@@ -139,7 +139,7 @@ Console pages (html/template, no build step): Sessions (list + detail: findings,
 
 Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — write a v2 AGENTS.md in Phase 0; testify/require, table-driven, ULID, no CGO, never push, one commit per step, progress log at the bottom of this file). Old Seam keeps running untouched on :8080 throughout; Seamless develops on :8081 with `SEAMLESS_DATA_DIR=~/.seamless`.
 
-- [ ] **P0 — Skeleton (target: 1-2 days).** New repo, module, Makefile (build/test/lint/run), config (yaml + env, static key, budgets), `internal/store` with migration runner (pattern from v1) and migration 001 (all tables above), event log write path, `/healthz`, doctor skeleton. Port `validate`. Acceptance: `make test` green; server starts; doctor reports config + DB ok.
+- [x] **P0 — Skeleton (target: 1-2 days).** New repo, module, Makefile (build/test/lint/run), config (yaml + env, static key, budgets), `internal/store` with migration runner (pattern from v1) and migration 001 (all tables above), event log write path, `/healthz`, doctor skeleton. Port `validate`. Acceptance: `make test` green; server starts; doctor reports config + DB ok. **DONE 2026-07-10 (awaiting owner review before P1).**
 - [ ] **P1 — Files + import (2-3 days).** `internal/files`: memory/note frontmatter round-trip, atomic writes, watcher + reconciliation (port), FTS + embeddings jobs (brute-force cosine search working with Ollama/OpenAI embedder). `seamlessd import --from ~/.seam`: old memory notes (parse `"Knowledge: {cat} - {name}"` titles + `domain:/project:/session:` tags into real frontmatter), plain notes (normalize frontmatter), sessions + agent_tool_calls (as historical sessions/events), old trial notes (parse sections into `trials` rows), SKIP the briefings project. Acceptance: import on a COPY of prod data; counts reported and spot-checked (76 memories, ~28 notes, 42 sessions); FTS and cosine search return sane results; editing a memory file on disk round-trips through the watcher.
 - [ ] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system.
 - [ ] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2.
@@ -221,3 +221,20 @@ Helpers `SchemaVersion`/`TableCount`. Wired into serve (healthz pings DB) and do
 reopen, FK enforced end-to-end, FTS insert/match/stem/delete. Divergences: modernc sqlite
 v1.53.0 (vs v1 1.46.1); DSN pragmas (vs v1 `db.Exec`) for per-connection robustness. Green;
 `serve` + `doctor` smoke-verified (healthz ok, graceful shutdown).
+
+**Step 5 — event log** (`feat(p0): append-only event log write path`). `internal/events`:
+`Recorder.Record(ctx, core.Event)` (stamps ULID id + UTC ts when absent, JSON payload,
+rejects empty kind) + `Recent(ctx, limit)` (newest-first, `rows.Err` guarded). Added a
+canonical fixed-width UTC timestamp format `core.FormatTime`/`ParseTime` (lexically
+sortable TEXT timestamps; ParseTime also accepts RFC3339 for imported v1 data). Tests:
+stamp/round-trip/payload, explicit id+ts preserved, empty-kind rejected, Recent
+ordering+limit; core time round-trip / UTC normalization / lexical sort. Green.
+
+**P0 acceptance (phase boundary, 2026-07-10).** `make build` + `go test ./...` +
+`golangci-lint run` all green (5 packages: validate, config, core, store, events).
+`seamlessd serve` starts, `/healthz` returns `{"status":"ok"}` with a DB ping, graceful
+shutdown on signal verified. `seamlessd doctor` reports config + DB ok (schema v1, 15
+tables) with expected empty-key warnings (mcp.api_key, openai.api_key). Migration 001
+provisions all 13 domain tables + unified FTS5 for every later phase. Packages deferred to
+their phases per plan (files, llm, retrieve, lifecycle, tasks, gardener, mcp, hooks,
+console, capture) -- none are P0 scope. **HARD STOP: awaiting owner go-ahead before P1.**
