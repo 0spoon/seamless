@@ -1,0 +1,64 @@
+package store
+
+import (
+	"database/sql"
+	_ "embed"
+	"fmt"
+)
+
+//go:embed migrations/001_initial.sql
+var migration001 string
+
+// Migration is a single numbered schema migration.
+type Migration struct {
+	Version int
+	SQL     string
+}
+
+// migrationList returns the ordered migrations. Append new numbered files here
+// (with a matching go:embed) -- NEVER edit an already-applied migration.
+func migrationList() []Migration {
+	return []Migration{
+		{Version: 1, SQL: migration001},
+	}
+}
+
+// migrate applies every migration whose version exceeds the current max, each
+// inside its own transaction, recording the version in schema_migrations.
+// Ported from Seam v1 (migrations/migrate.go); the rarely-used PreHook was
+// dropped -- add it back only if a future migration needs pre-transaction DDL.
+func migrate(db *sql.DB, ms []Migration) error {
+	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+		version    INTEGER PRIMARY KEY,
+		applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+	)`); err != nil {
+		return fmt.Errorf("store.migrate: create tracking table: %w", err)
+	}
+
+	var current int
+	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&current); err != nil {
+		return fmt.Errorf("store.migrate: read current version: %w", err)
+	}
+
+	for _, m := range ms {
+		if m.Version <= current {
+			continue
+		}
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("store.migrate: begin v%d: %w", m.Version, err)
+		}
+		if _, err := tx.Exec(m.SQL); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("store.migrate: apply v%d: %w", m.Version, err)
+		}
+		if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES (?)", m.Version); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("store.migrate: record v%d: %w", m.Version, err)
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("store.migrate: commit v%d: %w", m.Version, err)
+		}
+	}
+	return nil
+}

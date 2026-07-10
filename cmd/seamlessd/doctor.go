@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // checkStatus is the outcome of a single doctor check.
@@ -65,6 +66,22 @@ func doctor(args []string) error {
 		apiKeyCheck(cfg),
 		llmCheck(cfg),
 	)
+
+	// Database: open (creating + migrating if needed) and report schema state.
+	db, err := store.Open(cfg.DBPath())
+	if err != nil {
+		checks = append(checks, check{statusFail, "database", err.Error()})
+		return reportChecks(checks)
+	}
+	defer func() { _ = db.Close() }()
+	ver, verr := store.SchemaVersion(db)
+	tbls, terr := store.TableCount(db)
+	if verr != nil || terr != nil {
+		checks = append(checks, check{statusFail, "database", "opened but could not read schema"})
+	} else {
+		checks = append(checks, check{statusOK, "database",
+			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
+	}
 
 	return reportChecks(checks)
 }

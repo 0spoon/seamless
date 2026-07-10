@@ -9,6 +9,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -21,6 +22,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // version is the seamlessd build version. Bumped at release; "dev" until P6.
@@ -85,8 +87,17 @@ func runServe(args []string) error {
 		bind = *addr
 	}
 
+	db, err := store.Open(cfg.DBPath())
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	defer func() { _ = db.Close() }()
+	if v, verr := store.SchemaVersion(db); verr == nil {
+		slog.Info("database ready", "path", cfg.DBPath(), "schema_version", v)
+	}
+
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", handleHealthz)
+	mux.HandleFunc("/healthz", healthzHandler(db))
 
 	srv := &http.Server{
 		Addr:              bind,
@@ -121,11 +132,19 @@ func runServe(args []string) error {
 	return nil
 }
 
-func handleHealthz(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]string{"status": "ok", "version": version}); err != nil {
-		slog.Warn("healthz: encode response", "err", err)
+// healthzHandler reports liveness plus a database ping.
+func healthzHandler(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		status, code := "ok", http.StatusOK
+		if err := db.PingContext(r.Context()); err != nil {
+			status, code = "degraded", http.StatusServiceUnavailable
+			slog.Warn("healthz: db ping failed", "err", err)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(code)
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": status, "version": version}); err != nil {
+			slog.Warn("healthz: encode response", "err", err)
+		}
 	}
 }
 

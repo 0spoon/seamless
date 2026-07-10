@@ -207,3 +207,17 @@ env ints, validate. Divergence from v1: fresh minimal config (no JWT/auth/chroma
 `Closed`), Trial (+`TrialOutcome`), Event (+`EventKind` set). Pure data, no I/O deps.
 Tests: ULID uniqueness/parseability (dropped an incorrect intra-ms ordering assertion --
 random-entropy ULIDs only sort across milliseconds), enum validity, Active/Closed. Green.
+
+**Step 4 — store + migration 001** (`feat(p0): sqlite store, migration runner, migration 001`).
+`internal/store.Open(dbPath)` sets PRAGMAs via the DSN (`journal_mode(WAL)`,
+`foreign_keys(1)`, `busy_timeout(5000)`) so every pooled connection inherits them,
+`SetMaxOpenConns(1)`, runs migrations. Ported the migration runner from v1
+(`migrations/migrate.go`; dropped the unused PreHook). Migration 001 creates all 13 domain
+tables (projects, memories_index, notes_index, embeddings, sessions, tasks, task_deps,
+trials, events, retrieval_stats, gardener_proposals, settings, jobs) + a unified
+self-contained FTS5 `fts` (managed by the files layer, `porter unicode61`) + indexes.
+Helpers `SchemaVersion`/`TableCount`. Wired into serve (healthz pings DB) and doctor
+(schema v + table count -> "config + DB ok"). Tests: fresh-DB pragmas/migration, idempotent
+reopen, FK enforced end-to-end, FTS insert/match/stem/delete. Divergences: modernc sqlite
+v1.53.0 (vs v1 1.46.1); DSN pragmas (vs v1 `db.Exec`) for per-connection robustness. Green;
+`serve` + `doctor` smoke-verified (healthz ok, graceful shutdown).
