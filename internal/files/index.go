@@ -1,0 +1,228 @@
+package files
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+
+	"github.com/0spoon/seamless/internal/core"
+)
+
+// Item kinds, as stored in the fts.kind and embeddings.kind columns.
+const (
+	kindMemory = "memory"
+	kindNote   = "note"
+)
+
+// Indexer mirrors memory/note files into the SQLite index tables and the
+// unified self-contained FTS5 table. The files on disk are the source of truth;
+// these mirrors are rebuildable and kept in sync by the watcher + reconciler.
+type Indexer struct {
+	db *sql.DB
+}
+
+// NewIndexer returns an Indexer backed by db.
+func NewIndexer(db *sql.DB) *Indexer { return &Indexer{db: db} }
+
+// tagsJSON encodes tags as a JSON array string ("[]" for none).
+func tagsJSON(tags []string) (string, error) {
+	if len(tags) == 0 {
+		return "[]", nil
+	}
+	b, err := json.Marshal(tags)
+	if err != nil {
+		return "", fmt.Errorf("files: marshal tags: %w", err)
+	}
+	return string(b), nil
+}
+
+// parseTags decodes a JSON tags array; a blank or invalid value yields nil.
+func parseTags(s string) []string {
+	if s == "" || s == "[]" {
+		return nil
+	}
+	var tags []string
+	if err := json.Unmarshal([]byte(s), &tags); err != nil {
+		return nil
+	}
+	return tags
+}
+
+// IndexMemory upserts a memory into memories_index and refreshes its FTS row.
+func (ix *Indexer) IndexMemory(ctx context.Context, m core.Memory) error {
+	if m.ID == "" {
+		return fmt.Errorf("files.IndexMemory: memory has no id (file %s)", m.FilePath)
+	}
+	tags, err := tagsJSON(m.Tags)
+	if err != nil {
+		return err
+	}
+	var invalidAt any
+	if m.InvalidAt != nil {
+		invalidAt = core.FormatTime(*m.InvalidAt)
+	}
+
+	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("files.IndexMemory: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO memories_index
+		    (id, kind, name, description, project, file_path, tags,
+		     valid_from, invalid_at, superseded_by, source_session,
+		     content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+		    kind=excluded.kind, name=excluded.name, description=excluded.description,
+		    project=excluded.project, file_path=excluded.file_path, tags=excluded.tags,
+		    valid_from=excluded.valid_from, invalid_at=excluded.invalid_at,
+		    superseded_by=excluded.superseded_by, source_session=excluded.source_session,
+		    content_hash=excluded.content_hash, updated_at=excluded.updated_at`,
+		m.ID, string(m.Kind), m.Name, m.Description, m.Project, m.FilePath, tags,
+		core.FormatTime(m.ValidFrom), invalidAt, nullStr(m.SupersededBy), m.SourceSession,
+		m.ContentHash, core.FormatTime(m.Created), core.FormatTime(m.Updated),
+	)
+	if err != nil {
+		return fmt.Errorf("files.IndexMemory: upsert: %w", err)
+	}
+
+	if err := ftsUpsert(ctx, tx, m.ID, kindMemory, m.Project, "", m.Name, m.Description, m.Body); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("files.IndexMemory: commit: %w", err)
+	}
+	return nil
+}
+
+// IndexNote upserts a note into notes_index and refreshes its FTS row.
+func (ix *Indexer) IndexNote(ctx context.Context, n core.Note) error {
+	if n.ID == "" {
+		return fmt.Errorf("files.IndexNote: note has no id (file %s)", n.FilePath)
+	}
+	tags, err := tagsJSON(n.Tags)
+	if err != nil {
+		return err
+	}
+
+	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("files.IndexNote: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO notes_index
+		    (id, title, slug, description, project, file_path, tags,
+		     source_url, content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(id) DO UPDATE SET
+		    title=excluded.title, slug=excluded.slug, description=excluded.description,
+		    project=excluded.project, file_path=excluded.file_path, tags=excluded.tags,
+		    source_url=excluded.source_url, content_hash=excluded.content_hash,
+		    updated_at=excluded.updated_at`,
+		n.ID, n.Title, n.Slug, n.Description, n.Project, n.FilePath, tags,
+		nullStr(n.SourceURL), n.ContentHash, core.FormatTime(n.Created), core.FormatTime(n.Updated),
+	)
+	if err != nil {
+		return fmt.Errorf("files.IndexNote: upsert: %w", err)
+	}
+
+	if err := ftsUpsert(ctx, tx, n.ID, kindNote, n.Project, n.Title, "", n.Description, n.Body); err != nil {
+		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("files.IndexNote: commit: %w", err)
+	}
+	return nil
+}
+
+// DeleteByFilePath removes the index (and FTS) row for a data-dir-relative path.
+// It is a no-op if no row references that path. Used by the watcher/reconciler
+// when a file disappears from disk.
+func (ix *Indexer) DeleteByFilePath(ctx context.Context, relPath string) error {
+	tree, _, ok := treeAndRel(relPath)
+	if !ok {
+		return fmt.Errorf("files.DeleteByFilePath: %q is not under a known tree", relPath)
+	}
+	table := "memories_index"
+	if tree == notesTree {
+		table = "notes_index"
+	}
+
+	tx, err := ix.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var id string
+	err = tx.QueryRowContext(ctx, `SELECT id FROM `+table+` WHERE file_path = ?`, relPath).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil // already absent
+	}
+	if err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: lookup: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM `+table+` WHERE id = ?`, id); err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: delete row: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM fts WHERE item_id = ?`, id); err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: delete fts: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: commit: %w", err)
+	}
+	return nil
+}
+
+// ContentHashByFilePath returns the indexed content hash for a path, and whether
+// a row exists. The reconciler uses it to skip unchanged files.
+func (ix *Indexer) ContentHashByFilePath(ctx context.Context, relPath string) (hash string, found bool, err error) {
+	tree, _, ok := treeAndRel(relPath)
+	if !ok {
+		return "", false, fmt.Errorf("files.ContentHashByFilePath: %q is not under a known tree", relPath)
+	}
+	table := "memories_index"
+	if tree == notesTree {
+		table = "notes_index"
+	}
+	err = ix.db.QueryRowContext(ctx, `SELECT content_hash FROM `+table+` WHERE file_path = ?`, relPath).Scan(&hash)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("files.ContentHashByFilePath: %w", err)
+	}
+	return hash, true, nil
+}
+
+// ftsUpsert deletes any existing FTS row for itemID and inserts a fresh one.
+// The unified fts table is self-contained (no content triggers), so the files
+// layer maintains it explicitly.
+func ftsUpsert(ctx context.Context, tx *sql.Tx, itemID, kind, project, title, name, description, body string) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM fts WHERE item_id = ?`, itemID); err != nil {
+		return fmt.Errorf("files: fts delete: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO fts (item_id, kind, project, title, name, description, body)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		itemID, kind, project, title, name, description, body); err != nil {
+		return fmt.Errorf("files: fts insert: %w", err)
+	}
+	return nil
+}
+
+// nullStr maps the empty string to a NULL argument, so nullable TEXT columns
+// hold NULL rather than "".
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}

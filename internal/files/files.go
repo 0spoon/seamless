@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -324,4 +325,18 @@ func (s *Store) writeFile(relPath, content string) error {
 		return fmt.Errorf("files: mkdir: %w", err)
 	}
 	return AtomicWrite(abs, []byte(content), fileMode)
+}
+
+// treeAndRel splits a data-dir-relative path into its tree ("memory"|"notes")
+// and the remainder. It reports ok=false for paths outside a known tree.
+func treeAndRel(relPath string) (tree, rest string, ok bool) {
+	relPath = filepath.ToSlash(relPath)
+	switch {
+	case strings.HasPrefix(relPath, memoryTree+"/"):
+		return memoryTree, strings.TrimPrefix(relPath, memoryTree+"/"), true
+	case strings.HasPrefix(relPath, notesTree+"/"):
+		return notesTree, strings.TrimPrefix(relPath, notesTree+"/"), true
+	default:
+		return "", "", false
+	}
 }
