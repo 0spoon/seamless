@@ -140,7 +140,7 @@ Console pages (html/template, no build step): Sessions (list + detail: findings,
 Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — write a v2 AGENTS.md in Phase 0; testify/require, table-driven, ULID, no CGO, never push, one commit per step, progress log at the bottom of this file). Old Seam keeps running untouched on :8080 throughout; Seamless develops on :8081 with `SEAMLESS_DATA_DIR=~/.seamless`.
 
 - [x] **P0 — Skeleton (target: 1-2 days).** New repo, module, Makefile (build/test/lint/run), config (yaml + env, static key, budgets), `internal/store` with migration runner (pattern from v1) and migration 001 (all tables above), event log write path, `/healthz`, doctor skeleton. Port `validate`. Acceptance: `make test` green; server starts; doctor reports config + DB ok. **DONE 2026-07-10 (awaiting owner review before P1).**
-- [ ] **P1 — Files + import (2-3 days).** `internal/files`: memory/note frontmatter round-trip, atomic writes, watcher + reconciliation (port), FTS + embeddings jobs (brute-force cosine search working with Ollama/OpenAI embedder). `seamlessd import --from ~/.seam`: old memory notes (parse `"Knowledge: {cat} - {name}"` titles + `domain:/project:/session:` tags into real frontmatter), plain notes (normalize frontmatter), sessions + agent_tool_calls (as historical sessions/events), old trial notes (parse sections into `trials` rows), SKIP the briefings project. Acceptance: import on a COPY of prod data; counts reported and spot-checked (76 memories, ~28 notes, 42 sessions); FTS and cosine search return sane results; editing a memory file on disk round-trips through the watcher.
+- [x] **P1 — Files + import (2-3 days).** `internal/files`: memory/note frontmatter round-trip, atomic writes, watcher + reconciliation (port), FTS + embeddings jobs (brute-force cosine search working with Ollama/OpenAI embedder). `seamlessd import --from ~/.seam`: old memory notes (parse `"Knowledge: {cat} - {name}"` titles + `domain:/project:/session:` tags into real frontmatter), plain notes (normalize frontmatter), sessions + agent_tool_calls (as historical sessions/events), old trial notes (parse sections into `trials` rows), SKIP the briefings project. Acceptance: import on a COPY of prod data; counts reported and spot-checked (76 memories, ~28 notes, 42 sessions); FTS and cosine search return sane results; editing a memory file on disk round-trips through the watcher. **DONE 2026-07-10 (awaiting owner review before P2).**
 - [ ] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system.
 - [ ] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2.
 - [ ] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down.
@@ -238,3 +238,84 @@ tables) with expected empty-key warnings (mcp.api_key, openai.api_key). Migratio
 provisions all 13 domain tables + unified FTS5 for every later phase. Packages deferred to
 their phases per plan (files, llm, retrieve, lifecycle, tasks, gardener, mcp, hooks,
 console, capture) -- none are P0 scope. **HARD STOP: awaiting owner go-ahead before P1.**
+
+### 2026-07-10 — P1 (Files + import)
+
+Owner go-ahead received ("go ahead, Ollama-for-dev for P1 embeddings"). Mid-phase
+the owner added a gitignored `seamless.yaml` with an OpenAI key and asked to use
+**OpenAI for embeddings** instead of Ollama; the switch needs no code change (the
+config default is already `provider: openai`; the importer and Manager build the
+embedder via `llm.NewEmbedder(cfg.LLM)`). Executed as 6 green commits.
+
+**Step 1 — files: frontmatter round-trip + atomic writes** (`feat(p1): files layer
+— frontmatter round-trip + atomic writes`). `internal/files` ported from v1
+`internal/note`, generalized to two item kinds. `frontmatter.go`: ordered YAML
+marshal for memory + note; unknown keys captured into an `Extra` map and re-emitted
+(lossless Obsidian-style round-trip); lifecycle fields (`invalid_at`,
+`superseded_by`) always emitted (null when unset). `files.go`: Parse/Render for
+each kind (RFC3339 timestamps on disk, parsed at the core boundary via
+`core.ParseTime`), data-dir-relative path computation
+(`memory/{project|_global}/{name}.md`, `notes/{project|inbox}/{slug}.md`), pure-FS
+Store guarded by `validate`. `atomic.go`: AtomicWrite (temp+fsync+rename). core:
+add `Note` type; add `Extra` passthrough on Memory + Note.
+
+**Step 2 — files: index mirror + unified FTS** (`feat(p1): files layer — SQLite
+index mirror + unified FTS`). `index.go`: Indexer upserts memory/note into
+`memories_index` / `notes_index` and refreshes the item's row in the unified
+self-contained `fts` (delete+insert by ULID `item_id`; no content triggers, since
+one virtual table spans both kinds). Tags -> JSON column; nullable columns hold
+real NULL; timestamps use the fixed-width `core.FormatTime`. DeleteByFilePath and
+ContentHashByFilePath support the reconciler.
+
+**Step 3 — files: watcher + reconciliation** (`feat(p1): files layer — watcher +
+startup reconciliation`). `watcher.go`: fsnotify over the two trees (ported from
+v1 `internal/watcher`): recursive dir add, debounce+generation, self-write
+suppression, plus a new-directory re-scan that closes the create-race so a file in
+a brand-new project dir is still indexed. `manager.go`: Manager ties Store +
+Indexer + watcher; Start (mkdir+watch+reconcile+run loop); Reconcile (content-hash
+skip + orphan deletion via AllFilePaths); write-through WriteMemory/WriteNote/Remove
+that suppress the watcher and index synchronously. Dep: fsnotify v1.9.0.
+
+**Step 4 — llm embedding clients** (`feat(p1): llm embedding clients (openai +
+ollama), provider factory`). `internal/llm` ported+trimmed from v1 `internal/ai`
+(chat/Chroma/task-queue dropped). Embedder interface (Embed -> []float32 + Model);
+OpenAIEmbedder + OllamaEmbedder; sentinel errors for graceful P4 lexical fallback;
+`NewEmbedder(config.LLM)` selects by provider (Anthropic rejected — no embeddings
+API). httptest-only unit tests.
+
+**Step 5 — embeddings store + cosine + embed-on-index** (`feat(p1): embeddings
+store + brute-force cosine search + embed-on-index`). `internal/store/embeddings.go`:
+LE float32 BLOB encode/decode, Upsert/Delete, and `CosineSearch` (full scan filtered
+by model+kinds, dim-mismatch skip, deterministic top-k) — no vector DB. Manager
+gains a best-effort embedder: every (re)indexed item is embedded and upserted;
+failures log-and-continue so a down embedder never blocks writes (degrades to FTS).
+DeleteByFilePath also drops the vector.
+
+**Step 6 — import** (`feat(p1): seamlessd import — migrate Seam v1 data into
+Seamless`). `internal/importer` reverses v1's "Knowledge: {kind} - {name}" +
+`domain:/project:/session:` tag convention back into real frontmatter (kind from
+title, name slugified, semantic project + provenance from tags, structural tags
+stripped); normalizes plain notes; lifts `type:trial` notes into `trials` rows
+(lab/outcome/Changes/Expected/Actual parsed from markdown, tolerant of v1's
+run-together headers); replays `agent_sessions` -> sessions and `agent_tool_calls`
+-> `tool.call` events. Idempotent by id (index check + INSERT OR IGNORE).
+`seamlessd import --from ~/.seam [--skip briefings] [--embed]`. core: add
+`tool.call` event kind.
+
+**P1 acceptance (phase boundary, 2026-07-10).** `make build` + `go test ./...` +
+`golangci-lint run` all green (7 tested packages; race-clean on files). Validated
+on an announced read-only COPY of live `~/.seam` (live v1 untouched): imported
+**72 memories, 29 notes, 6 trials, 43 sessions, 440 events**; a second run skipped
+all 590 (idempotent by id). Kind distribution (reference 34 / gotcha 13 / runbook 7
+/ protocol 6 / decision 6 / constraint 4 / refuted 2) and semantic-project mapping
+(from the `project:` tag, not the `agent-memory` storage bucket) verified; on-disk
+v2 frontmatter spot-checked clean. Unified FTS returns sane hits. Full-corpus
+OpenAI embedding: **101/101 items** vectorized (3072-dim, text-embedding-3-large,
+zero failures once the owner's firewall was opened). Cosine on imported data:
+"how do I back up the postgres database to s3" -> `backup-strategy` #1 (0.57);
+"firmware antenna matching network for the nordic chip" ->
+`nrf54l15-...-antenna-matching-network` #1 (0.59), firmware memories following.
+Watcher round-trip (create/edit/delete on disk -> index) verified. Divergences:
+embeddings switched to OpenAI mid-phase per owner; imported sessions coerced to
+`completed` (historical); tool-call args/results dropped from events (kept
+tool/duration/error). **HARD STOP: awaiting owner go-ahead before P2.**
