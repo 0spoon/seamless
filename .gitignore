@@ -1,0 +1,39 @@
+# Binaries
+/bin/
+/seamlessd
+/seam
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Data / runtime state (SQLite + data-dir artifacts)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Config that may contain secrets (keep *.example, ignore the real ones)
+seamless.yaml
+seam-server.yaml
+
+# Go build / test output
+*.test
+*.out
+coverage.*
+*.prof
+vendor/
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Scratch / logs
+tmp/
+*.log
+.mcp.json
