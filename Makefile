@@ -1,5 +1,6 @@
 # Seamless Makefile. Go 1.25+, no CGO.
 BINARY  := seamlessd
+CLI     := seam
 BIN_DIR := bin
 PKG     := ./...
 GO      ?= go
@@ -8,7 +9,7 @@ GO      ?= go
 
 help:
 	@echo "Seamless targets:"
-	@echo "  build      build ./bin/$(BINARY)"
+	@echo "  build      build ./bin/$(BINARY) and ./bin/$(CLI)"
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  lint       run golangci-lint"
@@ -21,6 +22,7 @@ help:
 
 build:
 	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/seamlessd
+	$(GO) build -o $(BIN_DIR)/$(CLI) ./cmd/seam
 
 test:
 	$(GO) test $(PKG)
