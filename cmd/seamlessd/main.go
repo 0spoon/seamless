@@ -23,6 +23,12 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/hooks"
+	"github.com/0spoon/seamless/internal/llm"
+	"github.com/0spoon/seamless/internal/mcp"
+	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -46,6 +52,10 @@ func main() {
 		err = runDoctor(args)
 	case "import":
 		err = runImport(args)
+	case "install-hooks":
+		err = runInstallHooks(args)
+	case "map-repo":
+		err = runMapRepo(args)
 	case "version", "-v", "--version":
 		fmt.Printf("seamlessd %s\n", version)
 	case "help", "-h", "--help":
@@ -65,16 +75,19 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `seamlessd %s -- Seamless server daemon
 
 usage:
-  seamlessd serve     start the HTTP server (127.0.0.1:8081)
-  seamlessd doctor    run configuration + database self-checks
-  seamlessd import    import a Seam v1 data directory (--from ~/.seam)
-  seamlessd version   print the version
+  seamlessd serve          start the HTTP server (127.0.0.1:8081)
+  seamlessd doctor         run configuration + database self-checks
+  seamlessd import         import a Seam v1 data directory (--from ~/.seam)
+  seamlessd install-hooks  install the SessionStart/UserPromptSubmit hooks
+  seamlessd map-repo       map a repo path to a project slug (repo_project_map)
+  seamlessd version        print the version
 `, version)
 }
 
 // runServe starts the HTTP server and blocks until SIGINT/SIGTERM, then shuts
-// down gracefully. The routing surface (hooks, MCP, console) is added in later
-// phases; P0 exposes only /healthz.
+// down gracefully. It wires the full P2 surface: /healthz, the MCP tool endpoint
+// at /api/mcp, and the SessionStart/UserPromptSubmit hooks under /api/hooks. The
+// console is added in P5.
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "", "HTTP bind address (overrides config)")
@@ -90,6 +103,7 @@ func runServe(args []string) error {
 	if *addr != "" {
 		bind = *addr
 	}
+	logger := slog.Default()
 
 	db, err := store.Open(cfg.DBPath())
 	if err != nil {
@@ -100,8 +114,45 @@ func runServe(args []string) error {
 		slog.Info("database ready", "path", cfg.DBPath(), "schema_version", v)
 	}
 
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Files subsystem: markdown source of truth, watcher, reconcile, and
+	// embed-on-index when an embedder is configured.
+	mgr, err := files.NewManager(cfg.DataDir, db, logger)
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	defer func() { _ = mgr.Close() }()
+
+	var embedder llm.Embedder
+	if e, eerr := llm.NewEmbedder(cfg.LLM); eerr != nil {
+		slog.Warn("embeddings disabled; recall degrades to FTS", "err", eerr)
+	} else {
+		embedder = e
+		mgr.SetEmbedder(embedder)
+		slog.Info("embeddings enabled", "provider", cfg.LLM.Provider, "model", embedder.Model())
+	}
+	if err := mgr.Start(ctx); err != nil {
+		return fmt.Errorf("seamlessd.serve: files start: %w", err)
+	}
+
+	ret := retrieve.New(db, embedder, cfg.Budgets, logger)
+	rec := events.NewRecorder(db)
+
+	if cfg.MCP.APIKey == "" {
+		slog.Warn("mcp.api_key is empty; MCP and hook requests will be rejected -- set it in seamless.yaml")
+	}
+	mcpSrv := mcp.New(mcp.Config{
+		DB: db, Files: mgr, Retrieve: ret, Events: rec, Embedder: embedder,
+		APIKey: cfg.MCP.APIKey, Logger: logger,
+	})
+	hooksH := hooks.NewHandler(ret, rec, cfg.MCP.APIKey, logger)
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler(db))
+	mux.Handle("/api/mcp", mcpSrv.Handler())
+	hooksH.Register(mux)
 
 	srv := &http.Server{
 		Addr:              bind,
@@ -109,12 +160,10 @@ func runServe(args []string) error {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("seamlessd listening", "addr", bind, "data_dir", cfg.DataDir, "version", version)
+		slog.Info("seamlessd listening", "addr", bind, "data_dir", cfg.DataDir,
+			"version", version, "mcp_tools", mcp.ToolCount)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
