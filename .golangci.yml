@@ -1,0 +1,40 @@
+# Lint config for Seamless. A backstop for the grep-detectable subset of the
+# conventions in AGENTS.md > "Common pitfalls"; AGENTS.md is the source of truth
+# (lint cannot catch e.g. os.WriteFile on a .md file or byte-slicing UTF-8).
+run:
+  timeout: 5m
+  tests: true
+
+linters:
+  # Keeps the golangci-lint defaults (errcheck, govet, ineffassign, staticcheck,
+  # unused) and adds a curated set on top.
+  enable:
+    - forbidigo      # bans ulid.MustNew, time.Sleep
+    - rowserrcheck   # missing rows.Err() after rows.Next()
+    - sqlclosecheck  # missing rows.Close() / stmt.Close()
+    - errorlint      # err == ErrXxx instead of errors.Is
+
+linters-settings:
+  forbidigo:
+    # Patterns match against call-expression text (e.g. "ulid.MustNew").
+    forbid:
+      - p: ^ulid\.MustNew$
+        msg: "use ulid.New + error handling; ulid.MustNew panics on entropy failure (AGENTS.md > Common pitfalls)."
+      - p: ^time\.Sleep$
+        msg: "no time.Sleep for synchronization; use channels/sync.WaitGroup/t.Eventually (AGENTS.md > Testing)."
+    analyze-types: true
+  errorlint:
+    errorf: true
+    errorf-multi: true
+    asserts: true
+    comparison: true
+
+issues:
+  exclude-use-default: true
+  exclude-rules:
+    # Tests may use timing-sensitive patterns and construct fixtures with
+    # patterns banned in production code.
+    - path: _test\.go
+      linters:
+        - forbidigo
+        - errcheck

@@ -1,0 +1,68 @@
+# Seamless configuration example. Copy to seamless.yaml and fill in secrets.
+#
+#   cp seamless.yaml.example seamless.yaml
+#
+# seamless.yaml is gitignored (it holds API keys). This .example file is safe to
+# commit. Every key also has a SEAMLESS_* environment override, and env wins over
+# the file. Config file search order: $SEAMLESS_CONFIG, ~/.config/seamless/seamless.yaml,
+# ./seamless.yaml.
+
+# HTTP bind address. Dev runs on 8081 so it never collides with v1 Seam on 8080.
+# env: SEAMLESS_ADDR
+addr: "127.0.0.1:8081"
+
+# Data directory: SQLite database + markdown trees (memory/, notes/). A leading
+# ~ is expanded to the home directory.
+# env: SEAMLESS_DATA_DIR
+data_dir: "~/.seamless"
+
+mcp:
+  # Static bearer key protecting /api/mcp and the console. Generate one with:
+  #   openssl rand -hex 32
+  # An empty key is reported as a warning by `seamlessd doctor`.
+  # env: SEAMLESS_MCP_API_KEY
+  api_key: ""
+
+budgets:
+  # Hard token budget for the SessionStart briefing.
+  # env: SEAMLESS_MAX_BRIEFING_TOKENS
+  max_briefing_tokens: 1500
+  # Default token budget for a recall response.
+  # env: SEAMLESS_RECALL_BUDGET_TOKENS
+  recall_budget_tokens: 1000
+
+llm:
+  # Primary provider for chat (session digests) and embeddings. OpenAI is the
+  # default and the first-class provider. One of: openai | ollama | anthropic.
+  # env: SEAMLESS_LLM_PROVIDER
+  provider: "openai"
+
+  openai:
+    # env: SEAMLESS_OPENAI_API_KEY
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+    # Any OpenAI chat model; set to your preferred one.
+    chat_model: "gpt-4o"
+    embedding_model: "text-embedding-3-large"
+    # Native dimensionality of the embedding model. 0 = auto-detect from the
+    # first embedding response (the store records dims per row regardless).
+    embedding_dims: 3072
+
+  ollama:
+    base_url: "http://127.0.0.1:11434"
+    chat_model: "llama3.3:latest"
+    embedding_model: "qwen3-embedding:8b"
+    embedding_dims: 0
+
+  anthropic:
+    # env: SEAMLESS_ANTHROPIC_API_KEY
+    api_key: ""
+    chat_model: "claude-sonnet-5"
+    # Anthropic has no embeddings API; when provider=anthropic, embeddings fall
+    # back to OpenAI if its api_key is set, else Ollama.
+
+gardener:
+  # The gardener only ever proposes; it never mutates memory without an explicit
+  # apply. Safe to leave enabled.
+  # env: SEAMLESS_GARDENER_ENABLED
+  enabled: true
