@@ -13,7 +13,7 @@ func TestNewID_ValidAndUnique(t *testing.T) {
 	// millisecond are not ordered relative to each other -- only uniqueness and
 	// parseability are guaranteed. Cross-millisecond ULIDs sort by time.
 	seen := make(map[string]struct{}, 1000)
-	for i := 0; i < 1000; i++ {
+	for range 1000 {
 		id, err := NewID()
 		require.NoError(t, err)
 		require.Len(t, id, 26)
