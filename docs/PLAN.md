@@ -200,3 +200,10 @@ text-embedding-3-large/3072). Config search: `$SEAMLESS_CONFIG`, `~/.config/seam
 seamless.yaml`, `./seamless.yaml`. Wired into `serve` (bind = flag||config) and `doctor`
 (config load + api_key/llm warnings). Tests cover file/env precedence, `~` expansion, bad
 env ints, validate. Divergence from v1: fresh minimal config (no JWT/auth/chroma). Green.
+
+**Step 3 — core domain types** (`feat(p0): core domain types + ULID`). `internal/core`:
+`NewID()` (crypto/rand ULID, never `MustNew`); types Project, Memory (+`MemoryKind`
+8-value enum, `Active()`), Session (+`SessionStatus`), Task (+`TaskStatus`, `Valid`/
+`Closed`), Trial (+`TrialOutcome`), Event (+`EventKind` set). Pure data, no I/O deps.
+Tests: ULID uniqueness/parseability (dropped an incorrect intra-ms ordering assertion --
+random-entropy ULIDs only sort across milliseconds), enum validity, Active/Closed. Green.
