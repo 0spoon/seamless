@@ -19,6 +19,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 // version is the seamlessd build version. Bumped at release; "dev" until P6.
@@ -69,16 +71,25 @@ usage:
 // phases; P0 exposes only /healthz.
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
-	addr := fs.String("addr", "127.0.0.1:8081", "HTTP bind address")
+	addr := fs.String("addr", "", "HTTP bind address (overrides config)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	bind := cfg.Addr
+	if *addr != "" {
+		bind = *addr
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", handleHealthz)
 
 	srv := &http.Server{
-		Addr:              *addr,
+		Addr:              bind,
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
@@ -88,7 +99,7 @@ func runServe(args []string) error {
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("seamlessd listening", "addr", *addr, "version", version)
+		slog.Info("seamlessd listening", "addr", bind, "data_dir", cfg.DataDir, "version", version)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
