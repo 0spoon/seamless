@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -15,19 +16,24 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// TestOllamaSemanticSearch is an opt-in end-to-end check that the files + llm +
-// store pipeline returns semantically sane cosine results with a real Ollama
-// embedder. It is skipped unless SEAMLESS_OLLAMA_TEST=1 (so `make test` stays
-// hermetic). Run with:
+// TestEmbedderSemanticSearch is an opt-in end-to-end check that the files + llm +
+// store pipeline returns semantically sane cosine results with a real embedder.
+// It uses the configured provider (config.Load, honoring seamless.yaml via
+// SEAMLESS_CONFIG), so it exercises whatever provider is set — OpenAI or Ollama.
+// Skipped unless SEAMLESS_EMBED_TEST=1 (so `make test` stays hermetic). Run with:
 //
-//	SEAMLESS_OLLAMA_TEST=1 go test ./internal/files/ -run TestOllamaSemanticSearch -v
-func TestOllamaSemanticSearch(t *testing.T) {
-	if os.Getenv("SEAMLESS_OLLAMA_TEST") == "" {
-		t.Skip("set SEAMLESS_OLLAMA_TEST=1 to run the live Ollama embedding test")
+//	SEAMLESS_EMBED_TEST=1 SEAMLESS_CONFIG=$PWD/seamless.yaml \
+//	  go test ./internal/files/ -run TestEmbedderSemanticSearch -v
+func TestEmbedderSemanticSearch(t *testing.T) {
+	if os.Getenv("SEAMLESS_EMBED_TEST") == "" {
+		t.Skip("set SEAMLESS_EMBED_TEST=1 to run the live embedding test")
 	}
 
-	cfg := config.Defaults().LLM.Ollama
-	embedder := llm.NewOllamaEmbedder(cfg.BaseURL, cfg.EmbeddingModel)
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	embedder, err := llm.NewEmbedder(cfg.LLM)
+	require.NoError(t, err)
+	t.Logf("embedding provider=%s model=%s", cfg.LLM.Provider, embedder.Model())
 
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -69,4 +75,40 @@ func TestOllamaSemanticSearch(t *testing.T) {
 		`SELECT name FROM memories_index WHERE id = ?`, hits[0].ItemID).Scan(&topName))
 	require.Equal(t, "chroma-boot-race", topName, "boot-race memory should be the closest match; ranking=%v", hits)
 	t.Logf("ranking: %+v", hits)
+}
+
+// TestQueryExistingDB runs a cosine query against an already-populated seam.db
+// (e.g. a validation import), to confirm semantic ranking on real data. Opt-in:
+//
+//	SEAMLESS_EMBED_TEST=1 SEAMLESS_CONFIG=$PWD/seamless.yaml \
+//	  SEAMLESS_QUERY_DB=/path/seam.db SEAMLESS_QUERY="back up the database" \
+//	  go test ./internal/files/ -run TestQueryExistingDB -v
+func TestQueryExistingDB(t *testing.T) {
+	if os.Getenv("SEAMLESS_EMBED_TEST") == "" || os.Getenv("SEAMLESS_QUERY_DB") == "" {
+		t.Skip("set SEAMLESS_EMBED_TEST=1 and SEAMLESS_QUERY_DB to run")
+	}
+	cfg, err := config.Load()
+	require.NoError(t, err)
+	embedder, err := llm.NewEmbedder(cfg.LLM)
+	require.NoError(t, err)
+
+	db, err := sql.Open("sqlite", "file:"+os.Getenv("SEAMLESS_QUERY_DB")+"?mode=ro")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	query := os.Getenv("SEAMLESS_QUERY")
+	qvec, err := embedder.Embed(context.Background(), query)
+	require.NoError(t, err)
+	hits, err := store.CosineSearch(context.Background(), db, qvec, embedder.Model(), nil, 5)
+	require.NoError(t, err)
+
+	t.Logf("query: %q", query)
+	for i, h := range hits {
+		var name string
+		_ = db.QueryRowContext(context.Background(),
+			`SELECT COALESCE((SELECT name FROM memories_index WHERE id=?),
+			                 (SELECT title FROM notes_index WHERE id=?))`, h.ItemID, h.ItemID).Scan(&name)
+		t.Logf("  #%d  %.4f  %s", i+1, h.Score, name)
+	}
+	require.NotEmpty(t, hits)
 }
