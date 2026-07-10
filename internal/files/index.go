@@ -175,6 +175,9 @@ func (ix *Indexer) DeleteByFilePath(ctx context.Context, relPath string) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM fts WHERE item_id = ?`, id); err != nil {
 		return fmt.Errorf("files.DeleteByFilePath: delete fts: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM embeddings WHERE item_id = ?`, id); err != nil {
+		return fmt.Errorf("files.DeleteByFilePath: delete embedding: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("files.DeleteByFilePath: commit: %w", err)
 	}

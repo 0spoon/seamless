@@ -1,0 +1,128 @@
+package store
+
+import (
+	"context"
+	"database/sql"
+	"math"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+)
+
+func newEmbedDB(t *testing.T) *sql.DB {
+	t.Helper()
+	db, err := Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	return db
+}
+
+func TestEncodeDecodeVector(t *testing.T) {
+	vec := []float32{0, 1, -1, 0.5, 3.14159, -2.71828}
+	got := DecodeVector(EncodeVector(vec))
+	require.Equal(t, vec, got)
+
+	require.Len(t, EncodeVector(vec), len(vec)*4)
+	require.Nil(t, DecodeVector([]byte{1, 2, 3})) // not a multiple of 4
+	require.Empty(t, DecodeVector(nil))
+}
+
+func TestCosine(t *testing.T) {
+	require.InDelta(t, 1.0, Cosine([]float32{1, 0, 0}, []float32{1, 0, 0}), 1e-6)
+	require.InDelta(t, 1.0, Cosine([]float32{1, 2, 3}, []float32{2, 4, 6}), 1e-6) // scale-invariant
+	require.InDelta(t, 0.0, Cosine([]float32{1, 0}, []float32{0, 1}), 1e-6)       // orthogonal
+	require.InDelta(t, -1.0, Cosine([]float32{1, 0}, []float32{-1, 0}), 1e-6)     // opposite
+	require.Equal(t, 0.0, Cosine([]float32{0, 0}, []float32{1, 1}))               // zero magnitude
+	require.Equal(t, 0.0, Cosine([]float32{1, 0, 0}, []float32{1, 0}))            // length mismatch
+}
+
+func TestUpsertAndCosineSearch(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m1", []float32{0.9, 0.1, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "c", "note", "m1", []float32{0, 1, 0}))
+
+	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 3)
+	require.Equal(t, "a", hits[0].ItemID) // identical
+	require.Equal(t, "b", hits[1].ItemID) // close
+	require.Equal(t, "c", hits[2].ItemID) // orthogonal
+	require.InDelta(t, 1.0, hits[0].Score, 1e-6)
+	require.InDelta(t, 0.0, hits[2].Score, 1e-6)
+
+	// limit caps the result set.
+	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 2)
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+
+	// kind filter restricts the search space.
+	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", []string{"note"}, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "c", hits[0].ItemID)
+}
+
+// A vector stored under a different model is invisible to a search for m1.
+func TestCosineSearchModelScope(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m2", []float32{1, 0}))
+
+	hits, err := CosineSearch(ctx, db, []float32{1, 0}, "m1", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "a", hits[0].ItemID)
+}
+
+// Rows whose dimensionality differs from the query (e.g. after a model swap
+// under the same name) are skipped rather than returned with a bogus score.
+func TestCosineSearchSkipsDimMismatch(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m1", []float32{1, 0})) // 2-dim
+
+	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "a", hits[0].ItemID)
+}
+
+func TestUpsertReplacesAndDelete(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{0, 1, 0})) // replace
+
+	var dims int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT dims FROM embeddings WHERE item_id='a'`).Scan(&dims))
+	require.Equal(t, 3, dims)
+	var count int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embeddings`).Scan(&count))
+	require.Equal(t, 1, count)
+
+	require.NoError(t, DeleteEmbedding(ctx, db, "a"))
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embeddings`).Scan(&count))
+	require.Zero(t, count)
+	require.NoError(t, DeleteEmbedding(ctx, db, "a")) // idempotent
+}
+
+func TestUpsertRejectsEmpty(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	require.Error(t, UpsertEmbedding(ctx, db, "", "memory", "m1", []float32{1}))
+	require.Error(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", nil))
+}
+
+func TestUnitVectorNormIsOne(t *testing.T) {
+	// Guard the norm math against regressions.
+	v := []float32{3, 4}
+	require.InDelta(t, 5.0, math.Sqrt(float64(v[0]*v[0]+v[1]*v[1])), 1e-6)
+	require.InDelta(t, 1.0, Cosine(v, v), 1e-6)
+}
