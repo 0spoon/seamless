@@ -10,21 +10,31 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/llm"
+	"github.com/0spoon/seamless/internal/store"
 )
 
-// defaultDebounce is how long a file must be quiet before the watcher re-indexes
-// it. Editors emit several writes per save; this coalesces them.
-const defaultDebounce = 300 * time.Millisecond
+const (
+	// defaultDebounce is how long a file must be quiet before the watcher
+	// re-indexes it. Editors emit several writes per save; this coalesces them.
+	defaultDebounce = 300 * time.Millisecond
+	// maxEmbedRunes bounds the text sent to the embedder (roughly a few thousand
+	// tokens). One vector per item; long bodies are truncated, not chunked.
+	maxEmbedRunes = 8000
+)
 
 // Manager is the running files subsystem: it owns the filesystem Store and the
 // SQLite Indexer, reconciles the trees against the index at startup, and watches
 // them for out-of-band edits. Application writes go through it so their own
-// writes are suppressed in the watcher (no re-index loop).
+// writes are suppressed in the watcher (no re-index loop). An optional embedder
+// keeps the vector index in sync with the file content (best-effort).
 type Manager struct {
-	store   *Store
-	indexer *Indexer
-	watcher *watcher
-	logger  *slog.Logger
+	store    *Store
+	indexer  *Indexer
+	watcher  *watcher
+	db       *sql.DB
+	embedder llm.Embedder
+	logger   *slog.Logger
 }
 
 // NewManager builds a Manager over dataDir backed by db. It does not touch the
@@ -36,6 +46,7 @@ func NewManager(dataDir string, db *sql.DB, logger *slog.Logger) (*Manager, erro
 	m := &Manager{
 		store:   NewStore(dataDir),
 		indexer: NewIndexer(db),
+		db:      db,
 		logger:  logger,
 	}
 	w, err := newWatcher(dataDir, m.handleFile, defaultDebounce, logger)
@@ -45,6 +56,11 @@ func NewManager(dataDir string, db *sql.DB, logger *slog.Logger) (*Manager, erro
 	m.watcher = w
 	return m, nil
 }
+
+// SetEmbedder enables vector indexing. When set, every (re)indexed item is
+// embedded and its vector upserted; embedding failures are logged, not fatal, so
+// a slow or down embedder never blocks a write or an edit. Nil disables it.
+func (m *Manager) SetEmbedder(e llm.Embedder) { m.embedder = e }
 
 // Store exposes the filesystem layer (read-only helpers for other packages).
 func (m *Manager) Store() *Store { return m.store }
@@ -172,7 +188,11 @@ func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 			m.logger.Warn("files.handleFile: memory file has no id, skipping", "file_path", relPath)
 			return nil
 		}
-		return m.indexer.IndexMemory(ctx, mem)
+		if err := m.indexer.IndexMemory(ctx, mem); err != nil {
+			return err
+		}
+		m.embedItem(ctx, kindMemory, mem.ID, memoryEmbedText(mem))
+		return nil
 	case notesTree:
 		note, err := ParseNote(content, relPath)
 		if err != nil {
@@ -182,10 +202,51 @@ func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 			m.logger.Warn("files.handleFile: note file has no id, skipping", "file_path", relPath)
 			return nil
 		}
-		return m.indexer.IndexNote(ctx, note)
+		if err := m.indexer.IndexNote(ctx, note); err != nil {
+			return err
+		}
+		m.embedItem(ctx, kindNote, note.ID, noteEmbedText(note))
+		return nil
 	default:
 		return nil
 	}
+}
+
+// embedItem embeds text and upserts the vector for an item. It is best-effort:
+// with no embedder configured it is a no-op, and any embedding/store failure is
+// logged rather than propagated, so a down embedder never blocks indexing.
+func (m *Manager) embedItem(ctx context.Context, kind, id, text string) {
+	if m.embedder == nil {
+		return
+	}
+	vec, err := m.embedder.Embed(ctx, text)
+	if err != nil {
+		m.logger.Warn("files: embed failed", "kind", kind, "id", id, "error", err)
+		return
+	}
+	if err := store.UpsertEmbedding(ctx, m.db, id, kind, m.embedder.Model(), vec); err != nil {
+		m.logger.Warn("files: upsert embedding failed", "kind", kind, "id", id, "error", err)
+	}
+}
+
+// memoryEmbedText is the text embedded for a memory: name and one-line
+// description carry the most signal, followed by the body.
+func memoryEmbedText(m core.Memory) string {
+	return truncateRunes(m.Name+"\n"+m.Description+"\n\n"+m.Body, maxEmbedRunes)
+}
+
+// noteEmbedText is the text embedded for a note.
+func noteEmbedText(n core.Note) string {
+	return truncateRunes(n.Title+"\n"+n.Description+"\n\n"+n.Body, maxEmbedRunes)
+}
+
+// truncateRunes caps s at max runes (never splitting a multi-byte rune).
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max])
 }
 
 // WriteMemory writes a memory through the Store (suppressing the watcher's view
@@ -200,6 +261,7 @@ func (m *Manager) WriteMemory(ctx context.Context, mem core.Memory) (core.Memory
 	if err := m.indexer.IndexMemory(ctx, written); err != nil {
 		return core.Memory{}, err
 	}
+	m.embedItem(ctx, kindMemory, written.ID, memoryEmbedText(written))
 	return written, nil
 }
 
@@ -213,6 +275,7 @@ func (m *Manager) WriteNote(ctx context.Context, note core.Note) (core.Note, err
 	if err := m.indexer.IndexNote(ctx, written); err != nil {
 		return core.Note{}, err
 	}
+	m.embedItem(ctx, kindNote, written.ID, noteEmbedText(written))
 	return written, nil
 }
 
