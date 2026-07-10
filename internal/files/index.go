@@ -202,6 +202,29 @@ func (ix *Indexer) ContentHashByFilePath(ctx context.Context, relPath string) (h
 	return hash, true, nil
 }
 
+// AllFilePaths returns every data-dir-relative file_path currently in the memory
+// and note indexes. The reconciler uses it to find rows whose file has vanished.
+func (ix *Indexer) AllFilePaths(ctx context.Context) ([]string, error) {
+	rows, err := ix.db.QueryContext(ctx,
+		`SELECT file_path FROM memories_index UNION ALL SELECT file_path FROM notes_index`)
+	if err != nil {
+		return nil, fmt.Errorf("files.AllFilePaths: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("files.AllFilePaths: scan: %w", err)
+		}
+		paths = append(paths, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("files.AllFilePaths: %w", err)
+	}
+	return paths, nil
+}
+
 // ftsUpsert deletes any existing FTS row for itemID and inserts a fresh one.
 // The unified fts table is self-contained (no content triggers), so the files
 // layer maintains it explicitly.
