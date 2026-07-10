@@ -216,6 +216,7 @@ const (
 	EventTaskTransition   EventKind = "task.transition"
 	EventInjected         EventKind = "retrieval.injected"
 	EventGardenerAction   EventKind = "gardener.action"
+	EventToolCall         EventKind = "tool.call" // historical MCP tool invocation (import)
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

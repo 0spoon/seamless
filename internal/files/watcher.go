@@ -32,7 +32,7 @@ type watcher struct {
 	logger   *slog.Logger
 
 	mu         sync.Mutex
-	suppressed map[string]time.Time  // absolute path -> expiry
+	suppressed map[string]time.Time   // absolute path -> expiry
 	pending    map[string]*time.Timer // absolute path -> debounce timer
 	gen        map[string]uint64      // absolute path -> debounce generation
 
