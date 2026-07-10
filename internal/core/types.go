@@ -65,11 +65,38 @@ type Memory struct {
 	SupersededBy  string     `json:"supersededBy"`  // ULID of the replacement, "" = none
 	SourceSession string     `json:"sourceSession"` // provenance
 	ContentHash   string     `json:"contentHash"`
+	// Extra preserves unknown frontmatter keys (e.g. Obsidian plugin fields) so
+	// a parse -> render round-trip is lossless. Not mirrored to the index.
+	Extra map[string]any `json:"extra,omitempty"`
 }
 
 // Active reports whether the memory is still valid (not superseded or archived).
 // Inactive memories leave the briefing/prompt/recall indexes but remain readable.
 func (m Memory) Active() bool { return m.InvalidAt == nil }
+
+// ---------------------------------------------------------------------------
+// Note
+// ---------------------------------------------------------------------------
+
+// Note is a work artifact (research finding, decision record, meeting summary),
+// stored one-per-file with YAML frontmatter; this struct mirrors that
+// frontmatter plus the body. Unlike a Memory it has no lifecycle/validity.
+type Note struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Slug        string    `json:"slug"`
+	Description string    `json:"description"`
+	Project     string    `json:"project"` // empty = inbox
+	Body        string    `json:"body"`
+	FilePath    string    `json:"filePath"`
+	Tags        []string  `json:"tags"`
+	SourceURL   string    `json:"sourceUrl"`
+	Created     time.Time `json:"created"`
+	Updated     time.Time `json:"updated"`
+	ContentHash string    `json:"contentHash"`
+	// Extra preserves unknown frontmatter keys for a lossless round-trip.
+	Extra map[string]any `json:"extra,omitempty"`
+}
 
 // ---------------------------------------------------------------------------
 // Session
