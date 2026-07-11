@@ -1,0 +1,96 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Tasks</h1>
+    <div class="sub">{{len .Ready}} ready &middot; {{len .InProgress}} in progress &middot; {{len .Blocked}} blocked</div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Ready <span class="count">{{len .Ready}}</span></h2>
+  {{if .Ready}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Project</th><th>Deps</th><th>Age</th></tr></thead>
+      <tbody>
+        {{range .Ready}}
+        <tr>
+          <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted">{{if .Deps}}{{.Deps}}{{else}}&mdash;{{end}}</td>
+          <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">Nothing ready to pick up</div>{{end}}
+</div>
+
+{{if .InProgress}}
+<div class="section">
+  <h2>In progress <span class="count">{{len .InProgress}}</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Project</th><th>Age</th></tr></thead>
+      <tbody>
+        {{range .InProgress}}
+        <tr>
+          <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+<div class="section">
+  <h2>Blocked <span class="count">{{len .Blocked}}</span></h2>
+  {{if .Blocked}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Project</th><th>Blocked by</th></tr></thead>
+      <tbody>
+        {{range .Blocked}}
+        <tr>
+          <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td>
+            {{range .Blockers}}<span class="badge {{if eq .Status "in_progress"}}accent{{else}}warn{{end}}" title="{{.ID}}">{{.Title}}</span> {{end}}
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">Nothing blocked</div>{{end}}
+</div>
+
+{{if .Closed}}
+<div class="section">
+  <details>
+    <summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px;">Recently closed <span class="count muted">{{len .Closed}}{{if .ClosedMore}} of {{add (len .Closed) .ClosedMore}}{{end}}</span></summary>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Task</th><th>Project</th><th>Status</th><th>Closed</th></tr></thead>
+        <tbody>
+          {{range .Closed}}
+          <tr>
+            <td class="muted">{{.Title}}</td>
+            <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+            <td>{{if eq .Status "done"}}<span class="badge ok">done</span>{{else}}<span class="badge">dropped</span>{{end}}</td>
+            <td class="muted">{{if .Closed}}{{ago .Closed}}{{else}}&mdash;{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{{end}}
+{{end}}
+{{end}}

@@ -21,7 +21,7 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "sessions", "session", "memories", "retrieval",
+	"login", "overview", "sessions", "session", "memories", "retrieval", "tasks",
 }
 
 // pageData is the envelope every rendered page receives. Data holds the
@@ -110,8 +110,22 @@ func (s *Service) serverError(w http.ResponseWriter, r *http.Request, err error)
 // Template helpers
 // ---------------------------------------------------------------------------
 
-// ago renders a compact relative age ("3d", "5h", "just now").
-func ago(t time.Time) string {
+// ago renders a compact relative age ("3d", "5h", "just now"). It accepts a
+// time.Time or *time.Time (nil/zero -> "-") so templates can pass nullable
+// timestamps directly.
+func ago(v any) string {
+	var t time.Time
+	switch x := v.(type) {
+	case time.Time:
+		t = x
+	case *time.Time:
+		if x == nil {
+			return "-"
+		}
+		t = *x
+	default:
+		return "-"
+	}
 	if t.IsZero() {
 		return "-"
 	}

@@ -228,6 +228,61 @@ func ReadyTasks(ctx context.Context, db *sql.DB, project string) ([]core.Task, e
 	return scanTasksWithDeps(ctx, db, rows)
 }
 
+// AllReadyTasks returns the ready tasks across every project (see ReadyTasks for
+// the readiness rule), oldest-created first. It backs the console Tasks page.
+func AllReadyTasks(ctx context.Context, db *sql.DB) ([]core.Task, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks t
+		WHERE t.status = 'open'
+		  AND NOT EXISTS (
+		      SELECT 1 FROM task_deps d
+		      JOIN tasks b ON b.id = d.depends_on
+		      WHERE d.task_id = t.id AND b.status IN ('open','in_progress'))
+		ORDER BY t.created_at ASC, t.id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("store.AllReadyTasks: %w", err)
+	}
+	return scanTasksWithDeps(ctx, db, rows)
+}
+
+// AllBlockedTasks returns open-but-not-ready tasks across every project, each
+// with its still-open blockers.
+func AllBlockedTasks(ctx context.Context, db *sql.DB) ([]BlockedTask, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks t
+		WHERE t.status = 'open'
+		  AND EXISTS (
+		      SELECT 1 FROM task_deps d
+		      JOIN tasks b ON b.id = d.depends_on
+		      WHERE d.task_id = t.id AND b.status IN ('open','in_progress'))
+		ORDER BY t.created_at ASC, t.id ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("store.AllBlockedTasks: %w", err)
+	}
+	tasks, err := scanTasksWithDeps(ctx, db, rows)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]BlockedTask, 0, len(tasks))
+	for _, t := range tasks {
+		blockers, err := openBlockers(ctx, db, t.ID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, BlockedTask{Task: t, Blockers: blockers})
+	}
+	return out, nil
+}
+
+// AllTasksByStatus returns every task with the given status across all projects,
+// newest-updated first.
+func AllTasksByStatus(ctx context.Context, db *sql.DB, status core.TaskStatus) ([]core.Task, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks
+		WHERE status = ? ORDER BY updated_at DESC, id DESC`, string(status))
+	if err != nil {
+		return nil, fmt.Errorf("store.AllTasksByStatus: %w", err)
+	}
+	return scanTasksWithDeps(ctx, db, rows)
+}
+
 // ListTasks returns a project's tasks, optionally filtered by status, newest
 // first. An empty status returns every status.
 func ListTasks(ctx context.Context, db *sql.DB, project string, status core.TaskStatus) ([]core.Task, error) {
