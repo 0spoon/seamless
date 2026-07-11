@@ -164,6 +164,48 @@ func TestMCPLoopWithBinding(t *testing.T) {
 	require.Equal(t, "completed", end["status"])
 }
 
+func TestMemorySupersession(t *testing.T) {
+	ctx := context.Background()
+	url := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	sessID := start["session_id"].(string)
+
+	// Write the original memory, then a replacement that supersedes it.
+	callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "chroma-boot-race", "kind": "gotcha",
+		"description": "chroma readiness boot race",
+		"body":        "The old understanding of the readiness race.\n",
+	})
+	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "chroma-readiness-gate", "kind": "gotcha",
+		"description": "readiness gate fixes the chroma race",
+		"body":        "Add a readiness gate and healthcheck.\n",
+		"supersedes":  "chroma-boot-race",
+	})
+	require.Equal(t, "demo/chroma-boot-race", w["superseded"])
+	require.Nil(t, w["supersede_error"])
+
+	// recall no longer surfaces the superseded memory, only its replacement.
+	rec := callJSON(t, ctx, cli, "recall", map[string]any{"query": "chroma readiness race gate"})
+	for _, h := range rec["hits"].([]any) {
+		require.NotEqual(t, "chroma-boot-race", h.(map[string]any)["name"],
+			"superseded memory must not appear in recall")
+	}
+
+	// memory_read of the superseded memory still returns it, with a warning and
+	// provenance (source_session) attached.
+	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "chroma-boot-race"})
+	require.Contains(t, r["body"], "old understanding")
+	require.Contains(t, r["warning"], "superseded by demo/chroma-readiness-gate")
+	require.Equal(t, sessID, r["source_session"], "memory_read must carry write-time provenance")
+
+	// The replacement reads back active (no warning).
+	r2 := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "chroma-readiness-gate"})
+	require.Nil(t, r2["warning"])
+}
+
 func TestMCPAuthRejectsBadKey(t *testing.T) {
 	ctx := context.Background()
 	url := newServer(t)

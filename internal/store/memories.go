@@ -106,6 +106,29 @@ func MemoryByName(ctx context.Context, db *sql.DB, project, name string) (core.M
 	return mems[0], true, nil
 }
 
+// MemoryByNameIncludingInvalid returns the most recently updated memory with an
+// exact (project, name), whether or not it is still valid. It backs memory_read's
+// warning path: a superseded memory (which MemoryByName excludes) is still
+// readable, prefixed with a warning pointing at its replacement.
+func MemoryByNameIncludingInvalid(ctx context.Context, db *sql.DB, project, name string) (core.Memory, bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
+		FROM memories_index
+		WHERE project = ? AND name = ?
+		ORDER BY updated_at DESC, id DESC LIMIT 1`, project, name)
+	if err != nil {
+		return core.Memory{}, false, fmt.Errorf("store.MemoryByNameIncludingInvalid: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	mems, err := scanMemories(rows)
+	if err != nil {
+		return core.Memory{}, false, fmt.Errorf("store.MemoryByNameIncludingInvalid: %w", err)
+	}
+	if len(mems) == 0 {
+		return core.Memory{}, false, nil
+	}
+	return mems[0], true, nil
+}
+
 // MemoryByID returns the memory with the given id. found is false when absent.
 func MemoryByID(ctx context.Context, db *sql.DB, id string) (core.Memory, bool, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
