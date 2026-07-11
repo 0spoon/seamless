@@ -219,21 +219,46 @@ type kindCount struct {
 
 // overviewData is the pre-computed payload for the overview page.
 type overviewData struct {
-	Memories    int
-	MemByKind   []kindCount
-	Notes       int
-	SessActive  int
-	SessTotal   int
-	TasksOpen   int
-	TasksInProg int
-	TasksDone   int
-	Injections  int
-	Reads       int
-	ReadRate    int              // reads as a % of injections
-	Trend       []store.DayCount // 14-day injection trend, for the area chart
-	TopInjected []store.NamedCount
-	Pending     int
-	Recent      []eventRow
+	Memories     int
+	MemByKind    []kindCount
+	Notes        int
+	SessActive   int
+	SessTotal    int
+	TasksOpen    int
+	TasksInProg  int
+	TasksDone    int
+	Injections   int
+	Reads        int
+	ReadRate     int              // reads as a % of injections
+	Trend        []store.DayCount // 14-day injection trend, for the area chart
+	TopInjected  []store.NamedCount
+	Pending      int
+	Recent       []eventRow
+	Coverage     int           // % of sessions that retained knowledge
+	Covered      int           // sessions with >=1 durable artifact
+	CoverageRows []coverageRow // per-channel breakdown (findings/memories/notes/trials)
+}
+
+// coverageRow is one retention channel in the overview's "retained via"
+// breakdown: how many sessions left this kind of artifact, and its share of all
+// sessions (channels overlap, so the shares need not sum to 100%). Color is a
+// server-controlled CSS token, safe to inline into the bar.
+type coverageRow struct {
+	Label string
+	Count int
+	Pct   int
+	Color string
+}
+
+// coverageRows projects a SessionCoverage roll-up into the ordered channel rows
+// the overview renders, each bar sized as its share of all sessions.
+func coverageRows(c store.SessionCoverage) []coverageRow {
+	return []coverageRow{
+		{"Findings", c.Findings, percent(c.Findings, c.Total), "var(--brand)"},
+		{"Memories", c.Memories, percent(c.Memories, c.Total), "var(--ok)"},
+		{"Notes", c.Notes, percent(c.Notes, c.Total), "var(--pop)"},
+		{"Trials", c.Trials, percent(c.Trials, c.Total), "var(--warn)"},
+	}
 }
 
 func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
@@ -257,23 +282,31 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	cov, err := store.GetSessionCoverage(ctx, s.cfg.DB)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 
 	data := overviewData{
-		Trend:       denseDays(trend, 14),
-		Memories:    sum.Memories.Active,
-		MemByKind:   orderKinds(sum.Memories.ByKind),
-		Notes:       sum.Notes,
-		SessActive:  sum.Sessions[string(core.SessionActive)],
-		SessTotal:   sumValues(sum.Sessions),
-		TasksOpen:   sum.Tasks[string(core.TaskOpen)],
-		TasksInProg: sum.Tasks[string(core.TaskInProgress)],
-		TasksDone:   sum.Tasks[string(core.TaskDone)],
-		Injections:  sum.Retrieval.Injections,
-		Reads:       sum.Retrieval.Reads,
-		ReadRate:    readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
-		TopInjected: sum.Retrieval.TopInjected,
-		Pending:     sumValues(sum.GardenerPending),
-		Recent:      recent,
+		Trend:        denseDays(trend, 14),
+		Memories:     sum.Memories.Active,
+		MemByKind:    orderKinds(sum.Memories.ByKind),
+		Notes:        sum.Notes,
+		SessActive:   sum.Sessions[string(core.SessionActive)],
+		SessTotal:    sumValues(sum.Sessions),
+		TasksOpen:    sum.Tasks[string(core.TaskOpen)],
+		TasksInProg:  sum.Tasks[string(core.TaskInProgress)],
+		TasksDone:    sum.Tasks[string(core.TaskDone)],
+		Injections:   sum.Retrieval.Injections,
+		Reads:        sum.Retrieval.Reads,
+		ReadRate:     readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
+		TopInjected:  sum.Retrieval.TopInjected,
+		Pending:      sumValues(sum.GardenerPending),
+		Recent:       recent,
+		Coverage:     percent(cov.Covered, cov.Total),
+		Covered:      cov.Covered,
+		CoverageRows: coverageRows(cov),
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }

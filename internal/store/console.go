@@ -130,6 +130,50 @@ func scanMemoryStats(rows *sql.Rows) ([]MemoryStat, error) {
 	return out, rows.Err()
 }
 
+// SessionCoverage measures how much Claude Code session knowledge Seamless is
+// retaining: a session is "covered" when it left a durable artifact behind --
+// non-empty findings, or at least one written memory, note, or recorded trial.
+// It is a rough proxy for "how much of what happened in a session did we keep".
+// The per-channel counts (Findings/Memories/Notes/Trials) overlap -- a session
+// can be covered several ways -- so only Total and Covered partition the set.
+type SessionCoverage struct {
+	Total    int `json:"total"`    // all sessions (the denominator)
+	Covered  int `json:"covered"`  // sessions with >=1 durable artifact
+	Findings int `json:"findings"` // sessions whose findings are non-empty
+	Memories int `json:"memories"` // sessions that wrote >=1 memory
+	Notes    int `json:"notes"`    // sessions that created >=1 note
+	Trials   int `json:"trials"`   // sessions that recorded >=1 trial
+}
+
+// GetSessionCoverage computes the coverage roll-up in a single pass over
+// sessions, testing each against the event log for durable artifacts. It reads
+// the event log directly rather than retrieval_stats, so it needs no rebuild.
+func GetSessionCoverage(ctx context.Context, db *sql.DB) (SessionCoverage, error) {
+	var c SessionCoverage
+	err := db.QueryRowContext(ctx, `
+		SELECT
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN has_findings OR has_mem OR has_note OR has_trial THEN 1 ELSE 0 END), 0),
+			COALESCE(SUM(has_findings), 0),
+			COALESCE(SUM(has_mem), 0),
+			COALESCE(SUM(has_note), 0),
+			COALESCE(SUM(has_trial), 0)
+		FROM (
+			SELECT
+				(s.findings <> '') AS has_findings,
+				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_mem,
+				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_note,
+				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_trial
+			FROM sessions s
+		)`,
+		string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded),
+	).Scan(&c.Total, &c.Covered, &c.Findings, &c.Memories, &c.Notes, &c.Trials)
+	if err != nil {
+		return c, fmt.Errorf("store.GetSessionCoverage: %w", err)
+	}
+	return c, nil
+}
+
 // DayCount is one calendar day's event count, for the injection trend.
 type DayCount struct {
 	Day   string `json:"day"` // YYYY-MM-DD
