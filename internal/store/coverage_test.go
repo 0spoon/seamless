@@ -61,7 +61,7 @@ func TestGetSessionCoverage(t *testing.T) {
 	c, err := GetSessionCoverage(ctx, db)
 	require.NoError(t, err)
 	require.Equal(t, 7, c.Total)
-	require.Equal(t, 5, c.Covered) // s1..s5; s6,s7 uncovered
+	require.Equal(t, 5, c.Covered)  // s1..s5; s6,s7 uncovered
 	require.Equal(t, 2, c.Findings) // s1, s5
 	require.Equal(t, 2, c.Memories) // s2, s5
 	require.Equal(t, 1, c.Notes)    // s3
@@ -73,4 +73,43 @@ func TestGetSessionCoverage_Empty(t *testing.T) {
 	c, err := GetSessionCoverage(context.Background(), db)
 	require.NoError(t, err)
 	require.Equal(t, SessionCoverage{}, c)
+}
+
+func TestSessionCoverageByDay(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	d0 := now                   // today
+	d1 := now.AddDate(0, 0, -1) // yesterday
+
+	mk := func(id, name string, created time.Time) core.Session {
+		return core.Session{ID: id, Name: name, Status: core.SessionCompleted, CreatedAt: created, UpdatedAt: created}
+	}
+
+	// Today: one covered (findings), one uncovered.
+	s1 := mk("d0a", "cc/d0a", d0)
+	s1.Findings = "kept something"
+	require.NoError(t, CreateSession(ctx, db, s1))
+	require.NoError(t, CreateSession(ctx, db, mk("d0b", "cc/d0b", d0)))
+	// Yesterday: one covered via a written memory.
+	require.NoError(t, CreateSession(ctx, db, mk("d1a", "cc/d1a", d1)))
+	insertSessionEvent(t, db, core.EventMemoryWritten, "d1a", now)
+
+	got, err := SessionCoverageByDay(ctx, db, 14)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+
+	byDay := map[string]DayCoverage{}
+	for _, d := range got {
+		byDay[d.Day] = d
+	}
+	require.Equal(t, DayCoverage{Day: d0.Format("2006-01-02"), Total: 2, Covered: 1}, byDay[d0.Format("2006-01-02")])
+	require.Equal(t, DayCoverage{Day: d1.Format("2006-01-02"), Total: 1, Covered: 1}, byDay[d1.Format("2006-01-02")])
+}
+
+func TestSessionCoverageByDay_Empty(t *testing.T) {
+	db := openTestDB(t)
+	got, err := SessionCoverageByDay(context.Background(), db, 14)
+	require.NoError(t, err)
+	require.Empty(t, got)
 }

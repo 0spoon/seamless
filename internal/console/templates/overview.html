@@ -58,6 +58,15 @@
   </div>
 </div>
 
+<div class="section">
+  <div class="card">
+    <h2>Coverage trend &middot; 14d</h2>
+    {{if .CoverageTrend}}{{coverageTrend .CoverageTrend}}
+    <span class="ring-label">daily share of sessions that retained knowledge</span>
+    {{else}}<div class="empty">No sessions in the last 14 days</div>{{end}}
+  </div>
+</div>
+
 <div class="grid section">
   <div class="card stat"><span class="value">{{.Memories}}</span><span class="label">Active memories</span></div>
   <div class="card stat"><span class="value">{{.Notes}}</span><span class="label">Notes</span></div>
