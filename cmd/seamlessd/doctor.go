@@ -1,11 +1,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/hooks"
+	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/mcp"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -66,6 +71,7 @@ func doctor(args []string) error {
 		check{statusOK, "data_dir", cfg.DataDir},
 		apiKeyCheck(cfg),
 		llmCheck(cfg),
+		embedderCheck(cfg),
 	)
 
 	// Database: open (creating + migrating if needed) and report schema state.
@@ -84,9 +90,89 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
-	checks = append(checks, mcpToolsCheck())
+	checks = append(checks, mcpToolsCheck(), hooksCheck(), gardenerCheck(cfg))
 
 	return reportChecks(checks)
+}
+
+// hooksCheck reports whether the three Seamless hooks are installed. It looks in
+// the global settings (~/.claude/settings.json) and the project-scoped dogfood
+// settings (./.claude/settings.json), reporting the first location that has all
+// three, or a warning when they are partial or absent.
+func hooksCheck() check {
+	want := len(hooks.InstalledEvents())
+	var candidates []string
+	if home, err := expandHome("~/.claude/settings.json"); err == nil {
+		candidates = append(candidates, home)
+	}
+	candidates = append(candidates, filepath.Join(".claude", "settings.json"))
+
+	var best check
+	found := false
+	for _, path := range candidates {
+		present, err := hooks.InstalledStatus(path)
+		if err != nil || len(present) == 0 {
+			continue
+		}
+		if len(present) == want {
+			return check{statusOK, "hooks", fmt.Sprintf("%d/%d installed in %s", want, want, path)}
+		}
+		if !found {
+			best = check{statusWarn, "hooks",
+				fmt.Sprintf("%d/%d installed in %s (%s)", len(present), want, path, strings.Join(present, ","))}
+			found = true
+		}
+	}
+	if found {
+		return best
+	}
+	return check{statusWarn, "hooks", "not installed (run: seamlessd install-hooks)"}
+}
+
+// gardenerCheck reports the gardener ticker configuration.
+func gardenerCheck(cfg config.Config) check {
+	g := cfg.Gardener
+	if !g.Enabled {
+		return check{statusWarn, "gardener", "disabled (set gardener.enabled: true to run maintenance passes)"}
+	}
+	return check{statusOK, "gardener", fmt.Sprintf(
+		"enabled (every %dm; dedup>=%.2f, staleness %dd, digest %dd)",
+		g.IntervalMinutes, g.DedupThreshold, g.StalenessDays, g.DigestDays)}
+}
+
+// embedderCheck probes the configured embedder so a misconfiguration (bad key,
+// unreachable Ollama) is caught before it silently degrades recall to FTS. A
+// missing credential or a failed probe is a warning, not a failure -- recall
+// still works lexically.
+func embedderCheck(cfg config.Config) check {
+	if missing, why := missingEmbedCredential(cfg); missing {
+		return check{statusWarn, "embedder", why + " (recall degrades to FTS)"}
+	}
+	e, err := llm.NewEmbedder(cfg.LLM)
+	if err != nil {
+		return check{statusWarn, "embedder", "disabled: " + err.Error() + " (recall degrades to FTS)"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+	if _, err := e.Embed(ctx, "seamless doctor reachability probe"); err != nil {
+		return check{statusWarn, "embedder", fmt.Sprintf(
+			"provider=%s model=%s unreachable: %v (recall degrades to FTS)", cfg.LLM.Provider, e.Model(), err)}
+	}
+	return check{statusOK, "embedder", fmt.Sprintf("provider=%s model=%s reachable", cfg.LLM.Provider, e.Model())}
+}
+
+// missingEmbedCredential reports whether the selected provider lacks the
+// credential it needs to embed, so doctor can skip a doomed network probe.
+func missingEmbedCredential(cfg config.Config) (bool, string) {
+	switch cfg.LLM.Provider {
+	case config.ProviderOpenAI:
+		if strings.TrimSpace(cfg.LLM.OpenAI.APIKey) == "" {
+			return true, "provider=openai but openai.api_key is empty"
+		}
+	case config.ProviderAnthropic:
+		return true, "provider=anthropic has no embeddings API"
+	}
+	return false, ""
 }
 
 // mcpToolsCheck asserts the MCP server registers exactly the expected number of
