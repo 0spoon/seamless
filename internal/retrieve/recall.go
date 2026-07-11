@@ -17,6 +17,10 @@ const rrfK = 60
 // fusing; a few multiples of the requested limit gives RRF room to reorder.
 const recallSourceDepth = 24
 
+// linkExpandFrom is how many of the top fused memory hits are scanned for
+// [[name]] links; each linked neighbor is pulled in as a third retrieval signal.
+const linkExpandFrom = 5
+
 // Hit is one recall result. Kind tells the agent how to read it: a memory by its
 // Name (memory_read), a note by its ID (notes_read).
 type Hit struct {
@@ -45,6 +49,7 @@ type fusedItem struct {
 	score    float64
 	semantic bool
 	fts      bool
+	linked   bool // pulled in via a [[name]] link from a top hit
 }
 
 // Recall fuses semantic (cosine) and FTS results with RRF, hydrates the winners
@@ -106,6 +111,16 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	notes, err := store.NotesByIDs(ctx, s.db, noteIDs)
 	if err != nil {
 		return nil, err
+	}
+
+	// Link expansion: pull in memories referenced by [[name]] links in the top
+	// hits, as a third retrieval signal alongside semantic and FTS. Requires the
+	// body reader (index rows carry no body); degrades away when it is unset.
+	// expandLinks adds neighbors to both acc and mems, so we only re-rank.
+	if neighbors, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
+		return nil, err
+	} else if len(neighbors) > 0 {
+		ordered = rankFused(acc)
 	}
 
 	budget := s.budgets.RecallBudgetTokens
@@ -179,8 +194,12 @@ func fusedSource(f *fusedItem) string {
 		return "fused"
 	case f.semantic:
 		return "semantic"
-	default:
+	case f.fts:
 		return "fts"
+	case f.linked:
+		return "link"
+	default:
+		return "fused"
 	}
 }
 
