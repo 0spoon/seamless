@@ -145,7 +145,7 @@ Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — wr
 - [x] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2. **DONE 2026-07-10 (awaiting owner review before P4).**
 - [x] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down. **DONE 2026-07-10 (awaiting owner review before P5).**
 - [x] **P5 — Console + CLI observability (3-4 days).** All console pages + SSE; CLI `sessions/usage/ready/task/capture/doctor`; `install-hooks` for v2; doctor complete (key, hooks x3, tool count 26, gardener ticker, embedder reachability). Acceptance: owner walkthrough of every console page against live dogfood data; screenshots recorded. **DONE 2026-07-10 (awaiting owner review before P6).**
-- [ ] **P6 — Cutover (1-2 days + a parallel-run week).** Final `import` delta run (re-import anything old Seam accrued during the rewrite; imports are idempotent by id/name). Switch the global hooks + MCP registration to Seamless for ALL repos (installer handles it; remove the project-scoped dogfood hooks and rename/remove the old `seam` MCP entry), keep old seamd running read-only for one week as fallback, then stop and disable the old service. Archive the v1 repo (history + PLAN.md + review notes are the design record). Rename/move: Seamless takes over port 8080, data dir stays `~/.seamless`, `make install-service` for Seamless, update `~/.claude/CLAUDE.md` Seam section and replace the `/seam-onboard` skill from the Seamless docs. Acceptance: `make doctor` green on v2 as the sole system; one full day of normal multi-repo agent work with zero fallbacks to v1.
+- [x] **P6 — Cutover (1-2 days + a parallel-run week).** Final `import` delta run (re-import anything old Seam accrued during the rewrite; imports are idempotent by id/name). Switch the global hooks + MCP registration to Seamless for ALL repos (installer handles it; remove the project-scoped dogfood hooks and rename/remove the old `seam` MCP entry), keep old seamd running read-only for one week as fallback, then stop and disable the old service. Archive the v1 repo (history + PLAN.md + review notes are the design record). Rename/move: Seamless takes over port 8080, data dir stays `~/.seamless`, `make install-service` for Seamless, update `~/.claude/CLAUDE.md` Seam section and replace the `/seam-onboard` skill from the Seamless docs. Acceptance: `make doctor` green on v2 as the sole system; one full day of normal multi-repo agent work with zero fallbacks to v1. **DONE 2026-07-10 -- owner elected a full same-day cutover (no parallel-run week). Deviations: Seamless stayed on :8081 (did not take :8080; v1 decommissioned frees 8080); v1 services disabled but NOT archived, all data preserved (`~/.seam`, `~/repos/seam`, plists as `.disabled`). See progress log.**
 
 Total: roughly 3-4 weeks of agent execution at the PLAN.md level of care, with v2 earning its keep from P2 onward.
 
@@ -577,3 +577,57 @@ pill. `seamlessd doctor` reports 26 tools, hooks 3/3 after install, gardener
 config, and the embedder credential state. `seam doctor/usage/ready/task/
 sessions/capture` all verified against a live throwaway server. **HARD STOP:
 awaiting owner review before P6 (cutover).**
+
+### 2026-07-10 — P6 cutover (full same-day, no parallel-run week)
+
+Owner merged P5 to `main`, then elected a **complete same-day cutover** rather
+than the planned one-week parallel run. The live env had already diverged from
+the plan text (owner had manually pointed global hooks + MCP at Seamless during
+dogfood), so P6 was smaller than written.
+
+**Owner decisions (this session):** (1) keep Seamless on **:8081** -- do NOT take
+:8080; v1 is decommissioned and 8080 simply freed. (2) Convert everything to
+Seamless including the MW75 hardware repo, then disable v1 and free the port,
+**preserving all v1 data/DB/repo** (disable only, no deletion).
+
+**Repo deliverables (committed):**
+- `chore(p6)`: `make install-service` + `deploy/launchd` plist template
+  (`__BINARY__`/`__CONFIG__`/`__LOG__`) formalizing the hand-made
+  `org.thereisnospoon.seamless` LaunchAgent; idempotent bootout+bootstrap reload;
+  symmetric `uninstall-service`. (plist render validated via `plutil`; the
+  bootstrap action itself is gated behind explicit owner approval.)
+- `feat(p6)`: ported the `/seam-onboard` skill from v1 to Seamless -- discovery
+  reads `SEAMLESS_MCP_API_KEY` / plist `SEAMLESS_CONFIG` / `seamless.yaml`
+  (`mcp.api_key`+`addr`), registers the `seamless` MCP server at user scope on
+  :8081, writes a `mcp__seamless__` CLAUDE.md block (recall as the single search
+  tool; no `notes_search`/`context_gather`/`decision_record`). Same skill name +
+  markers so it overwrites v1 in place. `make install-onboard-skill`.
+
+**Live cutover (all reversible, backups in session scratch):**
+- Delta `import --from ~/.seam`: idempotent-by-id; parity confirmed (v1's 107
+  note-tree files == 73 memories + 29 notes + 6 trials in v2, + 50 sessions;
+  final re-run 0 new / 590 skipped). Firmware knowledge verified recallable via
+  `recall` scoped to `mw75-neuro-firmware`.
+- `install-hooks` on `~/.claude/settings.json` added the missing global
+  **SessionEnd** hook. **Gotcha:** the installer keys idempotency on a
+  `seamless_managed: true` marker and does NOT adopt pre-existing *unmarked*
+  seamless-URL hooks -- it duplicated SessionStart/UserPromptSubmit. Fixed by
+  dropping the stale unmarked duplicates; installer now reports 3/3 unchanged.
+  (Follow-up candidate: teach `hooks.Install` to adopt/dedupe unmarked entries.)
+- Removed the last project-scoped `seam` (:8080) MCP entry
+  (`hegemon/firmware/mw75neuro`) from `~/.claude.json`; global MCP is now
+  `seamless`-only. Repo was already mapped (`.../hegemon/firmware ->
+  mw75-neuro-firmware`), so nothing writes to v1 anymore.
+- Installed the Seamless `/seam-onboard` skill (replacing v1's) and rewrote the
+  `~/.claude/CLAUDE.md` block canonically (byte-identical to the committed
+  SKILL.md).
+- **v1 decommissioned:** `launchctl bootout` of `com.seam.seamd` +
+  `com.seam.chroma`; both plists renamed to `*.plist.disabled` (no login
+  reload). Port **8080 freed**, processes gone. `~/.seam`, `~/repos/seam`,
+  `seam.db`, chroma data all preserved -- restore = rename plists back +
+  bootstrap.
+
+**Acceptance:** `make doctor` green as the sole system -- 26 tools, 3/3 hooks,
+embedder reachable, DB ok, gardener enabled. Seamless healthy on :8081; 8080
+free. The "one full day zero fallbacks" soak is now ongoing normal use rather
+than a gated week.

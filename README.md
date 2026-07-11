@@ -9,10 +9,11 @@ plan live in [`docs/PLAN.md`](docs/PLAN.md).
 
 ## Status
 
-Under active construction, one phase at a time, per `docs/PLAN.md`. Not yet at
-parity with v1; v1 keeps serving daily traffic until cutover (Phase 6). Seamless
-develops on port `8081` with data dir `~/.seamless` (env prefix `SEAMLESS_*`) so
-the two systems never cross-configure during the parallel run.
+Cutover complete (Phase 6, 2026-07-10): Seamless is the sole agent-memory system,
+serving on port `8081` with data dir `~/.seamless` (env prefix `SEAMLESS_*`). v1
+Seam is decommissioned -- its launchd services are disabled and port `8080` is
+freed, with `~/.seam` preserved read-only as a fallback archive. See
+[`docs/PLAN.md`](docs/PLAN.md) for the phase history.
 
 ## Architecture (target)
 

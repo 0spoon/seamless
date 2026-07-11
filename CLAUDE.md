@@ -12,10 +12,11 @@ gardener), ambient sessions via Claude Code hooks, a dependency-aware task
 ready-queue, research trials, hybrid recall, and a read-mostly observability
 console. Go backend, no CGO, single binary + CLI.
 
-It is a ground-up rebuild of Seam v1 (`~/repos/seam`, READ-ONLY reference). v1
-keeps running on port 8080 with data dir `~/.seam` throughout the rewrite;
-Seamless develops on port 8081 with data dir `~/.seamless` and env prefix
-`SEAMLESS_*`, so the two never cross-configure during the parallel run.
+It is a ground-up rebuild of Seam v1 (`~/repos/seam`, READ-ONLY reference). As of
+the P6 cutover (2026-07-10) Seamless is the sole agent-memory system, serving on
+port 8081 with data dir `~/.seamless` and env prefix `SEAMLESS_*`. v1 is
+decommissioned (launchd services disabled, port 8080 freed) with `~/.seam`
+preserved read-only as a fallback archive.
 
 ## Project structure
 
