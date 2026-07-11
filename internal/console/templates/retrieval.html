@@ -7,10 +7,20 @@
   </div>
 </div>
 
-<div class="grid section">
+<div class="grid-hero section">
+  <div class="card center">
+    <h2 style="align-self:flex-start">Read-after-inject</h2>
+    {{if .Injections}}
+    <div class="ring" style="--ring-val:{{.ReadRate}};--ring-size:116px;--ring-stroke:12px">
+      <div class="ring-center">
+        <span class="ring-num">{{.ReadRate}}%</span>
+        <span class="ring-sub">{{.Reads}} / {{.Injections}}</span>
+      </div>
+    </div>
+    {{else}}<div class="empty">No retrieval yet</div>{{end}}
+  </div>
   <div class="card stat"><span class="value">{{.Injections}}</span><span class="label">Injections</span></div>
   <div class="card stat"><span class="value">{{.Reads}}</span><span class="label">Reads</span></div>
-  <div class="card stat"><span class="value">{{.ReadRate}}%</span><span class="label">Read after inject</span></div>
 </div>
 
 <div class="grid-2 section">
@@ -45,7 +55,7 @@
         <tr>
           <td class="muted mono" style="width:100px">{{.Day}}</td>
           <td class="num" style="width:40px">{{.Count}}</td>
-          <td><div class="meter"><span style="width:{{pct .Count $.Data.TrendMax}}%"></span></div></td>
+          <td><div class="meter"><span class="{{if and (gt .Count 0) (eq .Count $.Data.TrendMax)}}peak{{end}}" style="width:{{pct .Count $.Data.TrendMax}}%"></span></div></td>
         </tr>
         {{end}}
       </tbody>

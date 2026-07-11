@@ -41,6 +41,25 @@ var funcs = template.FuncMap{
 	"pct":       func(n, d int) int { return percent(n, d) },
 	"add":       func(a, b int) int { return a + b },
 	"hasPrefix": strings.HasPrefix,
+	"evtTone":   evtTone,
+}
+
+// evtTone maps an event kind to a chip tone class (see console.css .kind.*), so
+// the activity/timeline tables read at a glance: injections brand, reads/writes
+// green, gardener coral, supersede/archive amber. Empty string = neutral.
+func evtTone(kind string) string {
+	switch {
+	case strings.HasPrefix(kind, "retrieval"):
+		return "brand"
+	case strings.HasPrefix(kind, "gardener"):
+		return "pop"
+	case kind == "memory.superseded" || kind == "memory.archived":
+		return "warn"
+	case strings.HasPrefix(kind, "memory.read"), strings.HasPrefix(kind, "memory.written"), strings.HasPrefix(kind, "note."):
+		return "ok"
+	default:
+		return ""
+	}
 }
 
 // parseTemplates parses the layout + every page into its own template set.
