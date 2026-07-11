@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/config"
@@ -18,6 +20,7 @@ func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
 	settings := fs.String("settings", "~/.claude/settings.json", "settings.json to install into")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
+	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -37,8 +40,13 @@ func runInstallHooks(args []string) error {
 	if err != nil {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
+	seamBin := resolveSeamBin(*seamFlag)
+	configPath := absConfigPath(cfg.SourcePath())
 
-	res, err := hooks.Install(hooks.InstallOptions{SettingsPath: path, BaseURL: baseURL, APIKey: cfg.MCP.APIKey})
+	res, err := hooks.Install(hooks.InstallOptions{
+		SettingsPath: path, BaseURL: baseURL, APIKey: cfg.MCP.APIKey,
+		SeamBin: seamBin, ConfigPath: configPath,
+	})
 	if err != nil {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
@@ -54,6 +62,37 @@ func runInstallHooks(args []string) error {
 		fmt.Printf("Seamless hooks already up to date in %s\n", path)
 	}
 	return nil
+}
+
+// absConfigPath makes the loaded config file absolute so it can be baked into
+// the SessionStart command hook as SEAMLESS_CONFIG (the hook fires from any cwd,
+// where a relative "seamless.yaml" would not resolve). "" (defaults+env, no
+// file) stays "" so no SEAMLESS_CONFIG is emitted.
+func absConfigPath(src string) string {
+	if strings.TrimSpace(src) == "" {
+		return ""
+	}
+	if abs, err := filepath.Abs(src); err == nil {
+		return abs
+	}
+	return src
+}
+
+// resolveSeamBin picks the seam CLI path baked into the SessionStart command
+// hook. An explicit --seam wins; otherwise it prefers the seam binary sitting
+// next to this seamlessd (the normal `make build` layout) so the hook works
+// regardless of PATH, falling back to a bare "seam" resolved at hook time.
+func resolveSeamBin(override string) string {
+	if strings.TrimSpace(override) != "" {
+		return override
+	}
+	if exe, err := os.Executable(); err == nil {
+		cand := filepath.Join(filepath.Dir(exe), "seam")
+		if info, err := os.Stat(cand); err == nil && !info.IsDir() {
+			return cand
+		}
+	}
+	return "seam"
 }
 
 // hookBaseURL turns a bind address into a reachable base URL, mapping a

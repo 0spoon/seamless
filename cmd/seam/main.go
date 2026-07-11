@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"flag"
@@ -50,6 +51,8 @@ func main() {
 		err = runTask(args)
 	case "capture":
 		err = runCapture(args)
+	case "hook":
+		err = runHook(args)
 	case "doctor":
 		err = runDoctor(args)
 	case "help", "-h", "--help":
@@ -85,6 +88,9 @@ observability:
   seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
   seam usage                                   activity roll-up
   seam doctor                                  reachability + key + tool-count check
+
+hooks (invoked by Claude Code, not by hand):
+  seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
 `)
 }
 
@@ -336,6 +342,52 @@ func runStatus(args []string) error {
 		}
 	}
 	fmt.Printf("projects: %d [%s]\n", len(slugs), strings.Join(slugs, " "))
+	return nil
+}
+
+// runHook forwards a Claude Code hook payload (read from stdin) to the matching
+// seamlessd hook endpoint and copies the JSON response to stdout, so a `command`
+// hook can drive the same server logic an `http` hook would. Claude Code accepts
+// only command/mcp_tool hooks for SessionStart, so this is how its briefing and
+// ambient session get injected. Runtime failures (server down, bad config) are
+// reported to stderr and exit 0 so a hiccup never blocks the session; only a
+// misconfigured event name (an install bug) is a hard error.
+func runHook(args []string) error {
+	endpoints := map[string]string{
+		"session-start":      "/api/hooks/session-start",
+		"user-prompt-submit": "/api/hooks/user-prompt-submit",
+		"session-end":        "/api/hooks/session-end",
+	}
+	if len(args) < 1 {
+		return fmt.Errorf("usage: seam hook <session-start|user-prompt-submit|session-end>")
+	}
+	ep, ok := endpoints[args[0]]
+	if !ok {
+		return fmt.Errorf("unknown hook event %q (want session-start|user-prompt-submit|session-end)", args[0])
+	}
+	payload, _ := io.ReadAll(os.Stdin)
+
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seam hook: load config:", err)
+		return nil // never block the session
+	}
+	req, err := http.NewRequest(http.MethodPost, mcpBase(cfg)+ep, bytes.NewReader(payload))
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seam hook:", err)
+		return nil
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seam hook:", err)
+		return nil
+	}
+	defer func() { _ = resp.Body.Close() }()
+	_, _ = io.Copy(os.Stdout, resp.Body)
 	return nil
 }
 
