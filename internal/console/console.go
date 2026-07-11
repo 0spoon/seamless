@@ -37,6 +37,7 @@ type Config struct {
 	Gardener *gardener.Service
 	Events   *events.Recorder
 	APIKey   string
+	DataDir  string // for resolving memory/note file paths to absolute editor links
 	Budgets  config.Budgets
 	Logger   *slog.Logger
 }
@@ -72,6 +73,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/{$}", s.auth(s.overview))
 	mux.HandleFunc("GET /console/sessions", s.auth(s.sessionsList))
 	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
+	mux.HandleFunc("GET /console/memories", s.auth(s.memoriesList))
+	mux.HandleFunc("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
 }
 
 // ---------------------------------------------------------------------------

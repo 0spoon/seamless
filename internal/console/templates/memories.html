@@ -1,0 +1,76 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Memories</h1>
+    <div class="sub">{{.ActiveCount}} active &middot; {{.InactiveCount}} inactive</div>
+  </div>
+</div>
+
+{{range .Groups}}
+<div class="section">
+  <h2>{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></h2>
+  {{range .Kinds}}
+  <div class="table-wrap" style="margin-bottom:12px;">
+    <table>
+      <thead>
+        <tr><th style="width:1%"><span class="kind">{{.Kind}}</span></th><th>Name</th><th>Description</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th><th></th></tr>
+      </thead>
+      <tbody>
+        {{range .Memories}}
+        <tr id="{{.ID}}">
+          <td></td>
+          <td><strong>{{.Name}}</strong></td>
+          <td class="muted">{{.Description}}</td>
+          <td class="num">{{.Injects}}</td>
+          <td class="num">{{.Reads}}</td>
+          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          <td class="num">
+            <div class="btn-row" style="justify-content:flex-end;flex-wrap:nowrap;">
+              <a class="btn small" href="{{.EditURL}}" title="{{.AbsPath}}">edit</a>
+              {{if $.Data.CanArchive}}
+              <form method="post" action="/console/memories/{{.ID}}/archive" onsubmit="return confirm('Archive {{.Name}}?');">
+                <button class="btn small danger" type="submit">archive</button>
+              </form>
+              {{end}}
+            </div>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<div class="empty">No active memories yet</div>
+{{end}}
+
+{{if .Inactive}}
+<div class="section">
+  <details>
+    <summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px;">Archived &amp; superseded <span class="count muted">{{.InactiveCount}}</span></summary>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Kind</th><th>Project</th><th>Status</th><th>Updated</th></tr></thead>
+        <tbody>
+          {{range .Inactive}}
+          <tr id="{{.ID}}">
+            <td>{{.Name}}</td>
+            <td><span class="kind">{{.Kind}}</span></td>
+            <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+            <td>
+              {{if eq .Status "superseded"}}<span class="badge warn">superseded{{if .ReplacedBy}} by <a href="#{{.ReplacedByID}}">{{.ReplacedBy}}</a>{{end}}</span>
+              {{else}}<span class="badge">archived</span>{{end}}
+            </td>
+            <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
+  </details>
+</div>
+{{end}}
+{{end}}
+{{end}}
