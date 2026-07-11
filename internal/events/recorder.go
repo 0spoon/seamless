@@ -9,18 +9,69 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
 
-// Recorder appends events to the log and reads them back.
+// subBuffer is the per-subscriber channel depth. A subscriber that falls behind
+// simply drops events (the console's live feed is best-effort; the DB remains the
+// source of truth), so a stalled SSE client never blocks the write path.
+const subBuffer = 32
+
+// Recorder appends events to the log, reads them back, and fans successfully
+// recorded events out to live subscribers (the console SSE feed).
 type Recorder struct {
 	db *sql.DB
+
+	mu     sync.Mutex
+	subs   map[int]chan core.Event
+	nextID int
 }
 
 // NewRecorder returns a Recorder backed by db.
 func NewRecorder(db *sql.DB) *Recorder { return &Recorder{db: db} }
+
+// Subscribe registers a live-event channel and returns it with an unsubscribe
+// func the caller must invoke when done (idempotent). Events are delivered
+// best-effort: a full channel drops rather than blocks.
+func (r *Recorder) Subscribe() (<-chan core.Event, func()) {
+	ch := make(chan core.Event, subBuffer)
+	r.mu.Lock()
+	if r.subs == nil {
+		r.subs = make(map[int]chan core.Event)
+	}
+	id := r.nextID
+	r.nextID++
+	r.subs[id] = ch
+	r.mu.Unlock()
+
+	var once sync.Once
+	return ch, func() {
+		once.Do(func() {
+			r.mu.Lock()
+			if c, ok := r.subs[id]; ok {
+				delete(r.subs, id)
+				close(c)
+			}
+			r.mu.Unlock()
+		})
+	}
+}
+
+// publish fans an event out to current subscribers, dropping to any that are
+// full. It holds the lock so it cannot race an unsubscribe's close.
+func (r *Recorder) publish(e core.Event) {
+	r.mu.Lock()
+	for _, ch := range r.subs {
+		select {
+		case ch <- e:
+		default:
+		}
+	}
+	r.mu.Unlock()
+}
 
 // Record appends an event, stamping a ULID id and UTC timestamp when absent and
 // serializing Payload to JSON. It returns the stored event's id. A non-fatal
@@ -58,6 +109,7 @@ func (r *Recorder) Record(ctx context.Context, e core.Event) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("events.Record: insert: %w", err)
 	}
+	r.publish(e)
 	return e.ID, nil
 }
 

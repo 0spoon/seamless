@@ -91,3 +91,49 @@ func TestRecent_NewestFirstAndLimit(t *testing.T) {
 	require.Equal(t, "d", got[1].ItemID)
 	require.Equal(t, "c", got[2].ItemID)
 }
+
+func TestSubscribe_ReceivesPublishedEvent(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+
+	ch, unsubscribe := r.Subscribe()
+	defer unsubscribe()
+
+	id, err := r.Record(ctx, core.Event{Kind: core.EventMemoryWritten, ItemID: "m1"})
+	require.NoError(t, err)
+
+	select {
+	case e := <-ch:
+		require.Equal(t, id, e.ID)
+		require.Equal(t, core.EventMemoryWritten, e.Kind)
+	case <-time.After(2 * time.Second):
+		t.Fatal("did not receive published event")
+	}
+}
+
+func TestUnsubscribe_StopsDeliveryAndIsIdempotent(t *testing.T) {
+	r := newRecorder(t)
+	ch, unsubscribe := r.Subscribe()
+	unsubscribe()
+	unsubscribe() // idempotent -- must not panic
+
+	// Channel is closed; a receive returns the zero value with ok=false.
+	_, open := <-ch
+	require.False(t, open)
+
+	// Recording after unsubscribe must not block or panic.
+	_, err := r.Record(context.Background(), core.Event{Kind: core.EventMemoryRead, ItemID: "m2"})
+	require.NoError(t, err)
+}
+
+func TestPublish_DropsWhenSubscriberFull(t *testing.T) {
+	r := newRecorder(t)
+	_, unsubscribe := r.Subscribe() // never drained
+	defer unsubscribe()
+
+	// Far more than subBuffer events; publish must never block on the full channel.
+	for range subBuffer * 3 {
+		_, err := r.Record(context.Background(), core.Event{Kind: core.EventMemoryRead, ItemID: "x"})
+		require.NoError(t, err)
+	}
+}
