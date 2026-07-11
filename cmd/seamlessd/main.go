@@ -2,10 +2,13 @@
 //
 // Subcommands (grown phase by phase per docs/PLAN.md):
 //
-//	seamlessd serve     start the HTTP server
-//	seamlessd doctor    run configuration + database self-checks
-//	seamlessd import     import a Seam v1 data directory
-//	seamlessd version   print the version
+//	seamlessd serve         start the HTTP server
+//	seamlessd doctor        run configuration + database self-checks
+//	seamlessd import        import a Seam v1 data directory
+//	seamlessd install-hooks install the Claude Code hooks
+//	seamlessd map-repo      map a repo path to a project slug
+//	seamlessd family        manage project families
+//	seamlessd version       print the version
 package main
 
 import (
@@ -58,6 +61,8 @@ func main() {
 		err = runInstallHooks(args)
 	case "map-repo":
 		err = runMapRepo(args)
+	case "family":
+		err = runFamily(args)
 	case "version", "-v", "--version":
 		fmt.Printf("seamlessd %s\n", version)
 	case "help", "-h", "--help":
@@ -82,6 +87,7 @@ usage:
   seamlessd import         import a Seam v1 data directory (--from ~/.seam)
   seamlessd install-hooks  install the SessionStart/UserPromptSubmit hooks
   seamlessd map-repo       map a repo path to a project slug (repo_project_map)
+  seamlessd family         manage project families (list|add|remove)
   seamlessd version        print the version
 `, version)
 }

@@ -51,6 +51,53 @@ func TestSiblingProjects(t *testing.T) {
 	require.Empty(t, sibs)
 }
 
+func TestProjectFamilyMutators(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// Add to a brand-new family.
+	members, err := AddFamilyMembers(ctx, db, "hegemon", []string{"app", "backend"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend"}, members)
+
+	// Adding again unions and dedupes, preserving first-seen order; whitespace is
+	// trimmed and blanks dropped.
+	members, err = AddFamilyMembers(ctx, db, "hegemon", []string{" backend ", "agent", "app", ""})
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend", "agent"}, members)
+
+	// It round-trips through the read path used by briefings.
+	fams, err := ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"hegemon": {"app", "backend", "agent"}}, fams)
+
+	// Removing a subset keeps the rest, in order.
+	members, err = RemoveFamilyMembers(ctx, db, "hegemon", []string{"agent"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend"}, members)
+
+	// Removing an unknown family errors with the sentinel.
+	_, err = RemoveFamilyMembers(ctx, db, "nope", nil)
+	require.ErrorIs(t, err, ErrFamilyNotFound)
+
+	// Removing the remaining members empties and drops the family.
+	members, err = RemoveFamilyMembers(ctx, db, "hegemon", []string{"app", "backend"})
+	require.NoError(t, err)
+	require.Empty(t, members)
+	fams, err = ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Empty(t, fams)
+
+	// Removing a whole family by name (no slugs) also drops it.
+	_, err = AddFamilyMembers(ctx, db, "x", []string{"a"})
+	require.NoError(t, err)
+	_, err = RemoveFamilyMembers(ctx, db, "x", nil)
+	require.NoError(t, err)
+	fams, err = ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Empty(t, fams)
+}
+
 func TestResolveProjectForCWD(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
