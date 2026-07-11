@@ -1,9 +1,7 @@
 # AGENTS.md
 
 Coding conventions for AI agents working in the Seamless repository. For the
-project overview, structure, and commands, see `CLAUDE.md`. For the execution
-plan and phase order, see `docs/PLAN.md` (authoritative; check off steps and
-append to its Progress log as you work).
+project overview, structure, and commands, see `CLAUDE.md`.
 
 ## Go style rules
 

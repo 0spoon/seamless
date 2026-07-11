@@ -4,16 +4,14 @@ Seamless is a local-first agent memory and coordination substrate: persistent
 memory, sessions, tasks, and research trials for the AI agents you run (Claude
 Code and friends), with a read-mostly observability console for the human.
 
-It is a ground-up rebuild of Seam (v1). The design and phase-by-phase execution
-plan live in [`docs/PLAN.md`](docs/PLAN.md).
+It is a ground-up rebuild of Seam (v1).
 
 ## Status
 
 Cutover complete (Phase 6, 2026-07-10): Seamless is the sole agent-memory system,
 serving on port `8081` with data dir `~/.seamless` (env prefix `SEAMLESS_*`). v1
 Seam is decommissioned -- its launchd services are disabled and port `8080` is
-freed, with `~/.seam` preserved read-only as a fallback archive. See
-[`docs/PLAN.md`](docs/PLAN.md) for the phase history.
+freed, with `~/.seam` preserved read-only as a fallback archive.
 
 ## Architecture (target)
 

@@ -37,11 +37,11 @@ The tricky thing is that boot order matters.
 id: 01TRIAL000000000000000000A
 title: 'Trial: GATT go/no-go'
 project: research
-tags: ['domain:firmware', 'lab:mw75-firmware-ble', 'type:trial']
+tags: ['domain:firmware', 'lab:example-ble-lab', 'type:trial']
 created: 2026-07-07T23:25:00Z
 modified: 2026-07-08T00:27:49Z
 ---
-**Lab:** mw75-firmware-ble
+**Lab:** example-ble-lab
 **Outcome:** pending
 
 ## Changes
@@ -120,7 +120,7 @@ func writeV1DB(t *testing.T, path string) {
 	require.NoError(t, err)
 
 	_, err = db.Exec(`INSERT INTO agent_sessions VALUES
-		('01SESS0000000000000000000A','mw75-firmware-ble','completed','found the mcu','{}','2026-06-01T10:00:00Z','2026-06-01T12:00:00Z'),
+		('01SESS0000000000000000000A','example-ble-lab','completed','found the mcu','{}','2026-06-01T10:00:00Z','2026-06-01T12:00:00Z'),
 		('01SESS0000000000000000000B','stale-session','active','','{"k":"v"}','2026-06-02T10:00:00Z','2026-06-02T11:00:00Z')`)
 	require.NoError(t, err)
 
@@ -201,7 +201,7 @@ func TestImportEndToEnd(t *testing.T) {
 	require.NoError(t, db.QueryRowContext(ctx,
 		`SELECT lab, outcome, changes FROM trials WHERE id='01TRIAL000000000000000000A'`).
 		Scan(&lab, &outcome, &changes))
-	require.Equal(t, "mw75-firmware-ble", lab)
+	require.Equal(t, "example-ble-lab", lab)
 	require.Equal(t, "pending", outcome)
 	require.Equal(t, "did a thing", changes)
 

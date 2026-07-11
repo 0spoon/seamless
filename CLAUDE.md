@@ -1,7 +1,7 @@
 # CLAUDE.md
 
 Quick-reference for AI assistants working in the Seamless repository. For coding
-conventions see `AGENTS.md`; for the execution plan see `docs/PLAN.md`.
+conventions see `AGENTS.md`.
 
 ## What is Seamless?
 
@@ -12,8 +12,8 @@ gardener), ambient sessions via Claude Code hooks, a dependency-aware task
 ready-queue, research trials, hybrid recall, and a read-mostly observability
 console. Go backend, no CGO, single binary + CLI.
 
-It is a ground-up rebuild of Seam v1 (`~/repos/seam`, READ-ONLY reference). As of
-the P6 cutover (2026-07-10) Seamless is the sole agent-memory system, serving on
+It is a ground-up rebuild of Seam v1 (a private predecessor, read-only
+reference). As of the P6 cutover (2026-07-10) Seamless is the sole agent-memory system, serving on
 port 8081 with data dir `~/.seamless` and env prefix `SEAMLESS_*`. v1 is
 decommissioned (launchd services disabled, port 8080 freed) with `~/.seam`
 preserved read-only as a fallback archive.
@@ -118,8 +118,4 @@ session binding; agents in mapped repos rarely pass `project` explicitly.
 
 ## Working here
 
-- `docs/PLAN.md` is the source of truth for what to build and in what order.
-  Work one phase at a time; a phase boundary is a hard stop for owner review.
 - Conventions live in `AGENTS.md`. Read it before writing code.
-- v1 (`~/repos/seam`) is read-only reference. Port packages marked `[PORT]` in the
-  plan with attribution; do not modify, run, or commit against v1.
