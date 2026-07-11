@@ -12,8 +12,15 @@ SVC_TEMPLATE  := deploy/launchd/$(SVC_LABEL).plist
 SVC_PLIST     := $(HOME)/Library/LaunchAgents/$(SVC_LABEL).plist
 SVC_LOG       := $(HOME)/.seamless/seamlessd.log
 
-.PHONY: help build test test-race lint vet fmt tidy run doctor console \
-	install-service uninstall-service start-service stop-service restart-service \
+# Release/prod install locations (stable, independent of this working tree).
+# Override the prefix with `make install-prod PREFIX=/custom`.
+PREFIX        ?= $(HOME)/.local
+PREFIX_BIN    := $(PREFIX)/bin
+PROD_CONFIG   := $(HOME)/.config/seamless/seamless.yaml
+
+.PHONY: help build test test-race lint vet fmt tidy run doctor console dev \
+	install-service install-hooks install-prod uninstall-prod _reload-service \
+	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
 
 help:
@@ -28,14 +35,19 @@ help:
 	@echo "  run        build and start the server (127.0.0.1:8081)"
 	@echo "  doctor     build and run config + DB self-checks"
 	@echo "  console    open the console in a browser, pre-authenticated"
-	@echo "  Service (launchd):"
-	@echo "    install-service    render+install+load the service, then restart it"
+	@echo "  Dev deploy (runs from ./bin -- fast iteration, tracks the working tree):"
+	@echo "    dev                rebuild + restart the running service (quick iterate loop)"
+	@echo "    install-service    render+install+load the launchd service, then restart it"
+	@echo "    install-hooks      install Claude Code hooks pointing at ./bin + ./seamless.yaml"
 	@echo "    uninstall-service  unload+remove the service"
 	@echo "    start-service      load the installed service"
 	@echo "    stop-service       unload the service (KeepAlive will not resurrect it)"
 	@echo "    restart-service    restart the running service in place"
 	@echo "    service-status     print the service's launchd state"
 	@echo "    logs               follow the service log ($(SVC_LOG))"
+	@echo "  Release/prod (snapshot to stable paths, independent of this repo):"
+	@echo "    install-prod       copy bin+config to stable paths; point service+hook there"
+	@echo "    uninstall-prod     remove prod service + copied binaries (config left in place)"
 	@echo "  install-onboard-skill    install the /seam-onboard Claude Code skill"
 	@echo "  uninstall-onboard-skill  remove the /seam-onboard skill"
 	@echo "  clean      remove build artifacts"
@@ -74,31 +86,87 @@ doctor: build
 console: build
 	$(BIN_DIR)/$(BINARY) console-open
 
-# Render the plist template with absolute paths, install it, and (re)load it.
-# Idempotent: an already-loaded service is booted out first. Restarts the daemon.
-install-service: build
-	@mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/.seamless
-	@sed -e 's#__BINARY__#$(CURDIR)/$(BIN_DIR)/$(BINARY)#g' \
-	     -e 's#__CONFIG__#$(CURDIR)/seamless.yaml#g' \
-	     -e 's#__LOG__#$(SVC_LOG)#g' \
-	     $(SVC_TEMPLATE) > $(SVC_PLIST)
+# Quick dev loop: rebuild and get the latest code running. If the dev service is
+# already installed (its plist points at ./bin), restart it in place -- fast, no
+# plist re-render or bootout/bootstrap. Otherwise fall back to a full dev install
+# (also covers switching back from a prod install). The hooks exec ./bin/seam
+# fresh each session, so a rebuilt CLI is picked up without reinstalling hooks.
+dev: build
+	@if grep -qF '$(CURDIR)/$(BIN_DIR)/$(BINARY)' $(SVC_PLIST) 2>/dev/null; then \
+	    $(MAKE) restart-service; \
+	else \
+	    echo "dev service not installed here; running install-service"; \
+	    $(MAKE) install-service; \
+	fi
+
+# Boot the (freshly rendered) $(SVC_PLIST): evict any old instance, bootstrap
+# with retry (bootout is async, so the label lingers briefly and bootstrapping
+# too soon fails with "Bootstrap failed: 5: Input/output error"), kick it, and
+# verify. Shared by install-service (dev) and install-prod.
+_reload-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
-	@# bootout is async: the label lingers briefly while the old instance exits.
-	@# Bootstrapping too soon fails with "Bootstrap failed: 5: Input/output error",
-	@# so retry until the label is released.
 	@for i in 1 2 3 4 5 6 7 8 9 10; do \
 	    launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null && break; \
 	    sleep 1; \
 	done
 	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@launchctl print gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1 \
-	    && echo "installed launchd service $(SVC_LABEL) -> $(SVC_PLIST)" \
 	    || { echo "ERROR: $(SVC_LABEL) failed to bootstrap; check $(SVC_LOG)"; exit 1; }
+
+# DEV service: render the plist to run straight from this working tree (./bin +
+# ./seamless.yaml) and (re)load it. Fast to iterate -- but `make build`, a branch
+# switch, or a moved repo changes what the running service executes. Pair with
+# `make install-hooks` for the matching SessionStart hook. Restarts the daemon.
+install-service: build
+	@mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/.seamless
+	@sed -e 's#__BINARY__#$(CURDIR)/$(BIN_DIR)/$(BINARY)#g' \
+	     -e 's#__CONFIG__#$(CURDIR)/seamless.yaml#g' \
+	     -e 's#__LOG__#$(SVC_LOG)#g' \
+	     $(SVC_TEMPLATE) > $(SVC_PLIST)
+	@$(MAKE) _reload-service
+	@echo "installed dev launchd service $(SVC_LABEL) -> $(CURDIR)/$(BIN_DIR)/$(BINARY)"
+
+# DEV hooks: install the Claude Code SessionStart/UserPromptSubmit/SessionEnd
+# hooks pointing at this working tree's seam + seamless.yaml. install-prod
+# installs the prod-path variant itself.
+install-hooks: build
+	@$(BIN_DIR)/$(BINARY) install-hooks
+
+# RELEASE/PROD: snapshot the binaries + config to stable locations independent of
+# this working tree, then point launchd AND the SessionStart hook at the copies.
+# Survives `make build`, branch switches, and a moved/cleaned repo. Shares the
+# data dir + port with dev (one instance per machine), so installing prod
+# replaces the dev service. Override the location with `make install-prod PREFIX=/opt`.
+install-prod: build
+	@test -f seamless.yaml || { echo "ERROR: ./seamless.yaml not found (copy seamless.yaml.example)"; exit 1; }
+	@mkdir -p $(PREFIX_BIN) $(dir $(PROD_CONFIG)) $(HOME)/Library/LaunchAgents $(HOME)/.seamless
+	@install -m 0755 $(BIN_DIR)/$(BINARY) $(PREFIX_BIN)/$(BINARY)
+	@install -m 0755 $(BIN_DIR)/$(CLI) $(PREFIX_BIN)/$(CLI)
+	@if [ -f $(PROD_CONFIG) ]; then \
+	    echo "config kept at $(PROD_CONFIG) (delete it to re-seed from ./seamless.yaml)"; \
+	else \
+	    install -m 0600 seamless.yaml $(PROD_CONFIG) && echo "seeded $(PROD_CONFIG) from ./seamless.yaml"; \
+	fi
+	@sed -e 's#__BINARY__#$(PREFIX_BIN)/$(BINARY)#g' \
+	     -e 's#__CONFIG__#$(PROD_CONFIG)#g' \
+	     -e 's#__LOG__#$(SVC_LOG)#g' \
+	     $(SVC_TEMPLATE) > $(SVC_PLIST)
+	@$(MAKE) _reload-service
+	@SEAMLESS_CONFIG=$(PROD_CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --seam $(PREFIX_BIN)/$(CLI)
+	@echo "installed prod service + hooks (bin $(PREFIX_BIN), config $(PROD_CONFIG))"
 
 uninstall-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@rm -f $(SVC_PLIST)
 	@echo "removed launchd service $(SVC_LABEL)"
+
+# Remove the prod install: stop+remove the service and delete the copied
+# binaries. The config at $(PROD_CONFIG) is left in place (it may hold local
+# edits and a bearer key) -- delete it by hand to fully reset. Afterwards run
+# `make install-service && make install-hooks` to return to the dev layout.
+uninstall-prod: uninstall-service
+	@rm -f $(PREFIX_BIN)/$(BINARY) $(PREFIX_BIN)/$(CLI)
+	@echo "removed prod binaries from $(PREFIX_BIN); left $(PROD_CONFIG) in place"
 
 # Load the already-installed plist. Run install-service first if it is missing.
 start-service:

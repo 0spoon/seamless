@@ -48,3 +48,40 @@ make run       # start the server on 127.0.0.1:8081
 Go 1.25+, no CGO, pure-Go SQLite (`modernc.org/sqlite`). Configuration lives in a
 gitignored `seamless.yaml` (see `seamless.yaml.example`); every key also has a
 `SEAMLESS_*` environment override.
+
+## Deployment
+
+There are two ways to run the daemon + Claude Code hooks. Both drive the same
+single instance (port `8081`, data dir `~/.seamless`), so only one is active at a
+time -- installing prod replaces dev, and vice versa.
+
+**Dev (default)** runs the service and hooks straight from this working tree, so
+a rebuild takes effect on the next restart. Fast to iterate -- but `make build`,
+a branch switch, or moving the repo changes what the live service and the global
+SessionStart hook execute:
+
+```
+make install-service   # launchd service -> ./bin/seamlessd + ./seamless.yaml
+make install-hooks      # SessionStart/UserPromptSubmit/SessionEnd -> ./bin/seam
+```
+
+**Release/prod** snapshots the binaries and config to stable, working-tree-
+independent locations, then points launchd and the hooks at the copies. Survives
+rebuilds, branch switches, and a moved or cleaned repo:
+
+```
+make install-prod                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
+make install-prod PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
+make uninstall-prod                  # remove prod service + binaries (config kept)
+```
+
+`install-prod` copies `seamless.yaml` only when the destination is absent, so it
+never clobbers an edited prod config; delete the copy to re-seed. It lands in
+`~/.config/seamless/`, one of the paths `seam` already searches, so the hooks
+resolve config from any directory. To return to dev, run `make install-service &&
+make install-hooks`.
+
+Note on the SessionStart hook: Claude Code only runs `command`/`mcp_tool` hooks
+for SessionStart -- an `http` one is silently ignored -- so it is installed as a
+`command` hook that shells out to `seam hook session-start`. UserPromptSubmit and
+SessionEnd stay `http` hooks.
