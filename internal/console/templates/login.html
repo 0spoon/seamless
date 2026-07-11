@@ -14,7 +14,7 @@
   <form class="login-card" method="post" action="/console/login">
     <h1><span class="dot" style="width:11px;height:11px;border-radius:50%;background:var(--live);display:inline-block;"></span> Seamless console</h1>
     <p>Paste the static API key to sign in. It is exchanged for a cookie scoped to this console.</p>
-    {{if .Error}}<div class="login-err">{{.Error}}</div>{{end}}
+    {{if .Error}}<div class="login-err">{{icon "triangle-alert"}}<span>{{.Error}}</span></div>{{end}}
     <label for="key">API key</label>
     <input id="key" name="key" type="password" autocomplete="off" autofocus placeholder="mcp.api_key">
     <input type="hidden" name="next" value="{{.Next}}">

@@ -229,7 +229,8 @@ type overviewData struct {
 	TasksDone   int
 	Injections  int
 	Reads       int
-	ReadRate    int // reads as a % of injections
+	ReadRate    int              // reads as a % of injections
+	Trend       []store.DayCount // 14-day injection trend, for the area chart
 	TopInjected []store.NamedCount
 	Pending     int
 	Recent      []eventRow
@@ -251,8 +252,14 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	trend, err := store.InjectionsByDay(ctx, s.cfg.DB, 14)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 
 	data := overviewData{
+		Trend:       denseDays(trend, 14),
 		Memories:    sum.Memories.Active,
 		MemByKind:   orderKinds(sum.Memories.ByKind),
 		Notes:       sum.Notes,

@@ -25,29 +25,12 @@
 
   <div class="card">
     <h2>Memories by kind</h2>
-    {{if .MemByKind}}
-    <div class="legend">
-      {{range .MemByKind}}
-      <div class="legend-row">
-        <span class="kdot" data-kind="{{.Kind}}"></span>
-        <span class="legend-label">{{.Kind}}</span>
-        <span class="legend-bar"><span data-kind="{{.Kind}}" style="width:{{pct .N $.Data.Memories}}%"></span></span>
-        <span class="legend-val">{{.N}}</span>
-      </div>
-      {{end}}
-    </div>
-    {{else}}<div class="empty">No memories yet</div>{{end}}
+    {{if .MemByKind}}{{donut .MemByKind}}{{else}}<div class="empty">No memories yet</div>{{end}}
   </div>
 
   <div class="card">
-    <h2>Retrieval</h2>
-    <dl class="kv">
-      <dt>Injections</dt><dd>{{.Injections}}</dd>
-      <dt>Reads</dt><dd>{{.Reads}}</dd>
-      <dt>Read-after-inject</dt><dd>{{.ReadRate}}%</dd>
-      <dt>Tasks in progress</dt><dd>{{.TasksInProg}}</dd>
-      <dt>Tasks done</dt><dd>{{.TasksDone}}</dd>
-    </dl>
+    <h2>Injection activity &middot; 14d</h2>
+    {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections yet</div>{{end}}
   </div>
 </div>
 
@@ -60,9 +43,20 @@
   <div class="card stat"><span class="value brand">{{.ReadRate}}%</span><span class="label">Read-after-inject</span></div>
 </div>
 
-<div class="section">
-  <h2>Most injected</h2>
+<div class="grid-2 section">
   <div class="card">
+    <h2>Retrieval</h2>
+    <dl class="kv">
+      <dt>Injections</dt><dd>{{.Injections}}</dd>
+      <dt>Reads</dt><dd>{{.Reads}}</dd>
+      <dt>Read-after-inject</dt><dd>{{.ReadRate}}%</dd>
+      <dt>Tasks in progress</dt><dd>{{.TasksInProg}}</dd>
+      <dt>Tasks done</dt><dd>{{.TasksDone}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Most injected</h2>
     {{if .TopInjected}}
     <dl class="kv">
       {{range .TopInjected}}<dt><a href="/console/memories#{{.ID}}">{{.Name}}</a></dt><dd>{{.Count}}&times;</dd>{{end}}

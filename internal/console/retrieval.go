@@ -50,11 +50,12 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	trend, err := store.InjectionsByDay(ctx, s.cfg.DB, 14)
+	sparseTrend, err := store.InjectionsByDay(ctx, s.cfg.DB, 14)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
+	trend := denseDays(sparseTrend, 14)
 	top, err := store.TopInjectedMemories(ctx, s.cfg.DB, 12)
 	if err != nil {
 		s.serverError(w, r, err)

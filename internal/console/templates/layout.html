@@ -16,18 +16,18 @@
     <div class="brand"><span class="dot"></span> Seamless</div>
     <div class="brand-by">by <span>0spoon</span></div>
     <nav class="nav">
-      <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">Overview</a>
-      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">Sessions <span class="count">{{.Nav.Sessions}}</span></a>
-      <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">Memories <span class="count">{{.Nav.Memories}}</span></a>
-      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">Retrieval</a>
-      <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">Tasks <span class="count">{{.Nav.Tasks}}</span></a>
-      <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">Gardener <span class="count">{{.Nav.Proposals}}</span></a>
-      <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">Settings</a>
+      <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
+      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
+      <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
+      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "arrow-down-to-line"}}<span class="nav-label">Retrieval</span></a>
+      <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count">{{.Nav.Tasks}}</span></a>
+      <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count">{{.Nav.Proposals}}</span></a>
+      <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
     </nav>
     <div class="side-foot">
-      <button class="btn small theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme">Light theme</button>
+      <button class="btn small theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme"><span class="tt-ico ico-light">{{icon "sun"}}</span><span class="tt-ico ico-dark">{{icon "moon"}}</span><span class="tt-label">Light theme</span></button>
       <form method="post" action="/console/logout">
-        <button class="btn small" type="submit">Sign out</button>
+        <button class="btn small" type="submit">{{icon "log-out"}}<span>Sign out</span></button>
       </form>
     </div>
   </aside>
@@ -58,7 +58,8 @@
   var btn = document.getElementById('theme-toggle');
   if (!btn) return;
   var root = document.documentElement;
-  function label() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; }
+  var lbl = btn.querySelector('.tt-label');
+  function label() { if (lbl) lbl.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; }
   label();
   btn.onclick = function () {
     var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

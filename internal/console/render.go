@@ -36,12 +36,17 @@ type pageData struct {
 
 // funcs are the template helpers shared by every page.
 var funcs = template.FuncMap{
-	"ago":       ago,
-	"shortID":   shortID,
-	"pct":       func(n, d int) int { return percent(n, d) },
-	"add":       func(a, b int) int { return a + b },
-	"hasPrefix": strings.HasPrefix,
-	"evtTone":   evtTone,
+	"ago":        ago,
+	"shortID":    shortID,
+	"pct":        func(n, d int) int { return percent(n, d) },
+	"add":        func(a, b int) int { return a + b },
+	"hasPrefix":  strings.HasPrefix,
+	"evtTone":    evtTone,
+	"icon":       icon,
+	"donut":      donut,
+	"areaChart":  areaChart,
+	"barChart":   barChart,
+	"stackedBar": stackedBar,
 }
 
 // evtTone maps an event kind to a chip tone class (see console.css .kind.*), so

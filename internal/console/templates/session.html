@@ -43,11 +43,7 @@
   </div>
   <div class="card">
     <h2>Events by kind</h2>
-    {{if .ByKind}}
-    <dl class="kv">
-      {{range .ByKind}}<dt><span class="kind">{{.Kind}}</span></dt><dd>{{.N}}</dd>{{end}}
-    </dl>
-    {{else}}<div class="empty">No events</div>{{end}}
+    {{if .ByKind}}{{barChart .ByKind}}{{else}}<div class="empty">No events</div>{{end}}
   </div>
 </div>
 
