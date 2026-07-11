@@ -1,0 +1,64 @@
+package mcp
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"github.com/mark3labs/mcp-go/mcp"
+
+	"github.com/0spoon/seamless/internal/store"
+)
+
+func gardenerProposalsTool() mcp.Tool {
+	return mcp.NewTool("gardener_proposals",
+		mcp.WithDescription("List pending gardener proposals (merge duplicate memories, archive stale memories, write a monthly session digest). Review, then apply or dismiss each with gardener_apply. Read-only."),
+		mcp.WithString("kind", mcp.Enum("merge", "archive", "digest"), mcp.Description("filter by proposal kind (default: all pending)")),
+	)
+}
+
+func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	kind := argString(req, "kind")
+	proposals, err := store.PendingProposals(ctx, s.cfg.DB, kind)
+	if err != nil {
+		return errResult("gardener_proposals", err)
+	}
+	return jsonResult(map[string]any{"proposals": proposals, "count": len(proposals)})
+}
+
+func gardenerApplyTool() mcp.Tool {
+	return mcp.NewTool("gardener_apply",
+		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; digest -> save the summary as a note); action=dismiss discards it. A dismissed proposal is never re-raised."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
+		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),
+	)
+}
+
+func (s *Server) handleGardenerApply(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := argString(req, "id")
+	if id == "" {
+		return errResult("gardener_apply", errors.New("id is required"))
+	}
+	if s.cfg.Gardener == nil {
+		return errResult("gardener_apply", errors.New("gardener is not configured on this server"))
+	}
+	action := argString(req, "action")
+	if action == "" {
+		action = "apply"
+	}
+	switch action {
+	case "apply":
+		result, err := s.cfg.Gardener.Apply(ctx, id)
+		if err != nil {
+			return errResult("gardener_apply", err)
+		}
+		return jsonResult(result)
+	case "dismiss":
+		if err := s.cfg.Gardener.Dismiss(ctx, id); err != nil {
+			return errResult("gardener_apply", err)
+		}
+		return jsonResult(map[string]any{"id": id, "status": "dismissed"})
+	default:
+		return errResult("gardener_apply", fmt.Errorf("unknown action %q (want apply|dismiss)", action))
+	}
+}

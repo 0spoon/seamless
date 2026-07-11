@@ -22,6 +22,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
@@ -31,10 +32,11 @@ const (
 	serverName    = "Seamless"
 	serverVersion = "0.0.0-dev"
 
-	// ToolCount is the number of MCP tools registered so far. doctor asserts
-	// against it; it grows to 26 by P4. P2 minimal loop = 15; P3 adds tasks (4)
-	// and trials (3) = 22.
-	ToolCount = 22
+	// ToolCount is the number of MCP tools registered. doctor asserts the actual
+	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
+	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
+	// usage_summary = 26.
+	ToolCount = 24
 
 	// maxFindingsRunes caps session_end findings, matching the memory budget.
 	maxFindingsRunes = 1500
@@ -50,19 +52,31 @@ type Config struct {
 	Files    *files.Manager
 	Retrieve *retrieve.Service
 	Events   *events.Recorder
-	Embedder llm.Embedder // may be nil (memory_write dedup hint is then skipped)
+	Gardener *gardener.Service // may be nil (gardener_apply is then unavailable)
+	Embedder llm.Embedder      // may be nil (memory_write dedup hint is then skipped)
 	APIKey   string
 	Logger   *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
 type Server struct {
-	mcp    *mcpserver.MCPServer
-	cfg    Config
-	logger *slog.Logger
+	mcp       *mcpserver.MCPServer
+	cfg       Config
+	logger    *slog.Logger
+	toolNames []string // registered tool names, in registration order
 
 	mu       sync.Mutex
 	bindings map[string]binding // mcp client-session id -> binding
+}
+
+// NumTools returns the number of registered MCP tools. doctor asserts it equals
+// ToolCount, catching a tool that was written but never wired into registerTools.
+func (s *Server) NumTools() int { return len(s.toolNames) }
+
+// addTool registers one tool and records its name so NumTools stays accurate.
+func (s *Server) addTool(t mcp.Tool, h mcpserver.ToolHandlerFunc) {
+	s.toolNames = append(s.toolNames, t.Name)
+	s.mcp.AddTool(t, h)
 }
 
 // binding is the session context inherited by later tool calls on a connection.
@@ -108,34 +122,37 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) registerTools() {
-	s.mcp.AddTool(sessionStartTool(), s.handleSessionStart)
-	s.mcp.AddTool(sessionUpdateTool(), s.handleSessionUpdate)
-	s.mcp.AddTool(sessionEndTool(), s.handleSessionEnd)
+	s.addTool(sessionStartTool(), s.handleSessionStart)
+	s.addTool(sessionUpdateTool(), s.handleSessionUpdate)
+	s.addTool(sessionEndTool(), s.handleSessionEnd)
 
-	s.mcp.AddTool(memoryWriteTool(), s.handleMemoryWrite)
-	s.mcp.AddTool(memoryAppendTool(), s.handleMemoryAppend)
-	s.mcp.AddTool(memoryReadTool(), s.handleMemoryRead)
-	s.mcp.AddTool(memoryDeleteTool(), s.handleMemoryDelete)
+	s.addTool(memoryWriteTool(), s.handleMemoryWrite)
+	s.addTool(memoryAppendTool(), s.handleMemoryAppend)
+	s.addTool(memoryReadTool(), s.handleMemoryRead)
+	s.addTool(memoryDeleteTool(), s.handleMemoryDelete)
 
-	s.mcp.AddTool(recallTool(), s.handleRecall)
+	s.addTool(recallTool(), s.handleRecall)
 
-	s.mcp.AddTool(notesCreateTool(), s.handleNotesCreate)
-	s.mcp.AddTool(notesReadTool(), s.handleNotesRead)
-	s.mcp.AddTool(notesUpdateTool(), s.handleNotesUpdate)
-	s.mcp.AddTool(notesAppendTool(), s.handleNotesAppend)
-	s.mcp.AddTool(notesDeleteTool(), s.handleNotesDelete)
+	s.addTool(notesCreateTool(), s.handleNotesCreate)
+	s.addTool(notesReadTool(), s.handleNotesRead)
+	s.addTool(notesUpdateTool(), s.handleNotesUpdate)
+	s.addTool(notesAppendTool(), s.handleNotesAppend)
+	s.addTool(notesDeleteTool(), s.handleNotesDelete)
 
-	s.mcp.AddTool(projectListTool(), s.handleProjectList)
-	s.mcp.AddTool(projectCreateTool(), s.handleProjectCreate)
+	s.addTool(projectListTool(), s.handleProjectList)
+	s.addTool(projectCreateTool(), s.handleProjectCreate)
 
-	s.mcp.AddTool(tasksAddTool(), s.handleTasksAdd)
-	s.mcp.AddTool(tasksUpdateTool(), s.handleTasksUpdate)
-	s.mcp.AddTool(tasksReadyTool(), s.handleTasksReady)
-	s.mcp.AddTool(tasksListTool(), s.handleTasksList)
+	s.addTool(tasksAddTool(), s.handleTasksAdd)
+	s.addTool(tasksUpdateTool(), s.handleTasksUpdate)
+	s.addTool(tasksReadyTool(), s.handleTasksReady)
+	s.addTool(tasksListTool(), s.handleTasksList)
 
-	s.mcp.AddTool(labOpenTool(), s.handleLabOpen)
-	s.mcp.AddTool(trialRecordTool(), s.handleTrialRecord)
-	s.mcp.AddTool(trialQueryTool(), s.handleTrialQuery)
+	s.addTool(labOpenTool(), s.handleLabOpen)
+	s.addTool(trialRecordTool(), s.handleTrialRecord)
+	s.addTool(trialQueryTool(), s.handleTrialQuery)
+
+	s.addTool(gardenerProposalsTool(), s.handleGardenerProposals)
+	s.addTool(gardenerApplyTool(), s.handleGardenerApply)
 }
 
 // ---------------------------------------------------------------------------
