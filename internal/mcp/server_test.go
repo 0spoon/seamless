@@ -210,6 +210,52 @@ func TestMemorySupersession(t *testing.T) {
 	require.Nil(t, r2["warning"])
 }
 
+func TestTasksReadyQueue(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+
+	a := callJSON(t, ctx, cli, "tasks_add", map[string]any{"title": "build ready queue"})
+	aID := a["id"].(string)
+	b := callJSON(t, ctx, cli, "tasks_add", map[string]any{
+		"title": "wire briefing line", "depends_on": aID,
+	})
+	bID := b["id"].(string)
+
+	// Only A is ready; B is blocked with A listed as its blocker.
+	ready := callJSON(t, ctx, cli, "tasks_ready", nil)
+	readyList := ready["ready"].([]any)
+	require.Len(t, readyList, 1)
+	require.Equal(t, aID, readyList[0].(map[string]any)["id"])
+	blocked := ready["blocked"].([]any)
+	require.Len(t, blocked, 1)
+	require.Equal(t, bID, blocked[0].(map[string]any)["id"])
+
+	// Completing A unblocks B.
+	callJSON(t, ctx, cli, "tasks_update", map[string]any{"id": aID, "status": "done"})
+	ready = callJSON(t, ctx, cli, "tasks_ready", nil)
+	readyList = ready["ready"].([]any)
+	require.Len(t, readyList, 1)
+	require.Equal(t, bID, readyList[0].(map[string]any)["id"])
+
+	// A cycle is rejected (B already depends on A).
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "tasks_update", Arguments: map[string]any{"id": aID, "add_depends_on": bID},
+	}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, resultText(t, res), "cycle")
+
+	// tasks_list filters by status.
+	list := callJSON(t, ctx, cli, "tasks_list", map[string]any{"status": "open"})
+	require.Len(t, list["tasks"].([]any), 1) // only B is open
+
+	// The next session's briefing surfaces the ready-tasks line.
+	brief := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
+	require.Contains(t, brief["briefing"], "Ready tasks: 1 -- wire briefing line")
+}
+
 func TestWriteScopeFallbackToAmbient(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)

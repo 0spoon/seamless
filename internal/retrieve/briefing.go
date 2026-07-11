@@ -48,10 +48,14 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error
 	if err != nil {
 		return "", err
 	}
-	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 {
+	ready, err := store.ReadyTasks(ctx, s.db, project)
+	if err != nil {
+		return "", err
+	}
+	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 && len(ready) == 0 {
 		return "", nil
 	}
-	return s.assembleBriefing(project, in.Source, constraints, index, findings), nil
+	return s.assembleBriefing(project, in.Source, constraints, index, findings, ready), nil
 }
 
 // RegisterProjectForCWD resolves cwd to a project slug and, for a not-yet-mapped
@@ -78,7 +82,7 @@ func projectLabel(project string) string {
 // assembleBriefing packs the sections against the token budget. Constraints, the
 // header, and the trailer are counted first and never dropped; the memory index
 // and findings are packed against the soft budget, then the whole is hard-capped.
-func (s *Service) assembleBriefing(project, source string, constraints, index []core.Memory, findings []core.Session) string {
+func (s *Service) assembleBriefing(project, source string, constraints, index []core.Memory, findings []core.Session, ready []core.Task) string {
 	label := projectLabel(project)
 	budget := s.budgets.MaxBriefingTokens
 	if budget <= 0 {
@@ -141,7 +145,30 @@ func (s *Service) assembleBriefing(project, source string, constraints, index []
 		}
 	}
 
+	// Ready tasks is the last body section, so its cost is only checked against
+	// the budget, not accumulated (nothing follows it).
+	if line := readyTasksLine(ready); line != "" && used+estTokens(line) <= budget {
+		body.WriteString(line)
+	}
+
 	return hardTruncate(head.String()+body.String()+tail.String(), hardCap)
+}
+
+// readyTasksLine renders the briefing's ready-queue line ("Ready tasks: N -- t1;
+// t2; t3"), naming up to the three oldest ready tasks, or "" when none are ready.
+// The ordering matches store.ReadyTasks (oldest first), which the CLI shares.
+func readyTasksLine(ready []core.Task) string {
+	if len(ready) == 0 {
+		return ""
+	}
+	titles := make([]string, 0, 3)
+	for _, t := range ready {
+		if len(titles) == 3 {
+			break
+		}
+		titles = append(titles, sanitizeField(t.Title, 60))
+	}
+	return fmt.Sprintf("\nReady tasks: %d -- %s\n", len(ready), strings.Join(titles, "; "))
 }
 
 // assembleSubagent renders a constraints-only briefing for a subagent, or "" if
