@@ -32,14 +32,15 @@ const cookieName = "seamless_console"
 // Config wires the console's dependencies. Files/Gardener/Events are used by the
 // write actions (archive, apply/dismiss) and the live feed; DB backs every read.
 type Config struct {
-	DB       *sql.DB
-	Files    *files.Manager
-	Gardener *gardener.Service
-	Events   *events.Recorder
-	APIKey   string
-	DataDir  string // for resolving memory/note file paths to absolute editor links
-	Budgets  config.Budgets
-	Logger   *slog.Logger
+	DB          *sql.DB
+	Files       *files.Manager
+	Gardener    *gardener.Service
+	Events      *events.Recorder
+	APIKey      string
+	DataDir     string // for resolving memory/note file paths to absolute editor links
+	Budgets     config.Budgets
+	GardenerCfg config.Gardener // for the Settings page (read-only display)
+	Logger      *slog.Logger
 }
 
 // Service renders the console and serves its routes.
@@ -80,6 +81,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
 	mux.HandleFunc("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
 	mux.HandleFunc("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
+	mux.HandleFunc("GET /console/settings", s.auth(s.settings))
 }
 
 // ---------------------------------------------------------------------------
