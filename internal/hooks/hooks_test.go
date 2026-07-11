@@ -237,7 +237,10 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	// The foreign seam_managed entry survives alongside the new seamless entry.
 	require.Len(t, ss, 2)
 	require.Contains(t, string(raw), "seamless_managed")
-	require.Contains(t, string(raw), "8081/api/hooks/session-start")
+	// SessionStart is a command hook (http is a silent no-op for it); the bearer
+	// key still reaches settings via the http UserPromptSubmit/SessionEnd hooks.
+	require.Contains(t, string(raw), "seam hook session-start")
+	require.Contains(t, string(raw), "8081/api/hooks/user-prompt-submit")
 	require.Contains(t, string(raw), "Bearer secret-key")
 	// UserPromptSubmit and SessionEnd were added too.
 	require.Len(t, hooksObj["UserPromptSubmit"].([]any), 1)
@@ -291,7 +294,7 @@ func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
   }
 }`), 0o600))
 
-	opts := InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"}
+	opts := InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k", SeamBin: "/opt/seam", ConfigPath: "/etc/seamless.yaml"}
 	res, err := Install(opts)
 	require.NoError(t, err)
 	require.True(t, res.Changed)
@@ -311,7 +314,11 @@ func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
 		m := e.(map[string]any)
 		if m["seamless_managed"] == true {
 			marked++
-			require.Contains(t, m["hooks"].([]any)[0].(map[string]any)["url"], "8081")
+			// SessionStart is now a command hook running the seam CLI, not http,
+			// with the config path baked in so it resolves from any cwd.
+			h0 := m["hooks"].([]any)[0].(map[string]any)
+			require.Equal(t, "command", h0["type"])
+			require.Equal(t, "SEAMLESS_CONFIG=/etc/seamless.yaml /opt/seam hook session-start", h0["command"])
 		}
 		if m["seam_managed"] == true {
 			v1++

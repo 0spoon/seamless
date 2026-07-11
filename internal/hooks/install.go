@@ -21,13 +21,20 @@ const managedMarker = "seamless_managed"
 type hookSpec struct {
 	Event    string // settings.json hooks key (SessionStart, UserPromptSubmit)
 	Matcher  string // "" omits the matcher key (UserPromptSubmit has none)
-	Endpoint string // path appended to the base URL
+	Endpoint string // path appended to the base URL (the http url, and the dedup key)
 	Timeout  int    // seconds (Claude Code's unit)
+	CLIArg   string // non-empty => install a `command` hook (`<seam> hook <CLIArg>`) not http
 }
 
 // seamlessHooks is the set installed/removed together.
+//
+// SessionStart must be a command hook: Claude Code only runs command/mcp_tool
+// hooks for that event and silently ignores an http one, so the briefing and
+// ambient session never fire. The command shells out to `seam hook
+// session-start`, which forwards the payload to Endpoint. The other two events
+// support http hooks and keep them.
 var seamlessHooks = []hookSpec{
-	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10},
+	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5},
 	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10},
 }
@@ -37,6 +44,8 @@ type InstallOptions struct {
 	SettingsPath string // target settings.json (created if absent)
 	BaseURL      string // e.g. http://127.0.0.1:8081
 	APIKey       string // static bearer key written into the Authorization header
+	SeamBin      string // path to the seam CLI for command hooks; "" => "seam" (PATH)
+	ConfigPath   string // abs seamless.yaml baked into command hooks as SEAMLESS_CONFIG so they resolve config from any cwd; "" omits it
 }
 
 // InstallResult reports what an install did.
@@ -69,7 +78,7 @@ func Install(opts InstallOptions) (InstallResult, error) {
 
 	var res InstallResult
 	for _, hs := range seamlessHooks {
-		desired := buildEntry(hs, opts.BaseURL, opts.APIKey)
+		desired := buildEntry(hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		arr := entryArray(hooksObj, hs.Event)
 		// Match every entry Seamless owns for this event: those carrying our
@@ -182,22 +191,54 @@ func entryArray(hooksObj map[string]any, event string) []any {
 	return nil
 }
 
-func buildEntry(hs hookSpec, baseURL, apiKey string) map[string]any {
+func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[string]any {
+	var hook map[string]any
+	if hs.CLIArg != "" {
+		// Command hook: Claude Code pipes the event JSON to the command's stdin
+		// and injects its stdout. `seam hook <arg>` forwards that to Endpoint and
+		// echoes the response, so no bearer key is written into settings.json.
+		// It fires from any cwd, so bake SEAMLESS_CONFIG in -- otherwise the CLI's
+		// cwd-relative config search misses seamless.yaml and it can't authenticate.
+		bin := seamBin
+		if bin == "" {
+			bin = "seam"
+		}
+		command := shellArg(bin) + " hook " + hs.CLIArg
+		if configPath != "" {
+			command = "SEAMLESS_CONFIG=" + shellArg(configPath) + " " + command
+		}
+		hook = map[string]any{
+			"type":    "command",
+			"command": command,
+			"timeout": hs.Timeout,
+		}
+	} else {
+		hook = map[string]any{
+			"type":    "http",
+			"url":     strings.TrimRight(baseURL, "/") + hs.Endpoint,
+			"timeout": hs.Timeout,
+			"headers": map[string]any{"Authorization": "Bearer " + apiKey},
+		}
+	}
 	entry := map[string]any{
 		managedMarker: true,
-		"hooks": []any{
-			map[string]any{
-				"type":    "http",
-				"url":     strings.TrimRight(baseURL, "/") + hs.Endpoint,
-				"timeout": hs.Timeout,
-				"headers": map[string]any{"Authorization": "Bearer " + apiKey},
-			},
-		},
+		"hooks":       []any{hook},
 	}
 	if hs.Matcher != "" {
 		entry["matcher"] = hs.Matcher
 	}
 	return entry
+}
+
+// shellArg returns s ready to drop into the shell command string Claude Code
+// runs for a command hook. Ordinary paths pass through bare for readability;
+// only a value with whitespace or shell metacharacters is single-quoted (with
+// embedded single quotes escaped), so a repo under "My Projects" still works.
+func shellArg(s string) string {
+	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`&|;<>(){}*?!#~") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // findManaged returns the index of the first Seamless-managed entry in arr, or -1.
