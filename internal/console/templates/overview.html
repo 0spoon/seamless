@@ -1,0 +1,71 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Overview</h1>
+    <div class="sub">Local-first agent memory &amp; coordination substrate</div>
+  </div>
+</div>
+
+<div class="grid section">
+  <div class="card stat"><span class="value">{{.Memories}}</span><span class="label">Active memories</span></div>
+  <div class="card stat"><span class="value">{{.Notes}}</span><span class="label">Notes</span></div>
+  <div class="card stat"><span class="value">{{.SessTotal}}</span><span class="label">Sessions ({{.SessActive}} active)</span></div>
+  <div class="card stat"><span class="value">{{.TasksOpen}}</span><span class="label">Open tasks</span></div>
+  <div class="card stat"><span class="value">{{.Pending}}</span><span class="label">Pending proposals</span></div>
+  <div class="card stat"><span class="value">{{.ReadRate}}%</span><span class="label">Read-after-inject</span></div>
+</div>
+
+<div class="grid-2 section">
+  <div class="card">
+    <h2>Memories by kind</h2>
+    {{if .MemByKind}}
+    <dl class="kv">
+      {{range .MemByKind}}<dt><span class="kind">{{.Kind}}</span></dt><dd>{{.N}}</dd>{{end}}
+    </dl>
+    {{else}}<div class="empty">No memories yet</div>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Retrieval</h2>
+    <dl class="kv">
+      <dt>Injections</dt><dd>{{.Injections}}</dd>
+      <dt>Reads</dt><dd>{{.Reads}}</dd>
+      <dt>Read-after-inject</dt><dd>{{.ReadRate}}%</dd>
+      <dt>Tasks in progress</dt><dd>{{.TasksInProg}}</dd>
+      <dt>Tasks done</dt><dd>{{.TasksDone}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Most injected</h2>
+    {{if .TopInjected}}
+    <dl class="kv">
+      {{range .TopInjected}}<dt><a href="/console/memories#{{.ID}}">{{.Name}}</a></dt><dd>{{.Count}}&times;</dd>{{end}}
+    </dl>
+    {{else}}<div class="empty">No injections recorded</div>{{end}}
+  </div>
+</div>
+
+<div class="section">
+  <h2>Recent activity</h2>
+  {{if .Recent}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
+      <tbody>
+        {{range .Recent}}
+        <tr>
+          <td class="muted" title="{{.When}}">{{ago .When}}</td>
+          <td><span class="kind">{{.Kind}}</span></td>
+          <td class="muted">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</td>
+          <td>{{.Summary}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">No activity yet</div>{{end}}
+</div>
+{{end}}
+{{end}}
