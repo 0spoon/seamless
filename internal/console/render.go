@@ -48,6 +48,7 @@ var funcs = template.FuncMap{
 	"barChart":      barChart,
 	"stackedBar":    stackedBar,
 	"coverageMeter": coverageMeter,
+	"coverageTrend": coverageTrend,
 }
 
 // evtTone maps an event kind to a chip tone class (see console.css .kind.*), so

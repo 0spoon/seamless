@@ -174,6 +174,56 @@ func GetSessionCoverage(ctx context.Context, db *sql.DB) (SessionCoverage, error
 	return c, nil
 }
 
+// DayCoverage is one calendar day's session-coverage roll-up, for the coverage
+// trend chart: of the sessions created that day (UTC), how many left a durable
+// artifact behind. Total == 0 means no sessions started that day, so that day's
+// coverage is undefined (the caller renders it as a gap, not 0%).
+type DayCoverage struct {
+	Day     string `json:"day"`     // YYYY-MM-DD (UTC)
+	Total   int    `json:"total"`   // sessions created that day
+	Covered int    `json:"covered"` // of those, how many retained knowledge
+}
+
+// SessionCoverageByDay buckets sessions by their creation day (UTC) over the
+// trailing `days` days and, per day, counts how many were "covered" -- left a
+// durable artifact behind (non-empty findings, or a written memory/note/recorded
+// trial). It applies the same covered-ness test as GetSessionCoverage, sliced by
+// day, to back the overview's coverage-trend chart. Days with no sessions are
+// omitted (the caller densifies the window).
+func SessionCoverageByDay(ctx context.Context, db *sql.DB, days int) ([]DayCoverage, error) {
+	if days <= 0 {
+		days = 14
+	}
+	since := core.FormatTime(time.Now().UTC().AddDate(0, 0, -days))
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			substr(s.created_at, 1, 10) AS day,
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN
+				s.findings <> ''
+				OR EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?)
+				OR EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?)
+				OR EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?)
+			THEN 1 ELSE 0 END), 0)
+		FROM sessions s
+		WHERE s.created_at >= ?
+		GROUP BY day ORDER BY day ASC`,
+		string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded), since)
+	if err != nil {
+		return nil, fmt.Errorf("store.SessionCoverageByDay: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []DayCoverage
+	for rows.Next() {
+		var d DayCoverage
+		if err := rows.Scan(&d.Day, &d.Total, &d.Covered); err != nil {
+			return nil, fmt.Errorf("store.SessionCoverageByDay: scan: %w", err)
+		}
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}
+
 // DayCount is one calendar day's event count, for the injection trend.
 type DayCount struct {
 	Day   string `json:"day"` // YYYY-MM-DD

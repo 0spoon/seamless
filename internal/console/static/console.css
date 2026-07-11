@@ -536,6 +536,12 @@ details > summary { font-family: var(--font-display); }
 .area-peak { animation: seam-fade 0.4s ease 0.85s both; }
 @keyframes area-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
 
+/* Coverage trend -- retained-knowledge rate (fixed 0-100% axis) */
+.cov-fill { animation: seam-fade 0.8s var(--ease-out) both; }
+.cov-line { animation: seam-fade 0.9s var(--ease-out) both; }
+.cov-dot { animation: seam-fade 0.4s ease 0.5s both; }
+.cov-axis { fill: var(--faint); font-size: 10px; font-family: var(--font-mono); }
+
 /* Bar chart -- events by kind */
 .barchart { display: flex; align-items: flex-end; gap: 10px; height: 168px; padding: 8px 2px 0; }
 .barcol { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; }

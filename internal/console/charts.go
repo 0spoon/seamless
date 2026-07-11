@@ -31,6 +31,52 @@ func denseDays(sparse []store.DayCount, n int) []store.DayCount {
 	return out
 }
 
+// denseCoverageDays expands a sparse per-day coverage series (SessionCoverageByDay
+// omits days with no sessions) into a dense trailing-window of exactly n daily
+// buckets ending today (UTC). Missing days become zero-Total buckets, which the
+// trend chart renders as gaps (no sessions -> coverage undefined, not 0%).
+func denseCoverageDays(sparse []store.DayCoverage, n int) []store.DayCoverage {
+	if n <= 0 {
+		return nil
+	}
+	byDay := make(map[string]store.DayCoverage, len(sparse))
+	for _, d := range sparse {
+		byDay[d.Day] = d
+	}
+	today := time.Now().UTC()
+	out := make([]store.DayCoverage, 0, n)
+	for i := n - 1; i >= 0; i-- {
+		day := today.AddDate(0, 0, -i).Format("2006-01-02")
+		if d, ok := byDay[day]; ok {
+			out = append(out, d)
+		} else {
+			out = append(out, store.DayCoverage{Day: day})
+		}
+	}
+	return out
+}
+
+// coverageTrendData densifies a sparse per-day coverage series into the trend
+// chart's n-day window, returning nil when the window holds no sessions at all
+// so the overview can show an empty state instead of a flat, dataless chart.
+func coverageTrendData(sparse []store.DayCoverage, n int) []store.DayCoverage {
+	dense := denseCoverageDays(sparse, n)
+	if !anySessions(dense) {
+		return nil
+	}
+	return dense
+}
+
+// anySessions reports whether any day in the window had at least one session.
+func anySessions(days []store.DayCoverage) bool {
+	for _, d := range days {
+		if d.Total > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 // This file holds the console's self-contained visual primitives: inline Lucide
 // icons and hand-rolled SVG/flex charts. They render server-side to
 // template.HTML (no charting library, no client JS), matching the "Seamless
@@ -223,6 +269,101 @@ func fmtDay(day string) string {
 		return day
 	}
 	return t.Format("Jan 02")
+}
+
+// ---------------------------------------------------------------------------
+// Coverage trend -- retained-knowledge rate over time
+// ---------------------------------------------------------------------------
+
+// coverageTrend renders the trailing-window session-coverage rate as a line +
+// area fill on a fixed 0-100% axis, in the coverage green. The rate is
+// covered/total per day; days with no sessions are backfilled to 0% so a quiet
+// stretch reads as a dip in retention rather than an implied ceiling, and only
+// days that actually had sessions are marked with a dot. It expects a dense day
+// series (denseCoverageDays); when no day in the window had a session it renders
+// nothing so the caller can fall back to an empty state.
+func coverageTrend(days []store.DayCoverage) template.HTML {
+	n := len(days)
+	if n == 0 {
+		return ""
+	}
+	const w, h = 560.0, 150.0
+	const padT, padR, padB, padL = 14.0, 12.0, 8.0, 30.0
+	pw := w - padL - padR
+	ph := h - padT - padB
+
+	x := func(i int) float64 {
+		if n == 1 {
+			return padL + pw/2
+		}
+		return padL + (float64(i)/float64(n-1))*pw
+	}
+	y := func(pct float64) float64 { return padT + ph - (pct/100)*ph }
+
+	// Coverage rate per day; days with no sessions count as 0% (backfilled) so
+	// the line spans the whole window and quiet days visibly drop to the floor.
+	pctOf := func(d store.DayCoverage) float64 {
+		if d.Total == 0 {
+			return 0
+		}
+		return float64(d.Covered) / float64(d.Total) * 100
+	}
+	if !anySessions(days) {
+		return "" // no sessions anywhere in the window
+	}
+
+	var line, area, dots strings.Builder
+	for i, d := range days {
+		cmd := "L"
+		if i == 0 {
+			cmd = "M"
+		}
+		fmt.Fprintf(&line, "%s%.1f %.1f ", cmd, x(i), y(pctOf(d)))
+		if d.Total > 0 { // mark only days that actually had sessions
+			fmt.Fprintf(&dots, `<circle class="cov-dot" cx="%.1f" cy="%.1f" r="3.5" fill="var(--ok)" stroke="var(--surface)" stroke-width="2" vector-effect="non-scaling-stroke"><title>%s: %d%% (%d of %d)</title></circle>`,
+				x(i), y(pctOf(d)), template.HTMLEscapeString(fmtDay(d.Day)), int(pctOf(d)+0.5), d.Covered, d.Total)
+		}
+	}
+	// One continuous area under the line, pinching to the baseline on empty days.
+	fmt.Fprintf(&area, "M%.1f %.1f ", x(0), padT+ph)
+	for i, d := range days {
+		fmt.Fprintf(&area, "L%.1f %.1f ", x(i), y(pctOf(d)))
+	}
+	fmt.Fprintf(&area, "L%.1f %.1f Z", x(n-1), padT+ph)
+
+	var b strings.Builder
+	b.WriteString(`<div class="area">`)
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--ok)">`, w, h)
+	b.WriteString(`<defs><linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
+	// horizontal gridlines with % axis labels at 100 / 50 / 0
+	for _, g := range []struct {
+		frac  float64
+		label string
+	}{{0, "100%"}, {0.25, ""}, {0.5, "50%"}, {0.75, ""}, {1, "0%"}} {
+		yy := padT + ph*g.frac
+		fmt.Fprintf(&b, `<line x1="%g" x2="%g" y1="%.1f" y2="%.1f" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 5" vector-effect="non-scaling-stroke"/>`, padL, padL+pw, yy, yy)
+		if g.label != "" {
+			fmt.Fprintf(&b, `<text class="cov-axis" x="%.1f" y="%.1f" text-anchor="end" dominant-baseline="middle">%s</text>`, padL-6, yy, g.label)
+		}
+	}
+	fmt.Fprintf(&b, `<path class="cov-fill" d="%s" fill="url(#covGrad)"/>`, area.String())
+	fmt.Fprintf(&b, `<path class="cov-line" d="%s" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`, line.String())
+	b.WriteString(dots.String())
+	b.WriteString(`</svg>`)
+	// date ticks: first / middle / last of the window
+	b.WriteString(`<div class="area-ticks">`)
+	ticks := []int{0}
+	if n > 2 {
+		ticks = append(ticks, n/2)
+	}
+	if n > 1 {
+		ticks = append(ticks, n-1)
+	}
+	for _, i := range ticks {
+		fmt.Fprintf(&b, `<span>%s</span>`, template.HTMLEscapeString(fmtDay(days[i].Day)))
+	}
+	b.WriteString(`</div></div>`)
+	return template.HTML(b.String())
 }
 
 // ---------------------------------------------------------------------------
