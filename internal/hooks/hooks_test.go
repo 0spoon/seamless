@@ -247,3 +247,23 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 		require.Contains(t, a, "unchanged")
 	}
 }
+
+func TestInstalledStatus(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".claude", "settings.json")
+
+	// Missing file -> nothing installed, no error.
+	present, err := InstalledStatus(path)
+	require.NoError(t, err)
+	require.Empty(t, present)
+
+	// After a full install, all three events are reported.
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	_, err = Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
+	require.NoError(t, err)
+
+	present, err = InstalledStatus(path)
+	require.NoError(t, err)
+	require.ElementsMatch(t, InstalledEvents(), present)
+	require.Len(t, present, 3)
+}

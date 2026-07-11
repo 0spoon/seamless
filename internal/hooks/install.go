@@ -102,6 +102,34 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	return res, nil
 }
 
+// InstalledEvents is the set of hook events Seamless installs, in install order.
+// A caller (doctor) compares InstalledStatus against len(InstalledEvents).
+func InstalledEvents() []string {
+	out := make([]string, len(seamlessHooks))
+	for i, hs := range seamlessHooks {
+		out[i] = hs.Event
+	}
+	return out
+}
+
+// InstalledStatus reports which Seamless-managed hook events are present in the
+// settings.json at path. A missing or empty file yields an empty slice and no
+// error. The result is a subset of InstalledEvents(), in install order.
+func InstalledStatus(path string) ([]string, error) {
+	settings, _, err := loadSettings(path)
+	if err != nil {
+		return nil, err
+	}
+	hooksObj := nestedObject(settings, "hooks")
+	var present []string
+	for _, hs := range seamlessHooks {
+		if findManaged(entryArray(hooksObj, hs.Event)) >= 0 {
+			present = append(present, hs.Event)
+		}
+	}
+	return present, nil
+}
+
 // loadSettings decodes settings.json into a generic map (preserving unknown
 // keys) and returns the file mode to preserve. A missing file yields an empty
 // map and 0o600 (the file holds a bearer key).
