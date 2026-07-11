@@ -12,7 +12,7 @@ SVC_TEMPLATE  := deploy/launchd/$(SVC_LABEL).plist
 SVC_PLIST     := $(HOME)/Library/LaunchAgents/$(SVC_LABEL).plist
 SVC_LOG       := $(HOME)/.seamless/seamlessd.log
 
-.PHONY: help build test test-race lint vet fmt tidy run doctor install-service uninstall-service clean
+.PHONY: help build test test-race lint vet fmt tidy run doctor install-service uninstall-service install-onboard-skill uninstall-onboard-skill clean
 
 help:
 	@echo "Seamless targets:"
@@ -27,6 +27,8 @@ help:
 	@echo "  doctor     build and run config + DB self-checks"
 	@echo "  install-service    install+load the launchd service (127.0.0.1:8081)"
 	@echo "  uninstall-service  unload+remove the launchd service"
+	@echo "  install-onboard-skill    install the /seam-onboard Claude Code skill"
+	@echo "  uninstall-onboard-skill  remove the /seam-onboard skill"
 	@echo "  clean      remove build artifacts"
 
 build:
@@ -74,6 +76,12 @@ uninstall-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@rm -f $(SVC_PLIST)
 	@echo "removed launchd service $(SVC_LABEL)"
+
+install-onboard-skill:
+	@scripts/install-onboard-skill.sh
+
+uninstall-onboard-skill:
+	@scripts/uninstall-onboard-skill.sh
 
 clean:
 	rm -rf $(BIN_DIR) coverage.*
