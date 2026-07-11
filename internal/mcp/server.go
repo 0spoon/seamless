@@ -34,7 +34,7 @@ const (
 	// ToolCount is the number of MCP tools registered so far. doctor asserts
 	// against it; it grows to 26 by P4. P2 minimal loop = 15; P3 adds tasks (4)
 	// and trials (3) = 22.
-	ToolCount = 19
+	ToolCount = 22
 
 	// maxFindingsRunes caps session_end findings, matching the memory budget.
 	maxFindingsRunes = 1500
@@ -69,6 +69,7 @@ type Server struct {
 type binding struct {
 	sessionID string // ULID of the bound session
 	project   string // resolved project slug ("" = global)
+	lab       string // current research lab (set by lab_open), inherited by trial_record
 }
 
 // New constructs a Server and registers the tool surface.
@@ -131,6 +132,10 @@ func (s *Server) registerTools() {
 	s.mcp.AddTool(tasksUpdateTool(), s.handleTasksUpdate)
 	s.mcp.AddTool(tasksReadyTool(), s.handleTasksReady)
 	s.mcp.AddTool(tasksListTool(), s.handleTasksList)
+
+	s.mcp.AddTool(labOpenTool(), s.handleLabOpen)
+	s.mcp.AddTool(trialRecordTool(), s.handleTrialRecord)
+	s.mcp.AddTool(trialQueryTool(), s.handleTrialQuery)
 }
 
 // ---------------------------------------------------------------------------
@@ -215,6 +220,29 @@ func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	}
 	if sess, ok := s.ambientFallback(ctx); ok {
 		return sess.ProjectSlug
+	}
+	return ""
+}
+
+// setBindingLab records the current research lab on the connection's binding, so
+// a later trial_record can inherit it. It is a no-op on a stateless transport
+// (no client session id) -- such callers pass lab explicitly.
+func (s *Server) setBindingLab(ctx context.Context, lab string) {
+	id := s.mcpSessionID(ctx)
+	if id == "" {
+		return
+	}
+	s.mu.Lock()
+	b := s.bindings[id]
+	b.lab = lab
+	s.bindings[id] = b
+	s.mu.Unlock()
+}
+
+// boundLab returns the connection's current lab, or "".
+func (s *Server) boundLab(ctx context.Context) string {
+	if b, ok := s.getBinding(ctx); ok {
+		return b.lab
 	}
 	return ""
 }
