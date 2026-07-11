@@ -2,6 +2,8 @@ package console
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,8 +19,9 @@ import (
 
 const testKey = "test-key-abc123"
 
-// newTestMux builds a console over a fresh DB and returns its mux.
-func newTestMux(t *testing.T) *http.ServeMux {
+// newConsole builds a console over a fresh DB and returns the DB (for seeding)
+// and its mux.
+func newConsole(t *testing.T) (*sql.DB, *http.ServeMux) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
 	require.NoError(t, err)
@@ -28,7 +31,25 @@ func newTestMux(t *testing.T) *http.ServeMux {
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)
+	return db, mux
+}
+
+// newTestMux builds a console over a fresh DB and returns its mux.
+func newTestMux(t *testing.T) *http.ServeMux {
+	t.Helper()
+	_, mux := newConsole(t)
 	return mux
+}
+
+// getJSON issues an authenticated JSON GET and decodes the body into v.
+func getJSON(t *testing.T, mux *http.ServeMux, path string, v any) {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set("Accept", "application/json")
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code, "GET %s -> %d: %s", path, rr.Code, rr.Body.String())
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), v))
 }
 
 func do(mux *http.ServeMux, req *http.Request) *httptest.ResponseRecorder {

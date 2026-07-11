@@ -1,0 +1,42 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Sessions</h1>
+    <div class="sub">{{.Total}} total &middot; {{.Active}} active</div>
+  </div>
+  <div class="btn-row">
+    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions">All</a>
+    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active">Active</a>
+    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed">Completed</a>
+  </div>
+</div>
+
+{{if .Sessions}}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>Session</th><th>Project</th><th>Status</th><th>Source</th><th>Updated</th><th>Findings</th></tr>
+    </thead>
+    <tbody>
+      {{range .Sessions}}
+      <tr>
+        <td>
+          <a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>
+          {{if .Ambient}}<span class="badge">ambient</span>{{end}}
+        </td>
+        <td class="muted">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</td>
+        <td>{{if eq .Status "active"}}<span class="badge ok">active</span>{{else}}<span class="badge">completed</span>{{end}}</td>
+        <td class="muted">{{.Source}}</td>
+        <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+        <td class="muted">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty">No sessions{{if .Filter}} with status "{{.Filter}}"{{end}} yet</div>
+{{end}}
+{{end}}
+{{end}}

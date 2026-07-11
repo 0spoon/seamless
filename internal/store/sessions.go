@@ -96,6 +96,36 @@ func RecentFindings(ctx context.Context, db *sql.DB, project string, limit int) 
 	return out, rows.Err()
 }
 
+// ListSessions returns sessions newest-updated first, optionally filtered by
+// status, capped at limit (default 100). It backs the console Sessions list.
+func ListSessions(ctx context.Context, db *sql.DB, status core.SessionStatus, limit int) ([]core.Session, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	query := `SELECT ` + sessionCols + ` FROM sessions`
+	args := []any{}
+	if status != "" {
+		query += ` WHERE status = ?`
+		args = append(args, string(status))
+	}
+	query += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListSessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		s, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.ListSessions: %w", err)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // LatestActiveAmbientSession returns the most recently updated active ambient
 // (cc/*) session updated within the given window, or found=false when none. It
 // backs the MCP write-scope fallback: an agent that writes without calling
