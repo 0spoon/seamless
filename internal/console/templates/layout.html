@@ -27,6 +27,26 @@
     {{template "content" .}}
   </main>
 </div>
+<button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
+<script>
+(function () {
+  if (!window.EventSource) return;
+  var pill = document.getElementById('live-pill');
+  var dot = document.querySelector('.brand .dot');
+  var n = 0;
+  var es = new EventSource('/console/events');
+  es.onopen = function () { if (dot) dot.classList.add('on'); };
+  es.onmessage = function () {
+    n++;
+    if (pill) {
+      pill.textContent = n + ' new event' + (n > 1 ? 's' : '') + ' · refresh';
+      pill.hidden = false;
+    }
+  };
+  es.onerror = function () { if (dot) dot.classList.remove('on'); };
+  if (pill) pill.onclick = function () { location.reload(); };
+})();
+</script>
 {{block "scripts" .}}{{end}}
 </body>
 </html>
