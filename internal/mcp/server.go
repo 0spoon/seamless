@@ -31,9 +31,10 @@ const (
 	serverName    = "Seamless"
 	serverVersion = "0.0.0-dev"
 
-	// ToolCount is the number of MCP tools registered in P2's minimal loop.
-	// doctor asserts against it; it grows to 26 by P4.
-	ToolCount = 15
+	// ToolCount is the number of MCP tools registered so far. doctor asserts
+	// against it; it grows to 26 by P4. P2 minimal loop = 15; P3 adds tasks (4)
+	// and trials (3) = 22.
+	ToolCount = 19
 
 	// maxFindingsRunes caps session_end findings, matching the memory budget.
 	maxFindingsRunes = 1500
@@ -125,6 +126,11 @@ func (s *Server) registerTools() {
 
 	s.mcp.AddTool(projectListTool(), s.handleProjectList)
 	s.mcp.AddTool(projectCreateTool(), s.handleProjectCreate)
+
+	s.mcp.AddTool(tasksAddTool(), s.handleTasksAdd)
+	s.mcp.AddTool(tasksUpdateTool(), s.handleTasksUpdate)
+	s.mcp.AddTool(tasksReadyTool(), s.handleTasksReady)
+	s.mcp.AddTool(tasksListTool(), s.handleTasksList)
 }
 
 // ---------------------------------------------------------------------------
