@@ -66,3 +66,16 @@ gardener:
   # apply. Safe to leave enabled.
   # env: SEAMLESS_GARDENER_ENABLED
   enabled: true
+  # Minutes between full gardener passes (dedup + staleness + digest).
+  # env: SEAMLESS_GARDENER_INTERVAL_MINUTES
+  interval_minutes: 60
+  # Cosine similarity at/above which two active memories are proposed for a merge.
+  # env: SEAMLESS_GARDENER_DEDUP_THRESHOLD
+  dedup_threshold: 0.88
+  # Days of no activity (no update, injection, or read) before a memory is
+  # proposed for archiving. Constraints and stages are never archived this way.
+  # env: SEAMLESS_GARDENER_STALENESS_DAYS
+  staleness_days: 90
+  # Trailing window of completed sessions rolled into a monthly digest proposal.
+  # env: SEAMLESS_GARDENER_DIGEST_DAYS
+  digest_days: 30

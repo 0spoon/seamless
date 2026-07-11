@@ -27,6 +27,10 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 1500, d.Budgets.MaxBriefingTokens)
 	require.Equal(t, 1000, d.Budgets.RecallBudgetTokens)
 	require.True(t, d.Gardener.Enabled)
+	require.Equal(t, 60, d.Gardener.IntervalMinutes)
+	require.Equal(t, 0.88, d.Gardener.DedupThreshold)
+	require.Equal(t, 90, d.Gardener.StalenessDays)
+	require.Equal(t, 30, d.Gardener.DigestDays)
 }
 
 func TestLoadFrom_FileOverridesDefaults(t *testing.T) {
@@ -75,10 +79,14 @@ llm:
 func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_GARDENER_ENABLED", "false")
 	t.Setenv("SEAMLESS_MAX_BRIEFING_TOKENS", "800")
+	t.Setenv("SEAMLESS_GARDENER_STALENESS_DAYS", "45")
+	t.Setenv("SEAMLESS_GARDENER_DEDUP_THRESHOLD", "0.91")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
 	require.Equal(t, 800, cfg.Budgets.MaxBriefingTokens)
+	require.Equal(t, 45, cfg.Gardener.StalenessDays)
+	require.Equal(t, 0.91, cfg.Gardener.DedupThreshold)
 	require.Equal(t, "", cfg.SourcePath())
 }
 

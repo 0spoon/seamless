@@ -82,9 +82,20 @@ type Anthropic struct {
 	ChatModel string `yaml:"chat_model"`
 }
 
-// Gardener toggles the propose-only maintenance passes.
+// Gardener configures the propose-only maintenance passes and their ticker.
 type Gardener struct {
 	Enabled bool `yaml:"enabled"`
+	// IntervalMinutes is the ticker period between full gardener passes.
+	IntervalMinutes int `yaml:"interval_minutes"`
+	// DedupThreshold is the cosine-similarity floor at/above which two active
+	// memories are proposed for a merge.
+	DedupThreshold float64 `yaml:"dedup_threshold"`
+	// StalenessDays is the no-activity age (no update, injection, or read) beyond
+	// which an active memory is proposed for archiving.
+	StalenessDays int `yaml:"staleness_days"`
+	// DigestDays is the trailing window of completed sessions rolled into a
+	// monthly digest proposal.
+	DigestDays int `yaml:"digest_days"`
 }
 
 // Defaults returns the built-in configuration. File and env values are layered
@@ -110,7 +121,13 @@ func Defaults() Config {
 			},
 			Anthropic: Anthropic{ChatModel: "claude-sonnet-5"},
 		},
-		Gardener: Gardener{Enabled: true},
+		Gardener: Gardener{
+			Enabled:         true,
+			IntervalMinutes: 60,
+			DedupThreshold:  0.88,
+			StalenessDays:   90,
+			DigestDays:      30,
+		},
 	}
 }
 
@@ -229,6 +246,18 @@ func (c *Config) applyEnv() error {
 	if err := envBool("SEAMLESS_GARDENER_ENABLED", &c.Gardener.Enabled); err != nil {
 		return err
 	}
+	if err := envInt("SEAMLESS_GARDENER_INTERVAL_MINUTES", &c.Gardener.IntervalMinutes); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_GARDENER_STALENESS_DAYS", &c.Gardener.StalenessDays); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_GARDENER_DIGEST_DAYS", &c.Gardener.DigestDays); err != nil {
+		return err
+	}
+	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -270,6 +299,19 @@ func envInt(key string, dst *int) error {
 		return fmt.Errorf("config: env %s: %w", key, err)
 	}
 	*dst = n
+	return nil
+}
+
+func envFloat(key string, dst *float64) error {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
+	if err != nil {
+		return fmt.Errorf("config: env %s: %w", key, err)
+	}
+	*dst = f
 	return nil
 }
 
