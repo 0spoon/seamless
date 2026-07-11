@@ -69,7 +69,7 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 	rates := make([]kindRate, 0, len(byKind))
 	for _, k := range byKind {
 		rates = append(rates, kindRate{
-			Kind: k.Kind, Injects: k.Injects, Reads: k.Reads, ReadRate: percent(k.Reads, k.Injects),
+			Kind: k.Kind, Injects: k.Injects, Reads: k.Reads, ReadRate: readAfterInject(k.Reads, k.Injects),
 		})
 	}
 	trendMax := 0
@@ -84,7 +84,7 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		Active: "retrieval",
 		Data: retrievalData{
 			Injections: sum.Retrieval.Injections, Reads: sum.Retrieval.Reads,
-			ReadRate: percent(sum.Retrieval.Reads, sum.Retrieval.Injections),
+			ReadRate: readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
 			ByKind:   rates, Trend: trend, TrendMax: trendMax,
 			TopInjected: top, Stale: staleStats(stale), StaleDays: staleWindowDays,
 		},

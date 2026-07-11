@@ -263,7 +263,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		TasksDone:   sum.Tasks[string(core.TaskDone)],
 		Injections:  sum.Retrieval.Injections,
 		Reads:       sum.Retrieval.Reads,
-		ReadRate:    percent(sum.Retrieval.Reads, sum.Retrieval.Injections),
+		ReadRate:    readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
 		TopInjected: sum.Retrieval.TopInjected,
 		Pending:     sumValues(sum.GardenerPending),
 		Recent:      recent,
