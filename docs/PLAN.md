@@ -141,8 +141,8 @@ Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — wr
 
 - [x] **P0 — Skeleton (target: 1-2 days).** New repo, module, Makefile (build/test/lint/run), config (yaml + env, static key, budgets), `internal/store` with migration runner (pattern from v1) and migration 001 (all tables above), event log write path, `/healthz`, doctor skeleton. Port `validate`. Acceptance: `make test` green; server starts; doctor reports config + DB ok. **DONE 2026-07-10 (awaiting owner review before P1).**
 - [x] **P1 — Files + import (2-3 days).** `internal/files`: memory/note frontmatter round-trip, atomic writes, watcher + reconciliation (port), FTS + embeddings jobs (brute-force cosine search working with Ollama/OpenAI embedder). `seamlessd import --from ~/.seam`: old memory notes (parse `"Knowledge: {cat} - {name}"` titles + `domain:/project:/session:` tags into real frontmatter), plain notes (normalize frontmatter), sessions + agent_tool_calls (as historical sessions/events), old trial notes (parse sections into `trials` rows), SKIP the briefings project. Acceptance: import on a COPY of prod data; counts reported and spot-checked (76 memories, ~28 notes, 42 sessions); FTS and cosine search return sane results; editing a memory file on disk round-trips through the watcher. **DONE 2026-07-10 (awaiting owner review before P2).**
-- [ ] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system.
-- [ ] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2.
+- [x] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system. **DONE 2026-07-10 (owner accepted; dogfood live on :8081).**
+- [x] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2. **DONE 2026-07-10 (awaiting owner review before P4).**
 - [ ] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down.
 - [ ] **P5 — Console + CLI observability (3-4 days).** All console pages + SSE; CLI `sessions/usage/ready/task/capture/doctor`; `install-hooks` for v2; doctor complete (key, hooks x3, tool count 26, gardener ticker, embedder reachability). Acceptance: owner walkthrough of every console page against live dogfood data; screenshots recorded.
 - [ ] **P6 — Cutover (1-2 days + a parallel-run week).** Final `import` delta run (re-import anything old Seam accrued during the rewrite; imports are idempotent by id/name). Switch the global hooks + MCP registration to Seamless for ALL repos (installer handles it; remove the project-scoped dogfood hooks and rename/remove the old `seam` MCP entry), keep old seamd running read-only for one week as fallback, then stop and disable the old service. Archive the v1 repo (history + PLAN.md + review notes are the design record). Rename/move: Seamless takes over port 8080, data dir stays `~/.seamless`, `make install-service` for Seamless, update `~/.claude/CLAUDE.md` Seam section and replace the `/seam-onboard` skill from the Seamless docs. Acceptance: `make doctor` green on v2 as the sole system; one full day of normal multi-repo agent work with zero fallbacks to v1.
@@ -319,3 +319,94 @@ Watcher round-trip (create/edit/delete on disk -> index) verified. Divergences:
 embeddings switched to OpenAI mid-phase per owner; imported sessions coerced to
 `completed` (historical); tool-call args/results dropped from events (kept
 tool/duration/error). **HARD STOP: awaiting owner go-ahead before P2.**
+
+### 2026-07-10 — P2 (Core loop + dogfood)
+
+Entry reconstructed from the commit log (the P2 executor shipped the code but did
+not append a progress entry). Commits, in order:
+`feat(p2): MCP server + 15 tools with per-session binding`;
+`feat(p2): hook endpoints + settings.json installer`;
+`feat(p2): wire MCP + hooks into serve; add install-hooks + map-repo`;
+`feat(p2): seam CLI (prime, remember, recall, status)`;
+`feat(p2): backfill projects registry + runtime repo->project mapping`;
+`fix(p2): import top-level notes as inbox (empty project), not filename`.
+
+Net: the minimal core loop is live -- `internal/mcp` (15 tools, static bearer key,
+per-connection session binding so project scope is inherited), `internal/hooks`
+(session-start briefing + user-prompt-submit matcher) + settings.json installer,
+`cmd/seam` CLI (prime/remember/recall/status), and a runtime-evolving
+repo->project map that registers a projects-table row the first time an agent
+works in a new git repo. The last item (top-level notes imported as inbox rather
+than under a filename-derived project) fixed the inbox-note importer bug that
+gated P3. Dogfood is live on :8081 with `~/.seamless`; v1 untouched on :8080.
+**Owner accepted; P3 kicked off.**
+
+### 2026-07-10 — P3 (Lifecycle + tasks + ambient)
+
+Executed as 6 green commits (build/test/vet/lint clean after each), then an
+isolated end-to-end binary smoke on a throwaway config/data-dir/port (never the
+live :8081/`~/.seamless`).
+
+**Step 1 -- supersession + provenance** (`feat(p3): memory supersession +
+provenance + recall validity filter`). New `internal/lifecycle`: `Supersede`
+stamps the old memory `invalid_at` + `superseded_by`, appends a tombstone line to
+its file body (source of truth stays honest), and rewrites it out of the active
+index. `memory_write` gains `supersedes`; `memory_read` returns `source_session`
+provenance and, for a superseded memory (found via new
+`store.MemoryByNameIncludingInvalid`), a warning naming its replacement.
+**Divergence/bug found:** recall did NOT exclude superseded memories -- their FTS
++ embedding rows persist after `invalid_at` (only the index row is stamped), so
+recall now filters on `Memory.Active()` in the hydrate step.
+
+**Step 2 -- ambient sessions + session-end** (`feat(p3): ambient sessions,
+session-end hook + harvest, write-scope fallback`). session-start hook creates/
+resumes `cc/{prefix}` (metadata `claude_session_id/cwd/source`, scoped to the cwd
+project) and appends `Seam session: cc/xxxx (ambient)` to the briefing; subagents
+get none. New `POST /api/hooks/session-end` harvests the transcript's last
+assistant message (text blocks, cap 2000 runes, `(auto-harvested) ` prefix;
+fallback when absent) and completes the session, idempotently. Installer now
+installs the 3rd hook. MCP write-scope fallback: an unbound connection attributes
+writes to the most recent active `cc/*` session within 6h
+(`store.LatestActiveAmbientSession`). `hooks.Handler` gained a `*sql.DB`.
+
+**Step 3 -- tasks v2** (`feat(p3): tasks v2 ready-queue + 4 tools + briefing
+line`). `store/tasks.go` implements the ready-queue to the spec: ready = open with
+no open/in_progress blocker; done AND dropped unblock; in_progress leaves ready
+but still blocks; order oldest-created then id; dangling + cycle rejected at write
+time; terminal transitions stamp/clear `closed_at`. `BlockedTasks` surfaces
+blockers. MCP `tasks_add/update/ready/list` (ToolCount 15->19); briefing gains a
+`Ready tasks: N -- ...` line. **Divergence:** task persistence lives in `store/`
+(store-centric codebase), not a separate `internal/tasks`.
+
+**Step 4 -- sibling briefings** (`feat(p3): sibling-project family briefings`).
+`project_families` setting; `store.SiblingProjects` (union across families, self
+excluded) + `SiblingFindings`; briefing gains a `## Sibling projects` section (<=2
+findings, 150-rune snippets) between the memory index and recent findings.
+Briefing sections grouped into a `briefingSections` struct.
+
+**Step 5 -- research trials** (`feat(p3): research trials -- lab_open,
+trial_record, trial_query`). `store/trials.go` on the trials table (metrics as
+native JSON); lab/outcome/project filtered in SQL, exact-match metrics filter in
+Go (JSON-normalized so 497 == 497.0). MCP `lab_open` (returns lab history, binds
+the lab), `trial_record` (inherits bound lab), `trial_query` (metrics_filter).
+ToolCount 19->22.
+
+**Step 6 -- stage pinning** (`feat(p3): pin non-done stage memories in the
+briefing`). `ParseStageHeader` reads `Status:`/`Gate:` from a stage body; briefing
+pins non-done stages right after constraints and keeps stage-kind out of the
+index. `retrieve.Service` gained an optional `MemoryBodyReader` (set to
+`files.Store` in serve; index rows carry no body); degrades away when unset.
+
+**P3 acceptance (phase boundary, 2026-07-10).** `make build` + `go test ./...` +
+`go vet` + `golangci-lint run` all green (10 tested packages incl. new lifecycle).
+No migration needed -- migration 001 already provisioned every P3 table. New unit
+tests cover the PLAN.md Phase 2/3 scenarios against v2: supersede A with B ->
+A absent from a fresh briefing and recall but readable with a warning; ambient
+session create/resume/harvest lifecycle + explicit-overrides-ambient no-op;
+`tasks_add` A, B depends_on A -> ready = {A}, complete A -> ready = {B}, cycle
+rejected; sibling findings shown only for family members; trial metrics filter
+round-trip; stage status pinned. Isolated binary smoke: `doctor` clean,
+`install-hooks` writes all 3 hooks, `mcp_tools=22`, session-start created ambient
+`cc/smoke123` (project auto-registered) with the ambient briefing line,
+session-end harvested `(auto-harvested) ...` and completed the session.
+**HARD STOP: awaiting owner review before P4.**
