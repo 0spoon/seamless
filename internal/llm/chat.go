@@ -14,9 +14,13 @@ import (
 // chatTimeout bounds a single completion. Digests are short; a minute is ample.
 const chatTimeout = 60 * time.Second
 
-// chatMaxTokens caps a completion's length. Gardener digests are a few
-// paragraphs, so a modest ceiling keeps cost and latency bounded.
-const chatMaxTokens = 1024
+// chatMaxTokens caps a completion's length. Gardener digests are only a few
+// paragraphs, but on OpenAI reasoning models (gpt-5 / o-series) this budget is
+// shared with the model's internal reasoning tokens, so too low a ceiling can
+// be spent entirely on reasoning and return empty visible text. The cap only
+// bounds the worst case -- billing is for tokens actually generated -- so we
+// keep enough headroom for reasoning plus a short digest.
+const chatMaxTokens = 4096
 
 const defaultAnthropicBaseURL = "https://api.anthropic.com"
 
@@ -78,9 +82,11 @@ type openAIChatMessage struct {
 }
 
 type openAIChatRequest struct {
-	Model     string              `json:"model"`
-	Messages  []openAIChatMessage `json:"messages"`
-	MaxTokens int                 `json:"max_tokens,omitempty"`
+	Model    string              `json:"model"`
+	Messages []openAIChatMessage `json:"messages"`
+	// max_completion_tokens is the modern field; max_tokens is deprecated on the
+	// Chat Completions API and is rejected outright by reasoning models.
+	MaxCompletionTokens int `json:"max_completion_tokens,omitempty"`
 }
 
 type openAIChatResponse struct {
@@ -99,7 +105,7 @@ func (c *openAIChat) Complete(ctx context.Context, system, user string) (string,
 	}
 	msgs = append(msgs, openAIChatMessage{Role: "user", Content: user})
 
-	body, err := json.Marshal(openAIChatRequest{Model: c.model, Messages: msgs, MaxTokens: chatMaxTokens})
+	body, err := json.Marshal(openAIChatRequest{Model: c.model, Messages: msgs, MaxCompletionTokens: chatMaxTokens})
 	if err != nil {
 		return "", fmt.Errorf("llm.OpenAI.Complete: marshal: %w", err)
 	}
