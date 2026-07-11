@@ -40,6 +40,18 @@ func main() {
 		err = runRecall(args)
 	case "status":
 		err = runStatus(args)
+	case "sessions":
+		err = runSessions(args)
+	case "usage":
+		err = runUsage(args)
+	case "ready":
+		err = runReady(args)
+	case "task":
+		err = runTask(args)
+	case "capture":
+		err = runCapture(args)
+	case "doctor":
+		err = runDoctor(args)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -56,11 +68,23 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `seam -- Seamless CLI (talks to a running seamlessd)
 
-usage:
+agent loop:
   seam prime [--cwd DIR] [--name NAME]         start/resume a session, print the briefing
   seam remember --name N --kind K --description D [--body TEXT] [--project P]
   seam recall QUERY [--scope all|memories|notes] [--project P] [--limit N]
+  seam capture URL [--project P]               capture a web page as a note
+
+tasks:
+  seam ready [--project P] [--blocked]         actionable queue (+ blocked tasks)
+  seam task list [--project P] [--status S]    list tasks
+  seam task add --title T [--body B] [--project P] [--depends id,id]
+  seam task done|start|drop|reopen <id>        transition a task
+
+observability:
   seam status                                  server health + project count
+  seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
+  seam usage                                   activity roll-up
+  seam doctor                                  reachability + key + tool-count check
 `)
 }
 
