@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"database/sql"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -19,8 +20,9 @@ import (
 
 // newConsoleWithFiles builds a console backed by a real files.Manager over a
 // temp data dir, so memory writes/archives round-trip through the source-of-truth
-// files. It returns the manager (to seed) and the mux.
-func newConsoleWithFiles(t *testing.T) (*files.Manager, *http.ServeMux) {
+// files. It returns the DB (to seed events), the manager (to seed memories), and
+// the mux.
+func newConsoleWithFiles(t *testing.T) (*sql.DB, *files.Manager, *http.ServeMux) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -38,7 +40,7 @@ func newConsoleWithFiles(t *testing.T) (*files.Manager, *http.ServeMux) {
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)
-	return mgr, mux
+	return db, mgr, mux
 }
 
 func writeMemory(t *testing.T, mgr *files.Manager, kind core.MemoryKind, project, name, desc string) core.Memory {
@@ -55,7 +57,7 @@ func writeMemory(t *testing.T, mgr *files.Manager, kind core.MemoryKind, project
 }
 
 func TestMemoriesPage_GroupsAndArchive(t *testing.T) {
-	mgr, mux := newConsoleWithFiles(t)
+	_, mgr, mux := newConsoleWithFiles(t)
 
 	m1 := writeMemory(t, mgr, core.KindGotcha, "seamless", "watcher-race", "a surprising pitfall")
 	writeMemory(t, mgr, core.KindConstraint, "", "no-cgo", "never enable cgo")
