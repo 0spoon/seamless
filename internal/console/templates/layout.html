@@ -1,0 +1,33 @@
+{{define "layout"}}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}} &middot; Seamless</title>
+<link rel="stylesheet" href="/console/static/console.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot"></span> Seamless</div>
+    <nav class="nav">
+      <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">Overview</a>
+      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">Sessions <span class="count">{{.Nav.Sessions}}</span></a>
+      <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">Memories <span class="count">{{.Nav.Memories}}</span></a>
+      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">Retrieval</a>
+      <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">Tasks <span class="count">{{.Nav.Tasks}}</span></a>
+      <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">Gardener <span class="count">{{.Nav.Proposals}}</span></a>
+      <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">Settings</a>
+    </nav>
+    <form method="post" action="/console/logout" style="margin-top:18px;padding:0 10px;">
+      <button class="btn small" type="submit">Sign out</button>
+    </form>
+  </aside>
+  <main class="main">
+    {{template "content" .}}
+  </main>
+</div>
+{{block "scripts" .}}{{end}}
+</body>
+</html>
+{{end}}

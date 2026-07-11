@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/console"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gardener"
@@ -86,9 +87,9 @@ usage:
 }
 
 // runServe starts the HTTP server and blocks until SIGINT/SIGTERM, then shuts
-// down gracefully. It wires the full P2 surface: /healthz, the MCP tool endpoint
-// at /api/mcp, and the SessionStart/UserPromptSubmit hooks under /api/hooks. The
-// console is added in P5.
+// down gracefully. It wires /healthz, the MCP tool endpoint at /api/mcp, the
+// SessionStart/UserPromptSubmit/SessionEnd hooks under /api/hooks, and the
+// server-rendered observability console under /console.
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "", "HTTP bind address (overrides config)")
@@ -161,6 +162,13 @@ func runServe(args []string) error {
 		APIKey: cfg.MCP.APIKey, Logger: logger,
 	})
 	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
+	consoleSrv, err := console.New(console.Config{
+		DB: db, Files: mgr, Gardener: garden, Events: rec,
+		APIKey: cfg.MCP.APIKey, Budgets: cfg.Budgets, Logger: logger,
+	})
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: console: %w", err)
+	}
 
 	if cfg.Gardener.Enabled {
 		garden.Start(ctx)
@@ -174,6 +182,7 @@ func runServe(args []string) error {
 	mux.HandleFunc("/healthz", healthzHandler(db))
 	mux.Handle("/api/mcp", mcpSrv.Handler())
 	hooksH.Register(mux)
+	consoleSrv.Register(mux)
 
 	srv := &http.Server{
 		Addr:              bind,
