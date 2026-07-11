@@ -256,6 +256,47 @@ func TestTasksReadyQueue(t *testing.T) {
 	require.Contains(t, brief["briefing"], "Ready tasks: 1 -- wire briefing line")
 }
 
+func TestResearchTrials(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+
+	// Opening a fresh lab returns empty history and binds the lab.
+	open := callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "mw75-dfu"})
+	require.EqualValues(t, 0, open["trial_count"])
+
+	// trial_record inherits the bound lab (no lab arg) and stores metrics.
+	callJSON(t, ctx, cli, "trial_record", map[string]any{
+		"title": "baseline", "outcome": "fail", "metrics": `{"fw":"2.0.3","hz":497}`,
+	})
+	callJSON(t, ctx, cli, "trial_record", map[string]any{
+		"title": "retry", "outcome": "pass", "metrics": `{"fw":"2.0.4","hz":500}`,
+	})
+
+	// Re-opening the lab now shows both trials as context.
+	open = callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "mw75-dfu"})
+	require.EqualValues(t, 2, open["trial_count"])
+
+	// Native metrics query: only the trial with hz=497 comes back.
+	q := callJSON(t, ctx, cli, "trial_query", map[string]any{"metrics_filter": `{"hz":497}`})
+	trials := q["trials"].([]any)
+	require.Len(t, trials, 1)
+	require.Equal(t, "baseline", trials[0].(map[string]any)["title"])
+
+	// Outcome filter.
+	q = callJSON(t, ctx, cli, "trial_query", map[string]any{"outcome": "pass"})
+	require.Len(t, q["trials"].([]any), 1)
+
+	// A bad metrics argument is a tool error, not a panic.
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "trial_record", Arguments: map[string]any{"title": "x", "metrics": "not json"},
+	}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, resultText(t, res), "JSON object")
+}
+
 func TestWriteScopeFallbackToAmbient(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
