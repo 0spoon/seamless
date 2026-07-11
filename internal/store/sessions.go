@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
@@ -93,6 +94,23 @@ func RecentFindings(ctx context.Context, db *sql.DB, project string, limit int) 
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// LatestActiveAmbientSession returns the most recently updated active ambient
+// (cc/*) session updated within the given window, or found=false when none. It
+// backs the MCP write-scope fallback: an agent that writes without calling
+// session_start inherits the ambient session's project and provenance. A
+// non-positive within disables the recency filter.
+func LatestActiveAmbientSession(ctx context.Context, db *sql.DB, within time.Duration) (core.Session, bool, error) {
+	query := `SELECT ` + sessionCols + ` FROM sessions
+		WHERE status = 'active' AND ambient = 1`
+	args := []any{}
+	if within > 0 {
+		query += ` AND updated_at >= ?`
+		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
+	}
+	query += ` ORDER BY updated_at DESC, id DESC LIMIT 1`
+	return sessionOne(ctx, db, query, args...)
 }
 
 func sessionOne(ctx context.Context, db *sql.DB, query string, args ...any) (core.Session, bool, error) {

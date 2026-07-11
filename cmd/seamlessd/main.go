@@ -147,7 +147,7 @@ func runServe(args []string) error {
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Embedder: embedder,
 		APIKey: cfg.MCP.APIKey, Logger: logger,
 	})
-	hooksH := hooks.NewHandler(ret, rec, cfg.MCP.APIKey, logger)
+	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler(db))
