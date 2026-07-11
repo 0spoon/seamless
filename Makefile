@@ -68,9 +68,17 @@ install-service: build
 	     -e 's#__LOG__#$(SVC_LOG)#g' \
 	     $(SVC_TEMPLATE) > $(SVC_PLIST)
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
-	@launchctl bootstrap gui/$(UID) $(SVC_PLIST)
-	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL)
-	@echo "installed launchd service $(SVC_LABEL) -> $(SVC_PLIST)"
+	@# bootout is async: the label lingers briefly while the old instance exits.
+	@# Bootstrapping too soon fails with "Bootstrap failed: 5: Input/output error",
+	@# so retry until the label is released.
+	@for i in 1 2 3 4 5 6 7 8 9 10; do \
+	    launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null && break; \
+	    sleep 1; \
+	done
+	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
+	@launchctl print gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1 \
+	    && echo "installed launchd service $(SVC_LABEL) -> $(SVC_PLIST)" \
+	    || { echo "ERROR: $(SVC_LABEL) failed to bootstrap; check $(SVC_LOG)"; exit 1; }
 
 uninstall-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
