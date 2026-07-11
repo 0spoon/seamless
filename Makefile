@@ -5,7 +5,14 @@ BIN_DIR := bin
 PKG     := ./...
 GO      ?= go
 
-.PHONY: help build test test-race lint vet fmt tidy run doctor clean
+# launchd service (macOS user LaunchAgent)
+UID           := $(shell id -u)
+SVC_LABEL     := org.thereisnospoon.seamless
+SVC_TEMPLATE  := deploy/launchd/$(SVC_LABEL).plist
+SVC_PLIST     := $(HOME)/Library/LaunchAgents/$(SVC_LABEL).plist
+SVC_LOG       := $(HOME)/.seamless/seamlessd.log
+
+.PHONY: help build test test-race lint vet fmt tidy run doctor install-service uninstall-service clean
 
 help:
 	@echo "Seamless targets:"
@@ -18,6 +25,8 @@ help:
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server (127.0.0.1:8081)"
 	@echo "  doctor     build and run config + DB self-checks"
+	@echo "  install-service    install+load the launchd service (127.0.0.1:8081)"
+	@echo "  uninstall-service  unload+remove the launchd service"
 	@echo "  clean      remove build artifacts"
 
 build:
@@ -47,6 +56,24 @@ run: build
 
 doctor: build
 	$(BIN_DIR)/$(BINARY) doctor
+
+# Render the plist template with absolute paths, install it, and (re)load it.
+# Idempotent: an already-loaded service is booted out first. Restarts the daemon.
+install-service: build
+	@mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/.seamless
+	@sed -e 's#__BINARY__#$(CURDIR)/$(BIN_DIR)/$(BINARY)#g' \
+	     -e 's#__CONFIG__#$(CURDIR)/seamless.yaml#g' \
+	     -e 's#__LOG__#$(SVC_LOG)#g' \
+	     $(SVC_TEMPLATE) > $(SVC_PLIST)
+	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
+	@launchctl bootstrap gui/$(UID) $(SVC_PLIST)
+	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL)
+	@echo "installed launchd service $(SVC_LABEL) -> $(SVC_PLIST)"
+
+uninstall-service:
+	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
+	@rm -f $(SVC_PLIST)
+	@echo "removed launchd service $(SVC_LABEL)"
 
 clean:
 	rm -rf $(BIN_DIR) coverage.*
