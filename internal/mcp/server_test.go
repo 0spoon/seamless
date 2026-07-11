@@ -266,7 +266,7 @@ func TestResearchTrials(t *testing.T) {
 	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
 
 	// Opening a fresh lab returns empty history and binds the lab.
-	open := callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "mw75-dfu"})
+	open := callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "demo-dfu"})
 	require.EqualValues(t, 0, open["trial_count"])
 
 	// trial_record inherits the bound lab (no lab arg) and stores metrics.
@@ -278,7 +278,7 @@ func TestResearchTrials(t *testing.T) {
 	})
 
 	// Re-opening the lab now shows both trials as context.
-	open = callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "mw75-dfu"})
+	open = callJSON(t, ctx, cli, "lab_open", map[string]any{"lab": "demo-dfu"})
 	require.EqualValues(t, 2, open["trial_count"])
 
 	// Native metrics query: only the trial with hz=497 comes back.

@@ -27,24 +27,24 @@ func TestQueryTrialsFilters(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 
-	addTrial(t, db, "mw75-dfu", "baseline", core.OutcomeFail, map[string]any{"fw": "2.0.3", "hz": 497}, 1)
-	addTrial(t, db, "mw75-dfu", "retry", core.OutcomePass, map[string]any{"fw": "2.0.4", "hz": 500}, 2)
+	addTrial(t, db, "demo-dfu", "baseline", core.OutcomeFail, map[string]any{"fw": "2.0.3", "hz": 497}, 1)
+	addTrial(t, db, "demo-dfu", "retry", core.OutcomePass, map[string]any{"fw": "2.0.4", "hz": 500}, 2)
 	addTrial(t, db, "other-lab", "unrelated", core.OutcomePass, map[string]any{"hz": 497}, 3)
 
 	// Lab filter, newest first.
-	byLab, err := QueryTrials(ctx, db, TrialFilter{Lab: "mw75-dfu"})
+	byLab, err := QueryTrials(ctx, db, TrialFilter{Lab: "demo-dfu"})
 	require.NoError(t, err)
 	require.Len(t, byLab, 2)
 	require.Equal(t, "retry", byLab[0].Title)
 
 	// Outcome filter.
-	fails, err := QueryTrials(ctx, db, TrialFilter{Lab: "mw75-dfu", Outcome: string(core.OutcomeFail)})
+	fails, err := QueryTrials(ctx, db, TrialFilter{Lab: "demo-dfu", Outcome: string(core.OutcomeFail)})
 	require.NoError(t, err)
 	require.Len(t, fails, 1)
 	require.Equal(t, "baseline", fails[0].Title)
 
 	// Metrics equality filter: 497 (int literal) matches the stored 497.
-	byHz, err := QueryTrials(ctx, db, TrialFilter{Lab: "mw75-dfu", MetricsEquals: map[string]any{"hz": 497}})
+	byHz, err := QueryTrials(ctx, db, TrialFilter{Lab: "demo-dfu", MetricsEquals: map[string]any{"hz": 497}})
 	require.NoError(t, err)
 	require.Len(t, byHz, 1)
 	require.Equal(t, "baseline", byHz[0].Title)

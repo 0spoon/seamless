@@ -1,6 +1,6 @@
 // Command seamlessd is the Seamless server daemon and operator CLI.
 //
-// Subcommands (grown phase by phase per docs/PLAN.md):
+// Subcommands:
 //
 //	seamlessd serve         start the HTTP server
 //	seamlessd doctor        run configuration + database self-checks

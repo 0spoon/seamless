@@ -56,23 +56,23 @@ func TestProjectFamilyMutators(t *testing.T) {
 	ctx := context.Background()
 
 	// Add to a brand-new family.
-	members, err := AddFamilyMembers(ctx, db, "hegemon", []string{"app", "backend"})
+	members, err := AddFamilyMembers(ctx, db, "acme", []string{"app", "backend"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"app", "backend"}, members)
 
 	// Adding again unions and dedupes, preserving first-seen order; whitespace is
 	// trimmed and blanks dropped.
-	members, err = AddFamilyMembers(ctx, db, "hegemon", []string{" backend ", "agent", "app", ""})
+	members, err = AddFamilyMembers(ctx, db, "acme", []string{" backend ", "agent", "app", ""})
 	require.NoError(t, err)
 	require.Equal(t, []string{"app", "backend", "agent"}, members)
 
 	// It round-trips through the read path used by briefings.
 	fams, err := ProjectFamilies(ctx, db)
 	require.NoError(t, err)
-	require.Equal(t, map[string][]string{"hegemon": {"app", "backend", "agent"}}, fams)
+	require.Equal(t, map[string][]string{"acme": {"app", "backend", "agent"}}, fams)
 
 	// Removing a subset keeps the rest, in order.
-	members, err = RemoveFamilyMembers(ctx, db, "hegemon", []string{"agent"})
+	members, err = RemoveFamilyMembers(ctx, db, "acme", []string{"agent"})
 	require.NoError(t, err)
 	require.Equal(t, []string{"app", "backend"}, members)
 
@@ -81,7 +81,7 @@ func TestProjectFamilyMutators(t *testing.T) {
 	require.ErrorIs(t, err, ErrFamilyNotFound)
 
 	// Removing the remaining members empties and drops the family.
-	members, err = RemoveFamilyMembers(ctx, db, "hegemon", []string{"app", "backend"})
+	members, err = RemoveFamilyMembers(ctx, db, "acme", []string{"app", "backend"})
 	require.NoError(t, err)
 	require.Empty(t, members)
 	fams, err = ProjectFamilies(ctx, db)
