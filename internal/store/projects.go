@@ -6,12 +6,48 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
 
 // ErrSlugExists is returned by CreateProject when the slug is already taken.
 var ErrSlugExists = errors.New("store: project slug already exists")
+
+// EnsureProject returns the project registered under slug, creating a minimal
+// row when none exists yet. It is the idempotent upsert used by the importer and
+// by session resolution so that every project referenced by memories, notes, or
+// sessions also has a first-class projects-table row -- the row project_list
+// reads. A blank slug is the global scope: it is never registered and yields the
+// zero Project with no error. When name is blank the slug is used as the name.
+func EnsureProject(ctx context.Context, db *sql.DB, slug, name string) (core.Project, error) {
+	slug = strings.TrimSpace(slug)
+	if slug == "" {
+		return core.Project{}, nil
+	}
+	if p, ok, err := ProjectBySlug(ctx, db, slug); err != nil || ok {
+		return p, err
+	}
+	if strings.TrimSpace(name) == "" {
+		name = slug
+	}
+	id, err := core.NewID()
+	if err != nil {
+		return core.Project{}, fmt.Errorf("store.EnsureProject: %w", err)
+	}
+	now := time.Now().UTC()
+	p := core.Project{ID: id, Slug: slug, Name: name, CreatedAt: now, UpdatedAt: now}
+	if err := CreateProject(ctx, db, p); err != nil {
+		if errors.Is(err, ErrSlugExists) {
+			// Lost a create race with a concurrent caller; return the winner's row.
+			if got, ok, gerr := ProjectBySlug(ctx, db, slug); gerr == nil && ok {
+				return got, nil
+			}
+		}
+		return core.Project{}, err
+	}
+	return p, nil
+}
 
 // ListProjects returns every project, ordered by slug.
 func ListProjects(ctx context.Context, db *sql.DB) ([]core.Project, error) {

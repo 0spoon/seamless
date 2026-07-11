@@ -73,6 +73,20 @@ func callJSON(t *testing.T, ctx context.Context, cli *mcpclient.Client, name str
 	return out
 }
 
+// projectSlugs extracts the slugs from a project_list result.
+func projectSlugs(pl map[string]any) []string {
+	ps, _ := pl["projects"].([]any)
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		if m, ok := p.(map[string]any); ok {
+			if slug, ok := m["slug"].(string); ok {
+				out = append(out, slug)
+			}
+		}
+	}
+	return out
+}
+
 func resultText(t *testing.T, res *mcp.CallToolResult) string {
 	t.Helper()
 	require.NotNil(t, res)
@@ -134,11 +148,16 @@ func TestMCPLoopWithBinding(t *testing.T) {
 	nr := callJSON(t, ctx, cli, "notes_read", map[string]any{"id": noteID})
 	require.Contains(t, nr["body"], "readiness gate")
 
-	// projects.
-	pc := callJSON(t, ctx, cli, "project_create", map[string]any{"name": "Demo Project", "slug": "demo"})
-	require.Equal(t, "demo", pc["slug"])
+	// projects: session_start auto-registered "demo" from the cwd map, so it
+	// already appears in project_list without an explicit project_create.
 	pl := callJSON(t, ctx, cli, "project_list", nil)
-	require.NotEmpty(t, pl["projects"])
+	require.Contains(t, projectSlugs(pl), "demo")
+
+	// A distinct project_create adds another; both are then listed.
+	pc := callJSON(t, ctx, cli, "project_create", map[string]any{"name": "Other Project", "slug": "other"})
+	require.Equal(t, "other", pc["slug"])
+	pl = callJSON(t, ctx, cli, "project_list", nil)
+	require.Subset(t, projectSlugs(pl), []string{"demo", "other"})
 
 	// session_end persists findings.
 	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "readiness gate fixes the boot race"})

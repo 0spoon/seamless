@@ -87,6 +87,11 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
+	// Grow the repo->project map when this agent is working in a not-yet-mapped
+	// repo, so the briefing below (and later tool calls) resolve to a real
+	// project. Best-effort: a failure just leaves the cwd on the global scope.
+	h.retrieve.RegisterProjectForCWD(ctx, p.CWD)
+
 	briefing, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
 		CWD: p.CWD, Source: p.Source, AgentType: p.AgentType,
 	})

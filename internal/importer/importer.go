@@ -15,6 +15,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // Options configures an import run.
@@ -34,6 +35,7 @@ type Report struct {
 	Trials   int
 	Sessions int
 	Events   int
+	Projects int // projects-table rows backfilled from imported items
 	Skipped  int
 	Warnings []string
 }
@@ -41,8 +43,8 @@ type Report struct {
 // String renders a human-readable summary.
 func (r Report) String() string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "imported: %d memories, %d notes, %d trials, %d sessions, %d events (%d skipped, already present)",
-		r.Memories, r.Notes, r.Trials, r.Sessions, r.Events, r.Skipped)
+	fmt.Fprintf(&b, "imported: %d memories, %d notes, %d trials, %d sessions, %d events, %d projects (%d skipped, already present)",
+		r.Memories, r.Notes, r.Trials, r.Sessions, r.Events, r.Projects, r.Skipped)
 	if len(r.Warnings) > 0 {
 		fmt.Fprintf(&b, "\nwarnings (%d):", len(r.Warnings))
 		for _, w := range r.Warnings {
@@ -69,7 +71,63 @@ func Import(ctx context.Context, mgr *files.Manager, db *sql.DB, opts Options) (
 	if err := importDB(ctx, db, opts, rep); err != nil {
 		return rep, err
 	}
+	if err := backfillProjects(ctx, db, rep); err != nil {
+		return rep, err
+	}
 	return rep, nil
+}
+
+// backfillProjects ensures a projects-table row exists for every project slug
+// referenced by imported memories, notes, or trials, so project_list reflects
+// the imported corpus. It runs on every import (including idempotent re-imports),
+// registering only the slugs still missing a row. v1 sessions and events carry
+// no project slug and are not a source here.
+func backfillProjects(ctx context.Context, db *sql.DB, rep *Report) error {
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT project FROM memories_index WHERE project <> ''
+		UNION
+		SELECT DISTINCT project FROM notes_index WHERE project <> ''
+		UNION
+		SELECT DISTINCT project_slug FROM trials WHERE project_slug <> ''`)
+	if err != nil {
+		return fmt.Errorf("importer: distinct projects: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var slugs []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return fmt.Errorf("importer: scan project slug: %w", err)
+		}
+		slugs = append(slugs, slug)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, slug := range slugs {
+		// Only canonical slugs become projects. Malformed values -- notably v1
+		// inbox notes whose project field is actually a "<file>.md" name (the
+		// inbox-note importer bug) -- slugify to something else and are skipped,
+		// so the bug never pollutes project_list.
+		if core.Slugify(slug) != slug {
+			rep.Warnings = append(rep.Warnings, fmt.Sprintf("skipped non-slug project %q (not registered)", slug))
+			continue
+		}
+		_, ok, err := store.ProjectBySlug(ctx, db, slug)
+		if err != nil {
+			return fmt.Errorf("importer: lookup project %q: %w", slug, err)
+		}
+		if ok {
+			continue
+		}
+		if _, err := store.EnsureProject(ctx, db, slug, slug); err != nil {
+			return fmt.Errorf("importer: ensure project %q: %w", slug, err)
+		}
+		rep.Projects++
+	}
+	return nil
 }
 
 func importNotesTree(ctx context.Context, mgr *files.Manager, db *sql.DB, opts Options, skip map[string]bool, rep *Report) error {
