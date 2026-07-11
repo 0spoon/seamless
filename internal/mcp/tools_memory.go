@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/lifecycle"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -17,12 +18,13 @@ const maxDescriptionRunes = 150
 
 func memoryWriteTool() mcp.Tool {
 	return mcp.NewTool("memory_write",
-		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds."),
+		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
 		mcp.WithString("kind", mcp.Required(), mcp.Enum("constraint", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage"), mcp.Description("memory kind")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("supersedes", mcp.Description("name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here")),
 	)
 }
 
@@ -89,7 +91,45 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if similar != nil {
 		resp["similar"] = *similar
 	}
+	if supersedes := argString(req, "supersedes"); supersedes != "" {
+		superseded, serr := s.supersedeMemory(ctx, project, supersedes, written, now)
+		if serr != nil {
+			resp["supersede_error"] = serr.Error()
+		} else if superseded != "" {
+			resp["superseded"] = superseded
+		}
+	}
 	return jsonResult(resp)
+}
+
+// supersedeMemory marks the memory named target (in project, falling back to
+// global) as superseded by replacement. It returns the superseded memory's name
+// (project-qualified) on success, "" when there is nothing to supersede, or an
+// error the caller surfaces without failing the write.
+func (s *Server) supersedeMemory(ctx context.Context, project, target string, replacement core.Memory, now time.Time) (string, error) {
+	old, found, err := s.resolveMemory(ctx, project, target, true)
+	if err != nil {
+		return "", err
+	}
+	if !found {
+		return "", fmt.Errorf("no memory named %q to supersede", target)
+	}
+	if old.ID == replacement.ID {
+		return "", nil // same memory: an in-place update, not a supersession
+	}
+	// Index rows carry no body; read the file so the tombstone appends to the
+	// real content rather than truncating it.
+	full, err := s.cfg.Files.Store().ReadMemory(old.FilePath)
+	if err != nil {
+		return "", err
+	}
+	updated, err := lifecycle.Supersede(ctx, s.cfg.Files, full, replacement, now)
+	if err != nil {
+		return "", err
+	}
+	s.record(ctx, core.EventMemorySuperseded, s.boundSession(ctx), updated.Project, updated.ID,
+		map[string]any{"name": updated.Name, "superseded_by": replacement.ID})
+	return lifecycle.MemoryRef(updated.Project, updated.Name), nil
 }
 
 func memoryAppendTool() mcp.Tool {
@@ -149,18 +189,64 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 		return errResult("memory_read", err)
 	}
 	if !found {
-		return errResult("memory_read", fmt.Errorf("no memory named %q", name))
+		// The active lookup missed; a superseded memory (excluded from the active
+		// index) is still readable, returned with a warning pointing at its
+		// replacement so the agent reads the current knowledge instead.
+		idx, found, err = s.resolveSupersededMemory(ctx, project, name)
+		if err != nil {
+			return errResult("memory_read", err)
+		}
+		if !found {
+			return errResult("memory_read", fmt.Errorf("no memory named %q", name))
+		}
 	}
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
 	if err != nil {
 		return errResult("memory_read", err)
 	}
+	// Carry index-only lifecycle fields onto the file-parsed memory for the response.
+	mem.InvalidAt, mem.SupersededBy = idx.InvalidAt, idx.SupersededBy
 	s.record(ctx, core.EventMemoryRead, s.boundSession(ctx), mem.Project, mem.ID, map[string]any{"name": name})
-	return jsonResult(map[string]any{
+
+	out := map[string]any{
 		"id": mem.ID, "kind": string(mem.Kind), "name": mem.Name,
 		"description": mem.Description, "project": mem.Project, "body": mem.Body,
-		"tags": mem.Tags,
-	})
+		"tags": mem.Tags, "source_session": mem.SourceSession,
+	}
+	if !mem.Active() {
+		out["warning"] = s.supersededWarning(ctx, mem)
+	}
+	return jsonResult(out)
+}
+
+// resolveSupersededMemory finds a superseded (invalid) memory by (project, name),
+// falling back to the global scope, for memory_read's warning path.
+func (s *Server) resolveSupersededMemory(ctx context.Context, project, name string) (core.Memory, bool, error) {
+	m, ok, err := store.MemoryByNameIncludingInvalid(ctx, s.cfg.DB, project, name)
+	if err != nil || ok {
+		return m, ok, err
+	}
+	if project != "" {
+		return store.MemoryByNameIncludingInvalid(ctx, s.cfg.DB, "", name)
+	}
+	return core.Memory{}, false, nil
+}
+
+// supersededWarning renders the read warning for an invalid memory, naming the
+// replacement when superseded_by resolves to a known memory.
+func (s *Server) supersededWarning(ctx context.Context, mem core.Memory) string {
+	when := ""
+	if mem.InvalidAt != nil {
+		when = " on " + mem.InvalidAt.Format("2006-01-02")
+	}
+	if mem.SupersededBy != "" {
+		if repl, ok, err := store.MemoryByID(ctx, s.cfg.DB, mem.SupersededBy); err == nil && ok {
+			return fmt.Sprintf("superseded by %s%s; read that instead",
+				lifecycle.MemoryRef(repl.Project, repl.Name), when)
+		}
+		return fmt.Sprintf("superseded by %s%s; read that instead", mem.SupersededBy, when)
+	}
+	return fmt.Sprintf("archived%s; this memory is no longer active", when)
 }
 
 func memoryDeleteTool() mcp.Tool {

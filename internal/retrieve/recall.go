@@ -129,6 +129,12 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 			if !ok {
 				continue
 			}
+			// A superseded/archived memory keeps its FTS + embedding rows (only
+			// the index row is stamped invalid_at), so filter it out here rather
+			// than surface stale knowledge as a live hit.
+			if !m.Active() {
+				continue
+			}
 			h = memoryHit(m)
 		}
 		if !scopeVisible(h.Project, in.Project) {
