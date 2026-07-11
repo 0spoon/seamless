@@ -25,6 +25,10 @@ const SettingRepoProjectMap = "repo_project_map"
 // from a project's family members.
 const SettingProjectFamilies = "project_families"
 
+// ErrFamilyNotFound is returned by RemoveFamilyMembers when the named family does
+// not exist.
+var ErrFamilyNotFound = errors.New("store: project family not found")
+
 // ProjectFamilies decodes the project_families setting into a map. An unset or
 // blank value yields an empty map (not an error).
 func ProjectFamilies(ctx context.Context, db *sql.DB) (map[string][]string, error) {
@@ -69,6 +73,103 @@ func SiblingProjects(ctx context.Context, db *sql.DB, project string) ([]string,
 		}
 	}
 	return out, nil
+}
+
+// SetProjectFamilies persists the full families map as the project_families
+// setting. Empty families (no members) are dropped and members are trimmed and
+// deduped so the stored value stays canonical; passing an empty map clears the
+// setting to "{}". It is the single writer the family CLI and mutators funnel
+// through, so the setting never accumulates blanks or duplicates.
+func SetProjectFamilies(ctx context.Context, db *sql.DB, families map[string][]string) error {
+	clean := make(map[string][]string, len(families))
+	for name, members := range families {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			continue
+		}
+		if deduped := dedupeSlugs(members); len(deduped) > 0 {
+			clean[name] = deduped
+		}
+	}
+	b, err := json.Marshal(clean)
+	if err != nil {
+		return fmt.Errorf("store.SetProjectFamilies: %w", err)
+	}
+	return SetSetting(ctx, db, SettingProjectFamilies, string(b))
+}
+
+// AddFamilyMembers adds slugs to the named family, creating the family when it is
+// new, and persists the result. Existing members keep their order and duplicates
+// are ignored, so callers may re-add the same slugs idempotently. Returns the
+// family's resulting members.
+func AddFamilyMembers(ctx context.Context, db *sql.DB, family string, slugs []string) ([]string, error) {
+	family = strings.TrimSpace(family)
+	if family == "" {
+		return nil, fmt.Errorf("store.AddFamilyMembers: family name is empty")
+	}
+	families, err := ProjectFamilies(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	families[family] = dedupeSlugs(append(families[family], slugs...))
+	if err := SetProjectFamilies(ctx, db, families); err != nil {
+		return nil, err
+	}
+	return families[family], nil
+}
+
+// RemoveFamilyMembers removes slugs from the named family and persists the
+// result. Passing no slugs removes the whole family; a family left with no
+// members after the removal is dropped as well. Returns the family's resulting
+// members, empty when the family was removed. It errors with ErrFamilyNotFound
+// when the named family does not exist.
+func RemoveFamilyMembers(ctx context.Context, db *sql.DB, family string, slugs []string) ([]string, error) {
+	family = strings.TrimSpace(family)
+	if family == "" {
+		return nil, fmt.Errorf("store.RemoveFamilyMembers: family name is empty")
+	}
+	families, err := ProjectFamilies(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := families[family]; !ok {
+		return nil, fmt.Errorf("store.RemoveFamilyMembers: %q: %w", family, ErrFamilyNotFound)
+	}
+	if len(slugs) == 0 {
+		delete(families, family)
+		return nil, SetProjectFamilies(ctx, db, families)
+	}
+	drop := make(map[string]bool, len(slugs))
+	for _, s := range slugs {
+		drop[strings.TrimSpace(s)] = true
+	}
+	var kept []string
+	for _, m := range families[family] {
+		if !drop[m] {
+			kept = append(kept, m)
+		}
+	}
+	families[family] = kept // SetProjectFamilies drops it when kept is empty
+	if err := SetProjectFamilies(ctx, db, families); err != nil {
+		return nil, err
+	}
+	return kept, nil
+}
+
+// dedupeSlugs returns slugs with surrounding whitespace trimmed, blanks dropped,
+// and duplicates removed, preserving first-seen order.
+func dedupeSlugs(slugs []string) []string {
+	seen := make(map[string]bool, len(slugs))
+	out := make([]string, 0, len(slugs))
+	for _, s := range slugs {
+		s = strings.TrimSpace(s)
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		out = append(out, s)
+	}
+	return out
 }
 
 // GetSetting returns the value for a settings key. found is false when unset.
