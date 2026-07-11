@@ -143,7 +143,7 @@ Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — wr
 - [x] **P1 — Files + import (2-3 days).** `internal/files`: memory/note frontmatter round-trip, atomic writes, watcher + reconciliation (port), FTS + embeddings jobs (brute-force cosine search working with Ollama/OpenAI embedder). `seamlessd import --from ~/.seam`: old memory notes (parse `"Knowledge: {cat} - {name}"` titles + `domain:/project:/session:` tags into real frontmatter), plain notes (normalize frontmatter), sessions + agent_tool_calls (as historical sessions/events), old trial notes (parse sections into `trials` rows), SKIP the briefings project. Acceptance: import on a COPY of prod data; counts reported and spot-checked (76 memories, ~28 notes, 42 sessions); FTS and cosine search return sane results; editing a memory file on disk round-trips through the watcher. **DONE 2026-07-10 (awaiting owner review before P2).**
 - [x] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system. **DONE 2026-07-10 (owner accepted; dogfood live on :8081).**
 - [x] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2. **DONE 2026-07-10 (awaiting owner review before P4).**
-- [ ] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down.
+- [x] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down. **DONE 2026-07-10 (awaiting owner review before P5).**
 - [ ] **P5 — Console + CLI observability (3-4 days).** All console pages + SSE; CLI `sessions/usage/ready/task/capture/doctor`; `install-hooks` for v2; doctor complete (key, hooks x3, tool count 26, gardener ticker, embedder reachability). Acceptance: owner walkthrough of every console page against live dogfood data; screenshots recorded.
 - [ ] **P6 — Cutover (1-2 days + a parallel-run week).** Final `import` delta run (re-import anything old Seam accrued during the rewrite; imports are idempotent by id/name). Switch the global hooks + MCP registration to Seamless for ALL repos (installer handles it; remove the project-scoped dogfood hooks and rename/remove the old `seam` MCP entry), keep old seamd running read-only for one week as fallback, then stop and disable the old service. Archive the v1 repo (history + PLAN.md + review notes are the design record). Rename/move: Seamless takes over port 8080, data dir stays `~/.seamless`, `make install-service` for Seamless, update `~/.claude/CLAUDE.md` Seam section and replace the `/seam-onboard` skill from the Seamless docs. Acceptance: `make doctor` green on v2 as the sole system; one full day of normal multi-repo agent work with zero fallbacks to v1.
 
@@ -410,3 +410,91 @@ round-trip; stage status pinned. Isolated binary smoke: `doctor` clean,
 `cc/smoke123` (project auto-registered) with the ambient briefing line,
 session-end harvested `(auto-harvested) ...` and completed the session.
 **HARD STOP: awaiting owner review before P4.**
+
+### 2026-07-10 — P4 (Gardener + retrieval quality)
+
+Owner go-ahead received ("start P4 gardener"). Executed as 8 green commits
+(build/test/vet/lint clean after each), then an isolated binary smoke on a
+throwaway config/data-dir/port (never the live :8081/`~/.seamless`). No
+migration -- migration 001 already provisioned retrieval_stats,
+gardener_proposals, and jobs.
+
+**Step 1 -- retrieval_stats from events** (`feat(p4): retrieval_stats derived
+from the event log`). `store/retrieval_stats.go`: `RebuildRetrievalStats`
+materializes the table from the append-only log (`retrieval.injected` ->
+inject_count/last_injected_at per item id, read from BOTH the item_id column and
+the payload `item_ids` array; `memory.read` -> read_count/last_read_at),
+`GetRetrievalStat`, and `StaleMemories(cutoff)` (active memories with no
+update/injection/read since a cutoff, via LEFT JOIN). Chosen design: a
+rebuildable projection (the gardener rebuilds it at the top of each pass), not
+scattered incremental bumps -- the event log is the single source of truth.
+**Gap found:** briefing/prompt-hook injections record NO item_ids (only
+`{hook, claude_session_id}`), so only recall + memory_read feed per-item stats;
+staleness therefore measures "pulled via recall/read", which is the intended
+liveness signal.
+
+**Step 2 -- llm chat client** (`feat(p4): llm chat client (openai, ollama,
+anthropic) for digests`). `llm/chat.go`: minimal `Chat` (Complete(system, user)
+-> text) + `NewChatClient` factory. Unlike embeddings, all three providers do
+chat (OpenAI /chat/completions, Ollama /api/chat, Anthropic /v1/messages).
+httptest-only tests.
+
+**Step 3 -- gardener passes** (`feat(p4): gardener propose-only passes (dedup,
+staleness, digest)`). New `internal/gardener` + `store/gardener.go`
+(gardener_proposals CRUD + `ActiveMemoryVectors`/`AllActiveMemories`/
+`CompletedSessionsSince`). RunOnce rebuilds stats, then: dedup (pairwise cosine
+over stored vectors, >=0.88 -> merge proposal, keep newer / drop older;
+skipped without an embedder), staleness (no activity in StalenessDays -> archive
+proposal; constraints + stages never archived; a memory named by a [[link]] in
+another memory's body is protected), digest (completed sessions in the trailing
+DigestDays grouped by project, summarized by the chat client into one digest
+proposal per project per calendar month; skipped without a chat client). Every
+payload carries a stable `key`; `AllProposalKeys` (across every status) dedups so
+an applied/dismissed suggestion never returns. config: gardener
+interval/threshold/staleness/digest knobs + env. **Divergence:** digest computed
+inline in the pass (synchronous chat call), not via the `jobs` queue -- simpler,
+testable, and the gardener is already a ticker. Acceptance test seeds a fixture
+and asserts RunOnce produces all three proposal kinds and is idempotent on a
+second pass.
+
+**Step 4 -- ticker + serve** (`feat(p4): gardener ticker + wire into serve`).
+`Service.Start`: one pass ~20s after boot, then every Interval, stopping on ctx
+cancel; each pass under a 5-minute timeout, best-effort. serve builds a
+best-effort chat client and starts the gardener when enabled.
+
+**Step 5 -- gardener MCP tools** (`feat(p4): gardener_proposals + gardener_apply
+MCP tools`). `lifecycle.Archive` (retire a memory: invalid_at, no successor,
+archive tombstone) + gardener `Apply`/`Dismiss` (archive -> retire; merge ->
+supersede drop by keep; digest -> write the summary as a note; a failed effect
+leaves the proposal pending). Two tools; ToolCount 22->24. Server now tracks
+registered tool names (`NumTools`) for the doctor assertion.
+
+**Step 6 -- capture_url** (`feat(p4): capture_url tool + SSRF-safe URL fetch`).
+Ported `internal/capture` from v1 (URL path only; voice dropped): DNS-rebinding-
+safe dialer rejecting private/loopback addresses, redirect-scheme validation,
+2MB cap, readable-content extraction. `capture_url` saves the page as a note.
+Added golang.org/x/net + golang.org/x/text. ToolCount ->25.
+
+**Step 7 -- recall link expansion** (`feat(p4): recall link expansion + shared
+core.WikiLinks`). `core.WikiLinks` (parse/normalize/dedup [[name]] refs), routed
+the gardener's reference scan through it too. Recall scans the top fused memory
+hits' bodies for links and pulls each linked active in-scope memory into the
+candidate set as a third RRF signal (source `link`); no-op without a body reader.
+
+**Step 8 -- usage_summary + doctor** (`feat(p4): usage_summary tool + doctor
+asserts 26 tools`). `store.GetUsageSummary` (memory/note/session/task counts,
+retrieval totals + most-injected, pending proposals, events by kind).
+`usage_summary` rebuilds stats then returns it. doctor builds a throwaway MCP
+server and asserts NumTools == ToolCount (26). ToolCount ->26.
+
+**P4 acceptance (phase boundary, 2026-07-10).** `make build` + `go test ./...` +
+`go vet` + `golangci-lint run` all green (13 tested packages incl. new gardener +
+capture). Acceptance scenarios: seeded-fixture RunOnce produces merge + archive +
+digest and re-proposes nothing on a second pass (reference-aware + kind-aware
+protections verified: a linked old memory and an old constraint are NOT
+archived); recall returns results with the embedder nil (degrades to FTS), and
+link expansion is a no-op without a body reader. Isolated binary smoke: `doctor`
+clean with `mcp_tools: 26 tools registered`; serve boots with `gardener enabled`
+(interval 1h, dedup 0.88, staleness 90d), healthz ok, embeddings + digests
+degrade cleanly when unconfigured, graceful shutdown. **HARD STOP: awaiting owner
+review before P5.**
