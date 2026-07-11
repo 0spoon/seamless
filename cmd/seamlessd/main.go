@@ -180,6 +180,11 @@ func runServe(args []string) error {
 	}
 
 	mux := http.NewServeMux()
+	// Redirect the bare root to the console; {$} matches only "/" so other
+	// unmatched paths still return 404.
+	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/console/", http.StatusFound)
+	})
 	mux.HandleFunc("/healthz", healthzHandler(db))
 	mux.Handle("/api/mcp", mcpSrv.Handler())
 	hooksH.Register(mux)
