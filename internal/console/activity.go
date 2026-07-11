@@ -102,3 +102,14 @@ func payloadStr(p map[string]any, key string) string {
 	}
 	return ""
 }
+
+// payloadMap reads a nested object field from a payload map (nil if absent).
+func payloadMap(p map[string]any, key string) map[string]any {
+	if p == nil {
+		return nil
+	}
+	if v, ok := p[key].(map[string]any); ok {
+		return v
+	}
+	return nil
+}
