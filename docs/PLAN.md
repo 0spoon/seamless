@@ -144,7 +144,7 @@ Guardrails: identical spirit to PLAN.md (AGENTS.md conventions carry over — wr
 - [x] **P2 — Core loop + dogfood (3-4 days).** MCP server (static key) with the minimal loop: `session_start/update/end` (with binding + write-scope inheritance), `memory_write/append/read/delete` (arbitration hint from day one — port dedupHint logic onto cosine search), `recall` (semantic + FTS, simple fusion), `notes_create/read/update/append/delete`, `project_list/create`. Hooks: session-start briefing (constraints + memory index + findings, token-budgeted) and user-prompt-submit (ported matcher). CLI: `prime, remember, recall, status`. Dogfood switch (owner-confirmed): add a SECOND user-scope MCP server named `seamless` pointing at :8081 in `~/.claude.json` (leave the v1 `seam` entry untouched), and install the v2 hooks into THIS repo's project-scoped `.claude/settings.json` only — v1's global hooks will also fire here with their small unmapped-repo fallback briefing, which is acceptable during dogfood. Acceptance: a real Claude Code session in the seamless repo gets a v2 briefing, writes/recalls memories; old Seam untouched for all other repos. DOGFOOD STARTS HERE — every subsequent phase is built with v2 as this repo's memory system. **DONE 2026-07-10 (owner accepted; dogfood live on :8081).**
 - [x] **P3 — Lifecycle + tasks + ambient (3-4 days).** Bi-temporal supersession (`supersedes` param, validity filters everywhere, read warnings), provenance stamping, SessionEnd hook + ambient sessions + harvest (PLAN.md 3.1 contract), tasks v2 ready-queue + 4 tools + briefing line (build to the "Ready-queue semantics" spec above), sibling-family briefing section, `trial_record/trial_query/lab_open` on the trials table with native metrics filtering, `stage` kind pinned in briefings. Acceptance: PLAN.md Phase 2/3 verification scenarios, run against v2. **DONE 2026-07-10 (awaiting owner review before P4).**
 - [x] **P4 — Gardener + retrieval quality (2-3 days).** Gardener ticker (propose-only: dedup >=0.88, staleness 90d via retrieval_stats, monthly session digests via LLM job; reference-aware protection; apply/dismiss via 2 MCP tools + console later), RRF recall (semantic + FTS + link expansion, k=60, validity- and budget-aware), retrieval_stats from events, `capture_url` + `usage_summary` tools. Tool count now 26 — assert in doctor. Acceptance: seeded-fixture gardener run produces all three proposal kinds; recall degrades to lexical with the embedder down. **DONE 2026-07-10 (awaiting owner review before P5).**
-- [ ] **P5 — Console + CLI observability (3-4 days).** All console pages + SSE; CLI `sessions/usage/ready/task/capture/doctor`; `install-hooks` for v2; doctor complete (key, hooks x3, tool count 26, gardener ticker, embedder reachability). Acceptance: owner walkthrough of every console page against live dogfood data; screenshots recorded.
+- [x] **P5 — Console + CLI observability (3-4 days).** All console pages + SSE; CLI `sessions/usage/ready/task/capture/doctor`; `install-hooks` for v2; doctor complete (key, hooks x3, tool count 26, gardener ticker, embedder reachability). Acceptance: owner walkthrough of every console page against live dogfood data; screenshots recorded. **DONE 2026-07-10 (awaiting owner review before P6).**
 - [ ] **P6 — Cutover (1-2 days + a parallel-run week).** Final `import` delta run (re-import anything old Seam accrued during the rewrite; imports are idempotent by id/name). Switch the global hooks + MCP registration to Seamless for ALL repos (installer handles it; remove the project-scoped dogfood hooks and rename/remove the old `seam` MCP entry), keep old seamd running read-only for one week as fallback, then stop and disable the old service. Archive the v1 repo (history + PLAN.md + review notes are the design record). Rename/move: Seamless takes over port 8080, data dir stays `~/.seamless`, `make install-service` for Seamless, update `~/.claude/CLAUDE.md` Seam section and replace the `/seam-onboard` skill from the Seamless docs. Acceptance: `make doctor` green on v2 as the sole system; one full day of normal multi-repo agent work with zero fallbacks to v1.
 
 Total: roughly 3-4 weeks of agent execution at the PLAN.md level of care, with v2 earning its keep from P2 onward.
@@ -498,3 +498,82 @@ clean with `mcp_tools: 26 tools registered`; serve boots with `gardener enabled`
 (interval 1h, dedup 0.88, staleness 90d), healthz ok, embeddings + digests
 degrade cleanly when unconfigured, graceful shutdown. **HARD STOP: awaiting owner
 review before P5.**
+
+### 2026-07-10 — P5 (Console + CLI observability)
+
+Owner go-ahead received ("merged P4 to main, now start P5"). P4 fast-forwarded
+to main (HEAD 3a71869); P5 executed on branch `p5-console` as 11 green commits
+(build/test/vet/lint clean after each), then a live browser walkthrough of every
+page against a COPY of the dogfood `~/.seamless` (the live :8081 instance was
+never touched). No migration -- migration 001 already provisioned every table
+the console reads.
+
+New `internal/console`: server-rendered `html/template` + one embedded CSS file
+via `go:embed`, vanilla-JS SSE client, no node/build step. Auth accepts EITHER a
+session cookie (browser, set at `/console/login` -- the cookie stores a SHA-256
+of the key, never the key) OR the static bearer key (so the `seam` CLI reaches
+the same routes). Every page also serves `?format=json`, which is how the CLI's
+`sessions` command reads data without adding a 27th MCP tool (ToolCount stays 26).
+
+Commits, in order:
+- **scaffold** (`feat(p5): console scaffold`): auth, layout, overview page from
+  GetUsageSummary + the event log, wired into serve. `store.GetNavCounts`.
+- **Sessions** (`feat(p5): console Sessions page`): list (all/active/completed
+  filter) + detail (metadata, findings, event timeline, per-session
+  tool-call/read/write counts + a read-after-inject metric). `store.ListSessions`,
+  `events.BySession` (scanEvents factored out of Recent).
+- **Memories** (`feat(p5): console Memories browser + archive`): project (global
+  first) -> kind groups, per-memory inject/read counts, edit link
+  (`vscode://file` absolute path via `template.URL`), archive button
+  (lifecycle.Archive -- the console's one memory write), and a collapsible
+  archived/superseded section with resolved supersession chains.
+  `store.AllMemoriesIncludingInvalid` + `AllRetrievalStats` (one bulk query).
+- **Retrieval** (`feat(p5): console Retrieval page`): read-after-inject headline,
+  per-kind rate meters, 14-day injection trend, most-injected + stale (90d)
+  lists. `store.RetrievalByKind/TopInjectedMemories/InjectionsByDay`.
+- **Tasks** (`feat(p5): console Tasks page`): ready-first, then in-progress,
+  blocked (with blocker badges), and a collapsible recently-closed list, across
+  all projects. `store.AllReadyTasks/AllBlockedTasks/AllTasksByStatus`.
+- **Gardener** (`feat(p5): console Gardener page`): typed proposal cards
+  (archive/merge/digest) with previews; Apply/Dismiss POST to
+  gardener.Apply/Dismiss; a failed apply leaves the proposal pending and flashes
+  the error.
+- **Settings** (`feat(p5): console Settings page`): read-only view of data dir,
+  budgets, gardener knobs, projects, the learned repo->project map, and families.
+- **SSE** (`feat(p5): console SSE live feed`): `events.Recorder` gains a
+  best-effort pub/sub (a slow subscriber drops rather than blocks the write
+  path); `/console/events` streams JSON frames; every page's layout runs a small
+  EventSource client that pulses the brand dot and shows a "new activity" pill.
+  Race-clean.
+- **CLI** (`feat(p5): seam CLI observability`): `usage` (usage_summary), `ready
+  [--blocked]` (tasks_ready), `task list|add|done|start|drop|reopen`, `capture`
+  (capture_url), `sessions [<id>]` (console JSON, bearer), `doctor` (healthz +
+  MCP tools/list count == 26 + project_list). Verified end-to-end live.
+- **doctor** (`feat(p5): complete seamlessd doctor`): adds hooks x3
+  (`hooks.InstalledStatus`, checked in `~/.claude` and `./.claude`), gardener
+  ticker config, and an embedder reachability probe (skipped when the provider
+  credential is missing). All three degrade to warnings, never failures.
+- **fix** (`fix(p5): cap read-after-inject rate at 100%`): reads can exceed
+  injections (hook injections record no per-item ids), so the raw ratio is
+  clamped to a sensible coverage percentage.
+
+`install-hooks` already installed all three hooks (P2/P3); doctor now reports
+their status. **Divergences:** console-support store queries live in
+`store/console.go` + existing per-domain files (store-centric codebase), not a
+new package; the CLI `sessions` command uses the console's content-negotiated
+JSON rather than a new MCP tool (keeps ToolCount at 26); the memory edit link
+assumes a VS Code-family editor (`vscode://file`), with the absolute path shown
+as the title so it is informative regardless.
+
+**P5 acceptance (phase boundary, 2026-07-10).** `make build` + `go test ./...` +
+`go vet` + `golangci-lint run` all green (console + events race-clean). Live
+walkthrough on a copy of dogfood data (73 memories, 28 notes, 49 sessions):
+every page rendered correctly -- Overview roll-up, Sessions list+detail (real
+findings + timeline), Memories grouped by project/kind with archive + edit,
+Retrieval (per-kind meters, trend, stale), Tasks (ready/blocked with a real
+dependency), Gardener (all three seeded card types), Settings (14 projects, 15
+repo mappings). SSE verified: emitting an event surfaced the live "new activity"
+pill. `seamlessd doctor` reports 26 tools, hooks 3/3 after install, gardener
+config, and the embedder credential state. `seam doctor/usage/ready/task/
+sessions/capture` all verified against a live throwaway server. **HARD STOP:
+awaiting owner review before P6 (cutover).**
