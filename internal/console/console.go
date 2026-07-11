@@ -70,6 +70,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /console/logout", s.logout)
 
 	mux.HandleFunc("GET /console/{$}", s.auth(s.overview))
+	mux.HandleFunc("GET /console/sessions", s.auth(s.sessionsList))
+	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
 }
 
 // ---------------------------------------------------------------------------

@@ -73,8 +73,31 @@ func (r *Recorder) Recent(ctx context.Context, limit int) ([]core.Event, error) 
 	if err != nil {
 		return nil, fmt.Errorf("events.Recent: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
+	return scanEvents(rows)
+}
 
+// BySession returns a session's events in chronological order (oldest first), so
+// a caller can render the session's timeline. A non-positive limit defaults to
+// 500.
+func (r *Recorder) BySession(ctx context.Context, sessionID string, limit int) ([]core.Event, error) {
+	if sessionID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 500
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, ts, kind, session_id, project_slug, item_id, payload
+		 FROM events WHERE session_id = ? ORDER BY ts ASC, id ASC LIMIT ?`, sessionID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("events.BySession: %w", err)
+	}
+	return scanEvents(rows)
+}
+
+// scanEvents drains an events query into core.Event values.
+func scanEvents(rows *sql.Rows) ([]core.Event, error) {
+	defer func() { _ = rows.Close() }()
 	var out []core.Event
 	for rows.Next() {
 		var (
@@ -82,23 +105,23 @@ func (r *Recorder) Recent(ctx context.Context, limit int) ([]core.Event, error) 
 			ts, kind, payload string
 		)
 		if err := rows.Scan(&e.ID, &ts, &kind, &e.SessionID, &e.ProjectSlug, &e.ItemID, &payload); err != nil {
-			return nil, fmt.Errorf("events.Recent: scan: %w", err)
+			return nil, fmt.Errorf("events: scan: %w", err)
 		}
 		t, err := core.ParseTime(ts)
 		if err != nil {
-			return nil, fmt.Errorf("events.Recent: parse ts: %w", err)
+			return nil, fmt.Errorf("events: parse ts: %w", err)
 		}
 		e.TS = t
 		e.Kind = core.EventKind(kind)
 		if payload != "" && payload != "{}" {
 			if err := json.Unmarshal([]byte(payload), &e.Payload); err != nil {
-				return nil, fmt.Errorf("events.Recent: unmarshal payload: %w", err)
+				return nil, fmt.Errorf("events: unmarshal payload: %w", err)
 			}
 		}
 		out = append(out, e)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("events.Recent: rows: %w", err)
+		return nil, fmt.Errorf("events: rows: %w", err)
 	}
 	return out, nil
 }
