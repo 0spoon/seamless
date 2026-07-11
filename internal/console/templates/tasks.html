@@ -7,6 +7,13 @@
   </div>
 </div>
 
+{{if or .Ready .InProgress .Blocked .Closed}}
+<div class="card section">
+  <h2>Task pipeline</h2>
+  {{stackedBar (len .Ready) (len .InProgress) (len .Blocked) (add (len .Closed) .ClosedMore)}}
+</div>
+{{end}}
+
 <div class="section">
   <h2>Ready <span class="count">{{len .Ready}}</span></h2>
   {{if .Ready}}
