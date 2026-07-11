@@ -138,6 +138,7 @@ func runServe(args []string) error {
 	}
 
 	ret := retrieve.New(db, embedder, cfg.Budgets, logger)
+	ret.SetBodyReader(mgr.Store()) // enables the pinned-stage briefing section
 	rec := events.NewRecorder(db)
 
 	if cfg.MCP.APIKey == "" {

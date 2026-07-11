@@ -30,11 +30,14 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error
 	if err != nil {
 		return "", err
 	}
-	var constraints, index []core.Memory
+	var constraints, index, stageMems []core.Memory
 	for _, m := range mems {
-		if m.Kind == core.KindConstraint {
+		switch m.Kind {
+		case core.KindConstraint:
 			constraints = append(constraints, m)
-		} else {
+		case core.KindStage:
+			stageMems = append(stageMems, m)
+		default:
 			index = append(index, m)
 		}
 	}
@@ -56,13 +59,14 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error
 	if err != nil {
 		return "", err
 	}
+	stages := s.pinnedStages(stageMems)
 	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
-		len(ready) == 0 && len(siblings) == 0 {
+		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 {
 		return "", nil
 	}
 	return s.assembleBriefing(project, in.Source, briefingSections{
 		constraints: constraints, index: index, findings: findings,
-		ready: ready, siblings: siblings,
+		ready: ready, siblings: siblings, stages: stages,
 	}), nil
 }
 
@@ -108,6 +112,7 @@ type briefingSections struct {
 	findings    []core.Session
 	ready       []core.Task
 	siblings    []core.Session // recent findings from family-member projects
+	stages      []stageLine    // non-done stage memories, pinned after constraints
 }
 
 // assembleBriefing packs the sections against the token budget. Constraints, the
@@ -132,6 +137,9 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	for _, c := range constraints {
 		head.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
 	}
+	// Pinned stages sit right after constraints and, like them, are never dropped
+	// for budget -- a gated stage's status is load-bearing for the whole session.
+	head.WriteString(stageHead(sec.stages))
 
 	var tail strings.Builder
 	tail.WriteString("Recall on demand with recall; read a memory with memory_read.\n")
