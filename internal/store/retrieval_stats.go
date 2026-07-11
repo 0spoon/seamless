@@ -166,6 +166,38 @@ func GetRetrievalStat(ctx context.Context, db *sql.DB, itemID string) (Retrieval
 	return s, true, nil
 }
 
+// AllRetrievalStats loads the whole retrieval_stats table into a map keyed by
+// item id, so a caller (the console) can annotate many memories with one query
+// instead of N GetRetrievalStat calls.
+func AllRetrievalStats(ctx context.Context, db *sql.DB) (map[string]RetrievalStat, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT item_id, inject_count, read_count, last_injected_at, last_read_at
+		FROM retrieval_stats`)
+	if err != nil {
+		return nil, fmt.Errorf("store.AllRetrievalStats: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := make(map[string]RetrievalStat)
+	for rows.Next() {
+		var (
+			s                      RetrievalStat
+			lastInjected, lastRead sql.NullString
+		)
+		if err := rows.Scan(&s.ItemID, &s.InjectCount, &s.ReadCount, &lastInjected, &lastRead); err != nil {
+			return nil, fmt.Errorf("store.AllRetrievalStats: scan: %w", err)
+		}
+		var perr error
+		if s.LastInjectedAt, perr = nullTimePtr(lastInjected); perr != nil {
+			return nil, fmt.Errorf("store.AllRetrievalStats: last_injected_at: %w", perr)
+		}
+		if s.LastReadAt, perr = nullTimePtr(lastRead); perr != nil {
+			return nil, fmt.Errorf("store.AllRetrievalStats: last_read_at: %w", perr)
+		}
+		out[s.ItemID] = s
+	}
+	return out, rows.Err()
+}
+
 // StaleMemories returns active memories that have seen no activity since cutoff:
 // neither updated, injected, nor read on or after that instant. It LEFT JOINs
 // retrieval_stats (a memory with no stats row counts as never injected/read, so

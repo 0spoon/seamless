@@ -84,6 +84,23 @@ func ActiveMemories(ctx context.Context, db *sql.DB, project string) ([]core.Mem
 	return mems, nil
 }
 
+// AllMemoriesIncludingInvalid returns every memory index row -- active and
+// invalid (superseded or archived) -- newest-updated first. It backs the console
+// Memories browser, which renders supersession chains and archived items.
+func AllMemoriesIncludingInvalid(ctx context.Context, db *sql.DB) ([]core.Memory, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
+		FROM memories_index ORDER BY updated_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("store.AllMemoriesIncludingInvalid: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	mems, err := scanMemories(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.AllMemoriesIncludingInvalid: %w", err)
+	}
+	return mems, nil
+}
+
 // MemoryByName returns the active memory with an exact (project, name), most
 // recently updated first. found is false when none matches. It does not fall
 // back to the global scope; a caller that wants that resolves it explicitly.
