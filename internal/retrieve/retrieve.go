@@ -20,10 +20,11 @@ import (
 
 // Service assembles briefings, prompt recall, and fused recall over one store.
 type Service struct {
-	db       *sql.DB
-	embedder llm.Embedder // nil => lexical-only (FTS); recall degrades gracefully
-	budgets  config.Budgets
-	logger   *slog.Logger
+	db         *sql.DB
+	embedder   llm.Embedder     // nil => lexical-only (FTS); recall degrades gracefully
+	bodyReader MemoryBodyReader // nil => briefing omits the pinned-stage section
+	budgets    config.Budgets
+	logger     *slog.Logger
 
 	corpus *corpusCache // prompt-matcher IDF corpus, cached per project scope
 }
