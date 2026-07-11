@@ -257,6 +257,28 @@ func barChart(items []kindCount) template.HTML {
 }
 
 // ---------------------------------------------------------------------------
+// Coverage meter -- how sessions retained knowledge
+// ---------------------------------------------------------------------------
+
+// coverageMeter renders the overview's "retained via" breakdown: one labeled bar
+// per retention channel (findings / memories / notes / trials), each bar's width
+// its share of all sessions. Channels overlap, so the widths need not sum to
+// 100%. It reuses the memories-legend row layout. Empty input renders nothing.
+func coverageMeter(rows []coverageRow) template.HTML {
+	if len(rows) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="legend">`)
+	for _, row := range rows {
+		fmt.Fprintf(&b, `<div class="legend-row"><span class="kdot" style="background:%s"></span><span class="legend-label">%s</span><span class="legend-bar"><span style="width:%d%%;background:%s"></span></span><span class="legend-val">%d</span></div>`,
+			row.Color, template.HTMLEscapeString(row.Label), row.Pct, row.Color, row.Count)
+	}
+	b.WriteString(`</div>`)
+	return template.HTML(b.String())
+}
+
+// ---------------------------------------------------------------------------
 // Stacked bar -- task pipeline
 // ---------------------------------------------------------------------------
 

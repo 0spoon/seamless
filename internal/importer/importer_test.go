@@ -272,7 +272,7 @@ func TestImportIdempotent(t *testing.T) {
 	require.Zero(t, rep2.Trials)
 	require.Zero(t, rep2.Sessions)
 	require.Zero(t, rep2.Events)
-	require.Zero(t, rep2.Projects) // both projects already registered by the first run
+	require.Zero(t, rep2.Projects)    // both projects already registered by the first run
 	require.Equal(t, 8, rep2.Skipped) // 1 mem + 2 notes + 1 trial + 2 sessions + 2 events
 
 	// Totals unchanged after the second run.

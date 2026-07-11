@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -163,4 +165,30 @@ func TestGetNavCounts_EmptyDB(t *testing.T) {
 	n, err := store.GetNavCounts(context.Background(), db)
 	require.NoError(t, err)
 	require.Equal(t, store.NavCounts{}, n)
+}
+
+func TestOverview_CoverageInPayload(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// One covered session (has findings), one uncovered (empty).
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: "cov1", Name: "cc/a", Status: core.SessionCompleted,
+		Findings: "kept something", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: "cov2", Name: "cc/b", Status: core.SessionCompleted,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+
+	var data overviewData
+	getJSON(t, mux, "/console/?format=json", &data)
+
+	require.Equal(t, 1, data.Covered)
+	require.Equal(t, 50, data.Coverage) // 1 of 2 sessions
+	require.Len(t, data.CoverageRows, 4)
+	require.Equal(t, "Findings", data.CoverageRows[0].Label)
+	require.Equal(t, 1, data.CoverageRows[0].Count)
+	require.Equal(t, 50, data.CoverageRows[0].Pct)
 }
