@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,6 +19,57 @@ import (
 // JSON object {absolute-path: slug}. The hooks and session_start resolve an
 // agent's working directory to a project slug through it.
 const SettingRepoProjectMap = "repo_project_map"
+
+// SettingProjectFamilies is the settings key holding project families: a JSON
+// object {family-name: [slug, ...]}. Sibling briefings surface recent findings
+// from a project's family members.
+const SettingProjectFamilies = "project_families"
+
+// ProjectFamilies decodes the project_families setting into a map. An unset or
+// blank value yields an empty map (not an error).
+func ProjectFamilies(ctx context.Context, db *sql.DB) (map[string][]string, error) {
+	raw, found, err := GetSetting(ctx, db, SettingProjectFamilies)
+	if err != nil {
+		return nil, err
+	}
+	if !found || strings.TrimSpace(raw) == "" {
+		return map[string][]string{}, nil
+	}
+	var m map[string][]string
+	if err := json.Unmarshal([]byte(raw), &m); err != nil {
+		return nil, fmt.Errorf("store.ProjectFamilies: decode: %w", err)
+	}
+	return m, nil
+}
+
+// SiblingProjects returns the other project slugs sharing a family with project,
+// deduped and excluding project itself. A project may appear in more than one
+// family; all such siblings are unioned. Returns nil for the global scope or a
+// project with no family.
+func SiblingProjects(ctx context.Context, db *sql.DB, project string) ([]string, error) {
+	if project == "" {
+		return nil, nil
+	}
+	families, err := ProjectFamilies(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	seen := map[string]bool{project: true}
+	var out []string
+	for _, members := range families {
+		if !slices.Contains(members, project) {
+			continue
+		}
+		for _, slug := range members {
+			if slug == "" || seen[slug] {
+				continue
+			}
+			seen[slug] = true
+			out = append(out, slug)
+		}
+	}
+	return out, nil
+}
 
 // GetSetting returns the value for a settings key. found is false when unset.
 func GetSetting(ctx context.Context, db *sql.DB, key string) (string, bool, error) {

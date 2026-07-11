@@ -113,6 +113,42 @@ func LatestActiveAmbientSession(ctx context.Context, db *sql.DB, within time.Dur
 	return sessionOne(ctx, db, query, args...)
 }
 
+// SiblingFindings returns the most recent completed sessions with non-empty
+// findings across the given sibling projects, newest first, capped at limit. It
+// backs the briefing's "Sibling projects" section. An empty slugs slice yields
+// no results.
+func SiblingFindings(ctx context.Context, db *sql.DB, slugs []string, limit int) ([]core.Session, error) {
+	if len(slugs) == 0 {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 2
+	}
+	args := make([]any, 0, len(slugs)+1)
+	for _, s := range slugs {
+		args = append(args, s)
+	}
+	args = append(args, limit)
+	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
+		FROM sessions
+		WHERE status = 'completed' AND findings <> ''
+		  AND project_slug IN (`+placeholders(len(slugs))+`)
+		ORDER BY updated_at DESC, id DESC LIMIT ?`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.SiblingFindings: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		s, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.SiblingFindings: %w", err)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 func sessionOne(ctx context.Context, db *sql.DB, query string, args ...any) (core.Session, bool, error) {
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {

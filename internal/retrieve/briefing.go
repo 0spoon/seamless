@@ -52,10 +52,30 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error
 	if err != nil {
 		return "", err
 	}
-	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 && len(ready) == 0 {
+	siblings, err := s.siblingFindings(ctx, project)
+	if err != nil {
+		return "", err
+	}
+	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
+		len(ready) == 0 && len(siblings) == 0 {
 		return "", nil
 	}
-	return s.assembleBriefing(project, in.Source, constraints, index, findings, ready), nil
+	return s.assembleBriefing(project, in.Source, briefingSections{
+		constraints: constraints, index: index, findings: findings,
+		ready: ready, siblings: siblings,
+	}), nil
+}
+
+// siblingFindings gathers up to two recent findings from a project's family
+// members (see store.SiblingProjects/SiblingFindings), for the briefing's
+// "Sibling projects" section. It is a no-op for the global scope or a project
+// with no configured family.
+func (s *Service) siblingFindings(ctx context.Context, project string) ([]core.Session, error) {
+	siblings, err := store.SiblingProjects(ctx, s.db, project)
+	if err != nil || len(siblings) == 0 {
+		return nil, err
+	}
+	return store.SiblingFindings(ctx, s.db, siblings, 2)
 }
 
 // RegisterProjectForCWD resolves cwd to a project slug and, for a not-yet-mapped
@@ -79,10 +99,25 @@ func projectLabel(project string) string {
 	return project
 }
 
+// briefingSections carries the assembled, pre-filtered content of a full
+// briefing (subagents use assembleSubagent instead). Grouping the sections keeps
+// the assembler signature stable as new sections are added.
+type briefingSections struct {
+	constraints []core.Memory
+	index       []core.Memory
+	findings    []core.Session
+	ready       []core.Task
+	siblings    []core.Session // recent findings from family-member projects
+}
+
 // assembleBriefing packs the sections against the token budget. Constraints, the
-// header, and the trailer are counted first and never dropped; the memory index
-// and findings are packed against the soft budget, then the whole is hard-capped.
-func (s *Service) assembleBriefing(project, source string, constraints, index []core.Memory, findings []core.Session, ready []core.Task) string {
+// header, and the trailer are counted first and never dropped; the memory index,
+// sibling findings, and findings are packed against the soft budget, then the
+// whole is hard-capped. Section order: constraints > memory index > sibling
+// findings > recent findings > ready tasks.
+func (s *Service) assembleBriefing(project, source string, sec briefingSections) string {
+	constraints, index := sec.constraints, sec.index
+	findings, ready := sec.findings, sec.ready
 	label := projectLabel(project)
 	budget := s.budgets.MaxBriefingTokens
 	if budget <= 0 {
@@ -126,6 +161,22 @@ func (s *Service) assembleBriefing(project, source string, constraints, index []
 			extra := fmt.Sprintf("- (+%d older -- use recall)\n", dropped)
 			body.WriteString(extra)
 			used += estTokens(extra)
+		}
+	}
+
+	if len(sec.siblings) > 0 {
+		lead := "\n## Sibling projects\n"
+		if used+estTokens(lead) <= budget {
+			body.WriteString(lead)
+			used += estTokens(lead)
+			for _, f := range sec.siblings {
+				line := "- " + sanitizeField(f.ProjectSlug, 60) + " (" + humanAge(f.UpdatedAt) + "): " + sanitizeField(f.Findings, 150) + "\n"
+				if used+estTokens(line) > budget {
+					break
+				}
+				body.WriteString(line)
+				used += estTokens(line)
+			}
 		}
 	}
 
