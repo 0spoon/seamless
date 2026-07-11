@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
@@ -23,6 +24,7 @@ import (
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 const (
@@ -189,8 +191,15 @@ func (s *Server) getBinding(ctx context.Context) (binding, bool) {
 	return b, ok
 }
 
+// ambientFallbackWindow bounds how stale an ambient (cc/*) session may be and
+// still absorb writes from an unbound connection. On a single-owner machine the
+// ambiguity window is acceptable; a shorter window would drop provenance for a
+// long-running session that has gone quiet.
+const ambientFallbackWindow = 6 * time.Hour
+
 // resolveProject prefers an explicit project argument, then the bound session's
-// project, then the global scope.
+// project, then the most recent ambient session's project (write-scope
+// fallback), then the global scope.
 func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	if explicit != "" {
 		return explicit
@@ -198,15 +207,34 @@ func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project
 	}
+	if sess, ok := s.ambientFallback(ctx); ok {
+		return sess.ProjectSlug
+	}
 	return ""
 }
 
-// boundSession returns the bound session's ULID, or "".
+// boundSession returns the bound session's ULID, the most recent ambient
+// session's ULID (write-scope fallback), or "".
 func (s *Server) boundSession(ctx context.Context) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID
 	}
+	if sess, ok := s.ambientFallback(ctx); ok {
+		return sess.ID
+	}
 	return ""
+}
+
+// ambientFallback returns the ambient session an unbound connection's writes
+// should attribute to: the most recently updated active cc/* session within the
+// fallback window. It is only consulted when there is no explicit binding.
+func (s *Server) ambientFallback(ctx context.Context) (core.Session, bool) {
+	sess, ok, err := store.LatestActiveAmbientSession(ctx, s.cfg.DB, ambientFallbackWindow)
+	if err != nil {
+		s.logger.Warn("mcp: ambient fallback lookup", "error", err)
+		return core.Session{}, false
+	}
+	return sess, ok
 }
 
 // record appends an event best-effort; a logging failure never fails a tool.

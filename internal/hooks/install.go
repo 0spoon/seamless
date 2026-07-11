@@ -29,6 +29,7 @@ type hookSpec struct {
 var seamlessHooks = []hookSpec{
 	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5},
+	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10},
 }
 
 // InstallOptions configures an install.

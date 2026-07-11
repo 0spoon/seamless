@@ -39,7 +39,7 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	insertMemory(t, db, "01D", "reference", "sqlite-wal", "enable wal journal mode and busy timeout", "demo")
 
 	ret := retrieve.New(db, nil, config.Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000}, nil)
-	h := NewHandler(ret, events.NewRecorder(db), testKey, nil)
+	h := NewHandler(db, ret, events.NewRecorder(db), testKey, nil)
 	mux := http.NewServeMux()
 	h.Register(mux)
 	ts := httptest.NewServer(mux)
@@ -135,6 +135,68 @@ func TestUserPromptSubmitHook(t *testing.T) {
 	require.Empty(t, additionalContext(t, out))
 }
 
+func TestAmbientSessionLifecycle(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	startURL := ts.URL + "/api/hooks/session-start"
+	endURL := ts.URL + "/api/hooks/session-end"
+
+	// SessionStart creates an ambient session and appends its line to the briefing.
+	_, out := post(t, startURL, testKey, map[string]any{
+		"session_id": "abcdef12-3456", "cwd": "/work/demo", "source": "startup",
+	})
+	require.Contains(t, additionalContext(t, out), "Seam session: cc/abcdef12 (ambient)")
+
+	sess, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, sess.Status)
+	require.True(t, sess.Ambient)
+	require.Equal(t, "demo", sess.ProjectSlug)
+	require.Equal(t, "abcdef12-3456", sess.Metadata["claude_session_id"])
+
+	// A subagent SessionStart gets no ambient session of its own.
+	_, out = post(t, startURL, testKey, map[string]any{
+		"session_id": "sub00000-0000", "cwd": "/work/demo", "agent_type": "Explore",
+	})
+	require.NotContains(t, additionalContext(t, out), "(ambient)")
+	_, ok, err = store.SessionByName(ctx, db, "cc/sub00000")
+	require.NoError(t, err)
+	require.False(t, ok, "subagents share the parent session, no ambient row")
+
+	// SessionEnd harvests the transcript's final assistant message and completes.
+	transcript := writeTranscript(t,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Shipped the ready-queue."}]}}`)
+	resp, _ := post(t, endURL, testKey, map[string]any{
+		"session_id": "abcdef12-3456", "transcript_path": transcript, "reason": "clear",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	sess, ok, err = store.SessionByName(ctx, db, "cc/abcdef12")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionCompleted, sess.Status)
+	require.Equal(t, "(auto-harvested) Shipped the ready-queue.", sess.Findings)
+
+	// Re-delivering SessionEnd is a no-op (findings are not clobbered).
+	resp, _ = post(t, endURL, testKey, map[string]any{
+		"session_id": "abcdef12-3456", "transcript_path": "", "reason": "other",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	sess, _, _ = store.SessionByName(ctx, db, "cc/abcdef12")
+	require.Equal(t, "(auto-harvested) Shipped the ready-queue.", sess.Findings)
+
+	// SessionEnd for an unknown session is a tolerated no-op (still 200).
+	resp, _ = post(t, endURL, testKey, map[string]any{"session_id": "unknown0-0000"})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+}
+
+func TestSessionEndRejectsBadKey(t *testing.T) {
+	ts, _ := newHandlerServer(t)
+	resp, _ := post(t, ts.URL+"/api/hooks/session-end", "nope", map[string]any{"session_id": "x"})
+	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+}
+
 func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".claude", "settings.json")
@@ -173,8 +235,9 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	require.Contains(t, string(raw), "seamless_managed")
 	require.Contains(t, string(raw), "8081/api/hooks/session-start")
 	require.Contains(t, string(raw), "Bearer secret-key")
-	// UserPromptSubmit was added too.
+	// UserPromptSubmit and SessionEnd were added too.
 	require.Len(t, hooksObj["UserPromptSubmit"].([]any), 1)
+	require.Len(t, hooksObj["SessionEnd"].([]any), 1)
 
 	// Re-install is a no-op.
 	res2, err := Install(opts)

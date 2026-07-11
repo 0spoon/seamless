@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
@@ -13,17 +14,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
 	mcpserver "github.com/0spoon/seamless/internal/mcp"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
+	"time"
 )
 
 const testKey = "test-bearer-key"
 
-// newServer builds a full MCP server over a temp store and returns its base URL.
-func newServer(t *testing.T) string {
+// newServer builds a full MCP server over a temp store and returns its base URL
+// and the backing DB (for tests that seed rows directly).
+func newServer(t *testing.T) (string, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -43,7 +47,7 @@ func newServer(t *testing.T) string {
 	})
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return ts.URL
+	return ts.URL, db
 }
 
 // dialClient starts and initializes an MCP client against url with the given key.
@@ -101,7 +105,7 @@ func resultText(t *testing.T, res *mcp.CallToolResult) string {
 
 func TestMCPLoopWithBinding(t *testing.T) {
 	ctx := context.Background()
-	url := newServer(t)
+	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
 	// session_start binds the connection to project "demo" via the cwd map.
@@ -166,7 +170,7 @@ func TestMCPLoopWithBinding(t *testing.T) {
 
 func TestMemorySupersession(t *testing.T) {
 	ctx := context.Background()
-	url := newServer(t)
+	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
 	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
@@ -206,9 +210,36 @@ func TestMemorySupersession(t *testing.T) {
 	require.Nil(t, r2["warning"])
 }
 
+func TestWriteScopeFallbackToAmbient(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	// Seed an active ambient session in "demo" (as the session-start hook would).
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: "cc/amb00000", ProjectSlug: "demo", Status: core.SessionActive,
+		Ambient: true, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	// A connection that never calls session_start still attributes its writes to
+	// the ambient session's project and provenance.
+	cli := dialClient(t, ctx, url, testKey)
+	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "unbound-write", "kind": "reference",
+		"description": "written without session_start",
+		"body":        "lands in the ambient project.\n",
+	})
+	require.Equal(t, "demo", w["project"], "unbound write inherits the ambient project")
+
+	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "unbound-write", "project": "demo"})
+	require.Equal(t, id, r["source_session"], "unbound write inherits ambient provenance")
+}
+
 func TestMCPAuthRejectsBadKey(t *testing.T) {
 	ctx := context.Background()
-	url := newServer(t)
+	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, "wrong-key")
 
 	// Initialize is open, but a tool call with a bad key is rejected.
