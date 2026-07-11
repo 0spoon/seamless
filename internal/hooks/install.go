@@ -70,18 +70,30 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	var res InstallResult
 	for _, hs := range seamlessHooks {
 		desired := buildEntry(hs, opts.BaseURL, opts.APIKey)
+		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		arr := entryArray(hooksObj, hs.Event)
-		switch idx := findManaged(arr); {
-		case idx < 0:
+		// Match every entry Seamless owns for this event: those carrying our
+		// managed marker, plus any UNMARKED entry pointing at exactly this hook
+		// URL (a hand-edit, or a pre-marker installer). Adopting the latter --
+		// rather than appending beside it -- is what stops re-installs from
+		// duplicating hooks. A v1 "seam_managed" entry at a different URL (e.g.
+		// :8080) is not matched, so it is preserved untouched.
+		matches := seamlessIndices(arr, desiredURL)
+		switch {
+		case len(matches) == 0:
 			arr = append(arr, desired)
 			res.Changed = true
 			res.Actions = append(res.Actions, hs.Event+": added")
-		case canonicalEqual(arr[idx], desired):
+		case len(matches) == 1 && canonicalEqual(arr[matches[0]], desired):
 			res.Actions = append(res.Actions, hs.Event+": unchanged")
 		default:
-			arr[idx] = desired
+			// Keep the first owned entry (replacing it with the canonical
+			// desired form) and drop any other owned duplicates.
+			firstWasManaged := isManaged(arr[matches[0]])
+			arr[matches[0]] = desired
+			arr = removeIndices(arr, matches[1:])
 			res.Changed = true
-			res.Actions = append(res.Actions, hs.Event+": updated")
+			res.Actions = append(res.Actions, hs.Event+": "+matchAction(len(matches), firstWasManaged))
 		}
 		hooksObj[hs.Event] = arr
 	}
@@ -188,16 +200,97 @@ func buildEntry(hs hookSpec, baseURL, apiKey string) map[string]any {
 	return entry
 }
 
-// findManaged returns the index of the Seamless-managed entry in arr, or -1.
+// findManaged returns the index of the first Seamless-managed entry in arr, or -1.
 func findManaged(arr []any) int {
 	for i, e := range arr {
-		if m, ok := e.(map[string]any); ok {
-			if v, ok := m[managedMarker].(bool); ok && v {
-				return i
-			}
+		if isManaged(e) {
+			return i
 		}
 	}
 	return -1
+}
+
+// seamlessIndices returns the ascending indices of entries in arr that Seamless
+// owns for a hook: entries carrying the managed marker, plus unmarked entries
+// whose hook URL is desiredURL (written by hand or by a pre-marker installer).
+// A v1 "seam_managed" entry at another URL is not matched, so it survives.
+func seamlessIndices(arr []any, desiredURL string) []int {
+	var out []int
+	for i, e := range arr {
+		if isManaged(e) || entryTargetsURL(e, desiredURL) {
+			out = append(out, i)
+		}
+	}
+	return out
+}
+
+// isManaged reports whether e is a hook entry carrying the Seamless managed marker.
+func isManaged(e any) bool {
+	m, ok := e.(map[string]any)
+	if !ok {
+		return false
+	}
+	v, ok := m[managedMarker].(bool)
+	return ok && v
+}
+
+// entryTargetsURL reports whether any http hook in the entry points at url
+// (trailing slash ignored) -- identifying a Seamless hook written without the marker.
+func entryTargetsURL(e any, url string) bool {
+	m, ok := e.(map[string]any)
+	if !ok {
+		return false
+	}
+	hooks, ok := m["hooks"].([]any)
+	if !ok {
+		return false
+	}
+	for _, h := range hooks {
+		hm, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+		if u, ok := hm["url"].(string); ok && sameURL(u, url) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameURL compares two hook URLs ignoring a trailing slash.
+func sameURL(a, b string) bool {
+	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
+// removeIndices returns arr without the elements at the given (ascending) indices.
+func removeIndices(arr []any, idxs []int) []any {
+	if len(idxs) == 0 {
+		return arr
+	}
+	drop := make(map[int]bool, len(idxs))
+	for _, i := range idxs {
+		drop[i] = true
+	}
+	out := make([]any, 0, len(arr)-len(idxs))
+	for i, e := range arr {
+		if !drop[i] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
+// matchAction labels a rewrite when at least one owned entry already existed:
+// collapsing duplicates, updating our own marked entry, or adopting an unmarked one.
+func matchAction(n int, firstWasManaged bool) string {
+	switch {
+	case n > 1:
+		return "deduped"
+	case firstWasManaged:
+		return "updated"
+	default:
+		return "adopted"
+	}
 }
 
 // canonicalEqual compares two JSON values ignoring key order and numeric
