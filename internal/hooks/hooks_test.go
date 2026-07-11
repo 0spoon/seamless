@@ -267,3 +267,74 @@ func TestInstalledStatus(t *testing.T) {
 	require.ElementsMatch(t, InstalledEvents(), present)
 	require.Len(t, present, 3)
 }
+
+// Mirrors the P6 dogfood state: hand-written UNMARKED Seamless hooks (which an
+// older installer duplicated) plus a v1 seam_managed entry at :8080. Install
+// must adopt/dedupe the seamless-URL entries in place while leaving v1 alone.
+func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup|resume|clear|compact", "hooks": [{"type": "http", "url": "http://127.0.0.1:8081/api/hooks/session-start", "timeout": 10}]},
+      {"seamless_managed": true, "matcher": "startup|resume|clear|compact", "hooks": [{"type": "http", "url": "http://127.0.0.1:8081/api/hooks/session-start", "timeout": 10}]},
+      {"seam_managed": true, "matcher": "startup|resume|clear|compact", "hooks": [{"type": "http", "url": "http://127.0.0.1:8080/api/hooks/session-start", "timeout": 10}]}
+    ],
+    "UserPromptSubmit": [
+      {"hooks": [{"type": "http", "url": "http://127.0.0.1:8081/api/hooks/user-prompt-submit", "timeout": 5}]}
+    ]
+  }
+}`), 0o600))
+
+	opts := InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"}
+	res, err := Install(opts)
+	require.NoError(t, err)
+	require.True(t, res.Changed)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(raw, &got))
+	hooksObj := got["hooks"].(map[string]any)
+
+	// SessionStart: the two seamless-URL entries collapse to one marked entry;
+	// the v1 :8080 seam_managed entry is preserved -> 2 entries total.
+	ss := hooksObj["SessionStart"].([]any)
+	require.Len(t, ss, 2)
+	var marked, v1 int
+	for _, e := range ss {
+		m := e.(map[string]any)
+		if m["seamless_managed"] == true {
+			marked++
+			require.Contains(t, m["hooks"].([]any)[0].(map[string]any)["url"], "8081")
+		}
+		if m["seam_managed"] == true {
+			v1++
+			require.Contains(t, m["hooks"].([]any)[0].(map[string]any)["url"], "8080")
+		}
+	}
+	require.Equal(t, 1, marked, "seamless-URL duplicates collapse to one marked entry")
+	require.Equal(t, 1, v1, "v1 seam_managed :8080 entry preserved")
+
+	// UserPromptSubmit: the lone unmarked entry is adopted in place (now marked).
+	ups := hooksObj["UserPromptSubmit"].([]any)
+	require.Len(t, ups, 1)
+	require.Equal(t, true, ups[0].(map[string]any)["seamless_managed"])
+
+	// SessionEnd was absent -> added.
+	require.Len(t, hooksObj["SessionEnd"].([]any), 1)
+
+	joined := strings.Join(res.Actions, ",")
+	require.Contains(t, joined, "SessionStart: deduped")
+	require.Contains(t, joined, "UserPromptSubmit: adopted")
+	require.Contains(t, joined, "SessionEnd: added")
+
+	// Re-install is now a clean no-op (all entries carry the marker).
+	res2, err := Install(opts)
+	require.NoError(t, err)
+	require.False(t, res2.Changed)
+	for _, a := range res2.Actions {
+		require.Contains(t, a, "unchanged")
+	}
+}
