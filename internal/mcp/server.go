@@ -19,6 +19,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/0spoon/seamless/internal/capture"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
@@ -36,7 +37,7 @@ const (
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
 	// usage_summary = 26.
-	ToolCount = 24
+	ToolCount = 25
 
 	// maxFindingsRunes caps session_end findings, matching the memory budget.
 	maxFindingsRunes = 1500
@@ -63,7 +64,8 @@ type Server struct {
 	mcp       *mcpserver.MCPServer
 	cfg       Config
 	logger    *slog.Logger
-	toolNames []string // registered tool names, in registration order
+	fetcher   *capture.URLFetcher // SSRF-safe URL fetch backing capture_url
+	toolNames []string            // registered tool names, in registration order
 
 	mu       sync.Mutex
 	bindings map[string]binding // mcp client-session id -> binding
@@ -95,6 +97,7 @@ func New(cfg Config) *Server {
 	s := &Server{
 		cfg:      cfg,
 		logger:   logger,
+		fetcher:  capture.NewURLFetcher(),
 		bindings: make(map[string]binding),
 	}
 	s.mcp = mcpserver.NewMCPServer(
@@ -153,6 +156,8 @@ func (s *Server) registerTools() {
 
 	s.addTool(gardenerProposalsTool(), s.handleGardenerProposals)
 	s.addTool(gardenerApplyTool(), s.handleGardenerApply)
+
+	s.addTool(captureURLTool(), s.handleCaptureURL)
 }
 
 // ---------------------------------------------------------------------------
