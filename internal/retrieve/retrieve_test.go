@@ -90,6 +90,35 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	require.NotContains(t, gb, "no-force-push")
 }
 
+func TestBriefingSiblingProjects(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/work/app":"app"}`))
+	// app and backend are family members; web is unrelated.
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingProjectFamilies,
+		`{"product":["app","backend"],"other":["web"]}`))
+
+	insMem(t, db, "01A", "constraint", "no-force-push", "never force push", "app")
+
+	// Completed findings in each project.
+	mk := func(id, name, project, findings string, ageMin int) {
+		ts := time.Now().Add(-time.Duration(ageMin) * time.Minute)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: project, Status: core.SessionCompleted,
+			Findings: findings, CreatedAt: ts, UpdatedAt: ts,
+		}))
+	}
+	mk("01S1", "cc/aa", "backend", "backend migration shipped", 5)
+	mk("01S2", "cc/bb", "web", "web redesign landed", 1)
+
+	svc := New(db, nil, budgets(), nil)
+	b, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/app", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, b, "## Sibling projects")
+	require.Contains(t, b, "backend migration shipped", "sibling family finding surfaces")
+	require.NotContains(t, b, "web redesign landed", "non-family project finding excluded")
+}
+
 func TestBriefingBudgetDropsTail(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

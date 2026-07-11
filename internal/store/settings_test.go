@@ -23,6 +23,34 @@ func TestSettingsGetSet(t *testing.T) {
 	require.Equal(t, "v2", v)
 }
 
+func TestSiblingProjects(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// No family configured -> no siblings.
+	sibs, err := SiblingProjects(ctx, db, "app")
+	require.NoError(t, err)
+	require.Empty(t, sibs)
+
+	require.NoError(t, SetSetting(ctx, db, SettingProjectFamilies,
+		`{"product":["app","backend","agent"],"infra":["app","ops"]}`))
+
+	// app appears in two families; siblings are the union, app excluded, deduped.
+	sibs, err = SiblingProjects(ctx, db, "app")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"backend", "agent", "ops"}, sibs)
+
+	// A project with no family membership has no siblings.
+	sibs, err = SiblingProjects(ctx, db, "lonely")
+	require.NoError(t, err)
+	require.Empty(t, sibs)
+
+	// The global scope never has siblings.
+	sibs, err = SiblingProjects(ctx, db, "")
+	require.NoError(t, err)
+	require.Empty(t, sibs)
+}
+
 func TestResolveProjectForCWD(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
