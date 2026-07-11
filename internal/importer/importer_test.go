@@ -66,6 +66,22 @@ modified: 2026-06-18T21:00:00Z
 
 Mem0 delta ~2%.
 `,
+		// A note directly under notes/ (no project subdir) -- the inbox. Its v1
+		// frontmatter project field is the filename, but the import must land it
+		// with project="" (the inbox-note bug was treating segs[0] as the project).
+		"inbox-scratch.md": `---
+id: 01NOTE0000000000000000000B
+title: 'Inbox scratch'
+description: 'a loose top-level note'
+project: inbox-scratch.md
+tags: ['created-by:agent']
+created: 2026-06-19T20:30:31Z
+modified: 2026-06-19T21:00:00Z
+---
+# Loose thoughts
+
+Not tied to any project.
+`,
 		"briefings/2026-07-10.md": `---
 id: 01BRIEF000000000000000000A
 title: 'Briefing 2026-07-10'
@@ -142,7 +158,7 @@ func TestImportEndToEnd(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 1, rep.Memories)
-	require.Equal(t, 1, rep.Notes)
+	require.Equal(t, 2, rep.Notes) // seam/landscape-scan + top-level inbox-scratch
 	require.Equal(t, 1, rep.Trials)
 	require.Equal(t, 2, rep.Sessions)
 	require.Equal(t, 2, rep.Events)
@@ -170,8 +186,15 @@ func TestImportEndToEnd(t *testing.T) {
 	_, err = os.Stat(filepath.Join(mgr.Store().DataDir(), "memory", "seam", "a-tricky-thing.md"))
 	require.NoError(t, err)
 
-	// Briefings project was skipped entirely.
-	require.Equal(t, 1, count(t, db, "notes_index")) // only landscape-scan, not the briefing
+	// Briefings project was skipped entirely; landscape-scan + inbox-scratch land.
+	require.Equal(t, 2, count(t, db, "notes_index")) // landscape-scan + inbox-scratch, not the briefing
+
+	// The top-level inbox note landed with project="" (not its filename), and so
+	// contributes no projects row -- the inbox-note importer bug regression guard.
+	var inboxProject string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT project FROM notes_index WHERE id='01NOTE0000000000000000000B'`).Scan(&inboxProject))
+	require.Empty(t, inboxProject, "inbox note must import with no project")
 
 	// Trial row parsed.
 	var lab, outcome, changes string
@@ -250,11 +273,11 @@ func TestImportIdempotent(t *testing.T) {
 	require.Zero(t, rep2.Sessions)
 	require.Zero(t, rep2.Events)
 	require.Zero(t, rep2.Projects) // both projects already registered by the first run
-	require.Equal(t, 7, rep2.Skipped) // 1 mem + 1 note + 1 trial + 2 sessions + 2 events
+	require.Equal(t, 8, rep2.Skipped) // 1 mem + 2 notes + 1 trial + 2 sessions + 2 events
 
 	// Totals unchanged after the second run.
 	require.Equal(t, 1, count(t, db, "memories_index"))
-	require.Equal(t, 1, count(t, db, "notes_index"))
+	require.Equal(t, 2, count(t, db, "notes_index"))
 	require.Equal(t, 1, count(t, db, "trials"))
 	require.Equal(t, 2, count(t, db, "sessions"))
 	require.Equal(t, 2, count(t, db, "events"))

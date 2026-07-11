@@ -145,19 +145,29 @@ func importNotesTree(ctx context.Context, mgr *files.Manager, db *sql.DB, opts O
 			return err
 		}
 		segs := strings.Split(filepath.ToSlash(rel), "/")
-		project := segs[0]
+		// topSeg is the top-level storage segment: a project subdir, or -- for a
+		// file directly under notes/ -- the file itself. It drives skip decisions.
+		topSeg := segs[0]
 
 		if d.IsDir() {
-			if skip[project] {
+			if skip[topSeg] {
 				return filepath.SkipDir
 			}
 			return nil
 		}
-		if filepath.Ext(path) != ".md" || skip[project] {
+		if filepath.Ext(path) != ".md" || skip[topSeg] {
 			return nil
 		}
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+
+		// A note directly under notes/ has no leading directory segment and
+		// belongs to no project -- the inbox. Only a leading directory names a
+		// project; treating the filename as the project was the inbox-note bug.
+		project := ""
+		if len(segs) > 1 {
+			project = segs[0]
 		}
 
 		content, err := os.ReadFile(path)
