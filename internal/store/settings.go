@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // SettingRepoProjectMap is the settings key holding the cwd->project-slug map: a
@@ -58,15 +62,119 @@ func RepoProjectMap(ctx context.Context, db *sql.DB) (map[string]string, error) 
 }
 
 // ResolveProjectForCWD maps an absolute working directory to a project slug via
-// the repo_project_map, using a longest-prefix match. It is failure-soft: an
-// unresolvable cwd (or an unconfigured map) returns "" (the global scope), never
-// an error from the matching itself.
+// the repo_project_map, using a longest-prefix match. It is read-only and
+// failure-soft: an unresolvable cwd (or an unconfigured map) returns "" (the
+// global scope), never an error from the matching itself. Use it on read paths
+// (briefing, prompt recall); use RegisterProjectForCWD on session-start paths
+// that should grow the map.
 func ResolveProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, error) {
 	m, err := RepoProjectMap(ctx, db)
 	if err != nil {
 		return "", err
 	}
 	return matchProjectPath(cwd, m), nil
+}
+
+// AddRepoMapping records repoPath -> slug in the repo_project_map and persists
+// it, so the mapping survives restarts and is shared by every agent. It is a
+// no-op when that exact entry already exists, so callers may invoke it on every
+// resolve without churning the setting.
+func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) error {
+	repoPath = filepath.Clean(repoPath)
+	m, err := RepoProjectMap(ctx, db)
+	if err != nil {
+		return err
+	}
+	if m[repoPath] == slug {
+		return nil
+	}
+	m[repoPath] = slug
+	b, err := json.Marshal(m)
+	if err != nil {
+		return fmt.Errorf("store.AddRepoMapping: %w", err)
+	}
+	return SetSetting(ctx, db, SettingRepoProjectMap, string(b))
+}
+
+// RegisterProjectForCWD resolves cwd to a project slug like ResolveProjectForCWD,
+// but grows the map at runtime when cwd falls outside every mapped repo: it finds
+// the enclosing git repository, derives a slug from that repo's directory name,
+// records repoRoot -> slug in the repo_project_map, and ensures a projects-table
+// row. This is how the repo->project map evolves as agents work in new repos --
+// no recompile, no manual map-repo. For an already-mapped cwd it still backfills
+// the registry row, so project_list stays complete. A blank cwd, or a cwd outside
+// any git repo, resolves to the global scope ("") and registers nothing.
+func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, error) {
+	if strings.TrimSpace(cwd) == "" {
+		return "", nil
+	}
+	m, err := RepoProjectMap(ctx, db)
+	if err != nil {
+		return "", err
+	}
+	if slug := matchProjectPath(cwd, m); slug != "" {
+		// Already mapped: backfill the registry row (idempotent) and return.
+		if _, err := EnsureProject(ctx, db, slug, slug); err != nil {
+			return "", err
+		}
+		return slug, nil
+	}
+
+	root := gitRepoRoot(cwd)
+	if root == "" {
+		return "", nil // not inside a git repo: stay global, register nothing
+	}
+	name := filepath.Base(root)
+	slug := uniqueProjectSlug(core.Slugify(name), root, m)
+	if _, err := EnsureProject(ctx, db, slug, name); err != nil {
+		return "", err
+	}
+	if err := AddRepoMapping(ctx, db, root, slug); err != nil {
+		return "", err
+	}
+	return slug, nil
+}
+
+// gitRepoRoot returns the nearest ancestor of dir (inclusive) containing a .git
+// entry -- the repository root -- or "" if dir is not inside a git repo. A .git
+// file (worktrees, submodules) counts as well as a .git directory.
+func gitRepoRoot(dir string) string {
+	dir = filepath.Clean(dir)
+	for {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "" // reached the filesystem root without finding .git
+		}
+		dir = parent
+	}
+}
+
+// uniqueProjectSlug returns base unless another repo path already owns it in m,
+// in which case it appends -2, -3, ... until free. The guard keeps a newly seen
+// repo whose directory name collides with an existing project (e.g. two distinct
+// "backend" repos) from silently inheriting that project's memories; the owner
+// can still merge them later with map-repo.
+func uniqueProjectSlug(base, root string, m map[string]string) string {
+	root = filepath.Clean(root)
+	takenByOther := func(slug string) bool {
+		for path, s := range m {
+			if s == slug && filepath.Clean(path) != root {
+				return true
+			}
+		}
+		return false
+	}
+	if !takenByOther(base) {
+		return base
+	}
+	for i := 2; ; i++ {
+		if cand := base + "-" + strconv.Itoa(i); !takenByOther(cand) {
+			return cand
+		}
+	}
 }
 
 // matchProjectPath returns the slug of the longest map key that is a path-prefix

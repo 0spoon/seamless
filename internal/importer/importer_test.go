@@ -147,6 +147,16 @@ func TestImportEndToEnd(t *testing.T) {
 	require.Equal(t, 2, rep.Sessions)
 	require.Equal(t, 2, rep.Events)
 
+	// project_list's source table is backfilled from the imported items: "seam"
+	// (memory + note) and "research" (trial). Sessions/events carry no project.
+	require.Equal(t, 2, rep.Projects)
+	require.Equal(t, 2, count(t, db, "projects"))
+	for _, slug := range []string{"seam", "research"} {
+		_, ok, err := store.ProjectBySlug(ctx, db, slug)
+		require.NoError(t, err)
+		require.True(t, ok, "project %q should be registered", slug)
+	}
+
 	// Memory landed with decoded kind/name/project.
 	var kind, name, project string
 	require.NoError(t, db.QueryRowContext(ctx,
@@ -193,6 +203,36 @@ func TestImportEndToEnd(t *testing.T) {
 	require.Empty(t, sessID)
 }
 
+// backfillProjects must register canonical project slugs but skip malformed
+// values -- notably inbox notes whose project field is a "<file>.md" name (the
+// inbox-note importer bug) -- so project_list is never polluted.
+func TestBackfillProjectsSkipsNonSlug(t *testing.T) {
+	_, db := newV2(t)
+	ctx := context.Background()
+
+	insertNoteRow := func(id, project, filePath string) {
+		_, err := db.ExecContext(ctx, `
+			INSERT INTO notes_index (id, title, slug, project, file_path, content_hash, created_at, updated_at)
+			VALUES (?, 't', 's', ?, ?, 'h', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`,
+			id, project, filePath)
+		require.NoError(t, err)
+	}
+	insertNoteRow("01N00000000000000000000AAA", "good-project", "notes/good-project/a.md")
+	insertNoteRow("01N00000000000000000000BBB", "bad-name.md", "notes/bad-name.md/b.md")
+
+	rep := &Report{}
+	require.NoError(t, backfillProjects(ctx, db, rep))
+
+	require.Equal(t, 1, rep.Projects)
+	_, ok, err := store.ProjectBySlug(ctx, db, "good-project")
+	require.NoError(t, err)
+	require.True(t, ok)
+	_, ok, err = store.ProjectBySlug(ctx, db, "bad-name.md")
+	require.NoError(t, err)
+	require.False(t, ok, "non-slug project must be skipped")
+	require.NotEmpty(t, rep.Warnings)
+}
+
 // Re-running the import must not duplicate anything (idempotent by id).
 func TestImportIdempotent(t *testing.T) {
 	src := writeV1(t)
@@ -209,6 +249,7 @@ func TestImportIdempotent(t *testing.T) {
 	require.Zero(t, rep2.Trials)
 	require.Zero(t, rep2.Sessions)
 	require.Zero(t, rep2.Events)
+	require.Zero(t, rep2.Projects) // both projects already registered by the first run
 	require.Equal(t, 7, rep2.Skipped) // 1 mem + 1 note + 1 trial + 2 sessions + 2 events
 
 	// Totals unchanged after the second run.

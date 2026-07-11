@@ -31,7 +31,9 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	if source == "" {
 		source = "explicit"
 	}
-	project, err := store.ResolveProjectForCWD(ctx, s.cfg.DB, cwd)
+	// Resolve the cwd to a project, registering a new repo->project mapping and
+	// projects-table row when the agent works in a not-yet-mapped git repo.
+	project, err := store.RegisterProjectForCWD(ctx, s.cfg.DB, cwd)
 	if err != nil {
 		return errResult("session_start", err)
 	}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -51,16 +50,10 @@ func runMapRepo(args []string) error {
 	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
-	m, err := store.RepoProjectMap(ctx, db)
-	if err != nil {
+	if err := store.AddRepoMapping(ctx, db, abs, *project); err != nil {
 		return fmt.Errorf("seamlessd.map-repo: %w", err)
 	}
-	m[abs] = *project
-	b, err := json.Marshal(m)
-	if err != nil {
-		return fmt.Errorf("seamlessd.map-repo: %w", err)
-	}
-	if err := store.SetSetting(ctx, db, store.SettingRepoProjectMap, string(b)); err != nil {
+	if _, err := store.EnsureProject(ctx, db, *project, *project); err != nil {
 		return fmt.Errorf("seamlessd.map-repo: %w", err)
 	}
 	fmt.Printf("mapped %s -> project %q\n", abs, *project)
