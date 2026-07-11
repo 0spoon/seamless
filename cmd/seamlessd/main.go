@@ -25,6 +25,7 @@ import (
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/hooks"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/mcp"
@@ -149,6 +150,23 @@ func runServe(args []string) error {
 		APIKey: cfg.MCP.APIKey, Logger: logger,
 	})
 	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
+
+	// Gardener: propose-only maintenance on a ticker. The chat client (for
+	// digests) is best-effort; without it the digest pass simply no-ops.
+	var chat llm.Chat
+	if c, cerr := llm.NewChatClient(cfg.LLM); cerr != nil {
+		slog.Warn("gardener digests disabled; chat client unavailable", "err", cerr)
+	} else {
+		chat = c
+	}
+	garden := gardener.New(db, mgr, embedder, chat, rec, gardener.FromConfig(cfg.Gardener), logger)
+	if cfg.Gardener.Enabled {
+		garden.Start(ctx)
+		slog.Info("gardener enabled", "interval", time.Duration(cfg.Gardener.IntervalMinutes)*time.Minute,
+			"dedup_threshold", cfg.Gardener.DedupThreshold, "staleness_days", cfg.Gardener.StalenessDays)
+	} else {
+		slog.Info("gardener disabled")
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", healthzHandler(db))
