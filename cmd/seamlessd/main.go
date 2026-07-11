@@ -8,6 +8,7 @@
 //	seamlessd install-hooks install the Claude Code hooks
 //	seamlessd map-repo      map a repo path to a project slug
 //	seamlessd family        manage project families
+//	seamlessd console-open  open the console in a browser, pre-authenticated
 //	seamlessd version       print the version
 package main
 
@@ -63,6 +64,8 @@ func main() {
 		err = runMapRepo(args)
 	case "family":
 		err = runFamily(args)
+	case "console-open":
+		err = runConsoleOpen(args)
 	case "version", "-v", "--version":
 		fmt.Printf("seamlessd %s\n", version)
 	case "help", "-h", "--help":
@@ -88,6 +91,7 @@ usage:
   seamlessd install-hooks  install the SessionStart/UserPromptSubmit hooks
   seamlessd map-repo       map a repo path to a project slug (repo_project_map)
   seamlessd family         manage project families (list|add|remove)
+  seamlessd console-open   open the console in a browser, pre-authenticated
   seamlessd version        print the version
 `, version)
 }
