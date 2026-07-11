@@ -37,7 +37,7 @@ const (
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
 	// usage_summary = 26.
-	ToolCount = 25
+	ToolCount = 26
 
 	// maxFindingsRunes caps session_end findings, matching the memory budget.
 	maxFindingsRunes = 1500
@@ -158,6 +158,7 @@ func (s *Server) registerTools() {
 	s.addTool(gardenerApplyTool(), s.handleGardenerApply)
 
 	s.addTool(captureURLTool(), s.handleCaptureURL)
+	s.addTool(usageSummaryTool(), s.handleUsageSummary)
 }
 
 // ---------------------------------------------------------------------------

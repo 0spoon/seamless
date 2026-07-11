@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/mcp"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -83,7 +84,24 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
+	checks = append(checks, mcpToolsCheck())
+
 	return reportChecks(checks)
+}
+
+// mcpToolsCheck asserts the MCP server registers exactly the expected number of
+// tools (the P4 target is 26). It builds a throwaway server -- tool registration
+// touches no external dependency -- and compares the registered count to
+// mcp.ToolCount, catching a tool that was written but never wired in (or vice
+// versa).
+func mcpToolsCheck() check {
+	srv := mcp.New(mcp.Config{})
+	n := srv.NumTools()
+	if n != mcp.ToolCount {
+		return check{statusFail, "mcp_tools",
+			fmt.Sprintf("registered %d tools but ToolCount is %d", n, mcp.ToolCount)}
+	}
+	return check{statusOK, "mcp_tools", fmt.Sprintf("%d tools registered", n)}
 }
 
 // apiKeyCheck warns when the static bearer key is unset.
