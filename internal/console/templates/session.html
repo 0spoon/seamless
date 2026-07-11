@@ -16,7 +16,17 @@
   <div class="card stat"><span class="value small">{{.ToolCalls}}</span><span class="label">Tool calls</span></div>
   <div class="card stat"><span class="value small">{{.Writes}}</span><span class="label">Memory writes</span></div>
   <div class="card stat"><span class="value small">{{.Reads}}</span><span class="label">Memory reads</span></div>
-  <div class="card stat"><span class="value small">{{.ReadBack}}/{{.Injected}}</span><span class="label">Read after inject</span></div>
+  <div class="card center" style="padding:12px">
+    {{if .Injected}}
+    <div class="ring" style="--ring-val:{{pct .ReadBack .Injected}};--ring-size:92px;--ring-stroke:10px">
+      <div class="ring-center">
+        <span class="ring-num" style="font-size:var(--text-lg)">{{pct .ReadBack .Injected}}%</span>
+        <span class="ring-sub">{{.ReadBack}} / {{.Injected}}</span>
+      </div>
+    </div>
+    <span class="ring-label">Read after inject</span>
+    {{else}}<span class="value small">{{.ReadBack}}/{{.Injected}}</span><span class="label">Read after inject</span>{{end}}
+  </div>
 </div>
 
 <div class="grid-2 section">
@@ -58,7 +68,7 @@
         {{range .Timeline}}
         <tr>
           <td class="muted" title="{{.When}}">{{ago .When}}</td>
-          <td><span class="kind">{{.Kind}}</span></td>
+          <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
           <td>{{.Summary}}</td>
         </tr>
         {{end}}

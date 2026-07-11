@@ -5,11 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{.Title}} &middot; Seamless</title>
 <link rel="stylesheet" href="/console/static/console.css">
+<script>
+/* Apply the saved theme before first paint (default dark) to avoid a flash. */
+(function(){try{document.documentElement.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
     <div class="brand"><span class="dot"></span> Seamless</div>
+    <div class="brand-by">by <span>0spoon</span></div>
     <nav class="nav">
       <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">Overview</a>
       <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">Sessions <span class="count">{{.Nav.Sessions}}</span></a>
@@ -19,9 +24,12 @@
       <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">Gardener <span class="count">{{.Nav.Proposals}}</span></a>
       <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">Settings</a>
     </nav>
-    <form method="post" action="/console/logout" style="margin-top:18px;padding:0 10px;">
-      <button class="btn small" type="submit">Sign out</button>
-    </form>
+    <div class="side-foot">
+      <button class="btn small theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme">Light theme</button>
+      <form method="post" action="/console/logout">
+        <button class="btn small" type="submit">Sign out</button>
+      </form>
+    </div>
   </aside>
   <main class="main">
     {{template "content" .}}
@@ -45,6 +53,19 @@
   };
   es.onerror = function () { if (dot) dot.classList.remove('on'); };
   if (pill) pill.onclick = function () { location.reload(); };
+})();
+(function () {
+  var btn = document.getElementById('theme-toggle');
+  if (!btn) return;
+  var root = document.documentElement;
+  function label() { btn.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; }
+  label();
+  btn.onclick = function () {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    try { localStorage.setItem('seamless-theme', next); } catch (e) {}
+    label();
+  };
 })();
 </script>
 {{block "scripts" .}}{{end}}

@@ -5,11 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in &middot; Seamless</title>
 <link rel="stylesheet" href="/console/static/console.css">
+<script>
+(function(){try{document.documentElement.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+</script>
 </head>
 <body>
-<div class="login-wrap">
+<div class="login-wrap dotgrid">
   <form class="login-card" method="post" action="/console/login">
-    <h1><span class="dot" style="width:10px;height:10px;border-radius:50%;background:var(--ok);display:inline-block;"></span> Seamless console</h1>
+    <h1><span class="dot" style="width:11px;height:11px;border-radius:50%;background:var(--live);display:inline-block;"></span> Seamless console</h1>
     <p>Paste the static API key to sign in. It is exchanged for a cookie scoped to this console.</p>
     {{if .Error}}<div class="login-err">{{.Error}}</div>{{end}}
     <label for="key">API key</label>
