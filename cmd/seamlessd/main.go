@@ -142,17 +142,9 @@ func runServe(args []string) error {
 	ret.SetBodyReader(mgr.Store()) // enables the pinned-stage briefing section
 	rec := events.NewRecorder(db)
 
-	if cfg.MCP.APIKey == "" {
-		slog.Warn("mcp.api_key is empty; MCP and hook requests will be rejected -- set it in seamless.yaml")
-	}
-	mcpSrv := mcp.New(mcp.Config{
-		DB: db, Files: mgr, Retrieve: ret, Events: rec, Embedder: embedder,
-		APIKey: cfg.MCP.APIKey, Logger: logger,
-	})
-	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
-
-	// Gardener: propose-only maintenance on a ticker. The chat client (for
-	// digests) is best-effort; without it the digest pass simply no-ops.
+	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool
+	// and run on a ticker. The chat client (for digests) is best-effort; without
+	// it the digest pass simply no-ops.
 	var chat llm.Chat
 	if c, cerr := llm.NewChatClient(cfg.LLM); cerr != nil {
 		slog.Warn("gardener digests disabled; chat client unavailable", "err", cerr)
@@ -160,6 +152,16 @@ func runServe(args []string) error {
 		chat = c
 	}
 	garden := gardener.New(db, mgr, embedder, chat, rec, gardener.FromConfig(cfg.Gardener), logger)
+
+	if cfg.MCP.APIKey == "" {
+		slog.Warn("mcp.api_key is empty; MCP and hook requests will be rejected -- set it in seamless.yaml")
+	}
+	mcpSrv := mcp.New(mcp.Config{
+		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, Embedder: embedder,
+		APIKey: cfg.MCP.APIKey, Logger: logger,
+	})
+	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
+
 	if cfg.Gardener.Enabled {
 		garden.Start(ctx)
 		slog.Info("gardener enabled", "interval", time.Duration(cfg.Gardener.IntervalMinutes)*time.Minute,

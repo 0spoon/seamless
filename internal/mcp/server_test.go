@@ -17,6 +17,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/gardener"
 	mcpserver "github.com/0spoon/seamless/internal/mcp"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
@@ -42,8 +43,10 @@ func newServer(t *testing.T) (string, *sql.DB) {
 	t.Cleanup(func() { _ = mgr.Close() })
 
 	ret := retrieve.New(db, nil, config.Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000}, nil)
+	rec := events.NewRecorder(db)
+	garden := gardener.New(db, mgr, nil, nil, rec, gardener.Config{}, nil)
 	srv := mcpserver.New(mcpserver.Config{
-		DB: db, Files: mgr, Retrieve: ret, Events: events.NewRecorder(db), APIKey: testKey,
+		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, APIKey: testKey,
 	})
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
