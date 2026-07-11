@@ -1,0 +1,86 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Settings</h1>
+    <div class="sub">Read-only view of the running configuration</div>
+  </div>
+</div>
+
+<div class="grid-2 section">
+  <div class="card">
+    <h2>Storage</h2>
+    <dl class="kv">
+      <dt>Data dir</dt><dd class="mono">{{.DataDir}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Budgets</h2>
+    <dl class="kv">
+      <dt>Max briefing tokens</dt><dd>{{.Budgets.MaxBriefingTokens}}</dd>
+      <dt>Recall budget tokens</dt><dd>{{.Budgets.RecallBudgetTokens}}</dd>
+    </dl>
+  </div>
+
+  <div class="card">
+    <h2>Gardener</h2>
+    <dl class="kv">
+      <dt>Enabled</dt><dd>{{if .Gardener.Enabled}}<span class="badge ok">yes</span>{{else}}<span class="badge">no</span>{{end}}</dd>
+      <dt>Interval</dt><dd>{{.Gardener.IntervalMinutes}}m</dd>
+      <dt>Dedup threshold</dt><dd>{{.Gardener.DedupThreshold}}</dd>
+      <dt>Staleness</dt><dd>{{.Gardener.StalenessDays}}d</dd>
+      <dt>Digest window</dt><dd>{{.Gardener.DigestDays}}d</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Projects <span class="count">{{len .Projects}}</span></h2>
+  {{if .Projects}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Slug</th><th>Name</th><th>Description</th></tr></thead>
+      <tbody>
+        {{range .Projects}}
+        <tr><td class="mono">{{.Slug}}</td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">No projects registered</div>{{end}}
+</div>
+
+<div class="section">
+  <h2>Repo &rarr; project map <span class="count">{{len .RepoMap}}</span></h2>
+  {{if .RepoMap}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Repo path</th><th>Project</th></tr></thead>
+      <tbody>
+        {{range .RepoMap}}
+        <tr><td class="mono">{{.Repo}}</td><td>{{.Project}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">No repo mappings yet &mdash; they are learned as agents work in new repos</div>{{end}}
+</div>
+
+<div class="section">
+  <h2>Project families <span class="count">{{len .Families}}</span></h2>
+  {{if .Families}}
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Family</th><th>Members</th></tr></thead>
+      <tbody>
+        {{range .Families}}
+        <tr><td>{{.Name}}</td><td>{{range .Members}}<span class="badge">{{.}}</span> {{end}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}<div class="empty">No project families configured</div>{{end}}
+</div>
+{{end}}
+{{end}}

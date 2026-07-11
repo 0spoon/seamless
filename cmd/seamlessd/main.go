@@ -164,7 +164,8 @@ func runServe(args []string) error {
 	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec,
-		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir, Budgets: cfg.Budgets, Logger: logger,
+		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,
+		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, Logger: logger,
 	})
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: console: %w", err)

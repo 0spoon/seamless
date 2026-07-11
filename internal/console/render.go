@@ -21,7 +21,8 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "sessions", "session", "memories", "retrieval", "tasks", "gardener",
+	"login", "overview", "sessions", "session", "memories", "retrieval",
+	"tasks", "gardener", "settings",
 }
 
 // pageData is the envelope every rendered page receives. Data holds the
