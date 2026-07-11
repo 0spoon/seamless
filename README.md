@@ -81,7 +81,10 @@ never clobbers an edited prod config; delete the copy to re-seed. It lands in
 resolve config from any directory. To return to dev, run `make install-service &&
 make install-hooks`.
 
-Note on the SessionStart hook: Claude Code only runs `command`/`mcp_tool` hooks
-for SessionStart -- an `http` one is silently ignored -- so it is installed as a
-`command` hook that shells out to `seam hook session-start`. UserPromptSubmit and
-SessionEnd stay `http` hooks.
+Note on the session lifecycle hooks: SessionStart and SessionEnd are installed as
+`command` hooks that shell out to `seam hook <event>`. Claude Code only runs
+`command`/`mcp_tool` hooks for SessionStart (an `http` one is silently ignored),
+and although SessionEnd does support `http`, at process exit the fire-and-forget
+request races the teardown and the ambient-session harvest often never lands, so
+it too runs as a `command` hook Claude Code waits on. UserPromptSubmit fires
+mid-turn where `http` is reliable and stays an `http` hook.

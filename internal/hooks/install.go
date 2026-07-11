@@ -28,15 +28,19 @@ type hookSpec struct {
 
 // seamlessHooks is the set installed/removed together.
 //
-// SessionStart must be a command hook: Claude Code only runs command/mcp_tool
-// hooks for that event and silently ignores an http one, so the briefing and
-// ambient session never fire. The command shells out to `seam hook
-// session-start`, which forwards the payload to Endpoint. The other two events
-// support http hooks and keep them.
+// SessionStart and SessionEnd are command hooks. Claude Code only runs
+// command/mcp_tool hooks for SessionStart, so an http one is silently skipped
+// and the briefing/ambient session never fire. SessionEnd does support http,
+// but at process exit the fire-and-forget request races the teardown, so the
+// ambient-session harvest often never lands and sessions pile up as active;
+// running it as a command hook Claude Code waits on makes the harvest reliable.
+// Each shells out to `seam hook <event>`, which forwards the payload to
+// Endpoint. UserPromptSubmit fires mid-turn where http is reliable, so it keeps
+// an http hook (and carries the bearer key into settings.json).
 var seamlessHooks = []hookSpec{
 	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5},
-	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10},
+	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10, CLIArg: "session-end"},
 }
 
 // InstallOptions configures an install.
