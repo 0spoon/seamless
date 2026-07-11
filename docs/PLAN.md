@@ -591,11 +591,14 @@ Seamless including the MW75 hardware repo, then disable v1 and free the port,
 **preserving all v1 data/DB/repo** (disable only, no deletion).
 
 **Repo deliverables (committed):**
-- `chore(p6)`: `make install-service` + `deploy/launchd` plist template
-  (`__BINARY__`/`__CONFIG__`/`__LOG__`) formalizing the hand-made
-  `org.thereisnospoon.seamless` LaunchAgent; idempotent bootout+bootstrap reload;
-  symmetric `uninstall-service`. (plist render validated via `plutil`; the
-  bootstrap action itself is gated behind explicit owner approval.)
+- `chore(p6)` + `fix(p6)`: `make install-service` + `deploy/launchd` plist
+  template (`__BINARY__`/`__CONFIG__`/`__LOG__`) formalizing the hand-made
+  `org.thereisnospoon.seamless` LaunchAgent; symmetric `uninstall-service`. Run
+  live (owner-approved) -- the running :8081 service now derives from the
+  committed template. **Gotcha:** `launchctl bootout` is async, so an immediate
+  `bootstrap` of the same label fails with `Bootstrap failed: 5: Input/output
+  error` and leaves the service DOWN. Fixed the target with a bootstrap retry
+  loop + a `launchctl print` success check.
 - `feat(p6)`: ported the `/seam-onboard` skill from v1 to Seamless -- discovery
   reads `SEAMLESS_MCP_API_KEY` / plist `SEAMLESS_CONFIG` / `seamless.yaml`
   (`mcp.api_key`+`addr`), registers the `seamless` MCP server at user scope on
