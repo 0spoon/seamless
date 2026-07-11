@@ -1,0 +1,96 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Retrieval</h1>
+    <div class="sub">How memories reach agents, and whether they get read</div>
+  </div>
+</div>
+
+<div class="grid section">
+  <div class="card stat"><span class="value">{{.Injections}}</span><span class="label">Injections</span></div>
+  <div class="card stat"><span class="value">{{.Reads}}</span><span class="label">Reads</span></div>
+  <div class="card stat"><span class="value">{{.ReadRate}}%</span><span class="label">Read after inject</span></div>
+</div>
+
+<div class="grid-2 section">
+  <div class="card">
+    <h2>By kind</h2>
+    {{if .ByKind}}
+    <table>
+      <thead><tr><th>Kind</th><th class="num">Inj</th><th class="num">Read</th><th>Rate</th></tr></thead>
+      <tbody>
+        {{range .ByKind}}
+        <tr>
+          <td><span class="kind">{{.Kind}}</span></td>
+          <td class="num">{{.Injects}}</td>
+          <td class="num">{{.Reads}}</td>
+          <td style="min-width:120px">
+            <span class="muted">{{.ReadRate}}%</span>
+            <div class="meter"><span style="width:{{.ReadRate}}%"></span></div>
+          </td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No retrieval activity yet</div>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Injection trend (14d)</h2>
+    {{if .Trend}}
+    <table>
+      <tbody>
+        {{range .Trend}}
+        <tr>
+          <td class="muted mono" style="width:100px">{{.Day}}</td>
+          <td class="num" style="width:40px">{{.Count}}</td>
+          <td><div class="meter"><span style="width:{{pct .Count $.Data.TrendMax}}%"></span></div></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No injections in the last 14 days</div>{{end}}
+  </div>
+</div>
+
+<div class="grid-2 section">
+  <div class="card">
+    <h2>Most injected</h2>
+    {{if .TopInjected}}
+    <table>
+      <thead><tr><th>Memory</th><th>Kind</th><th class="num">Inj</th><th class="num">Read</th></tr></thead>
+      <tbody>
+        {{range .TopInjected}}
+        <tr>
+          <td><a href="/console/memories#{{.ID}}">{{.Name}}</a> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span></td>
+          <td><span class="kind">{{.Kind}}</span></td>
+          <td class="num">{{.Injects}}</td>
+          <td class="num">{{.Reads}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No injections recorded</div>{{end}}
+  </div>
+
+  <div class="card">
+    <h2>Stale <span class="count muted">no activity in {{.StaleDays}}d</span></h2>
+    {{if .Stale}}
+    <table>
+      <thead><tr><th>Memory</th><th>Kind</th><th>Updated</th></tr></thead>
+      <tbody>
+        {{range .Stale}}
+        <tr>
+          <td><a href="/console/memories#{{.ID}}">{{.Name}}</a> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span></td>
+          <td><span class="kind">{{.Kind}}</span></td>
+          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No stale memories &mdash; everything has been touched recently</div>{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

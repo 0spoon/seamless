@@ -75,6 +75,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
 	mux.HandleFunc("GET /console/memories", s.auth(s.memoriesList))
 	mux.HandleFunc("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
+	mux.HandleFunc("GET /console/retrieval", s.auth(s.retrieval))
 }
 
 // ---------------------------------------------------------------------------
