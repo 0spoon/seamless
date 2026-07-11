@@ -167,10 +167,14 @@ func TestAmbientSessionLifecycle(t *testing.T) {
 	// SessionEnd harvests the transcript's final assistant message and completes.
 	transcript := writeTranscript(t,
 		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Shipped the ready-queue."}]}}`)
-	resp, _ := post(t, endURL, testKey, map[string]any{
+	resp, endOut := post(t, endURL, testKey, map[string]any{
 		"session_id": "abcdef12-3456", "transcript_path": transcript, "reason": "clear",
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	// SessionEnd has no hookSpecificOutput variant in Claude Code's schema;
+	// including one fails root validation, so the ack must omit it.
+	require.NotContains(t, endOut, "hookSpecificOutput")
+	require.Equal(t, true, endOut["continue"])
 
 	sess, ok, err = store.SessionByName(ctx, db, "cc/abcdef12")
 	require.NoError(t, err)

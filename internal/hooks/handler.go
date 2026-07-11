@@ -82,9 +82,9 @@ type endPayload struct {
 // hookResponse is the Claude Code hook response envelope; the field names are
 // load-bearing and case-sensitive.
 type hookResponse struct {
-	Continue           bool               `json:"continue"`
-	SuppressOutput     bool               `json:"suppressOutput"`
-	HookSpecificOutput hookSpecificOutput `json:"hookSpecificOutput"`
+	Continue           bool                `json:"continue"`
+	SuppressOutput     bool                `json:"suppressOutput"`
+	HookSpecificOutput *hookSpecificOutput `json:"hookSpecificOutput,omitempty"`
 }
 
 type hookSpecificOutput struct {
@@ -143,8 +143,9 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	h.completeAmbientSession(ctx, p)
-	// SessionEnd expects no additional context; the response only confirms.
-	writeHookResponse(w, "SessionEnd", "")
+	// SessionEnd has no hookSpecificOutput variant in Claude Code's schema, so
+	// the response is a bare ack -- emitting one fails root validation.
+	writeHookAck(w)
 }
 
 // ensureAmbientSession creates (source startup) or resumes (any source) the
@@ -310,10 +311,18 @@ func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
 	_ = json.NewEncoder(w).Encode(hookResponse{
 		Continue:       true,
 		SuppressOutput: true,
-		HookSpecificOutput: hookSpecificOutput{
+		HookSpecificOutput: &hookSpecificOutput{
 			HookEventName: event, AdditionalContext: additionalContext,
 		},
 	})
+}
+
+// writeHookAck confirms a hook that carries no additional context. SessionEnd
+// (and other events without a hookSpecificOutput variant) must omit that field
+// entirely, or Claude Code's schema validation rejects the whole response.
+func writeHookAck(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(hookResponse{Continue: true, SuppressOutput: true})
 }
 
 // verifyBearer constant-time-compares the request's bearer token to key.
