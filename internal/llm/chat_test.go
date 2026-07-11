@@ -22,7 +22,7 @@ func TestOpenAIChatComplete(t *testing.T) {
 		require.Len(t, req.Messages, 2)
 		require.Equal(t, "system", req.Messages[0].Role)
 		require.Equal(t, "user", req.Messages[1].Role)
-		require.Equal(t, chatMaxTokens, req.MaxTokens)
+		require.Equal(t, chatMaxTokens, req.MaxCompletionTokens)
 		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"a digest"}}]}`))
 	}))
 	defer srv.Close()
