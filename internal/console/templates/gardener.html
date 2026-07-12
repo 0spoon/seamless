@@ -20,17 +20,17 @@
 
     {{if eq .Kind "archive"}}
       {{with .Archive}}
-      <div class="prop-row"><span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
+      <div class="prop-row"><a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
       {{if .Description}}<div class="prop-desc">{{.Description}}</div>{{end}}
       {{end}}
       <div class="badge warn">{{.Reason}}</div>
     {{else if eq .Kind "merge"}}
       <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
-      {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
-      {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+      {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+      {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
     {{else if eq .Kind "digest"}}
       <div class="prop-title">{{.Title}}</div>
-      <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; {{.Month}}</div>
+      <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
       <pre class="pre">{{.Preview}}</pre>
     {{end}}
 

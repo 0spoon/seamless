@@ -54,6 +54,22 @@ func scanNotes(rows *sql.Rows) ([]core.Note, error) {
 	return out, rows.Err()
 }
 
+// ListNotes returns every note, newest-updated first. Rows carry index metadata
+// only (no body, which lives in the file). It backs the console Notes browser.
+func ListNotes(ctx context.Context, db *sql.DB) ([]core.Note, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+noteCols+`
+		FROM notes_index ORDER BY updated_at DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNotes: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	notes, err := scanNotes(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListNotes: %w", err)
+	}
+	return notes, nil
+}
+
 // NoteByID returns the note with the given id. found is false when absent.
 func NoteByID(ctx context.Context, db *sql.DB, id string) (core.Note, bool, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+noteCols+`

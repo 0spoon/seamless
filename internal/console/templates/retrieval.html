@@ -43,7 +43,7 @@
       <tbody>
         {{range .TopInjected}}
         <tr>
-          <td><a href="/console/memories#{{.ID}}">{{.Name}}</a> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span></td>
+          <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="num">{{.Injects}}</td>
           <td class="num">{{.Reads}}</td>
@@ -64,7 +64,7 @@
       <tbody>
         {{range .Stale}}
         <tr>
-          <td><a href="/console/memories#{{.ID}}">{{.Name}}</a> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span></td>
+          <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
         </tr>

@@ -19,6 +19,7 @@
       <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
       <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
       <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
+      <a href="/console/notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
       <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "arrow-down-to-line"}}<span class="nav-label">Retrieval</span></a>
       <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count">{{.Nav.Tasks}}</span></a>
       <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count">{{.Nav.Proposals}}</span></a>
@@ -36,6 +37,15 @@
   </main>
 </div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
+<aside id="peek" class="peek" hidden aria-label="Detail panel">
+  <div class="peek-chrome">
+    <button class="peek-back btn small" type="button" title="Back" aria-label="Back">&larr;</button>
+    <span class="peek-spacer"></span>
+    <a class="peek-open btn small" href="#" title="Open full page">open &nearr;</a>
+    <button class="peek-close btn small" type="button" title="Close" aria-label="Close">&times;</button>
+  </div>
+  <div class="peek-content"></div>
+</aside>
 <script>
 (function () {
   if (!window.EventSource) return;
@@ -55,10 +65,55 @@
   if (pill) pill.onclick = function () { location.reload(); };
 })();
 (function () {
-  /* Whole-row navigation for any element with .row-link + data-href (table
-     rows and the sessions list rows), ignoring clicks on real links/buttons
-     and on a text selection the user is making. */
+  /* Peek panel: intercept clicks on [data-peek] elements (links and whole
+     rows), fetch the entity's fragment (?peek=1), and slide it into the fixed
+     right drawer with a back-stack + #peek= deep-link. Falls back to plain
+     whole-row navigation for a .row-link[data-href] with no data-peek. Server
+     fragments are auto-escaped html/template output, injected same-origin. */
+  var panel = document.getElementById('peek');
+  var content = panel && panel.querySelector('.peek-content');
+  var openLink = panel && panel.querySelector('.peek-open');
+  var stack = [];
+
+  function peekURL(href) { return href + (href.indexOf('?') >= 0 ? '&' : '?') + 'peek=1'; }
+  function targetHref(el) {
+    if (el.getAttribute('href')) return el.getAttribute('href');
+    var h = el.closest('[data-href]');
+    return h ? h.getAttribute('data-href') : null;
+  }
+  function setHash(href) {
+    try { history.replaceState(null, '', location.pathname + location.search + '#peek=' + encodeURIComponent(href)); } catch (e) {}
+  }
+  function clearHash() {
+    if (location.hash.indexOf('#peek=') === 0) {
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    }
+  }
+  function show() { panel.hidden = false; document.body.classList.add('peek-open'); }
+  function hide() { panel.hidden = true; document.body.classList.remove('peek-open'); stack = []; clearHash(); }
+  function load(href) {
+    return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
+      content.innerHTML = html;
+      content.scrollTop = 0;
+      if (openLink) openLink.setAttribute('href', href);
+    }).catch(function () {});
+  }
+  function open(href, push) {
+    if (!panel || !href) return;
+    if (push !== false) stack.push(href);
+    show();
+    setHash(href);
+    load(href);
+  }
+
   document.addEventListener('click', function (e) {
+    var peek = e.target.closest ? e.target.closest('[data-peek]') : null;
+    if (peek && panel) {
+      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // let modified clicks open a tab
+      if (e.target.closest('button, form')) return; // inline actions (archive) act normally
+      var href = targetHref(peek);
+      if (href) { e.preventDefault(); open(href, true); return; }
+    }
     var row = e.target.closest ? e.target.closest('.row-link[data-href]') : null;
     if (!row) return;
     if (e.target.closest('a, button')) return;
@@ -66,6 +121,20 @@
     if (sel && sel.type === 'Range' && sel.toString()) return;
     location.href = row.getAttribute('data-href');
   });
+
+  if (panel) {
+    var back = panel.querySelector('.peek-back');
+    var close = panel.querySelector('.peek-close');
+    if (back) back.onclick = function () {
+      stack.pop();
+      if (stack.length === 0) { hide(); return; }
+      open(stack[stack.length - 1], false);
+    };
+    if (close) close.onclick = hide;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) hide(); });
+    var m = location.hash.match(/^#peek=(.+)$/);
+    if (m) { try { open(decodeURIComponent(m[1]), true); } catch (e) {} }
+  }
 })();
 (function () {
   var btn = document.getElementById('theme-toggle');

@@ -1,0 +1,41 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Notes</h1>
+    <div class="sub">{{.Count}} total</div>
+  </div>
+</div>
+
+{{if .Groups}}
+<div class="mem-layout">
+  <nav class="mem-index">
+    <span class="hd">Projects</span>
+    {{range .Groups}}
+    <a href="#notes-{{if .Project}}{{.Project}}{{else}}inbox{{end}}">{{if .Project}}{{.Project}}{{else}}inbox{{end}} <span class="n">{{.Count}}</span></a>
+    {{end}}
+  </nav>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
+      <tbody>
+        {{range .Groups}}
+        <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}inbox{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}inbox{{end}} <span class="count">{{.Count}}</span></td></tr>
+        {{range .Notes}}
+        <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
+          <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
+          <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
+          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+        </tr>
+        {{end}}
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{else}}
+<div class="empty">No notes yet</div>
+{{end}}
+{{end}}
+{{end}}

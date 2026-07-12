@@ -45,9 +45,10 @@ type Config struct {
 
 // Service renders the console and serves its routes.
 type Service struct {
-	cfg    Config
-	logger *slog.Logger
-	pages  map[string]*template.Template
+	cfg       Config
+	logger    *slog.Logger
+	pages     map[string]*template.Template
+	fragments map[string]*template.Template // peek-body fragments, keyed by entity
 }
 
 // New builds a console Service, parsing its templates once.
@@ -56,11 +57,11 @@ func New(cfg Config) (*Service, error) {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	pages, err := parseTemplates()
+	pages, fragments, err := parseTemplates()
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cfg: cfg, logger: logger, pages: pages}, nil
+	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments}, nil
 }
 
 // Register mounts the console routes on mux under /console. Public routes are the
@@ -75,9 +76,14 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/sessions", s.auth(s.sessionsList))
 	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
 	mux.HandleFunc("GET /console/memories", s.auth(s.memoriesList))
+	mux.HandleFunc("GET /console/memories/{id}", s.auth(s.memoryDetail))
 	mux.HandleFunc("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
+	mux.HandleFunc("GET /console/notes", s.auth(s.notesList))
+	mux.HandleFunc("GET /console/notes/{id}", s.auth(s.noteDetail))
 	mux.HandleFunc("GET /console/retrieval", s.auth(s.retrieval))
 	mux.HandleFunc("GET /console/tasks", s.auth(s.tasks))
+	mux.HandleFunc("GET /console/tasks/{id}", s.auth(s.taskDetail))
+	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
 	mux.HandleFunc("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
 	mux.HandleFunc("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
@@ -349,6 +355,7 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 	return navCounts{
 		Sessions:  n.Sessions,
 		Memories:  n.Memories,
+		Notes:     n.Notes,
 		Tasks:     n.OpenTasks,
 		Proposals: n.PendingProposals,
 	}
@@ -358,6 +365,7 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 type navCounts struct {
 	Sessions  int
 	Memories  int
+	Notes     int
 	Tasks     int
 	Proposals int
 }

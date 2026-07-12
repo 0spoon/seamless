@@ -70,6 +70,10 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Fields = scalarFields(ev.Payload, "content", "item_ids")
 
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "event", data)
+		return
+	}
 	s.render(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Active: "overview", Data: data})
 }
 

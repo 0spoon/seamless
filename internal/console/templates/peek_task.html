@@ -1,0 +1,38 @@
+{{define "peek-body"}}
+<article class="peek-entity">
+  <header class="peek-head">
+    <span class="mono-id">{{shortID .ID}}</span>
+    <span class="badge {{taskTone .Status}}">{{.Status}}</span>
+    {{if .PlanSlug}}<span class="kind">plan:{{.PlanSlug}}</span>{{end}}
+  </header>
+  <h2 class="peek-title">{{.Title}}</h2>
+
+  {{if .Body}}<div class="peek-body">{{.Body}}</div>{{end}}
+
+  <dl class="peek-kv">
+    <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
+    {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}</dd>{{end}}
+    <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
+    <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+    {{if .Closed}}<dt>Closed</dt><dd title="{{.Closed}}">{{ago .Closed}}</dd>{{end}}
+  </dl>
+
+  {{if .Deps}}
+  <section class="peek-section">
+    <h3>Depends on <span class="count">{{len .Deps}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Deps}}<li><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  {{if .Blocks}}
+  <section class="peek-section">
+    <h3>Blocks <span class="count">{{len .Blocks}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Blocks}}<li><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+</article>
+{{end}}
