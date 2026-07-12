@@ -22,7 +22,7 @@ var consoleCSS []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "sessions", "session", "memories", "retrieval",
-	"tasks", "gardener", "settings",
+	"tasks", "gardener", "settings", "event",
 }
 
 // pageData is the envelope every rendered page receives. Data holds the

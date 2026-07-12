@@ -55,6 +55,18 @@
   if (pill) pill.onclick = function () { location.reload(); };
 })();
 (function () {
+  /* Whole-row navigation for tables with data-href, ignoring clicks on real
+     links/buttons and on a text selection the user is making. */
+  document.addEventListener('click', function (e) {
+    var row = e.target.closest ? e.target.closest('tr.row-link[data-href]') : null;
+    if (!row) return;
+    if (e.target.closest('a, button')) return;
+    var sel = window.getSelection && window.getSelection();
+    if (sel && sel.type === 'Range' && sel.toString()) return;
+    location.href = row.getAttribute('data-href');
+  });
+})();
+(function () {
   var btn = document.getElementById('theme-toggle');
   if (!btn) return;
   var root = document.documentElement;

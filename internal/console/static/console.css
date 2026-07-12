@@ -256,7 +256,20 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 .side-foot { margin-top: auto; padding: 14px 8px 0; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .side-foot .btn { width: 100%; justify-content: flex-start; }
 
-.main { flex: 1; min-width: 0; padding: 24px 32px 72px; max-width: var(--content-max); }
+/* The content column fills the space left of the sidebar but caps its own width
+   at --content-max and centers within that space, so it never clings to the
+   left edge on a wide monitor. A single-column grid does the centering;
+   align-content:start keeps rows packed at the top (default stretch would open
+   gaps between sections on tall viewports). */
+.main {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, var(--content-max));
+  justify-content: center;
+  align-content: start;
+  padding: 24px 32px 72px;
+}
 
 .topbar {
   display: flex;
@@ -358,6 +371,8 @@ td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align:
 tr:last-child td { border-bottom: none; }
 tbody tr { transition: background var(--dur-fast) var(--ease-out); }
 tbody tr:hover { background: var(--surface-2); }
+tbody tr.row-link { cursor: pointer; }
+tbody tr.row-link:hover { background: var(--surface-3, var(--surface-2)); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 
@@ -569,3 +584,80 @@ details > summary { font-family: var(--font-display); }
 .empty-ico { display: inline-flex; margin-bottom: 10px; }
 .empty-ico .ico { width: 26px; height: 26px; }
 .empty-ico.ok { color: var(--ok); }
+
+/* ===========================================================================
+   RESPONSIVE
+   The layout is a fixed sidebar + a centered content band. The band widens on
+   large monitors (bumping --content-max), stays comfortably full on laptops,
+   and below the tablet breakpoint the sidebar folds into a horizontal top bar
+   so the content gets the full viewport width.
+   =========================================================================== */
+
+/* Large monitors -- let the content band grow past laptop width instead of
+   leaving a wide empty gutter. It stays centered (see .main), so the extra
+   space is shared rather than left-hugged. Thresholds are tuned so common
+   MacBook widths fill nicely and only genuinely large displays widen. */
+@media (min-width: 1600px) { :root { --content-max: 1400px; } }
+@media (min-width: 2200px) { :root { --content-max: 1560px; } }
+
+/* Small laptops / large tablets -- trim the sidebar and shell gutters so the
+   content keeps its room before anything has to stack. */
+@media (max-width: 1120px) {
+  :root { --sidebar-width: 190px; }
+  .main { padding: 22px 24px 64px; }
+}
+
+/* Narrow -- fold the sidebar into a sticky top bar. The nav lays out
+   horizontally and scrolls sideways if it overflows; the footer actions sit
+   inline at the end. Content then spans the full width. */
+@media (max-width: 720px) {
+  .shell { flex-direction: column; }
+  .sidebar {
+    width: 100%;
+    flex: none;
+    height: auto;
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    overflow: visible;
+  }
+  .brand { padding: 0 2px 0 6px; font-size: var(--text-lg); flex: none; }
+  .brand-by { display: none; }
+  .nav {
+    flex-direction: row;
+    flex: 1;
+    gap: 2px;
+    min-width: 0;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .nav a { padding: 6px 9px; white-space: nowrap; }
+  .nav .count { display: none; }
+  .side-foot {
+    margin-top: 0;
+    padding: 0;
+    border-top: none;
+    flex-direction: row;
+    gap: 6px;
+    flex: none;
+  }
+  .side-foot .btn { width: auto; }
+  .side-foot .tt-label { display: none; }
+  .main { padding: 18px 16px 56px; }
+  .topbar { flex-wrap: wrap; }
+}
+
+/* Phone -- collapse the nav to icons and drop the sign-out label so the top bar
+   fits, and shrink the big display numerals a touch. */
+@media (max-width: 460px) {
+  .nav-label { display: none; }
+  .side-foot form .btn span { display: none; }
+  .main { padding: 16px 12px 48px; }
+  .stat .value { font-size: var(--text-2xl); }
+}

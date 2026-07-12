@@ -62,7 +62,7 @@
       <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
       <tbody>
         {{range .Timeline}}
-        <tr>
+        <tr class="row-link" data-href="/console/events/{{.ID}}">
           <td class="muted" title="{{.When}}">{{ago .When}}</td>
           <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
           <td>{{.Summary}}</td>

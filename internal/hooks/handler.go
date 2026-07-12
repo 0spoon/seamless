@@ -115,9 +115,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("hooks: session-start briefing failed", "error", err)
 		briefing = "" // never block the agent
 	}
-	if briefing != "" {
-		h.recordInjection(ctx, "session-start", p.SessionID)
-	}
+	injected := briefing != ""
 
 	// Ambient session: create or resume cc/{prefix} so work is recorded without
 	// the agent calling session_start. Subagents share the parent's session, so
@@ -127,6 +125,11 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		if name := h.ensureAmbientSession(ctx, p); name != "" {
 			briefing = injectAmbientLine(briefing, name)
 		}
+	}
+	// Record after the ambient line is appended so the stored content is exactly
+	// what the agent received.
+	if injected {
+		h.recordInjection(ctx, "session-start", p.SessionID, briefing)
 	}
 	writeHookResponse(w, "SessionStart", briefing)
 }
@@ -274,21 +277,22 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		out = ""
 	}
 	if out != "" {
-		h.recordInjection(ctx, "user-prompt-submit", p.SessionID)
+		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, out)
 	}
 	writeHookResponse(w, "UserPromptSubmit", out)
 }
 
-// recordInjection logs a coarse retrieval.injected event. The session_id column
-// holds seamless ULIDs only, so the Claude session id rides in the payload
-// rather than that column (the hook has no seamless session in P2).
-func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID string) {
+// recordInjection logs a retrieval.injected event carrying the exact text that
+// was injected, so the console can show what an agent actually received. The
+// session_id column holds seamless ULIDs only, so the Claude session id rides in
+// the payload rather than that column (the hook has no seamless session in P2).
+func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, content string) {
 	if h.events == nil {
 		return
 	}
 	if _, err := h.events.Record(ctx, core.Event{
 		Kind:    core.EventInjected,
-		Payload: map[string]any{"hook": hook, "claude_session_id": claudeSessionID},
+		Payload: map[string]any{"hook": hook, "claude_session_id": claudeSessionID, "content": content},
 	}); err != nil {
 		h.logger.Warn("hooks: record injection", "error", err)
 	}
