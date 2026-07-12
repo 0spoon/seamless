@@ -899,7 +899,13 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .ix-tab:hover { color: var(--ink); border-color: var(--border-strong); }
 .ix-tab.active { color: var(--brand); background: var(--brand-soft); border-color: transparent; }
 .ix-tab .n { font-variant-numeric: tabular-nums; opacity: .8; }
-.ix-actions { display: flex; gap: 8px; flex: none; }
+.ix-tab.muted { color: var(--faint); background: transparent; border-style: dashed; }
+.ix-tab.muted:hover { color: var(--muted); border-color: var(--border-strong); }
+.ix-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.ix-window { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
+.ix-window select { font-family: inherit; font-size: var(--text-xs); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 3px 6px; cursor: pointer; }
+.ix-window select:hover { border-color: var(--border-strong); }
+.ix-window select:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 
 .ix-feed { display: flex; flex-direction: column; gap: 6px; }
 .ix-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; }
