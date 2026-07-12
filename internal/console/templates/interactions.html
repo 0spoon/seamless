@@ -10,6 +10,15 @@
 <div class="ix-controls">
   <div class="ix-tabs" id="ix-tabs"></div>
   <div class="ix-actions">
+    <label class="ix-window">active
+      <select id="ix-window" aria-label="Show sessions active within">
+        <option value="60">1m</option>
+        <option value="300" selected>5m</option>
+        <option value="900">15m</option>
+        <option value="3600">1h</option>
+        <option value="0">all</option>
+      </select>
+    </label>
     <button class="btn small" type="button" id="ix-pause">Pause</button>
   </div>
 </div>
@@ -30,7 +39,16 @@
   var olderWrap = document.querySelector('.ix-more');
   var olderBtn = document.getElementById('ix-older');
   var liveEl = document.getElementById('ix-live');
+  var windowSel = document.getElementById('ix-window');
   if (!feed) return;
+
+  // Session tabs default to those active in the last 5 minutes; the user can
+  // narrow to 1m or widen up to "all". 0 means no window (show every session).
+  var windowSecs = 300;
+  try {
+    var savedW = parseInt(localStorage.getItem('ix-window'), 10);
+    if (!isNaN(savedW)) windowSecs = savedW;
+  } catch (e) {}
 
   // This page IS the live view -- suppress the global "refresh" pill.
   var pill = document.getElementById('live-pill');
@@ -189,16 +207,38 @@
     if (olderWrap) olderWrap.hidden = !cursor;
   }
 
+  function setWindow(secs) {
+    windowSecs = secs;
+    if (windowSel) windowSel.value = String(secs);
+    try { localStorage.setItem('ix-window', String(secs)); } catch (e) {}
+    refreshTabs();
+  }
+
   function refreshTabs() {
-    var counts = {}; var names = {}; var none = 0;
+    var counts = {}; var names = {}; var latest = {}; var none = 0;
     order.forEach(function (id) {
       var d = rows[id].data;
       if (!d.sessionId) { none++; return; }
       counts[d.sessionId] = (counts[d.sessionId] || 0) + 1;
       names[d.sessionId] = d.sessionName || shortId(d.sessionId);
+      if (!latest[d.sessionId] || d.ts > latest[d.sessionId]) latest[d.sessionId] = d.ts;
     });
+    // Most-recently-active session first, then apply the activity window. The
+    // active filter is always kept visible so a session under inspection is
+    // never yanked out from under the user.
+    var sids = Object.keys(counts).sort(function (a, b) {
+      return latest[a] < latest[b] ? 1 : latest[a] > latest[b] ? -1 : 0;
+    });
+    var now = Date.now();
+    var visible = []; var hidden = 0;
+    sids.forEach(function (sid) {
+      var fresh = windowSecs === 0 || (now - Date.parse(latest[sid])) / 1000 <= windowSecs;
+      if (fresh || sid === filter) visible.push(sid);
+      else hidden++;
+    });
+
     var tabs = [{ key: 'all', label: 'All', n: order.length }];
-    Object.keys(counts).forEach(function (sid) {
+    visible.forEach(function (sid) {
       tabs.push({ key: sid, label: names[sid], n: counts[sid] });
     });
     if (none) tabs.push({ key: '__none__', label: 'unattributed', n: none });
@@ -212,6 +252,13 @@
       b.onclick = function () { filter = t.key; applyAll(); refreshTabs(); };
       tabsEl.appendChild(b);
     });
+    if (hidden > 0) {
+      var more = el('button', 'ix-tab muted', '+' + hidden + ' older');
+      more.type = 'button';
+      more.title = hidden + ' session' + (hidden === 1 ? '' : 's') + ' with no recent activity - show all';
+      more.onclick = function () { setWindow(0); };
+      tabsEl.appendChild(more);
+    }
   }
 
   function applyAll() {
@@ -290,6 +337,16 @@
     if (!paused) flushBuffer();
     reflectBuffer();
   };
+  if (windowSel) {
+    windowSel.value = String(windowSecs);
+    windowSel.onchange = function () {
+      var v = parseInt(windowSel.value, 10);
+      setWindow(isNaN(v) ? 0 : v);
+    };
+  }
+  // Re-evaluate the activity window on a timer so idle sessions age out of the
+  // tab bar even when no new frames arrive.
+  setInterval(function () { if (order.length) refreshTabs(); }, 15000);
   if (olderBtn) olderBtn.onclick = loadOlder;
   // Flush the pause/open buffer when the last open row is collapsed.
   feed.addEventListener('toggle', function () {
