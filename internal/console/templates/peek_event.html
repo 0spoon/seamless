@@ -1,0 +1,30 @@
+{{define "peek-body"}}
+<article class="peek-entity">
+  <header class="peek-head"><span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span></header>
+  <h2 class="peek-title">{{.Event.Summary}}</h2>
+
+  <dl class="peek-kv">
+    <dt>When</dt><dd title="{{.Event.When}}">{{ago .Event.When}}</dd>
+    <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
+    <dt>Session</dt><dd>{{if .Event.SessionID}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{else}}&mdash;{{end}}</dd>
+  </dl>
+
+  {{if .Content}}
+  <section class="peek-section">
+    <h3>Injected content</h3>
+    <pre class="pre">{{.Content}}</pre>
+  </section>
+  {{end}}
+
+  {{if .Items}}
+  <section class="peek-section">
+    <h3>Surfaced memories <span class="count">{{len .Items}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Items}}<li>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span> <span class="badge warn">removed</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}</li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  <div class="peek-actions"><a href="/console/events/{{.Event.ID}}">Open full view &rarr;</a></div>
+</article>
+{{end}}

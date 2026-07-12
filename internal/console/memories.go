@@ -113,17 +113,26 @@ func toMemoryRow(m core.Memory, stat store.RetrievalStat, nameByID map[string]st
 			status = "archived"
 		}
 	}
-	abs := m.FilePath
-	if dataDir != "" && !filepath.IsAbs(abs) {
-		abs = filepath.Join(dataDir, m.FilePath)
-	}
+	abs, edit := absAndEditURL(dataDir, m.FilePath)
 	return memoryRow{
 		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, FilePath: m.FilePath, Updated: m.Updated, Status: status,
 		ReplacedBy: nameByID[m.SupersededBy], ReplacedByID: m.SupersededBy,
 		Injects: stat.InjectCount, Reads: stat.ReadCount, LastInjected: stat.LastInjectedAt,
-		AbsPath: abs, EditURL: template.URL("vscode://file" + abs),
+		AbsPath: abs, EditURL: edit,
 	}
+}
+
+// absAndEditURL resolves a data-dir-relative file path to its absolute path and a
+// vscode:// editor link. An empty dataDir (or an already-absolute path) leaves
+// the path as given. template.URL bypasses sanitization so the custom scheme
+// survives; the input is a server-controlled file path, never user text.
+func absAndEditURL(dataDir, relPath string) (string, template.URL) {
+	abs := relPath
+	if dataDir != "" && !filepath.IsAbs(abs) {
+		abs = filepath.Join(dataDir, relPath)
+	}
+	return abs, template.URL("vscode://file" + abs)
 }
 
 // buildGroups turns the project->kind->rows map into an ordered slice: global

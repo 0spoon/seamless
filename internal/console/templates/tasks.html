@@ -22,9 +22,9 @@
       <thead><tr><th>Task</th><th>Project</th><th>Deps</th><th>Age</th></tr></thead>
       <tbody>
         {{range .Ready}}
-        <tr>
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
-          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted">{{if .Deps}}{{.Deps}}{{else}}&mdash;{{end}}</td>
           <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
         </tr>
@@ -43,9 +43,9 @@
       <thead><tr><th>Task</th><th>Project</th><th>Age</th></tr></thead>
       <tbody>
         {{range .InProgress}}
-        <tr>
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
-          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
         </tr>
         {{end}}
@@ -63,11 +63,11 @@
       <thead><tr><th>Task</th><th>Project</th><th>Blocked by</th></tr></thead>
       <tbody>
         {{range .Blocked}}
-        <tr>
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
-          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td>
-            {{range .Blockers}}<span class="badge {{if eq .Status "in_progress"}}accent{{else}}warn{{end}}" title="{{.ID}}">{{.Title}}</span> {{end}}
+            {{range .Blockers}}<a href="/console/tasks/{{.ID}}" data-peek class="badge {{if eq .Status "in_progress"}}accent{{else}}warn{{end}}" title="{{.ID}}">{{.Title}}</a> {{end}}
           </td>
         </tr>
         {{end}}
@@ -86,9 +86,9 @@
         <thead><tr><th>Task</th><th>Project</th><th>Status</th><th>Closed</th></tr></thead>
         <tbody>
           {{range .Closed}}
-          <tr>
+          <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
             <td class="muted">{{.Title}}</td>
-            <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+            <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
             <td>{{if eq .Status "done"}}<span class="badge ok">done</span>{{else}}<span class="badge">dropped</span>{{end}}</td>
             <td class="muted">{{if .Closed}}{{ago .Closed}}{{else}}&mdash;{{end}}</td>
           </tr>

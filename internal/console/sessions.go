@@ -140,14 +140,19 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	data := sessionDetail{
+		Session: sess, Findings: sess.Findings, Timeline: timeline,
+		ToolCalls: toolCalls, Reads: reads, Writes: writes,
+		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
+	}
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "session", data)
+		return
+	}
 	s.render(w, r, "session", pageData{
 		Title:  "Session " + shortID(sess.ID),
 		Active: "sessions",
-		Data: sessionDetail{
-			Session: sess, Findings: sess.Findings, Timeline: timeline,
-			ToolCalls: toolCalls, Reads: reads, Writes: writes,
-			Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
-		},
+		Data:   data,
 	})
 }
 

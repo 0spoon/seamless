@@ -591,6 +591,24 @@ func openBlockers(ctx context.Context, db *sql.DB, taskID string) ([]core.Task, 
 	return out, rows.Err()
 }
 
+// TasksBlockedBy returns the tasks that depend on id -- the inverse of a task's
+// DependsOn edges, i.e. the tasks this one blocks. Unlike openBlockers it applies
+// no status filter (closed dependents are included too), oldest-created first. It
+// backs the console task peek's reverse "blocks" section.
+func TasksBlockedBy(ctx context.Context, db *sql.DB, id string) ([]core.Task, error) {
+	if id == "" {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+prefixCols("t", taskCols)+`
+		FROM task_deps d JOIN tasks t ON t.id = d.task_id
+		WHERE d.depends_on = ?
+		ORDER BY t.created_at ASC, t.id ASC`, id)
+	if err != nil {
+		return nil, fmt.Errorf("store.TasksBlockedBy: %w", err)
+	}
+	return scanTasksWithDeps(ctx, db, rows)
+}
+
 // TaskByID returns a task with its dependency ids populated. found is false when
 // absent.
 func TaskByID(ctx context.Context, db *sql.DB, id string) (core.Task, error) {

@@ -19,12 +19,12 @@
   <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span></h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "active"}}
-    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}">
+    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}no findings yet{{end}}</div>
       </div>
-      <span class="proj">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</span>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
       <span class="src">{{.Source}}</span>
       <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
     </div>
@@ -39,12 +39,12 @@
   <h2>Completed{{if eq .Filter ""}} <span class="count">{{sub .Total .Active}}</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "completed"}}
-    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}">
+    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
       </div>
-      <span class="proj">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</span>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
       <span class="src">{{.Source}}</span>
       <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
     </div>

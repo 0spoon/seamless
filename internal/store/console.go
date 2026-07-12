@@ -14,6 +14,7 @@ import (
 type NavCounts struct {
 	Sessions         int // all sessions
 	Memories         int // active memories
+	Notes            int // all notes
 	OpenTasks        int // open or in_progress
 	PendingProposals int // pending gardener proposals
 }
@@ -33,6 +34,9 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 	if err := scalar(&n.Memories, `SELECT COUNT(*) FROM memories_index WHERE invalid_at IS NULL`); err != nil {
 		return n, err
 	}
+	if err := scalar(&n.Notes, `SELECT COUNT(*) FROM notes_index`); err != nil {
+		return n, err
+	}
 	if err := scalar(&n.OpenTasks, `SELECT COUNT(*) FROM tasks WHERE status IN ('open','in_progress')`); err != nil {
 		return n, err
 	}
@@ -40,6 +44,33 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 		return n, err
 	}
 	return n, nil
+}
+
+// ProjectCounts are the per-project totals the console project peek shows. The
+// channels do not overlap in the way coverage does; each is a plain count.
+type ProjectCounts struct {
+	Memories  int `json:"memories"`  // active memories in the project
+	Sessions  int `json:"sessions"`  // sessions scoped to the project
+	OpenTasks int `json:"openTasks"` // open or in_progress tasks
+	Notes     int `json:"notes"`     // notes in the project
+}
+
+// GetProjectCounts computes the per-project roll-up for one slug in a single
+// round trip (scalar subqueries). It backs the console project peek.
+func GetProjectCounts(ctx context.Context, db *sql.DB, slug string) (ProjectCounts, error) {
+	var c ProjectCounts
+	err := db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM memories_index WHERE project = ? AND invalid_at IS NULL),
+			(SELECT COUNT(*) FROM sessions WHERE project_slug = ?),
+			(SELECT COUNT(*) FROM tasks WHERE project_slug = ? AND status IN ('open','in_progress')),
+			(SELECT COUNT(*) FROM notes_index WHERE project = ?)`,
+		slug, slug, slug, slug).
+		Scan(&c.Memories, &c.Sessions, &c.OpenTasks, &c.Notes)
+	if err != nil {
+		return c, fmt.Errorf("store.GetProjectCounts: %w", err)
+	}
+	return c, nil
 }
 
 // KindRetrieval aggregates injection/read counts for one memory kind, backing

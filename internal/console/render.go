@@ -21,9 +21,20 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "sessions", "session", "memories", "retrieval",
+	"login", "overview", "sessions", "session", "memories", "notes", "retrieval",
 	"tasks", "gardener", "settings", "event",
 }
+
+// peekNames are the entity detail templates. Each templates/peek_<name>.html
+// defines a "peek-body" block, parsed twice: as a standalone fragment (executed
+// for ?peek=1 drawer fetches) and -- for the entities without a pre-existing
+// full page -- wrapped in layout+detail for a shareable, no-JS page.
+var peekNames = []string{"memory", "note", "task", "project", "session", "event"}
+
+// detailPageNames are the peek entities that have no pre-existing full page and
+// so get the generic layout+detail wrapper as their default (non-peek) render.
+// session/event are excluded: they already own session.html/event.html.
+var detailPageNames = []string{"memory", "note", "task", "project"}
 
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
@@ -43,6 +54,7 @@ var funcs = template.FuncMap{
 	"sub":           func(a, b int) int { return a - b },
 	"hasPrefix":     strings.HasPrefix,
 	"evtTone":       evtTone,
+	"taskTone":      taskTone,
 	"icon":          icon,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
@@ -70,18 +82,90 @@ func evtTone(kind string) string {
 	}
 }
 
-// parseTemplates parses the layout + every page into its own template set.
-func parseTemplates() (map[string]*template.Template, error) {
-	out := make(map[string]*template.Template, len(pageNames))
+// taskTone maps a task status to a badge tone class (see console.css .badge.*),
+// so status chips read at a glance: done green, in-progress brand, open amber,
+// dropped neutral.
+func taskTone(status string) string {
+	switch status {
+	case "done":
+		return "ok"
+	case "in_progress":
+		return "accent"
+	case "open":
+		return "warn"
+	default: // dropped
+		return ""
+	}
+}
+
+// parseTemplates parses the layout + every page into its own template set, plus
+// the peek entities: a full layout+detail page per detailPageNames entry (keyed
+// "peek-<name>") and a standalone body fragment per peekNames entry.
+func parseTemplates() (pages, fragments map[string]*template.Template, err error) {
+	pages = make(map[string]*template.Template, len(pageNames)+len(detailPageNames))
 	for _, name := range pageNames {
 		t := template.New("layout").Funcs(funcs)
-		t, err := t.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html")
-		if err != nil {
-			return nil, fmt.Errorf("console: parse %s: %w", name, err)
+		t, perr := t.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html")
+		if perr != nil {
+			return nil, nil, fmt.Errorf("console: parse %s: %w", name, perr)
 		}
-		out[name] = t
+		pages[name] = t
 	}
-	return out, nil
+	// Full detail pages: layout + generic detail wrapper + the entity's body.
+	for _, name := range detailPageNames {
+		t := template.New("layout").Funcs(funcs)
+		t, perr := t.ParseFS(templateFS,
+			"templates/layout.html", "templates/detail.html", "templates/peek_"+name+".html")
+		if perr != nil {
+			return nil, nil, fmt.Errorf("console: parse peek page %s: %w", name, perr)
+		}
+		pages["peek-"+name] = t
+	}
+	// Standalone fragments: just the peek body, executed into the drawer.
+	fragments = make(map[string]*template.Template, len(peekNames))
+	for _, name := range peekNames {
+		t := template.New("peek_" + name).Funcs(funcs)
+		t, perr := t.ParseFS(templateFS, "templates/peek_"+name+".html")
+		if perr != nil {
+			return nil, nil, fmt.Errorf("console: parse peek fragment %s: %w", name, perr)
+		}
+		fragments[name] = t
+	}
+	return pages, fragments, nil
+}
+
+// renderFragment writes an entity's peek body -- the "peek-body" block of
+// templates/peek_<name>.html -- as a standalone HTML fragment, for a drawer
+// fetch (?peek=1). data is the entity payload (the fragment's dot).
+func (s *Service) renderFragment(w http.ResponseWriter, r *http.Request, name string, data any) {
+	tmpl, ok := s.fragments[name]
+	if !ok {
+		s.serverError(w, r, fmt.Errorf("console: no peek fragment %q", name))
+		return
+	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "peek-body", data); err != nil {
+		s.serverError(w, r, fmt.Errorf("console: render peek %s: %w", name, err))
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_, _ = buf.WriteTo(w)
+}
+
+// renderDetail serves an entity detail three ways: JSON for the CLI (wantsJSON),
+// an HTML fragment for a drawer fetch (?peek=1), or -- by default -- a full
+// layout-wrapped page (a shareable, no-JS fallback URL). name is the peek entity
+// ("memory", "task", ...); pd.Data is its payload.
+func (s *Service) renderDetail(w http.ResponseWriter, r *http.Request, name string, pd pageData) {
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, pd.Data)
+		return
+	}
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, name, pd.Data)
+		return
+	}
+	s.render(w, r, "peek-"+name, pd)
 }
 
 // render writes a page as HTML, or -- when the caller asked for JSON (the CLI) --

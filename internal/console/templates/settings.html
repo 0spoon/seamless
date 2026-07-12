@@ -43,7 +43,7 @@
       <thead><tr><th>Slug</th><th>Name</th><th>Description</th></tr></thead>
       <tbody>
         {{range .Projects}}
-        <tr><td class="mono">{{.Slug}}</td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
+        <tr><td class="mono"><a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}</a></td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -59,7 +59,7 @@
       <thead><tr><th>Repo path</th><th>Project</th></tr></thead>
       <tbody>
         {{range .RepoMap}}
-        <tr><td class="mono">{{.Repo}}</td><td>{{.Project}}</td></tr>
+        <tr><td class="mono">{{.Repo}}</td><td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -75,7 +75,7 @@
       <thead><tr><th>Family</th><th>Members</th></tr></thead>
       <tbody>
         {{range .Families}}
-        <tr><td>{{.Name}}</td><td>{{range .Members}}<span class="badge">{{.}}</span> {{end}}</td></tr>
+        <tr><td>{{.Name}}</td><td>{{range .Members}}<a href="/console/projects/{{.}}" data-peek class="badge">{{.}}</a> {{end}}</td></tr>
         {{end}}
       </tbody>
     </table>

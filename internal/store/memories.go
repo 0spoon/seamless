@@ -190,3 +190,26 @@ func MemoriesByIDs(ctx context.Context, db *sql.DB, ids []string) (map[string]co
 	}
 	return out, nil
 }
+
+// MemoriesSuperseding returns the memories that the given memory replaced: the
+// index rows whose superseded_by points at id. It is the inverse of a memory's
+// own SupersededBy edge (which the store does not otherwise materialize),
+// newest-updated first, and empty when the memory superseded nothing. It backs
+// the console memory peek's reverse "supersedes" section.
+func MemoriesSuperseding(ctx context.Context, db *sql.DB, id string) ([]core.Memory, error) {
+	if id == "" {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
+		FROM memories_index WHERE superseded_by = ?
+		ORDER BY updated_at DESC, id DESC`, id)
+	if err != nil {
+		return nil, fmt.Errorf("store.MemoriesSuperseding: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	mems, err := scanMemories(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.MemoriesSuperseding: %w", err)
+	}
+	return mems, nil
+}

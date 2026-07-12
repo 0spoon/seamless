@@ -811,3 +811,83 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .prop-row .name { font-weight: 600; }
 .prop-row .desc { flex-basis: 100%; color: var(--muted); font-size: var(--text-xs); margin-top: 2px; }
 .prop-foot { margin-top: 14px; }
+
+/* ===========================================================================
+   PEEK PANEL -- slide-over drawer for entity detail (see layout.html + peek.go)
+   A fixed right drawer that fetches an entity's server-rendered fragment
+   (?peek=1) and injects it, with a back-stack and #peek= deep-link. Non-modal:
+   no backdrop, the list behind stays scrollable. The same fragments render as
+   a centered .peek-page on a full detail URL (the no-JS fallback).
+   =========================================================================== */
+.peek {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100vh;
+  width: min(460px, 92vw);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.peek[hidden] { display: none; }
+.peek:not([hidden]) { animation: peek-in var(--dur-med) var(--ease-out); }
+@keyframes peek-in { from { transform: translateX(16px); opacity: 0.5; } to { transform: translateX(0); opacity: 1; } }
+
+.peek-chrome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.peek-chrome .peek-spacer { flex: 1; }
+.peek-content { flex: 1; overflow-y: auto; padding: 18px; }
+
+/* Full-page variant of the same fragment (shareable URL, no-JS fallback). */
+.peek-page {
+  max-width: 720px;
+  margin: 0 auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 22px 24px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Entity body internals -- shared by drawer and full page. */
+.peek-entity { display: flex; flex-direction: column; gap: 14px; }
+.peek-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.peek-title { font-family: var(--font-display); font-size: var(--text-lg); margin: 0; font-weight: 600; letter-spacing: var(--tracking-tight); word-break: break-word; }
+.peek-desc { color: var(--muted); font-size: var(--text-sm); margin: -6px 0 0; }
+.peek-desc.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
+.peek-note { color: var(--muted); font-style: italic; font-size: var(--text-sm); }
+
+/* Preformatted body: short-form markdown reads fine as pre-wrap; [[links]] are
+   rewritten server-side to data-peek anchors (linkifyBody). */
+.peek-body { white-space: pre-wrap; word-break: break-word; font-size: var(--text-sm); line-height: 1.6; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; max-height: 340px; overflow: auto; }
+.peek-body a[data-peek] { font-weight: 500; }
+
+.peek-kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: var(--text-sm); margin: 0; }
+.peek-kv dt { color: var(--muted); margin: 0; }
+.peek-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; word-break: break-word; }
+.peek-kv dd.mono { font-family: var(--font-mono); font-size: var(--text-2xs); word-break: break-all; }
+.peek-kv .peek-tags { text-align: right; }
+
+.peek-section { display: flex; flex-direction: column; gap: 8px; }
+.peek-section h3 { font-family: var(--font-display); font-size: var(--text-sm); margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.peek-section h3 .count { font-size: var(--text-xs); color: var(--muted); font-weight: 500; }
+.peek-refs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); }
+.peek-refs li { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.peek-refs li a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.peek-actions { display: flex; gap: 14px; align-items: center; padding-top: 12px; border-top: 1px solid var(--border); }
+.peek-actions form { margin: 0; }
+
+@media (max-width: 900px) { .peek { width: 100vw; } }

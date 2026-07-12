@@ -16,8 +16,8 @@
       <dt>ID</dt><dd class="mono">{{.Event.ID}}</dd>
       <dt>When</dt><dd title="{{.Event.When}}">{{ago .Event.When}}</dd>
       <dt>Kind</dt><dd>{{.Event.Kind}}</dd>
-      <dt>Project</dt><dd>{{if .Event.Project}}{{.Event.Project}}{{else}}&mdash;{{end}}</dd>
-      <dt>Session</dt><dd>{{if .Event.SessionID}}<a class="mono" href="/console/sessions/{{.Event.SessionID}}">{{shortID .Event.SessionID}}</a>{{else}}&mdash;{{end}}</dd>
+      <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
+      <dt>Session</dt><dd>{{if .Event.SessionID}}<a class="mono" href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{else}}&mdash;{{end}}</dd>
       <dt>Item</dt><dd class="mono">{{if .Event.ItemID}}{{.Event.ItemID}}{{else}}&mdash;{{end}}</dd>
     </dl>
   </div>
@@ -39,7 +39,7 @@
       <tbody>
         {{range .Items}}
         <tr>
-          <td>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span>{{else}}<a href="/console/memories#{{.ID}}">{{.Name}}</a>{{end}}</td>
+          <td>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{end}}</td>
           <td>{{if .Missing}}<span class="badge warn">removed</span>{{else}}<span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}</td>
           <td class="muted">{{if .Missing}}no longer in the index{{else}}{{.Description}}{{end}}</td>
         </tr>

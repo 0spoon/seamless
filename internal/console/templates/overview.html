@@ -47,11 +47,11 @@
           <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
           <tbody>
             {{range .Recent}}
-            <tr class="row-link" data-href="/console/events/{{.ID}}">
+            <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
               <td class="muted" title="{{.When}}">{{ago .When}}</td>
               <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
-              <td class="muted">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</td>
-              <td>{{.Summary}}</td>
+              <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td>
+              <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}" data-peek>{{shortID .SessionID}}</a>{{end}}</td>
             </tr>
             {{end}}
           </tbody>
@@ -84,7 +84,7 @@
       <h2>Most injected</h2>
       {{if .TopInjected}}
       <div class="rail-list">
-        {{range .TopInjected}}<div class="row"><a href="/console/memories#{{.ID}}">{{.Name}}</a><span class="n">{{.Count}}&times;</span></div>{{end}}
+        {{range .TopInjected}}<div class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="n">{{.Count}}&times;</span></div>{{end}}
       </div>
       {{else}}<div class="empty">No injections recorded</div>{{end}}
     </div>

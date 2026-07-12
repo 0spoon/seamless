@@ -7,7 +7,7 @@
     <div class="sub">
       {{if eq .Session.Status "active"}}<span class="badge ok">active</span>{{else}}<span class="badge">completed</span>{{end}}
       {{if .Session.Ambient}}<span class="badge">ambient</span>{{end}}
-      &middot; {{if .Session.ProjectSlug}}{{.Session.ProjectSlug}}{{else}}global{{end}}
+      &middot; {{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}
     </div>
   </div>
 </div>
@@ -71,7 +71,7 @@
       <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
       <tbody>
         {{range .Timeline}}
-        <tr class="row-link" data-href="/console/events/{{.ID}}">
+        <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
           <td class="muted" title="{{.When}}">{{ago .When}}</td>
           <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
           <td>{{.Summary}}</td>

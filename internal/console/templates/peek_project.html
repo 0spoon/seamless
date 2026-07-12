@@ -1,0 +1,17 @@
+{{define "peek-body"}}
+<article class="peek-entity">
+  <header class="peek-head"><span class="kind">project</span></header>
+  <h2 class="peek-title">{{.Name}}</h2>
+  <p class="peek-desc mono">{{.Slug}}</p>
+  {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
+
+  <dl class="peek-kv">
+    <dt><a href="/console/memories#proj-{{if .Slug}}{{.Slug}}{{else}}global{{end}}">Memories</a></dt><dd>{{.Memories}}</dd>
+    <dt><a href="/console/sessions">Sessions</a></dt><dd>{{.Sessions}}</dd>
+    <dt><a href="/console/tasks">Open tasks</a></dt><dd>{{.OpenTasks}}</dd>
+    <dt><a href="/console/notes">Notes</a></dt><dd>{{.Notes}}</dd>
+    <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
+    <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+  </dl>
+</article>
+{{end}}
