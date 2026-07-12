@@ -106,15 +106,32 @@ tags: [x, y]
 body markdown
 ```
 
-## MCP surface (target: 26 tools)
+## MCP surface (target: 28 tools)
 
 sessions (`session_start/update/end`), memory (`memory_write/append/read/delete`,
 write carries `supersedes`), discovery (`recall` -- the only search tool, RRF-fused),
 notes (`notes_create/read/update/append/delete`), projects (`project_list/create`),
-tasks (`tasks_add/update/ready/list`), research lab (`lab_open`, `trial_record`,
+tasks (`tasks_add/update/ready/list` -- `tasks_list id=<id>` loads a single task
+by its globally-unique id -- plus `tasks_claim`/`tasks_release` for
+atomic lease-based claiming), research lab (`lab_open`, `trial_record`,
 `trial_query`), gardener (`gardener_proposals`, `gardener_apply`), utility
 (`capture_url`, `usage_summary`). Project and session are inherited from the
 session binding; agents in mapped repos rarely pass `project` explicitly.
+
+## Plans as composition
+
+A "plan" is not a primitive -- it is a composition keyed by `plan:<slug>`:
+
+- **Narrative + supporting knowledge**: one primary note, plus any further notes
+  tagged `plan:<slug>`, so the next agent inherits the design and its supporting
+  context. `notes_create` already accepts `tags`.
+- **Steps**: tasks created with `plan:<slug>` (`tasks_add plan=...`). Plan-step
+  tasks are excluded from the default `tasks_ready`/`tasks_list` (no queue
+  pollution) and surfaced with `plan=<slug>`.
+- **Claiming**: `tasks_claim` atomically moves a ready task to `in_progress` with
+  a lease (default 900s); re-claiming refreshes the lease (heartbeat); an expired
+  lease is reclaimable. `tasks_release` (or closing the task, or `session_end`)
+  frees it. The briefing surfaces each active plan as a `PLAN: <slug> -- ...` line.
 
 ## Working here
 

@@ -24,7 +24,7 @@ func TestOpen_FreshDB_PragmasAndMigration(t *testing.T) {
 
 	v, err := SchemaVersion(db)
 	require.NoError(t, err)
-	require.Equal(t, 1, v)
+	require.Equal(t, len(migrationList()), v, "schema version must match the number of migrations")
 
 	for _, tbl := range []string{
 		"projects", "memories_index", "notes_index", "embeddings", "sessions",
@@ -54,7 +54,7 @@ func TestOpen_Idempotent(t *testing.T) {
 
 	var count int
 	require.NoError(t, db2.QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&count))
-	require.Equal(t, 1, count, "reopening must not re-apply the migration")
+	require.Equal(t, len(migrationList()), count, "reopening must not re-apply the migration")
 }
 
 func TestForeignKeys_Enforced(t *testing.T) {

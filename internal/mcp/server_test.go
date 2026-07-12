@@ -254,6 +254,22 @@ func TestTasksReadyQueue(t *testing.T) {
 	list := callJSON(t, ctx, cli, "tasks_list", map[string]any{"status": "open"})
 	require.Len(t, list["tasks"].([]any), 1) // only B is open
 
+	// tasks_list id=<id> loads exactly that task by its globally-unique id,
+	// regardless of status (A is done, not open) and with no scope needed.
+	byID := callJSON(t, ctx, cli, "tasks_list", map[string]any{"id": aID})
+	got := byID["tasks"].([]any)
+	require.Len(t, got, 1)
+	require.Equal(t, aID, got[0].(map[string]any)["id"])
+	require.Equal(t, "done", got[0].(map[string]any)["status"])
+
+	// An unknown id is a not-found error, not an empty list.
+	miss, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "tasks_list", Arguments: map[string]any{"id": "01JZZZZZZZZZZZZZZZZZZZZZZZ"},
+	}})
+	require.NoError(t, err)
+	require.True(t, miss.IsError)
+	require.Contains(t, resultText(t, miss), "not found")
+
 	// The next session's briefing surfaces the ready-tasks line.
 	brief := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
 	require.Contains(t, brief["briefing"], "Ready tasks: 1 -- wire briefing line")

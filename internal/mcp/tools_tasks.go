@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -12,6 +13,10 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
+// defaultClaimLease is how long a task claim holds before it lapses and the task
+// becomes reclaimable, unless the caller overrides it via lease_seconds.
+const defaultClaimLease = 15 * time.Minute
+
 func tasksAddTool() mcp.Tool {
 	return mcp.NewTool("tasks_add",
 		mcp.WithDescription("Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker."),
@@ -19,6 +24,7 @@ func tasksAddTool() mcp.Tool {
 		mcp.WithString("body", mcp.Description("optional details / acceptance criteria (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global task. With no session and no explicit project the add is rejected as ambiguous.")),
 		mcp.WithString("depends_on", mcp.Description("comma-separated task ids this task is blocked by")),
+		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter.")),
 	)
 }
 
@@ -39,6 +45,7 @@ func (s *Server) handleTasksAdd(ctx context.Context, req mcp.CallToolRequest) (*
 	task := core.Task{
 		ID: id, ProjectSlug: project, Title: title, Body: argBody(req),
 		Status: core.TaskOpen, CreatedBy: s.boundSessionName(ctx),
+		PlanSlug:  argString(req, "plan"),
 		DependsOn: parseCommaList(argString(req, "depends_on")),
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -101,8 +108,9 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 
 func tasksReadyTool() mcp.Tool {
 	return mcp.NewTool("tasks_ready",
-		mcp.WithDescription("List the actionable (ready) tasks for a project -- open tasks with no unfinished blocker -- oldest first, plus the blocked tasks with their still-open blockers."),
+		mcp.WithDescription("List the actionable (ready) tasks for a project -- open tasks with no unfinished blocker -- oldest first, plus the blocked tasks with their still-open blockers. By default plan-step tasks are excluded; pass plan=<slug> to list that plan's steps instead."),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("plan", mcp.Description("optional plan slug: return that plan's ready/blocked step tasks instead of the default (non-plan) queue")),
 	)
 }
 
@@ -111,11 +119,22 @@ func (s *Server) handleTasksReady(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return errResult("tasks_ready", err)
 	}
-	ready, err := store.ReadyTasks(ctx, s.cfg.DB, project)
-	if err != nil {
-		return errResult("tasks_ready", err)
+	plan := argString(req, "plan")
+	var ready []core.Task
+	var blocked []store.BlockedTask
+	if plan != "" {
+		ready, err = store.ReadyTasksForPlan(ctx, s.cfg.DB, project, plan)
+		if err != nil {
+			return errResult("tasks_ready", err)
+		}
+		blocked, err = store.BlockedTasksForPlan(ctx, s.cfg.DB, project, plan)
+	} else {
+		ready, err = store.ReadyTasks(ctx, s.cfg.DB, project)
+		if err != nil {
+			return errResult("tasks_ready", err)
+		}
+		blocked, err = store.BlockedTasks(ctx, s.cfg.DB, project)
 	}
-	blocked, err := store.BlockedTasks(ctx, s.cfg.DB, project)
 	if err != nil {
 		return errResult("tasks_ready", err)
 	}
@@ -138,13 +157,27 @@ func (s *Server) handleTasksReady(ctx context.Context, req mcp.CallToolRequest) 
 
 func tasksListTool() mcp.Tool {
 	return mcp.NewTool("tasks_list",
-		mcp.WithDescription("List a project's tasks, optionally filtered by status, newest first."),
+		mcp.WithDescription("List a project's tasks, optionally filtered by status, newest first. By default plan-step tasks are excluded; pass plan=<slug> to list that plan's steps instead. Pass id=<task id> to load a single task by its globally-unique id (a direct lookup that ignores project/status/plan and needs no session scope)."),
+		mcp.WithString("id", mcp.Description("load exactly one task by its globally-unique id; when set, project/status/plan are ignored and the response's tasks array holds just that task")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("optional status filter")),
+		mcp.WithString("plan", mcp.Description("optional plan slug: list that plan's step tasks instead of the default (non-plan) tasks")),
 	)
 }
 
 func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// id is a globally-unique ULID, so a by-id load is a direct lookup that needs
+	// no project scope -- an agent can load a task it only knows the id of.
+	if id := argString(req, "id"); id != "" {
+		task, err := store.TaskByID(ctx, s.cfg.DB, id)
+		if err != nil {
+			return errResult("tasks_list", err)
+		}
+		return jsonResult(map[string]any{
+			"project": task.ProjectSlug,
+			"tasks":   []map[string]any{taskJSON(task)},
+		})
+	}
 	project, err := s.resolveReadScope(ctx, argString(req, "project"))
 	if err != nil {
 		return errResult("tasks_list", err)
@@ -156,7 +189,12 @@ func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (
 			return errResult("tasks_list", fmt.Errorf("invalid status %q", st))
 		}
 	}
-	tasks, err := store.ListTasks(ctx, s.cfg.DB, project, status)
+	var tasks []core.Task
+	if plan := argString(req, "plan"); plan != "" {
+		tasks, err = store.ListTasksForPlan(ctx, s.cfg.DB, project, status, plan)
+	} else {
+		tasks, err = store.ListTasks(ctx, s.cfg.DB, project, status)
+	}
 	if err != nil {
 		return errResult("tasks_list", err)
 	}
@@ -167,6 +205,69 @@ func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (
 	return jsonResult(map[string]any{"project": project, "tasks": out})
 }
 
+func tasksClaimTool() mcp.Tool {
+	return mcp.NewTool("tasks_claim",
+		mcp.WithDescription("Atomically claim a task for the current session, moving it to in_progress with a lease. Fails if another live claim already holds it. Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("task id to claim")),
+		mcp.WithString("lease_seconds", mcp.Description("lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900)")),
+	)
+}
+
+func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := argString(req, "id")
+	if id == "" {
+		return errResult("tasks_claim", errors.New("id is required"))
+	}
+	sessionID := s.boundSession(ctx)
+	if sessionID == "" {
+		return errResult("tasks_claim", errors.New("no active session to claim as; start a session first"))
+	}
+	lease := defaultClaimLease
+	if v := argString(req, "lease_seconds"); v != "" {
+		secs, err := strconv.Atoi(v)
+		if err != nil || secs <= 0 {
+			return errResult("tasks_claim", fmt.Errorf("invalid lease_seconds %q", v))
+		}
+		lease = time.Duration(secs) * time.Second
+	}
+	res, err := store.ClaimTask(ctx, s.cfg.DB, id, sessionID, lease, time.Now().UTC())
+	if err != nil {
+		return errResult("tasks_claim", err)
+	}
+	payload := map[string]any{"to": string(res.Task.Status), "claimed_by": sessionID}
+	if res.Reclaimed {
+		payload["reclaimed"] = true
+		payload["prior_holder"] = res.PriorHolder
+	}
+	s.record(ctx, core.EventTaskTransition, sessionID, res.Task.ProjectSlug, id, payload)
+	return jsonResult(taskJSON(res.Task))
+}
+
+func tasksReleaseTool() mcp.Tool {
+	return mcp.NewTool("tasks_release",
+		mcp.WithDescription("Release a task the current session holds, reopening it (status back to open, claim cleared) so another agent can claim it. Only the current holder may release."),
+		mcp.WithString("id", mcp.Required(), mcp.Description("task id to release")),
+	)
+}
+
+func (s *Server) handleTasksRelease(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id := argString(req, "id")
+	if id == "" {
+		return errResult("tasks_release", errors.New("id is required"))
+	}
+	sessionID := s.boundSession(ctx)
+	if sessionID == "" {
+		return errResult("tasks_release", errors.New("no active session; nothing to release"))
+	}
+	released, err := store.ReleaseTask(ctx, s.cfg.DB, id, sessionID, time.Now().UTC())
+	if err != nil {
+		return errResult("tasks_release", err)
+	}
+	s.record(ctx, core.EventTaskTransition, sessionID, released.ProjectSlug, id,
+		map[string]any{"to": string(released.Status), "released": true})
+	return jsonResult(taskJSON(released))
+}
+
 // taskJSON renders a task for a tool response.
 func taskJSON(t core.Task) map[string]any {
 	j := map[string]any{
@@ -175,6 +276,15 @@ func taskJSON(t core.Task) map[string]any {
 	}
 	if t.Body != "" {
 		j["body"] = t.Body
+	}
+	if t.PlanSlug != "" {
+		j["plan"] = t.PlanSlug
+	}
+	if t.ClaimedBy != "" {
+		j["claimed_by"] = t.ClaimedBy
+	}
+	if t.LeaseExpiresAt != nil {
+		j["lease_expires_at"] = core.FormatTime(*t.LeaseExpiresAt)
 	}
 	if len(t.DependsOn) > 0 {
 		j["depends_on"] = t.DependsOn

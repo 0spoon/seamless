@@ -63,14 +63,18 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
+	plans, err := store.ActivePlans(ctx, s.db, project)
+	if err != nil {
+		return "", nil, err
+	}
 	stages := s.pinnedStages(stageMems)
 	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
-		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 {
+		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 && len(plans) == 0 {
 		return "", nil, nil
 	}
 	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
 		constraints: constraints, index: index, findings: findings,
-		ready: ready, siblings: siblings, stages: stages,
+		ready: ready, siblings: siblings, stages: stages, plans: plans,
 	})
 	return text, ids, nil
 }
@@ -116,8 +120,9 @@ type briefingSections struct {
 	index       []core.Memory
 	findings    []core.Session
 	ready       []core.Task
-	siblings    []core.Session // recent findings from family-member projects
-	stages      []stageLine    // non-done stage memories, pinned after constraints
+	siblings    []core.Session     // recent findings from family-member projects
+	stages      []stageLine        // non-done stage memories, pinned after constraints
+	plans       []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
 }
 
 // assembleBriefing packs the sections against the token budget. Constraints, the
@@ -155,6 +160,9 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	for _, st := range sec.stages {
 		ids = append(ids, st.id)
 	}
+	// Active-plan rollups follow stages, also pinned: a plan's claimable/in-flight
+	// counts tell the next agent what work is available to pick up right now.
+	head.WriteString(planHead(sec.plans))
 
 	var tail strings.Builder
 	tail.WriteString("Recall on demand with recall; read a memory with memory_read.\n")
@@ -227,6 +235,23 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	}
 
 	return hardTruncate(head.String()+body.String()+tail.String(), hardCap), ids
+}
+
+// planHead renders one pinned line per active plan
+// ("PLAN: <slug> -- X/Y done, Z claimable, W in flight"), or "" when there are
+// none. A trailing reminder of the plan:<slug> convention is appended once so
+// agents discover how to attach step tasks and supporting notes to a plan.
+func planHead(plans []store.PlanRollup) string {
+	if len(plans) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, p := range plans {
+		fmt.Fprintf(&b, "PLAN: %s -- %d/%d done, %d claimable, %d in flight\n",
+			sanitizeField(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
+	}
+	b.WriteString("(claim a step with tasks_claim; attach notes/tasks to a plan with the plan:<slug> convention)\n")
+	return b.String()
 }
 
 // readyTasksLine renders the briefing's ready-queue line ("Ready tasks: N -- t1;

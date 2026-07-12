@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -82,6 +83,7 @@ func runReady(args []string) error {
 	fs := flag.NewFlagSet("ready", flag.ContinueOnError)
 	project := fs.String("project", "", "project slug (defaults to server binding)")
 	showBlocked := fs.Bool("blocked", false, "also list blocked tasks and their blockers")
+	plan := fs.String("plan", "", "show a plan's ready/blocked step tasks instead of the default queue")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -92,7 +94,7 @@ func runReady(args []string) error {
 	}
 	defer func() { _ = cli.Close() }()
 
-	out, err := callTool(ctx, cli, "tasks_ready", map[string]any{"project": *project})
+	out, err := callTool(ctx, cli, "tasks_ready", map[string]any{"project": *project, "plan": *plan})
 	if err != nil {
 		return err
 	}
@@ -139,15 +141,21 @@ func runTask(args []string) error {
 		return runTaskAdd(rest)
 	case "done", "start", "drop", "reopen":
 		return runTaskTransition(sub, rest)
+	case "claim", "heartbeat":
+		return runTaskClaim(sub, rest)
+	case "release":
+		return runTaskRelease(rest)
 	default:
-		return fmt.Errorf("unknown task subcommand %q (use: list, add, done, start, drop, reopen)", sub)
+		return fmt.Errorf("unknown task subcommand %q (use: list, add, done, start, drop, reopen, claim, heartbeat, release)", sub)
 	}
 }
 
 func runTaskList(args []string) error {
 	fs := flag.NewFlagSet("task list", flag.ContinueOnError)
+	id := fs.String("id", "", "load a single task by its globally-unique id (ignores project/status/plan)")
 	project := fs.String("project", "", "project slug")
 	status := fs.String("status", "", "filter: open|in_progress|done|dropped")
+	plan := fs.String("plan", "", "list a plan's step tasks instead of the default (non-plan) tasks")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -157,7 +165,7 @@ func runTaskList(args []string) error {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "tasks_list", map[string]any{"project": *project, "status": *status})
+	out, err := callTool(ctx, cli, "tasks_list", map[string]any{"id": *id, "project": *project, "status": *status, "plan": *plan})
 	if err != nil {
 		return err
 	}
@@ -179,6 +187,7 @@ func runTaskAdd(args []string) error {
 	body := fs.String("body", "", "optional details")
 	project := fs.String("project", "", "project slug")
 	depends := fs.String("depends", "", "comma-separated blocker task ids")
+	plan := fs.String("plan", "", "plan slug: compose this task as a step of a plan (plan:<slug>)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -192,7 +201,7 @@ func runTaskAdd(args []string) error {
 	}
 	defer func() { _ = cli.Close() }()
 	out, err := callTool(ctx, cli, "tasks_add", map[string]any{
-		"title": *title, "body": *body, "project": *project, "depends_on": *depends,
+		"title": *title, "body": *body, "project": *project, "depends_on": *depends, "plan": *plan,
 	})
 	if err != nil {
 		return err
@@ -218,6 +227,55 @@ func runTaskTransition(sub string, args []string) error {
 		return err
 	}
 	fmt.Printf("task %s -> %s\n", shortID(id), str(out["status"]))
+	return nil
+}
+
+// runTaskClaim backs both `task claim` and `task heartbeat`: both call tasks_claim,
+// which claims a ready task or, when the caller already holds it, refreshes the lease.
+func runTaskClaim(sub string, args []string) error {
+	fs := flag.NewFlagSet("task "+sub, flag.ContinueOnError)
+	lease := fs.Int("lease", 0, "lease seconds before the claim lapses (default: server default of 900)")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() == 0 {
+		return fmt.Errorf("usage: seam task %s <id> [--lease <seconds>]", sub)
+	}
+	id := fs.Arg(0)
+	ctx := context.Background()
+	cli, _, err := dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = cli.Close() }()
+	call := map[string]any{"id": id}
+	if *lease > 0 {
+		call["lease_seconds"] = strconv.Itoa(*lease)
+	}
+	out, err := callTool(ctx, cli, "tasks_claim", call)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("task %s %s -> %s (lease until %s)\n", shortID(id), sub, str(out["status"]), str(out["lease_expires_at"]))
+	return nil
+}
+
+func runTaskRelease(args []string) error {
+	if len(args) == 0 {
+		return fmt.Errorf("usage: seam task release <id>")
+	}
+	id := args[0]
+	ctx := context.Background()
+	cli, _, err := dial(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = cli.Close() }()
+	out, err := callTool(ctx, cli, "tasks_release", map[string]any{"id": id})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("task %s released -> %s\n", shortID(id), str(out["status"]))
 	return nil
 }
 
@@ -339,7 +397,7 @@ func sessionDetail(cfg config.Config, id string) error {
 // expectedTools mirrors mcp.ToolCount without importing the mcp server package
 // into the CLI (which would pull its whole dependency tree). doctor asserts the
 // running server exposes this many tools via tools/list.
-const expectedTools = 26
+const expectedTools = 28
 
 func runDoctor(args []string) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)

@@ -78,10 +78,13 @@ agent loop:
   seam capture URL [--project P]               capture a web page as a note
 
 tasks:
-  seam ready [--project P] [--blocked]         actionable queue (+ blocked tasks)
-  seam task list [--project P] [--status S]    list tasks
-  seam task add --title T [--body B] [--project P] [--depends id,id]
+  seam ready [--project P] [--blocked] [--plan S]   actionable queue (+ blocked tasks)
+  seam task list [--project P] [--status S] [--plan S]   list tasks (--plan lists a plan's steps)
+  seam task add --title T [--body B] [--project P] [--depends id,id] [--plan S]
   seam task done|start|drop|reopen <id>        transition a task
+  seam task claim <id> [--lease SECS]          atomically claim a task (lease-based)
+  seam task heartbeat <id> [--lease SECS]      refresh the lease on a task you hold
+  seam task release <id>                       release a task you hold (reopens it)
 
 observability:
   seam status                                  server health + project count
