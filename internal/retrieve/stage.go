@@ -20,6 +20,7 @@ func (s *Service) SetBodyReader(r MemoryBodyReader) { s.bodyReader = r }
 
 // stageLine is one pinned stage rendered in the briefing.
 type stageLine struct {
+	id     string // memory ULID, for retrieval instrumentation
 	name   string
 	status string
 	gate   string
@@ -88,7 +89,7 @@ func (s *Service) pinnedStages(stages []core.Memory) []stageLine {
 		if status == "done" {
 			continue // completed stages are not pinned
 		}
-		out = append(out, stageLine{name: m.Name, status: status, gate: gate})
+		out = append(out, stageLine{id: m.ID, name: m.Name, status: status, gate: gate})
 	}
 	return out
 }

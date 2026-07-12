@@ -59,14 +59,19 @@ func TestBriefingPinsStages(t *testing.T) {
 	svc := New(db, nil, budgets(), nil)
 	svc.SetBodyReader(reader)
 
-	b, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
+	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
 	require.Contains(t, b, "STAGE: f5-ssh-signing -- in_progress, gate human")
 	require.NotContains(t, b, "f6-old", "done stages are not pinned")
+	// The pinned stage's id is injected; the done (unpinned) stage's id is not.
+	require.Subset(t, ids, []string{"01A", "01S1"})
+	require.NotContains(t, ids, "01S2")
 
 	// Without a body reader, the stage section is omitted (degrades cleanly).
 	plain := New(db, nil, budgets(), nil)
-	b2, err := plain.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
+	b2, ids2, err := plain.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
 	require.NotContains(t, b2, "STAGE:")
+	require.Contains(t, ids2, "01A")     // constraint still injected
+	require.NotContains(t, ids2, "01S1") // no stage section => no stage ids
 }

@@ -91,7 +91,7 @@ func additionalContext(t *testing.T, out map[string]any) string {
 }
 
 func TestSessionStartHook(t *testing.T) {
-	ts, _ := newHandlerServer(t)
+	ts, db := newHandlerServer(t)
 	url := ts.URL + "/api/hooks/session-start"
 
 	// Bad key -> 401.
@@ -111,6 +111,21 @@ func TestSessionStartHook(t *testing.T) {
 	ac = additionalContext(t, out)
 	require.Contains(t, ac, "CONSTRAINT: no-force-push")
 	require.NotContains(t, ac, "chroma-boot-race")
+
+	// End to end: the auto-briefing recorded item_ids, so rebuilding the funnel
+	// credits each surfaced memory. The full briefing and the subagent briefing
+	// both surface the constraint (01A); only the full one surfaces the gotcha
+	// (01B).
+	ctx := context.Background()
+	require.NoError(t, store.RebuildRetrievalStats(ctx, db))
+	constraintStat, ok, err := store.GetRetrievalStat(ctx, db, "01A")
+	require.NoError(t, err)
+	require.True(t, ok, "constraint surfaced by the briefing should have a stats row")
+	require.Equal(t, 2, constraintStat.InjectCount)
+	gotchaStat, ok, err := store.GetRetrievalStat(ctx, db, "01B")
+	require.NoError(t, err)
+	require.True(t, ok, "gotcha surfaced by the briefing should have a stats row")
+	require.Equal(t, 1, gotchaStat.InjectCount)
 }
 
 func TestUserPromptSubmitHook(t *testing.T) {

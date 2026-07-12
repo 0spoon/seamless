@@ -20,15 +20,18 @@ type BriefingInput struct {
 // included), a newest-first memory index, and recent sibling findings, budgeted
 // by estimated tokens and wrapped in <seam-briefing> tags. It returns "" when
 // there is nothing worth injecting (unmapped cwd with no global memories), which
-// the hook forwards as an empty additionalContext.
-func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error) {
+// the hook forwards as an empty additionalContext. The second return value is the
+// ids of the memories actually rendered (after budget dropping), so the caller
+// can record them as a retrieval.injected event and feed the read-after-inject
+// funnel -- the same telemetry the recall tool emits.
+func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []string, error) {
 	project, err := store.ResolveProjectForCWD(ctx, s.db, in.CWD)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	mems, err := store.ActiveMemories(ctx, s.db, project)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	var constraints, index, stageMems []core.Memory
 	for _, m := range mems {
@@ -44,30 +47,32 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, error
 
 	// Subagents get constraints only (they inherit the parent's task context).
 	if in.AgentType != "" {
-		return s.assembleSubagent(project, constraints), nil
+		text, ids := s.assembleSubagent(project, constraints)
+		return text, ids, nil
 	}
 
 	findings, err := store.RecentFindings(ctx, s.db, project, 3)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	ready, err := store.ReadyTasks(ctx, s.db, project)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	siblings, err := s.siblingFindings(ctx, project)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	stages := s.pinnedStages(stageMems)
 	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
 		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 {
-		return "", nil
+		return "", nil, nil
 	}
-	return s.assembleBriefing(project, in.Source, briefingSections{
+	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
 		constraints: constraints, index: index, findings: findings,
 		ready: ready, siblings: siblings, stages: stages,
-	}), nil
+	})
+	return text, ids, nil
 }
 
 // siblingFindings gathers up to two recent findings from a project's family
@@ -119,8 +124,12 @@ type briefingSections struct {
 // header, and the trailer are counted first and never dropped; the memory index,
 // sibling findings, and findings are packed against the soft budget, then the
 // whole is hard-capped. Section order: constraints > memory index > sibling
-// findings > recent findings > ready tasks.
-func (s *Service) assembleBriefing(project, source string, sec briefingSections) string {
+// findings > recent findings > ready tasks. The second return value is the ids of
+// the memories actually rendered (constraints, pinned stages, and the index lines
+// that survived budgeting) -- for retrieval instrumentation. Findings, siblings,
+// and ready tasks are sessions/tasks, not memory_read-able memories, so they are
+// omitted from the funnel.
+func (s *Service) assembleBriefing(project, source string, sec briefingSections) (string, []string) {
 	constraints, index := sec.constraints, sec.index
 	findings, ready := sec.findings, sec.ready
 	label := projectLabel(project)
@@ -130,16 +139,22 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	}
 	hardCap := budget * 2
 
+	ids := make([]string, 0, len(constraints)+len(sec.stages)+len(index))
+
 	var head strings.Builder
 	head.WriteString("<seam-briefing>\n")
 	fmt.Fprintf(&head, "Seam project: %s -- %d constraints, %d memories, %d recent findings.\n",
 		sanitizeField(label, 80), len(constraints), len(index), len(findings))
 	for _, c := range constraints {
 		head.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		ids = append(ids, c.ID)
 	}
 	// Pinned stages sit right after constraints and, like them, are never dropped
 	// for budget -- a gated stage's status is load-bearing for the whole session.
 	head.WriteString(stageHead(sec.stages))
+	for _, st := range sec.stages {
+		ids = append(ids, st.id)
+	}
 
 	var tail strings.Builder
 	tail.WriteString("Recall on demand with recall; read a memory with memory_read.\n")
@@ -164,6 +179,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 			}
 			body.WriteString(line)
 			used += estTokens(line)
+			ids = append(ids, m.ID)
 		}
 		if dropped > 0 {
 			extra := fmt.Sprintf("- (+%d older -- use recall)\n", dropped)
@@ -210,7 +226,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 		body.WriteString(line)
 	}
 
-	return hardTruncate(head.String()+body.String()+tail.String(), hardCap)
+	return hardTruncate(head.String()+body.String()+tail.String(), hardCap), ids
 }
 
 // readyTasksLine renders the briefing's ready-queue line ("Ready tasks: N -- t1;
@@ -231,20 +247,23 @@ func readyTasksLine(ready []core.Task) string {
 }
 
 // assembleSubagent renders a constraints-only briefing for a subagent, or "" if
-// there are no constraints in scope.
-func (s *Service) assembleSubagent(project string, constraints []core.Memory) string {
+// there are no constraints in scope. The second return value is the ids of the
+// rendered constraints, for retrieval instrumentation.
+func (s *Service) assembleSubagent(project string, constraints []core.Memory) (string, []string) {
 	if len(constraints) == 0 {
-		return ""
+		return "", nil
 	}
 	label := projectLabel(project)
+	ids := make([]string, 0, len(constraints))
 	var b strings.Builder
 	b.WriteString("<seam-briefing>\n")
 	fmt.Fprintf(&b, "Seam project: %s -- %d constraints (subagent scope).\n", sanitizeField(label, 80), len(constraints))
 	for _, c := range constraints {
 		b.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		ids = append(ids, c.ID)
 	}
 	b.WriteString("</seam-briefing>")
-	return b.String()
+	return b.String(), ids
 }
 
 // hardTruncate caps s at hardCapTokens estimated tokens while preserving the

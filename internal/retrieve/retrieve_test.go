@@ -63,7 +63,7 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 
 	svc := New(db, nil, budgets(), nil)
 
-	b, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam/internal", Source: "startup"})
+	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam/internal", Source: "startup"})
 	require.NoError(t, err)
 	require.Contains(t, b, "<seam-briefing>")
 	require.Contains(t, b, "</seam-briefing>")
@@ -74,20 +74,27 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	require.Contains(t, b, "the readiness gate fixed the boot race")
 	// Injection phrase scrubbed from the poisoned memory's description.
 	require.NotContains(t, b, "ignore all previous instructions")
+	// Every rendered memory is reported for the retrieval funnel; the session
+	// finding (01S) is not a memory, so it is not.
+	require.Subset(t, ids, []string{"01A", "01B", "01C", "01D"})
+	require.NotContains(t, ids, "01S")
 
 	// Subagent briefing is constraints-only.
-	sb, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", AgentType: "Explore"})
+	sb, sbIDs, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", AgentType: "Explore"})
 	require.NoError(t, err)
 	require.Contains(t, sb, "CONSTRAINT: no-force-push")
 	require.NotContains(t, sb, "chroma-boot-race")
 	require.NotContains(t, sb, "Recent findings")
+	require.Equal(t, []string{"01A"}, sbIDs) // only the constraint is injected
 
 	// Unmapped cwd with no global-only content still resolves globals; here it
 	// should surface the one global memory and no project constraints.
-	gb, err := svc.Briefing(ctx, BriefingInput{CWD: "/somewhere/else", Source: "startup"})
+	gb, gbIDs, err := svc.Briefing(ctx, BriefingInput{CWD: "/somewhere/else", Source: "startup"})
 	require.NoError(t, err)
 	require.Contains(t, gb, "global-fact")
 	require.NotContains(t, gb, "no-force-push")
+	require.Contains(t, gbIDs, "01C")
+	require.NotContains(t, gbIDs, "01A")
 }
 
 func TestBriefingSiblingProjects(t *testing.T) {
@@ -112,11 +119,12 @@ func TestBriefingSiblingProjects(t *testing.T) {
 	mk("01S2", "cc/bb", "web", "web redesign landed", 1)
 
 	svc := New(db, nil, budgets(), nil)
-	b, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/app", Source: "startup"})
+	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/app", Source: "startup"})
 	require.NoError(t, err)
 	require.Contains(t, b, "## Sibling projects")
 	require.Contains(t, b, "backend migration shipped", "sibling family finding surfaces")
 	require.NotContains(t, b, "web redesign landed", "non-family project finding excluded")
+	require.Contains(t, ids, "01A") // the constraint memory, not the sibling findings
 }
 
 func TestBriefingBudgetDropsTail(t *testing.T) {
@@ -130,11 +138,16 @@ func TestBriefingBudgetDropsTail(t *testing.T) {
 	}
 
 	svc := New(db, nil, config.Budgets{MaxBriefingTokens: 200, RecallBudgetTokens: 1000}, nil)
-	b, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
+	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Contains(t, b, "CONSTRAINT: keep-me") // constraints never dropped
 	require.Contains(t, b, "older -- use recall") // tail was truncated
 	require.True(t, strings.HasSuffix(b, "</seam-briefing>"))
+	// The dropped tail is not counted as injected: reported ids match exactly the
+	// constraint plus the index lines that survived budgeting.
+	require.Contains(t, ids, "C1")
+	require.Equal(t, 1+strings.Count(b, "- memo-"), len(ids))
+	require.Less(t, len(ids), 201)
 }
 
 func TestPromptRecall(t *testing.T) {
@@ -147,14 +160,16 @@ func TestPromptRecall(t *testing.T) {
 
 	svc := New(db, nil, budgets(), nil)
 
-	out, err := svc.PromptRecall(ctx, "/w", "why does the chroma container fail its health check")
+	out, ids, err := svc.PromptRecall(ctx, "/w", "why does the chroma container fail its health check")
 	require.NoError(t, err)
 	require.Contains(t, out, "<seam-recall>")
 	require.Contains(t, out, "chroma-boot-race")
+	require.Contains(t, ids, "01A") // the surfaced memory's id, for the funnel
 
-	none, err := svc.PromptRecall(ctx, "/w", "what is the weather in paris")
+	none, noneIDs, err := svc.PromptRecall(ctx, "/w", "what is the weather in paris")
 	require.NoError(t, err)
 	require.Empty(t, none)
+	require.Empty(t, noneIDs)
 }
 
 func TestRecallFTSFusionAndScope(t *testing.T) {
