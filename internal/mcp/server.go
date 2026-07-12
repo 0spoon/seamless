@@ -39,13 +39,34 @@ const (
 	// usage_summary = 26.
 	ToolCount = 26
 
-	// maxFindingsRunes caps session_end findings, matching the memory budget.
-	maxFindingsRunes = 1500
+	// globalNamespace is the reserved project token an agent passes to
+	// deliberately target the global (cross-project) scope, instead of relying on
+	// an empty project (which is easy to hit by accident). "_global" -- the
+	// on-disk directory name -- is accepted as a synonym.
+	globalNamespace = "global"
 )
 
 // errNoSession is returned when a session-scoped tool is called with neither a
 // bound session nor an explicit one.
 var errNoSession = errors.New("no active session: call session_start first, or pass a session name")
+
+// errAmbiguousScope is returned by resolveWriteScope when a durable create has no
+// explicit project, no bound session, and no ambient session to inherit from --
+// so the write would silently land in the global scope. The agent must choose.
+var errAmbiguousScope = errors.New(
+	"ambiguous scope: no bound or ambient session to infer the project from; " +
+		"pass project=<slug> for a project item, or project=global for a global one")
+
+// normalizeProject maps the reserved global tokens to the internal empty-string
+// global scope, and leaves every other slug untouched.
+func normalizeProject(explicit string) string {
+	switch explicit {
+	case globalNamespace, "_global":
+		return ""
+	default:
+		return explicit
+	}
+}
 
 // Config wires the MCP server's dependencies.
 type Config struct {
@@ -56,6 +77,7 @@ type Config struct {
 	Gardener *gardener.Service // may be nil (gardener_apply is then unavailable)
 	Embedder llm.Embedder      // may be nil (memory_write dedup hint is then skipped)
 	APIKey   string
+	Version  string // build version advertised in the MCP handshake; defaults to serverVersion
 	Logger   *slog.Logger
 }
 
@@ -94,6 +116,10 @@ func New(cfg Config) *Server {
 	if logger == nil {
 		logger = slog.Default()
 	}
+	version := cfg.Version
+	if version == "" {
+		version = serverVersion
+	}
 	s := &Server{
 		cfg:      cfg,
 		logger:   logger,
@@ -101,7 +127,7 @@ func New(cfg Config) *Server {
 		bindings: make(map[string]binding),
 	}
 	s.mcp = mcpserver.NewMCPServer(
-		serverName, serverVersion,
+		serverName, version,
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
@@ -231,12 +257,14 @@ func (s *Server) getBinding(ctx context.Context) (binding, bool) {
 // long-running session that has gone quiet.
 const ambientFallbackWindow = 6 * time.Hour
 
-// resolveProject prefers an explicit project argument, then the bound session's
-// project, then the most recent ambient session's project (write-scope
-// fallback), then the global scope.
+// resolveProject prefers an explicit project argument (with the global token
+// normalized), then the bound session's project, then the most recent ambient
+// session's project (write-scope fallback), then the global scope. It never
+// errors: reads and searches quietly fall back to global. Durable creates use
+// resolveWriteScope instead, which rejects that ambiguity.
 func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	if explicit != "" {
-		return explicit
+		return normalizeProject(explicit)
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project
@@ -245,6 +273,24 @@ func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 		return sess.ProjectSlug
 	}
 	return ""
+}
+
+// resolveWriteScope is resolveProject for durable creates (memory/note/task): it
+// returns the same project, but errors with errAmbiguousScope instead of
+// silently defaulting to global when nothing pins the scope. An explicit project
+// -- including project=global -- is always unambiguous, as is any bound or
+// ambient session (even a deliberately global one).
+func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string, error) {
+	if explicit != "" {
+		return normalizeProject(explicit), nil
+	}
+	if b, ok := s.getBinding(ctx); ok {
+		return b.project, nil
+	}
+	if sess, ok := s.ambientFallback(ctx); ok {
+		return sess.ProjectSlug, nil
+	}
+	return "", errAmbiguousScope
 }
 
 // setBindingLab records the current research lab on the connection's binding, so

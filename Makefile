@@ -5,6 +5,13 @@ BIN_DIR := bin
 PKG     := ./...
 GO      ?= go
 
+# Build metadata linked into the daemon (surfaced in /healthz, the MCP handshake,
+# and the startup log so a stale running daemon is visible). A plain `go build`
+# leaves these "unknown"; only `make build` stamps them.
+COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+BUILDDATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+LDFLAGS   := -X main.commit=$(COMMIT) -X main.buildDate=$(BUILDDATE)
+
 # launchd service (macOS user LaunchAgent)
 UID           := $(shell id -u)
 SVC_LABEL     := org.thereisnospoon.seamless
@@ -53,8 +60,8 @@ help:
 	@echo "  clean      remove build artifacts"
 
 build:
-	$(GO) build -o $(BIN_DIR)/$(BINARY) ./cmd/seamlessd
-	$(GO) build -o $(BIN_DIR)/$(CLI) ./cmd/seam
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(BINARY) ./cmd/seamlessd
+	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/$(CLI) ./cmd/seam
 
 test:
 	$(GO) test $(PKG)

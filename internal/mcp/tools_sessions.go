@@ -3,10 +3,8 @@ package mcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -112,7 +110,7 @@ func (s *Server) handleSessionUpdate(ctx context.Context, req mcp.CallToolReques
 func sessionEndTool() mcp.Tool {
 	return mcp.NewTool("session_end",
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
-		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings (<=1500 chars): what was learned, decided, or left open")),
+		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
 		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
 	)
 }
@@ -121,9 +119,6 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	findings := argString(req, "findings")
 	if findings == "" {
 		return errResult("session_end", errors.New("findings is required and must not be empty"))
-	}
-	if utf8.RuneCountInString(findings) > maxFindingsRunes {
-		return errResult("session_end", fmt.Errorf("findings exceeds %d chars", maxFindingsRunes))
 	}
 	sess, ok, err := s.resolveSession(ctx, req)
 	if err != nil {

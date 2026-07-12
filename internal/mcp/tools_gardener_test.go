@@ -19,7 +19,7 @@ func TestGardenerProposalsAndApply(t *testing.T) {
 	// apply then retires it.
 	wrote := callJSON(t, ctx, cli, "memory_write", map[string]any{
 		"name": "stale-thing", "kind": "gotcha",
-		"description": "an old memory", "body": "body text",
+		"description": "an old memory", "body": "body text", "project": "global",
 	})
 	memID, _ := wrote["id"].(string)
 	require.NotEmpty(t, memID)

@@ -35,6 +35,36 @@ func argRaw(r mcp.CallToolRequest, key string) string {
 	return r.GetString(key, "")
 }
 
+// bodyAliases are the interchangeable names for an item's markdown text. The
+// create tools advertise "body"; the append tools historically used
+// "content"/"text". Accepting all three means an agent primed on one tool's
+// param name still succeeds on another -- the single most common field-name
+// mistake in the field logs.
+var bodyAliases = []string{"body", "content", "text"}
+
+// argBody returns an item's markdown text, accepting body/content/text
+// interchangeably. Whitespace is preserved (markdown); the first non-blank wins.
+func argBody(r mcp.CallToolRequest) string {
+	for _, k := range bodyAliases {
+		if v := argRaw(r, k); strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// firstStringArg returns the first present string argument among keys (for
+// update tools that read the raw args map to detect which fields changed), and
+// whether any was present. Value is returned untrimmed.
+func firstStringArg(args map[string]any, keys ...string) (string, bool) {
+	for _, k := range keys {
+		if v, ok := args[k].(string); ok {
+			return v, true
+		}
+	}
+	return "", false
+}
+
 // argInt reads an integer argument, or def when absent/invalid.
 func argInt(r mcp.CallToolRequest, key string, def int) int {
 	return r.GetInt(key, def)

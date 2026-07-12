@@ -16,7 +16,7 @@ func TestUsageSummaryTool(t *testing.T) {
 
 	// Write a memory and recall it, so the summary has something to report.
 	callJSON(t, ctx, cli, "memory_write", map[string]any{
-		"name": "a-fact", "kind": "reference", "description": "a durable fact", "body": "body",
+		"name": "a-fact", "kind": "reference", "description": "a durable fact", "body": "body", "project": "global",
 	})
 	callJSON(t, ctx, cli, "recall", map[string]any{"query": "durable fact"})
 
