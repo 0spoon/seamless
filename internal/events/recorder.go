@@ -9,11 +9,45 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
+
+// truncationMarker is appended to a captured field that Truncate had to trim.
+const truncationMarker = "\n… [truncated]"
+
+// Truncate caps s to maxRunes runes, appending truncationMarker when it trims.
+// A non-positive maxRunes disables truncation (returns s unchanged) -- the
+// default for captured Interactions content, where retention pruning rather than
+// truncation is the growth control. Rune-safe: never splits a multibyte rune.
+func Truncate(s string, maxRunes int) string {
+	if maxRunes <= 0 || len(s) <= maxRunes {
+		// len (bytes) >= rune count, so a byte-length under the cap is safe.
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	return string(runes[:maxRunes]) + truncationMarker
+}
+
+// kindArgs builds the "?,?,?" placeholder list and the matching []any args for
+// an IN/NOT IN clause over kinds. It returns ("", nil) for an empty slice.
+func kindArgs(kinds []core.EventKind) (string, []any) {
+	if len(kinds) == 0 {
+		return "", nil
+	}
+	ph := strings.TrimSuffix(strings.Repeat("?,", len(kinds)), ",")
+	args := make([]any, len(kinds))
+	for i, k := range kinds {
+		args[i] = string(k)
+	}
+	return ph, args
+}
 
 // subBuffer is the per-subscriber channel depth. A subscriber that falls behind
 // simply drops events (the console's live feed is best-effort; the DB remains the
@@ -167,6 +201,105 @@ func (r *Recorder) BySession(ctx context.Context, sessionID string, limit int) (
 		return nil, fmt.Errorf("events.BySession: %w", err)
 	}
 	return scanEvents(rows)
+}
+
+// ByKinds returns events of any of the given kinds, newest first, strictly older
+// than the compound (beforeTS, beforeID) cursor when it is set -- so a caller can
+// page backwards through the Interactions feed without missing or repeating rows
+// across a ts tie (ids are ULIDs, lexically ordered like ts). An empty kinds
+// slice returns nil; a non-positive limit defaults to 200.
+func (r *Recorder) ByKinds(ctx context.Context, kinds []core.EventKind, beforeTS, beforeID string, limit int) ([]core.Event, error) {
+	ph, args := kindArgs(kinds)
+	if ph == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload
+	      FROM events WHERE kind IN (` + ph + `)`
+	if beforeTS != "" {
+		q += ` AND (ts < ? OR (ts = ? AND id < ?))`
+		args = append(args, beforeTS, beforeTS, beforeID)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.ByKinds: %w", err)
+	}
+	return scanEvents(rows)
+}
+
+// ByKindsSince returns events of any of the given kinds strictly newer than the
+// (sinceTS, sinceID) cursor, oldest first -- the gap-fill query an SSE client
+// runs after a reconnect to recover rows it missed. An empty kinds slice returns
+// nil; a non-positive limit defaults to 200.
+func (r *Recorder) ByKindsSince(ctx context.Context, kinds []core.EventKind, sinceTS, sinceID string, limit int) ([]core.Event, error) {
+	ph, args := kindArgs(kinds)
+	if ph == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload
+	      FROM events WHERE kind IN (` + ph + `)`
+	if sinceTS != "" {
+		q += ` AND (ts > ? OR (ts = ? AND id > ?))`
+		args = append(args, sinceTS, sinceTS, sinceID)
+	}
+	q += ` ORDER BY ts ASC, id ASC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.ByKindsSince: %w", err)
+	}
+	return scanEvents(rows)
+}
+
+// RecentExcluding returns the most recent events, newest first, omitting the
+// given kinds -- the overview's business-level feed, which hides transport-level
+// tool.call / hook.prompt noise. A non-positive limit defaults to 50.
+func (r *Recorder) RecentExcluding(ctx context.Context, limit int, exclude ...core.EventKind) ([]core.Event, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload FROM events`
+	var args []any
+	if ph, exArgs := kindArgs(exclude); ph != "" {
+		q += ` WHERE kind NOT IN (` + ph + `)`
+		args = append(args, exArgs...)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.RecentExcluding: %w", err)
+	}
+	return scanEvents(rows)
+}
+
+// PruneKinds deletes events of the given kinds recorded strictly before cutoff,
+// returning the number removed. It is the retention path for transport-level
+// Interactions events (tool.call, hook.prompt); domain events are never passed
+// in. An empty kinds slice or zero cutoff deletes nothing.
+func (r *Recorder) PruneKinds(ctx context.Context, kinds []core.EventKind, before time.Time) (int64, error) {
+	ph, args := kindArgs(kinds)
+	if ph == "" || before.IsZero() {
+		return 0, nil
+	}
+	args = append(args, core.FormatTime(before))
+	res, err := r.db.ExecContext(ctx,
+		`DELETE FROM events WHERE kind IN (`+ph+`) AND ts < ?`, args...)
+	if err != nil {
+		return 0, fmt.Errorf("events.PruneKinds: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("events.PruneKinds: rows affected: %w", err)
+	}
+	return n, nil
 }
 
 // scanEvents drains an events query into core.Event values.

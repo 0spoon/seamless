@@ -26,11 +26,13 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 3072, d.LLM.OpenAI.EmbeddingDims)
 	require.Equal(t, 1500, d.Budgets.MaxBriefingTokens)
 	require.Equal(t, 1000, d.Budgets.RecallBudgetTokens)
+	require.Equal(t, 0, d.Budgets.ToolEventMaxChars) // 0 = unlimited
 	require.True(t, d.Gardener.Enabled)
 	require.Equal(t, 60, d.Gardener.IntervalMinutes)
 	require.Equal(t, 0.88, d.Gardener.DedupThreshold)
 	require.Equal(t, 90, d.Gardener.StalenessDays)
 	require.Equal(t, 30, d.Gardener.DigestDays)
+	require.Equal(t, 30, d.Gardener.ToolEventRetentionDays)
 }
 
 func TestLoadFrom_FileOverridesDefaults(t *testing.T) {
@@ -81,12 +83,16 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_MAX_BRIEFING_TOKENS", "800")
 	t.Setenv("SEAMLESS_GARDENER_STALENESS_DAYS", "45")
 	t.Setenv("SEAMLESS_GARDENER_DEDUP_THRESHOLD", "0.91")
+	t.Setenv("SEAMLESS_TOOL_EVENT_MAX_CHARS", "4096")
+	t.Setenv("SEAMLESS_TOOL_EVENT_RETENTION_DAYS", "7")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
 	require.Equal(t, 800, cfg.Budgets.MaxBriefingTokens)
 	require.Equal(t, 45, cfg.Gardener.StalenessDays)
 	require.Equal(t, 0.91, cfg.Gardener.DedupThreshold)
+	require.Equal(t, 4096, cfg.Budgets.ToolEventMaxChars)
+	require.Equal(t, 7, cfg.Gardener.ToolEventRetentionDays)
 	require.Equal(t, "", cfg.SourcePath())
 }
 
@@ -122,6 +128,10 @@ func TestValidate(t *testing.T) {
 		{"unknown-provider", func(c *Config) { c.LLM.Provider = "gemini" }, true},
 		{"zero-briefing-budget", func(c *Config) { c.Budgets.MaxBriefingTokens = 0 }, true},
 		{"negative-recall-budget", func(c *Config) { c.Budgets.RecallBudgetTokens = -1 }, true},
+		{"zero-tool-event-cap-ok", func(c *Config) { c.Budgets.ToolEventMaxChars = 0 }, false},
+		{"negative-tool-event-cap", func(c *Config) { c.Budgets.ToolEventMaxChars = -1 }, true},
+		{"zero-tool-event-retention-ok", func(c *Config) { c.Gardener.ToolEventRetentionDays = 0 }, false},
+		{"negative-tool-event-retention", func(c *Config) { c.Gardener.ToolEventRetentionDays = -1 }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

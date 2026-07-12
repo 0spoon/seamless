@@ -21,8 +21,8 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "sessions", "session", "memories", "notes", "retrieval",
-	"tasks", "gardener", "settings", "event",
+	"login", "overview", "interactions", "sessions", "session", "memories", "notes",
+	"retrieval", "tasks", "gardener", "settings", "event",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html

@@ -190,9 +190,10 @@ func runServe(args []string) error {
 	}
 	mcpSrv := mcp.New(mcp.Config{
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, Embedder: embedder,
-		APIKey: cfg.MCP.APIKey, Version: buildVersion(), Logger: logger,
+		APIKey: cfg.MCP.APIKey, Version: buildVersion(),
+		ToolEventMaxChars: cfg.Budgets.ToolEventMaxChars, Logger: logger,
 	})
-	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
+	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, cfg.Budgets.ToolEventMaxChars, logger)
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec,
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,

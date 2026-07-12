@@ -32,20 +32,23 @@ const ambientPrefixLen = 8
 
 // Handler serves the hook endpoints.
 type Handler struct {
-	db       *sql.DB
-	retrieve *retrieve.Service
-	events   *events.Recorder
-	apiKey   string
-	logger   *slog.Logger
+	db            *sql.DB
+	retrieve      *retrieve.Service
+	events        *events.Recorder
+	apiKey        string
+	maxEventChars int
+	logger        *slog.Logger
 }
 
 // NewHandler builds a hook Handler. db backs ambient sessions and the session-end
-// harvest; events may be nil (injection telemetry is then skipped).
-func NewHandler(db *sql.DB, ret *retrieve.Service, rec *events.Recorder, apiKey string, logger *slog.Logger) *Handler {
+// harvest; events may be nil (injection telemetry is then skipped). maxEventChars
+// caps captured prompt/findings text (0 = unlimited); injected content is always
+// stored in full (it is already bounded by the briefing/recall budgets upstream).
+func NewHandler(db *sql.DB, ret *retrieve.Service, rec *events.Recorder, apiKey string, maxEventChars int, logger *slog.Logger) *Handler {
 	if logger == nil {
 		logger = slog.Default()
 	}
-	return &Handler{db: db, retrieve: ret, events: rec, apiKey: apiKey, logger: logger}
+	return &Handler{db: db, retrieve: ret, events: rec, apiKey: apiKey, maxEventChars: maxEventChars, logger: logger}
 }
 
 // Register mounts the hook routes on mux at their full /api/hooks/* paths.
@@ -127,9 +130,9 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	// Record after the ambient line is appended so the stored content is exactly
-	// what the agent received.
+	// what the agent received. A SessionStart carries no user prompt (prompt="").
 	if injected {
-		h.recordInjection(ctx, "session-start", p.SessionID, briefing, injectedIDs)
+		h.recordInjection(ctx, "session-start", p.SessionID, "", briefing, injectedIDs)
 	}
 	writeHookResponse(w, "SessionStart", briefing)
 }
@@ -228,7 +231,10 @@ func (h *Handler) completeAmbientSession(ctx context.Context, p endPayload) {
 		h.logger.Warn("hooks: session-end complete", "error", err)
 		return
 	}
-	h.recordSession(ctx, core.EventSessionEnded, sess, map[string]any{"ambient": true, "harvested": true})
+	h.recordSession(ctx, core.EventSessionEnded, sess, map[string]any{
+		"ambient": true, "harvested": true,
+		"reason": p.Reason, "findings": events.Truncate(sess.Findings, h.maxEventChars),
+	})
 }
 
 // ambientName is the ambient session name for a Claude session id: cc/{prefix}.
@@ -277,7 +283,11 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		out, injectedIDs = "", nil
 	}
 	if out != "" {
-		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, out, injectedIDs)
+		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, p.UserPrompt, out, injectedIDs)
+	} else {
+		// A recall miss: capture the prompt as its own hook.prompt event so the
+		// Interactions feed can show "why didn't recall fire?" cases.
+		h.recordHookPrompt(ctx, p.SessionID, p.UserPrompt)
 	}
 	writeHookResponse(w, "UserPromptSubmit", out)
 }
@@ -286,22 +296,72 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 // was injected, so the console can show what an agent actually received. itemIDs
 // are the memory ULIDs surfaced by this injection; recording them (as the recall
 // tool does) feeds the read-after-inject funnel so the auto-briefing counts, not
-// just recall-tool hits. The session_id column holds seamless ULIDs only, so the
-// Claude session id rides in the payload rather than that column (the hook has no
-// seamless session in P2).
-func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, content string, itemIDs []string) {
+// just recall-tool hits. The event is stamped with the ambient session's seamless
+// ULID and project (best-effort) so the Interactions feed can group it under the
+// right agent; the Claude session id still rides in the payload. prompt (empty for
+// SessionStart) is the user turn that triggered a recall injection; content is the
+// full injected block, stored verbatim.
+func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, prompt, content string, itemIDs []string) {
 	if h.events == nil {
 		return
 	}
+	sessionID, project := h.ambientRef(ctx, claudeSessionID)
+	payload := map[string]any{
+		"hook": hook, "claude_session_id": claudeSessionID,
+		"content": content, "item_ids": itemIDs,
+	}
+	if prompt != "" {
+		payload["prompt"] = events.Truncate(prompt, h.maxEventChars)
+	}
 	if _, err := h.events.Record(ctx, core.Event{
-		Kind: core.EventInjected,
-		Payload: map[string]any{
-			"hook": hook, "claude_session_id": claudeSessionID,
-			"content": content, "item_ids": itemIDs,
-		},
+		Kind:        core.EventInjected,
+		SessionID:   sessionID,
+		ProjectSlug: project,
+		Payload:     payload,
 	}); err != nil {
 		h.logger.Warn("hooks: record injection", "error", err)
 	}
+}
+
+// recordHookPrompt logs a hook.prompt event for a UserPromptSubmit that matched
+// no memory -- the recall-miss case. Matched prompts ride on the retrieval.injected
+// event instead (no duplicate row), so InjectionsByDay (which counts injected
+// rows) is unaffected. Session stamping mirrors recordInjection.
+func (h *Handler) recordHookPrompt(ctx context.Context, claudeSessionID, prompt string) {
+	if h.events == nil || prompt == "" {
+		return
+	}
+	sessionID, project := h.ambientRef(ctx, claudeSessionID)
+	if _, err := h.events.Record(ctx, core.Event{
+		Kind:        core.EventHookPrompt,
+		SessionID:   sessionID,
+		ProjectSlug: project,
+		Payload: map[string]any{
+			"hook": "user-prompt-submit", "claude_session_id": claudeSessionID,
+			"prompt": events.Truncate(prompt, h.maxEventChars), "matched": false,
+		},
+	}); err != nil {
+		h.logger.Warn("hooks: record hook prompt", "error", err)
+	}
+}
+
+// ambientRef resolves the ambient session (cc/{prefix}) for a Claude session id
+// to its seamless ULID and project, best-effort. It returns empty strings when
+// the DB is absent, the id is empty, or no such session exists -- the event then
+// carries no session attribution rather than failing the hook.
+func (h *Handler) ambientRef(ctx context.Context, claudeSessionID string) (sessionID, project string) {
+	if h.db == nil || claudeSessionID == "" {
+		return "", ""
+	}
+	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(claudeSessionID))
+	if err != nil {
+		h.logger.Warn("hooks: ambient ref lookup", "error", err)
+		return "", ""
+	}
+	if !ok {
+		return "", ""
+	}
+	return sess.ID, sess.ProjectSlug
 }
 
 // recordSession appends a session lifecycle event for an ambient session.

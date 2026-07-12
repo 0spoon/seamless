@@ -29,6 +29,12 @@ const testKey = "test-bearer-key"
 // newServer builds a full MCP server over a temp store and returns its base URL
 // and the backing DB (for tests that seed rows directly).
 func newServer(t *testing.T) (string, *sql.DB) {
+	return newServerCfg(t, nil)
+}
+
+// newServerCfg is newServer with a hook to tune the Config before construction
+// (e.g. ToolEventMaxChars), so tests can exercise non-default wiring.
+func newServerCfg(t *testing.T, tune func(*mcpserver.Config)) (string, *sql.DB) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -45,9 +51,13 @@ func newServer(t *testing.T) (string, *sql.DB) {
 	ret := retrieve.New(db, nil, config.Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000}, nil)
 	rec := events.NewRecorder(db)
 	garden := gardener.New(db, mgr, nil, nil, rec, gardener.Config{}, nil)
-	srv := mcpserver.New(mcpserver.Config{
+	cfg := mcpserver.Config{
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, APIKey: testKey,
-	})
+	}
+	if tune != nil {
+		tune(&cfg)
+	}
+	srv := mcpserver.New(cfg)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
 	return ts.URL, db

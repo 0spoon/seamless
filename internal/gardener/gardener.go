@@ -37,6 +37,10 @@ type Config struct {
 	StalenessDays  int
 	DigestDays     int
 	Interval       time.Duration
+	// ToolEventRetentionDays prunes transport-level Interactions events
+	// (tool.call, hook.prompt) older than this many days on each pass. 0 disables
+	// pruning -- deliberately not defaulted, since 0 means "keep forever".
+	ToolEventRetentionDays int
 }
 
 // withDefaults fills non-positive fields from the package defaults.
@@ -59,10 +63,11 @@ func (c Config) withDefaults() Config {
 // FromConfig adapts the server config's gardener block to the pass Config.
 func FromConfig(g config.Gardener) Config {
 	return Config{
-		DedupThreshold: g.DedupThreshold,
-		StalenessDays:  g.StalenessDays,
-		DigestDays:     g.DigestDays,
-		Interval:       time.Duration(g.IntervalMinutes) * time.Minute,
+		DedupThreshold:         g.DedupThreshold,
+		StalenessDays:          g.StalenessDays,
+		DigestDays:             g.DigestDays,
+		Interval:               time.Duration(g.IntervalMinutes) * time.Minute,
+		ToolEventRetentionDays: g.ToolEventRetentionDays,
 	}
 }
 
@@ -111,6 +116,11 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 		s.logger.Warn("gardener: rebuild retrieval stats", "error", err)
 	}
 
+	// Bound the event log: prune transport-level Interactions events past the
+	// retention window. Runs before the stat-independent passes and never touches
+	// domain events, so retrieval stats (built above) are unaffected.
+	s.pruneToolEvents(ctx)
+
 	existing, err := store.AllProposalKeys(ctx, s.db)
 	if err != nil {
 		return PassResult{}, err
@@ -137,6 +147,25 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 		s.logger.Info("gardener pass complete", "merges", res.Merges, "archives", res.Archives, "digests", res.Digests)
 	}
 	return res, nil
+}
+
+// pruneToolEvents deletes transport-level Interactions events (tool.call,
+// hook.prompt) older than the retention window, keeping the event log bounded.
+// Domain events are never touched. A non-positive retention or nil recorder
+// disables it. Best-effort: a failure is logged, not returned.
+func (s *Service) pruneToolEvents(ctx context.Context) {
+	if s.events == nil || s.cfg.ToolEventRetentionDays <= 0 {
+		return
+	}
+	cutoff := s.now().UTC().AddDate(0, 0, -s.cfg.ToolEventRetentionDays)
+	n, err := s.events.PruneKinds(ctx, []core.EventKind{core.EventToolCall, core.EventHookPrompt}, cutoff)
+	if err != nil {
+		s.logger.Warn("gardener: prune tool events", "error", err)
+		return
+	}
+	if n > 0 {
+		s.logger.Info("gardener pruned tool events", "deleted", n, "older_than_days", s.cfg.ToolEventRetentionDays)
+	}
 }
 
 // createProposal persists a proposal and records a gardener.action event. The

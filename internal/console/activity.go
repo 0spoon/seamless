@@ -24,7 +24,9 @@ func (s *Service) recentEvents(ctx context.Context, limit int) ([]eventRow, erro
 	if s.cfg.Events == nil {
 		return nil, nil
 	}
-	evs, err := s.cfg.Events.Recent(ctx, limit)
+	// Hide transport-level Interactions noise (tool.call/hook.prompt) from the
+	// overview's business feed; those live on the Interactions screen instead.
+	evs, err := s.cfg.Events.RecentExcluding(ctx, limit, core.EventToolCall, core.EventHookPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +89,13 @@ func eventSummary(e core.Event) string {
 		}
 		return "gardener " + action
 	case core.EventToolCall:
-		return "tool " + payloadStr(p, "tool")
+		label := "tool " + payloadStr(p, "tool")
+		if isErr, _ := p["is_error"].(bool); isErr {
+			label += " failed"
+		}
+		return label
+	case core.EventHookPrompt:
+		return "prompt (no recall match)"
 	default:
 		return string(e.Kind)
 	}

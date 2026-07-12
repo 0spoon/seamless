@@ -20,6 +20,7 @@
     <dl class="kv">
       <dt>Max briefing tokens</dt><dd>{{.Budgets.MaxBriefingTokens}}</dd>
       <dt>Recall budget tokens</dt><dd>{{.Budgets.RecallBudgetTokens}}</dd>
+      <dt>Tool event cap</dt><dd>{{if .Budgets.ToolEventMaxChars}}{{.Budgets.ToolEventMaxChars}} chars{{else}}unlimited{{end}}</dd>
     </dl>
   </div>
 
@@ -31,6 +32,7 @@
       <dt>Dedup threshold</dt><dd>{{.Gardener.DedupThreshold}}</dd>
       <dt>Staleness</dt><dd>{{.Gardener.StalenessDays}}d</dd>
       <dt>Digest window</dt><dd>{{.Gardener.DigestDays}}d</dd>
+      <dt>Tool event retention</dt><dd>{{if .Gardener.ToolEventRetentionDays}}{{.Gardener.ToolEventRetentionDays}}d{{else}}disabled{{end}}</dd>
     </dl>
   </div>
 </div>

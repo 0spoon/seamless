@@ -175,6 +175,14 @@ type Task struct {
 	ClosedAt       *time.Time `json:"closedAt,omitempty"`
 }
 
+// ClaimLive reports whether the task is actively claimed as of now: in_progress,
+// a non-empty holder, and an unexpired lease. An expired lease is not live (the
+// task is reclaimable), matching ClaimTask's lazy expiry.
+func (t Task) ClaimLive(now time.Time) bool {
+	return t.ClaimedBy != "" && t.Status == TaskInProgress &&
+		t.LeaseExpiresAt != nil && t.LeaseExpiresAt.After(now)
+}
+
 // ---------------------------------------------------------------------------
 // Trial (research lab)
 // ---------------------------------------------------------------------------
@@ -226,7 +234,8 @@ const (
 	EventTaskTransition   EventKind = "task.transition"
 	EventInjected         EventKind = "retrieval.injected"
 	EventGardenerAction   EventKind = "gardener.action"
-	EventToolCall         EventKind = "tool.call" // historical MCP tool invocation (import)
+	EventToolCall         EventKind = "tool.call"   // MCP tool invocation, logged live by the middleware (also the shape used by import)
+	EventHookPrompt       EventKind = "hook.prompt" // a UserPromptSubmit that matched no memory (recall miss)
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

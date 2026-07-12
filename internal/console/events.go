@@ -31,6 +31,7 @@ type eventItem struct {
 // eventDetailData is the payload for a single event's detail page.
 type eventDetailData struct {
 	Event   eventRow    `json:"event"`
+	Prompt  string      `json:"prompt,omitempty"`  // user prompt that triggered the event, if any
 	Content string      `json:"content,omitempty"` // verbatim injected/large text, if any
 	Items   []eventItem `json:"items,omitempty"`   // resolved memories the event referenced
 	Fields  []kvPair    `json:"fields,omitempty"`  // remaining scalar payload fields
@@ -59,6 +60,7 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := eventDetailData{
 		Event:   toEventRow(ev),
+		Prompt:  payloadStr(ev.Payload, "prompt"),
 		Content: payloadStr(ev.Payload, "content"),
 		RawJSON: prettyPayload(ev.Payload),
 	}
@@ -68,7 +70,7 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data.Items = items
 	}
-	data.Fields = scalarFields(ev.Payload, "content", "item_ids")
+	data.Fields = scalarFields(ev.Payload, "content", "item_ids", "prompt")
 
 	if r.URL.Query().Get("peek") == "1" {
 		s.renderFragment(w, r, "event", data)

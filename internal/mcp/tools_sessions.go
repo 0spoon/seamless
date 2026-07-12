@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -145,7 +146,7 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 		return errResult("session_end", err)
 	}
 	s.record(ctx, core.EventSessionEnded, sess.ID, sess.ProjectSlug, "",
-		map[string]any{"claims_released": released})
+		map[string]any{"claims_released": released, "findings": events.Truncate(findings, s.cfg.ToolEventMaxChars)})
 	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID, "claims_released": released})
 }
 

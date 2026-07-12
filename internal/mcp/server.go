@@ -98,7 +98,11 @@ type Config struct {
 	Embedder llm.Embedder      // may be nil (memory_write dedup hint is then skipped)
 	APIKey   string
 	Version  string // build version advertised in the MCP handshake; defaults to serverVersion
-	Logger   *slog.Logger
+	// ToolEventMaxChars caps each captured field (tool.call args value/result,
+	// session findings) of a logged Interactions event at this many runes. 0 =
+	// unlimited (the default): content is logged in full.
+	ToolEventMaxChars int
+	Logger            *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
@@ -150,7 +154,10 @@ func New(cfg Config) *Server {
 		serverName, version,
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),
+		// mcp-go applies middlewares in reverse registration order, so auth stays
+		// outermost (unauthorized calls never reach the logger) with logging inner.
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
+		mcpserver.WithToolHandlerMiddleware(s.logMiddleware),
 	)
 	s.registerTools()
 	return s

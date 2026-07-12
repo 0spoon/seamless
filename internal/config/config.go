@@ -47,6 +47,11 @@ type MCP struct {
 type Budgets struct {
 	MaxBriefingTokens  int `yaml:"max_briefing_tokens"`
 	RecallBudgetTokens int `yaml:"recall_budget_tokens"`
+	// ToolEventMaxChars caps each captured field (tool-call args value, result,
+	// hook prompt, session findings) of an Interactions transport event at this
+	// many runes. 0 = unlimited (the default): content is stored in full, and the
+	// tool-event retention prune -- not truncation -- is the growth control.
+	ToolEventMaxChars int `yaml:"tool_event_max_chars"`
 }
 
 // LLM configures chat (digests) and embeddings. OpenAI is the default provider.
@@ -96,6 +101,10 @@ type Gardener struct {
 	// DigestDays is the trailing window of completed sessions rolled into a
 	// monthly digest proposal.
 	DigestDays int `yaml:"digest_days"`
+	// ToolEventRetentionDays is the age beyond which transport-level Interactions
+	// events (tool.call, hook.prompt) are pruned by the gardener. 0 disables the
+	// prune; domain events are never pruned regardless.
+	ToolEventRetentionDays int `yaml:"tool_event_retention_days"`
 }
 
 // Defaults returns the built-in configuration. File and env values are layered
@@ -122,11 +131,12 @@ func Defaults() Config {
 			Anthropic: Anthropic{ChatModel: "claude-sonnet-5"},
 		},
 		Gardener: Gardener{
-			Enabled:         true,
-			IntervalMinutes: 60,
-			DedupThreshold:  0.88,
-			StalenessDays:   90,
-			DigestDays:      30,
+			Enabled:                true,
+			IntervalMinutes:        60,
+			DedupThreshold:         0.88,
+			StalenessDays:          90,
+			DigestDays:             30,
+			ToolEventRetentionDays: 30,
 		},
 	}
 }
@@ -195,6 +205,12 @@ func (c Config) Validate() error {
 	if c.Budgets.RecallBudgetTokens <= 0 {
 		return fmt.Errorf("config: budgets.recall_budget_tokens must be > 0")
 	}
+	if c.Budgets.ToolEventMaxChars < 0 {
+		return fmt.Errorf("config: budgets.tool_event_max_chars must be >= 0")
+	}
+	if c.Gardener.ToolEventRetentionDays < 0 {
+		return fmt.Errorf("config: gardener.tool_event_retention_days must be >= 0")
+	}
 	return nil
 }
 
@@ -220,6 +236,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envInt("SEAMLESS_RECALL_BUDGET_TOKENS", &c.Budgets.RecallBudgetTokens); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_TOOL_EVENT_MAX_CHARS", &c.Budgets.ToolEventMaxChars); err != nil {
 		return err
 	}
 
@@ -253,6 +272,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envInt("SEAMLESS_GARDENER_DIGEST_DAYS", &c.Gardener.DigestDays); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_TOOL_EVENT_RETENTION_DAYS", &c.Gardener.ToolEventRetentionDays); err != nil {
 		return err
 	}
 	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {
