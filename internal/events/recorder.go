@@ -128,6 +128,28 @@ func (r *Recorder) Recent(ctx context.Context, limit int) ([]core.Event, error) 
 	return scanEvents(rows)
 }
 
+// ByID returns a single event by its id. ok is false (with a nil error) when no
+// event has that id.
+func (r *Recorder) ByID(ctx context.Context, id string) (core.Event, bool, error) {
+	if id == "" {
+		return core.Event{}, false, nil
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT id, ts, kind, session_id, project_slug, item_id, payload
+		 FROM events WHERE id = ? LIMIT 1`, id)
+	if err != nil {
+		return core.Event{}, false, fmt.Errorf("events.ByID: %w", err)
+	}
+	evs, err := scanEvents(rows)
+	if err != nil {
+		return core.Event{}, false, err
+	}
+	if len(evs) == 0 {
+		return core.Event{}, false, nil
+	}
+	return evs[0], true, nil
+}
+
 // BySession returns a session's events in chronological order (oldest first), so
 // a caller can render the session's timeline. A non-positive limit defaults to
 // 500.
