@@ -7,35 +7,35 @@
   </div>
 </div>
 
-{{if .Error}}<div class="login-err" style="max-width:none;margin-bottom:18px;">Could not apply: {{.Error}}</div>{{end}}
+{{if .Error}}<div class="login-err section">Could not apply: {{.Error}}</div>{{end}}
 
 {{if .Cards}}
 <div class="grid-2">
   {{range .Cards}}
   <div class="card">
-    <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px;">
+    <div class="prop-head">
       <span class="kind">{{.Kind}}</span>
-      <span class="muted" style="font-size:12px" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
+      <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
     </div>
 
     {{if eq .Kind "archive"}}
       {{with .Archive}}
-      <div><strong>{{.Name}}</strong> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span> <span class="kind">{{.Kind}}</span></div>
-      <div class="muted" style="margin:4px 0 8px">{{.Description}}</div>
+      <div class="prop-row"><span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
+      {{if .Description}}<div class="prop-desc">{{.Description}}</div>{{end}}
       {{end}}
       <div class="badge warn">{{.Reason}}</div>
     {{else if eq .Kind "merge"}}
-      <div class="muted" style="margin-bottom:8px">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
-      {{with .Keep}}<div style="margin-bottom:6px"><span class="badge ok">keep</span> <strong>{{.Name}}</strong> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span><div class="muted" style="font-size:12px">{{.Description}}</div></div>{{end}}
-      {{with .Drop}}<div><span class="badge danger">drop</span> <strong>{{.Name}}</strong> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span><div class="muted" style="font-size:12px">{{.Description}}</div></div>{{end}}
+      <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
+      {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+      {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <span class="name">{{.Name}}</span> <span class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
     {{else if eq .Kind "digest"}}
-      <div><strong>{{.Title}}</strong></div>
-      <div class="muted" style="margin:4px 0 8px">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; {{.Month}}</div>
+      <div class="prop-title">{{.Title}}</div>
+      <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; {{.Month}}</div>
       <pre class="pre">{{.Preview}}</pre>
     {{end}}
 
     {{if $.Data.CanAct}}
-    <div class="btn-row" style="margin-top:14px">
+    <div class="btn-row prop-foot">
       <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
         <button class="btn small primary" type="submit">Apply</button>
       </form>

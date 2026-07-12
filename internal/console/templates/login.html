@@ -12,7 +12,7 @@
 <body>
 <div class="login-wrap dotgrid">
   <form class="login-card" method="post" action="/console/login">
-    <h1><span class="dot" style="width:11px;height:11px;border-radius:50%;background:var(--live);display:inline-block;"></span> Seamless console</h1>
+    <h1><span class="live-dot"></span> Seamless console</h1>
     <p>Paste the static API key to sign in. It is exchanged for a cookie scoped to this console.</p>
     {{if .Error}}<div class="login-err">{{icon "triangle-alert"}}<span>{{.Error}}</span></div>{{end}}
     <label for="key">API key</label>

@@ -40,14 +40,15 @@ var funcs = template.FuncMap{
 	"shortID":       shortID,
 	"pct":           func(n, d int) int { return percent(n, d) },
 	"add":           func(a, b int) int { return a + b },
+	"sub":           func(a, b int) int { return a - b },
 	"hasPrefix":     strings.HasPrefix,
 	"evtTone":       evtTone,
 	"icon":          icon,
-	"donut":         donut,
+	"kindLegend":    kindLegend,
+	"kindBars":      kindBars,
 	"areaChart":     areaChart,
 	"barChart":      barChart,
 	"stackedBar":    stackedBar,
-	"coverageMeter": coverageMeter,
 	"coverageTrend": coverageTrend,
 }
 

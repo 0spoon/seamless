@@ -11,7 +11,7 @@
 
 <div class="section">
   <div class="card">
-    <h2>Metadata</h2>
+    <h2>Metadata <span class="h2-meta">{{ago .Event.When}}</span></h2>
     <dl class="kv">
       <dt>ID</dt><dd class="mono">{{.Event.ID}}</dd>
       <dt>When</dt><dd title="{{.Event.When}}">{{ago .Event.When}}</dd>

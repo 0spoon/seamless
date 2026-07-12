@@ -3,7 +3,7 @@ package console
 import (
 	"fmt"
 	"html/template"
-	"math"
+	"sort"
 	"strings"
 	"time"
 
@@ -145,44 +145,57 @@ func evtColorVar(kind string) string {
 }
 
 // ---------------------------------------------------------------------------
-// Donut -- memories by kind
+// Kind legend -- memories by kind (rail variant of the donut)
 // ---------------------------------------------------------------------------
 
-// donut renders a ring (one arc per kind) with a center total and a legend,
-// matching the design brief's memories-by-kind visual. Empty input renders
-// nothing so callers can fall back to an empty state.
-func donut(items []kindCount) template.HTML {
-	total := 0
-	for _, it := range items {
-		total += it.N
-	}
-	if total == 0 {
+// kindLegend renders the memories-by-kind breakdown as labeled bars (the rail
+// variant of the donut), largest kind first, widths normalized to the largest.
+func kindLegend(items []kindCount) template.HTML {
+	if len(items) == 0 {
 		return ""
 	}
-	const size, stroke = 128.0, 20.0
-	r := (size - stroke) / 2
-	circ := 2 * math.Pi * r
-
+	maxV := 1
+	for _, it := range items {
+		if it.N > maxV {
+			maxV = it.N
+		}
+	}
+	sorted := make([]kindCount, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].N > sorted[j].N })
 	var b strings.Builder
-	b.WriteString(`<div class="donut"><div class="donut-ring">`)
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="donut-svg" width="%g" height="%g"><g transform="rotate(-90 %g %g)">`, size, size, size, size, size/2, size/2)
-	fmt.Fprintf(&b, `<circle cx="%g" cy="%g" r="%g" fill="none" stroke="var(--surface-2)" stroke-width="%g"/>`, size/2, size/2, r, stroke)
-	acc := 0.0
-	for _, it := range items {
-		frac := float64(it.N) / float64(total)
-		dash := frac * circ
-		fmt.Fprintf(&b, `<circle class="donut-seg" cx="%g" cy="%g" r="%g" fill="none" stroke-width="%g" stroke-linecap="butt" style="stroke:%s;stroke-dasharray:%.2f %.2f;stroke-dashoffset:%.2f"/>`,
-			size/2, size/2, r, stroke, kindColorVar(it.Kind), dash, circ-dash, -acc*circ)
-		acc += frac
+	b.WriteString(`<div class="legend">`)
+	for _, it := range sorted {
+		c := kindColorVar(it.Kind)
+		fmt.Fprintf(&b, `<div class="legend-row"><span class="kdot" style="background:%s"></span><span class="legend-label">%s</span><span class="legend-bar"><span style="width:%d%%;background:%s"></span></span><span class="legend-val">%d</span></div>`,
+			c, template.HTMLEscapeString(it.Kind), percent(it.N, maxV), c, it.N)
 	}
-	b.WriteString(`</g></svg>`)
-	fmt.Fprintf(&b, `<div class="donut-center"><span class="donut-total">%d</span><span class="donut-cap">total</span></div>`, total)
-	b.WriteString(`</div><ul class="donut-legend">`)
-	for _, it := range items {
-		fmt.Fprintf(&b, `<li><span class="kdot" style="background:%s"></span><span class="donut-k">%s</span><span class="donut-n">%d</span></li>`,
-			kindColorVar(it.Kind), template.HTMLEscapeString(it.Kind), it.N)
+	b.WriteString(`</div>`)
+	return template.HTML(b.String())
+}
+
+// kindBars renders per-kind injected vs read bars for the Retrieval page,
+// widths normalized to the largest count in either column so pairs compare.
+func kindBars(rows []kindRate) template.HTML {
+	if len(rows) == 0 {
+		return ""
 	}
-	b.WriteString(`</ul></div>`)
+	maxV := 1
+	for _, r := range rows {
+		if r.Injects > maxV {
+			maxV = r.Injects
+		}
+		if r.Reads > maxV {
+			maxV = r.Reads
+		}
+	}
+	var b strings.Builder
+	b.WriteString(`<div class="kindbars">`)
+	for _, r := range rows {
+		fmt.Fprintf(&b, `<div class="kindbar"><span class="kind">%s</span><div class="bars"><div class="track"><span class="inj" style="width:%d%%"></span></div><div class="track"><span class="read" style="width:%d%%"></span></div></div><span class="nums">%d &rarr; %d</span></div>`,
+			template.HTMLEscapeString(r.Kind), percent(r.Injects, maxV), percent(r.Reads, maxV), r.Injects, r.Reads)
+	}
+	b.WriteString(`</div><div class="kindbar-legend"><span><i style="background:var(--brand)"></i> injected</span><span><i style="background:var(--ok)"></i> read</span></div>`)
 	return template.HTML(b.String())
 }
 
@@ -392,28 +405,6 @@ func barChart(items []kindCount) template.HTML {
 		hp := float64(it.N) / float64(maxV) * 100
 		fmt.Fprintf(&b, `<div class="barcol"><div class="bartrack"><span class="barval">%d</span><div class="bar" style="height:%.1f%%;background:%s"></div></div><span class="barlabel">%s</span></div>`,
 			it.N, hp, evtColorVar(it.Kind), template.HTMLEscapeString(label))
-	}
-	b.WriteString(`</div>`)
-	return template.HTML(b.String())
-}
-
-// ---------------------------------------------------------------------------
-// Coverage meter -- how sessions retained knowledge
-// ---------------------------------------------------------------------------
-
-// coverageMeter renders the overview's "retained via" breakdown: one labeled bar
-// per retention channel (findings / memories / notes / trials), each bar's width
-// its share of all sessions. Channels overlap, so the widths need not sum to
-// 100%. It reuses the memories-legend row layout. Empty input renders nothing.
-func coverageMeter(rows []coverageRow) template.HTML {
-	if len(rows) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	b.WriteString(`<div class="legend">`)
-	for _, row := range rows {
-		fmt.Fprintf(&b, `<div class="legend-row"><span class="kdot" style="background:%s"></span><span class="legend-label">%s</span><span class="legend-bar"><span style="width:%d%%;background:%s"></span></span><span class="legend-val">%d</span></div>`,
-			row.Color, template.HTMLEscapeString(row.Label), row.Pct, row.Color, row.Count)
 	}
 	b.WriteString(`</div>`)
 	return template.HTML(b.String())

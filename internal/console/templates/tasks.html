@@ -9,7 +9,7 @@
 
 {{if or .Ready .InProgress .Blocked .Closed}}
 <div class="card section">
-  <h2>Task pipeline</h2>
+  <h2>Task pipeline <span class="h2-meta">{{len .Ready}} ready &middot; {{len .InProgress}} active &middot; {{len .Blocked}} blocked</span></h2>
   {{stackedBar (len .Ready) (len .InProgress) (len .Blocked) (add (len .Closed) .ClosedMore)}}
 </div>
 {{end}}
