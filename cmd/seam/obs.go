@@ -261,10 +261,35 @@ func runTaskClaim(sub string, args []string) error {
 }
 
 func runTaskRelease(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: seam task release <id>")
+	fs := flag.NewFlagSet("task release", flag.ContinueOnError)
+	force := fs.Bool("force", false, "owner override: release the lock even if you do not hold it (routes through the console owner surface, not the agent claim path)")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	id := args[0]
+	if fs.NArg() == 0 {
+		return fmt.Errorf("usage: seam task release <id> [--force]")
+	}
+	id := fs.Arg(0)
+
+	// --force is the owner override: it force-releases any holder's claim via the
+	// console POST route (bearer-authenticated), which agents cannot reach. The
+	// plain path is holder-checked: tasks_release only releases a claim you hold.
+	if *force {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		var out struct {
+			ID     string `json:"id"`
+			Status string `json:"status"`
+		}
+		if err := consolePOST(cfg, "/console/tasks/"+id+"/release?format=json", &out); err != nil {
+			return err
+		}
+		fmt.Printf("task %s force-released -> %s\n", shortID(id), out.Status)
+		return nil
+	}
+
 	ctx := context.Background()
 	cli, _, err := dial(ctx)
 	if err != nil {
@@ -489,6 +514,43 @@ func consoleJSON(cfg config.Config, path string, v any) error {
 	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("console returned %s", resp.Status)
+	}
+	return json.NewDecoder(resp.Body).Decode(v)
+}
+
+// consolePOST performs an authenticated POST to a console action endpoint and
+// decodes the JSON response into v (v may be nil to ignore the body). It backs
+// owner-only overrides (e.g. force-releasing a task lock) that live on the
+// console surface rather than the MCP tools.
+func consolePOST(cfg config.Config, path string, v any) error {
+	req, err := http.NewRequest(http.MethodPost, mcpBase(cfg)+path, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
+	req.Header.Set("Accept", "application/json")
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("console unreachable at %s: %w", mcpBase(cfg), err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusNotFound {
+		return fmt.Errorf("not found")
+	}
+	if resp.StatusCode != http.StatusOK {
+		// Surface the handler's error message when it sent one (e.g. the task is
+		// not claimed), falling back to the bare status.
+		var e struct {
+			Error string `json:"error"`
+		}
+		if json.NewDecoder(resp.Body).Decode(&e) == nil && e.Error != "" {
+			return fmt.Errorf("%s", e.Error)
+		}
+		return fmt.Errorf("console returned %s", resp.Status)
+	}
+	if v == nil {
+		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(v)
 }

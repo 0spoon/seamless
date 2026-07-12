@@ -84,7 +84,7 @@ tasks:
   seam task done|start|drop|reopen <id>        transition a task
   seam task claim <id> [--lease SECS]          atomically claim a task (lease-based)
   seam task heartbeat <id> [--lease SECS]      refresh the lease on a task you hold
-  seam task release <id>                       release a task you hold (reopens it)
+  seam task release <id> [--force]             release a task you hold (--force: owner override, any holder)
 
 observability:
   seam status                                  server health + project count

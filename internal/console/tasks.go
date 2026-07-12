@@ -1,6 +1,7 @@
 package console
 
 import (
+	"errors"
 	"net/http"
 	"sort"
 	"time"
@@ -85,6 +86,47 @@ func (s *Service) tasks(w http.ResponseWriter, r *http.Request) {
 		ClosedMore: closedMore,
 	}
 	s.render(w, r, "tasks", pageData{Title: "Tasks", Active: "tasks", Data: data})
+}
+
+// taskRelease is the owner override for a claimed task: it force-releases the
+// lock (reopening the task for any agent to claim) regardless of who holds it.
+// It is reachable only from this owner surface (the console button and the
+// bearer-authenticated `seam task release --force`), never the agent MCP tools.
+func (s *Service) taskRelease(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	released, err := store.ForceReleaseTask(ctx, s.cfg.DB, id, time.Now().UTC())
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			http.NotFound(w, r)
+			return
+		}
+		// Not in progress (nothing to release) or a store error: surface it
+		// rather than pretend success.
+		s.serverError(w, r, err)
+		return
+	}
+	if s.cfg.Events != nil {
+		if _, err := s.cfg.Events.Record(ctx, core.Event{
+			Kind: core.EventTaskTransition, ProjectSlug: released.ProjectSlug, ItemID: released.ID,
+			Payload: map[string]any{"to": string(released.Status), "released": true, "by": "console"},
+		}); err != nil {
+			s.logger.Warn("console: record task release event", "error", err)
+		}
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, taskDetailJSON(released))
+		return
+	}
+	http.Redirect(w, r, "/console/tasks/"+released.ID, http.StatusSeeOther)
+}
+
+// taskDetailJSON is the minimal task view returned to a CLI/JSON caller of
+// taskRelease, so `seam task release --force` can print the reopened task.
+func taskDetailJSON(t core.Task) map[string]any {
+	return map[string]any{
+		"id": t.ID, "title": t.Title, "project": t.ProjectSlug, "status": string(t.Status),
+	}
 }
 
 // closedBefore reports whether a closed before b (by ClosedAt, falling back to

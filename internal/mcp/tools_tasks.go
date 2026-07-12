@@ -63,7 +63,7 @@ func (s *Server) handleTasksAdd(ctx context.Context, req mcp.CallToolRequest) (*
 
 func tasksUpdateTool() mcp.Tool {
 	return mcp.NewTool("tasks_update",
-		mcp.WithDescription("Update a task: change status (open|in_progress|done|dropped), edit title/body, or add dependencies. Moving to done/dropped closes it and unblocks its dependents."),
+		mcp.WithDescription("Update a task: change status (open|in_progress|done|dropped), edit title/body, or add dependencies. Moving to done/dropped closes it and unblocks its dependents. A task another session holds via a live claim is locked to its holder: updating it fails with 'already claimed' until the lease lapses or the holder releases it."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id")),
 		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("new status")),
 		mcp.WithString("title", mcp.Description("new title")),
@@ -97,7 +97,7 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if patch.Status == nil && patch.Title == nil && patch.Body == nil && len(patch.AddDependsOn) == 0 {
 		return errResult("tasks_update", errors.New("nothing to update: pass status, title, body, or add_depends_on"))
 	}
-	updated, err := store.UpdateTask(ctx, s.cfg.DB, id, patch, time.Now().UTC())
+	updated, err := store.UpdateTask(ctx, s.cfg.DB, id, patch, s.boundSession(ctx), time.Now().UTC())
 	if err != nil {
 		return errResult("tasks_update", err)
 	}

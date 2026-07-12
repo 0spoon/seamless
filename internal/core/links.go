@@ -21,7 +21,7 @@ func WikiLinks(body string) []string {
 	seen := make(map[string]struct{}, len(matches))
 	var out []string
 	for _, m := range matches {
-		name := wikiLinkName(m[1])
+		name := WikiLinkName(m[1])
 		if name == "" {
 			continue
 		}
@@ -44,7 +44,7 @@ func WikiLinks(body string) []string {
 func ReplaceWikiLinks(s string, repl func(token, name string) string) string {
 	return wikiLinkRe.ReplaceAllStringFunc(s, func(tok string) string {
 		m := wikiLinkRe.FindStringSubmatch(tok)
-		name := wikiLinkName(m[1])
+		name := WikiLinkName(m[1])
 		if name == "" {
 			return tok
 		}
@@ -52,8 +52,11 @@ func ReplaceWikiLinks(s string, repl func(token, name string) string) string {
 	})
 }
 
-// wikiLinkName normalizes a [[...]] inner reference to a bare memory name.
-func wikiLinkName(ref string) string {
+// WikiLinkName normalizes a [[...]] inner reference to a bare memory name: a
+// "project/name" reference keeps the last segment, and a trailing "|alias" or
+// "#anchor" is dropped. It is the shared normalization for every wiki-link
+// consumer (WikiLinks, ReplaceWikiLinks, and the console markdown renderer).
+func WikiLinkName(ref string) string {
 	ref = strings.TrimSpace(ref)
 	if i := strings.IndexAny(ref, "|#"); i >= 0 {
 		ref = ref[:i]

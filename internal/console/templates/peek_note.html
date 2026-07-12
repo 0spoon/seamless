@@ -4,7 +4,7 @@
   <h2 class="peek-title">{{.Title}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
 
-  {{if .BodyLoaded}}<div class="peek-body">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
+  {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}inbox{{end}}</dd>

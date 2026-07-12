@@ -174,10 +174,10 @@ func TestTaskPeek_DepsAndBlocks(t *testing.T) {
 	mk("TB", "B", "TA")
 	mk("TC", "C", "TA")
 
-	// A: rendered body + reverse "blocks" (B and C).
+	// A: raw body in JSON + reverse "blocks" (B and C).
 	var a taskDetail
 	getJSON(t, mux, "/console/tasks/TA?format=json", &a)
-	require.Equal(t, "do A", a.Body)
+	require.Equal(t, "do A", a.BodyText)
 	var blocks []string
 	for _, r := range a.Blocks {
 		blocks = append(blocks, r.ID)
@@ -264,59 +264,4 @@ func TestSessionAndEventPeekFragments(t *testing.T) {
 	require.NotContains(t, ep.Body.String(), "<html")
 	require.Contains(t, ep.Body.String(), "briefing text")
 	require.Contains(t, ep.Body.String(), "/console/sessions/SESS1")
-}
-
-func TestLinkifyBody(t *testing.T) {
-	resolve := func(name string) (string, bool) {
-		if name == "known" {
-			return "ID123", true
-		}
-		return "", false
-	}
-	cases := []struct {
-		name        string
-		body        string
-		contains    []string
-		notContains []string
-	}{
-		{
-			name:     "resolved link",
-			body:     "see [[known]] here",
-			contains: []string{`<a href="/console/memories/ID123" data-peek>known</a>`, "see ", " here"},
-		},
-		{
-			name:        "unresolved stays plain",
-			body:        "see [[missing]] here",
-			contains:    []string{"[[missing]]"},
-			notContains: []string{"<a "},
-		},
-		{
-			name:        "escapes html in body",
-			body:        "<script>evil()</script> [[known]]",
-			contains:    []string{"&lt;script&gt;", `<a href="/console/memories/ID123" data-peek>known</a>`},
-			notContains: []string{"<script>"},
-		},
-		{
-			name:        "no double escaping",
-			body:        "a & b [[known]]",
-			contains:    []string{"a &amp; b "},
-			notContains: []string{"&amp;amp;"},
-		},
-		{
-			name:     "project-qualified resolves via bare name",
-			body:     "ref [[proj/known|Alias]]",
-			contains: []string{`<a href="/console/memories/ID123" data-peek>known</a>`},
-		},
-	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := string(linkifyBody(tc.body, resolve))
-			for _, c := range tc.contains {
-				require.Contains(t, got, c)
-			}
-			for _, c := range tc.notContains {
-				require.NotContains(t, got, c)
-			}
-		})
-	}
 }

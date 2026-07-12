@@ -1,7 +1,9 @@
 package console
 
 import (
+	"context"
 	"errors"
+	"html/template"
 	"net/http"
 	"net/url"
 	"time"
@@ -37,12 +39,14 @@ type proposalCard struct {
 	Keep  *memBrief `json:"keep,omitempty"`
 	Drop  *memBrief `json:"drop,omitempty"`
 
-	// Digest
-	Project      string `json:"project,omitempty"`
-	Month        string `json:"month,omitempty"`
-	SessionCount int    `json:"sessionCount,omitempty"`
-	Title        string `json:"title,omitempty"`
-	Preview      string `json:"preview,omitempty"`
+	// Digest. Preview is the raw body text (JSON); Body is the full rendered
+	// markdown the card shows.
+	Project      string        `json:"project,omitempty"`
+	Month        string        `json:"month,omitempty"`
+	SessionCount int           `json:"sessionCount,omitempty"`
+	Title        string        `json:"title,omitempty"`
+	Preview      string        `json:"preview,omitempty"`
+	Body         template.HTML `json:"-"`
 }
 
 // gardenerData is the payload for the Gardener page.
@@ -61,7 +65,7 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 	}
 	cards := make([]proposalCard, 0, len(proposals))
 	for _, p := range proposals {
-		cards = append(cards, toProposalCard(p))
+		cards = append(cards, s.toProposalCard(ctx, p))
 	}
 	s.render(w, r, "gardener", pageData{
 		Title:  "Gardener",
@@ -74,7 +78,7 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func toProposalCard(p store.Proposal) proposalCard {
+func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposalCard {
 	c := proposalCard{ID: p.ID, Kind: p.Kind, CreatedAt: p.CreatedAt}
 	switch p.Kind {
 	case store.ProposalArchive:
@@ -93,7 +97,9 @@ func toProposalCard(p store.Proposal) proposalCard {
 		c.Month = payloadStr(p.Payload, "month")
 		c.SessionCount = int(payloadFloat(p.Payload, "session_count"))
 		c.Title = payloadStr(p.Payload, "title")
-		c.Preview = snippet(payloadStr(p.Payload, "body"), 600)
+		body := payloadStr(p.Payload, "body")
+		c.Preview = snippet(body, 600) // raw, for JSON
+		c.Body = s.renderBody(ctx, body, c.Project)
 	}
 	return c
 }

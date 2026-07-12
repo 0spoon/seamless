@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -27,8 +27,8 @@ type memoryRef struct {
 }
 
 // memoryDetail is the payload for a single memory's peek/detail. Body is the
-// linkified HTML the template renders; BodyText is the raw source (JSON + the
-// no-files fallback), so the two never double-escape each other.
+// rendered markdown HTML the template shows; BodyText is the raw source (JSON +
+// the no-files fallback), so the two never double-escape each other.
 type memoryDetail struct {
 	ID           string        `json:"id"`
 	Kind         string        `json:"kind"`
@@ -95,7 +95,7 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 		} else {
 			d.BodyText = full.Body
 			d.BodyLoaded = true
-			d.Body = s.linkifyBody(ctx, full.Body, m.Project)
+			d.Body = s.renderBody(ctx, full.Body, m.Project)
 		}
 	}
 
@@ -181,7 +181,7 @@ func (s *Service) noteDetail(w http.ResponseWriter, r *http.Request) {
 		} else {
 			d.BodyText = full.Body
 			d.BodyLoaded = true
-			d.Body = s.linkifyBody(ctx, full.Body, n.Project)
+			d.Body = s.renderBody(ctx, full.Body, n.Project)
 		}
 	}
 	s.renderDetail(w, r, "note", pageData{Title: "Note " + n.Title, Active: "notes", Data: d})
@@ -197,18 +197,24 @@ type taskRef struct {
 // taskDetail is the payload for a single task's peek/detail. Unlike the Tasks
 // list rows, it renders the task Body and resolves both dependency directions.
 type taskDetail struct {
-	ID        string     `json:"id"`
-	Title     string     `json:"title"`
-	Project   string     `json:"project"`
-	Status    string     `json:"status"`
-	Body      string     `json:"body"`
-	PlanSlug  string     `json:"planSlug,omitempty"`
-	CreatedBy string     `json:"createdBy,omitempty"`
-	Deps      []taskRef  `json:"deps,omitempty"`   // tasks this one depends on
-	Blocks    []taskRef  `json:"blocks,omitempty"` // tasks that depend on this one
-	Created   time.Time  `json:"created"`
-	Updated   time.Time  `json:"updated"`
-	Closed    *time.Time `json:"closed,omitempty"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Project string `json:"project"`
+	Status  string `json:"status"`
+	// Body is the rendered markdown HTML the template shows; BodyText is the raw
+	// source (JSON output), so the two never double-escape each other.
+	Body        template.HTML `json:"-"`
+	BodyText    string        `json:"body"`
+	PlanSlug    string        `json:"planSlug,omitempty"`
+	CreatedBy   string        `json:"createdBy,omitempty"`
+	ClaimedBy   string        `json:"claimedBy,omitempty"`
+	LeaseExpiry *time.Time    `json:"leaseExpiry,omitempty"`
+	ClaimLive   bool          `json:"claimLive,omitempty"` // lease unexpired as of render time
+	Deps        []taskRef     `json:"deps,omitempty"`      // tasks this one depends on
+	Blocks      []taskRef     `json:"blocks,omitempty"`    // tasks that depend on this one
+	Created     time.Time     `json:"created"`
+	Updated     time.Time     `json:"updated"`
+	Closed      *time.Time    `json:"closed,omitempty"`
 }
 
 func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
@@ -225,9 +231,14 @@ func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	d := taskDetail{
 		ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
-		Body: t.Body, PlanSlug: t.PlanSlug, CreatedBy: t.CreatedBy,
-		Created: t.CreatedAt, Updated: t.UpdatedAt, Closed: t.ClosedAt,
+		BodyText: t.Body, PlanSlug: t.PlanSlug, CreatedBy: t.CreatedBy,
+		ClaimedBy: t.ClaimedBy, LeaseExpiry: t.LeaseExpiresAt,
+		ClaimLive: t.ClaimLive(time.Now().UTC()),
+		Created:   t.CreatedAt, Updated: t.UpdatedAt, Closed: t.ClosedAt,
 	}
+	// Task bodies get the same markdown + wiki-link treatment as memory/note
+	// bodies, scoped to the task's project.
+	d.Body = s.renderBody(ctx, t.Body, t.ProjectSlug)
 	for _, depID := range t.DependsOn {
 		dep, derr := store.TaskByID(ctx, s.cfg.DB, depID)
 		if derr != nil {
@@ -290,31 +301,20 @@ func (s *Service) projectDetail(w http.ResponseWriter, r *http.Request) {
 	s.renderDetail(w, r, "project", pageData{Title: "Project " + p.Slug, Active: "settings", Data: d})
 }
 
-// linkifyBody renders a memory/note body as safe HTML for the peek panel: the
-// whole body is HTML-escaped first, then each [[name]] wiki-link whose target
-// resolves is rewritten to a memory peek link (data-peek); unresolved links stay
-// as escaped plain text. There is no markdown engine -- the body is short-form
-// markdown that reads fine preformatted (the template wraps it in a
-// white-space:pre-wrap block), so this adds cross-links and nothing else. The
-// resolver receives the normalized bare name and returns a memory id.
-func linkifyBody(body string, resolve func(name string) (id string, ok bool)) template.HTML {
-	escaped := template.HTMLEscapeString(body)
-	out := core.ReplaceWikiLinks(escaped, func(token, name string) string {
-		id, ok := resolve(name)
-		if !ok {
-			return token // already escaped; leave as plain text
-		}
-		return `<a href="/console/memories/` + template.HTMLEscapeString(id) +
-			`" data-peek>` + template.HTMLEscapeString(name) + `</a>`
-	})
-	return template.HTML(out)
+// renderBody renders a memory/note/task body -- or session findings -- as
+// sanitized markdown HTML for the peek panel and the no-JS detail page. [[name]]
+// references resolve to memory peek links (data-peek), scoped to the item's
+// project with a global fallback (the same rule recall uses); unresolved
+// references stay as literal text. The raw source is kept separately in each
+// detail's BodyText field, so rendered and raw never double-escape each other.
+func (s *Service) renderBody(ctx context.Context, body, project string) template.HTML {
+	return markdown.Render(body, s.wikiResolver(ctx, project))
 }
 
-// linkifyBody (method) resolves [[name]] links against the store, scoped to the
-// item's project with a global fallback (the same rule recall uses), and returns
-// the linkified HTML.
-func (s *Service) linkifyBody(ctx context.Context, body, project string) template.HTML {
-	return linkifyBody(body, func(name string) (string, bool) {
+// wikiResolver maps a normalized [[name]] reference to a memory peek link,
+// resolving the name against the store scoped to project with a global fallback.
+func (s *Service) wikiResolver(ctx context.Context, project string) markdown.WikiResolver {
+	return func(name string) (string, bool) {
 		m, ok, err := store.MemoryByName(ctx, s.cfg.DB, project, name)
 		if err != nil {
 			s.logger.Warn("console: resolve wiki-link", "name", name, "error", err)
@@ -330,6 +330,6 @@ func (s *Service) linkifyBody(ctx context.Context, body, project string) templat
 		if !ok {
 			return "", false
 		}
-		return m.ID, true
-	})
+		return "/console/memories/" + m.ID, true
+	}
 }
