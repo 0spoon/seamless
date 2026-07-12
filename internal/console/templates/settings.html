@@ -24,7 +24,7 @@
   </div>
 
   <div class="card">
-    <h2>Gardener</h2>
+    <h2>Gardener <span class="h2-meta">{{if .Gardener.Enabled}}enabled &middot; every {{.Gardener.IntervalMinutes}}m{{else}}disabled{{end}}</span></h2>
     <dl class="kv">
       <dt>Enabled</dt><dd>{{if .Gardener.Enabled}}<span class="badge ok">yes</span>{{else}}<span class="badge">no</span>{{end}}</dd>
       <dt>Interval</dt><dd>{{.Gardener.IntervalMinutes}}m</dd>

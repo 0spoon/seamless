@@ -7,47 +7,53 @@
   </div>
 </div>
 
-{{range .Groups}}
-<div class="section">
-  <h2>{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></h2>
-  {{range .Kinds}}
-  <div class="table-wrap" style="margin-bottom:12px;">
+{{if .Groups}}
+<div class="mem-layout">
+  <nav class="mem-index">
+    <span class="hd">Projects</span>
+    {{range .Groups}}
+    <a href="#proj-{{if .Project}}{{.Project}}{{else}}global{{end}}">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="n">{{.Count}}</span></a>
+    {{end}}
+  </nav>
+
+  <div class="table-wrap">
     <table>
-      <thead>
-        <tr><th style="width:1%"><span class="kind">{{.Kind}}</span></th><th>Name</th><th>Description</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th><th></th></tr>
-      </thead>
+      <thead><tr><th>Name</th><th>Kind</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th><th></th></tr></thead>
       <tbody>
+        {{range .Groups}}
+        <tr class="group-row" id="proj-{{if .Project}}{{.Project}}{{else}}global{{end}}"><td colspan="6">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></td></tr>
+        {{range .Kinds}}
         {{range .Memories}}
         <tr id="{{.ID}}">
-          <td></td>
-          <td><strong>{{.Name}}</strong></td>
-          <td class="muted">{{.Description}}</td>
+          <td class="mem-name"><strong>{{.Name}}</strong>{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
+          <td><span class="kind">{{.Kind}}</span></td>
           <td class="num">{{.Injects}}</td>
           <td class="num">{{.Reads}}</td>
           <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
-          <td class="num">
-            <div class="btn-row" style="justify-content:flex-end;flex-wrap:nowrap;">
-              <a class="btn small" href="{{.EditURL}}" title="{{.AbsPath}}">edit</a>
+          <td>
+            <div class="row-actions">
+              <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit</a>
               {{if $.Data.CanArchive}}
               <form method="post" action="/console/memories/{{.ID}}/archive" onsubmit="return confirm('Archive {{.Name}}?');">
-                <button class="btn small danger" type="submit">archive</button>
+                <button class="link-act danger" type="submit">archive</button>
               </form>
               {{end}}
             </div>
           </td>
         </tr>
         {{end}}
+        {{end}}
+        {{end}}
       </tbody>
     </table>
   </div>
-  {{end}}
 </div>
 {{else}}
 <div class="empty">No active memories yet</div>
 {{end}}
 
 {{if .Inactive}}
-<div class="section">
+<div class="section" style="margin-top:24px">
   <details>
     <summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px;">Archived &amp; superseded <span class="count muted">{{.InactiveCount}}</span></summary>
     <div class="table-wrap">

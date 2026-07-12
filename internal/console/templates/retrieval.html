@@ -7,52 +7,34 @@
   </div>
 </div>
 
-<div class="grid-hero section" style="grid-template-columns:0.7fr 1fr 1fr">
-  <div class="card center">
-    <h2 style="align-self:flex-start">Read-after-inject</h2>
-    {{if .Injections}}
-    <div class="ring" style="--ring-val:{{.ReadRate}};--ring-size:116px;--ring-stroke:12px">
-      <div class="ring-center">
-        <span class="ring-num">{{.ReadRate}}%</span>
-        <span class="ring-sub">{{.Reads}} / {{.Injections}}</span>
-      </div>
+<div class="card section">
+  <h2>Read-after-inject funnel</h2>
+  {{if .Injections}}
+  <div class="funnel">
+    <div class="step"><span class="v">{{.Injections}}</span><span class="l">Injections</span></div>
+    <div class="arrow">&rarr;</div>
+    <div class="step"><span class="v brand">{{.Reads}}</span><span class="l">Reads</span></div>
+    <div class="funnel-bar">
+      <div class="track"><span style="width:{{.ReadRate}}%"></span></div>
+      <span class="cap">{{.ReadRate}}% of injected memories were read back by an agent</span>
     </div>
-    {{else}}<div class="empty">No retrieval yet</div>{{end}}
   </div>
-  <div class="card stat"><span class="value">{{.Injections}}</span><span class="label">Injections</span></div>
-  <div class="card stat"><span class="value">{{.Reads}}</span><span class="label">Reads</span></div>
+  {{else}}<div class="empty">No retrieval yet</div>{{end}}
 </div>
 
 <div class="grid-2 section">
   <div class="card">
-    <h2>By kind</h2>
-    {{if .ByKind}}
-    <table>
-      <thead><tr><th>Kind</th><th class="num">Inj</th><th class="num">Read</th><th>Rate</th></tr></thead>
-      <tbody>
-        {{range .ByKind}}
-        <tr>
-          <td><span class="kind">{{.Kind}}</span></td>
-          <td class="num">{{.Injects}}</td>
-          <td class="num">{{.Reads}}</td>
-          <td style="min-width:120px">
-            <span class="muted">{{.ReadRate}}%</span>
-            <div class="meter"><span style="width:{{.ReadRate}}%"></span></div>
-          </td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}<div class="empty">No retrieval activity yet</div>{{end}}
+    <h2>By kind <span class="h2-meta">inj vs read</span></h2>
+    {{if .ByKind}}{{kindBars .ByKind}}{{else}}<div class="empty">No retrieval activity yet</div>{{end}}
   </div>
 
   <div class="card">
-    <h2>Injection trend (14d)</h2>
+    <h2>Injection trend &middot; 14d{{if .TrendMax}} <span class="h2-meta">peak {{.TrendMax}}</span>{{end}}</h2>
     {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in the last 14 days</div>{{end}}
   </div>
 </div>
 
-<div class="grid-2 section">
+<div class="section">
   <div class="card">
     <h2>Most injected</h2>
     {{if .TopInjected}}
@@ -71,10 +53,12 @@
     </table>
     {{else}}<div class="empty">No injections recorded</div>{{end}}
   </div>
+</div>
 
+{{if .Stale}}
+<div class="section">
   <div class="card">
-    <h2>Stale <span class="count muted">no activity in {{.StaleDays}}d</span></h2>
-    {{if .Stale}}
+    <h2>Stale <span class="h2-meta">no activity in {{.StaleDays}}d</span></h2>
     <table>
       <thead><tr><th>Memory</th><th>Kind</th><th>Updated</th></tr></thead>
       <tbody>
@@ -87,8 +71,14 @@
         {{end}}
       </tbody>
     </table>
-    {{else}}<div class="empty">No stale memories &mdash; everything has been touched recently</div>{{end}}
   </div>
 </div>
+{{else}}
+<div class="stale-strip section">
+  <span class="lab">Stale &middot; no activity in {{.StaleDays}}d</span>
+  <span class="okdot"></span>
+  <span>No stale memories &mdash; everything has been touched recently.</span>
+</div>
+{{end}}
 {{end}}
 {{end}}

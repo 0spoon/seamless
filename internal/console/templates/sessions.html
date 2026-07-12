@@ -13,28 +13,47 @@
 </div>
 
 {{if .Sessions}}
-<div class="table-wrap">
-  <table>
-    <thead>
-      <tr><th>Session</th><th>Project</th><th>Status</th><th>Source</th><th>Updated</th><th>Findings</th></tr>
-    </thead>
-    <tbody>
-      {{range .Sessions}}
-      <tr>
-        <td>
-          <a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>
-          {{if .Ambient}}<span class="badge">ambient</span>{{end}}
-        </td>
-        <td class="muted">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</td>
-        <td>{{if eq .Status "active"}}<span class="badge ok">active</span>{{else}}<span class="badge">completed</span>{{end}}</td>
-        <td class="muted">{{.Source}}</td>
-        <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
-        <td class="muted">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
+
+{{if and (or (eq .Filter "") (eq .Filter "active")) .Active}}
+<div class="sess-group">
+  <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span></h2>
+  <div class="sess-list">
+    {{range .Sessions}}{{if eq .Status "active"}}
+    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}">
+      <div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="find">{{if .Findings}}{{.Findings}}{{else}}no findings yet{{end}}</div>
+      </div>
+      <span class="proj">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</span>
+      <span class="src">{{.Source}}</span>
+      <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
+    </div>
+    {{end}}{{end}}
+  </div>
 </div>
+{{end}}
+
+{{if or (eq .Filter "") (eq .Filter "completed")}}
+{{if ne .Total .Active}}
+<div class="sess-group">
+  <h2>Completed{{if eq .Filter ""}} <span class="count">{{sub .Total .Active}}</span>{{end}}</h2>
+  <div class="sess-list">
+    {{range .Sessions}}{{if eq .Status "completed"}}
+    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}">
+      <div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}">{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
+      </div>
+      <span class="proj">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</span>
+      <span class="src">{{.Source}}</span>
+      <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
+    </div>
+    {{end}}{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
 {{else}}
 <div class="empty">No sessions{{if .Filter}} with status "{{.Filter}}"{{end}} yet</div>
 {{end}}

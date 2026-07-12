@@ -661,3 +661,153 @@ details > summary { font-family: var(--font-display); }
   .main { padding: 16px 12px 48px; }
   .stat .value { font-size: var(--text-2xl); }
 }
+
+
+/* ===========================================================================
+   POLISH PASS (2026-07) -- "Operations rail"
+   Appended overrides + new components for the redesigned Overview (main
+   column + right rail), Sessions (status groups, two-line list rows),
+   Memories (project index + one flat table), and Retrieval (funnel first).
+   Appended last on purpose: equal-specificity rules here win over the base.
+   =========================================================================== */
+
+/* --- Page titles carry more weight; sections breathe ---------------------- */
+.topbar { margin-bottom: 24px; }
+.topbar h1 { font-size: var(--text-2xl); }
+.section { margin-bottom: 24px; }
+
+/* Card headers may carry a right-aligned meta note. */
+.card h2 { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.card h2 .h2-meta { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--faint); font-variant-numeric: tabular-nums; text-align: right; }
+
+/* Section titles that sit outside a card (e.g. Recent activity). */
+.flow-title { font-family: var(--font-display); font-size: var(--text-md); margin: 0 0 12px; font-weight: 600; }
+
+/* --- Overview: main column + right rail ----------------------------------- */
+.ov-grid { display: grid; grid-template-columns: minmax(0, 1fr) 304px; gap: 16px; align-items: start; }
+.ov-main, .ov-rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1020px) { .ov-grid { grid-template-columns: 1fr; } }
+
+/* Hero banner: one headline number, its context, and the trend in one card. */
+.hero-banner { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 34px; align-items: center; padding: 6px 4px 2px; }
+.hero-num { display: flex; flex-direction: column; gap: 4px; min-width: 172px; }
+.hero-num .big { font-family: var(--font-display); font-weight: 700; font-size: 52px; letter-spacing: var(--tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; color: var(--brand); }
+.hero-num .big.ok { color: var(--ok); }
+.hero-num .cap { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; }
+.hero-num .sub { font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 700px) { .hero-banner { grid-template-columns: 1fr; } }
+
+/* Rail counters: quiet label:value rows instead of five display tiles. */
+.rail-kv { display: flex; flex-direction: column; }
+.rail-kv .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); }
+.rail-kv .row:last-child { border-bottom: none; padding-bottom: 0; }
+.rail-kv .row:first-child { padding-top: 0; }
+.rail-kv .k { color: var(--muted); }
+.rail-kv .v { font-family: var(--font-display); font-weight: 700; font-size: var(--text-lg); font-variant-numeric: tabular-nums; }
+.rail-kv .v.zero { color: var(--faint); }
+.rail-kv .v-sub { font-family: var(--font-sans); font-weight: 600; font-size: var(--text-xs); color: var(--ok); }
+
+/* Rail lists: link + count per row. */
+.rail-list { display: flex; flex-direction: column; }
+.rail-list .row { display: flex; align-items: baseline; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: var(--text-sm); min-width: 0; }
+.rail-list .row:last-child { border-bottom: none; padding-bottom: 0; }
+.rail-list .row:first-child { padding-top: 0; }
+.rail-list a { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-xs); font-family: var(--font-mono); }
+.rail-list .n { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--muted); }
+
+/* --- Sessions: status groups + two-line list rows -------------------------- */
+.sess-group { margin-bottom: 26px; }
+.sess-group > h2 { font-family: var(--font-display); font-size: var(--text-md); margin: 0 0 10px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.sess-group > h2 .count { font-size: var(--text-xs); color: var(--muted); font-weight: 500; }
+.sess-list { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.sess-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 64px 52px; gap: 16px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); transition: background var(--dur-fast) var(--ease-out); cursor: pointer; }
+.sess-row:last-child { border-bottom: none; }
+.sess-row:hover { background: var(--surface-2); }
+.sess-row .id-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sess-row .id-line a { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-row .find { color: var(--muted); font-size: var(--text-xs); margin-top: 3px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.sess-row .proj { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sess-row .src { font-size: var(--text-xs); color: var(--faint); text-align: right; }
+.sess-row .when { font-size: var(--text-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 720px) {
+  .sess-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .sess-row .proj, .sess-row .src { display: none; }
+}
+
+/* Ambient marker reads as metadata, not a badge. */
+.kind.faint { color: var(--faint); background: transparent; }
+
+/* --- Memories: project index rail + one flat table -------------------------- */
+.mem-layout { display: grid; grid-template-columns: 196px minmax(0, 1fr); gap: 20px; align-items: start; }
+.mem-index { position: sticky; top: 24px; display: flex; flex-direction: column; gap: 1px; font-size: var(--text-sm); }
+.mem-index .hd { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; padding: 0 10px 8px; }
+.mem-index a { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 5px 10px; border-radius: var(--radius-sm); color: var(--text-secondary); font-family: var(--font-mono); font-size: var(--text-xs); }
+.mem-index a:hover { background: var(--surface-2); text-decoration: none; }
+.mem-index .n { color: var(--faint); font-variant-numeric: tabular-nums; }
+@media (max-width: 900px) {
+  .mem-layout { grid-template-columns: 1fr; }
+  .mem-index { position: static; flex-direction: row; flex-wrap: wrap; gap: 4px; }
+  .mem-index .hd { width: 100%; padding-left: 0; }
+}
+
+/* Project separator rows inside the flat memories table. */
+tr.group-row td { background: var(--surface-2); font-family: var(--font-mono); font-weight: 600; font-size: var(--text-xs); color: var(--text-secondary); padding: 7px 12px; }
+tr.group-row .count { color: var(--faint); font-weight: 500; margin-left: 6px; }
+tr.group-row:hover td { background: var(--surface-2); }
+
+/* Memory name cell: description tucks under the name, clamped to one line. */
+.mem-name { max-width: 380px; }
+.mem-name .desc { color: var(--muted); font-size: var(--text-xs); font-weight: 400; margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+
+/* Row actions: quiet text links, revealed on row hover/focus. */
+.row-actions { display: flex; gap: 12px; justify-content: flex-end; opacity: 0.4; transition: opacity var(--dur-fast) var(--ease-out); }
+.row-actions form { margin: 0; display: contents; }
+tr:hover .row-actions, tr:focus-within .row-actions { opacity: 1; }
+.link-act { font-size: var(--text-xs); font-weight: 600; color: var(--muted); background: none; border: 0; cursor: pointer; padding: 0; font-family: var(--font-sans); }
+.link-act:hover { color: var(--brand); text-decoration: underline; }
+a.link-act { color: var(--muted); }
+a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
+.link-act.danger:hover { color: var(--danger); text-decoration-color: var(--danger); }
+
+/* --- Retrieval: funnel first ------------------------------------------------ */
+.funnel { display: grid; grid-template-columns: repeat(3, auto) minmax(0, 1fr); gap: 30px; align-items: center; padding: 4px 4px 0; }
+.funnel .step { display: flex; flex-direction: column; gap: 3px; }
+.funnel .step .v { font-family: var(--font-display); font-weight: 700; font-size: var(--text-3xl); letter-spacing: var(--tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; }
+.funnel .step .v.brand { color: var(--brand); }
+.funnel .step .l { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+.funnel .arrow { color: var(--faint); font-size: var(--text-lg); }
+.funnel-bar { display: flex; flex-direction: column; gap: 8px; min-width: 220px; }
+.funnel-bar .track { height: 22px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.funnel-bar .track > span { display: block; height: 100%; background: var(--brand); border-radius: 0 var(--radius-xs) var(--radius-xs) 0; transition: width var(--dur-slow) var(--ease-out); }
+.funnel-bar .cap { font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
+@media (max-width: 860px) { .funnel { grid-template-columns: repeat(3, auto); } .funnel-bar { grid-column: 1 / -1; } }
+
+/* By-kind: paired injected/read bars (see kindBars in charts.go). */
+.kindbars { display: flex; flex-direction: column; gap: 13px; padding-top: 2px; }
+.kindbar { display: grid; grid-template-columns: 92px minmax(0, 1fr) 74px; gap: 12px; align-items: center; }
+.kindbar .bars { display: flex; flex-direction: column; gap: 3px; }
+.kindbar .track { height: 7px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.kindbar .track > span { display: block; height: 100%; border-radius: var(--radius-pill); transition: width var(--dur-slow) var(--ease-out); }
+.kindbar .track > span.inj { background: var(--brand); }
+.kindbar .track > span.read { background: var(--ok); }
+.kindbar .nums { font-size: var(--text-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kindbar-legend { display: flex; gap: 16px; margin-top: 14px; font-size: var(--text-2xs); color: var(--muted); }
+.kindbar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.kindbar-legend i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+
+/* Empty stale state collapses to a slim reassuring strip. */
+.stale-strip { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--muted); font-size: var(--text-sm); box-shadow: var(--shadow-sm); }
+.stale-strip .lab { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; margin-right: 6px; }
+.stale-strip .okdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+
+/* --- Gardener: proposal card internals (replaces inline styles) ------------- */
+.prop-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.prop-head .when { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.prop-title { font-family: var(--font-display); font-weight: 600; font-size: var(--text-md); }
+.prop-note { color: var(--muted); font-size: var(--text-sm); margin-bottom: 8px; }
+.prop-desc { color: var(--muted); font-size: var(--text-sm); margin: 4px 0 10px; }
+.prop-row { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.prop-row:last-of-type { margin-bottom: 0; }
+.prop-row .name { font-weight: 600; }
+.prop-row .desc { flex-basis: 100%; color: var(--muted); font-size: var(--text-xs); margin-top: 2px; }
+.prop-foot { margin-top: 14px; }
