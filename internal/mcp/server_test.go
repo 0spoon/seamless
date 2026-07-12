@@ -381,6 +381,142 @@ func TestConcurrentAmbientDoesNotBleed(t *testing.T) {
 	require.True(t, foundDemo, "the explicitly scoped write lands in its own project")
 }
 
+// TestConcurrentAmbientRejectsReads is the read-side twin of the bleed
+// regression: under concurrent agents in different repos, a read or by-name
+// lookup must not silently narrow to the global scope (hiding the intended
+// project's items). It must refuse, exactly as the durable writes do. The same
+// guard covers capture_url and trial_record, which create durable artifacts but
+// used to resolve scope through the read path (a latent instance of the bug).
+func TestConcurrentAmbientRejectsReads(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	seedAmbient(t, ctx, db, "cc/ambdemo0", "demo")
+	seedAmbient(t, ctx, db, "cc/ambother", "other")
+
+	cli := dialClient(t, ctx, url, testKey)
+
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"recall", map[string]any{"query": "anything"}},
+		{"memory_read", map[string]any{"name": "x"}},
+		{"memory_append", map[string]any{"name": "x", "body": "b"}},
+		{"memory_delete", map[string]any{"name": "x"}},
+		{"tasks_list", map[string]any{}},
+		{"tasks_ready", map[string]any{}},
+		{"capture_url", map[string]any{"url": "https://example.com/x"}},
+		{"trial_record", map[string]any{"title": "t", "lab": "L", "changes": "c"}},
+	} {
+		isErr, txt := callErr(t, ctx, cli, tc.tool, tc.args)
+		require.True(t, isErr, "%s must refuse under concurrent multi-project ambient sessions", tc.tool)
+		require.Contains(t, txt, "ambiguous scope", "%s: %s", tc.tool, txt)
+	}
+}
+
+// TestReadResolvesGlobalWithoutAmbient verifies the read path is only tightened
+// for the *ambiguous* case: with genuinely nothing to infer from (no binding, no
+// ambient), a read still legitimately targets the global scope rather than
+// erroring -- reading a global memory by name keeps working.
+func TestReadResolvesGlobalWithoutAmbient(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "g", "kind": "reference", "description": "d",
+		"body": "a global memory.\n", "project": "global",
+	})
+	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "g"})
+	require.Equal(t, "g", r["name"], "a read with no scope signal resolves to global, not an error")
+}
+
+// TestSingleAmbientInfersProjectForReads verifies the single-agent ergonomic is
+// preserved for reads: one active ambient project is unambiguous, so an unbound
+// read inherits it instead of falling to global.
+func TestSingleAmbientInfersProjectForReads(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	seedAmbient(t, ctx, db, "cc/ambonly0", "demo")
+	cli := dialClient(t, ctx, url, testKey)
+
+	// Write (inherits demo), then read back with no project -- the read must infer
+	// demo too, otherwise it would look in global and miss it.
+	callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "in-demo", "kind": "reference", "description": "d", "body": "b\n",
+	})
+	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "in-demo"})
+	require.Equal(t, "in-demo", r["name"], "single-project ambient is inferred for reads")
+}
+
+// TestSessionTargetAmbiguousSameProject closes the same-project session gap: two
+// agents in the SAME repo both leave an active ambient session, so a session_end
+// / session_update with no explicit target must refuse rather than complete a
+// sibling agent's session. An explicit session_id is the escape hatch.
+func TestSessionTargetAmbiguousSameProject(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	a := seedAmbient(t, ctx, db, "cc/samea000", "demo")
+	b := seedAmbient(t, ctx, db, "cc/sameb000", "demo")
+
+	cli := dialClient(t, ctx, url, testKey)
+
+	for _, tool := range []string{"session_end", "session_update"} {
+		isErr, txt := callErr(t, ctx, cli, tool, map[string]any{"findings": "x"})
+		require.True(t, isErr, "%s must refuse when two same-project ambients could be the target", tool)
+		require.Contains(t, txt, "ambiguous session", "%s: %s", tool, txt)
+	}
+
+	// Explicit session_id resolves cleanly and completes only that session.
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done", "session_id": a})
+	require.Equal(t, a, end["session_id"])
+	require.Equal(t, "completed", end["status"])
+
+	other, ok, err := store.SessionByID(ctx, db, b)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, other.Status, "the sibling session must stay active")
+}
+
+// TestSessionTargetSoloAmbientResolves verifies the solo ergonomic survives: with
+// exactly one active ambient session, session_end with no explicit target still
+// completes it.
+func TestSessionTargetSoloAmbientResolves(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	solo := seedAmbient(t, ctx, db, "cc/solo0000", "demo")
+
+	cli := dialClient(t, ctx, url, testKey)
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done"})
+	require.Equal(t, solo, end["session_id"], "a lone ambient is unambiguous and resolves")
+	require.Equal(t, "completed", end["status"])
+}
+
+// TestSessionTargetBindingWinsOverAmbient verifies a bound agent (called
+// session_start) targets its own session even when a sibling ambient exists in
+// the same project -- the binding short-circuits the ambient ambiguity guard.
+func TestSessionTargetBindingWinsOverAmbient(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	cli := dialClient(t, ctx, url, testKey)
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	bound, _ := start["session_id"].(string)
+	require.NotEmpty(t, bound)
+
+	sib := seedAmbient(t, ctx, db, "cc/sibling0", "demo")
+
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done"})
+	require.Equal(t, bound, end["session_id"], "session_end targets the bound session, not the sibling ambient")
+
+	s, ok, err := store.SessionByID(ctx, db, sib)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, s.Status, "the sibling ambient must stay active")
+}
+
 // TestSessionEndTargetsExplicitID verifies session_end/session_update honor an
 // explicit session_id -- so a call meant for one session can no longer be
 // silently redirected to the ambient fallback and overwrite another agent's.

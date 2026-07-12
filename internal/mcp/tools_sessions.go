@@ -140,10 +140,14 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 // resolveSession loads the session the request targets: an explicit session_id
-// (ULID) first, then a session name, then the bound session. Accepting an id as
-// well as a name stops a session_id= argument from being silently ignored and
-// dropping to the ambient fallback -- the call-site mistake behind an overwrite
-// of the wrong agent's session.
+// (ULID) first, then a session name, then the connection's bound session, and
+// only then a single unambiguous active ambient session. Accepting an id as well
+// as a name stops a session_id= argument from being silently ignored and dropping
+// to the fallback -- the call-site mistake behind an overwrite of the wrong
+// agent's session. The fallback is stricter than for reads/writes: it refuses
+// (errAmbiguousSession) whenever more than one active ambient session could be the
+// one meant -- including two agents' ambients in the SAME repo -- because
+// completing the wrong session is destructive, not merely mis-scoped.
 func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (core.Session, bool, error) {
 	if id := argString(req, "session_id"); id != "" {
 		return store.SessionByID(ctx, s.cfg.DB, id)
@@ -151,11 +155,47 @@ func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (c
 	if name := argString(req, "session"); name != "" {
 		return store.SessionByName(ctx, s.cfg.DB, name)
 	}
-	id := s.boundSession(ctx)
-	if id == "" {
-		return core.Session{}, false, nil
+	if b, ok := s.getBinding(ctx); ok {
+		return store.SessionByID(ctx, s.cfg.DB, b.sessionID)
 	}
-	return store.SessionByID(ctx, s.cfg.DB, id)
+	sess, ok, ambiguous, err := s.ambientSessionTarget(ctx)
+	if err != nil {
+		return core.Session{}, false, err
+	}
+	if ambiguous {
+		return core.Session{}, false, errAmbiguousSession
+	}
+	return sess, ok, nil
+}
+
+// ambientSessionTarget resolves the single active ambient session an unbound
+// session_update/end may target, or reports ambiguity. It is stricter than
+// ambientFallback: that one collapses a project's ambients to the most recent for
+// provenance, which is fine for stamping an event but not for *completing* a
+// session. Here more than one candidate -- across projects, or two agents' cc/*
+// ambients in one project -- yields ambiguous=true and no session, so the caller
+// must name the session. Exactly one candidate (the solo-agent case) resolves.
+func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, err error) {
+	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
+	if err != nil {
+		return core.Session{}, false, false, err
+	}
+	switch len(projects) {
+	case 0:
+		return core.Session{}, false, false, nil
+	case 1:
+		// Single project: still ambiguous if two agents left ambients in it.
+	default:
+		return core.Session{}, false, true, nil
+	}
+	sessions, err := store.ActiveAmbientSessionsForProject(ctx, s.cfg.DB, projects[0], ambientFallbackWindow)
+	if err != nil {
+		return core.Session{}, false, false, err
+	}
+	if len(sessions) != 1 {
+		return core.Session{}, false, len(sessions) > 1, nil
+	}
+	return sessions[0], true, false, nil
 }
 
 // shortID returns the last 8 characters of a ULID, lowercased, for a readable

@@ -63,6 +63,15 @@ var errNoScope = errors.New(
 // (concurrent agents in different repos). Inheriting the machine-latest ambient
 // here is exactly how a write bleeds into another agent's project, so the caller
 // must disambiguate with project=.
+// errAmbiguousSession is returned by resolveSession when a session_update/end
+// gives no explicit session_id or session name, has no bound session, and more
+// than one active ambient session -- across projects, or two agents' cc/* ambients
+// in the same repo -- could be the target. Guessing here would complete or
+// overwrite another agent's session, so the caller must name it explicitly.
+var errAmbiguousSession = errors.New(
+	"ambiguous session: no bound session, and multiple active ambient sessions " +
+		"could be the target; pass session_id=<ULID> or session=<name>")
+
 var errAmbiguousScope = errors.New(
 	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
 		"projects (concurrent agents); pass project=<slug> for a project item, or " +
@@ -268,28 +277,35 @@ func (s *Server) getBinding(ctx context.Context) (binding, bool) {
 // long-running session that has gone quiet.
 const ambientFallbackWindow = 6 * time.Hour
 
-// resolveProject prefers an explicit project argument (with the global token
-// normalized), then the bound session's project, then a single unambiguous
-// ambient project (write-scope fallback), then the global scope. It never
-// errors: reads and searches quietly fall back to global, including when the
-// ambient fallback is ambiguous. Durable creates use resolveWriteScope instead,
-// which rejects that ambiguity.
-func (s *Server) resolveProject(ctx context.Context, explicit string) string {
+// resolveReadScope resolves the project for a read or by-name lookup (recall,
+// memory_read/append/delete, tasks_list/ready). It prefers an explicit project
+// (global token normalized), then the bound session's project, then a single
+// unambiguous ambient project. It differs from resolveWriteScope only in the
+// empty case: a read with nothing to infer from legitimately targets the global
+// scope, so it returns ("", nil) there rather than errNoScope. It still refuses
+// with errAmbiguousScope when active ambient sessions span multiple projects --
+// otherwise it would silently narrow the read to global and hide the intended
+// project's items, the read-side twin of the cross-agent write bleed.
+func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
-		return normalizeProject(explicit)
+		return normalizeProject(explicit), nil
 	}
 	if b, ok := s.getBinding(ctx); ok {
-		return b.project
+		return b.project, nil
 	}
-	if sess, ok, _ := s.ambientFallback(ctx); ok {
-		return sess.ProjectSlug
+	sess, ok, ambiguous := s.ambientFallback(ctx)
+	if ok {
+		return sess.ProjectSlug, nil
 	}
-	return ""
+	if ambiguous {
+		return "", errAmbiguousScope
+	}
+	return "", nil
 }
 
-// resolveWriteScope is resolveProject for durable creates (memory/note/task): it
-// returns the same project, but errors with errAmbiguousScope instead of
-// silently defaulting to global when nothing pins the scope. An explicit project
+// resolveWriteScope is resolveReadScope for durable creates (memory/note/task/
+// captured-note/trial): it returns the same project, but errors with errNoScope
+// instead of defaulting to global when nothing pins the scope. An explicit project
 // -- including project=global -- is always unambiguous, as is any bound session
 // or a single-project ambient fallback. When active ambient sessions span
 // multiple projects (concurrent agents), it refuses to guess rather than bleed

@@ -50,6 +50,42 @@ func TestActiveAmbientProjects(t *testing.T) {
 	require.False(t, ok)
 }
 
+func TestActiveAmbientSessionsForProject(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	now := time.Now().UTC()
+
+	mk := func(name, project string, updatedAgo time.Duration, ambient bool, status core.SessionStatus) {
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: project, Status: status, Ambient: ambient,
+			CreatedAt: now.Add(-updatedAgo), UpdatedAt: now.Add(-updatedAgo),
+		}))
+	}
+
+	// Two active ambients in "demo" (the same-repo concurrency case), plus rows
+	// that must be excluded: an older-window ambient, a completed one, a
+	// non-ambient one, and an ambient in a different project.
+	mk("cc/demoA", "demo", 10*time.Minute, true, core.SessionActive)
+	mk("cc/demoB", "demo", 3*time.Minute, true, core.SessionActive) // most recent in demo
+	mk("cc/stale", "demo", 8*time.Hour, true, core.SessionActive)   // outside window
+	mk("cc/done", "demo", 1*time.Minute, true, core.SessionCompleted)
+	mk("sess/x", "demo", 1*time.Minute, false, core.SessionActive)
+	mk("cc/other", "other", 1*time.Minute, true, core.SessionActive)
+
+	sessions, err := ActiveAmbientSessionsForProject(ctx, db, "demo", ambientWindowForTest)
+	require.NoError(t, err)
+	require.Len(t, sessions, 2, "two concurrent same-project ambients -- the ambiguity resolveSession must refuse")
+	require.Equal(t, "cc/demoB", sessions[0].Name, "most recent first")
+	require.Equal(t, "cc/demoA", sessions[1].Name)
+
+	// A lone ambient in a project is unambiguous (the solo ergonomic).
+	solo, err := ActiveAmbientSessionsForProject(ctx, db, "other", ambientWindowForTest)
+	require.NoError(t, err)
+	require.Len(t, solo, 1)
+}
+
 // ambientWindowForTest mirrors the MCP server's ambientFallbackWindow so the
 // store test exercises the same recency boundary.
 const ambientWindowForTest = 6 * time.Hour

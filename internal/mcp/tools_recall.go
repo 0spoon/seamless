@@ -25,7 +25,10 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 	if query == "" {
 		return errResult("recall", errors.New("query is required"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("recall", err)
+	}
 	hits, err := s.cfg.Retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: query, Project: project, Scope: argString(req, "scope"), Limit: argInt(req, "limit", 10),
 	})

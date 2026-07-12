@@ -19,7 +19,7 @@ func captureURLTool() mcp.Tool {
 	return mcp.NewTool("capture_url",
 		mcp.WithDescription("Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and save its readable content as a note. Returns the new note's id."),
 		mcp.WithString("url", mcp.Required(), mcp.Description("http(s) URL to capture")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project (empty or project=global = inbox)")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to file it in the inbox.")),
 	)
 }
 
@@ -27,6 +27,13 @@ func (s *Server) handleCaptureURL(ctx context.Context, req mcp.CallToolRequest) 
 	rawURL := argString(req, "url")
 	if rawURL == "" {
 		return errResult("capture_url", errors.New("url is required"))
+	}
+	// Resolve the destination scope before fetching: a captured page is a durable
+	// note, so an ambiguous scope must fail fast rather than do an SSRF fetch for a
+	// write we are only going to reject.
+	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("capture_url", err)
 	}
 	content, err := s.fetcher.FetchURL(ctx, rawURL)
 	if err != nil {
@@ -38,7 +45,6 @@ func (s *Server) handleCaptureURL(ctx context.Context, req mcp.CallToolRequest) 
 		body = string(r[:captureBodyMaxRunes]) + "\n\n[content truncated]"
 	}
 
-	project := s.resolveProject(ctx, argString(req, "project"))
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("capture_url", err)

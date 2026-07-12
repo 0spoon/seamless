@@ -176,6 +176,37 @@ func ActiveAmbientProjects(ctx context.Context, db *sql.DB, within time.Duration
 	return out, rows.Err()
 }
 
+// ActiveAmbientSessionsForProject returns every active ambient (cc/*) session in
+// the given project updated within the window, most recent first. resolveSession
+// uses it to refuse targeting a session by inference when more than one same-
+// project ambient could be the one meant -- two agents in the same repo -- so a
+// session_update/end without an explicit id can't complete a sibling's session.
+// A non-positive within disables the recency filter.
+func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, project string, within time.Duration) ([]core.Session, error) {
+	query := `SELECT ` + sessionCols + ` FROM sessions
+		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
+	args := []any{project}
+	if within > 0 {
+		query += ` AND updated_at >= ?`
+		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
+	}
+	query += ` ORDER BY updated_at DESC, id DESC`
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientSessionsForProject: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		sess, err := scanSession(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.ActiveAmbientSessionsForProject: %w", err)
+		}
+		out = append(out, sess)
+	}
+	return out, rows.Err()
+}
+
 // SiblingFindings returns the most recent completed sessions with non-empty
 // findings across the given sibling projects, newest first, capped at limit. It
 // backs the briefing's "Sibling projects" section. An empty slugs slice yields
