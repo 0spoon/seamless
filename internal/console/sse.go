@@ -33,6 +33,16 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 
 	ctx := r.Context()
+
+	// Opt-in richer feed for the Interactions screen: transport-level rows with
+	// full request/response bodies, instead of the default summary rows every
+	// page's layout EventSource consumes.
+	interactions := r.URL.Query().Get("feed") == "interactions"
+	var namer func(string) (string, bool)
+	if interactions {
+		namer = s.sessionNamer(ctx)
+	}
+
 	fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
 
@@ -50,7 +60,16 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			payload, err := json.Marshal(toEventRow(e))
+			var payload []byte
+			var err error
+			if interactions {
+				if !isInteraction(e) || skipInteraction(e) {
+					continue
+				}
+				payload, err = json.Marshal(toInteractionRow(e, namer))
+			} else {
+				payload, err = json.Marshal(toEventRow(e))
+			}
 			if err != nil {
 				s.logger.Warn("console: sse marshal", "error", err)
 				continue

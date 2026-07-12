@@ -63,6 +63,50 @@ func mustID(t *testing.T) string {
 	return id
 }
 
+func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	rec := events.NewRecorder(db)
+
+	now := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
+	old := now.AddDate(0, 0, -40)  // beyond a 30-day window
+	fresh := now.AddDate(0, 0, -5) // inside the window
+
+	mustRec := func(id string, ts time.Time, kind core.EventKind) {
+		_, err := rec.Record(ctx, core.Event{ID: id, TS: ts, Kind: kind})
+		require.NoError(t, err)
+	}
+	mustRec("01A", old, core.EventToolCall)      // old transport -> pruned
+	mustRec("01B", old, core.EventHookPrompt)    // old transport -> pruned
+	mustRec("01C", old, core.EventMemoryWritten) // old domain -> kept
+	mustRec("01D", fresh, core.EventToolCall)    // fresh transport -> kept
+
+	g := New(db, nil, nil, nil, rec, Config{ToolEventRetentionDays: 30}, slog.Default())
+	g.now = func() time.Time { return now }
+	g.pruneToolEvents(ctx)
+
+	got, err := rec.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	kinds := map[core.EventKind]bool{}
+	for _, e := range got {
+		kinds[e.Kind] = true
+	}
+	require.True(t, kinds[core.EventMemoryWritten], "domain event survives")
+	require.True(t, kinds[core.EventToolCall], "fresh transport event survives")
+	require.False(t, kinds[core.EventHookPrompt], "old transport event pruned")
+
+	// Retention 0 disables pruning entirely (no-op).
+	g0 := New(db, nil, nil, nil, rec, Config{ToolEventRetentionDays: 0}, slog.Default())
+	g0.now = func() time.Time { return now }
+	g0.pruneToolEvents(ctx)
+	got2, err := rec.Recent(ctx, 10)
+	require.NoError(t, err)
+	require.Len(t, got2, 2)
+}
+
 func TestRunOnce_ProducesAllThreeProposalKinds(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

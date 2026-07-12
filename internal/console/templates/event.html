@@ -23,6 +23,13 @@
   </div>
 </div>
 
+{{if .Prompt}}
+<div class="section">
+  <h2>Prompt</h2>
+  <div class="card"><pre class="pre">{{.Prompt}}</pre></div>
+</div>
+{{end}}
+
 {{if .Content}}
 <div class="section">
   <h2>Injected content</h2>

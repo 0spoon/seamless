@@ -1,0 +1,305 @@
+{{define "content"}}
+<div class="topbar">
+  <div>
+    <h1>Interactions</h1>
+    <div class="sub">every agent request and response, live</div>
+  </div>
+  <span class="live" id="ix-live"><span class="live-dot"></span> live</span>
+</div>
+
+<div class="ix-controls">
+  <div class="ix-tabs" id="ix-tabs"></div>
+  <div class="ix-actions">
+    <button class="btn small" type="button" id="ix-pause">Pause</button>
+  </div>
+</div>
+
+<div class="ix-feed" id="ix-feed"></div>
+<div class="empty" id="ix-empty" hidden>No interactions yet &mdash; run a hooked agent and its calls will stream in here.</div>
+<div class="ix-more" hidden><button class="btn small" type="button" id="ix-older">Load older</button></div>
+<noscript><div class="empty">The Interactions feed needs JavaScript. Individual events are at <span class="mono">/console/events/&lt;id&gt;</span>.</div></noscript>
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  var feed = document.getElementById('ix-feed');
+  var tabsEl = document.getElementById('ix-tabs');
+  var emptyEl = document.getElementById('ix-empty');
+  var pauseBtn = document.getElementById('ix-pause');
+  var olderWrap = document.querySelector('.ix-more');
+  var olderBtn = document.getElementById('ix-older');
+  var liveEl = document.getElementById('ix-live');
+  if (!feed) return;
+
+  // This page IS the live view -- suppress the global "refresh" pill.
+  var pill = document.getElementById('live-pill');
+  if (pill) pill.remove();
+
+  var MAX_ROWS = 500;
+  var rows = {};              // id -> {data, el}
+  var order = [];            // ids, newest-first
+  var filter = 'all';
+  var paused = false;
+  var loaded = false;
+  var preload = [];          // SSE frames that arrived before the initial fetch
+  var buffer = [];           // live frames held back while paused / a row is open
+  var cursor = null;         // {ts,id} for the next older page
+  var last = null;           // {ts,id} of the newest row seen (gap-fill anchor)
+
+  function esc(s) { return s == null ? '' : String(s); }
+  function shortId(id) { return id && id.length > 8 ? id.slice(-8) : (id || ''); }
+
+  function rel(ts) {
+    var t = Date.parse(ts);
+    if (isNaN(t)) return '';
+    var s = Math.max(0, (Date.now() - t) / 1000);
+    if (s < 1) return 'now';
+    if (s < 60) return Math.floor(s) + 's';
+    if (s < 3600) return Math.floor(s / 60) + 'm';
+    if (s < 86400) return Math.floor(s / 3600) + 'h';
+    return Math.floor(s / 86400) + 'd';
+  }
+
+  function anyOpen() {
+    return !!feed.querySelector('details.ix-row[open]');
+  }
+
+  function el(tag, cls, text) {
+    var e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  }
+
+  function buildRow(d) {
+    var row = el('details', 'ix-row' + (d.isError ? ' err' : ''));
+    row.setAttribute('data-id', d.id);
+    row.setAttribute('data-session', d.sessionId || '');
+    var sum = el('summary');
+    var when = el('span', 'ix-when', rel(d.ts));
+    when.title = d.ts;
+    sum.appendChild(when);
+    sum.appendChild(el('span', 'kind ' + (d.tone || ''), d.kind));
+    if (d.label) sum.appendChild(el('span', 'ix-label mono', d.label));
+    sum.appendChild(el('span', 'ix-sum', d.summary || ''));
+    if (d.ambient) sum.appendChild(el('span', 'badge', 'ambient'));
+    if (d.isError) sum.appendChild(el('span', 'badge danger', 'error'));
+    var meta = [];
+    if (d.durationMs) meta.push(d.durationMs + 'ms');
+    if (d.items) meta.push(d.items + (d.items === 1 ? ' item' : ' items'));
+    if (meta.length) sum.appendChild(el('span', 'ix-meta', meta.join(' · ')));
+    row.appendChild(sum);
+
+    var body = el('div', 'ix-body');
+    if (d.request) {
+      body.appendChild(el('h3', null, 'Request'));
+      body.appendChild(el('pre', 'pre', d.request));
+    }
+    if (d.response) {
+      body.appendChild(el('h3', null, d.kind === 'retrieval.injected' ? 'Injected content' : 'Response'));
+      body.appendChild(el('pre', 'pre', d.response));
+    }
+    var links = el('div', 'ix-links');
+    if (d.sessionId) {
+      var sl = el('a', null, (d.sessionName || shortId(d.sessionId)) + ' →');
+      sl.href = '/console/sessions/' + d.sessionId;
+      sl.setAttribute('data-peek', '');
+      links.appendChild(sl);
+    }
+    var evl = el('a', null, 'event →');
+    evl.href = '/console/events/' + d.id;
+    evl.setAttribute('data-peek', '');
+    links.appendChild(evl);
+    body.appendChild(links);
+    row.appendChild(body);
+    return row;
+  }
+
+  function applyFilter(el2, sessionId) {
+    var show = filter === 'all' ||
+      (filter === '__none__' && !sessionId) ||
+      filter === sessionId;
+    el2.hidden = !show;
+  }
+
+  function insert(d, atTop) {
+    if (rows[d.id]) return; // dedupe
+    var node = buildRow(d);
+    rows[d.id] = { data: d, el: node };
+    applyFilter(node, d.sessionId || '');
+    if (atTop) {
+      feed.insertBefore(node, feed.firstChild);
+      order.unshift(d.id);
+    } else {
+      feed.appendChild(node);
+      order.push(d.id);
+    }
+    trim();
+  }
+
+  function trim() {
+    while (order.length > MAX_ROWS) {
+      var id = order.pop();
+      var r = rows[id];
+      if (r && r.el && r.el.parentNode) r.el.parentNode.removeChild(r.el);
+      delete rows[id];
+    }
+  }
+
+  function newer(a, b) { // is a strictly newer than b?
+    if (!b) return true;
+    if (a.ts !== b.ts) return a.ts > b.ts;
+    return a.id > b.id;
+  }
+
+  function handleLive(d) {
+    if (rows[d.id]) return;
+    if (paused || anyOpen()) { buffer.push(d); reflectBuffer(); return; }
+    insert(d, true);
+    if (newer(d, last)) last = { ts: d.ts, id: d.id };
+    refreshTabs();
+    updateEmpty();
+  }
+
+  function flushBuffer() {
+    if (!buffer.length) return;
+    // Oldest-first so prepending yields newest-on-top.
+    buffer.sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1); });
+    buffer.forEach(function (d) {
+      if (rows[d.id]) return;
+      insert(d, true);
+      if (newer(d, last)) last = { ts: d.ts, id: d.id };
+    });
+    buffer = [];
+    reflectBuffer();
+    refreshTabs();
+    updateEmpty();
+  }
+
+  function reflectBuffer() {
+    pauseBtn.textContent = paused
+      ? (buffer.length ? 'Resume · +' + buffer.length : 'Resume')
+      : 'Pause';
+  }
+
+  function updateEmpty() {
+    var has = order.length > 0;
+    emptyEl.hidden = has;
+    if (olderWrap) olderWrap.hidden = !cursor;
+  }
+
+  function refreshTabs() {
+    var counts = {}; var names = {}; var none = 0;
+    order.forEach(function (id) {
+      var d = rows[id].data;
+      if (!d.sessionId) { none++; return; }
+      counts[d.sessionId] = (counts[d.sessionId] || 0) + 1;
+      names[d.sessionId] = d.sessionName || shortId(d.sessionId);
+    });
+    var tabs = [{ key: 'all', label: 'All', n: order.length }];
+    Object.keys(counts).forEach(function (sid) {
+      tabs.push({ key: sid, label: names[sid], n: counts[sid] });
+    });
+    if (none) tabs.push({ key: '__none__', label: 'unattributed', n: none });
+
+    tabsEl.textContent = '';
+    tabs.forEach(function (t) {
+      var b = el('button', 'ix-tab' + (filter === t.key ? ' active' : ''));
+      b.type = 'button';
+      b.appendChild(document.createTextNode(t.label + ' '));
+      b.appendChild(el('span', 'n', t.n));
+      b.onclick = function () { filter = t.key; applyAll(); refreshTabs(); };
+      tabsEl.appendChild(b);
+    });
+  }
+
+  function applyAll() {
+    order.forEach(function (id) {
+      var r = rows[id];
+      applyFilter(r.el, r.data.sessionId || '');
+    });
+  }
+
+  // --- Load older (descending page via before/beforeTs) ---
+  function loadOlder() {
+    if (!cursor) return;
+    olderBtn.disabled = true;
+    fetch('/console/interactions?format=json&before=' + encodeURIComponent(cursor.id) +
+          '&beforeTs=' + encodeURIComponent(cursor.ts), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        (data.rows || []).forEach(function (d) { insert(d, false); });
+        cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
+        olderBtn.disabled = false;
+        refreshTabs(); updateEmpty(); applyAll();
+      })
+      .catch(function () { olderBtn.disabled = false; });
+  }
+
+  // --- Gap-fill after an SSE reconnect (ascending, since/sinceTs) ---
+  function gapFill() {
+    if (!last) return;
+    fetch('/console/interactions?format=json&since=' + encodeURIComponent(last.id) +
+          '&sinceTs=' + encodeURIComponent(last.ts), { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        // rows are oldest-first; prepend each so newest lands on top.
+        (data.rows || []).forEach(function (d) {
+          if (rows[d.id]) return;
+          insert(d, true);
+          if (newer(d, last)) last = { ts: d.ts, id: d.id };
+        });
+        refreshTabs(); updateEmpty(); applyAll();
+      })
+      .catch(function () {});
+  }
+
+  // --- Initial hydrate ---
+  function hydrate(data) {
+    var list = data.rows || [];
+    list.forEach(function (d) { insert(d, false); }); // already newest-first
+    if (list.length) last = { ts: list[0].ts, id: list[0].id };
+    cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
+    loaded = true;
+    // Drain any SSE frames that arrived during the fetch.
+    preload.forEach(handleLive);
+    preload = [];
+    refreshTabs();
+    updateEmpty();
+  }
+
+  // Open the stream first (buffer frames), then hydrate from JSON.
+  var es;
+  if (window.EventSource) {
+    es = new EventSource('/console/events?feed=interactions');
+    es.onopen = function () {
+      if (liveEl) liveEl.classList.remove('off');
+      if (loaded) gapFill(); // recover rows missed during a drop
+    };
+    es.onmessage = function (ev) {
+      var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
+      if (!loaded) { preload.push(d); return; }
+      handleLive(d);
+    };
+    es.onerror = function () { if (liveEl) liveEl.classList.add('off'); };
+  }
+
+  pauseBtn.onclick = function () {
+    paused = !paused;
+    if (!paused) flushBuffer();
+    reflectBuffer();
+  };
+  if (olderBtn) olderBtn.onclick = loadOlder;
+  // Flush the pause/open buffer when the last open row is collapsed.
+  feed.addEventListener('toggle', function () {
+    if (!paused && !anyOpen()) flushBuffer();
+  }, true);
+
+  fetch('/console/interactions?format=json', { headers: { Accept: 'application/json' } })
+    .then(function (r) { return r.json(); })
+    .then(hydrate)
+    .catch(function () { loaded = true; updateEmpty(); });
+})();
+</script>
+{{end}}

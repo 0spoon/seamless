@@ -30,6 +30,12 @@ budgets:
   # Default token budget for a recall response.
   # env: SEAMLESS_RECALL_BUDGET_TOKENS
   recall_budget_tokens: 1000
+  # Per-field cap (in runes) on captured Interactions transport events (tool-call
+  # args/result, hook prompt, session findings). 0 = unlimited: content is stored
+  # in full and the tool-event retention prune is the growth control. Set a
+  # positive value only as an opt-in guard against pathological payloads.
+  # env: SEAMLESS_TOOL_EVENT_MAX_CHARS
+  tool_event_max_chars: 0
 
 llm:
   # Primary provider for chat (session digests) and embeddings. OpenAI is the
@@ -79,3 +85,7 @@ gardener:
   # Trailing window of completed sessions rolled into a monthly digest proposal.
   # env: SEAMLESS_GARDENER_DIGEST_DAYS
   digest_days: 30
+  # Age (days) beyond which transport-level Interactions events (tool.call,
+  # hook.prompt) are pruned. 0 disables the prune. Domain events are never pruned.
+  # env: SEAMLESS_TOOL_EVENT_RETENTION_DAYS
+  tool_event_retention_days: 30

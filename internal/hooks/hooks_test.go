@@ -39,7 +39,7 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	insertMemory(t, db, "01D", "reference", "sqlite-wal", "enable wal journal mode and busy timeout", "demo")
 
 	ret := retrieve.New(db, nil, config.Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000}, nil)
-	h := NewHandler(db, ret, events.NewRecorder(db), testKey, nil)
+	h := NewHandler(db, ret, events.NewRecorder(db), testKey, 0, nil)
 	mux := http.NewServeMux()
 	h.Register(mux)
 	ts := httptest.NewServer(mux)
@@ -148,6 +148,77 @@ func TestUserPromptSubmitHook(t *testing.T) {
 	resp, out := post(t, url, testKey, map[string]any{})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	require.Empty(t, additionalContext(t, out))
+}
+
+func eventsOfKind(t *testing.T, rec *events.Recorder, kind core.EventKind) []core.Event {
+	t.Helper()
+	evs, err := rec.ByKinds(context.Background(), []core.EventKind{kind}, "", "", 200)
+	require.NoError(t, err)
+	return evs
+}
+
+func payloadString(v any) string {
+	s, _ := v.(string)
+	return s
+}
+
+func TestHookEventCapture(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	// SessionStart creates the ambient session and records an injection stamped
+	// with that session's ULID + project.
+	_, out := post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": "abcdef12-3456", "cwd": "/work/demo", "source": "startup",
+	})
+	require.Contains(t, additionalContext(t, out), "<seam-briefing>")
+
+	sess, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	inj := eventsOfKind(t, rec, core.EventInjected)
+	require.Len(t, inj, 1)
+	require.Equal(t, sess.ID, inj[0].SessionID, "injection stamped with the ambient session ULID")
+	require.Equal(t, "demo", inj[0].ProjectSlug)
+	require.Equal(t, "session-start", inj[0].Payload["hook"])
+	require.Nil(t, inj[0].Payload["prompt"], "SessionStart carries no user prompt")
+
+	// A matching prompt records an injection carrying the prompt text.
+	_, out = post(t, ts.URL+"/api/hooks/user-prompt-submit", testKey, map[string]any{
+		"session_id": "abcdef12-3456", "cwd": "/work/demo",
+		"user_prompt": "why does the chroma container fail its health check",
+	})
+	require.Contains(t, additionalContext(t, out), "chroma-boot-race")
+	inj = eventsOfKind(t, rec, core.EventInjected)
+	require.Len(t, inj, 2) // newest first
+	require.Equal(t, "user-prompt-submit", inj[0].Payload["hook"])
+	require.Contains(t, payloadString(inj[0].Payload["prompt"]), "chroma container")
+	require.Equal(t, sess.ID, inj[0].SessionID)
+
+	// A non-matching prompt records a hook.prompt (recall miss) instead of nothing.
+	_, _ = post(t, ts.URL+"/api/hooks/user-prompt-submit", testKey, map[string]any{
+		"session_id": "abcdef12-3456", "cwd": "/work/demo", "user_prompt": "weather in paris",
+	})
+	hp := eventsOfKind(t, rec, core.EventHookPrompt)
+	require.Len(t, hp, 1)
+	require.Equal(t, false, hp[0].Payload["matched"])
+	require.Contains(t, payloadString(hp[0].Payload["prompt"]), "weather in paris")
+	require.Equal(t, sess.ID, hp[0].SessionID)
+	// Injected count is unchanged by the miss (InjectionsByDay stays accurate).
+	require.Len(t, eventsOfKind(t, rec, core.EventInjected), 2)
+
+	// SessionEnd records session.ended with reason + harvested findings.
+	transcript := writeTranscript(t,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Did the thing."}]}}`)
+	_, _ = post(t, ts.URL+"/api/hooks/session-end", testKey, map[string]any{
+		"session_id": "abcdef12-3456", "transcript_path": transcript, "reason": "clear",
+	})
+	ended := eventsOfKind(t, rec, core.EventSessionEnded)
+	require.Len(t, ended, 1)
+	require.Equal(t, "clear", ended[0].Payload["reason"])
+	require.Contains(t, payloadString(ended[0].Payload["findings"]), "Did the thing.")
 }
 
 func TestAmbientSessionLifecycle(t *testing.T) {
