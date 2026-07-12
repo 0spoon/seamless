@@ -16,8 +16,8 @@ func tasksAddTool() mcp.Tool {
 	return mcp.NewTool("tasks_add",
 		mcp.WithDescription("Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short task title")),
-		mcp.WithString("body", mcp.Description("optional details / acceptance criteria")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("body", mcp.Description("optional details / acceptance criteria (aliases: content, text)")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global task. With no session and no explicit project the add is rejected as ambiguous.")),
 		mcp.WithString("depends_on", mcp.Description("comma-separated task ids this task is blocked by")),
 	)
 }
@@ -27,14 +27,17 @@ func (s *Server) handleTasksAdd(ctx context.Context, req mcp.CallToolRequest) (*
 	if title == "" {
 		return errResult("tasks_add", errors.New("title is required"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("tasks_add", err)
+	}
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("tasks_add", err)
 	}
 	now := time.Now().UTC()
 	task := core.Task{
-		ID: id, ProjectSlug: project, Title: title, Body: argRaw(req, "body"),
+		ID: id, ProjectSlug: project, Title: title, Body: argBody(req),
 		Status: core.TaskOpen, CreatedBy: s.boundSessionName(ctx),
 		DependsOn: parseCommaList(argString(req, "depends_on")),
 		CreatedAt: now, UpdatedAt: now,
@@ -57,7 +60,7 @@ func tasksUpdateTool() mcp.Tool {
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id")),
 		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("new status")),
 		mcp.WithString("title", mcp.Description("new title")),
-		mcp.WithString("body", mcp.Description("new body")),
+		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("add_depends_on", mcp.Description("comma-separated task ids to add as blockers")),
 	)
 }
@@ -79,8 +82,7 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 		title := argString(req, "title")
 		patch.Title = &title
 	}
-	if req.GetArguments()["body"] != nil {
-		body := argRaw(req, "body")
+	if body, ok := firstStringArg(req.GetArguments(), "body", "content", "text"); ok {
 		patch.Body = &body
 	}
 	patch.AddDependsOn = parseCommaList(argString(req, "add_depends_on"))

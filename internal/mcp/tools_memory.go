@@ -22,8 +22,8 @@ func memoryWriteTool() mcp.Tool {
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
 		mcp.WithString("kind", mcp.Required(), mcp.Enum("constraint", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage"), mcp.Description("memory kind")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
-		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to deliberately create a global (cross-project) memory. With no session and no explicit project the write is rejected as ambiguous.")),
 		mcp.WithString("supersedes", mcp.Description("name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here")),
 	)
 }
@@ -32,8 +32,7 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	name := argString(req, "name")
 	kindStr := argString(req, "kind")
 	desc := argString(req, "description")
-	body := argRaw(req, "body")
-	project := s.resolveProject(ctx, argString(req, "project"))
+	body := argBody(req)
 
 	if name == "" || kindStr == "" || desc == "" || strings.TrimSpace(body) == "" {
 		return errResult("memory_write", errors.New("name, kind, description, and body are required"))
@@ -41,6 +40,10 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	kind := core.MemoryKind(kindStr)
 	if !kind.Valid() {
 		return errResult("memory_write", fmt.Errorf("invalid kind %q", kindStr))
+	}
+	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("memory_write", err)
 	}
 	if len([]rune(desc)) > maxDescriptionRunes {
 		desc = string([]rune(desc)[:maxDescriptionRunes])
@@ -134,26 +137,28 @@ func (s *Server) supersedeMemory(ctx context.Context, project, target string, re
 
 func memoryAppendTool() mcp.Tool {
 	return mcp.NewTool("memory_append",
-		mcp.WithDescription("Append content to an existing memory's body. The memory keeps its id."),
+		mcp.WithDescription("Append markdown to an existing memory's body. The memory keeps its id. To create a new memory, use memory_write."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("memory name")),
-		mcp.WithString("content", mcp.Required(), mcp.Description("markdown to append")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("body", mcp.Required(), mcp.Description("markdown to append (aliases: content, text)")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory.")),
 	)
 }
 
 func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := argString(req, "name")
-	content := argRaw(req, "content")
+	content := argBody(req)
 	if name == "" || strings.TrimSpace(content) == "" {
-		return errResult("memory_append", errors.New("name and content are required"))
+		return errResult("memory_append", errors.New("name and a non-empty body are required (body aliases: content, text)"))
 	}
 	project := s.resolveProject(ctx, argString(req, "project"))
-	idx, found, err := s.resolveMemory(ctx, project, name, false)
+	// Look up in the project scope, falling back to global (as memory_read does)
+	// so an append does not miss a global memory the session is scoped to.
+	idx, found, err := s.resolveMemory(ctx, project, name, true)
 	if err != nil {
 		return errResult("memory_append", err)
 	}
 	if !found {
-		return errResult("memory_append", fmt.Errorf("no memory named %q", name))
+		return errResult("memory_append", fmt.Errorf("%v; create it first with memory_write, or pass project=<slug> / project=global", scopedNotFound("memory", project, name)))
 	}
 	// Read the full memory (index rows have no body) and append.
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
@@ -181,7 +186,7 @@ func memoryReadTool() mcp.Tool {
 func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := argString(req, "name")
 	if name == "" {
-		return errResult("memory_read", errors.New("name is required"))
+		return errResult("memory_read", errors.New("name is required (memory_read reads one memory by exact name; to search text use recall)"))
 	}
 	project := s.resolveProject(ctx, argString(req, "project"))
 	idx, found, err := s.resolveMemory(ctx, project, name, true)
@@ -197,7 +202,7 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 			return errResult("memory_read", err)
 		}
 		if !found {
-			return errResult("memory_read", fmt.Errorf("no memory named %q", name))
+			return errResult("memory_read", fmt.Errorf("%v; check the name, pass project=<slug> or project=global, or use recall to search by text", scopedNotFound("memory", project, name)))
 		}
 	}
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
@@ -275,6 +280,15 @@ func (s *Server) handleMemoryDelete(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.record(ctx, core.EventMemoryArchived, s.boundSession(ctx), idx.Project, idx.ID, map[string]any{"name": name})
 	return jsonResult(map[string]any{"status": "deleted", "id": idx.ID, "name": name})
+}
+
+// scopedNotFound builds a "no such item" error that names the scope searched, so
+// the agent can tell a wrong-project mistake from a wrong-name one.
+func scopedNotFound(kind, project, name string) error {
+	if project == "" {
+		return fmt.Errorf("no %s named %q in the global scope", kind, name)
+	}
+	return fmt.Errorf("no %s named %q in project %q (also searched global)", kind, name, project)
 }
 
 // resolveMemory finds an active memory by (project, name); when globalFallback

@@ -18,9 +18,9 @@ func notesCreateTool() mcp.Tool {
 	return mcp.NewTool("notes_create",
 		mcp.WithDescription("Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("note title")),
-		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body")),
+		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global (inbox) note. With no session and no explicit project the create is rejected as ambiguous.")),
 		mcp.WithString("tags", mcp.Description("comma-separated tags")),
 		mcp.WithString("source_url", mcp.Description("optional source URL")),
 	)
@@ -28,11 +28,14 @@ func notesCreateTool() mcp.Tool {
 
 func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	title := argString(req, "title")
-	body := argRaw(req, "body")
+	body := argBody(req)
 	if title == "" || strings.TrimSpace(body) == "" {
 		return errResult("notes_create", errors.New("title and body are required"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("notes_create", err)
+	}
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("notes_create", err)
@@ -75,8 +78,8 @@ func notesUpdateTool() mcp.Tool {
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 		mcp.WithString("title", mcp.Description("new title")),
 		mcp.WithString("description", mcp.Description("new description")),
-		mcp.WithString("body", mcp.Description("new body")),
-		mcp.WithString("project", mcp.Description("new project slug (\"\" = inbox)")),
+		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
+		mcp.WithString("project", mcp.Description("new project slug (\"\" or \"global\" = inbox)")),
 		mcp.WithString("tags", mcp.Description("comma-separated tags, replacing all")),
 	)
 }
@@ -97,12 +100,12 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 		note.Description = strings.TrimSpace(v)
 		changed = true
 	}
-	if v, ok := args["body"].(string); ok {
+	if v, ok := firstStringArg(args, "body", "content", "text"); ok {
 		note.Body = v
 		changed = true
 	}
 	if v, ok := args["project"].(string); ok {
-		note.Project = strings.TrimSpace(v)
+		note.Project = normalizeProject(strings.TrimSpace(v))
 		changed = true
 	}
 	if v, ok := args["tags"].(string); ok {
@@ -132,14 +135,14 @@ func notesAppendTool() mcp.Tool {
 	return mcp.NewTool("notes_append",
 		mcp.WithDescription("Append a timestamped line to a note's body."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
-		mcp.WithString("text", mcp.Required(), mcp.Description("text to append")),
+		mcp.WithString("body", mcp.Required(), mcp.Description("text to append (aliases: content, text)")),
 	)
 }
 
 func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	text := argRaw(req, "text")
+	text := argBody(req)
 	if strings.TrimSpace(text) == "" {
-		return errResult("notes_append", errors.New("text is required"))
+		return errResult("notes_append", errors.New("a non-empty body is required (aliases: content, text)"))
 	}
 	note, err := s.loadNote(ctx, argString(req, "id"))
 	if err != nil {

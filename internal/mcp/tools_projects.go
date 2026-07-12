@@ -50,6 +50,9 @@ func (s *Server) handleProjectCreate(ctx context.Context, req mcp.CallToolReques
 	if slug == "" {
 		slug = slugify(name)
 	}
+	if normalizeProject(slug) == "" {
+		return errResult("project_create", fmt.Errorf("slug %q is reserved for the global namespace", slug))
+	}
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("project_create", err)

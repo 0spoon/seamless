@@ -41,6 +41,27 @@ import (
 // version is the seamlessd build version. Bumped at release; "dev" until P6.
 const version = "0.0.0-dev"
 
+// commit and buildDate are link-time build metadata, set via
+//
+//	go build -ldflags "-X main.commit=$(git rev-parse --short HEAD) -X main.buildDate=<utc>"
+//
+// (see the Makefile). They stay "unknown" for a plain `go build`/`go test`.
+var (
+	commit    = "unknown"
+	buildDate = "unknown"
+)
+
+// buildVersion is the version plus the short commit when linked in, e.g.
+// "0.0.0-dev+1a2b3c4". It is surfaced in /healthz, the MCP handshake, and the
+// startup log so a stale running daemon (older code than the working tree) is
+// visible at a glance.
+func buildVersion() string {
+	if commit == "unknown" {
+		return version
+	}
+	return version + "+" + commit
+}
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 
@@ -67,7 +88,7 @@ func main() {
 	case "console-open":
 		err = runConsoleOpen(args)
 	case "version", "-v", "--version":
-		fmt.Printf("seamlessd %s\n", version)
+		fmt.Printf("seamlessd %s (commit %s, built %s)\n", version, commit, buildDate)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -169,7 +190,7 @@ func runServe(args []string) error {
 	}
 	mcpSrv := mcp.New(mcp.Config{
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, Embedder: embedder,
-		APIKey: cfg.MCP.APIKey, Logger: logger,
+		APIKey: cfg.MCP.APIKey, Version: buildVersion(), Logger: logger,
 	})
 	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, logger)
 	consoleSrv, err := console.New(console.Config{
@@ -209,7 +230,7 @@ func runServe(args []string) error {
 	errCh := make(chan error, 1)
 	go func() {
 		slog.Info("seamlessd listening", "addr", bind, "data_dir", cfg.DataDir,
-			"version", version, "mcp_tools", mcp.ToolCount)
+			"version", buildVersion(), "commit", commit, "built", buildDate, "mcp_tools", mcp.ToolCount)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
@@ -241,7 +262,9 @@ func healthzHandler(db *sql.DB) http.HandlerFunc {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(code)
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": status, "version": version}); err != nil {
+		if err := json.NewEncoder(w).Encode(map[string]string{
+			"status": status, "version": buildVersion(), "commit": commit, "built": buildDate,
+		}); err != nil {
 			slog.Warn("healthz: encode response", "err", err)
 		}
 	}
