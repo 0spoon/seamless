@@ -16,9 +16,10 @@ func TestCaptureURL_RejectsUnsafeURL(t *testing.T) {
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
 
-	// file:// scheme is rejected before any dial.
+	// file:// scheme is rejected before any dial. An explicit project=global keeps
+	// the scope unambiguous so the call reaches the SSRF guard under test.
 	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
-		Name: "capture_url", Arguments: map[string]any{"url": "file:///etc/passwd"},
+		Name: "capture_url", Arguments: map[string]any{"url": "file:///etc/passwd", "project": "global"},
 	}})
 	require.NoError(t, err)
 	require.True(t, res.IsError)

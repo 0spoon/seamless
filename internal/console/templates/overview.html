@@ -105,7 +105,7 @@
       <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
       <tbody>
         {{range .Recent}}
-        <tr>
+        <tr class="row-link" data-href="/console/events/{{.ID}}">
           <td class="muted" title="{{.When}}">{{ago .When}}</td>
           <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
           <td class="muted">{{if .Project}}{{.Project}}{{else}}&mdash;{{end}}</td>

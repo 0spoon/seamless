@@ -150,7 +150,10 @@ func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest
 	if name == "" || strings.TrimSpace(content) == "" {
 		return errResult("memory_append", errors.New("name and a non-empty body are required (body aliases: content, text)"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("memory_append", err)
+	}
 	// Look up in the project scope, falling back to global (as memory_read does)
 	// so an append does not miss a global memory the session is scoped to.
 	idx, found, err := s.resolveMemory(ctx, project, name, true)
@@ -188,7 +191,10 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 	if name == "" {
 		return errResult("memory_read", errors.New("name is required (memory_read reads one memory by exact name; to search text use recall)"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("memory_read", err)
+	}
 	idx, found, err := s.resolveMemory(ctx, project, name, true)
 	if err != nil {
 		return errResult("memory_read", err)
@@ -267,7 +273,10 @@ func (s *Server) handleMemoryDelete(ctx context.Context, req mcp.CallToolRequest
 	if name == "" {
 		return errResult("memory_delete", errors.New("name is required"))
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("memory_delete", err)
+	}
 	idx, found, err := s.resolveMemory(ctx, project, name, true)
 	if err != nil {
 		return errResult("memory_delete", err)

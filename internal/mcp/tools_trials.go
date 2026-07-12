@@ -46,6 +46,7 @@ func trialRecordTool() mcp.Tool {
 		mcp.WithDescription("Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short trial title")),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project (project=global for a global trial)")),
 		mcp.WithString("changes", mcp.Description("what was changed for this trial")),
 		mcp.WithString("expected", mcp.Description("expected result")),
 		mcp.WithString("actual", mcp.Description("observed result")),
@@ -74,7 +75,10 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return errResult("trial_record", err)
 	}
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("trial_record", err)
+	}
 	tr := core.Trial{
 		ID: id, Lab: lab, Title: title,
 		Changes:  argRaw(req, "changes"),

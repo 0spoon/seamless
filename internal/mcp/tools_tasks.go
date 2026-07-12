@@ -107,7 +107,10 @@ func tasksReadyTool() mcp.Tool {
 }
 
 func (s *Server) handleTasksReady(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("tasks_ready", err)
+	}
 	ready, err := store.ReadyTasks(ctx, s.cfg.DB, project)
 	if err != nil {
 		return errResult("tasks_ready", err)
@@ -142,7 +145,10 @@ func tasksListTool() mcp.Tool {
 }
 
 func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	project := s.resolveProject(ctx, argString(req, "project"))
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return errResult("tasks_list", err)
+	}
 	var status core.TaskStatus
 	if st := argString(req, "status"); st != "" {
 		status = core.TaskStatus(st)
