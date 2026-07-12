@@ -869,10 +869,34 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .peek-desc.mono { font-family: var(--font-mono); font-size: var(--text-xs); }
 .peek-note { color: var(--muted); font-style: italic; font-size: var(--text-sm); }
 
-/* Preformatted body: short-form markdown reads fine as pre-wrap; [[links]] are
-   rewritten server-side to data-peek anchors (linkifyBody). */
-.peek-body { white-space: pre-wrap; word-break: break-word; font-size: var(--text-sm); line-height: 1.6; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; max-height: 340px; overflow: auto; }
-.peek-body a[data-peek] { font-weight: 500; }
+/* Rendered markdown body -- memory/note/task bodies, session findings, and
+   gardener digests. Sanitized goldmark output (internal/markdown), framed like
+   the old preformatted box but with real block styling. [[links]] resolve to
+   data-peek anchors that open the drawer. */
+.prose { font-size: var(--text-sm); line-height: 1.65; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; max-height: 340px; overflow: auto; }
+.prose > :first-child { margin-top: 0; }
+.prose > :last-child { margin-bottom: 0; }
+.prose p { margin: 0 0 10px; }
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 { font-family: var(--font-display); font-weight: 600; line-height: 1.3; letter-spacing: var(--tracking-tight); margin: 16px 0 8px; }
+.prose h1 { font-size: var(--text-lg); }
+.prose h2 { font-size: var(--text-md); }
+.prose h3, .prose h4, .prose h5, .prose h6 { font-size: var(--text-sm); }
+.prose ul, .prose ol { margin: 0 0 10px; padding-left: 20px; }
+.prose li { margin: 2px 0; }
+.prose li > ul, .prose li > ol { margin: 2px 0; }
+.prose a { color: var(--brand); text-decoration: none; }
+.prose a:hover { text-decoration: underline; }
+.prose a[data-peek] { font-weight: 500; }
+.prose code { font-family: var(--font-mono); font-size: 0.92em; background: var(--surface-3); border-radius: var(--radius-xs); padding: 1px 5px; }
+.prose pre { font-family: var(--font-mono); font-size: var(--text-xs); line-height: 1.55; background: var(--surface-3); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; margin: 0 0 10px; overflow: auto; }
+.prose pre code { background: none; border-radius: 0; padding: 0; font-size: inherit; }
+.prose blockquote { margin: 0 0 10px; padding: 2px 0 2px 12px; border-left: 3px solid var(--border-strong); color: var(--muted); }
+.prose hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.prose table { border-collapse: collapse; margin: 0 0 10px; font-size: var(--text-xs); display: block; overflow-x: auto; }
+.prose th, .prose td { border: 1px solid var(--border); padding: 5px 9px; text-align: left; }
+.prose th { background: var(--surface-3); font-weight: 600; }
+.prose del { color: var(--muted); }
+.prose img { max-width: 100%; height: auto; }
 
 .peek-kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: var(--text-sm); margin: 0; }
 .peek-kv dt { color: var(--muted); margin: 0; }

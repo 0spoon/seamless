@@ -78,6 +78,40 @@ func TestClaimConflictAcrossSessions(t *testing.T) {
 	require.Contains(t, resultText(t, res), "already claimed")
 }
 
+// TestUpdateRejectedForNonHolder confirms the write-lock over MCP: a session
+// that does not hold a task's live claim cannot mutate it via tasks_update, but
+// the holder can, and a released task is updatable by anyone again.
+func TestUpdateRejectedForNonHolder(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+
+	// Session A claims the task.
+	cliA := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cliA, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	task := callJSON(t, ctx, cliA, "tasks_add", map[string]any{"title": "held work"})
+	id := task["id"].(string)
+	callJSON(t, ctx, cliA, "tasks_claim", map[string]any{"id": id})
+
+	// Session B cannot close it out from under the holder.
+	cliB := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cliB, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup", "name": "agent-b"})
+	res, err := cliB.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "tasks_update", Arguments: map[string]any{"id": id, "status": "done"},
+	}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	require.Contains(t, resultText(t, res), "already claimed")
+
+	// The holder updates its own task normally.
+	updated := callJSON(t, ctx, cliA, "tasks_update", map[string]any{"id": id, "body": "in progress"})
+	require.Equal(t, "in progress", updated["body"])
+
+	// Once A releases, B may update the (now open) task.
+	callJSON(t, ctx, cliA, "tasks_release", map[string]any{"id": id})
+	reopened := callJSON(t, ctx, cliB, "tasks_update", map[string]any{"id": id, "status": "done"})
+	require.Equal(t, "done", reopened["status"])
+}
+
 // TestSessionEndReleasesClaims confirms ending a session returns its in-flight
 // claims to the queue.
 func TestSessionEndReleasesClaims(t *testing.T) {

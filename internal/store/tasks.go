@@ -86,7 +86,14 @@ func CreateTask(ctx context.Context, db *sql.DB, t core.Task) error {
 // UpdateTask applies patch to the task and returns the updated task (with deps).
 // Moving to a terminal status stamps closed_at; reopening clears it. Added deps
 // are validated for existence and cycles like CreateTask.
-func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, now time.Time) (core.Task, error) {
+//
+// actor is the caller's session id (empty for callers with no session). A task
+// with a live claim (see core.Task.ClaimLive) is locked to its holder: any
+// mutation by a different actor is rejected with ErrTaskClaimConflict, so an
+// agent's claimed task cannot be edited or closed out from under it. The holder
+// itself, an expired lease, and the owner override (ForceReleaseTask) are the
+// only ways past the lock.
+func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, actor string, now time.Time) (core.Task, error) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return core.Task{}, fmt.Errorf("store.UpdateTask: begin: %w", err)
@@ -99,6 +106,10 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, now
 	}
 	if !ok {
 		return core.Task{}, fmt.Errorf("store.UpdateTask: %w: %q", ErrTaskNotFound, id)
+	}
+	if t.ClaimLive(now) && t.ClaimedBy != actor {
+		return core.Task{}, fmt.Errorf("store.UpdateTask: %w: task %q held by %q",
+			ErrTaskClaimConflict, id, t.ClaimedBy)
 	}
 
 	if patch.Title != nil {
@@ -234,6 +245,33 @@ func ReleaseTask(ctx context.Context, db *sql.DB, id, sessionID string, now time
 		}
 		return core.Task{}, fmt.Errorf("store.ReleaseTask: %w: task %q not held by %q",
 			ErrTaskClaimConflict, id, sessionID)
+	}
+	return TaskByID(ctx, db, id)
+}
+
+// ForceReleaseTask unconditionally releases a claimed (in_progress) task,
+// reopening it (status back to open, claim and lease cleared) regardless of who
+// holds it or whether the lease is still live. It backs the owner override (the
+// console "release lock" button and `seam task release --force`); it is not
+// reachable from the agent MCP surface. Unlike ReleaseTask it does not check the
+// holder. Returns ErrTaskClaimConflict when the task is not in_progress (nothing
+// to release) and ErrTaskNotFound when the id is unknown.
+func ForceReleaseTask(ctx context.Context, db *sql.DB, id string, now time.Time) (core.Task, error) {
+	res, err := db.ExecContext(ctx, `
+		UPDATE tasks SET status = 'open', claimed_by = '', lease_expires_at = NULL, updated_at = ?
+		 WHERE id = ? AND status = 'in_progress'`,
+		core.FormatTime(now.UTC()), id)
+	if err != nil {
+		return core.Task{}, fmt.Errorf("store.ForceReleaseTask: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, ok, err := taskByIDTx(ctx, db, id); err != nil {
+			return core.Task{}, err
+		} else if !ok {
+			return core.Task{}, fmt.Errorf("store.ForceReleaseTask: %w: %q", ErrTaskNotFound, id)
+		}
+		return core.Task{}, fmt.Errorf("store.ForceReleaseTask: %w: task %q is not claimed",
+			ErrTaskClaimConflict, id)
 	}
 	return TaskByID(ctx, db, id)
 }

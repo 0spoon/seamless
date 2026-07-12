@@ -1,9 +1,10 @@
 // Package console serves the Seamless observability UI: server-rendered
 // html/template pages plus an SSE feed, with no node/npm/React or build step.
-// It is read-mostly -- the only writes are archiving a memory and
-// applying/dismissing a gardener proposal. Access is guarded by the same static
-// bearer key as the MCP surface: a browser trades the key for a cookie at
-// /console/login, and the seam CLI presents the key as a bearer token.
+// It is read-mostly -- the only writes are archiving a memory,
+// applying/dismissing a gardener proposal, and force-releasing a task's claim
+// lock (the owner override). Access is guarded by the same static bearer key as
+// the MCP surface: a browser trades the key for a cookie at /console/login, and
+// the seam CLI presents the key as a bearer token.
 package console
 
 import (
@@ -84,6 +85,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/retrieval", s.auth(s.retrieval))
 	mux.HandleFunc("GET /console/tasks", s.auth(s.tasks))
 	mux.HandleFunc("GET /console/tasks/{id}", s.auth(s.taskDetail))
+	mux.HandleFunc("POST /console/tasks/{id}/release", s.auth(s.taskRelease))
 	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
 	mux.HandleFunc("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))

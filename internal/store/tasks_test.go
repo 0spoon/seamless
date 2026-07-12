@@ -47,7 +47,7 @@ func readyTitles(t *testing.T, db *sql.DB, project string) []string {
 
 func setStatus(t *testing.T, db *sql.DB, id string, status core.TaskStatus) {
 	t.Helper()
-	_, err := UpdateTask(context.Background(), db, id, TaskPatch{Status: &status}, time.Now().UTC())
+	_, err := UpdateTask(context.Background(), db, id, TaskPatch{Status: &status}, "", time.Now().UTC())
 	require.NoError(t, err)
 }
 
@@ -132,11 +132,11 @@ func TestDependencyCycleRejected(t *testing.T) {
 	b := addTask(t, db, "demo", "B", 2, a) // B -> A
 
 	// Adding A -> B would close the cycle A -> B -> A.
-	_, err := UpdateTask(context.Background(), db, a, TaskPatch{AddDependsOn: []string{b}}, time.Now().UTC())
+	_, err := UpdateTask(context.Background(), db, a, TaskPatch{AddDependsOn: []string{b}}, "", time.Now().UTC())
 	require.ErrorIs(t, err, ErrTaskCycle)
 
 	// A self-dependency is rejected too.
-	_, err = UpdateTask(context.Background(), db, a, TaskPatch{AddDependsOn: []string{a}}, time.Now().UTC())
+	_, err = UpdateTask(context.Background(), db, a, TaskPatch{AddDependsOn: []string{a}}, "", time.Now().UTC())
 	require.Error(t, err)
 }
 
@@ -145,12 +145,12 @@ func TestUpdateTaskStampsAndClearsClosedAt(t *testing.T) {
 	a := addTask(t, db, "demo", "A", 1)
 
 	done, err := UpdateTask(context.Background(), db, a,
-		TaskPatch{Status: statusPtr(core.TaskDone)}, time.Now().UTC())
+		TaskPatch{Status: statusPtr(core.TaskDone)}, "", time.Now().UTC())
 	require.NoError(t, err)
 	require.NotNil(t, done.ClosedAt, "moving to done stamps closed_at")
 
 	reopened, err := UpdateTask(context.Background(), db, a,
-		TaskPatch{Status: statusPtr(core.TaskOpen)}, time.Now().UTC())
+		TaskPatch{Status: statusPtr(core.TaskOpen)}, "", time.Now().UTC())
 	require.NoError(t, err)
 	require.Nil(t, reopened.ClosedAt, "reopening clears closed_at")
 }

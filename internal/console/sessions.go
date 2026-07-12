@@ -1,12 +1,14 @@
 package console
 
 import (
+	"html/template"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -63,7 +65,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, sessionRow{
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
 			Status: string(sess.Status), Source: sess.Source, Ambient: sess.Ambient,
-			Findings: snippet(sess.Findings, 120), Updated: sess.UpdatedAt,
+			Findings: snippet(markdown.PlainText(sess.Findings), 120), Updated: sess.UpdatedAt,
 		})
 	}
 	s.render(w, r, "sessions", pageData{
@@ -75,17 +77,20 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// sessionDetail is the payload for a single session's page.
+// sessionDetail is the payload for a single session's page. Findings is the raw
+// markdown (JSON output); FindingsHTML is the rendered, sanitized version the
+// template shows.
 type sessionDetail struct {
-	Session   core.Session `json:"session"`
-	Findings  string       `json:"findings"`
-	Timeline  []eventRow   `json:"timeline"`
-	ToolCalls int          `json:"toolCalls"`
-	Reads     int          `json:"memoryReads"`
-	Writes    int          `json:"memoryWrites"`
-	Injected  int          `json:"injectedItems"`
-	ReadBack  int          `json:"readAfterInject"`
-	ByKind    []kindCount  `json:"eventsByKind"`
+	Session      core.Session  `json:"session"`
+	Findings     string        `json:"findings"`
+	FindingsHTML template.HTML `json:"-"`
+	Timeline     []eventRow    `json:"timeline"`
+	ToolCalls    int           `json:"toolCalls"`
+	Reads        int           `json:"memoryReads"`
+	Writes       int           `json:"memoryWrites"`
+	Injected     int           `json:"injectedItems"`
+	ReadBack     int           `json:"readAfterInject"`
+	ByKind       []kindCount   `json:"eventsByKind"`
 }
 
 func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +150,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		ToolCalls: toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
 	}
+	data.FindingsHTML = s.renderBody(ctx, sess.Findings, sess.ProjectSlug)
 	if r.URL.Query().Get("peek") == "1" {
 		s.renderFragment(w, r, "session", data)
 		return

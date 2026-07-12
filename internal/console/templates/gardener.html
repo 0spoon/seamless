@@ -31,7 +31,7 @@
     {{else if eq .Kind "digest"}}
       <div class="prop-title">{{.Title}}</div>
       <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
-      <pre class="pre">{{.Preview}}</pre>
+      <div class="prose">{{.Body}}</div>
     {{end}}
 
     {{if $.Data.CanAct}}

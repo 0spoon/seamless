@@ -7,11 +7,15 @@
   </header>
   <h2 class="peek-title">{{.Title}}</h2>
 
-  {{if .Body}}<div class="peek-body">{{.Body}}</div>{{end}}
+  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
     {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}</dd>{{end}}
+    {{if .ClaimedBy}}
+    <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}</dd>
+    <dt>Lease</dt><dd>{{if .ClaimLive}}live &middot; expires {{ago .LeaseExpiry}}{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
+    {{end}}
     <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
     {{if .Closed}}<dt>Closed</dt><dd title="{{.Closed}}">{{ago .Closed}}</dd>{{end}}
@@ -33,6 +37,14 @@
       {{range .Blocks}}<li><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
     </ul>
   </section>
+  {{end}}
+
+  {{if .ClaimedBy}}
+  <div class="peek-actions">
+    <form method="post" action="/console/tasks/{{.ID}}/release" onsubmit="return confirm('Release the lock on this task? It reopens for any agent to claim.');">
+      <button class="link-act danger" type="submit">release lock</button>
+    </form>
+  </div>
   {{end}}
 </article>
 {{end}}

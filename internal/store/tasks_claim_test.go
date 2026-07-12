@@ -170,10 +170,76 @@ func TestUpdateTask_CloseClearsClaim(t *testing.T) {
 	require.NoError(t, err)
 
 	done := core.TaskDone
-	updated, err := UpdateTask(context.Background(), db, id, TaskPatch{Status: &done}, now.Add(time.Second))
+	updated, err := UpdateTask(context.Background(), db, id, TaskPatch{Status: &done}, "sessA", now.Add(time.Second))
 	require.NoError(t, err)
 	require.Empty(t, updated.ClaimedBy, "closing a task releases its claim")
 	require.Nil(t, updated.LeaseExpiresAt)
+}
+
+// TestUpdateTask_HolderCheck is the acceptance for the write-lock: a live claim
+// locks the task to its holder. A non-holder update is rejected; the holder
+// updates freely; and once the lease lapses a non-holder may take over.
+func TestUpdateTask_HolderCheck(t *testing.T) {
+	db := newTaskDB(t)
+	id := addTask(t, db, "demo", "A", 1)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	_, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now)
+	require.NoError(t, err)
+
+	// A different session cannot mutate the live-claimed task.
+	done := core.TaskDone
+	_, err = UpdateTask(context.Background(), db, id, TaskPatch{Status: &done}, "sessB", now.Add(time.Second))
+	require.ErrorIs(t, err, ErrTaskClaimConflict, "a non-holder cannot update a live-claimed task")
+
+	// A caller with no session identity is likewise blocked.
+	_, err = UpdateTask(context.Background(), db, id, TaskPatch{Status: &done}, "", now.Add(time.Second))
+	require.ErrorIs(t, err, ErrTaskClaimConflict, "an empty actor is not the holder")
+
+	// The holder still updates its own task.
+	title := "A renamed"
+	updated, err := UpdateTask(context.Background(), db, id, TaskPatch{Title: &title}, "sessA", now.Add(time.Second))
+	require.NoError(t, err)
+	require.Equal(t, "A renamed", updated.Title)
+
+	// After the lease expires the claim is no longer live, so a non-holder update
+	// is allowed (matching ClaimTask's lazy-expiry reclaim).
+	afterExpiry := now.Add(2 * time.Minute)
+	reopened, err := UpdateTask(context.Background(), db, id, TaskPatch{Status: statusPtr(core.TaskOpen)}, "sessB", afterExpiry)
+	require.NoError(t, err, "an expired lease no longer locks the task")
+	require.Equal(t, core.TaskOpen, reopened.Status)
+}
+
+// TestForceReleaseTask covers the owner override: it reopens a claimed task
+// regardless of holder or lease liveness, and errors when there is nothing to
+// release.
+func TestForceReleaseTask(t *testing.T) {
+	db := newTaskDB(t)
+	id := addTask(t, db, "demo", "A", 1)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	_, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now)
+	require.NoError(t, err)
+
+	// Force-release while the lease is still live (the override's whole point).
+	released, err := ForceReleaseTask(context.Background(), db, id, now.Add(time.Second))
+	require.NoError(t, err)
+	require.Equal(t, core.TaskOpen, released.Status)
+	require.Empty(t, released.ClaimedBy)
+	require.Nil(t, released.LeaseExpiresAt)
+
+	// Reopened -> a different session can now claim it.
+	_, err = ClaimTask(context.Background(), db, id, "sessB", time.Minute, now.Add(2*time.Second))
+	require.NoError(t, err)
+
+	// Force-releasing a task that is not in progress is a conflict, not a no-op.
+	other := addTask(t, db, "demo", "B", 2)
+	_, err = ForceReleaseTask(context.Background(), db, other, now)
+	require.ErrorIs(t, err, ErrTaskClaimConflict, "an unclaimed task has no lock to release")
+
+	// An unknown id is a not-found.
+	_, err = ForceReleaseTask(context.Background(), db, "nope", now)
+	require.ErrorIs(t, err, ErrTaskNotFound)
 }
 
 func TestReleaseClaimsForSession(t *testing.T) {
