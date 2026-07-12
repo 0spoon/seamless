@@ -36,8 +36,8 @@ const (
 	// ToolCount is the number of MCP tools registered. doctor asserts the actual
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
-	// usage_summary = 26.
-	ToolCount = 26
+	// usage_summary = 26; plans-as-composition adds tasks_claim + tasks_release = 28.
+	ToolCount = 28
 
 	// globalNamespace is the reserved project token an agent passes to
 	// deliberately target the global (cross-project) scope, instead of relying on
@@ -195,6 +195,8 @@ func (s *Server) registerTools() {
 	s.addTool(tasksUpdateTool(), s.handleTasksUpdate)
 	s.addTool(tasksReadyTool(), s.handleTasksReady)
 	s.addTool(tasksListTool(), s.handleTasksList)
+	s.addTool(tasksClaimTool(), s.handleTasksClaim)
+	s.addTool(tasksReleaseTool(), s.handleTasksRelease)
 
 	s.addTool(labOpenTool(), s.handleLabOpen)
 	s.addTool(trialRecordTool(), s.handleTrialRecord)

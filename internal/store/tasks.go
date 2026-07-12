@@ -13,7 +13,7 @@ import (
 
 // taskCols is the SELECT list for the tasks table, matching scanTask.
 const taskCols = `id, project_slug, title, body, status, created_by,
-	created_at, updated_at, closed_at`
+	plan_slug, claimed_by, lease_expires_at, created_at, updated_at, closed_at`
 
 // cycleWalkCap bounds the dependency walk in createsCycle, a backstop against a
 // pathological graph (the edges form a DAG by construction, so this is never hit
@@ -26,6 +26,10 @@ var ErrTaskCycle = errors.New("dependency would create a cycle")
 // ErrTaskNotFound is returned when a task id does not exist (e.g. a dangling
 // depends_on reference).
 var ErrTaskNotFound = errors.New("task not found")
+
+// ErrTaskClaimConflict is returned when a claim loses the compare-and-set race:
+// the task is already held by another live lease, or is not in a claimable state.
+var ErrTaskClaimConflict = errors.New("task already claimed")
 
 // rowQuerier is the read subset shared by *sql.DB and *sql.Tx, so the cycle and
 // dangling-reference checks run identically inside or outside a transaction.
@@ -56,11 +60,17 @@ func CreateTask(ctx context.Context, db *sql.DB, t core.Task) error {
 	if t.ClosedAt != nil {
 		closedAt = core.FormatTime(*t.ClosedAt)
 	}
+	var leaseAt any
+	if t.LeaseExpiresAt != nil {
+		leaseAt = core.FormatTime(*t.LeaseExpiresAt)
+	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO tasks (id, project_slug, title, body, status, created_by,
+		                   plan_slug, claimed_by, lease_expires_at,
 		                   created_at, updated_at, closed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.ProjectSlug, t.Title, t.Body, string(t.Status), t.CreatedBy,
+		t.PlanSlug, t.ClaimedBy, leaseAt,
 		core.FormatTime(t.CreatedAt), core.FormatTime(t.UpdatedAt), closedAt); err != nil {
 		return fmt.Errorf("store.CreateTask: insert: %w", err)
 	}
@@ -102,6 +112,10 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, now
 		if t.Status.Closed() {
 			at := now.UTC()
 			t.ClosedAt = &at
+			// A finished task releases its claim so it never lingers as a
+			// stale holder or blocks a lease reclaim.
+			t.ClaimedBy = ""
+			t.LeaseExpiresAt = nil
 		} else {
 			t.ClosedAt = nil
 		}
@@ -112,10 +126,16 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, now
 	if t.ClosedAt != nil {
 		closedAt = core.FormatTime(*t.ClosedAt)
 	}
+	var leaseAt any
+	if t.LeaseExpiresAt != nil {
+		leaseAt = core.FormatTime(*t.LeaseExpiresAt)
+	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE tasks SET title = ?, body = ?, status = ?, updated_at = ?, closed_at = ?
+		UPDATE tasks SET title = ?, body = ?, status = ?, updated_at = ?, closed_at = ?,
+		                 claimed_by = ?, lease_expires_at = ?
 		 WHERE id = ?`,
-		t.Title, t.Body, string(t.Status), core.FormatTime(t.UpdatedAt), closedAt, t.ID); err != nil {
+		t.Title, t.Body, string(t.Status), core.FormatTime(t.UpdatedAt), closedAt,
+		t.ClaimedBy, leaseAt, t.ID); err != nil {
 		return core.Task{}, fmt.Errorf("store.UpdateTask: update: %w", err)
 	}
 	if err := addDeps(ctx, tx, t.ID, patch.AddDependsOn); err != nil {
@@ -125,6 +145,169 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, now
 		return core.Task{}, fmt.Errorf("store.UpdateTask: commit: %w", err)
 	}
 	return TaskByID(ctx, db, id)
+}
+
+// ClaimResult reports the outcome of a successful ClaimTask. Reclaimed is true
+// when a different session's lapsed lease was stolen; PriorHolder then names that
+// session so the caller can record a reclaim event.
+type ClaimResult struct {
+	Task        core.Task
+	Reclaimed   bool
+	PriorHolder string
+}
+
+// ClaimTask atomically claims a task for sessionID, moving it to in_progress and
+// stamping a lease that expires at now+lease. It is a compare-and-set (mirrors
+// ResolveProposal): the write lands only when the task is claimable --
+//
+//	(a) open, unclaimed, and ready (no open/in_progress blocker), or
+//	(b) already held by sessionID (a re-claim / heartbeat that refreshes the lease), or
+//	(c) in_progress with an expired lease (a steal from a dead holder).
+//
+// Otherwise it returns ErrTaskClaimConflict. Lease expiry is enforced lazily
+// here -- there is no background sweeper. sessionID must be non-empty.
+func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time.Duration, now time.Time) (ClaimResult, error) {
+	if sessionID == "" {
+		return ClaimResult{}, errors.New("store.ClaimTask: empty session id")
+	}
+	prior, ok, err := taskByIDTx(ctx, db, id)
+	if err != nil {
+		return ClaimResult{}, err
+	}
+	if !ok {
+		return ClaimResult{}, fmt.Errorf("store.ClaimTask: %w: %q", ErrTaskNotFound, id)
+	}
+
+	nowStr := core.FormatTime(now.UTC())
+	expStr := core.FormatTime(now.Add(lease).UTC())
+	res, err := db.ExecContext(ctx, `
+		UPDATE tasks
+		   SET status = 'in_progress', claimed_by = ?, lease_expires_at = ?, updated_at = ?
+		 WHERE id = ?
+		   AND (
+		         (status = 'open' AND claimed_by = '' AND NOT EXISTS (
+		             SELECT 1 FROM task_deps d
+		             JOIN tasks b ON b.id = d.depends_on
+		             WHERE d.task_id = tasks.id AND b.status IN ('open','in_progress')))
+		      OR (status = 'in_progress' AND (
+		             claimed_by = ?
+		          OR (lease_expires_at IS NOT NULL AND lease_expires_at < ?)))
+		   )`,
+		sessionID, expStr, nowStr, id, sessionID, nowStr)
+	if err != nil {
+		return ClaimResult{}, fmt.Errorf("store.ClaimTask: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return ClaimResult{Task: prior}, fmt.Errorf("store.ClaimTask: %w: task %q held by %q",
+			ErrTaskClaimConflict, id, prior.ClaimedBy)
+	}
+	updated, err := TaskByID(ctx, db, id)
+	if err != nil {
+		return ClaimResult{}, err
+	}
+	reclaimed := prior.ClaimedBy != "" && prior.ClaimedBy != sessionID
+	holder := ""
+	if reclaimed {
+		holder = prior.ClaimedBy
+	}
+	return ClaimResult{Task: updated, Reclaimed: reclaimed, PriorHolder: holder}, nil
+}
+
+// ReleaseTask releases a task held by sessionID, reopening it (status back to
+// open, claim and lease cleared) so another agent can pick it up. Only the
+// current holder may release; otherwise it returns ErrTaskClaimConflict (or
+// ErrTaskNotFound when the id is unknown).
+func ReleaseTask(ctx context.Context, db *sql.DB, id, sessionID string, now time.Time) (core.Task, error) {
+	res, err := db.ExecContext(ctx, `
+		UPDATE tasks SET status = 'open', claimed_by = '', lease_expires_at = NULL, updated_at = ?
+		 WHERE id = ? AND claimed_by = ? AND status = 'in_progress'`,
+		core.FormatTime(now.UTC()), id, sessionID)
+	if err != nil {
+		return core.Task{}, fmt.Errorf("store.ReleaseTask: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		if _, ok, err := taskByIDTx(ctx, db, id); err != nil {
+			return core.Task{}, err
+		} else if !ok {
+			return core.Task{}, fmt.Errorf("store.ReleaseTask: %w: %q", ErrTaskNotFound, id)
+		}
+		return core.Task{}, fmt.Errorf("store.ReleaseTask: %w: task %q not held by %q",
+			ErrTaskClaimConflict, id, sessionID)
+	}
+	return TaskByID(ctx, db, id)
+}
+
+// ReleaseClaimsForSession reopens every in_progress task currently claimed by
+// sessionID (called on session_end so a departing agent's work returns to the
+// queue). It returns the number of tasks released.
+func ReleaseClaimsForSession(ctx context.Context, db *sql.DB, sessionID string, now time.Time) (int, error) {
+	if sessionID == "" {
+		return 0, nil
+	}
+	res, err := db.ExecContext(ctx, `
+		UPDATE tasks SET status = 'open', claimed_by = '', lease_expires_at = NULL, updated_at = ?
+		 WHERE claimed_by = ? AND status = 'in_progress'`,
+		core.FormatTime(now.UTC()), sessionID)
+	if err != nil {
+		return 0, fmt.Errorf("store.ReleaseClaimsForSession: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
+}
+
+// PlanRollup is the per-plan aggregate the briefing surfaces: Total step tasks,
+// how many are Done (closed), InFlight (in_progress), and Claimable (ready).
+type PlanRollup struct {
+	Slug      string `json:"slug"`
+	Total     int    `json:"total"`
+	Done      int    `json:"done"`
+	InFlight  int    `json:"inFlight"`
+	Claimable int    `json:"claimable"`
+}
+
+// ActivePlans returns a rollup for each not-yet-complete plan in a project
+// (plans whose every step is closed are omitted, like a done stage). Claimable
+// counts ready open steps; the plan's status is derived, never stored.
+func ActivePlans(ctx context.Context, db *sql.DB, project string) ([]PlanRollup, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT plan_slug,
+		       COUNT(*),
+		       SUM(CASE WHEN status IN ('done','dropped') THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END)
+		  FROM tasks
+		 WHERE project_slug = ? AND plan_slug <> ''
+		 GROUP BY plan_slug
+		 ORDER BY plan_slug ASC`, project)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActivePlans: %w", err)
+	}
+	var plans []PlanRollup
+	func() {
+		defer func() { _ = rows.Close() }()
+		for rows.Next() {
+			var p PlanRollup
+			if err = rows.Scan(&p.Slug, &p.Total, &p.Done, &p.InFlight); err != nil {
+				return
+			}
+			if p.Done >= p.Total {
+				continue // every step closed -> plan complete, not active
+			}
+			plans = append(plans, p)
+		}
+		err = rows.Err()
+	}()
+	if err != nil {
+		return nil, fmt.Errorf("store.ActivePlans: %w", err)
+	}
+	for i := range plans {
+		ready, err := ReadyTasksForPlan(ctx, db, project, plans[i].Slug)
+		if err != nil {
+			return nil, err
+		}
+		plans[i].Claimable = len(ready)
+	}
+	return plans, nil
 }
 
 // addDeps inserts depends-on edges for taskID, rejecting dangling references and
@@ -216,7 +399,7 @@ func taskExists(ctx context.Context, q rowQuerier, id string) (bool, error) {
 // so the queue is stable and agent-predictable.
 func ReadyTasks(ctx context.Context, db *sql.DB, project string) ([]core.Task, error) {
 	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks t
-		WHERE t.status = 'open' AND t.project_slug = ?
+		WHERE t.status = 'open' AND t.project_slug = ? AND t.plan_slug = ''
 		  AND NOT EXISTS (
 		      SELECT 1 FROM task_deps d
 		      JOIN tasks b ON b.id = d.depends_on
@@ -224,6 +407,23 @@ func ReadyTasks(ctx context.Context, db *sql.DB, project string) ([]core.Task, e
 		ORDER BY t.created_at ASC, t.id ASC`, project)
 	if err != nil {
 		return nil, fmt.Errorf("store.ReadyTasks: %w", err)
+	}
+	return scanTasksWithDeps(ctx, db, rows)
+}
+
+// ReadyTasksForPlan returns the ready (claimable) step tasks of one plan in a
+// project: open, unclaimed, with no unfinished blocker. Same readiness rule as
+// ReadyTasks, scoped to plan_slug instead of excluding plan tasks.
+func ReadyTasksForPlan(ctx context.Context, db *sql.DB, project, plan string) ([]core.Task, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks t
+		WHERE t.status = 'open' AND t.project_slug = ? AND t.plan_slug = ?
+		  AND NOT EXISTS (
+		      SELECT 1 FROM task_deps d
+		      JOIN tasks b ON b.id = d.depends_on
+		      WHERE d.task_id = t.id AND b.status IN ('open','in_progress'))
+		ORDER BY t.created_at ASC, t.id ASC`, project, plan)
+	if err != nil {
+		return nil, fmt.Errorf("store.ReadyTasksForPlan: %w", err)
 	}
 	return scanTasksWithDeps(ctx, db, rows)
 }
@@ -286,7 +486,7 @@ func AllTasksByStatus(ctx context.Context, db *sql.DB, status core.TaskStatus) (
 // ListTasks returns a project's tasks, optionally filtered by status, newest
 // first. An empty status returns every status.
 func ListTasks(ctx context.Context, db *sql.DB, project string, status core.TaskStatus) ([]core.Task, error) {
-	query := `SELECT ` + taskCols + ` FROM tasks WHERE project_slug = ?`
+	query := `SELECT ` + taskCols + ` FROM tasks WHERE project_slug = ? AND plan_slug = ''`
 	args := []any{project}
 	if status != "" {
 		query += ` AND status = ?`
@@ -296,6 +496,23 @@ func ListTasks(ctx context.Context, db *sql.DB, project string, status core.Task
 	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("store.ListTasks: %w", err)
+	}
+	return scanTasksWithDeps(ctx, db, rows)
+}
+
+// ListTasksForPlan returns a plan's step tasks in a project, optionally filtered
+// by status, newest first. Unlike ListTasks it includes (only) plan-scoped tasks.
+func ListTasksForPlan(ctx context.Context, db *sql.DB, project string, status core.TaskStatus, plan string) ([]core.Task, error) {
+	query := `SELECT ` + taskCols + ` FROM tasks WHERE project_slug = ? AND plan_slug = ?`
+	args := []any{project, plan}
+	if status != "" {
+		query += ` AND status = ?`
+		args = append(args, string(status))
+	}
+	query += ` ORDER BY created_at DESC, id DESC`
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListTasksForPlan: %w", err)
 	}
 	return scanTasksWithDeps(ctx, db, rows)
 }
@@ -310,13 +527,31 @@ type BlockedTask struct {
 // BlockedTasks returns a project's open-but-not-ready tasks, each with its
 // still-open blockers, so a caller can render the dependency chain legibly.
 func BlockedTasks(ctx context.Context, db *sql.DB, project string) ([]BlockedTask, error) {
+	return blockedTasks(ctx, db, project, false, "")
+}
+
+// BlockedTasksForPlan returns a plan's open-but-not-ready step tasks, each with
+// its still-open blockers.
+func BlockedTasksForPlan(ctx context.Context, db *sql.DB, project, plan string) ([]BlockedTask, error) {
+	return blockedTasks(ctx, db, project, true, plan)
+}
+
+// blockedTasks backs BlockedTasks (byPlan=false, non-plan tasks only) and
+// BlockedTasksForPlan (byPlan=true, only the given plan's tasks).
+func blockedTasks(ctx context.Context, db *sql.DB, project string, byPlan bool, plan string) ([]BlockedTask, error) {
+	planClause := ` AND t.plan_slug = ''`
+	args := []any{project}
+	if byPlan {
+		planClause = ` AND t.plan_slug = ?`
+		args = append(args, plan)
+	}
 	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks t
-		WHERE t.status = 'open' AND t.project_slug = ?
+		WHERE t.status = 'open' AND t.project_slug = ?`+planClause+`
 		  AND EXISTS (
 		      SELECT 1 FROM task_deps d
 		      JOIN tasks b ON b.id = d.depends_on
 		      WHERE d.task_id = t.id AND b.status IN ('open','in_progress'))
-		ORDER BY t.created_at ASC, t.id ASC`, project)
+		ORDER BY t.created_at ASC, t.id ASC`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("store.BlockedTasks: %w", err)
 	}
@@ -420,10 +655,10 @@ func scanTask(rows *sql.Rows) (core.Task, error) {
 		t                core.Task
 		status           string
 		created, updated string
-		closed           sql.NullString
+		lease, closed    sql.NullString
 	)
 	if err := rows.Scan(&t.ID, &t.ProjectSlug, &t.Title, &t.Body, &status,
-		&t.CreatedBy, &created, &updated, &closed); err != nil {
+		&t.CreatedBy, &t.PlanSlug, &t.ClaimedBy, &lease, &created, &updated, &closed); err != nil {
 		return core.Task{}, err
 	}
 	t.Status = core.TaskStatus(status)
@@ -433,6 +668,9 @@ func scanTask(rows *sql.Rows) (core.Task, error) {
 	}
 	if t.UpdatedAt, err = core.ParseTime(updated); err != nil {
 		return core.Task{}, fmt.Errorf("updated_at: %w", err)
+	}
+	if t.LeaseExpiresAt, err = nullTimePtr(lease); err != nil {
+		return core.Task{}, fmt.Errorf("lease_expires_at: %w", err)
 	}
 	if t.ClosedAt, err = nullTimePtr(closed); err != nil {
 		return core.Task{}, fmt.Errorf("closed_at: %w", err)

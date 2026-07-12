@@ -152,17 +152,27 @@ func (s TaskStatus) Closed() bool { return s == TaskDone || s == TaskDropped }
 
 // Task is a unit of work with optional dependency edges. It is "ready" when all
 // of its dependencies are closed.
+//
+// PlanSlug composes a task into a plan (see the plan:<slug> convention): a
+// non-empty PlanSlug marks the task as a plan step, excluded from the default
+// ready-queue but surfaced under a plan filter. ClaimedBy holds the session ULID
+// that currently owns the task (empty when unclaimed); LeaseExpiresAt is when
+// that claim lapses, after which the task is claimable again (lazy expiry, no
+// sweeper).
 type Task struct {
-	ID          string     `json:"id"`
-	ProjectSlug string     `json:"projectSlug"`
-	Title       string     `json:"title"`
-	Body        string     `json:"body"`
-	Status      TaskStatus `json:"status"`
-	CreatedBy   string     `json:"createdBy"`
-	DependsOn   []string   `json:"dependsOn,omitempty"`
-	CreatedAt   time.Time  `json:"createdAt"`
-	UpdatedAt   time.Time  `json:"updatedAt"`
-	ClosedAt    *time.Time `json:"closedAt,omitempty"`
+	ID             string     `json:"id"`
+	ProjectSlug    string     `json:"projectSlug"`
+	Title          string     `json:"title"`
+	Body           string     `json:"body"`
+	Status         TaskStatus `json:"status"`
+	CreatedBy      string     `json:"createdBy"`
+	PlanSlug       string     `json:"planSlug,omitempty"`
+	ClaimedBy      string     `json:"claimedBy,omitempty"`
+	LeaseExpiresAt *time.Time `json:"leaseExpiresAt,omitempty"`
+	DependsOn      []string   `json:"dependsOn,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	UpdatedAt      time.Time  `json:"updatedAt"`
+	ClosedAt       *time.Time `json:"closedAt,omitempty"`
 }
 
 // ---------------------------------------------------------------------------

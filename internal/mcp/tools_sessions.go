@@ -129,14 +129,24 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	if !ok {
 		return errResult("session_end", errNoSession)
 	}
+	now := time.Now().UTC()
 	sess.Status = core.SessionCompleted
 	sess.Findings = findings
-	sess.UpdatedAt = time.Now().UTC()
+	sess.UpdatedAt = now
 	if err := store.UpdateSession(ctx, s.cfg.DB, sess); err != nil {
 		return errResult("session_end", err)
 	}
-	s.record(ctx, core.EventSessionEnded, sess.ID, sess.ProjectSlug, "", nil)
-	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID})
+	// Release any task claims this session still holds so its in-flight work
+	// returns to the queue rather than sitting claimed by a departed agent.
+	// Keyed off the resolved sess.ID (not the connection binding) because
+	// session_end may complete an ambient session this connection isn't bound to.
+	released, err := store.ReleaseClaimsForSession(ctx, s.cfg.DB, sess.ID, now)
+	if err != nil {
+		return errResult("session_end", err)
+	}
+	s.record(ctx, core.EventSessionEnded, sess.ID, sess.ProjectSlug, "",
+		map[string]any{"claims_released": released})
+	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID, "claims_released": released})
 }
 
 // resolveSession loads the session the request targets: an explicit session_id

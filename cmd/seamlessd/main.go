@@ -38,8 +38,8 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// version is the seamlessd build version. Bumped at release; "dev" until P6.
-const version = "0.0.0-dev"
+// version is the seamlessd build version, bumped at release.
+const version = "0.2.1"
 
 // commit and buildDate are link-time build metadata, set via
 //
