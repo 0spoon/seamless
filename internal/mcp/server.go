@@ -50,12 +50,23 @@ const (
 // bound session nor an explicit one.
 var errNoSession = errors.New("no active session: call session_start first, or pass a session name")
 
-// errAmbiguousScope is returned by resolveWriteScope when a durable create has no
-// explicit project, no bound session, and no ambient session to inherit from --
-// so the write would silently land in the global scope. The agent must choose.
-var errAmbiguousScope = errors.New(
+// errNoScope is returned by resolveWriteScope for a durable create with no
+// explicit project, no bound session, and no ambient session at all to inherit
+// from -- so the write would silently land in the global scope. The agent must
+// choose.
+var errNoScope = errors.New(
 	"ambiguous scope: no bound or ambient session to infer the project from; " +
 		"pass project=<slug> for a project item, or project=global for a global one")
+
+// errAmbiguousScope is returned when a durable create has no explicit project and
+// no bound session, and active ambient sessions span multiple projects
+// (concurrent agents in different repos). Inheriting the machine-latest ambient
+// here is exactly how a write bleeds into another agent's project, so the caller
+// must disambiguate with project=.
+var errAmbiguousScope = errors.New(
+	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
+		"projects (concurrent agents); pass project=<slug> for a project item, or " +
+		"project=global for a global one")
 
 // normalizeProject maps the reserved global tokens to the internal empty-string
 // global scope, and leaves every other slug untouched.
@@ -258,10 +269,11 @@ func (s *Server) getBinding(ctx context.Context) (binding, bool) {
 const ambientFallbackWindow = 6 * time.Hour
 
 // resolveProject prefers an explicit project argument (with the global token
-// normalized), then the bound session's project, then the most recent ambient
-// session's project (write-scope fallback), then the global scope. It never
-// errors: reads and searches quietly fall back to global. Durable creates use
-// resolveWriteScope instead, which rejects that ambiguity.
+// normalized), then the bound session's project, then a single unambiguous
+// ambient project (write-scope fallback), then the global scope. It never
+// errors: reads and searches quietly fall back to global, including when the
+// ambient fallback is ambiguous. Durable creates use resolveWriteScope instead,
+// which rejects that ambiguity.
 func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	if explicit != "" {
 		return normalizeProject(explicit)
@@ -269,7 +281,7 @@ func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project
 	}
-	if sess, ok := s.ambientFallback(ctx); ok {
+	if sess, ok, _ := s.ambientFallback(ctx); ok {
 		return sess.ProjectSlug
 	}
 	return ""
@@ -278,8 +290,10 @@ func (s *Server) resolveProject(ctx context.Context, explicit string) string {
 // resolveWriteScope is resolveProject for durable creates (memory/note/task): it
 // returns the same project, but errors with errAmbiguousScope instead of
 // silently defaulting to global when nothing pins the scope. An explicit project
-// -- including project=global -- is always unambiguous, as is any bound or
-// ambient session (even a deliberately global one).
+// -- including project=global -- is always unambiguous, as is any bound session
+// or a single-project ambient fallback. When active ambient sessions span
+// multiple projects (concurrent agents), it refuses to guess rather than bleed
+// the write into the wrong project.
 func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
 		return normalizeProject(explicit), nil
@@ -287,10 +301,14 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
 	}
-	if sess, ok := s.ambientFallback(ctx); ok {
+	sess, ok, ambiguous := s.ambientFallback(ctx)
+	if ok {
 		return sess.ProjectSlug, nil
 	}
-	return "", errAmbiguousScope
+	if ambiguous {
+		return "", errAmbiguousScope
+	}
+	return "", errNoScope
 }
 
 // setBindingLab records the current research lab on the connection's binding, so
@@ -316,28 +334,43 @@ func (s *Server) boundLab(ctx context.Context) string {
 	return ""
 }
 
-// boundSession returns the bound session's ULID, the most recent ambient
+// boundSession returns the bound session's ULID, a single unambiguous ambient
 // session's ULID (write-scope fallback), or "".
 func (s *Server) boundSession(ctx context.Context) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID
 	}
-	if sess, ok := s.ambientFallback(ctx); ok {
+	if sess, ok, _ := s.ambientFallback(ctx); ok {
 		return sess.ID
 	}
 	return ""
 }
 
 // ambientFallback returns the ambient session an unbound connection's writes
-// should attribute to: the most recently updated active cc/* session within the
-// fallback window. It is only consulted when there is no explicit binding.
-func (s *Server) ambientFallback(ctx context.Context) (core.Session, bool) {
-	sess, ok, err := store.LatestActiveAmbientSession(ctx, s.cfg.DB, ambientFallbackWindow)
+// should attribute to. Because such a connection carries no project signal (MCP
+// tool calls receive no cwd, and no session_start ran), attribution is only safe
+// when active ambient sessions are confined to a single project: it then returns
+// that project's most recently updated cc/* session. When they span multiple
+// projects -- concurrent agents in different repos, the cross-agent-bleed case --
+// it returns ambiguous=true and ok=false so durable creates force an explicit
+// project= rather than guessing. It is only consulted when there is no binding.
+func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguous bool) {
+	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
+	if err != nil {
+		s.logger.Warn("mcp: ambient fallback projects", "error", err)
+		return core.Session{}, false, false
+	}
+	if len(projects) != 1 {
+		// Zero (nothing to inherit) or several (ambiguous) both decline; only the
+		// multi-project case is a true ambiguity the caller must resolve.
+		return core.Session{}, false, len(projects) > 1
+	}
+	sess, ok, err = store.LatestActiveAmbientSessionForProject(ctx, s.cfg.DB, projects[0], ambientFallbackWindow)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback lookup", "error", err)
-		return core.Session{}, false
+		return core.Session{}, false, false
 	}
-	return sess, ok
+	return sess, ok, false
 }
 
 // record appends an event best-effort; a logging failure never fails a tool.

@@ -126,21 +126,54 @@ func ListSessions(ctx context.Context, db *sql.DB, status core.SessionStatus, li
 	return out, rows.Err()
 }
 
-// LatestActiveAmbientSession returns the most recently updated active ambient
-// (cc/*) session updated within the given window, or found=false when none. It
-// backs the MCP write-scope fallback: an agent that writes without calling
-// session_start inherits the ambient session's project and provenance. A
-// non-positive within disables the recency filter.
-func LatestActiveAmbientSession(ctx context.Context, db *sql.DB, within time.Duration) (core.Session, bool, error) {
+// LatestActiveAmbientSessionForProject returns the most recently updated active
+// ambient (cc/*) session in the given project, updated within the window, or
+// found=false when none. It backs the MCP write-scope fallback: an agent that
+// writes without calling session_start inherits its project's ambient session's
+// provenance. A non-positive within disables the recency filter. Scoping to a
+// single project is what prevents cross-agent bleed -- see ActiveAmbientProjects.
+func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, project string, within time.Duration) (core.Session, bool, error) {
 	query := `SELECT ` + sessionCols + ` FROM sessions
-		WHERE status = 'active' AND ambient = 1`
-	args := []any{}
+		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
+	args := []any{project}
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
 	}
 	query += ` ORDER BY updated_at DESC, id DESC LIMIT 1`
 	return sessionOne(ctx, db, query, args...)
+}
+
+// ActiveAmbientProjects returns the distinct project slugs that have at least one
+// active ambient (cc/*) session updated within the window, ordered by each
+// project's most recent activity. The MCP fallback consults it to tell a safe
+// single-project inference (len 1) from the ambiguous concurrent-agent case
+// (len > 1, agents in different repos) where guessing would bleed a write into
+// the wrong project. A non-positive within disables the recency filter. The
+// global scope is reported as the empty string, distinct from any named project.
+func ActiveAmbientProjects(ctx context.Context, db *sql.DB, within time.Duration) ([]string, error) {
+	query := `SELECT project_slug FROM sessions
+		WHERE status = 'active' AND ambient = 1`
+	args := []any{}
+	if within > 0 {
+		query += ` AND updated_at >= ?`
+		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
+	}
+	query += ` GROUP BY project_slug ORDER BY MAX(updated_at) DESC`
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientProjects: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []string
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, fmt.Errorf("store.ActiveAmbientProjects: %w", err)
+		}
+		out = append(out, slug)
+	}
+	return out, rows.Err()
 }
 
 // SiblingFindings returns the most recent completed sessions with non-empty

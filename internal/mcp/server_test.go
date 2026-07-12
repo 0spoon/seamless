@@ -300,18 +300,26 @@ func TestResearchTrials(t *testing.T) {
 	require.Contains(t, resultText(t, res), "JSON object")
 }
 
+// seedAmbient inserts an active ambient (cc/*) session in the given project, as
+// the session-start hook would, and returns its id. name must be unique.
+func seedAmbient(t *testing.T, ctx context.Context, db *sql.DB, name, project string) string {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
+		Ambient: true, CreatedAt: now, UpdatedAt: now,
+	}))
+	return id
+}
+
 func TestWriteScopeFallbackToAmbient(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
 
 	// Seed an active ambient session in "demo" (as the session-start hook would).
-	id, err := core.NewID()
-	require.NoError(t, err)
-	now := time.Now().UTC()
-	require.NoError(t, store.CreateSession(ctx, db, core.Session{
-		ID: id, Name: "cc/amb00000", ProjectSlug: "demo", Status: core.SessionActive,
-		Ambient: true, CreatedAt: now, UpdatedAt: now,
-	}))
+	id := seedAmbient(t, ctx, db, "cc/amb00000", "demo")
 
 	// A connection that never calls session_start still attributes its writes to
 	// the ambient session's project and provenance.
@@ -325,6 +333,79 @@ func TestWriteScopeFallbackToAmbient(t *testing.T) {
 
 	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "unbound-write", "project": "demo"})
 	require.Equal(t, id, r["source_session"], "unbound write inherits ambient provenance")
+}
+
+// TestConcurrentAmbientDoesNotBleed is the regression test for the cross-agent
+// session-bleed bug: when two agents run in different repos, both leaving an
+// active ambient session, an unbound durable create must NOT silently attribute
+// to whichever ambient session was touched last (machine-global fallback).
+// Instead it must refuse and force an explicit project=.
+func TestConcurrentAmbientDoesNotBleed(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	// Two concurrent agents: an ambient session in "demo" and one in "other".
+	seedAmbient(t, ctx, db, "cc/ambdemo0", "demo")
+	seedAmbient(t, ctx, db, "cc/ambother", "other")
+
+	cli := dialClient(t, ctx, url, testKey)
+
+	// Every unbound durable create is rejected rather than guessing a project.
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+	}{
+		{"memory_write", map[string]any{"name": "x", "kind": "reference", "description": "d", "body": "b"}},
+		{"notes_create", map[string]any{"title": "a note", "body": "b"}},
+		{"tasks_add", map[string]any{"title": "a task"}},
+	} {
+		isErr, txt := callErr(t, ctx, cli, tc.tool, tc.args)
+		require.True(t, isErr, "%s must be rejected under concurrent ambient sessions", tc.tool)
+		require.Contains(t, txt, "ambiguous scope", "%s: %s", tc.tool, txt)
+		require.Contains(t, txt, "multiple", "%s error should name the multi-project cause: %s", tc.tool, txt)
+	}
+
+	// The write nothing bled into "other": passing project= resolves cleanly and
+	// lands exactly where asked, never in the sibling agent's project.
+	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "scoped-write", "kind": "reference", "description": "d",
+		"body": "explicitly scoped.\n", "project": "demo",
+	})
+	require.Equal(t, "demo", w["project"])
+
+	_, foundOther, err := store.MemoryByName(ctx, db, "other", "scoped-write")
+	require.NoError(t, err)
+	require.False(t, foundOther, "the write must not leak into the sibling agent's project")
+	_, foundDemo, err := store.MemoryByName(ctx, db, "demo", "scoped-write")
+	require.NoError(t, err)
+	require.True(t, foundDemo, "the explicitly scoped write lands in its own project")
+}
+
+// TestSessionEndTargetsExplicitID verifies session_end/session_update honor an
+// explicit session_id -- so a call meant for one session can no longer be
+// silently redirected to the ambient fallback and overwrite another agent's.
+func TestSessionEndTargetsExplicitID(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	// A bystander ambient session in another project that must be left untouched.
+	bystander := seedAmbient(t, ctx, db, "cc/bystandr", "other")
+
+	// A real, non-ambient session created out of band (no connection binding).
+	target := seedAmbient(t, ctx, db, "sess/target0", "demo")
+
+	cli := dialClient(t, ctx, url, testKey)
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{
+		"findings": "done", "session_id": target,
+	})
+	require.Equal(t, target, end["session_id"])
+	require.Equal(t, "completed", end["status"])
+
+	// The bystander is still active: the id-targeted end did not touch it.
+	bs, ok, err := store.SessionByID(ctx, db, bystander)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, bs.Status, "an id-targeted session_end must not complete a bystander session")
 }
 
 func TestMCPAuthRejectsBadKey(t *testing.T) {

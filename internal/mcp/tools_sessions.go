@@ -84,6 +84,7 @@ func sessionUpdateTool() mcp.Tool {
 		mcp.WithDescription("Record interim progress on the current session (working findings so far). Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Working findings / progress note so far")),
 		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
+		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
 	)
 }
 
@@ -112,6 +113,7 @@ func sessionEndTool() mcp.Tool {
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
 		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
+		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
 	)
 }
 
@@ -137,9 +139,15 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID})
 }
 
-// resolveSession loads the session named in the request, or the bound session
-// when none is named.
+// resolveSession loads the session the request targets: an explicit session_id
+// (ULID) first, then a session name, then the bound session. Accepting an id as
+// well as a name stops a session_id= argument from being silently ignored and
+// dropping to the ambient fallback -- the call-site mistake behind an overwrite
+// of the wrong agent's session.
 func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (core.Session, bool, error) {
+	if id := argString(req, "session_id"); id != "" {
+		return store.SessionByID(ctx, s.cfg.DB, id)
+	}
 	if name := argString(req, "session"); name != "" {
 		return store.SessionByName(ctx, s.cfg.DB, name)
 	}
