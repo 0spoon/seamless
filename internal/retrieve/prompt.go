@@ -53,6 +53,7 @@ type promptCorpus struct {
 }
 
 type promptCand struct {
+	id          string
 	name        string
 	description string
 	updatedAt   time.Time
@@ -61,6 +62,7 @@ type promptCand struct {
 }
 
 type promptHit struct {
+	id          string
 	name        string
 	description string
 	updatedAt   time.Time
@@ -69,22 +71,36 @@ type promptHit struct {
 
 // PromptRecall matches a user's prompt against the active memory index for the
 // cwd's project and returns a <seam-recall> block (or "" when nothing clears the
-// overlap and score floors). It never errors on the hook path except on a store
-// failure.
-func (s *Service) PromptRecall(ctx context.Context, cwd, prompt string) (string, error) {
+// overlap and score floors). The second return value is the ids of the memories
+// surfaced, so the caller can record them as a retrieval.injected event. It never
+// errors on the hook path except on a store failure.
+func (s *Service) PromptRecall(ctx context.Context, cwd, prompt string) (string, []string, error) {
 	tokens := promptTokenize(prompt)
 	if len(tokens) == 0 {
-		return "", nil
+		return "", nil, nil
 	}
 	project, err := store.ResolveProjectForCWD(ctx, s.db, cwd)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	corpus, err := s.promptCorpusFor(ctx, project)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
-	return renderPromptRecall(scorePrompt(tokens, corpus)), nil
+	hits := scorePrompt(tokens, corpus)
+	return renderPromptRecall(hits), promptHitIDs(hits), nil
+}
+
+// promptHitIDs returns the memory ids of the surfaced hits, in render order.
+func promptHitIDs(hits []promptHit) []string {
+	if len(hits) == 0 {
+		return nil
+	}
+	ids := make([]string, len(hits))
+	for i, h := range hits {
+		ids[i] = h.id
+	}
+	return ids
 }
 
 // promptCorpusFor returns a cached corpus for the project scope, rebuilding it
@@ -128,7 +144,7 @@ func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promp
 			df[t]++
 		}
 		cands = append(cands, promptCand{
-			name: m.Name, description: m.Description, updatedAt: m.Updated,
+			id: m.ID, name: m.Name, description: m.Description, updatedAt: m.Updated,
 			tokens: toks, tokenSet: set,
 		})
 	}
@@ -165,7 +181,7 @@ func scorePrompt(promptTokens []string, c *promptCorpus) []promptHit {
 			continue
 		}
 		hits = append(hits, promptHit{
-			name: cand.name, description: cand.description,
+			id: cand.id, name: cand.name, description: cand.description,
 			updatedAt: cand.updatedAt, score: score,
 		})
 	}

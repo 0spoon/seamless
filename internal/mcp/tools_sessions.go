@@ -48,7 +48,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			}
 			s.setBinding(ctx, existing.ID, project)
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
-			briefing, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
+			briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
 			return jsonResult(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
 				"project": project, "resumed": true, "briefing": briefing,
@@ -73,7 +73,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
-	briefing, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
+	briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
 	return jsonResult(map[string]any{
 		"session_id": id, "name": name, "project": project, "briefing": briefing,
 	})

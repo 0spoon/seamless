@@ -108,12 +108,12 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// project. Best-effort: a failure just leaves the cwd on the global scope.
 	h.retrieve.RegisterProjectForCWD(ctx, p.CWD)
 
-	briefing, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
+	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
 		CWD: p.CWD, Source: p.Source, AgentType: p.AgentType,
 	})
 	if err != nil {
 		h.logger.Warn("hooks: session-start briefing failed", "error", err)
-		briefing = "" // never block the agent
+		briefing, injectedIDs = "", nil // never block the agent
 	}
 	injected := briefing != ""
 
@@ -129,7 +129,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// Record after the ambient line is appended so the stored content is exactly
 	// what the agent received.
 	if injected {
-		h.recordInjection(ctx, "session-start", p.SessionID, briefing)
+		h.recordInjection(ctx, "session-start", p.SessionID, briefing, injectedIDs)
 	}
 	writeHookResponse(w, "SessionStart", briefing)
 }
@@ -271,28 +271,34 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	out, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
+	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
 	if err != nil {
 		h.logger.Warn("hooks: user-prompt-submit recall failed", "error", err)
-		out = ""
+		out, injectedIDs = "", nil
 	}
 	if out != "" {
-		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, out)
+		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, out, injectedIDs)
 	}
 	writeHookResponse(w, "UserPromptSubmit", out)
 }
 
 // recordInjection logs a retrieval.injected event carrying the exact text that
-// was injected, so the console can show what an agent actually received. The
-// session_id column holds seamless ULIDs only, so the Claude session id rides in
-// the payload rather than that column (the hook has no seamless session in P2).
-func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, content string) {
+// was injected, so the console can show what an agent actually received. itemIDs
+// are the memory ULIDs surfaced by this injection; recording them (as the recall
+// tool does) feeds the read-after-inject funnel so the auto-briefing counts, not
+// just recall-tool hits. The session_id column holds seamless ULIDs only, so the
+// Claude session id rides in the payload rather than that column (the hook has no
+// seamless session in P2).
+func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, content string, itemIDs []string) {
 	if h.events == nil {
 		return
 	}
 	if _, err := h.events.Record(ctx, core.Event{
-		Kind:    core.EventInjected,
-		Payload: map[string]any{"hook": hook, "claude_session_id": claudeSessionID, "content": content},
+		Kind: core.EventInjected,
+		Payload: map[string]any{
+			"hook": hook, "claude_session_id": claudeSessionID,
+			"content": content, "item_ids": itemIDs,
+		},
 	}); err != nil {
 		h.logger.Warn("hooks: record injection", "error", err)
 	}
