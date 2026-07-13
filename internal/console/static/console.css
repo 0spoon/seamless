@@ -1031,6 +1031,19 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-more { display: flex; justify-content: center; padding: 12px 0; }
 .live.off .live-dot { animation: none; background: var(--faint); }
 
+/* JSON value rendering in feed bodies: syntax-highlighted + collapsible. Inherits
+   .pre wrapping (pre-wrap + break-word) so long values wrap in-container, never
+   overflowing the page. Small payloads show in full; large ones start clamped. */
+.ix-json { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pre-json { max-height: none; overflow: visible; }
+.pre-json.clamp { max-height: 22em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 82%, transparent); mask-image: linear-gradient(#000 82%, transparent); }
+.pre-json .jk    { color: var(--brand); }
+.pre-json .js    { color: var(--ok); }
+.pre-json .jnum  { color: var(--pop); }
+.pre-json .jbool { color: var(--warn); font-weight: 600; }
+.pre-json .jnull { color: var(--faint); font-style: italic; }
+.ix-expand { align-self: flex-start; }
+
 /* Error tone for the tool-name chip (feed reuses .kind chips). */
 .kind.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
 

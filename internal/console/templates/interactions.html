@@ -90,6 +90,108 @@
     return e;
   }
 
+  // ---- Value rendering: pretty-print + highlight JSON, decode escapes -------
+  // A body value (tool args, tool result, prompt, injected content, findings) is
+  // shown as a syntax-highlighted, collapsible JSON block when it parses as a JSON
+  // object/array; as its decoded text when it is a JSON-encoded string; and as a
+  // best-effort escape-decoded text block otherwise. All text enters via
+  // textContent (never innerHTML), so highlighting stays XSS-safe.
+  var JSON_MAX_LINES = 40; // above this a JSON block starts collapsed with a toggle
+  var JSON_TOKEN = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
+
+  function tryJSON(s) {
+    var c = s.charAt(0);
+    if (c !== '{' && c !== '[' && c !== '"') return null; // only structured/quoted values
+    try { return { v: JSON.parse(s) }; } catch (e) { return null; }
+  }
+
+  // Decode the common backslash escapes when a value is a single-line string still
+  // carrying literal escape sequences (e.g. an error line). Left untouched when the
+  // text already has real newlines/tabs (it is already-decoded content) or has
+  // nothing to decode, so genuine backslashes (e.g. paths) are not mangled.
+  function decodeEscapes(s) {
+    if (/[\n\r\t]/.test(s)) return s;
+    if (!/\\(?:u[0-9a-fA-F]{4}|[nrtbf"\\/])/.test(s)) return s;
+    return s.replace(/\\u([0-9a-fA-F]{4})|\\([nrtbf"\\/])/g, function (m, u, c) {
+      if (u) return String.fromCharCode(parseInt(u, 16));
+      return { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '"': '"', '\\': '\\', '/': '/' }[c] || m;
+    });
+  }
+
+  function textBlock(s) { return el('pre', 'pre', s); }
+  function jspan(cls, text) { return el('span', cls, text); }
+
+  // Decode a JSON string token (quotes included) for display: \n/\t become real
+  // line breaks/tabs, \uXXXX become their glyph, \" and \\ their literal char.
+  // So a multi-line string value (e.g. captured markdown) reads as a real block
+  // instead of a wall of literal \n.
+  function unescapeJSONText(tok) {
+    return tok.replace(/\\u([0-9a-fA-F]{4})|\\([nrtbf"\\/])/g, function (m, u, c) {
+      if (u) return String.fromCharCode(parseInt(u, 16));
+      return { n: '\n', r: '', t: '\t', b: '', f: '', '"': '"', '\\': '\\', '/': '/' }[c];
+    });
+  }
+
+  // Tokenize pretty-printed JSON, appending coloured spans + literal punctuation.
+  function highlightInto(pre, text) {
+    JSON_TOKEN.lastIndex = 0;
+    var last = 0, m;
+    while ((m = JSON_TOKEN.exec(text)) !== null) {
+      if (m.index > last) pre.appendChild(document.createTextNode(text.slice(last, m.index)));
+      if (m[1] !== undefined) {
+        if (m[2] !== undefined) {                 // "key":
+          pre.appendChild(jspan('jk', unescapeJSONText(m[1])));
+          pre.appendChild(document.createTextNode(m[2]));
+        } else {                                   // "string value"
+          pre.appendChild(jspan('js', unescapeJSONText(m[1])));
+        }
+      } else if (m[3] !== undefined) {
+        pre.appendChild(jspan('jbool', m[3]));
+      } else if (m[4] !== undefined) {
+        pre.appendChild(jspan('jnull', m[4]));
+      } else {
+        pre.appendChild(jspan('jnum', m[5]));
+      }
+      last = JSON_TOKEN.lastIndex;
+    }
+    if (last < text.length) pre.appendChild(document.createTextNode(text.slice(last)));
+  }
+
+  function jsonBlock(value) {
+    var pretty;
+    try { pretty = JSON.stringify(value, null, 2); } catch (e) { return textBlock(String(value)); }
+    var wrap = el('div', 'ix-json');
+    var pre = el('pre', 'pre pre-json');
+    highlightInto(pre, pretty);
+    wrap.appendChild(pre);
+    // Count displayed lines (string values may decode to real multi-line blocks),
+    // so the collapse threshold reflects on-screen height, not the escaped source.
+    var shown = unescapeJSONText(pretty);
+    var total = 1;
+    for (var i = 0; i < shown.length; i++) if (shown.charCodeAt(i) === 10) total++;
+    if (total > JSON_MAX_LINES) {
+      pre.classList.add('clamp');
+      var btn = el('button', 'btn small ix-expand', 'Show all ' + total + ' lines');
+      btn.type = 'button';
+      btn.onclick = function () {
+        var collapsed = pre.classList.toggle('clamp');
+        btn.textContent = collapsed ? ('Show all ' + total + ' lines') : 'Show less';
+      };
+      wrap.appendChild(btn);
+    }
+    return wrap;
+  }
+
+  function renderValue(value) {
+    var s = String(value);
+    var parsed = tryJSON(s.replace(/^\s+/, ''));
+    if (parsed) {
+      if (parsed.v !== null && typeof parsed.v === 'object') return jsonBlock(parsed.v);
+      if (typeof parsed.v === 'string') return textBlock(parsed.v); // JSON.parse already decoded it
+    }
+    return textBlock(decodeEscapes(s));
+  }
+
   function buildRow(d) {
     var row = el('details', 'ix-row' + (d.isError ? ' err' : ''));
     row.setAttribute('data-id', d.id);
@@ -112,7 +214,7 @@
     var body = el('div', 'ix-body');
     if (d.request) {
       body.appendChild(el('h3', null, d.kind === 'subagent.captured' ? 'Prompt' : 'Request'));
-      body.appendChild(el('pre', 'pre', d.request));
+      body.appendChild(renderValue(d.request));
     }
     if (d.response) {
       var rh = 'Response';
@@ -120,7 +222,7 @@
       else if (d.kind.indexOf('plan.') === 0) rh = 'Plan content';
       else if (d.kind === 'subagent.captured') rh = 'Report';
       body.appendChild(el('h3', null, rh));
-      body.appendChild(el('pre', 'pre', d.response));
+      body.appendChild(renderValue(d.response));
     }
     var links = el('div', 'ix-links');
     if (d.sessionId) {
