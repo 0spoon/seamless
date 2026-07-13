@@ -9,15 +9,24 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/store"
 )
+
+// stubChat is a canned llm.Chat: it returns a fixed completion regardless of the
+// prompt, so the console can exercise the natural-language request path.
+type stubChat struct{ out string }
+
+func (c stubChat) Model() string                                     { return "stub-chat" }
+func (c stubChat) Complete(context.Context, string, string) (string, error) { return c.out, nil }
 
 // newConsoleWithGardener wires a real gardener (no embedder/chat) so apply/dismiss
 // round-trip through the proposal store and files.
@@ -100,4 +109,71 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	p, _, err = store.ProposalByID(ctx, db, archiveP.ID)
 	require.NoError(t, err)
 	require.Equal(t, store.ProposalPending, p.Status)
+}
+
+// newConsoleWithChat wires a chat-backed gardener and seeds two active global
+// memories in a known newest-first order ([1] keep-me, [2] drop-me), so the
+// natural-language request path has candidates to reference.
+func newConsoleWithChat(t *testing.T, chatOut string) (context.Context, *sql.DB, *http.ServeMux) {
+	t.Helper()
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	dataDir := filepath.Join(dir, "data")
+	mgr, err := files.NewManager(dataDir, db, slog.Default())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	now := time.Now().UTC()
+	writeConsoleMem(t, mgr, "keep-me", now)
+	writeConsoleMem(t, mgr, "drop-me", now.Add(-time.Hour))
+
+	rec := events.NewRecorder(db)
+	garden := gardener.New(db, mgr, nil, stubChat{out: chatOut}, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
+	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+	return ctx, db, mux
+}
+
+func writeConsoleMem(t *testing.T, mgr *files.Manager, name string, updated time.Time) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	_, err = mgr.WriteMemory(context.Background(), core.Memory{
+		ID: id, Kind: core.KindGotcha, Name: name, Description: name + " description",
+		Body: "body", Created: updated, Updated: updated, ValidFrom: updated,
+	})
+	require.NoError(t, err)
+}
+
+func postForm(mux *http.ServeMux, path, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(body))
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	return do(mux, req)
+}
+
+func TestGardenerRequest_CreatesProposals(t *testing.T) {
+	ctx, db, mux := newConsoleWithChat(t, `{"ops":[{"op":"merge","keep":1,"drop":2}]}`)
+
+	rr := postForm(mux, "/console/gardener/request", "request=keep-me+and+drop-me+are+duplicates&project=")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/gardener?notice="),
+		"a successful request redirects with a positive notice, got %q", rr.Header().Get("Location"))
+
+	merges, err := store.PendingProposals(ctx, db, store.ProposalMerge)
+	require.NoError(t, err)
+	require.Len(t, merges, 1)
+	require.Equal(t, "request", merges[0].Payload["source"], "request-originated proposals are tagged for the UI chip")
+}
+
+func TestGardenerRequest_UnavailableWithoutChat(t *testing.T) {
+	_, _, mux := newConsoleWithGardener(t) // gardener without a chat client
+	var data gardenerData
+	getJSON(t, mux, "/console/gardener?format=json", &data)
+	require.False(t, data.CanRequest, "the request box is gated off when no chat client is configured")
 }

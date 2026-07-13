@@ -89,6 +89,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /console/tasks/{id}/release", s.auth(s.taskRelease))
 	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
+	mux.HandleFunc("POST /console/gardener/request", s.auth(s.gardenerRequest))
 	mux.HandleFunc("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
 	mux.HandleFunc("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
 	mux.HandleFunc("GET /console/settings", s.auth(s.settings))

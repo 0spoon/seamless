@@ -31,9 +31,10 @@ func TestUsageSummaryTool(t *testing.T) {
 }
 
 // TestToolCountMatchesRegistered mirrors the doctor assertion: the server must
-// register exactly ToolCount tools (26 at P4; 28 with tasks_claim + tasks_release).
+// register exactly ToolCount tools (26 at P4; 28 with tasks_claim + tasks_release;
+// 29 with gardener_request).
 func TestToolCountMatchesRegistered(t *testing.T) {
 	srv := mcpserver.New(mcpserver.Config{})
 	require.Equal(t, mcpserver.ToolCount, srv.NumTools())
-	require.Equal(t, 28, mcpserver.ToolCount)
+	require.Equal(t, 29, mcpserver.ToolCount)
 }

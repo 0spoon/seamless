@@ -52,7 +52,7 @@ func (s *Service) proposeDigests(ctx context.Context, seen map[string]struct{}) 
 			"project": project, "month": month, "session_count": len(group),
 			"title": digestTitle(project, month), "body": body,
 		}
-		if err := s.createProposal(ctx, store.ProposalDigest, key, payload, seen); err != nil {
+		if _, err := s.createProposal(ctx, store.ProposalDigest, key, payload, seen); err != nil {
 			return created, err
 		}
 		created++

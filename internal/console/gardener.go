@@ -3,9 +3,11 @@ package console
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/store"
@@ -28,6 +30,7 @@ type memBrief struct {
 type proposalCard struct {
 	ID        string    `json:"id"`
 	Kind      string    `json:"kind"`
+	Source    string    `json:"source,omitempty"` // "request" => owner asked for it
 	CreatedAt time.Time `json:"createdAt"`
 
 	// Archive
@@ -49,11 +52,21 @@ type proposalCard struct {
 	Body         template.HTML `json:"-"`
 }
 
+// projectOpt is one entry in the request-scope selector.
+type projectOpt struct {
+	Slug  string `json:"slug"`
+	Label string `json:"label"`
+}
+
 // gardenerData is the payload for the Gardener page.
 type gardenerData struct {
-	Cards  []proposalCard `json:"cards"`
-	CanAct bool           `json:"-"`
-	Error  string         `json:"error,omitempty"`
+	Cards      []proposalCard `json:"cards"`
+	CanAct     bool           `json:"-"`
+	CanRequest bool           `json:"canRequest"` // an LLM chat client is configured
+	Projects   []projectOpt   `json:"projects,omitempty"`
+	Scope      string         `json:"scope,omitempty"`  // selected request scope (project slug)
+	Notice     string         `json:"notice,omitempty"` // positive flash
+	Error      string         `json:"error,omitempty"`  // failure flash
 }
 
 func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
@@ -71,15 +84,38 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 		Title:  "Gardener",
 		Active: "gardener",
 		Data: gardenerData{
-			Cards:  cards,
-			CanAct: s.cfg.Gardener != nil,
-			Error:  r.URL.Query().Get("error"),
+			Cards:      cards,
+			CanAct:     s.cfg.Gardener != nil,
+			CanRequest: s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
+			Projects:   s.projectOptions(ctx),
+			Scope:      r.URL.Query().Get("project"),
+			Notice:     r.URL.Query().Get("notice"),
+			Error:      r.URL.Query().Get("error"),
 		},
 	})
 }
 
+// projectOptions lists projects for the request-scope selector, best-effort: a
+// query error yields no options rather than failing the page.
+func (s *Service) projectOptions(ctx context.Context) []projectOpt {
+	projs, err := store.ListProjects(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("console: list projects", "error", err)
+		return nil
+	}
+	out := make([]projectOpt, 0, len(projs))
+	for _, p := range projs {
+		label := p.Name
+		if label == "" {
+			label = p.Slug
+		}
+		out = append(out, projectOpt{Slug: p.Slug, Label: label})
+	}
+	return out
+}
+
 func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposalCard {
-	c := proposalCard{ID: p.ID, Kind: p.Kind, CreatedAt: p.CreatedAt}
+	c := proposalCard{ID: p.ID, Kind: p.Kind, CreatedAt: p.CreatedAt, Source: payloadStr(p.Payload, "source")}
 	switch p.Kind {
 	case store.ProposalArchive:
 		c.Archive = &memBrief{
@@ -144,8 +180,43 @@ func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/console/gardener", http.StatusSeeOther)
 }
 
+// gardenerRequest interprets a natural-language maintenance request into pending
+// proposals and redirects back to the page, flashing the outcome. The request
+// never mutates a memory -- it only ever creates proposals for review.
+func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
+	if err := r.ParseForm(); err != nil {
+		redirectFlash(w, r, "could not read the request")
+		return
+	}
+	text := strings.TrimSpace(r.PostFormValue("request"))
+	if text == "" {
+		redirectFlash(w, r, "enter a request")
+		return
+	}
+	res, err := s.cfg.Gardener.Request(r.Context(), text, r.PostFormValue("project"))
+	if err != nil {
+		s.logger.Warn("console: gardener request", "error", err)
+		redirectFlash(w, r, err.Error())
+		return
+	}
+	if res.Total == 0 {
+		redirectNotice(w, r, "No proposals matched that request -- try rephrasing.")
+		return
+	}
+	redirectNotice(w, r, fmt.Sprintf("Generated %d proposal(s) -- review below.", res.Total))
+}
+
 func redirectFlash(w http.ResponseWriter, r *http.Request, msg string) {
 	http.Redirect(w, r, "/console/gardener?error="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+func redirectNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/gardener?notice="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 // payloadFloat reads a numeric field from a payload map (0 if absent).

@@ -170,15 +170,16 @@ func (s *Service) pruneToolEvents(ctx context.Context) {
 
 // createProposal persists a proposal and records a gardener.action event. The
 // key is added to seen so a single run does not propose the same thing twice.
-func (s *Service) createProposal(ctx context.Context, kind, key string, payload map[string]any, seen map[string]struct{}) error {
+// It returns the new proposal's id.
+func (s *Service) createProposal(ctx context.Context, kind, key string, payload map[string]any, seen map[string]struct{}) (string, error) {
 	payload["key"] = key
 	p, err := store.CreateProposal(ctx, s.db, kind, payload)
 	if err != nil {
-		return err
+		return "", err
 	}
 	seen[key] = struct{}{}
 	s.record(ctx, p.ID, map[string]any{"action": "propose", "kind": kind, "key": key})
-	return nil
+	return p.ID, nil
 }
 
 // record appends a gardener.action event best-effort.

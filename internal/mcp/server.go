@@ -37,7 +37,7 @@ const (
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
 	// usage_summary = 26; plans-as-composition adds tasks_claim + tasks_release = 28.
-	ToolCount = 28
+	ToolCount = 29
 
 	// globalNamespace is the reserved project token an agent passes to
 	// deliberately target the global (cross-project) scope, instead of relying on
@@ -210,6 +210,7 @@ func (s *Server) registerTools() {
 	s.addTool(trialQueryTool(), s.handleTrialQuery)
 
 	s.addTool(gardenerProposalsTool(), s.handleGardenerProposals)
+	s.addTool(gardenerRequestTool(), s.handleGardenerRequest)
 	s.addTool(gardenerApplyTool(), s.handleGardenerApply)
 
 	s.addTool(captureURLTool(), s.handleCaptureURL)
