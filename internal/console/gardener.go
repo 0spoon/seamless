@@ -355,7 +355,19 @@ func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, err.Error())
 		return
 	}
+	// A recognized split routes the owner to the "Split a project" box rather than
+	// creating loose proposals -- splitting needs a structured source project.
+	if res.SplitSource != "" {
+		redirectNotice(w, r, fmt.Sprintf("Recognized a split of %q -- use the \"Split a project\" box below (choose %s) to plan it.", res.SplitSource, res.SplitSource))
+		return
+	}
 	if res.Total == 0 {
+		// Guidance (e.g. a split intent whose source could not be matched) is more
+		// useful than a generic "nothing matched".
+		if res.Guidance != "" {
+			redirectNotice(w, r, res.Guidance)
+			return
+		}
 		redirectNotice(w, r, "No proposals matched that request -- try rephrasing.")
 		return
 	}
