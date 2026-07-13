@@ -19,9 +19,10 @@ const (
 
 // Proposal kinds (mirrors the gardener_proposals.kind CHECK constraint).
 const (
-	ProposalMerge   = "merge"
-	ProposalArchive = "archive"
-	ProposalDigest  = "digest"
+	ProposalMerge       = "merge"
+	ProposalArchive     = "archive"
+	ProposalDigest      = "digest"
+	ProposalConsolidate = "consolidate"
 )
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

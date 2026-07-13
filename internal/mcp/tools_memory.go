@@ -161,7 +161,7 @@ func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest
 		return errResult("memory_append", err)
 	}
 	if !found {
-		return errResult("memory_append", fmt.Errorf("%v; create it first with memory_write, or pass project=<slug> / project=global", scopedNotFound("memory", project, name)))
+		return errResult("memory_append", fmt.Errorf("%w; create it first with memory_write, or pass project=<slug> / project=global", scopedNotFound("memory", project, name)))
 	}
 	// Read the full memory (index rows have no body) and append.
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
@@ -208,7 +208,7 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 			return errResult("memory_read", err)
 		}
 		if !found {
-			return errResult("memory_read", fmt.Errorf("%v; check the name, pass project=<slug> or project=global, or use recall to search by text", scopedNotFound("memory", project, name)))
+			return errResult("memory_read", fmt.Errorf("%w; check the name, pass project=<slug> or project=global, or use recall to search by text", scopedNotFound("memory", project, name)))
 		}
 	}
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)

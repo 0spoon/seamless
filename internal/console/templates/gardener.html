@@ -58,6 +58,12 @@
       <div class="prop-title">{{.Title}}</div>
       <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
       <div class="prose">{{.Body}}</div>
+    {{else if eq .Kind "consolidate"}}
+      <div class="prop-note">Consolidate {{len .Sources}} memor{{if eq (len .Sources) 1}}y{{else}}ies{{end}} into one new memory.</div>
+      <div class="prop-row"><span class="badge ok">new</span> <span class="name">{{.NewName}}</span> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.NewKind}}</span></div>
+      {{if .NewDesc}}<div class="prop-desc">{{.NewDesc}}</div>{{end}}
+      {{range .Sources}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a></div>{{end}}
+      {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
     {{end}}
 
     {{if $.Data.CanAct}}

@@ -50,6 +50,13 @@ type proposalCard struct {
 	Title        string        `json:"title,omitempty"`
 	Preview      string        `json:"preview,omitempty"`
 	Body         template.HTML `json:"-"`
+
+	// Consolidate: a new unified memory (NewName/NewKind/NewDesc + rendered Body,
+	// which reuses the digest's Body field) that supersedes Sources.
+	NewName string     `json:"newName,omitempty"`
+	NewKind string     `json:"newKind,omitempty"`
+	NewDesc string     `json:"newDesc,omitempty"`
+	Sources []memBrief `json:"sources,omitempty"`
 }
 
 // projectOpt is one entry in the request-scope selector.
@@ -136,6 +143,17 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 		body := payloadStr(p.Payload, "body")
 		c.Preview = snippet(body, 600) // raw, for JSON
 		c.Body = s.renderBody(ctx, body, c.Project)
+	case store.ProposalConsolidate:
+		c.NewName = payloadStr(p.Payload, "name")
+		c.NewKind = payloadStr(p.Payload, "kind")
+		c.NewDesc = payloadStr(p.Payload, "description")
+		c.Project = payloadStr(p.Payload, "project")
+		body := payloadStr(p.Payload, "body")
+		c.Preview = snippet(body, 600) // raw, for JSON
+		c.Body = s.renderBody(ctx, body, c.Project)
+		for _, src := range payloadList(p.Payload, "sources") {
+			c.Sources = append(c.Sources, memBrief{ID: payloadStr(src, "id"), Name: payloadStr(src, "name")})
+		}
 	}
 	return c
 }
