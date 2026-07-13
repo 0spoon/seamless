@@ -33,8 +33,10 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 90, d.Gardener.StalenessDays)
 	require.Equal(t, 30, d.Gardener.DigestDays)
 	require.Equal(t, 30, d.Gardener.ToolEventRetentionDays)
+	require.Equal(t, 14, d.Gardener.StalePlanDays)
 	require.True(t, d.PlanCapture.Enabled)
 	require.True(t, d.PlanCapture.AutoTask)
+	require.True(t, d.PlanCapture.InjectRelated)
 }
 
 func TestLoadFrom_FileOverridesDefaults(t *testing.T) {
@@ -89,6 +91,8 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_TOOL_EVENT_RETENTION_DAYS", "7")
 	t.Setenv("SEAMLESS_PLAN_CAPTURE_ENABLED", "false")
 	t.Setenv("SEAMLESS_PLAN_CAPTURE_AUTO_TASK", "false")
+	t.Setenv("SEAMLESS_PLAN_CAPTURE_INJECT_RELATED", "false")
+	t.Setenv("SEAMLESS_GARDENER_STALE_PLAN_DAYS", "21")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
@@ -97,8 +101,10 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	require.Equal(t, 0.91, cfg.Gardener.DedupThreshold)
 	require.Equal(t, 4096, cfg.Budgets.ToolEventMaxChars)
 	require.Equal(t, 7, cfg.Gardener.ToolEventRetentionDays)
+	require.Equal(t, 21, cfg.Gardener.StalePlanDays)
 	require.False(t, cfg.PlanCapture.Enabled)
 	require.False(t, cfg.PlanCapture.AutoTask)
+	require.False(t, cfg.PlanCapture.InjectRelated)
 	require.Equal(t, "", cfg.SourcePath())
 }
 
@@ -138,6 +144,8 @@ func TestValidate(t *testing.T) {
 		{"negative-tool-event-cap", func(c *Config) { c.Budgets.ToolEventMaxChars = -1 }, true},
 		{"zero-tool-event-retention-ok", func(c *Config) { c.Gardener.ToolEventRetentionDays = 0 }, false},
 		{"negative-tool-event-retention", func(c *Config) { c.Gardener.ToolEventRetentionDays = -1 }, true},
+		{"zero-stale-plan-days-ok", func(c *Config) { c.Gardener.StalePlanDays = 0 }, false},
+		{"negative-stale-plan-days", func(c *Config) { c.Gardener.StalePlanDays = -1 }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

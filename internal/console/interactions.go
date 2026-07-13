@@ -11,17 +11,22 @@ import (
 )
 
 // interactionKinds are the event kinds the Interactions feed surfaces: live MCP
-// tool calls, recall-miss prompts, hook injections, and session lifecycle.
+// tool calls, recall-miss prompts, hook injections, session lifecycle, and the
+// plan-mode capture stream.
 var interactionKinds = []core.EventKind{
 	core.EventToolCall, core.EventHookPrompt, core.EventInjected,
 	core.EventSessionStarted, core.EventSessionEnded,
+	core.EventPlanCaptured, core.EventPlanPresented, core.EventPlanApproved,
+	core.EventSubagentCaptured,
 }
 
 // isInteraction reports whether an event belongs on the Interactions feed.
 func isInteraction(e core.Event) bool {
 	switch e.Kind {
 	case core.EventToolCall, core.EventHookPrompt, core.EventInjected,
-		core.EventSessionStarted, core.EventSessionEnded:
+		core.EventSessionStarted, core.EventSessionEnded,
+		core.EventPlanCaptured, core.EventPlanPresented, core.EventPlanApproved,
+		core.EventSubagentCaptured:
 		return true
 	}
 	return false
@@ -99,6 +104,15 @@ func toInteractionRow(e core.Event, name func(string) (string, bool)) interactio
 	case core.EventSessionEnded:
 		row.Label = "session"
 		row.Response = payloadStr(p, "findings")
+	case core.EventPlanCaptured, core.EventPlanApproved:
+		row.Label = payloadStr(p, "basename")
+		row.Response = payloadStr(p, "content")
+	case core.EventPlanPresented:
+		row.Label = payloadStr(p, "basename")
+	case core.EventSubagentCaptured:
+		row.Label = payloadStr(p, "agent_type")
+		row.Request = payloadStr(p, "prompt")
+		row.Response = payloadStr(p, "content")
 	}
 	return row
 }

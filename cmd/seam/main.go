@@ -49,6 +49,8 @@ func main() {
 		err = runReady(args)
 	case "task":
 		err = runTask(args)
+	case "plan":
+		err = runPlan(args)
 	case "capture":
 		err = runCapture(args)
 	case "hook":
@@ -85,6 +87,12 @@ tasks:
   seam task claim <id> [--lease SECS]          atomically claim a task (lease-based)
   seam task heartbeat <id> [--lease SECS]      refresh the lease on a task you hold
   seam task release <id> [--force]             release a task you hold (--force: owner override, any holder)
+
+captured plans (Claude Code plan mode):
+  seam plan list [--project P] [--window W]    list captured plans with status/iteration
+  seam plan show <slug>                        one plan: body, attached notes, tasks
+  seam plan check <slug> [--cwd DIR]           FRESH/STALE per note vs the repo's git history
+  seam plan approve <slug>                     escape hatch: flip to approved + create the task
 
 observability:
   seam status                                  server health + project count

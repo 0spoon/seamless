@@ -89,3 +89,21 @@ gardener:
   # hook.prompt) are pruned. 0 disables the prune. Domain events are never pruned.
   # env: SEAMLESS_TOOL_EVENT_RETENTION_DAYS
   tool_event_retention_days: 30
+  # Days after which a captured Claude Code plan still in draft/presented is
+  # proposed for abandonment (retag plan-status:abandoned). 0 disables the pass.
+  # env: SEAMLESS_GARDENER_STALE_PLAN_DAYS
+  stale_plan_days: 14
+
+plan_capture:
+  # Capture Claude Code plan-mode activity via the PostToolUse/SubagentStop/
+  # PermissionRequest hooks: plan-file saves upsert cc-plan notes, planning
+  # subagents cache as cc-agent notes, approval flips the plan note's status.
+  # env: SEAMLESS_PLAN_CAPTURE_ENABLED
+  enabled: true
+  # Create an "Implement plan: ..." tracking task when a plan is approved.
+  # env: SEAMLESS_PLAN_CAPTURE_AUTO_TASK
+  auto_task: true
+  # On a session's first captured plan iteration, return related prior plans and
+  # memories to the planning agent as additionalContext.
+  # env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED
+  inject_related: true

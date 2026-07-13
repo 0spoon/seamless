@@ -16,30 +16,22 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/plans"
+	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 	"github.com/0spoon/seamless/internal/validate"
 )
 
-// planNotePrefix + the plan file basename is the captured-plan note slug -- the
-// correlation key across iterations (a direct NoteBySlug lookup, no tag query).
-const planNotePrefix = "cc-plan-"
-
-// Plan lifecycle statuses, stored as a plan-status:<v> note tag.
-const (
-	planStatusDraft     = "draft"
-	planStatusPresented = "presented"
-	planStatusApproved  = "approved"
-)
-
 // postToolUse captures plan-file iterations (Write/Edit/MultiEdit under the
 // plans dir) and plan approvals (ExitPlanMode). The seam CLI pre-filters other
-// tools locally, but the daemon still dispatches defensively.
+// tools locally, but the daemon still dispatches defensively. A session's
+// first captured iteration may return related prior knowledge as
+// additionalContext; every other outcome is a bare ack.
 func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	if !verifyBearer(r, h.apiKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -49,15 +41,20 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p)
 
+	extra := ""
 	if h.captureEnabled() {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
 		defer cancel()
 		switch p.ToolName {
 		case "Write", "Edit", "MultiEdit":
-			h.capturePlanIteration(ctx, p)
+			extra = h.capturePlanIteration(ctx, p)
 		case "ExitPlanMode":
 			h.capturePlanApproval(ctx, p)
 		}
+	}
+	if extra != "" {
+		writeHookResponse(w, "PostToolUse", extra)
+		return
 	}
 	writeHookAck(w)
 }
@@ -90,24 +87,30 @@ func (h *Handler) captureEnabled() bool {
 
 // capturePlanIteration re-reads the just-written plan file from disk (the hook
 // runs on the same machine, and re-reading is authoritative for Write and Edit
-// alike) and upserts the cc-plan note.
-func (h *Handler) capturePlanIteration(ctx context.Context, p toolPayload) {
+// alike) and upserts the cc-plan note. On the session's first captured
+// iteration it returns a related-prior-knowledge block for injection ("" in
+// every other case).
+func (h *Handler) capturePlanIteration(ctx context.Context, p toolPayload) string {
 	var in struct {
 		FilePath string `json:"file_path"`
 	}
 	if err := json.Unmarshal(p.ToolInput, &in); err != nil || in.FilePath == "" {
-		return
+		return ""
 	}
 	path, ok := h.planFilePath(in.FilePath)
 	if !ok {
-		return // not a plan file
+		return "" // not a plan file
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		h.logger.Warn("hooks: plan capture read", "error", err)
-		return
+		return ""
 	}
-	h.upsertPlanNote(ctx, p, planBasename(path), string(content), false)
+	up, ok := h.upsertPlanNote(ctx, p, planBasename(path), string(content), false)
+	if !ok || !up.first || !h.planCapture.InjectRelated {
+		return ""
+	}
+	return h.relatedPlanContext(ctx, p, up.note)
 }
 
 // capturePlanApproval handles PostToolUse[ExitPlanMode]: the tool_response
@@ -145,39 +148,48 @@ func (h *Handler) capturePlanApproval(ctx context.Context, p toolPayload) {
 		h.logger.Warn("hooks: plan approval without correlation", "claude_session_id", p.SessionID)
 		return
 	}
-	note, planSlug, ok := h.upsertPlanNote(ctx, p, basename, content, true)
+	up, ok := h.upsertPlanNote(ctx, p, basename, content, true)
 	if !ok {
 		return
 	}
 	if h.planCapture.AutoTask {
-		h.ensurePlanTask(ctx, p, note, planSlug)
+		h.ensurePlanTask(ctx, p, up.note, up.planSlug)
 	}
 }
 
 // markPlanPresented flips the session's draft plan note to presented.
 func (h *Handler) markPlanPresented(ctx context.Context, p toolPayload) {
 	meta, ok := h.sessionPlanMeta(ctx, p.SessionID)
-	if !ok || meta.Basename == "" || meta.Status != planStatusDraft {
+	if !ok || meta.Basename == "" || meta.Status != plans.StatusDraft {
 		return
 	}
 	project := h.resolveProject(ctx, p.CWD)
-	note, found := h.loadNoteBySlug(ctx, project, planNotePrefix+meta.Basename)
+	note, found := h.loadNoteBySlug(ctx, project, plans.NotePrefix+meta.Basename)
 	if !found {
 		return
 	}
-	note.Tags = setPlanStatusTag(note.Tags, planStatusPresented)
-	note.Description = planNoteDescription(meta.Basename, notePlanIteration(note), planStatusPresented)
+	note.Tags = plans.SetStatusTag(note.Tags, plans.StatusPresented)
+	note.Description = plans.NoteDescription(meta.Basename, plans.NoteIteration(note), plans.StatusPresented)
 	note.Updated = time.Now().UTC()
 	written, err := h.files.WriteNote(ctx, note)
 	if err != nil {
 		h.logger.Warn("hooks: plan presented write", "error", err)
 		return
 	}
-	meta.Status = planStatusPresented
+	meta.Status = plans.StatusPresented
 	h.setSessionPlanMeta(ctx, p.SessionID, meta)
 	h.recordPlanEvent(ctx, core.EventPlanPresented, p.SessionID, written.ID, map[string]any{
 		"basename": meta.Basename, "plan_slug": meta.PlanSlug,
 	})
+}
+
+// planUpsert is upsertPlanNote's result: the written note, its composition
+// slug, and whether this was the session's first plan capture (no plan_capture
+// metadata existed yet) -- the trigger for the related-knowledge injection.
+type planUpsert struct {
+	note     core.Note
+	planSlug string
+	first    bool
 }
 
 // upsertPlanNote creates or updates the cc-plan-<basename> note for one plan
@@ -185,22 +197,24 @@ func (h *Handler) markPlanPresented(ctx context.Context, p toolPayload) {
 // tag are preserved (the composition slug is minted once, at first capture);
 // the title, body, and status tag follow the latest content. An approval with
 // no readable content flips the status of an existing note without touching
-// its body; with no existing note it is dropped (fail-open).
-func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, content string, approve bool) (core.Note, string, bool) {
+// its body; with no existing note it is dropped (fail-open). Agent-cache notes
+// captured before the plan existed (pending on the session) are adopted into
+// the composition here, once the slug is minted.
+func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, content string, approve bool) (planUpsert, bool) {
 	project := h.resolveProject(ctx, p.CWD)
-	noteSlug := planNotePrefix + basename
+	noteSlug := plans.NotePrefix + basename
 	existing, found := h.loadNoteBySlug(ctx, project, noteSlug)
 
 	trimmed := strings.TrimSpace(content)
 	if trimmed == "" && !(approve && found) {
-		return core.Note{}, "", false
+		return planUpsert{}, false
 	}
 
 	now := time.Now().UTC()
 	note := existing
 	iter := 1
 	if found {
-		iter = notePlanIteration(existing)
+		iter = plans.NoteIteration(existing)
 		if !approve && trimmed != "" {
 			iter++
 		}
@@ -208,20 +222,20 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 		id, err := core.NewID()
 		if err != nil {
 			h.logger.Warn("hooks: plan note id", "error", err)
-			return core.Note{}, "", false
+			return planUpsert{}, false
 		}
 		note = core.Note{ID: id, Slug: noteSlug, Project: project, Created: now}
 	}
 
-	status := planStatusDraft
-	if found && planStatusFromTags(existing.Tags) == planStatusApproved {
-		status = planStatusApproved // an approved plan never regresses to draft
+	status := plans.StatusDraft
+	if found && plans.StatusFromTags(existing.Tags) == plans.StatusApproved {
+		status = plans.StatusApproved // an approved plan never regresses to draft
 	}
 	if approve {
-		status = planStatusApproved
+		status = plans.StatusApproved
 	}
 
-	planSlug := planSlugFromTags(note.Tags)
+	planSlug := plans.SlugFromTags(note.Tags)
 	if trimmed != "" {
 		title := firstHeading(content)
 		if title == "" || validate.Title(title) != nil {
@@ -233,8 +247,8 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 	if planSlug == "" {
 		planSlug = core.Slugify(note.Title)
 	}
-	note.Description = planNoteDescription(basename, iter, status)
-	note.Tags = []string{"plan:" + planSlug, "cc-plan", "plan-status:" + status, "created-by:agent"}
+	note.Description = plans.NoteDescription(basename, iter, status)
+	note.Tags = plans.SetStatusTag([]string{plans.SlugTag(planSlug), plans.TagPlan, "created-by:agent"}, status)
 	note.Updated = now
 	if note.Extra == nil {
 		note.Extra = map[string]any{}
@@ -244,9 +258,15 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 	written, err := h.files.WriteNote(ctx, note)
 	if err != nil {
 		h.logger.Warn("hooks: plan note write", "slug", noteSlug, "error", err)
-		return core.Note{}, "", false
+		return planUpsert{}, false
 	}
 
+	// Adopt agent-cache notes that completed before this plan existed: the
+	// session accrued their slugs while no plan slug was known; tag them into
+	// the now-minted composition and clear the pending list (the fresh meta
+	// below carries none).
+	prior, _ := h.sessionPlanMeta(ctx, p.SessionID)
+	adopted := h.adoptPendingAgents(ctx, project, planSlug, prior.PendingAgents)
 	h.setSessionPlanMeta(ctx, p.SessionID, planCaptureMeta{Basename: basename, PlanSlug: planSlug, Status: status})
 
 	kind := core.EventPlanCaptured
@@ -260,49 +280,99 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 	if trimmed != "" {
 		payload["content"] = content // verbatim, unbounded by design
 	}
+	if adopted > 0 {
+		payload["adopted_agents"] = adopted
+	}
 	h.recordPlanEvent(ctx, kind, p.SessionID, written.ID, payload)
-	return written, planSlug, true
+	return planUpsert{note: written, planSlug: planSlug, first: prior.Basename == ""}, true
+}
+
+// adoptPendingAgents adds the plan:<slug> tag to agent-cache notes captured
+// before the plan's first iteration (the explore-first pattern: subagents
+// finish before any plan file exists). Best-effort per note; one that vanished
+// or already belongs to a plan is skipped. Returns how many were adopted.
+func (h *Handler) adoptPendingAgents(ctx context.Context, project, planSlug string, slugs []string) int {
+	adopted := 0
+	for _, slug := range slugs {
+		note, found := h.loadNoteBySlug(ctx, project, slug)
+		if !found || plans.SlugFromTags(note.Tags) != "" {
+			continue
+		}
+		note.Tags = append([]string{plans.SlugTag(planSlug)}, note.Tags...)
+		note.Updated = time.Now().UTC()
+		if _, err := h.files.WriteNote(ctx, note); err != nil {
+			h.logger.Warn("hooks: adopt pending agent note", "slug", slug, "error", err)
+			continue
+		}
+		adopted++
+	}
+	return adopted
 }
 
 // ensurePlanTask creates the "Implement plan" tracking task for an approved
 // plan unless the plan already has an open or in-progress step (idempotent on
 // re-approval).
 func (h *Handler) ensurePlanTask(ctx context.Context, p toolPayload, note core.Note, planSlug string) {
-	tasks, err := store.ListTasksForPlan(ctx, h.db, note.Project, "", planSlug)
-	if err != nil {
-		h.logger.Warn("hooks: plan task list", "error", err)
-		return
-	}
-	for _, t := range tasks {
-		if !t.Status.Closed() {
-			return
-		}
-	}
-	id, err := core.NewID()
-	if err != nil {
-		h.logger.Warn("hooks: plan task id", "error", err)
-		return
-	}
 	createdBy := ""
 	if p.SessionID != "" {
 		createdBy = ambientName(p.SessionID)
 	}
-	now := time.Now().UTC()
-	task := core.Task{
-		ID: id, ProjectSlug: note.Project,
-		Title: "Implement plan: " + note.Title,
-		Body: fmt.Sprintf("Plan note: %s (id %s). Agent caches: notes tagged plan:%s. "+
-			"Check git stamps for staleness before trusting caches.", note.Slug, note.ID, planSlug),
-		Status: core.TaskOpen, CreatedBy: createdBy, PlanSlug: planSlug,
-		CreatedAt: now, UpdatedAt: now,
-	}
-	if err := store.CreateTask(ctx, h.db, task); err != nil {
-		h.logger.Warn("hooks: plan task create", "error", err)
+	task, created, err := plans.EnsureTask(ctx, h.db, note, planSlug, createdBy)
+	if err != nil {
+		h.logger.Warn("hooks: plan task", "error", err)
 		return
 	}
-	h.recordPlanEvent(ctx, core.EventTaskTransition, p.SessionID, id, map[string]any{
+	if !created {
+		return
+	}
+	h.recordPlanEvent(ctx, core.EventTaskTransition, p.SessionID, task.ID, map[string]any{
 		"to": string(core.TaskOpen), "created": true, "plan_slug": planSlug,
 	})
+}
+
+// relatedPlanHits caps how many recall hits the first-capture injection lists.
+const relatedPlanHits = 5
+
+// relatedPlanContext builds the additionalContext block returned on a
+// session's first captured plan iteration: top recall hits for the plan title
+// (prior plans, constraints, related notes), so the planning agent sees prior
+// art before the plan is finalized. Returns "" when recall is unavailable,
+// errors, or finds nothing beyond the plan's own note; a non-empty block is
+// also recorded as a retrieval.injected event.
+func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note core.Note) string {
+	if h.retrieve == nil || strings.TrimSpace(note.Title) == "" {
+		return ""
+	}
+	hits, err := h.retrieve.Recall(ctx, retrieve.RecallInput{
+		Query: note.Title, Project: note.Project, Limit: relatedPlanHits + 1,
+	})
+	if err != nil {
+		h.logger.Warn("hooks: related plan recall", "error", err)
+		return ""
+	}
+	var b strings.Builder
+	ids := make([]string, 0, len(hits))
+	for _, hit := range hits {
+		if hit.ID == note.ID {
+			continue // the plan's own freshly-written note
+		}
+		if len(ids) == relatedPlanHits {
+			break
+		}
+		read := "memory_read name=" + hit.Name
+		if hit.Kind == "note" {
+			read = "notes_read id=" + hit.ID
+		}
+		fmt.Fprintf(&b, "\n- [%s] %s (%s): %s -- %s", hit.Kind, hit.Title, hit.Age, hit.Description, read)
+		ids = append(ids, hit.ID)
+	}
+	if len(ids) == 0 {
+		return ""
+	}
+	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
+		b.String() + "\n</seam-plan-context>"
+	h.recordInjection(ctx, "post-tool-use", p.SessionID, "", block, ids)
+	return block
 }
 
 // recordPlanEvent appends a plan-capture event, attributed to the ambient
@@ -325,11 +395,14 @@ func (h *Handler) recordPlanEvent(ctx context.Context, kind core.EventKind, clau
 // ---------------------------------------------------------------------------
 
 // planCaptureMeta mirrors core.Session.Metadata["plan_capture"]: the session's
-// active plan capture, keyed by the CC plan file basename.
+// active plan capture, keyed by the CC plan file basename. PendingAgents holds
+// the slugs of agent-cache notes captured before any plan file existed; they
+// are adopted into the composition (and the list cleared) at the next capture.
 type planCaptureMeta struct {
-	Basename string
-	PlanSlug string
-	Status   string
+	Basename      string
+	PlanSlug      string
+	Status        string
+	PendingAgents []string
 }
 
 // sessionPlanMeta returns the ambient session's plan_capture metadata.
@@ -346,7 +419,15 @@ func (h *Handler) sessionPlanMeta(ctx context.Context, claudeSessionID string) (
 		s, _ := m[k].(string)
 		return s
 	}
-	return planCaptureMeta{Basename: get("basename"), PlanSlug: get("plan_slug"), Status: get("status")}, true
+	meta := planCaptureMeta{Basename: get("basename"), PlanSlug: get("plan_slug"), Status: get("status")}
+	if raw, ok := m["pending_agents"].([]any); ok {
+		for _, v := range raw {
+			if s, ok := v.(string); ok && s != "" {
+				meta.PendingAgents = append(meta.PendingAgents, s)
+			}
+		}
+	}
+	return meta, true
 }
 
 // setSessionPlanMeta stores meta on the ambient session (best-effort).
@@ -358,9 +439,13 @@ func (h *Handler) setSessionPlanMeta(ctx context.Context, claudeSessionID string
 	if sess.Metadata == nil {
 		sess.Metadata = map[string]any{}
 	}
-	sess.Metadata["plan_capture"] = map[string]any{
+	m := map[string]any{
 		"basename": meta.Basename, "plan_slug": meta.PlanSlug, "status": meta.Status,
 	}
+	if len(meta.PendingAgents) > 0 {
+		m["pending_agents"] = meta.PendingAgents
+	}
+	sess.Metadata["plan_capture"] = m
 	sess.UpdatedAt = time.Now().UTC()
 	if err := store.UpdateSession(ctx, h.db, sess); err != nil {
 		h.logger.Warn("hooks: session plan meta", "error", err)
@@ -443,11 +528,6 @@ func planBasename(path string) string {
 	return strings.TrimSuffix(filepath.Base(path), ".md")
 }
 
-// planNoteDescription is the captured-plan note's one-line index text.
-func planNoteDescription(basename string, iter int, status string) string {
-	return fmt.Sprintf("Captured Claude Code plan %s.md (iteration %d, %s)", basename, iter, status)
-}
-
 // planStamp is the provenance blockquote prepended to every captured plan body.
 func planStamp(claudeSessionID, basename string, iter int, head string, now time.Time) string {
 	return fmt.Sprintf("> captured from %s | %s.md | iter %d | git %s | %s",
@@ -481,55 +561,6 @@ func firstHeading(content string) string {
 		}
 	}
 	return ""
-}
-
-// notePlanIteration reads the plan_iteration frontmatter (preserved in Extra),
-// tolerating the numeric types YAML/JSON round-trips produce.
-func notePlanIteration(n core.Note) int {
-	switch v := n.Extra["plan_iteration"].(type) {
-	case int:
-		return max(v, 1)
-	case int64:
-		return max(int(v), 1)
-	case float64:
-		return max(int(v), 1)
-	case string:
-		if i, err := strconv.Atoi(v); err == nil {
-			return max(i, 1)
-		}
-	}
-	return 1
-}
-
-// planSlugFromTags returns the plan:<slug> composition slug, or "".
-func planSlugFromTags(tags []string) string {
-	for _, t := range tags {
-		if after, ok := strings.CutPrefix(t, "plan:"); ok {
-			return after
-		}
-	}
-	return ""
-}
-
-// planStatusFromTags returns the plan-status:<v> value, or "".
-func planStatusFromTags(tags []string) string {
-	for _, t := range tags {
-		if after, ok := strings.CutPrefix(t, "plan-status:"); ok {
-			return after
-		}
-	}
-	return ""
-}
-
-// setPlanStatusTag replaces the plan-status:<v> tag, preserving all others.
-func setPlanStatusTag(tags []string, status string) []string {
-	out := make([]string, 0, len(tags)+1)
-	for _, t := range tags {
-		if !strings.HasPrefix(t, "plan-status:") {
-			out = append(out, t)
-		}
-	}
-	return append(out, "plan-status:"+status)
 }
 
 // gitHead resolves the repo's current commit at cwd by reading .git directly

@@ -1,0 +1,37 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Plans</h1>
+    <div class="sub">{{.Count}} captured plan{{if ne .Count 1}}s{{end}} &middot; {{.WindowLabel}}</div>
+  </div>
+</div>
+
+<div class="win-tabs win-tabs-page">
+  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/plans?w={{.Key}}">{{.Label}}</a>{{end}}
+</div>
+
+{{if .Rows}}
+<div class="table-wrap">
+  <table>
+    <thead><tr><th>Plan</th><th>Status</th><th>Project</th><th>Iter</th><th>Agents</th><th>Tasks</th><th>Updated</th></tr></thead>
+    <tbody>
+      {{range .Rows}}
+      <tr class="row-link" data-href="/console/plans/{{.Slug}}">
+        <td class="mem-name"><strong><a href="/console/plans/{{.Slug}}">{{.Title}}</a></strong><div class="desc mono">plan:{{.Slug}} &middot; {{.Basename}}.md</div></td>
+        <td><span class="badge {{planTone .Status}}">{{.Status}}</span></td>
+        <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+        <td>{{if .Iteration}}{{.Iteration}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+        <td>{{if .Agents}}{{.Agents}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+        <td>{{if .TasksTotal}}{{.TasksDone}}/{{.TasksTotal}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
+        <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="empty">No captured plans{{if ne .Window "all"}} in this window{{end}}</div>
+{{end}}
+{{end}}
+{{end}}

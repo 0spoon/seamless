@@ -22,7 +22,7 @@ var consoleCSS []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "interactions", "sessions", "session", "memories", "notes",
-	"retrieval", "tasks", "gardener", "settings", "event",
+	"retrieval", "tasks", "plans", "plan", "gardener", "settings", "event",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -55,6 +55,7 @@ var funcs = template.FuncMap{
 	"hasPrefix":     strings.HasPrefix,
 	"evtTone":       evtTone,
 	"taskTone":      taskTone,
+	"planTone":      planTone,
 	"icon":          icon,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
@@ -75,6 +76,10 @@ func evtTone(kind string) string {
 		return "pop"
 	case kind == "memory.superseded" || kind == "memory.archived":
 		return "warn"
+	case kind == "plan.approved":
+		return "ok"
+	case strings.HasPrefix(kind, "plan."), kind == "subagent.captured":
+		return "accent"
 	case strings.HasPrefix(kind, "memory.read"), strings.HasPrefix(kind, "memory.written"), strings.HasPrefix(kind, "note."):
 		return "ok"
 	default:

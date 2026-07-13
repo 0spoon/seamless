@@ -1,0 +1,62 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>{{.Row.Title}}</h1>
+    <div class="sub mono">plan:{{.Row.Slug}} &middot; {{.Row.Basename}}.md{{if .Row.Iteration}} &middot; iter {{.Row.Iteration}}{{end}}{{if .Row.Project}} &middot; {{.Row.Project}}{{end}}</div>
+  </div>
+  <div class="btn-row">
+    <span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>
+    {{if .CanApprove}}
+    <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
+      <button class="btn small primary" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">Approve</button>
+    </form>
+    {{end}}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Plan <span class="h2-meta"><a href="/console/notes/{{.Row.NoteID}}" data-peek>note &rarr;</a></span></h2>
+  {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="empty">Body unavailable</div>{{end}}
+</div>
+
+{{if .Attached}}
+<div class="card">
+  <h2>Attached notes <span class="h2-meta">{{len .Attached}}</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Note</th><th>Kind</th><th>Updated</th></tr></thead>
+      <tbody>
+        {{range .Attached}}
+        <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
+          <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong><div class="desc mono">{{.Slug}}</div></td>
+          <td>{{if .IsAgent}}<span class="badge">agent-cache</span>{{else}}<span class="badge">note</span>{{end}}</td>
+          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+
+{{if .Tasks}}
+<div class="card">
+  <h2>Tasks <span class="h2-meta">{{len .Tasks}}</span></h2>
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Task</th><th>Status</th></tr></thead>
+      <tbody>
+        {{range .Tasks}}
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+          <td><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
+          <td><span class="badge {{taskTone .Status}}">{{.Status}}</span></td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+{{end}}
+{{end}}
+{{end}}

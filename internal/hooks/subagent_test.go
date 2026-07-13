@@ -10,6 +10,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/plans"
 )
 
 // placeSubagentTranscript copies the fixture transcript into the verified
@@ -101,6 +102,50 @@ func TestSubagentCapturePlanModeGate(t *testing.T) {
 	for _, tag := range note.Tags {
 		require.False(t, strings.HasPrefix(tag, "plan:"), "no plan tag without a correlated plan, got %q", tag)
 	}
+}
+
+func TestSubagentBeforePlanAdoptedIntoComposition(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
+	e.startSession(t)
+
+	// Explore-first pattern: the subagent completes before any plan file exists,
+	// so no plan slug can be minted yet.
+	main := placeSubagentTranscript(t, "early99")
+	e.subagentStop(t, map[string]any{
+		"session_id": testSID, "cwd": "/work/demo", "permission_mode": "plan",
+		"transcript_path": main, "agent_id": "early99", "agent_type": "Explore",
+	})
+
+	note, found := e.loadNote(t, "cc-agent-early99")
+	require.True(t, found)
+	require.Empty(t, plans.SlugFromTags(note.Tags))
+	require.Equal(t, []any{"cc-agent-early99"}, e.sessionPlanMeta(t)["pending_agents"],
+		"the parked note slug rides on the session until a plan exists")
+
+	// The first plan capture mints the slug and adopts the parked agent note.
+	path := e.writePlanFile(t, "clever-stallman", "# My Plan\n\nDo it.\n")
+	e.planWrite(t, "Write", path)
+
+	note, found = e.loadNote(t, "cc-agent-early99")
+	require.True(t, found)
+	require.Contains(t, note.Tags, "plan:my-plan")
+	require.Contains(t, note.Tags, "agent-cache")
+	require.Nil(t, e.sessionPlanMeta(t)["pending_agents"], "pending list drains at adoption")
+
+	evs := eventsOfKind(t, e.rec, core.EventPlanCaptured)
+	require.Len(t, evs, 1)
+	require.Equal(t, float64(1), evs[0].Payload["adopted_agents"])
+
+	// A later subagent (slug now known) is tagged directly, no pending detour.
+	main2 := placeSubagentTranscript(t, "late42")
+	e.subagentStop(t, map[string]any{
+		"session_id": testSID, "cwd": "/work/demo", "permission_mode": "plan",
+		"transcript_path": main2, "agent_id": "late42", "agent_type": "Explore",
+	})
+	note, found = e.loadNote(t, "cc-agent-late42")
+	require.True(t, found)
+	require.Contains(t, note.Tags, "plan:my-plan")
+	require.Nil(t, e.sessionPlanMeta(t)["pending_agents"])
 }
 
 func TestSubagentCaptureMissingTranscriptFailsOpen(t *testing.T) {

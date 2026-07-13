@@ -15,15 +15,14 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/plans"
 )
-
-// agentNotePrefix + the CC agent id is the agent-cache note slug.
-const agentNotePrefix = "cc-agent-"
 
 // maxAgentTitleRunes caps the prompt-derived part of an agent-cache note title.
 const maxAgentTitleRunes = 120
@@ -53,7 +52,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 		return
 	}
 	meta, hasMeta := h.sessionPlanMeta(ctx, p.SessionID)
-	planning := hasMeta && (meta.Status == planStatusDraft || meta.Status == planStatusPresented)
+	planning := hasMeta && (meta.Status == plans.StatusDraft || meta.Status == plans.StatusPresented)
 	if !planning && p.PermissionMode != "plan" {
 		return
 	}
@@ -64,7 +63,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 	}
 
 	project := h.resolveProject(ctx, p.CWD)
-	noteSlug := agentNotePrefix + core.Slugify(p.AgentID)
+	noteSlug := plans.AgentNotePrefix + core.Slugify(p.AgentID)
 	now := time.Now().UTC()
 
 	note, found := h.loadNoteBySlug(ctx, project, noteSlug)
@@ -88,6 +87,13 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 		h.logger.Warn("hooks: agent note write", "slug", noteSlug, "error", err)
 		return
 	}
+	// No plan slug yet (the explore-first pattern: subagents finish before the
+	// first plan-file write): park the note slug on the session so the first
+	// plan capture adopts it into the composition.
+	if meta.PlanSlug == "" && !slices.Contains(meta.PendingAgents, noteSlug) {
+		meta.PendingAgents = append(meta.PendingAgents, noteSlug)
+		h.setSessionPlanMeta(ctx, p.SessionID, meta)
+	}
 	h.recordPlanEvent(ctx, core.EventSubagentCaptured, p.SessionID, written.ID, map[string]any{
 		"content": report, // verbatim, unbounded by design
 		"prompt":  events.Truncate(prompt, h.maxEventChars),
@@ -100,9 +106,9 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 func agentNoteTags(planSlug, agentType string) []string {
 	tags := make([]string, 0, 4)
 	if planSlug != "" {
-		tags = append(tags, "plan:"+planSlug)
+		tags = append(tags, plans.SlugTag(planSlug))
 	}
-	tags = append(tags, "agent-cache")
+	tags = append(tags, plans.TagAgent)
 	if agentType != "" {
 		tags = append(tags, "agent:"+agentType)
 	}

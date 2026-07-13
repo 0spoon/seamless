@@ -159,6 +159,11 @@
   </div>
   {{if .Rationale}}<div class="prop-desc">{{.Rationale}}</div>{{end}}
   {{end}}
+{{else if eq .Kind "abandon_plan"}}
+  {{with .AbandonPlan}}
+  <div class="prop-row"><a href="/console/plans/{{.Slug}}" class="name">{{.Title}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="badge {{planTone .Status}}">{{.Status}}</span></div>
+  {{end}}
+  <div class="badge warn">{{.Reason}}</div>
 {{else if eq .Kind "split"}}
   {{with .Split}}
   <div class="prop-note">Split <strong>{{.Source}}</strong> into:</div>
