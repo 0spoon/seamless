@@ -65,7 +65,7 @@ func harvestFindings(path string) string {
 		if tl.Type != "assistant" {
 			continue
 		}
-		if txt := assistantText(tl.Message.Content); txt != "" {
+		if txt := messageText(tl.Message.Content); txt != "" {
 			last = txt
 		}
 	}
@@ -77,9 +77,9 @@ func harvestFindings(path string) string {
 	return "(auto-harvested) " + capRunes(last, maxHarvestRunes)
 }
 
-// assistantText concatenates the text blocks of an assistant message's content,
-// which is either a plain string or an array of typed blocks.
-func assistantText(raw json.RawMessage) string {
+// messageText concatenates the text blocks of a transcript message's content
+// (assistant or user), which is either a plain string or an array of typed blocks.
+func messageText(raw json.RawMessage) string {
 	if len(raw) == 0 {
 		return ""
 	}

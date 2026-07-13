@@ -37,10 +37,19 @@ type hookSpec struct {
 // Each shells out to `seam hook <event>`, which forwards the payload to
 // Endpoint. UserPromptSubmit fires mid-turn where http is reliable, so it keeps
 // an http hook (and carries the bearer key into settings.json).
+//
+// The plan-capture hooks (PostToolUse, SubagentStop, PermissionRequest) are
+// command hooks too: the seam CLI pre-filters PostToolUse locally so the
+// machine-wide Write/Edit hot path never touches the network for non-plan
+// files. PostToolUse must stay a SINGLE entry (matcher-joined) -- the
+// dedupe/adopt logic assumes one managed entry per event.
 var seamlessHooks = []hookSpec{
 	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5},
 	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10, CLIArg: "session-end"},
+	{Event: "PostToolUse", Matcher: "Write|Edit|MultiEdit|ExitPlanMode", Endpoint: "/api/hooks/post-tool-use", Timeout: 10, CLIArg: "post-tool-use"},
+	{Event: "SubagentStop", Matcher: "", Endpoint: "/api/hooks/subagent-stop", Timeout: 10, CLIArg: "subagent-stop"},
+	{Event: "PermissionRequest", Matcher: "ExitPlanMode", Endpoint: "/api/hooks/permission-request", Timeout: 10, CLIArg: "permission-request"},
 }
 
 // InstallOptions configures an install.
@@ -87,11 +96,12 @@ func Install(opts InstallOptions) (InstallResult, error) {
 		arr := entryArray(hooksObj, hs.Event)
 		// Match every entry Seamless owns for this event: those carrying our
 		// managed marker, plus any UNMARKED entry pointing at exactly this hook
-		// URL (a hand-edit, or a pre-marker installer). Adopting the latter --
-		// rather than appending beside it -- is what stops re-installs from
-		// duplicating hooks. A v1 "seam_managed" entry at a different URL (e.g.
-		// :8080) is not matched, so it is preserved untouched.
-		matches := seamlessIndices(arr, desiredURL)
+		// URL or running `... hook <event>` via the seam CLI (a hand-edit, or a
+		// pre-marker installer). Adopting the latter -- rather than appending
+		// beside it -- is what stops re-installs from duplicating hooks. A v1
+		// "seam_managed" entry at a different URL (e.g. :8080) is not matched,
+		// so it is preserved untouched.
+		matches := seamlessIndices(arr, desiredURL, hs.CLIArg)
 		switch {
 		case len(matches) == 0:
 			arr = append(arr, desired)
@@ -257,12 +267,13 @@ func findManaged(arr []any) int {
 
 // seamlessIndices returns the ascending indices of entries in arr that Seamless
 // owns for a hook: entries carrying the managed marker, plus unmarked entries
-// whose hook URL is desiredURL (written by hand or by a pre-marker installer).
-// A v1 "seam_managed" entry at another URL is not matched, so it survives.
-func seamlessIndices(arr []any, desiredURL string) []int {
+// whose hook URL is desiredURL or whose command is a seam-CLI `hook <cliArg>`
+// invocation (written by hand or by a pre-marker installer). A v1
+// "seam_managed" entry at another URL is not matched, so it survives.
+func seamlessIndices(arr []any, desiredURL, cliArg string) []int {
 	var out []int
 	for i, e := range arr {
-		if isManaged(e) || entryTargetsURL(e, desiredURL) {
+		if isManaged(e) || entryTargetsURL(e, desiredURL) || entryRunsHookCommand(e, cliArg) {
 			out = append(out, i)
 		}
 	}
@@ -305,6 +316,35 @@ func entryTargetsURL(e any, url string) bool {
 // sameURL compares two hook URLs ignoring a trailing slash.
 func sameURL(a, b string) bool {
 	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
+}
+
+// entryRunsHookCommand reports whether any command hook in the entry invokes
+// the seam CLI for cliArg (a command ending in " hook <cliArg>") -- identifying
+// a Seamless command hook written without the marker, whatever binary path or
+// env prefix it carries. Command hooks have no URL, so without this an old
+// unmarked command entry would be duplicated instead of adopted.
+func entryRunsHookCommand(e any, cliArg string) bool {
+	if cliArg == "" {
+		return false
+	}
+	m, ok := e.(map[string]any)
+	if !ok {
+		return false
+	}
+	hooks, ok := m["hooks"].([]any)
+	if !ok {
+		return false
+	}
+	for _, h := range hooks {
+		hm, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+		if c, ok := hm["command"].(string); ok && strings.HasSuffix(strings.TrimSpace(c), " hook "+cliArg) {
+			return true
+		}
+	}
+	return false
 }
 
 // removeIndices returns arr without the elements at the given (ascending) indices.

@@ -33,6 +33,8 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 90, d.Gardener.StalenessDays)
 	require.Equal(t, 30, d.Gardener.DigestDays)
 	require.Equal(t, 30, d.Gardener.ToolEventRetentionDays)
+	require.True(t, d.PlanCapture.Enabled)
+	require.True(t, d.PlanCapture.AutoTask)
 }
 
 func TestLoadFrom_FileOverridesDefaults(t *testing.T) {
@@ -85,6 +87,8 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_GARDENER_DEDUP_THRESHOLD", "0.91")
 	t.Setenv("SEAMLESS_TOOL_EVENT_MAX_CHARS", "4096")
 	t.Setenv("SEAMLESS_TOOL_EVENT_RETENTION_DAYS", "7")
+	t.Setenv("SEAMLESS_PLAN_CAPTURE_ENABLED", "false")
+	t.Setenv("SEAMLESS_PLAN_CAPTURE_AUTO_TASK", "false")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
@@ -93,6 +97,8 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	require.Equal(t, 0.91, cfg.Gardener.DedupThreshold)
 	require.Equal(t, 4096, cfg.Budgets.ToolEventMaxChars)
 	require.Equal(t, 7, cfg.Gardener.ToolEventRetentionDays)
+	require.False(t, cfg.PlanCapture.Enabled)
+	require.False(t, cfg.PlanCapture.AutoTask)
 	require.Equal(t, "", cfg.SourcePath())
 }
 

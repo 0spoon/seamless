@@ -39,7 +39,7 @@ func newHandlerServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	insertMemory(t, db, "01D", "reference", "sqlite-wal", "enable wal journal mode and busy timeout", "demo")
 
 	ret := retrieve.New(db, nil, config.Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000}, nil)
-	h := NewHandler(db, ret, events.NewRecorder(db), testKey, 0, nil)
+	h := NewHandler(Config{DB: db, Retrieve: ret, Events: events.NewRecorder(db), APIKey: testKey})
 	mux := http.NewServeMux()
 	h.Register(mux)
 	ts := httptest.NewServer(mux)
@@ -332,6 +332,18 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	// UserPromptSubmit and SessionEnd were added too.
 	require.Len(t, hooksObj["UserPromptSubmit"].([]any), 1)
 	require.Len(t, hooksObj["SessionEnd"].([]any), 1)
+	// The plan-capture hooks are command hooks: ONE PostToolUse entry with the
+	// joined matcher, plus SubagentStop and PermissionRequest.
+	require.Contains(t, string(raw), "seam hook post-tool-use")
+	require.Contains(t, string(raw), "seam hook subagent-stop")
+	require.Contains(t, string(raw), "seam hook permission-request")
+	ptu := hooksObj["PostToolUse"].([]any)
+	require.Len(t, ptu, 1)
+	require.Equal(t, "Write|Edit|MultiEdit|ExitPlanMode", ptu[0].(map[string]any)["matcher"])
+	require.Len(t, hooksObj["SubagentStop"].([]any), 1)
+	pr := hooksObj["PermissionRequest"].([]any)
+	require.Len(t, pr, 1)
+	require.Equal(t, "ExitPlanMode", pr[0].(map[string]any)["matcher"])
 
 	// Re-install is a no-op.
 	res2, err := Install(opts)
@@ -351,7 +363,7 @@ func TestInstalledStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, present)
 
-	// After a full install, all three events are reported.
+	// After a full install, every event is reported.
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	_, err = Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
 	require.NoError(t, err)
@@ -359,7 +371,58 @@ func TestInstalledStatus(t *testing.T) {
 	present, err = InstalledStatus(path)
 	require.NoError(t, err)
 	require.ElementsMatch(t, InstalledEvents(), present)
-	require.Len(t, present, 3)
+	require.Len(t, present, 6)
+}
+
+// Mirrors the plan-capture dogfood state: an older installer left UNMARKED
+// command hooks (`... seam hook session-start`), which URL-matching alone
+// cannot adopt (command hooks have no URL). Install must adopt them by their
+// `hook <event>` command instead of appending a duplicate.
+func TestInstallAdoptsUnmarkedCommandHooks(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	require.NoError(t, os.WriteFile(path, []byte(`{
+  "hooks": {
+    "SessionStart": [
+      {"matcher": "startup|resume|clear|compact", "hooks": [{"type": "command", "command": "SEAMLESS_CONFIG=/old/seamless.yaml /old/bin/seam hook session-start", "timeout": 10}]}
+    ],
+    "SessionEnd": [
+      {"hooks": [{"type": "command", "command": "/old/bin/seam hook session-end", "timeout": 10}]},
+      {"seamless_managed": true, "hooks": [{"type": "command", "command": "/old/bin/seam hook session-end", "timeout": 10}]}
+    ]
+  }
+}`), 0o600))
+
+	opts := InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k", SeamBin: "/new/seam", ConfigPath: "/new/seamless.yaml"}
+	res, err := Install(opts)
+	require.NoError(t, err)
+	require.True(t, res.Changed)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(raw, &got))
+	hooksObj := got["hooks"].(map[string]any)
+
+	// The unmarked command entry is adopted in place, not duplicated.
+	ss := hooksObj["SessionStart"].([]any)
+	require.Len(t, ss, 1)
+	require.Equal(t, true, ss[0].(map[string]any)["seamless_managed"])
+	h0 := ss[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
+	require.Equal(t, "SEAMLESS_CONFIG=/new/seamless.yaml /new/seam hook session-start", h0["command"])
+
+	// Unmarked + marked command entries for one event collapse to one.
+	se := hooksObj["SessionEnd"].([]any)
+	require.Len(t, se, 1)
+
+	joined := strings.Join(res.Actions, ",")
+	require.Contains(t, joined, "SessionStart: adopted")
+	require.Contains(t, joined, "SessionEnd: deduped")
+
+	// Re-install is a clean no-op.
+	res2, err := Install(opts)
+	require.NoError(t, err)
+	require.False(t, res2.Changed)
 }
 
 // Mirrors the P6 dogfood state: hand-written UNMARKED Seamless hooks (which an
