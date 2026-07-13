@@ -275,11 +275,3 @@ func percent(n, d int) int {
 	}
 	return int(float64(n)/float64(d)*100 + 0.5)
 }
-
-// readAfterInject is the share of injections that were read back, capped at
-// 100%. Reads can exceed injections (a memory read directly, or more often than
-// it was surfaced via recall -- hook injections record no per-item ids), so the
-// raw ratio is clamped to stay a sensible coverage percentage.
-func readAfterInject(reads, injects int) int {
-	return min(percent(reads, injects), 100)
-}

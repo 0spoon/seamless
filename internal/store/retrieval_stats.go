@@ -27,7 +27,8 @@ type RetrievalStat struct {
 // retrieval.injected event's payload: recall records the surfaced item ids here
 // (the item_id column is reserved for single-item events like memory.read).
 type injectedPayload struct {
-	ItemIDs []string `json:"item_ids"`
+	ItemIDs         []string `json:"item_ids"`
+	ClaudeSessionID string   `json:"claude_session_id"`
 }
 
 // RebuildRetrievalStats recomputes the entire retrieval_stats table from the
