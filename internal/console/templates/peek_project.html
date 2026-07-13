@@ -2,7 +2,7 @@
 <article class="peek-entity">
   <header class="peek-head"><span class="kind">project</span></header>
   <h2 class="peek-title">{{.Name}}</h2>
-  <p class="peek-desc mono">{{.Slug}}</p>
+  <p class="peek-desc mono">{{.Slug}}{{copyBtn .Slug}}</p>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
 
   <dl class="peek-kv">

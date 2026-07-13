@@ -53,6 +53,7 @@ var funcs = template.FuncMap{
 	"add":           func(a, b int) int { return a + b },
 	"sub":           func(a, b int) int { return a - b },
 	"hasPrefix":     strings.HasPrefix,
+	"copyBtn":       copyBtn,
 	"evtTone":       evtTone,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
@@ -263,6 +264,21 @@ func ago(v any) string {
 	default:
 		return fmt.Sprintf("%dy", int(d.Hours()/(24*365)))
 	}
+}
+
+// copyBtn renders a small quiet copy-to-clipboard button carrying the FULL
+// value in a data-copy attribute; the global handler in layout.html copies it
+// on click. Pass the untruncated id/name/slug/path -- not the shortID display
+// text. The value is HTML-attribute-escaped; an empty value renders nothing so
+// callers can drop it inline next to conditionally-shown fields. It carries
+// both the copy and check glyphs; CSS toggles them via the .copied class.
+func copyBtn(value string) template.HTML {
+	if value == "" {
+		return ""
+	}
+	esc := template.HTMLEscapeString(value)
+	return template.HTML(`<button type="button" class="copy-btn" data-copy="` + esc +
+		`" aria-label="Copy" title="Copy">` + string(icon("copy")) + string(icon("check")) + `</button>`)
 }
 
 // shortID returns the first 8 chars of a ULID for compact display.

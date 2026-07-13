@@ -4,7 +4,7 @@
     <span class="kind">{{.Kind}}</span>
     <span class="badge {{if eq .Status "active"}}ok{{else if eq .Status "superseded"}}warn{{end}}">{{.Status}}</span>
   </header>
-  <h2 class="peek-title">{{.Name}}</h2>
+  <h2 class="peek-title">{{.Name}}{{copyBtn .Name}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
 
   {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
@@ -18,7 +18,7 @@
     {{if .ReplacedByID}}<dt>Superseded by</dt><dd><a href="/console/memories/{{.ReplacedByID}}" data-peek>{{.ReplacedBy}}</a></dd>{{end}}
     <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
-    <dt>File</dt><dd class="mono">{{.FilePath}}</dd>
+    <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
   </dl>
 
   {{if .Supersedes}}
