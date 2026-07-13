@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"sort"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -178,11 +177,18 @@ type SessionCoverage struct {
 	Trials   int `json:"trials"`   // sessions that recorded >=1 trial
 }
 
-// GetSessionCoverage computes the coverage roll-up in a single pass over
-// sessions, testing each against the event log for durable artifacts. It reads
-// the event log directly rather than retrieval_stats, so it needs no rebuild.
-func GetSessionCoverage(ctx context.Context, db *sql.DB) (SessionCoverage, error) {
+// GetSessionCoverage computes the coverage roll-up in a single pass over the
+// sessions created within the window (a zero `since` means all time), testing
+// each against the event log for durable artifacts. It reads the event log
+// directly rather than retrieval_stats, so it needs no rebuild.
+func GetSessionCoverage(ctx context.Context, db *sql.DB, since time.Time) (SessionCoverage, error) {
 	var c SessionCoverage
+	args := []any{string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded)}
+	where := ""
+	if !since.IsZero() {
+		where = " WHERE s.created_at >= ?"
+		args = append(args, core.FormatTime(since))
+	}
 	err := db.QueryRowContext(ctx, `
 		SELECT
 			COUNT(*),
@@ -197,9 +203,9 @@ func GetSessionCoverage(ctx context.Context, db *sql.DB) (SessionCoverage, error
 				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_mem,
 				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_note,
 				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_trial
-			FROM sessions s
+			FROM sessions s`+where+`
 		)`,
-		string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded),
+		args...,
 	).Scan(&c.Total, &c.Covered, &c.Findings, &c.Memories, &c.Notes, &c.Trials)
 	if err != nil {
 		return c, fmt.Errorf("store.GetSessionCoverage: %w", err)
@@ -207,32 +213,38 @@ func GetSessionCoverage(ctx context.Context, db *sql.DB) (SessionCoverage, error
 	return c, nil
 }
 
-// DayCoverage is one calendar day's session-coverage roll-up, for the coverage
-// trend chart: of the sessions created that day (viewer-local), how many left a
-// durable artifact behind. Total == 0 means no sessions started that day, so that
-// day's coverage is undefined (the caller renders it as a gap, not 0%).
-type DayCoverage struct {
-	Day     string `json:"day"`     // YYYY-MM-DD (local)
-	Total   int    `json:"total"`   // sessions created that day
+// CoverageBucket is one time bucket of the session-coverage trend: a pre-formatted
+// tick label, how many sessions started in it, and how many of those retained
+// knowledge. Total == 0 means no sessions in the bucket, so its coverage is
+// undefined (the trend renders it as a dip to the floor, not a ceiling).
+type CoverageBucket struct {
+	Label   string `json:"label"`
+	Total   int    `json:"total"`   // sessions created in the bucket
 	Covered int    `json:"covered"` // of those, how many retained knowledge
 }
 
-// SessionCoverageByDay buckets sessions by their creation day in the viewer's
-// local time (so "today" is the local day, never a UTC-rollover day into
-// tomorrow) over the trailing `days` days and, per day, counts how many were
-// "covered" -- left a durable artifact behind (non-empty findings, or a written
-// memory/note/recorded trial). It applies the same covered-ness test as
-// GetSessionCoverage, sliced by day, to back the overview's coverage-trend chart.
-// Bucketing is done in Go rather than SQL so the day boundary follows local time;
-// the SQL lower bound is widened by a day so sessions near the boundary are not
-// dropped before local re-bucketing. Days with no sessions are omitted (the
-// caller densifies the window).
-func SessionCoverageByDay(ctx context.Context, db *sql.DB, days int) ([]DayCoverage, error) {
-	if days <= 0 {
-		days = 14
+// SessionCoverageBuckets computes the windowed session-coverage trend in the
+// viewer's local time -- hourly for the 24h window, daily otherwise (for "all",
+// daily from the earliest session). It applies the same covered-ness test as
+// GetSessionCoverage over the same window, so the coverage hero and this trend
+// describe the same set of sessions. Buckets are contiguous (a quiet stretch
+// reads as a dip), and it shares localBucketAxis/bucketKey with the injection
+// trend so the two charts' x-axes line up. Returns nil when the window holds no
+// sessions.
+func SessionCoverageBuckets(ctx context.Context, db *sql.DB, w RetrievalWindow, now time.Time) ([]CoverageBucket, error) {
+	hourly := w.Key == "24h"
+	// Widen the SQL bound by one bucket so a session near the window boundary is
+	// not dropped before local re-bucketing.
+	lower := w.Since
+	if !lower.IsZero() {
+		if hourly {
+			lower = lower.Add(-time.Hour)
+		} else {
+			lower = lower.AddDate(0, 0, -1)
+		}
 	}
-	since := core.FormatTime(time.Now().UTC().AddDate(0, 0, -(days + 1)))
-	rows, err := db.QueryContext(ctx, `
+	args := []any{string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded)}
+	q := `
 		SELECT
 			s.created_at,
 			CASE WHEN
@@ -241,44 +253,64 @@ func SessionCoverageByDay(ctx context.Context, db *sql.DB, days int) ([]DayCover
 				OR EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?)
 				OR EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?)
 			THEN 1 ELSE 0 END AS covered
-		FROM sessions s
-		WHERE s.created_at >= ?
-		ORDER BY s.created_at ASC`,
-		string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded), since)
+		FROM sessions s`
+	if !lower.IsZero() {
+		q += ` WHERE s.created_at >= ?`
+		args = append(args, core.FormatTime(lower))
+	}
+	q += ` ORDER BY s.created_at ASC`
+	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.SessionCoverageByDay: %w", err)
+		return nil, fmt.Errorf("store.SessionCoverageBuckets: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	byDay := map[string]*DayCoverage{}
-	var order []string
+	type acc struct{ total, covered int }
+	counts := map[string]*acc{}
+	var earliest time.Time
+	any := false
 	for rows.Next() {
 		var createdAt string
 		var covered int
 		if err := rows.Scan(&createdAt, &covered); err != nil {
-			return nil, fmt.Errorf("store.SessionCoverageByDay: scan: %w", err)
+			return nil, fmt.Errorf("store.SessionCoverageBuckets: scan: %w", err)
 		}
 		ts, err := core.ParseTime(createdAt)
 		if err != nil {
-			return nil, fmt.Errorf("store.SessionCoverageByDay: parse ts: %w", err)
+			return nil, fmt.Errorf("store.SessionCoverageBuckets: parse ts: %w", err)
 		}
-		day := ts.Local().Format("2006-01-02")
-		d, ok := byDay[day]
-		if !ok {
-			d = &DayCoverage{Day: day}
-			byDay[day] = d
-			order = append(order, day)
+		any = true
+		if earliest.IsZero() || ts.Before(earliest) {
+			earliest = ts
 		}
-		d.Total++
-		d.Covered += covered
+		k := bucketKey(ts, hourly)
+		a := counts[k]
+		if a == nil {
+			a = &acc{}
+			counts[k] = a
+		}
+		a.total++
+		a.covered += covered
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.SessionCoverageByDay: rows: %w", err)
+		return nil, fmt.Errorf("store.SessionCoverageBuckets: rows: %w", err)
 	}
-	sort.Strings(order)
-	out := make([]DayCoverage, 0, len(order))
-	for _, day := range order {
-		out = append(out, *byDay[day])
+	if !any {
+		return nil, nil
+	}
+
+	start := w.Since
+	if start.IsZero() {
+		start = earliest
+	}
+	axis := localBucketAxis(start, now, hourly)
+	out := make([]CoverageBucket, 0, len(axis))
+	for _, t := range axis {
+		b := CoverageBucket{Label: t.label}
+		if a := counts[t.key]; a != nil {
+			b.Total, b.Covered = a.total, a.covered
+		}
+		out = append(out, b)
 	}
 	return out, nil
 }

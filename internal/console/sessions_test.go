@@ -41,6 +41,9 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	var list sessionsData
 	getJSON(t, mux, "/console/sessions?format=json", &list)
 	require.Equal(t, 1, list.Total)
+	require.Equal(t, "all", list.Window, "defaults to the all-time window")
+	require.Equal(t, 1, list.Completed)
+	require.Zero(t, list.Active)
 	require.Len(t, list.Sessions, 1)
 	require.Equal(t, "cc/abcd1234", list.Sessions[0].Name)
 	require.True(t, list.Sessions[0].Ambient)
@@ -73,6 +76,33 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Contains(t, rr.Body.String(), "found the bug in the watcher")
+}
+
+func TestSessionsPage_WindowFilter(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(id string, updated time.Time) core.Session {
+		return core.Session{
+			ID: id, Name: "cc/" + id, Status: core.SessionCompleted,
+			CreatedAt: updated, UpdatedAt: updated,
+		}
+	}
+	require.NoError(t, store.CreateSession(ctx, db, mk("recent", now.Add(-time.Hour))))
+	require.NoError(t, store.CreateSession(ctx, db, mk("old", now.Add(-72*time.Hour))))
+
+	// All-time lists both; the 24h window drops the 72h-old session.
+	var all sessionsData
+	getJSON(t, mux, "/console/sessions?format=json", &all)
+	require.Len(t, all.Sessions, 2)
+
+	var day sessionsData
+	getJSON(t, mux, "/console/sessions?w=24h&format=json", &day)
+	require.Len(t, day.Sessions, 1)
+	require.Equal(t, "cc/recent", day.Sessions[0].Name)
+	require.Equal(t, "24h", day.Window)
+	require.Equal(t, 2, day.Total, "Total is the all-time count, not the windowed one")
 }
 
 func TestSessionDetail_NotFound(t *testing.T) {

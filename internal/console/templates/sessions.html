@@ -6,10 +6,14 @@
     <div class="sub">{{.Total}} total &middot; {{.Active}} active</div>
   </div>
   <div class="btn-row">
-    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions">All</a>
-    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active">Active</a>
-    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed">Completed</a>
+    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions?w={{.Window}}">All</a>
+    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active&w={{.Window}}">Active</a>
+    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed&w={{.Window}}">Completed</a>
   </div>
+</div>
+
+<div class="win-tabs win-tabs-page">
+  {{$filter := .Filter}}{{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/sessions?status={{$filter}}&w={{.Key}}">{{.Label}}</a>{{end}}
 </div>
 
 {{if .Sessions}}
@@ -34,9 +38,9 @@
 {{end}}
 
 {{if or (eq .Filter "") (eq .Filter "completed")}}
-{{if ne .Total .Active}}
+{{if .Completed}}
 <div class="sess-group">
-  <h2>Completed{{if eq .Filter ""}} <span class="count">{{sub .Total .Active}}</span>{{end}}</h2>
+  <h2>Completed{{if eq .Filter ""}} <span class="count">{{.Completed}}</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "completed"}}
     <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
@@ -55,7 +59,7 @@
 {{end}}
 
 {{else}}
-<div class="empty">No sessions{{if .Filter}} with status "{{.Filter}}"{{end}} yet</div>
+<div class="empty">No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}}</div>
 {{end}}
 {{end}}
 {{end}}

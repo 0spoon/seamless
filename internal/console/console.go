@@ -250,10 +250,11 @@ type overviewData struct {
 	TopInjected      []store.NamedCount
 	Pending          int
 	Recent           []eventRow
-	Coverage         int                 // % of sessions that retained knowledge
-	Covered          int                 // sessions with >=1 durable artifact
-	CoverageRows     []coverageRow       // per-channel breakdown (findings/memories/notes/trials)
-	CoverageTrend    []store.DayCoverage // 14-day daily coverage rate, for the trend chart (nil = no in-window sessions)
+	Coverage         int                    // % of in-window sessions that retained knowledge
+	Covered          int                    // in-window sessions with >=1 durable artifact
+	CovTotal         int                    // in-window sessions (coverage denominator)
+	CoverageRows     []coverageRow          // per-channel breakdown (findings/memories/notes/trials), in-window
+	CoverageTrend    []store.CoverageBucket // windowed coverage-rate trend (nil = no in-window sessions)
 }
 
 // windowOption is one entry in the retrieval-health window selector: a stable key
@@ -314,18 +315,19 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	now := time.Now()
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 	report, err := store.BuildRetrievalReport(ctx, s.cfg.DB, win, 5)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	cov, err := store.GetSessionCoverage(ctx, s.cfg.DB)
+	cov, err := store.GetSessionCoverage(ctx, s.cfg.DB, win.Since)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	covTrend, err := store.SessionCoverageByDay(ctx, s.cfg.DB, 14)
+	covTrend, err := store.SessionCoverageBuckets(ctx, s.cfg.DB, win, now)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -333,7 +335,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 
 	data := overviewData{
 		Trend:            report.Trend,
-		CoverageTrend:    coverageTrendData(covTrend, 14),
+		CoverageTrend:    covTrend,
 		Memories:         sum.Memories.Active,
 		MemByKind:        orderKinds(sum.Memories.ByKind),
 		Notes:            sum.Notes,
@@ -355,6 +357,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		Recent:           recent,
 		Coverage:         percent(cov.Covered, cov.Total),
 		Covered:          cov.Covered,
+		CovTotal:         cov.Total,
 		CoverageRows:     coverageRows(cov),
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
