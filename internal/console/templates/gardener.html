@@ -3,24 +3,42 @@
 <div class="topbar">
   <div>
     <h1>Gardener</h1>
-    <div class="sub">{{len .Cards}} pending proposal{{if ne (len .Cards) 1}}s{{end}} awaiting review</div>
+    <div class="sub">{{len .Cards}} loose proposal{{if ne (len .Cards) 1}}s{{end}}{{if .Groups}} &middot; {{len .Groups}} plan{{if ne (len .Groups) 1}}s{{end}}{{end}} awaiting review</div>
   </div>
 </div>
 
 {{if .CanRequest}}
-<form class="card req-card" method="post" action="/console/gardener/request" id="req-form">
-  <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
-  <textarea class="field" name="request" id="req-text" rows="3"
-    placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; and archive anything about the old port 8080"></textarea>
-  <div class="req-row">
-    {{$scope := .Scope}}
-    <select class="req-scope" name="project" aria-label="Request scope">
-      <option value="">All projects</option>
-      {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
-    </select>
-    <button class="btn primary" type="submit" id="req-go">Generate proposals</button>
-  </div>
-</form>
+<div class="req-grid">
+  <form class="card req-card" method="post" action="/console/gardener/request" id="req-form">
+    <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
+    <textarea class="field" name="request" id="req-text" rows="3"
+      placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; and archive anything about the old port 8080"></textarea>
+    <div class="req-row">
+      {{$scope := .Scope}}
+      <select class="req-scope" name="project" aria-label="Request scope">
+        <option value="">All projects</option>
+        {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
+      </select>
+      <button class="btn primary" type="submit" id="req-go">Generate proposals</button>
+    </div>
+  </form>
+
+  <form class="card req-card" method="post" action="/console/gardener/split" id="split-form">
+    <h2>Split a project <span class="h2-meta">one project &rarr; two</span></h2>
+    <div class="req-row" style="margin: 0 0 10px;">
+      <select class="req-scope" name="source" aria-label="Project to split" id="split-source" required>
+        <option value="">Choose a project&hellip;</option>
+        {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
+      </select>
+    </div>
+    <textarea class="field" name="instruction" id="split-text" rows="2"
+      placeholder="e.g. split into arctop-ios and arctop-android; keep cross-platform memories in a shared arctop-mobile-apps"></textarea>
+    <div class="req-row">
+      <span class="prop-note" style="margin-right:auto;">Creates reviewable move proposals &mdash; nothing changes until you apply.</span>
+      <button class="btn primary" type="submit" id="split-go">Plan split</button>
+    </div>
+  </form>
+</div>
 {{else}}
 <div class="card req-card">
   <h2>Ask the gardener <span class="h2-meta">unavailable</span></h2>
@@ -31,6 +49,54 @@
 {{if .Notice}}<div class="section notice">{{.Notice}}</div>{{end}}
 {{if .Error}}<div class="login-err section">{{.Error}}</div>{{end}}
 
+{{/* Plan groups: a split's setup card + its per-memory reproject cards. */}}
+{{range .Groups}}
+<div class="plan-group">
+  <div class="plan-head">
+    <div class="plan-title"><span class="kind brand">plan</span> <span class="plan-slug">{{.Slug}}</span>
+      <span class="sub">{{len .Cards}} proposal{{if ne (len .Cards) 1}}s{{end}}</span></div>
+    {{if $.Data.CanAct}}
+    <form method="post" action="/console/gardener/plan/{{.Slug}}/apply"
+      onsubmit="return confirm('Apply every proposal in this plan? Projects are created and memories moved.');">
+      <button class="btn small primary" type="submit">Apply whole plan</button>
+    </form>
+    {{end}}
+  </div>
+  {{$targets := .Targets}}
+  <div class="grid-2">
+    {{range .Cards}}
+    <div class="card">
+      <div class="prop-head">
+        <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
+        <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
+      </div>
+      {{template "cardKindBody" .}}
+      {{if and (eq .Kind "reproject") $.Data.CanAct $targets}}
+      {{$to := .Reproject.To}}
+      <form class="retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
+        <span class="retarget-lbl">move to</span>
+        <select class="req-scope" name="to" aria-label="Retarget project">
+          {{range $targets}}<option value="{{.Slug}}"{{if eq .Slug $to}} selected{{end}}>{{.Label}}</option>{{end}}
+        </select>
+        <button class="btn small" type="submit">Retarget</button>
+      </form>
+      {{end}}
+      {{if $.Data.CanAct}}
+      <div class="btn-row prop-foot">
+        <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
+          <button class="btn small primary" type="submit">Apply</button>
+        </form>
+        <form method="post" action="/console/gardener/{{.ID}}/dismiss">
+          <button class="btn small" type="submit">Dismiss</button>
+        </form>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+
 {{if .Cards}}
 <div class="grid-2">
   {{range .Cards}}
@@ -39,33 +105,7 @@
       <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
       <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
     </div>
-
-    {{if eq .Kind "archive"}}
-      {{with .Archive}}
-      <div class="prop-row"><a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
-      {{if .Description}}<div class="prop-desc">{{.Description}}</div>{{end}}
-      {{end}}
-      <div class="badge warn">{{.Reason}}</div>
-    {{else if eq .Kind "merge"}}
-      {{if eq .Source "request"}}
-      <div class="prop-note">Requested merge &mdash; keep the first, supersede the second.</div>
-      {{else}}
-      <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
-      {{end}}
-      {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
-      {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
-    {{else if eq .Kind "digest"}}
-      <div class="prop-title">{{.Title}}</div>
-      <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
-      <div class="prose">{{.Body}}</div>
-    {{else if eq .Kind "consolidate"}}
-      <div class="prop-note">Consolidate {{len .Sources}} memor{{if eq (len .Sources) 1}}y{{else}}ies{{end}} into one new memory.</div>
-      <div class="prop-row"><span class="badge ok">new</span> <span class="name">{{.NewName}}</span> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.NewKind}}</span></div>
-      {{if .NewDesc}}<div class="prop-desc">{{.NewDesc}}</div>{{end}}
-      {{range .Sources}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a></div>{{end}}
-      {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
-    {{end}}
-
+    {{template "cardKindBody" .}}
     {{if $.Data.CanAct}}
     <div class="btn-row prop-foot">
       <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
@@ -79,26 +119,79 @@
   </div>
   {{end}}
 </div>
-{{else}}
+{{else if not .Groups}}
 <div class="empty dotgrid"><span class="empty-ico ok">{{icon "sprout"}}</span><div>No pending proposals &mdash; the garden is tidy.</div></div>
 {{end}}
+{{end}}
+{{end}}
+
+{{/* cardKindBody renders the kind-specific body of one proposal card (. is the card). */}}
+{{define "cardKindBody"}}
+{{if eq .Kind "archive"}}
+  {{with .Archive}}
+  <div class="prop-row"><a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
+  {{if .Description}}<div class="prop-desc">{{.Description}}</div>{{end}}
+  {{end}}
+  <div class="badge warn">{{.Reason}}</div>
+{{else if eq .Kind "merge"}}
+  {{if eq .Source "request"}}
+  <div class="prop-note">Requested merge &mdash; keep the first, supersede the second.</div>
+  {{else}}
+  <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
+  {{end}}
+  {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+  {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+{{else if eq .Kind "digest"}}
+  <div class="prop-title">{{.Title}}</div>
+  <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
+  <div class="prose">{{.Body}}</div>
+{{else if eq .Kind "consolidate"}}
+  <div class="prop-note">Consolidate {{len .Sources}} memor{{if eq (len .Sources) 1}}y{{else}}ies{{end}} into one new memory.</div>
+  <div class="prop-row"><span class="badge ok">new</span> <span class="name">{{.NewName}}</span> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.NewKind}}</span></div>
+  {{if .NewDesc}}<div class="prop-desc">{{.NewDesc}}</div>{{end}}
+  {{range .Sources}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a></div>{{end}}
+  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
+{{else if eq .Kind "reproject"}}
+  {{with .Reproject}}
+  <div class="prop-row">
+    <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a>
+    <span class="muted move-arrow">{{if .From}}<a href="/console/projects/{{.From}}" data-peek>{{.From}}</a>{{else}}global{{end}} <span class="arrow">&rarr;</span> <strong>{{.To}}</strong></span>
+  </div>
+  {{if .Rationale}}<div class="prop-desc">{{.Rationale}}</div>{{end}}
+  {{end}}
+{{else if eq .Kind "split"}}
+  {{with .Split}}
+  <div class="prop-note">Split <strong>{{.Source}}</strong> into:</div>
+  <div class="prop-row split-targets">
+    {{range .Children}}<span class="badge ok">{{.Label}}</span>{{end}}
+    {{if .Shared}}<span class="badge brand">shared &middot; {{.Shared.Label}}</span>{{end}}
+  </div>
+  <div class="prop-desc">Creates the projects, links them as a family{{if .Shared}}, parents the children on the shared project{{end}}{{if .RetireSource}}, and retires {{.Source}}{{end}}.</div>
+  {{end}}
 {{end}}
 {{end}}
 
 {{define "scripts"}}
 <script>
 (function () {
-  var form = document.getElementById('req-form');
-  if (!form) return;
+  function busy(formID, btnID, label) {
+    var form = document.getElementById(formID);
+    if (!form) return;
+    form.addEventListener('submit', function () {
+      form.classList.add('is-busy');
+      var btn = document.getElementById(btnID);
+      if (btn) { btn.textContent = label; }
+    });
+  }
+  busy('req-form', 'req-go', 'Interpreting…');
+  busy('split-form', 'split-go', 'Planning…');
+
   var ta = document.getElementById('req-text');
-  var btn = document.getElementById('req-go');
-  form.addEventListener('submit', function () {
-    form.classList.add('is-busy');
-    if (btn) { btn.textContent = 'Interpreting…'; }
-  });
   if (ta) {
     ta.addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { form.requestSubmit(); }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+        document.getElementById('req-form').requestSubmit();
+      }
     });
   }
 })();

@@ -29,7 +29,14 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	mems, err := store.ActiveMemories(ctx, s.db, project)
+	// A child project (one with a parent) sees its shared parent's active memories
+	// in-briefing too, so cross-platform knowledge kept in the parent surfaces in
+	// each child without being duplicated (see the arctop-app split).
+	extra, err := s.familyMemoryScope(ctx, project)
+	if err != nil {
+		return "", nil, err
+	}
+	mems, err := store.ActiveMemoriesForScope(ctx, s.db, project, extra)
 	if err != nil {
 		return "", nil, err
 	}
@@ -77,6 +84,22 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		ready: ready, siblings: siblings, stages: stages, plans: plans,
 	})
 	return text, ids, nil
+}
+
+// familyMemoryScope returns the extra project slugs whose active memories should
+// be folded into project's briefing: its shared parent, when set. It is a no-op
+// (nil) for the global scope or a project with no parent. Kept small on purpose --
+// a child inherits its parent's shared memories, not its siblings' platform-
+// specific ones (siblings still contribute recent findings via siblingFindings).
+func (s *Service) familyMemoryScope(ctx context.Context, project string) ([]string, error) {
+	if project == "" {
+		return nil, nil
+	}
+	p, ok, err := store.ProjectBySlug(ctx, s.db, project)
+	if err != nil || !ok || p.ParentSlug == "" {
+		return nil, err
+	}
+	return []string{p.ParentSlug}, nil
 }
 
 // siblingFindings gathers up to two recent findings from a project's family

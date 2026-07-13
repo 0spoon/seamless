@@ -10,14 +10,25 @@ import (
 // ---------------------------------------------------------------------------
 
 // Project groups memories, notes, sessions, tasks, and trials under a slug.
+//
+// ParentSlug, when set, points a child project (e.g. arctop-ios) at a shared
+// parent (e.g. arctop-mobile-apps) whose active memories are injected into the
+// child's briefing -- how a split keeps cross-platform knowledge shared without
+// duplicating it. RetiredAt marks a project emptied by a split: kept for
+// provenance and still readable, but flagged as no longer the live home.
 type Project struct {
-	ID          string    `json:"id"`
-	Slug        string    `json:"slug"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID          string     `json:"id"`
+	Slug        string     `json:"slug"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	ParentSlug  string     `json:"parentSlug,omitempty"`
+	RetiredAt   *time.Time `json:"retiredAt,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+	UpdatedAt   time.Time  `json:"updatedAt"`
 }
+
+// Retired reports whether the project has been retired (emptied by a split).
+func (p Project) Retired() bool { return p.RetiredAt != nil }
 
 // ---------------------------------------------------------------------------
 // Memory
@@ -229,6 +240,7 @@ const (
 	EventMemoryRead       EventKind = "memory.read"
 	EventMemorySuperseded EventKind = "memory.superseded"
 	EventMemoryArchived   EventKind = "memory.archived"
+	EventMemoryMoved      EventKind = "memory.moved" // relocated to another project (reproject/split)
 	EventNoteWritten      EventKind = "note.written"
 	EventTrialRecorded    EventKind = "trial.recorded"
 	EventTaskTransition   EventKind = "task.transition"

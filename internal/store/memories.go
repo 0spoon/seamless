@@ -84,6 +84,42 @@ func ActiveMemories(ctx context.Context, db *sql.DB, project string) ([]core.Mem
 	return mems, nil
 }
 
+// ActiveMemoriesForScope returns the active memories visible to a project widened
+// by extra project slugs (e.g. a shared parent whose memories a split injects into
+// each child). It is ActiveMemories plus the union of extra: rows where invalid_at
+// IS NULL and project is the project, global (''), or any extra slug -- deduped,
+// newest-updated first. Blank/duplicate extras are ignored; with no extras it is
+// exactly ActiveMemories.
+func ActiveMemoriesForScope(ctx context.Context, db *sql.DB, project string, extra []string) ([]core.Memory, error) {
+	// Build the deduped set of scope slugs: the project, global, and each extra.
+	seen := map[string]bool{project: true, "": true}
+	scopes := []string{project, ""}
+	for _, s := range extra {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		scopes = append(scopes, s)
+	}
+	args := make([]any, len(scopes))
+	for i, s := range scopes {
+		args[i] = s
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
+		FROM memories_index
+		WHERE invalid_at IS NULL AND project IN (`+placeholders(len(scopes))+`)
+		ORDER BY updated_at DESC, id DESC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveMemoriesForScope: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	mems, err := scanMemories(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveMemoriesForScope: %w", err)
+	}
+	return mems, nil
+}
+
 // AllMemoriesIncludingInvalid returns every memory index row -- active and
 // invalid (superseded or archived) -- newest-updated first. It backs the console
 // Memories browser, which renders supersession chains and archived items.

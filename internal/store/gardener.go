@@ -23,6 +23,8 @@ const (
 	ProposalArchive     = "archive"
 	ProposalDigest      = "digest"
 	ProposalConsolidate = "consolidate"
+	ProposalReproject   = "reproject" // move one memory to another project
+	ProposalSplit       = "split"     // set up child/shared projects + family for a project split
 )
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the
@@ -112,6 +114,26 @@ func ResolveProposal(ctx context.Context, db *sql.DB, id, status string, at time
 	n, _ := res.RowsAffected()
 	if n == 0 {
 		return fmt.Errorf("store.ResolveProposal: no pending proposal with id %q", id)
+	}
+	return nil
+}
+
+// UpdateProposalPayload replaces a pending proposal's payload (e.g. retargeting a
+// reproject to a different project before applying). It errors if the proposal is
+// missing or not pending, so a resolved proposal is never silently rewritten.
+func UpdateProposalPayload(ctx context.Context, db *sql.DB, id string, payload map[string]any) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("store.UpdateProposalPayload: marshal: %w", err)
+	}
+	res, err := db.ExecContext(ctx, `
+		UPDATE gardener_proposals SET payload = ?
+		WHERE id = ? AND status = ?`, string(raw), id, ProposalPending)
+	if err != nil {
+		return fmt.Errorf("store.UpdateProposalPayload: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return fmt.Errorf("store.UpdateProposalPayload: no pending proposal with id %q", id)
 	}
 	return nil
 }

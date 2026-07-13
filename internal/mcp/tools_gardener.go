@@ -12,8 +12,8 @@ import (
 
 func gardenerProposalsTool() mcp.Tool {
 	return mcp.NewTool("gardener_proposals",
-		mcp.WithDescription("List pending gardener proposals (merge duplicate memories, archive stale memories, write a monthly session digest). Review, then apply or dismiss each with gardener_apply. Read-only."),
-		mcp.WithString("kind", mcp.Enum("merge", "archive", "digest"), mcp.Description("filter by proposal kind (default: all pending)")),
+		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, or set up a project split). Review, then apply or dismiss each with gardener_apply. Read-only."),
+		mcp.WithString("kind", mcp.Enum("merge", "archive", "digest", "consolidate", "reproject", "split"), mcp.Description("filter by proposal kind (default: all pending)")),
 	)
 }
 
@@ -49,9 +49,32 @@ func (s *Server) handleGardenerRequest(ctx context.Context, req mcp.CallToolRequ
 	return jsonResult(res)
 }
 
+func gardenerSplitTool() mcp.Tool {
+	return mcp.NewTool("gardener_split",
+		mcp.WithDescription("Plan a project split into child projects, keeping cross-platform memories in a shared parent (e.g. split arctop-app into arctop-ios + arctop-android with shared arctop-mobile-apps). It NEVER creates a project or moves a memory: it only creates reviewable pending proposals -- one 'split' setup proposal plus one 'reproject' per memory, all under plan 'split-<source>'. Review with gardener_proposals, then apply each with gardener_apply (or retarget a memory first in the console). Needs an LLM chat client."),
+		mcp.WithString("source", mcp.Required(), mcp.Description("the project slug to split (its own memories are classified)")),
+		mcp.WithString("instruction", mcp.Description("optional guidance: which children, what stays shared")),
+	)
+}
+
+func (s *Server) handleGardenerSplit(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.cfg.Gardener == nil {
+		return errResult("gardener_split", errors.New("gardener is not configured on this server"))
+	}
+	source := argString(req, "source")
+	if source == "" {
+		return errResult("gardener_split", errors.New("source is required"))
+	}
+	res, err := s.cfg.Gardener.Split(ctx, source, argString(req, "instruction"))
+	if err != nil {
+		return errResult("gardener_split", err)
+	}
+	return jsonResult(res)
+}
+
 func gardenerApplyTool() mcp.Tool {
 	return mcp.NewTool("gardener_apply",
-		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; digest -> save the summary as a note); action=dismiss discards it. A dismissed proposal is never re-raised."),
+		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; split -> create the child/shared projects, link the family, parent the children, retire the source); action=dismiss discards it. A dismissed proposal is never re-raised."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
 		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),
 	)
