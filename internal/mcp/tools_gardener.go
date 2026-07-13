@@ -28,8 +28,8 @@ func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRe
 
 func gardenerRequestTool() mcp.Tool {
 	return mcp.NewTool("gardener_request",
-		mcp.WithDescription("Interpret a natural-language memory-maintenance request (e.g. \"these two memories are duplicates -- keep the newer\", or \"archive anything about the old port 8080\") into reviewable gardener proposals. It NEVER mutates memories directly: it only creates pending proposals -- review them with gardener_proposals, then resolve with gardener_apply. Needs an LLM chat client."),
-		mcp.WithString("request", mcp.Required(), mcp.Description("the maintenance request in plain language")),
+		mcp.WithDescription("The natural-language entry point for REORGANIZING memory. Describe the change in plain language and it returns reviewable pending proposals -- fold duplicates together (\"these two memories are duplicates -- keep the newer\"), retire stale memories (\"archive anything about the old port 8080\"), synthesize several into one (\"combine the three auth-flow notes\"), or move a mis-filed memory to another EXISTING project (\"the iOS DFU memory belongs in arctop-ios\"). Use this whenever the user describes how they want their knowledge organized; if the intended change is ambiguous, ask them a clarifying question first. It NEVER mutates memories: it only creates pending proposals -- review with gardener_proposals, resolve with gardener_apply. If the request is to split one project into NEW child projects, it recognizes that and returns guidance (splitSource) pointing you at gardener_split instead. Needs an LLM chat client."),
+		mcp.WithString("request", mcp.Required(), mcp.Description("the reorganization request in plain language")),
 		mcp.WithString("project", mcp.Description("scope candidate memories: a project slug (its memories + globals), \"global\" for globals only, or omit for all projects")),
 	)
 }
@@ -51,8 +51,8 @@ func (s *Server) handleGardenerRequest(ctx context.Context, req mcp.CallToolRequ
 
 func gardenerSplitTool() mcp.Tool {
 	return mcp.NewTool("gardener_split",
-		mcp.WithDescription("Plan a project split into child projects, keeping cross-platform memories in a shared parent (e.g. split arctop-app into arctop-ios + arctop-android with shared arctop-mobile-apps). It NEVER creates a project or moves a memory: it only creates reviewable pending proposals -- one 'split' setup proposal plus one 'reproject' per memory, all under plan 'split-<source>'. Review with gardener_proposals, then apply each with gardener_apply (or retarget a memory first in the console). Needs an LLM chat client."),
-		mcp.WithString("source", mcp.Required(), mcp.Description("the project slug to split (its own memories are classified)")),
+		mcp.WithDescription("Plan a project SPLIT: divide one existing project into two or more NEW child projects, keeping cross-platform memories in a shared parent (e.g. split arctop-app into arctop-ios + arctop-android with shared arctop-mobile-apps). Use this when the user wants to break one project into several -- gardener_request points you here (via splitSource) when it detects that intent. It NEVER creates a project or moves a memory: it only creates reviewable pending proposals -- one 'split' setup proposal plus one 'reproject' per memory, all under plan 'split-<source>'. Review with gardener_proposals, then apply each with gardener_apply (or retarget a memory first in the console). Needs an LLM chat client and a known source project slug (see project_list)."),
+		mcp.WithString("source", mcp.Required(), mcp.Description("the project slug to split (its own memories are classified into the children/shared parent)")),
 		mcp.WithString("instruction", mcp.Description("optional guidance: which children, what stays shared")),
 	)
 }

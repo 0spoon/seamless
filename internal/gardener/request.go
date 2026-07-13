@@ -49,6 +49,17 @@ type RequestResult struct {
 	Total   int            `json:"total"`
 	Skipped []string       `json:"skipped"` // human-readable notes on dropped ops
 	Summary string         `json:"summary"` // one-line summary
+
+	// Guidance is a human/agent-readable note on how to proceed when the request
+	// is better served by another tool -- most importantly when it recognizes a
+	// project split and points the caller at gardener_split. Empty when the
+	// request was handled inline.
+	Guidance string `json:"guidance,omitempty"`
+	// SplitSource is set to the source project slug when the request was
+	// recognized as a project split that should be planned with gardener_split.
+	// The general request never plans a split itself (it needs a whole-project
+	// classification and a known source); it only routes to it.
+	SplitSource string `json:"splitSource,omitempty"`
 }
 
 // Request interprets a single natural-language maintenance request against the
@@ -72,9 +83,19 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 		return RequestResult{ByKind: map[string]int{}, Summary: "no active memories in scope"}, nil
 	}
 
+	// The set of real projects a memory may be moved into (reproject) or that a
+	// split may target: registered projects plus any project a candidate memory
+	// already lives in. Moving into a project not in this set would be creating a
+	// new project -- which is a split, not a reproject.
+	projects, err := store.ListProjects(ctx, s.db)
+	if err != nil {
+		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
+	}
+	known := knownProjects(projects, candidates)
+
 	cctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	out, err := s.chat.Complete(cctx, requestSystemPrompt, requestUserPrompt(text, candidates))
+	out, err := s.chat.Complete(cctx, requestSystemPrompt, requestUserPrompt(text, candidates, projects))
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
 	}
@@ -82,6 +103,13 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 	plan, err := parseRequestPlan(out)
 	if err != nil {
 		return RequestResult{}, err // already wraps ErrUnparseable
+	}
+
+	// A split creates NEW child projects and a shared parent -- it needs a
+	// whole-project classification and a known source, so the general request
+	// never plans it inline. It recognizes the intent and routes to gardener_split.
+	if plan.Split != nil {
+		return s.routeSplit(ctx, text, plan.Split, known), nil
 	}
 
 	// Seed the dedup set from every existing proposal key (any status) so a
@@ -93,7 +121,7 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 
 	res := RequestResult{ByKind: map[string]int{}}
 	for _, op := range plan.Ops {
-		kind, key, payload, skip := mapRequestOp(op, candidates, text)
+		kind, key, payload, skip := mapRequestOp(op, candidates, text, known)
 		if skip != "" {
 			res.Skipped = append(res.Skipped, skip)
 			continue
@@ -116,8 +144,48 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 		"action": "request", "text": truncateRunes(text, 200),
 		"created": res.Total, "merges": res.ByKind[store.ProposalMerge],
 		"archives": res.ByKind[store.ProposalArchive], "consolidations": res.ByKind[store.ProposalConsolidate],
+		"reprojects": res.ByKind[store.ProposalReproject],
 	})
 	return res, nil
+}
+
+// knownProjects is the set of project slugs a request may move a memory into: every
+// registered project plus every project a candidate memory already lives in.
+func knownProjects(projects []core.Project, candidates []core.Memory) map[string]bool {
+	known := make(map[string]bool, len(projects)+len(candidates))
+	for _, p := range projects {
+		known[p.Slug] = true
+	}
+	for _, m := range candidates {
+		if m.Project != "" {
+			known[m.Project] = true
+		}
+	}
+	return known
+}
+
+// routeSplit turns a recognized split intent into guidance pointing at
+// gardener_split. It never plans the split itself: splitting needs a whole-project
+// classification and a structured source, so the general request only recognizes
+// the intent and hands the caller the exact way to run it.
+func (s *Service) routeSplit(ctx context.Context, text string, sp *reqSplit, known map[string]bool) RequestResult {
+	res := RequestResult{ByKind: map[string]int{}}
+	src := core.Slugify(strings.TrimSpace(sp.Source))
+	switch {
+	case src == "":
+		res.Guidance = "This reads like a project split, but no source project was identified. Run gardener_split with the exact slug of the project to split (see project_list)."
+	case !known[src]:
+		res.Guidance = fmt.Sprintf("This reads like a request to split %q, which is not a known project. Run gardener_split with the exact source slug (see project_list).", src)
+	default:
+		res.SplitSource = src
+		res.Guidance = fmt.Sprintf("Recognized a request to split %q into new child projects. Plan it with gardener_split (source=%s) -- it classifies %s's memories into the children and a shared parent as reviewable proposals.", src, src, src)
+	}
+	res.Summary = res.Guidance
+	s.record(ctx, "", map[string]any{
+		"action": "request", "text": truncateRunes(text, 200),
+		"recognized": "split", "source": res.SplitSource,
+	})
+	return res
 }
 
 // requestCandidates loads the active memories the interpreter may reference,
@@ -146,26 +214,38 @@ func (s *Service) requestCandidates(ctx context.Context, projectScope string) ([
 	return mems, nil
 }
 
-const requestSystemPrompt = `You convert a single natural-language maintenance request into a set of PROPOSED, reviewable operations over an AI agent's memory store. You never modify anything yourself; a human reviews and applies each operation. Reference memories only by their candidate number.
+const requestSystemPrompt = `You convert a single natural-language request to REORGANIZE an AI agent's memory store into a set of PROPOSED, reviewable operations. You never modify anything yourself; a human reviews and applies each operation. Reference memories only by their candidate number.
 
-Operations:
+Operations (return these in "ops"):
 - merge: fold one memory into another EXISTING memory. {"op":"merge","keep":<n>,"drop":<m>}. keep is retained as-is; drop is superseded by keep (still readable, pointing at keep). Use this when one existing memory should simply absorb another.
 - archive: retire a memory that is no longer relevant. {"op":"archive","target":<n>,"reason":"<short why>"}. The memory is marked invalid but stays readable.
 - consolidate: replace several redundant memories with ONE new unified memory that you write. {"op":"consolidate","name":"<short-kebab-name>","kind":"<kind>","description":"<one line, <=150 chars>","body":"<full markdown body>","sources":[<n>,<m>,...]}. Every named source is superseded by the new memory. Use this (not merge) when the truth is spread across several memories and a fresh combined write is clearer than keeping any single one.
+- reproject: move a memory to a DIFFERENT, ALREADY-EXISTING project. {"op":"reproject","target":<n>,"to":"<existing-project-slug>","reason":"<short why>"}. "to" MUST be one of the existing project slugs listed below. Use this when a memory is filed under the wrong project. Do NOT use reproject to move a memory into a project that does not exist yet -- that is a split.
+
+Splitting a project (special -- NOT an op):
+- If the request is to SPLIT one project into NEW child projects (e.g. "split arctop-app into arctop-ios and arctop-android"), do NOT emit ops. Instead return {"split":{"source":"<project-slug-to-split>","instruction":"<the request text>"}}. Splitting creates new projects and a shared parent and is planned by a separate pass; here you only identify the single project being split.
 
 Rules:
 - Reference memories ONLY by their [N] candidate number. Never invent numbers.
 - For a merge, keep and drop must be different memories.
 - For consolidate, kind is one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage. name is a short kebab-case identifier. Write a genuine unified body from the sources; do not invent facts beyond them.
+- For reproject, "to" must be one of the existing project slugs. Creating a new project is a split, not a reproject.
 - Propose only what the request asks for. If nothing applies, return {"ops":[]}.
-- Output ONLY a JSON object of the form {"ops":[...]} -- no prose, no markdown code fences.`
+- Output ONLY a JSON object -- either {"split":{...}} OR {"ops":[...]} -- with no prose and no markdown code fences.`
 
-// requestUserPrompt renders the request plus a numbered candidate list. The
-// model references memories by their [N] index, resolved back to ids server-side.
-func requestUserPrompt(text string, mems []core.Memory) string {
+// requestUserPrompt renders the request, the existing project slugs (so moves and
+// splits reference real projects), and a numbered candidate list. The model
+// references memories by their [N] index, resolved back to ids server-side.
+func requestUserPrompt(text string, mems []core.Memory, projects []core.Project) string {
 	var b strings.Builder
 	b.WriteString("Request:\n")
 	b.WriteString(text)
+	if len(projects) > 0 {
+		b.WriteString("\n\nExisting projects (use these exact slugs for a reproject; any other name would be a new project = a split):\n")
+		for _, p := range projects {
+			fmt.Fprintf(&b, "- %s\n", p.Slug)
+		}
+	}
 	b.WriteString("\n\nCandidate memories (reference by [N]):\n")
 	for i, m := range mems {
 		fmt.Fprintf(&b, "[%d] %s (%s, %s) -- %s\n", i+1, m.Name, projectLabel(m.Project), m.Kind, m.Description)
@@ -183,11 +263,12 @@ func projectLabel(project string) string {
 // reqOp is one operation the interpreter emits. Candidate references are 1-based
 // indices into the candidate list, so 0 is a clean "absent" sentinel.
 type reqOp struct {
-	Op     string `json:"op"`     // "merge" | "archive" | "consolidate"
+	Op     string `json:"op"`     // "merge" | "archive" | "consolidate" | "reproject"
 	Keep   int    `json:"keep"`   // merge: candidate to retain
 	Drop   int    `json:"drop"`   // merge: candidate to fold into keep
-	Target int    `json:"target"` // archive: candidate to retire
-	Reason string `json:"reason"` // archive rationale
+	Target int    `json:"target"` // archive/reproject: candidate to retire/move
+	To     string `json:"to"`     // reproject: destination project slug
+	Reason string `json:"reason"` // archive/reproject rationale
 
 	// consolidate: a new unified memory written from several sources.
 	Name        string `json:"name"`
@@ -197,8 +278,17 @@ type reqOp struct {
 	Sources     []int  `json:"sources"`
 }
 
+// reqSplit is the top-level split directive: the interpreter returns it (instead
+// of ops) when the request is to split one project into new children. The general
+// request only routes it to gardener_split; it never plans the split itself.
+type reqSplit struct {
+	Source      string `json:"source"`      // project slug to split
+	Instruction string `json:"instruction"` // the split ask, forwarded to gardener_split
+}
+
 type reqPlan struct {
-	Ops []reqOp `json:"ops"`
+	Split *reqSplit `json:"split"` // set => a recognized split; ops is ignored
+	Ops   []reqOp   `json:"ops"`
 }
 
 // parseRequestPlan extracts the {"ops":[...]} object from a completion, tolerating
@@ -236,8 +326,27 @@ func stripCodeFence(s string) string {
 // proposal (kind, dedup key, payload). A non-empty skip note means the op was
 // invalid and is dropped rather than fabricated. Keys match the gardener's own
 // passes (mergeKey / archive:<id>) so a request shares dedup state with them.
-func mapRequestOp(op reqOp, candidates []core.Memory, text string) (kind, key string, payload map[string]any, skip string) {
+func mapRequestOp(op reqOp, candidates []core.Memory, text string, known map[string]bool) (kind, key string, payload map[string]any, skip string) {
 	switch op.Op {
+	case store.ProposalReproject:
+		m, ok := candidateAt(candidates, op.Target)
+		if !ok {
+			return "", "", nil, fmt.Sprintf("reproject references memory #%d, which is not in the candidate list", op.Target)
+		}
+		to := core.Slugify(strings.TrimSpace(op.To))
+		if to == "" {
+			return "", "", nil, fmt.Sprintf("reproject of %s is missing a destination project", m.Name)
+		}
+		if !known[to] {
+			return "", "", nil, fmt.Sprintf("reproject target %q is not an existing project -- create it first, or split the source project", to)
+		}
+		if m.Project == to {
+			return "", "", nil, fmt.Sprintf("%s is already in %s", m.Name, projectLabel(to))
+		}
+		return store.ProposalReproject, "reproject:" + m.ID, map[string]any{
+			"id": m.ID, "name": m.Name, "from": m.Project, "to": to,
+			"rationale": strings.TrimSpace(op.Reason), "source": "request", "request_text": text,
+		}, ""
 	case store.ProposalMerge:
 		keep, ok := candidateAt(candidates, op.Keep)
 		if !ok {
@@ -347,6 +456,9 @@ func requestSummary(res RequestResult) string {
 	}
 	if n := res.ByKind[store.ProposalConsolidate]; n > 0 {
 		parts = append(parts, fmt.Sprintf("%d consolidate", n))
+	}
+	if n := res.ByKind[store.ProposalReproject]; n > 0 {
+		parts = append(parts, fmt.Sprintf("%d move", n))
 	}
 	return "created " + strings.Join(parts, ", ") + " proposal(s)"
 }

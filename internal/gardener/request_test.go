@@ -47,6 +47,95 @@ func newRequestGardener(t *testing.T, chatOut string) (context.Context, *sql.DB,
 	return ctx, db, g
 }
 
+// newReorgGardener builds a gardener over a fresh, empty store (no seeded
+// memories) and returns the manager too, so a test can seed project-scoped
+// memories and projects itself. chatOut empty => no chat client.
+func newReorgGardener(t *testing.T, chatOut string) (context.Context, *sql.DB, *files.Manager, *Service) {
+	t.Helper()
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	mgr, err := files.NewManager(dir, db, slog.Default())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = mgr.Close() })
+
+	var chat llm.Chat
+	if chatOut != "" {
+		chat = fakeChat{out: chatOut}
+	}
+	g := New(db, mgr, nil, chat, events.NewRecorder(db), Config{}, slog.Default())
+	return ctx, db, mgr, g
+}
+
+func TestRequest_ReprojectMovesToExistingProject(t *testing.T) {
+	ctx, db, mgr, g := newReorgGardener(t,
+		`{"ops":[{"op":"reproject","target":1,"to":"arctop-ios","reason":"iOS-specific"}]}`)
+	now := time.Now().UTC()
+	writeMem(t, mgr, "ios-dfu", "arctop-app", "1", core.KindRunbook, now, "the iOS DFU flow")
+	_, err := store.EnsureProject(ctx, db, "arctop-ios", "Arctop iOS")
+	require.NoError(t, err)
+
+	res, err := g.Request(ctx, "the ios-dfu memory belongs in arctop-ios", "")
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Total)
+	require.Equal(t, 1, res.ByKind[store.ProposalReproject])
+	require.Empty(t, res.Skipped)
+
+	rps, err := store.PendingProposals(ctx, db, store.ProposalReproject)
+	require.NoError(t, err)
+	require.Len(t, rps, 1)
+	require.Equal(t, "ios-dfu", rps[0].Payload["name"])
+	require.Equal(t, "arctop-app", rps[0].Payload["from"])
+	require.Equal(t, "arctop-ios", rps[0].Payload["to"])
+	require.Equal(t, "request", rps[0].Payload["source"], "request-originated moves are tagged")
+}
+
+func TestRequest_ReprojectToUnknownProjectIsSkipped(t *testing.T) {
+	ctx, db, mgr, g := newReorgGardener(t,
+		`{"ops":[{"op":"reproject","target":1,"to":"brand-new","reason":"x"}]}`)
+	writeMem(t, mgr, "thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "x")
+
+	res, err := g.Request(ctx, "move thing into a project that does not exist", "")
+	require.NoError(t, err)
+	require.Equal(t, 0, res.Total, "moving into a non-existent project is a split, not a reproject")
+	require.Len(t, res.Skipped, 1)
+	require.Contains(t, res.Skipped[0], "not an existing project")
+
+	all, err := store.PendingProposals(ctx, db, "")
+	require.NoError(t, err)
+	require.Empty(t, all)
+}
+
+func TestRequest_RecognizesSplitAndRoutes(t *testing.T) {
+	ctx, db, mgr, g := newReorgGardener(t,
+		`{"split":{"source":"arctop-app","instruction":"ios and android"}}`)
+	writeMem(t, mgr, "ios-thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "iOS only")
+
+	res, err := g.Request(ctx, "split arctop-app into arctop-ios and arctop-android", "")
+	require.NoError(t, err)
+	require.Equal(t, "arctop-app", res.SplitSource, "the source project is recognized and returned")
+	require.NotEmpty(t, res.Guidance)
+	require.Contains(t, res.Guidance, "gardener_split", "guidance routes to the split tool")
+	require.Equal(t, 0, res.Total, "routing a split creates no proposals itself")
+
+	all, err := store.PendingProposals(ctx, db, "")
+	require.NoError(t, err)
+	require.Empty(t, all, "the general request never plans a split -- it only routes")
+}
+
+func TestRequest_SplitUnknownSourceGivesGuidance(t *testing.T) {
+	ctx, _, mgr, g := newReorgGardener(t, `{"split":{"source":"ghost-project"}}`)
+	writeMem(t, mgr, "thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "x")
+
+	res, err := g.Request(ctx, "split the ghost project apart", "")
+	require.NoError(t, err)
+	require.Empty(t, res.SplitSource, "an unknown source is not routed")
+	require.Contains(t, res.Guidance, "not a known project")
+}
+
 func TestRequest_CreatesMergeAndArchive(t *testing.T) {
 	ctx, db, g := newRequestGardener(t,
 		`{"ops":[{"op":"merge","keep":1,"drop":2},{"op":"archive","target":3,"reason":"obsolete"}]}`)
