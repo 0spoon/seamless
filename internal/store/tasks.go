@@ -39,10 +39,13 @@ type rowQuerier interface {
 
 // TaskPatch is the set of mutable fields UpdateTask may change; nil fields are
 // left untouched. AddDependsOn edges are added (existing edges are kept).
+// ProjectSlug reassigns the task to another project (used when a split moves a
+// project's open work to a child); the holder-lock still applies.
 type TaskPatch struct {
 	Status       *core.TaskStatus
 	Title        *string
 	Body         *string
+	ProjectSlug  *string
 	AddDependsOn []string
 }
 
@@ -118,6 +121,9 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, act
 	if patch.Body != nil {
 		t.Body = *patch.Body
 	}
+	if patch.ProjectSlug != nil {
+		t.ProjectSlug = *patch.ProjectSlug
+	}
 	if patch.Status != nil && *patch.Status != t.Status {
 		t.Status = *patch.Status
 		if t.Status.Closed() {
@@ -142,10 +148,10 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, act
 		leaseAt = core.FormatTime(*t.LeaseExpiresAt)
 	}
 	if _, err := tx.ExecContext(ctx, `
-		UPDATE tasks SET title = ?, body = ?, status = ?, updated_at = ?, closed_at = ?,
+		UPDATE tasks SET title = ?, body = ?, project_slug = ?, status = ?, updated_at = ?, closed_at = ?,
 		                 claimed_by = ?, lease_expires_at = ?
 		 WHERE id = ?`,
-		t.Title, t.Body, string(t.Status), core.FormatTime(t.UpdatedAt), closedAt,
+		t.Title, t.Body, t.ProjectSlug, string(t.Status), core.FormatTime(t.UpdatedAt), closedAt,
 		t.ClaimedBy, leaseAt, t.ID); err != nil {
 		return core.Task{}, fmt.Errorf("store.UpdateTask: update: %w", err)
 	}

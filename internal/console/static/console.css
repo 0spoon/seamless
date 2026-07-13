@@ -848,6 +848,27 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .req-card.is-busy .field, .req-card.is-busy .btn, .req-card.is-busy .req-scope { opacity: .6; pointer-events: none; }
 .notice { background: var(--brand-soft); color: var(--brand); padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--text-sm); margin-bottom: 16px; }
 
+/* --- Gardener: split request + plan-grouped review ------------------------- */
+/* Two side-by-side request cards (ask + split); stacks on narrow viewports. */
+.req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+.req-grid .req-card { margin-bottom: 0; }
+@media (max-width: 860px) { .req-grid { grid-template-columns: 1fr; } }
+
+/* A plan batch (a split's setup + its reproject cards) reviewed as a unit. */
+.plan-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px; background: var(--surface-2); }
+.plan-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.plan-title { display: inline-flex; align-items: baseline; gap: 8px; }
+.plan-slug { font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-primary); }
+.plan-head .sub { color: var(--muted); font-size: var(--text-xs); }
+
+/* Reproject "from -> to" and the inline retarget control. */
+.move-arrow { display: inline-flex; align-items: center; gap: 6px; }
+.move-arrow .arrow { color: var(--faint); }
+.retarget { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+.retarget-lbl { color: var(--muted); font-size: var(--text-xs); }
+.retarget .req-scope { margin-right: 0; }
+.split-targets { flex-wrap: wrap; gap: 6px; }
+
 /* ===========================================================================
    PEEK PANEL -- slide-over drawer for entity detail (see layout.html + peek.go)
    A fixed right drawer that fetches an entity's server-rendered fragment

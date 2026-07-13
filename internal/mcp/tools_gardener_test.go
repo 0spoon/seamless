@@ -80,3 +80,18 @@ func TestGardenerRequest_NoChatIsToolError(t *testing.T) {
 	require.NoError(t, err, "transport succeeds")
 	require.True(t, res.IsError, "a gardener with no chat client returns a tool error")
 }
+
+// TestGardenerSplit_NoChatIsToolError exercises the project-split tool on a
+// server whose gardener has no chat client: it must surface a tool error rather
+// than create any projects or proposals.
+func TestGardenerSplit_NoChatIsToolError(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "gardener_split", Arguments: map[string]any{"source": "arctop-app", "instruction": "split into ios and android"},
+	}})
+	require.NoError(t, err, "transport succeeds")
+	require.True(t, res.IsError, "a gardener with no chat client returns a tool error")
+}

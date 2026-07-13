@@ -68,6 +68,7 @@ func tasksUpdateTool() mcp.Tool {
 		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("new status")),
 		mcp.WithString("title", mcp.Description("new title")),
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
+		mcp.WithString("project", mcp.Description("reassign the task to another project slug (used when a split moves a project's open work to a child)")),
 		mcp.WithString("add_depends_on", mcp.Description("comma-separated task ids to add as blockers")),
 	)
 }
@@ -92,10 +93,14 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if body, ok := firstStringArg(req.GetArguments(), "body", "content", "text"); ok {
 		patch.Body = &body
 	}
+	if req.GetArguments()["project"] != nil {
+		project := normalizeProject(argString(req, "project"))
+		patch.ProjectSlug = &project
+	}
 	patch.AddDependsOn = parseCommaList(argString(req, "add_depends_on"))
 
-	if patch.Status == nil && patch.Title == nil && patch.Body == nil && len(patch.AddDependsOn) == 0 {
-		return errResult("tasks_update", errors.New("nothing to update: pass status, title, body, or add_depends_on"))
+	if patch.Status == nil && patch.Title == nil && patch.Body == nil && patch.ProjectSlug == nil && len(patch.AddDependsOn) == 0 {
+		return errResult("tasks_update", errors.New("nothing to update: pass status, title, body, project, or add_depends_on"))
 	}
 	updated, err := store.UpdateTask(ctx, s.cfg.DB, id, patch, s.boundSession(ctx), time.Now().UTC())
 	if err != nil {

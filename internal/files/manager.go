@@ -265,6 +265,24 @@ func (m *Manager) WriteMemory(ctx context.Context, mem core.Memory) (core.Memory
 	return written, nil
 }
 
+// MoveMemory relocates a memory to another project, keeping its ULID. It mirrors
+// the note-move recipe (drop the old file+index row, then write under the new
+// project) so the file_path UNIQUE index never collides and the memory re-indexes
+// with its new project by stable id. The memory keeps its name; inbound [[name]]
+// wiki-links resolve globally by bare name, so a move needs no link rewrite. The
+// caller is responsible for bumping Updated. It is a no-op when toProject already
+// equals the memory's project (idempotent for a retried apply).
+func (m *Manager) MoveMemory(ctx context.Context, mem core.Memory, toProject string) (core.Memory, error) {
+	if mem.Project == toProject {
+		return m.WriteMemory(ctx, mem) // already home; re-write refreshes the index
+	}
+	if err := m.Remove(ctx, MemoryRelPath(mem.Project, mem.Name)); err != nil {
+		return core.Memory{}, fmt.Errorf("files.MoveMemory: drop old path: %w", err)
+	}
+	mem.Project = toProject
+	return m.WriteMemory(ctx, mem)
+}
+
 // WriteNote writes a note through the Store and indexes it synchronously.
 func (m *Manager) WriteNote(ctx context.Context, note core.Note) (core.Note, error) {
 	m.suppress(NoteRelPath(note.Project, note.Slug))

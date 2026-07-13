@@ -127,6 +127,32 @@ func TestBriefingSiblingProjects(t *testing.T) {
 	require.Contains(t, ids, "01A") // the constraint memory, not the sibling findings
 }
 
+func TestBriefingInjectsParentMemories(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/work/ios":"arctop-ios"}`))
+
+	// arctop-ios is a child of the shared parent arctop-mobile-apps.
+	_, err := store.EnsureProject(ctx, db, "arctop-ios", "Arctop iOS")
+	require.NoError(t, err)
+	_, err = store.EnsureProject(ctx, db, "arctop-mobile-apps", "Arctop Mobile")
+	require.NoError(t, err)
+	require.NoError(t, store.SetProjectParent(ctx, db, "arctop-ios", "arctop-mobile-apps", time.Now().UTC()))
+
+	insMem(t, db, "01IOS", "gotcha", "ios-only-thing", "iOS specific pitfall", "arctop-ios")
+	insMem(t, db, "01SHARED", "reference", "shared-account-flow", "cross-platform account flow", "arctop-mobile-apps")
+	insMem(t, db, "01AND", "gotcha", "android-only-thing", "Android specific pitfall", "arctop-android")
+
+	svc := New(db, nil, budgets(), nil)
+	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/ios", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, b, "ios-only-thing", "the child's own memory surfaces")
+	require.Contains(t, b, "shared-account-flow", "the shared parent's memory is injected into the child briefing")
+	require.NotContains(t, b, "android-only-thing", "a sibling's platform-specific memory is NOT injected")
+	require.Subset(t, ids, []string{"01IOS", "01SHARED"})
+	require.NotContains(t, ids, "01AND")
+}
+
 func TestBriefingBudgetDropsTail(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

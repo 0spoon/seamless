@@ -39,6 +39,10 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyDigest(ctx, p, now)
 	case store.ProposalConsolidate:
 		result, err = s.applyConsolidate(ctx, p, now)
+	case store.ProposalReproject:
+		result, err = s.applyReproject(ctx, p, now)
+	case store.ProposalSplit:
+		result, err = s.applySplit(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}
@@ -206,6 +210,119 @@ func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now ti
 	}, nil
 }
 
+// applyReproject relocates a memory to another project. Unlike archive/merge this
+// is a relocation, not an invalidation: the memory keeps its ULID and body and
+// stays active, only its project (and file path) change. It is idempotent -- a
+// memory already at the target is a success, so a retry after a partial apply
+// converges. A name already taken by a different active memory in the target is a
+// hard error (the proposal stays pending) so the owner resolves the clash.
+func (s *Service) applyReproject(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
+	to := payloadString(p.Payload, "to")
+	if to == "" {
+		return nil, fmt.Errorf("reproject proposal missing target project")
+	}
+	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
+	if err != nil {
+		return nil, err
+	}
+	from := mem.Project
+	if from == to {
+		// Already relocated (a retry, or a no-op target): nothing to do.
+		return map[string]any{"moved": lifecycle.MemoryRef(to, mem.Name), "from": from, "to": to, "noop": true}, nil
+	}
+	if clash, found, cerr := store.MemoryByName(ctx, s.db, to, mem.Name); cerr != nil {
+		return nil, cerr
+	} else if found && clash.ID != mem.ID {
+		return nil, fmt.Errorf("target project %q already has an active memory named %q", to, mem.Name)
+	}
+	mem.Updated = now
+	moved, err := s.files.MoveMemory(ctx, mem, to)
+	if err != nil {
+		return nil, err
+	}
+	s.recordMemory(ctx, core.EventMemoryMoved, moved, map[string]any{
+		"name": moved.Name, "from": from, "to": to, "by": "gardener",
+	})
+	return map[string]any{"moved": lifecycle.MemoryRef(to, moved.Name), "from": from, "to": to}, nil
+}
+
+// applySplit sets up the topology for a project split: it creates the child and
+// shared-parent projects, links them as a family, points each child at the shared
+// parent, and (optionally) retires the emptied source. It moves no memories --
+// each memory is a separate reproject proposal in the same plan, so the owner can
+// retarget or veto per memory. Every step is idempotent (ensure/add/set are
+// upserts), so a retry after a partial apply converges.
+func (s *Service) applySplit(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
+	source := payloadString(p.Payload, "source_project")
+	shared := payloadMap(p.Payload, "shared")
+	sharedSlug := payloadString(shared, "slug")
+
+	// Collect the target project slugs to create: each child plus the shared parent.
+	type projSpec struct{ slug, label string }
+	var specs []projSpec
+	for _, c := range payloadList(p.Payload, "children") {
+		if slug := payloadString(c, "slug"); slug != "" {
+			specs = append(specs, projSpec{slug, payloadString(c, "label")})
+		}
+	}
+	if sharedSlug != "" {
+		specs = append(specs, projSpec{sharedSlug, payloadString(shared, "label")})
+	}
+	if len(specs) == 0 {
+		return nil, fmt.Errorf("split proposal has no child or shared projects")
+	}
+
+	created := make([]string, 0, len(specs))
+	familyMembers := make([]string, 0, len(specs))
+	for _, sp := range specs {
+		if _, err := store.EnsureProject(ctx, s.db, sp.slug, sp.label); err != nil {
+			return nil, fmt.Errorf("ensure project %q: %w", sp.slug, err)
+		}
+		created = append(created, sp.slug)
+		familyMembers = append(familyMembers, sp.slug)
+	}
+
+	// Link the new projects as a family so a child's briefing surfaces its
+	// siblings' recent findings; name it after the shared parent (or the source).
+	family := payloadString(p.Payload, "family")
+	if family == "" {
+		family = sharedSlug
+	}
+	if family == "" {
+		family = source + "-split"
+	}
+	if _, err := store.AddFamilyMembers(ctx, s.db, family, familyMembers); err != nil {
+		return nil, fmt.Errorf("link family: %w", err)
+	}
+
+	// Point each child at the shared parent, whose active memories are injected
+	// into the child's briefing.
+	parented := make([]string, 0)
+	if sharedSlug != "" {
+		for _, sp := range specs {
+			if sp.slug == sharedSlug {
+				continue
+			}
+			if err := store.SetProjectParent(ctx, s.db, sp.slug, sharedSlug, now); err != nil {
+				return nil, fmt.Errorf("parent %q: %w", sp.slug, err)
+			}
+			parented = append(parented, sp.slug)
+		}
+	}
+
+	retired := ""
+	if payloadBool(p.Payload, "retire_source") && source != "" {
+		if err := store.RetireProject(ctx, s.db, source, now); err != nil {
+			return nil, fmt.Errorf("retire %q: %w", source, err)
+		}
+		retired = source
+	}
+
+	return map[string]any{
+		"created": created, "family": family, "parented": parented, "retired": retired,
+	}, nil
+}
+
 // loadActiveMemory resolves a memory id to its full on-disk content, erroring if
 // the memory no longer exists or is already inactive (archived/superseded) -- in
 // either case the proposal's effect no longer applies.
@@ -259,6 +376,16 @@ func payloadMap(m map[string]any, key string) map[string]any {
 		return v
 	}
 	return nil
+}
+
+// payloadBool reads a boolean field from a proposal payload (false if absent or
+// not a bool).
+func payloadBool(m map[string]any, key string) bool {
+	if m == nil {
+		return false
+	}
+	v, _ := m[key].(bool)
+	return v
 }
 
 // payloadList reads an array-of-objects field from a proposal payload (nil if

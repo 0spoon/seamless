@@ -149,6 +149,146 @@ func TestApplyConsolidate_RetryIsIdempotent(t *testing.T) {
 	require.Equal(t, 1, n, "retry must not create a duplicate unified memory")
 }
 
+func TestApplyReproject_MovesMemoryToNewProject(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "ios-dfu", "arctop-app", "1", core.KindRunbook, now, "the iOS DFU flow")
+	mem, _, err := store.MemoryByName(ctx, g.db, "arctop-app", "ios-dfu")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalReproject, map[string]any{
+		"key": "reproject:" + mem.ID, "id": mem.ID, "name": "ios-dfu",
+		"from": "arctop-app", "to": "arctop-ios", "rationale": "iOS-specific",
+	})
+	require.NoError(t, err)
+
+	res, err := g.Apply(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, "applied", res["status"])
+
+	// The memory now lives in arctop-ios (same id), and is gone from arctop-app.
+	moved, found, err := store.MemoryByName(ctx, g.db, "arctop-ios", "ios-dfu")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, mem.ID, moved.ID, "reproject keeps the ULID")
+	require.True(t, moved.Active(), "a move is a relocation, not an invalidation")
+	_, found, err = store.MemoryByName(ctx, g.db, "arctop-app", "ios-dfu")
+	require.NoError(t, err)
+	require.False(t, found, "the memory left the source project")
+
+	// The file moved on disk under the new project directory.
+	require.NoError(t, err)
+	idx, _, err := store.MemoryByID(ctx, g.db, mem.ID)
+	require.NoError(t, err)
+	require.Equal(t, "memory/arctop-ios/ios-dfu.md", idx.FilePath)
+}
+
+// TestApplyReproject_RetryIsIdempotent drives applyReproject twice: a memory
+// already at the target is a success (no-op), so a retry after a partial apply
+// converges rather than erroring.
+func TestApplyReproject_RetryIsIdempotent(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "thing", "arctop-app", "1", core.KindGotcha, now, "x")
+	mem, _, err := store.MemoryByName(ctx, g.db, "arctop-app", "thing")
+	require.NoError(t, err)
+	p := store.Proposal{Payload: map[string]any{"id": mem.ID, "name": "thing", "from": "arctop-app", "to": "arctop-ios"}}
+
+	_, err = g.applyReproject(ctx, p, now)
+	require.NoError(t, err)
+	res, err := g.applyReproject(ctx, p, now.Add(time.Minute))
+	require.NoError(t, err, "a second apply converges rather than erroring")
+	require.Equal(t, true, res["noop"], "the retry is a no-op")
+
+	all, err := store.AllActiveMemories(ctx, g.db)
+	require.NoError(t, err)
+	n := 0
+	for _, m := range all {
+		if m.Name == "thing" {
+			n++
+		}
+	}
+	require.Equal(t, 1, n, "retry must not duplicate the memory")
+}
+
+func TestApplyReproject_NameClashInTargetErrors(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "dupe", "arctop-app", "1", core.KindGotcha, now, "source copy")
+	writeMem(t, mgr, "dupe", "arctop-ios", "2", core.KindGotcha, now, "target already has this name")
+	mem, _, err := store.MemoryByName(ctx, g.db, "arctop-app", "dupe")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalReproject, map[string]any{
+		"key": "reproject:" + mem.ID, "id": mem.ID, "name": "dupe", "from": "arctop-app", "to": "arctop-ios",
+	})
+	require.NoError(t, err)
+
+	_, err = g.Apply(ctx, p.ID)
+	require.Error(t, err, "a name clash in the target project blocks the move")
+	got, _, err := store.ProposalByID(ctx, g.db, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalPending, got.Status, "the proposal stays pending for the owner to resolve")
+}
+
+func TestApplySplit_CreatesProjectsFamilyAndParents(t *testing.T) {
+	g, _, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	// The source needs a projects row for retirement to have a target.
+	_, err := store.EnsureProject(ctx, g.db, "arctop-app", "Arctop App")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalSplit, map[string]any{
+		"key": "split:arctop-app", "source_project": "arctop-app", "retire_source": true,
+		"family": "arctop-mobile-apps", "plan": "split-arctop-app",
+		"children": []any{
+			map[string]any{"slug": "arctop-ios", "label": "Arctop iOS"},
+			map[string]any{"slug": "arctop-android", "label": "Arctop Android"},
+		},
+		"shared": map[string]any{"slug": "arctop-mobile-apps", "label": "Arctop Mobile"},
+	})
+	require.NoError(t, err)
+
+	res, err := g.Apply(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, "applied", res["status"])
+
+	// All three projects exist; children point at the shared parent.
+	for _, slug := range []string{"arctop-ios", "arctop-android", "arctop-mobile-apps"} {
+		_, found, err := store.ProjectBySlug(ctx, g.db, slug)
+		require.NoError(t, err)
+		require.True(t, found, slug+" should have been created")
+	}
+	for _, child := range []string{"arctop-ios", "arctop-android"} {
+		pr, _, err := store.ProjectBySlug(ctx, g.db, child)
+		require.NoError(t, err)
+		require.Equal(t, "arctop-mobile-apps", pr.ParentSlug, child+" is parented to the shared project")
+	}
+
+	// The three are linked as a family (siblings surface each other's findings).
+	sibs, err := store.SiblingProjects(ctx, g.db, "arctop-ios")
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"arctop-android", "arctop-mobile-apps"}, sibs)
+
+	// The source is retired (flagged, not deleted).
+	src, found, err := store.ProjectBySlug(ctx, g.db, "arctop-app")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.True(t, src.Retired(), "the emptied source is retired")
+
+	// A second apply of the same setup converges (all steps are idempotent).
+	_, err = g.applySplit(ctx, p, now.Add(time.Minute))
+	require.NoError(t, err, "re-running the split setup is idempotent")
+}
+
 func TestApplyDigest_WritesNote(t *testing.T) {
 	g, _, cx := newApplyFixture(t)
 	ctx := cx()
