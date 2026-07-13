@@ -7,30 +7,61 @@
   </div>
 </div>
 
+<div class="win-tabs win-tabs-page">
+  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
+</div>
+
 <div class="card section">
-  <h2>Read-after-inject funnel</h2>
+  <h2>Memory reach <span class="h2-meta">{{.WindowLabel}}</span></h2>
   {{if .Injections}}
   <div class="funnel">
     <div class="step"><span class="v">{{.Injections}}</span><span class="l">Injections</span></div>
     <div class="arrow">&rarr;</div>
-    <div class="step"><span class="v brand">{{.Reads}}</span><span class="l">Reads</span></div>
+    <div class="step"><span class="v brand">{{.MemoriesSurfaced}}</span><span class="l">Memories surfaced</span></div>
     <div class="funnel-bar">
-      <div class="track"><span style="width:{{.ReadRate}}%"></span></div>
-      <span class="cap">{{.ReadRate}}% of injected memories were read back by an agent</span>
+      <div class="track"><span style="width:{{.ReachRate}}%"></span></div>
+      <span class="cap">{{.ReachRate}}% of {{.ActiveMemories}} active memories surfaced &middot; {{.SessionsReached}} sessions reached</span>
     </div>
   </div>
-  {{else}}<div class="empty">No retrieval yet</div>{{end}}
+  {{else}}<div class="empty">No injections in this window</div>{{end}}
 </div>
 
 <div class="grid-2 section">
   <div class="card">
-    <h2>By kind <span class="h2-meta">inj vs read</span></h2>
+    <h2>By kind <span class="h2-meta">injections &middot; memories</span></h2>
     {{if .ByKind}}{{kindBars .ByKind}}{{else}}<div class="empty">No retrieval activity yet</div>{{end}}
   </div>
 
   <div class="card">
-    <h2>Injection trend &middot; 14d{{if .TrendMax}} <span class="h2-meta">peak {{.TrendMax}}</span>{{end}}</h2>
-    {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in the last 14 days</div>{{end}}
+    <h2>Injection trend &middot; {{.WindowLabel}}{{if .TrendMax}} <span class="h2-meta">peak {{.TrendMax}}</span>{{end}}</h2>
+    {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
+  </div>
+</div>
+
+<div class="section">
+  <div class="card">
+    <h2>Reach by project <span class="h2-meta">surfaced / active memories</span></h2>
+    {{if .ByProject}}
+    <table>
+      <thead><tr><th>Project</th><th>Reach</th><th class="num">Surfaced</th><th class="num">Active</th><th class="num">Inj</th></tr></thead>
+      <tbody>
+        {{range .ByProject}}
+        <tr>
+          <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<span class="muted">global</span>{{end}}</td>
+          <td>
+            <div class="reach-cell">
+              <div class="track"><span style="width:{{.ReachRate}}%"></span></div>
+              <span class="rp">{{.ReachRate}}%</span>
+            </div>
+          </td>
+          <td class="num">{{.Surfaced}}</td>
+          <td class="num">{{.Active}}</td>
+          <td class="num">{{.Injects}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">No active memories</div>{{end}}
   </div>
 </div>
 
@@ -39,14 +70,14 @@
     <h2>Most injected</h2>
     {{if .TopInjected}}
     <table>
-      <thead><tr><th>Memory</th><th>Kind</th><th class="num">Inj</th><th class="num">Read</th></tr></thead>
+      <thead><tr><th>Memory</th><th>Kind</th><th class="num">Inj</th><th class="num">Sessions</th></tr></thead>
       <tbody>
         {{range .TopInjected}}
         <tr>
           <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="num">{{.Injects}}</td>
-          <td class="num">{{.Reads}}</td>
+          <td class="num">{{.Sessions}}</td>
         </tr>
         {{end}}
       </tbody>

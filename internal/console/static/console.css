@@ -769,6 +769,13 @@ a.link-act { color: var(--muted); }
 a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .link-act.danger:hover { color: var(--danger); text-decoration-color: var(--danger); }
 
+/* --- Retrieval-health window selector (Overview card + Retrieval page) ------- */
+.win-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
+.win-tabs-page { margin: 0 0 20px; }
+.win-tab { display: inline-flex; align-items: center; padding: 4px 12px; font-size: var(--text-xs); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); text-decoration: none; white-space: nowrap; transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out); }
+.win-tab:hover { color: var(--ink); border-color: var(--border-strong); }
+.win-tab.active { color: var(--brand); background: var(--brand-soft); border-color: transparent; }
+
 /* --- Retrieval: funnel first ------------------------------------------------ */
 .funnel { display: grid; grid-template-columns: repeat(3, auto) minmax(0, 1fr); gap: 30px; align-items: center; padding: 4px 4px 0; }
 .funnel .step { display: flex; flex-direction: column; gap: 3px; }
@@ -782,6 +789,12 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .funnel-bar .cap { font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
 @media (max-width: 860px) { .funnel { grid-template-columns: repeat(3, auto); } .funnel-bar { grid-column: 1 / -1; } }
 
+/* Reach-by-project: an inline reach bar inside a table cell. */
+.reach-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
+.reach-cell .track { flex: 1; height: 7px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.reach-cell .track > span { display: block; height: 100%; background: var(--brand); border-radius: var(--radius-pill); transition: width var(--dur-slow) var(--ease-out); }
+.reach-cell .rp { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; min-width: 34px; text-align: right; }
+
 /* By-kind: paired injected/read bars (see kindBars in charts.go). */
 .kindbars { display: flex; flex-direction: column; gap: 13px; padding-top: 2px; }
 .kindbar { display: grid; grid-template-columns: 92px minmax(0, 1fr) 74px; gap: 12px; align-items: center; }
@@ -793,6 +806,7 @@ a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .kindbar .nums { font-size: var(--text-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .kindbar-legend { display: flex; gap: 16px; margin-top: 14px; font-size: var(--text-2xs); color: var(--muted); }
 .kindbar-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.kindbar-legend .kb-note { color: var(--faint); }
 .kindbar-legend i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
 
 /* Empty stale state collapses to a slim reassuring strip. */

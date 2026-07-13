@@ -10,31 +10,11 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// denseDays expands a sparse day series (store.InjectionsByDay omits empty days)
-// into a dense trailing-window of exactly n daily buckets ending today (UTC),
-// filling gaps with zero. A continuous series makes the area chart read as a
-// real trend rather than a lone point.
-func denseDays(sparse []store.DayCount, n int) []store.DayCount {
-	if n <= 0 {
-		return nil
-	}
-	byDay := make(map[string]int, len(sparse))
-	for _, d := range sparse {
-		byDay[d.Day] = d.Count
-	}
-	today := time.Now().UTC()
-	out := make([]store.DayCount, 0, n)
-	for i := n - 1; i >= 0; i-- {
-		day := today.AddDate(0, 0, -i).Format("2006-01-02")
-		out = append(out, store.DayCount{Day: day, Count: byDay[day]})
-	}
-	return out
-}
-
 // denseCoverageDays expands a sparse per-day coverage series (SessionCoverageByDay
 // omits days with no sessions) into a dense trailing-window of exactly n daily
-// buckets ending today (UTC). Missing days become zero-Total buckets, which the
-// trend chart renders as gaps (no sessions -> coverage undefined, not 0%).
+// buckets ending today (viewer-local, matching the store's local-day keys).
+// Missing days become zero-Total buckets, which the trend chart renders as gaps
+// (no sessions -> coverage undefined, not 0%).
 func denseCoverageDays(sparse []store.DayCoverage, n int) []store.DayCoverage {
 	if n <= 0 {
 		return nil
@@ -43,7 +23,7 @@ func denseCoverageDays(sparse []store.DayCoverage, n int) []store.DayCoverage {
 	for _, d := range sparse {
 		byDay[d.Day] = d
 	}
-	today := time.Now().UTC()
+	today := time.Now().Local()
 	out := make([]store.DayCoverage, 0, n)
 	for i := n - 1; i >= 0; i-- {
 		day := today.AddDate(0, 0, -i).Format("2006-01-02")
@@ -176,9 +156,10 @@ func kindLegend(items []kindCount) template.HTML {
 	return template.HTML(b.String())
 }
 
-// kindBars renders per-kind injected vs read bars for the Retrieval page,
-// widths normalized to the largest count in either column so pairs compare.
-func kindBars(rows []kindRate) template.HTML {
+// kindBars renders per-kind injection volume for the Retrieval page: one bar per
+// memory kind (width normalized to the busiest kind), annotated with the raw
+// injection count and how many distinct memories of that kind were surfaced.
+func kindBars(rows []store.KindReach) template.HTML {
 	if len(rows) == 0 {
 		return ""
 	}
@@ -187,17 +168,14 @@ func kindBars(rows []kindRate) template.HTML {
 		if r.Injects > maxV {
 			maxV = r.Injects
 		}
-		if r.Reads > maxV {
-			maxV = r.Reads
-		}
 	}
 	var b strings.Builder
 	b.WriteString(`<div class="kindbars">`)
 	for _, r := range rows {
-		fmt.Fprintf(&b, `<div class="kindbar"><span class="kind">%s</span><div class="bars"><div class="track"><span class="inj" style="width:%d%%"></span></div><div class="track"><span class="read" style="width:%d%%"></span></div></div><span class="nums">%d &rarr; %d</span></div>`,
-			template.HTMLEscapeString(r.Kind), percent(r.Injects, maxV), percent(r.Reads, maxV), r.Injects, r.Reads)
+		fmt.Fprintf(&b, `<div class="kindbar"><span class="kind">%s</span><div class="bars"><div class="track"><span class="inj" style="width:%d%%"></span></div></div><span class="nums">%d &middot; %d mem</span></div>`,
+			template.HTMLEscapeString(r.Kind), percent(r.Injects, maxV), r.Injects, r.Memories)
 	}
-	b.WriteString(`</div><div class="kindbar-legend"><span><i style="background:var(--brand)"></i> injected</span><span><i style="background:var(--ok)"></i> read</span></div>`)
+	b.WriteString(`</div><div class="kindbar-legend"><span><i style="background:var(--brand)"></i> injections</span><span class="kb-note">&middot; distinct memories surfaced</span></div>`)
 	return template.HTML(b.String())
 }
 
@@ -206,10 +184,11 @@ func kindBars(rows []kindRate) template.HTML {
 // ---------------------------------------------------------------------------
 
 // areaChart renders an injection trend as an SVG line + gradient fill with the
-// peak day flagged in coral, and up to three date ticks below. Points are
-// plotted by index (sparse days are fine). Empty input renders nothing.
-func areaChart(days []store.DayCount) template.HTML {
-	n := len(days)
+// peak bucket flagged in coral, and up to three ticks below. Points are plotted
+// by index; each carries its own pre-formatted (local-time) tick label. Empty
+// input renders nothing.
+func areaChart(points []store.TrendBucket) template.HTML {
+	n := len(points)
 	if n == 0 {
 		return ""
 	}
@@ -219,11 +198,11 @@ func areaChart(days []store.DayCount) template.HTML {
 	ph := h - padT - padB
 
 	maxV, peak := 1, 0
-	for i, d := range days {
-		if d.Count > maxV {
-			maxV = d.Count
+	for i, p := range points {
+		if p.Count > maxV {
+			maxV = p.Count
 		}
-		if d.Count > days[peak].Count {
+		if p.Count > points[peak].Count {
 			peak = i
 		}
 	}
@@ -236,12 +215,12 @@ func areaChart(days []store.DayCount) template.HTML {
 	y := func(v int) float64 { return padT + ph - (float64(v)/float64(maxV))*ph }
 
 	var line strings.Builder
-	for i, d := range days {
+	for i, p := range points {
 		cmd := "L"
 		if i == 0 {
 			cmd = "M"
 		}
-		fmt.Fprintf(&line, "%s%.1f %.1f ", cmd, x(i), y(d.Count))
+		fmt.Fprintf(&line, "%s%.1f %.1f ", cmd, x(i), y(p.Count))
 	}
 	area := line.String() + fmt.Sprintf("L%.1f %.1f L%.1f %.1f Z", x(n-1), padT+ph, x(0), padT+ph)
 
@@ -258,9 +237,9 @@ func areaChart(days []store.DayCount) template.HTML {
 	fmt.Fprintf(&b, `<path class="area-line" d="%s" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" pathLength="1" vector-effect="non-scaling-stroke"/>`, line.String())
 	// peak marker
 	fmt.Fprintf(&b, `<g class="area-peak"><line x1="%.1f" x2="%.1f" y1="%.1f" y2="%.1f" stroke="var(--pop)" stroke-width="1.5" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/><circle cx="%.1f" cy="%.1f" r="4" fill="var(--pop)" stroke="var(--surface)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></g>`,
-		x(peak), x(peak), y(days[peak].Count), padT+ph, x(peak), y(days[peak].Count))
+		x(peak), x(peak), y(points[peak].Count), padT+ph, x(peak), y(points[peak].Count))
 	b.WriteString(`</svg>`)
-	// date ticks: first / middle / last
+	// ticks: first / middle / last, using each bucket's own label
 	b.WriteString(`<div class="area-ticks">`)
 	ticks := []int{0}
 	if n > 2 {
@@ -270,7 +249,7 @@ func areaChart(days []store.DayCount) template.HTML {
 		ticks = append(ticks, n-1)
 	}
 	for _, i := range ticks {
-		fmt.Fprintf(&b, `<span>%s</span>`, template.HTMLEscapeString(fmtDay(days[i].Day)))
+		fmt.Fprintf(&b, `<span>%s</span>`, template.HTMLEscapeString(points[i].Label))
 	}
 	b.WriteString(`</div></div>`)
 	return template.HTML(b.String())

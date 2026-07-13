@@ -99,12 +99,14 @@ func TestSessionCoverageByDay(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 
+	// Days are bucketed in local time, so assert against the local-day keys.
+	day0, day1 := d0.Local().Format("2006-01-02"), d1.Local().Format("2006-01-02")
 	byDay := map[string]DayCoverage{}
 	for _, d := range got {
 		byDay[d.Day] = d
 	}
-	require.Equal(t, DayCoverage{Day: d0.Format("2006-01-02"), Total: 2, Covered: 1}, byDay[d0.Format("2006-01-02")])
-	require.Equal(t, DayCoverage{Day: d1.Format("2006-01-02"), Total: 1, Covered: 1}, byDay[d1.Format("2006-01-02")])
+	require.Equal(t, DayCoverage{Day: day0, Total: 2, Covered: 1}, byDay[day0])
+	require.Equal(t, DayCoverage{Day: day1, Total: 1, Covered: 1}, byDay[day1])
 }
 
 func TestSessionCoverageByDay_Empty(t *testing.T) {

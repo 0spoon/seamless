@@ -12,17 +12,20 @@
   <div class="ov-main">
 
     <div class="card">
-      <h2>Retrieval health <span class="h2-meta">injection activity &middot; 14d</span></h2>
+      <h2>Retrieval health <span class="h2-meta">memory reach &middot; {{.WindowLabel}}</span></h2>
+      <div class="win-tabs">
+        {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
+      </div>
       {{if .Injections}}
       <div class="hero-banner">
         <div class="hero-num">
-          <span class="big">{{.ReadRate}}%</span>
-          <span class="cap">Read-after-inject</span>
-          <span class="sub">{{.Reads}} of {{.Injections}} injections read</span>
+          <span class="big">{{.ReachRate}}%</span>
+          <span class="cap">Memory reach</span>
+          <span class="sub">{{.MemoriesSurfaced}} of {{.ActiveMemories}} memories surfaced &middot; {{.Injections}} injections across {{.SessionsReached}} sessions</span>
         </div>
-        {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in the last 14 days</div>{{end}}
+        {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
       </div>
-      {{else}}<div class="empty">No retrieval yet</div>{{end}}
+      {{else}}<div class="empty">No injections in this window</div>{{end}}
     </div>
 
     <div class="card">

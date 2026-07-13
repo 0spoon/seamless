@@ -17,6 +17,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
@@ -229,25 +230,50 @@ type kindCount struct {
 
 // overviewData is the pre-computed payload for the overview page.
 type overviewData struct {
-	Memories      int
-	MemByKind     []kindCount
-	Notes         int
-	SessActive    int
-	SessTotal     int
-	TasksOpen     int
-	TasksInProg   int
-	TasksDone     int
-	Injections    int
-	Reads         int
-	ReadRate      int              // reads as a % of injections
-	Trend         []store.DayCount // 14-day injection trend, for the area chart
-	TopInjected   []store.NamedCount
-	Pending       int
-	Recent        []eventRow
-	Coverage      int                 // % of sessions that retained knowledge
-	Covered       int                 // sessions with >=1 durable artifact
-	CoverageRows  []coverageRow       // per-channel breakdown (findings/memories/notes/trials)
-	CoverageTrend []store.DayCoverage // 14-day daily coverage rate, for the trend chart (nil = no in-window sessions)
+	Memories         int
+	MemByKind        []kindCount
+	Notes            int
+	SessActive       int
+	SessTotal        int
+	TasksOpen        int
+	TasksInProg      int
+	TasksDone        int
+	Injections       int                 // item-level injection volume in the window
+	MemoriesSurfaced int                 // distinct active memories surfaced (reach numerator)
+	ActiveMemories   int                 // total active memories (reach denominator)
+	ReachRate        int                 // MemoriesSurfaced / ActiveMemories, %
+	SessionsReached  int                 // distinct sessions that received an injection
+	Window           string              // selected retrieval window key ("24h"|"7d"|"30d"|"all")
+	WindowLabel      string              // human label for the selected window
+	Windows          []windowOption      // the window selector entries
+	Trend            []store.TrendBucket // injection trend over the window, for the area chart
+	TopInjected      []store.NamedCount
+	Pending          int
+	Recent           []eventRow
+	Coverage         int                 // % of sessions that retained knowledge
+	Covered          int                 // sessions with >=1 durable artifact
+	CoverageRows     []coverageRow       // per-channel breakdown (findings/memories/notes/trials)
+	CoverageTrend    []store.DayCoverage // 14-day daily coverage rate, for the trend chart (nil = no in-window sessions)
+}
+
+// windowOption is one entry in the retrieval-health window selector: a stable key
+// (the ?w= value), its display label, and whether it is the active selection.
+type windowOption struct {
+	Key    string
+	Label  string
+	Active bool
+}
+
+// windowLabels maps a retrieval window key to its selector label.
+var windowLabels = map[string]string{"24h": "24h", "7d": "7d", "30d": "30d", "all": "all time"}
+
+// windowOptions builds the ordered selector entries, flagging the active key.
+func windowOptions(active string) []windowOption {
+	out := make([]windowOption, 0, len(store.RetrievalWindowKeys))
+	for _, k := range store.RetrievalWindowKeys {
+		out = append(out, windowOption{Key: k, Label: windowLabels[k], Active: k == active})
+	}
+	return out
 }
 
 // coverageRow is one retention channel in the overview's "retained via"
@@ -288,7 +314,8 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	trend, err := store.InjectionsByDay(ctx, s.cfg.DB, 14)
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	report, err := store.BuildRetrievalReport(ctx, s.cfg.DB, win, 5)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -305,25 +332,30 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := overviewData{
-		Trend:         denseDays(trend, 14),
-		CoverageTrend: coverageTrendData(covTrend, 14),
-		Memories:      sum.Memories.Active,
-		MemByKind:     orderKinds(sum.Memories.ByKind),
-		Notes:         sum.Notes,
-		SessActive:    sum.Sessions[string(core.SessionActive)],
-		SessTotal:     sumValues(sum.Sessions),
-		TasksOpen:     sum.Tasks[string(core.TaskOpen)],
-		TasksInProg:   sum.Tasks[string(core.TaskInProgress)],
-		TasksDone:     sum.Tasks[string(core.TaskDone)],
-		Injections:    sum.Retrieval.Injections,
-		Reads:         sum.Retrieval.Reads,
-		ReadRate:      readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
-		TopInjected:   sum.Retrieval.TopInjected,
-		Pending:       sumValues(sum.GardenerPending),
-		Recent:        recent,
-		Coverage:      percent(cov.Covered, cov.Total),
-		Covered:       cov.Covered,
-		CoverageRows:  coverageRows(cov),
+		Trend:            report.Trend,
+		CoverageTrend:    coverageTrendData(covTrend, 14),
+		Memories:         sum.Memories.Active,
+		MemByKind:        orderKinds(sum.Memories.ByKind),
+		Notes:            sum.Notes,
+		SessActive:       sum.Sessions[string(core.SessionActive)],
+		SessTotal:        sumValues(sum.Sessions),
+		TasksOpen:        sum.Tasks[string(core.TaskOpen)],
+		TasksInProg:      sum.Tasks[string(core.TaskInProgress)],
+		TasksDone:        sum.Tasks[string(core.TaskDone)],
+		Injections:       report.Injected,
+		MemoriesSurfaced: report.MemoriesSurfaced,
+		ActiveMemories:   report.ActiveMemories,
+		ReachRate:        report.ReachRate,
+		SessionsReached:  report.SessionsReached,
+		Window:           win.Key,
+		WindowLabel:      win.Label,
+		Windows:          windowOptions(win.Key),
+		TopInjected:      sum.Retrieval.TopInjected,
+		Pending:          sumValues(sum.GardenerPending),
+		Recent:           recent,
+		Coverage:         percent(cov.Covered, cov.Total),
+		Covered:          cov.Covered,
+		CoverageRows:     coverageRows(cov),
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }

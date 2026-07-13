@@ -13,25 +13,25 @@ import (
 // gardener's default staleness horizon.
 const staleWindowDays = 90
 
-// kindRate is a per-kind retrieval row with a derived read-after-inject rate.
-type kindRate struct {
-	Kind     string `json:"kind"`
-	Injects  int    `json:"injects"`
-	Reads    int    `json:"reads"`
-	ReadRate int    `json:"readRate"`
-}
-
-// retrievalData is the payload for the Retrieval page.
+// retrievalData is the payload for the Retrieval page. The reach funnel, by-kind,
+// trend, and top lists are all computed over the selected window; Stale is
+// window-independent.
 type retrievalData struct {
-	Injections  int                `json:"injections"`
-	Reads       int                `json:"reads"`
-	ReadRate    int                `json:"readRate"`
-	ByKind      []kindRate         `json:"byKind"`
-	Trend       []store.DayCount   `json:"trend"`
-	TrendMax    int                `json:"trendMax"`
-	TopInjected []store.MemoryStat `json:"topInjected"`
-	Stale       []store.MemoryStat `json:"stale"`
-	StaleDays   int                `json:"staleDays"`
+	Injections       int                  `json:"injections"`
+	MemoriesSurfaced int                  `json:"memoriesSurfaced"`
+	ActiveMemories   int                  `json:"activeMemories"`
+	ReachRate        int                  `json:"reachRate"`
+	SessionsReached  int                  `json:"sessionsReached"`
+	Window           string               `json:"window"`
+	WindowLabel      string               `json:"windowLabel"`
+	Windows          []windowOption       `json:"-"`
+	ByKind           []store.KindReach    `json:"byKind"`
+	ByProject        []store.ProjectReach `json:"byProject"`
+	Trend            []store.TrendBucket  `json:"trend"`
+	TrendMax         int                  `json:"trendMax"`
+	TopInjected      []store.MemoryStat   `json:"topInjected"`
+	Stale            []store.MemoryStat   `json:"stale"`
+	StaleDays        int                  `json:"staleDays"`
 }
 
 func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
@@ -40,23 +40,8 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("console: rebuild retrieval stats", "error", err)
 	}
 
-	sum, err := store.GetUsageSummary(ctx, s.cfg.DB)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	byKind, err := store.RetrievalByKind(ctx, s.cfg.DB)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	sparseTrend, err := store.InjectionsByDay(ctx, s.cfg.DB, 14)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	trend := denseDays(sparseTrend, 14)
-	top, err := store.TopInjectedMemories(ctx, s.cfg.DB, 12)
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	report, err := store.BuildRetrievalReport(ctx, s.cfg.DB, win, 12)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -67,16 +52,10 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rates := make([]kindRate, 0, len(byKind))
-	for _, k := range byKind {
-		rates = append(rates, kindRate{
-			Kind: k.Kind, Injects: k.Injects, Reads: k.Reads, ReadRate: readAfterInject(k.Reads, k.Injects),
-		})
-	}
 	trendMax := 0
-	for _, d := range trend {
-		if d.Count > trendMax {
-			trendMax = d.Count
+	for _, b := range report.Trend {
+		if b.Count > trendMax {
+			trendMax = b.Count
 		}
 	}
 
@@ -84,10 +63,12 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		Title:  "Retrieval",
 		Active: "retrieval",
 		Data: retrievalData{
-			Injections: sum.Retrieval.Injections, Reads: sum.Retrieval.Reads,
-			ReadRate: readAfterInject(sum.Retrieval.Reads, sum.Retrieval.Injections),
-			ByKind:   rates, Trend: trend, TrendMax: trendMax,
-			TopInjected: top, Stale: staleStats(stale), StaleDays: staleWindowDays,
+			Injections: report.Injected, MemoriesSurfaced: report.MemoriesSurfaced,
+			ActiveMemories: report.ActiveMemories, ReachRate: report.ReachRate,
+			SessionsReached: report.SessionsReached,
+			Window:          win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+			ByKind: report.ByKind, ByProject: report.ByProject, Trend: report.Trend, TrendMax: trendMax,
+			TopInjected: report.Top, Stale: staleStats(stale), StaleDays: staleWindowDays,
 		},
 	})
 }

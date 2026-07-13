@@ -192,10 +192,11 @@ func TestOverview_CoverageInPayload(t *testing.T) {
 	require.Equal(t, 1, data.CoverageRows[0].Count)
 	require.Equal(t, 50, data.CoverageRows[0].Pct)
 
-	// The trend spans the dense 14-day window and today reflects 1 of 2 covered.
+	// The trend spans the dense 14-day window and today (local day, matching the
+	// store's local-day bucketing) reflects 1 of 2 covered.
 	require.Len(t, data.CoverageTrend, 14)
 	today := data.CoverageTrend[len(data.CoverageTrend)-1]
-	require.Equal(t, now.Format("2006-01-02"), today.Day)
+	require.Equal(t, now.Local().Format("2006-01-02"), today.Day)
 	require.Equal(t, 2, today.Total)
 	require.Equal(t, 1, today.Covered)
 }
