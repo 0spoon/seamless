@@ -43,7 +43,7 @@ func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (
 				"keep":  memoryBrief(keep),
 				"drop":  memoryBrief(drop),
 			}
-			if err := s.createProposal(ctx, store.ProposalMerge, key, payload, seen); err != nil {
+			if _, err := s.createProposal(ctx, store.ProposalMerge, key, payload, seen); err != nil {
 				return created, err
 			}
 			created++

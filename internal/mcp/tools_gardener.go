@@ -26,6 +26,29 @@ func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRe
 	return jsonResult(map[string]any{"proposals": proposals, "count": len(proposals)})
 }
 
+func gardenerRequestTool() mcp.Tool {
+	return mcp.NewTool("gardener_request",
+		mcp.WithDescription("Interpret a natural-language memory-maintenance request (e.g. \"these two memories are duplicates -- keep the newer\", or \"archive anything about the old port 8080\") into reviewable gardener proposals. It NEVER mutates memories directly: it only creates pending proposals -- review them with gardener_proposals, then resolve with gardener_apply. Needs an LLM chat client."),
+		mcp.WithString("request", mcp.Required(), mcp.Description("the maintenance request in plain language")),
+		mcp.WithString("project", mcp.Description("scope candidate memories: a project slug (its memories + globals), \"global\" for globals only, or omit for all projects")),
+	)
+}
+
+func (s *Server) handleGardenerRequest(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	if s.cfg.Gardener == nil {
+		return errResult("gardener_request", errors.New("gardener is not configured on this server"))
+	}
+	text := argString(req, "request")
+	if text == "" {
+		return errResult("gardener_request", errors.New("request is required"))
+	}
+	res, err := s.cfg.Gardener.Request(ctx, text, argString(req, "project"))
+	if err != nil {
+		return errResult("gardener_request", err)
+	}
+	return jsonResult(res)
+}
+
 func gardenerApplyTool() mcp.Tool {
 	return mcp.NewTool("gardener_apply",
 		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; digest -> save the summary as a note); action=dismiss discards it. A dismissed proposal is never re-raised."),

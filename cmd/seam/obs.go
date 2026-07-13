@@ -422,7 +422,7 @@ func sessionDetail(cfg config.Config, id string) error {
 // expectedTools mirrors mcp.ToolCount without importing the mcp server package
 // into the CLI (which would pull its whole dependency tree). doctor asserts the
 // running server exposes this many tools via tools/list.
-const expectedTools = 28
+const expectedTools = 29
 
 func runDoctor(args []string) error {
 	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)

@@ -64,3 +64,19 @@ func TestGardenerProposalsAndApply(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, res.IsError)
 }
+
+// TestGardenerRequest_NoChatIsToolError exercises the natural-language request
+// tool on a server whose gardener has no chat client: it must surface a tool
+// error rather than fabricate proposals. (A success-path test needs a
+// chat-enabled server helper, which this fixture does not build.)
+func TestGardenerRequest_NoChatIsToolError(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "gardener_request", Arguments: map[string]any{"request": "merge the duplicate memories"},
+	}})
+	require.NoError(t, err, "transport succeeds")
+	require.True(t, res.IsError, "a gardener with no chat client returns a tool error")
+}

@@ -7,14 +7,36 @@
   </div>
 </div>
 
-{{if .Error}}<div class="login-err section">Could not apply: {{.Error}}</div>{{end}}
+{{if .CanRequest}}
+<form class="card req-card" method="post" action="/console/gardener/request" id="req-form">
+  <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
+  <textarea class="field" name="request" id="req-text" rows="3"
+    placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; and archive anything about the old port 8080"></textarea>
+  <div class="req-row">
+    {{$scope := .Scope}}
+    <select class="req-scope" name="project" aria-label="Request scope">
+      <option value="">All projects</option>
+      {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+    <button class="btn primary" type="submit" id="req-go">Generate proposals</button>
+  </div>
+</form>
+{{else}}
+<div class="card req-card">
+  <h2>Ask the gardener <span class="h2-meta">unavailable</span></h2>
+  <div class="prop-note">Natural-language requests need an LLM chat client. Configure a provider (an API key) to enable this.</div>
+</div>
+{{end}}
+
+{{if .Notice}}<div class="section notice">{{.Notice}}</div>{{end}}
+{{if .Error}}<div class="login-err section">{{.Error}}</div>{{end}}
 
 {{if .Cards}}
 <div class="grid-2">
   {{range .Cards}}
   <div class="card">
     <div class="prop-head">
-      <span class="kind">{{.Kind}}</span>
+      <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
       <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
     </div>
 
@@ -25,7 +47,11 @@
       {{end}}
       <div class="badge warn">{{.Reason}}</div>
     {{else if eq .Kind "merge"}}
+      {{if eq .Source "request"}}
+      <div class="prop-note">Requested merge &mdash; keep the first, supersede the second.</div>
+      {{else}}
       <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
+      {{end}}
       {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
       {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
     {{else if eq .Kind "digest"}}
@@ -51,4 +77,24 @@
 <div class="empty dotgrid"><span class="empty-ico ok">{{icon "sprout"}}</span><div>No pending proposals &mdash; the garden is tidy.</div></div>
 {{end}}
 {{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  var form = document.getElementById('req-form');
+  if (!form) return;
+  var ta = document.getElementById('req-text');
+  var btn = document.getElementById('req-go');
+  form.addEventListener('submit', function () {
+    form.classList.add('is-busy');
+    if (btn) { btn.textContent = 'Interpreting…'; }
+  });
+  if (ta) {
+    ta.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { form.requestSubmit(); }
+    });
+  }
+})();
+</script>
 {{end}}

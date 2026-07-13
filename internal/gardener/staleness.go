@@ -48,7 +48,7 @@ func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{})
 			"description": m.Description, "reason": "no activity in " + strconv.Itoa(s.cfg.StalenessDays) + "d",
 			"last_activity": core.FormatTime(m.Updated),
 		}
-		if err := s.createProposal(ctx, store.ProposalArchive, key, payload, seen); err != nil {
+		if _, err := s.createProposal(ctx, store.ProposalArchive, key, payload, seen); err != nil {
 			return created, err
 		}
 		created++
