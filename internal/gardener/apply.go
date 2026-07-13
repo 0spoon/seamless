@@ -37,6 +37,8 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyMerge(ctx, p, now)
 	case store.ProposalDigest:
 		result, err = s.applyDigest(ctx, p, now)
+	case store.ProposalConsolidate:
+		result, err = s.applyConsolidate(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}
@@ -131,6 +133,79 @@ func (s *Service) applyDigest(ctx context.Context, p store.Proposal, now time.Ti
 	return map[string]any{"note_id": written.ID, "title": written.Title}, nil
 }
 
+// applyConsolidate writes a new unified memory (or reuses an existing one with
+// the same project+name) and supersedes every named source by it. It is
+// idempotent: a retry after a partial apply reuses the already-written target
+// and skips sources that were already superseded, so it converges rather than
+// duplicating -- important because Apply leaves the proposal pending on failure.
+func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
+	name := payloadString(p.Payload, "name")
+	project := payloadString(p.Payload, "project")
+	body := payloadString(p.Payload, "body")
+	if name == "" || body == "" {
+		return nil, fmt.Errorf("consolidate proposal missing name/body")
+	}
+
+	// Resolve-or-create the unified target. An already-active (project,name)
+	// memory is reused, so a retry does not write a second copy; on a first run
+	// this also means a name matching an existing memory folds the sources into it.
+	target, ok, err := store.MemoryByName(ctx, s.db, project, name)
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		id, nerr := core.NewID()
+		if nerr != nil {
+			return nil, nerr
+		}
+		written, werr := s.files.WriteMemory(ctx, core.Memory{
+			ID: id, Kind: core.MemoryKind(payloadString(p.Payload, "kind")),
+			Name: name, Description: payloadString(p.Payload, "description"),
+			Project: project, Body: body,
+			Created: now, Updated: now, ValidFrom: now,
+		})
+		if werr != nil {
+			return nil, werr
+		}
+		target = written
+		s.recordMemory(ctx, core.EventMemoryWritten, target, map[string]any{"name": target.Name, "by": "gardener"})
+	}
+
+	// Supersede each still-active source by the target. Sources already inactive
+	// (superseded on a prior partial apply) and the target itself are skipped.
+	superseded := make([]string, 0)
+	for _, src := range payloadList(p.Payload, "sources") {
+		srcID := payloadString(src, "id")
+		if srcID == "" || srcID == target.ID {
+			continue
+		}
+		idx, found, ierr := store.MemoryByID(ctx, s.db, srcID)
+		if ierr != nil {
+			return nil, ierr
+		}
+		if !found || idx.InvalidAt != nil {
+			continue // already gone or already superseded
+		}
+		full, rerr := s.files.Store().ReadMemory(idx.FilePath)
+		if rerr != nil {
+			return nil, rerr
+		}
+		updated, serr := lifecycle.Supersede(ctx, s.files, full, target, now)
+		if serr != nil {
+			return nil, serr
+		}
+		s.recordMemory(ctx, core.EventMemorySuperseded, updated, map[string]any{
+			"name": updated.Name, "superseded_by": target.ID, "by": "gardener",
+		})
+		superseded = append(superseded, lifecycle.MemoryRef(updated.Project, updated.Name))
+	}
+
+	return map[string]any{
+		"created":    lifecycle.MemoryRef(target.Project, target.Name),
+		"superseded": superseded,
+	}, nil
+}
+
 // loadActiveMemory resolves a memory id to its full on-disk content, erroring if
 // the memory no longer exists or is already inactive (archived/superseded) -- in
 // either case the proposal's effect no longer applies.
@@ -184,4 +259,23 @@ func payloadMap(m map[string]any, key string) map[string]any {
 		return v
 	}
 	return nil
+}
+
+// payloadList reads an array-of-objects field from a proposal payload (nil if
+// absent), e.g. a consolidate proposal's "sources".
+func payloadList(m map[string]any, key string) []map[string]any {
+	if m == nil {
+		return nil
+	}
+	raw, ok := m[key].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, v := range raw {
+		if obj, ok := v.(map[string]any); ok {
+			out = append(out, obj)
+		}
+	}
+	return out
 }

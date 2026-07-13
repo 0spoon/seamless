@@ -121,3 +121,22 @@ func payloadMap(p map[string]any, key string) map[string]any {
 	}
 	return nil
 }
+
+// payloadList reads an array-of-objects field from a payload map (nil if absent),
+// e.g. a consolidate proposal's "sources".
+func payloadList(p map[string]any, key string) []map[string]any {
+	if p == nil {
+		return nil
+	}
+	raw, ok := p[key].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(raw))
+	for _, v := range raw {
+		if obj, ok := v.(map[string]any); ok {
+			out = append(out, obj)
+		}
+	}
+	return out
+}

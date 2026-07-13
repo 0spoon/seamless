@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -114,7 +115,7 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 	s.record(ctx, "", map[string]any{
 		"action": "request", "text": truncateRunes(text, 200),
 		"created": res.Total, "merges": res.ByKind[store.ProposalMerge],
-		"archives": res.ByKind[store.ProposalArchive],
+		"archives": res.ByKind[store.ProposalArchive], "consolidations": res.ByKind[store.ProposalConsolidate],
 	})
 	return res, nil
 }
@@ -148,12 +149,14 @@ func (s *Service) requestCandidates(ctx context.Context, projectScope string) ([
 const requestSystemPrompt = `You convert a single natural-language maintenance request into a set of PROPOSED, reviewable operations over an AI agent's memory store. You never modify anything yourself; a human reviews and applies each operation. Reference memories only by their candidate number.
 
 Operations:
-- merge: fold one memory into another. {"op":"merge","keep":<n>,"drop":<m>}. keep is retained as-is; drop is superseded by keep (still readable, pointing at keep). To collapse several memories into one, emit one merge per redundant memory, each with the same keep.
+- merge: fold one memory into another EXISTING memory. {"op":"merge","keep":<n>,"drop":<m>}. keep is retained as-is; drop is superseded by keep (still readable, pointing at keep). Use this when one existing memory should simply absorb another.
 - archive: retire a memory that is no longer relevant. {"op":"archive","target":<n>,"reason":"<short why>"}. The memory is marked invalid but stays readable.
+- consolidate: replace several redundant memories with ONE new unified memory that you write. {"op":"consolidate","name":"<short-kebab-name>","kind":"<kind>","description":"<one line, <=150 chars>","body":"<full markdown body>","sources":[<n>,<m>,...]}. Every named source is superseded by the new memory. Use this (not merge) when the truth is spread across several memories and a fresh combined write is clearer than keeping any single one.
 
 Rules:
 - Reference memories ONLY by their [N] candidate number. Never invent numbers.
 - For a merge, keep and drop must be different memories.
+- For consolidate, kind is one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage. name is a short kebab-case identifier. Write a genuine unified body from the sources; do not invent facts beyond them.
 - Propose only what the request asks for. If nothing applies, return {"ops":[]}.
 - Output ONLY a JSON object of the form {"ops":[...]} -- no prose, no markdown code fences.`
 
@@ -177,14 +180,21 @@ func projectLabel(project string) string {
 	return project
 }
 
-// reqOp is one operation the interpreter emits. Indices are 1-based into the
-// candidate list, so 0 is a clean "absent" sentinel.
+// reqOp is one operation the interpreter emits. Candidate references are 1-based
+// indices into the candidate list, so 0 is a clean "absent" sentinel.
 type reqOp struct {
-	Op     string `json:"op"`     // "merge" | "archive"
+	Op     string `json:"op"`     // "merge" | "archive" | "consolidate"
 	Keep   int    `json:"keep"`   // merge: candidate to retain
 	Drop   int    `json:"drop"`   // merge: candidate to fold into keep
 	Target int    `json:"target"` // archive: candidate to retire
 	Reason string `json:"reason"` // archive rationale
+
+	// consolidate: a new unified memory written from several sources.
+	Name        string `json:"name"`
+	Kind        string `json:"kind"`
+	Description string `json:"description"`
+	Body        string `json:"body"`
+	Sources     []int  `json:"sources"`
 }
 
 type reqPlan struct {
@@ -260,9 +270,50 @@ func mapRequestOp(op reqOp, candidates []core.Memory, text string) (kind, key st
 			"kind": string(target.Kind), "description": target.Description,
 			"reason": reason, "source": "request", "request_text": text,
 		}, ""
+	case store.ProposalConsolidate:
+		name := strings.TrimSpace(op.Name)
+		body := strings.TrimSpace(op.Body)
+		if name == "" || body == "" {
+			return "", "", nil, "consolidate op is missing a name or body"
+		}
+		var (
+			srcObjs []map[string]any
+			srcIDs  []string
+			project string
+		)
+		for _, n := range op.Sources {
+			m, ok := candidateAt(candidates, n)
+			if !ok {
+				continue // skip an out-of-range source reference
+			}
+			if project == "" {
+				project = m.Project // the unified memory lives with its first source
+			}
+			srcObjs = append(srcObjs, map[string]any{"id": m.ID, "name": m.Name})
+			srcIDs = append(srcIDs, m.ID)
+		}
+		if len(srcIDs) == 0 {
+			return "", "", nil, "consolidate op references no valid source memories"
+		}
+		slices.Sort(srcIDs) // canonical key regardless of source order
+		return store.ProposalConsolidate, "consolidate:" + strings.Join(srcIDs, "|"), map[string]any{
+			"name": name, "kind": normalizeKind(op.Kind), "project": project,
+			"description": strings.TrimSpace(op.Description), "body": body,
+			"sources": srcObjs, "source": "request", "request_text": text,
+		}, ""
 	default:
 		return "", "", nil, fmt.Sprintf("unknown operation %q", op.Op)
 	}
+}
+
+// normalizeKind validates a memory kind for a consolidated memory, defaulting to
+// reference when the model supplies an unknown or empty kind.
+func normalizeKind(kind string) string {
+	k := core.MemoryKind(strings.TrimSpace(kind))
+	if slices.Contains(core.MemoryKinds, k) {
+		return string(k)
+	}
+	return string(core.KindReference)
 }
 
 // candidateAt resolves a 1-based reference to a candidate memory. ok is false for
@@ -293,6 +344,9 @@ func requestSummary(res RequestResult) string {
 	}
 	if n := res.ByKind[store.ProposalArchive]; n > 0 {
 		parts = append(parts, fmt.Sprintf("%d archive", n))
+	}
+	if n := res.ByKind[store.ProposalConsolidate]; n > 0 {
+		parts = append(parts, fmt.Sprintf("%d consolidate", n))
 	}
 	return "created " + strings.Join(parts, ", ") + " proposal(s)"
 }

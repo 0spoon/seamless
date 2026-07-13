@@ -75,6 +75,26 @@ func TestRequest_CreatesMergeAndArchive(t *testing.T) {
 	require.Equal(t, "obsolete", archives[0].Payload["reason"])
 }
 
+func TestRequest_CreatesConsolidate(t *testing.T) {
+	ctx, db, g := newRequestGardener(t,
+		`{"ops":[{"op":"consolidate","name":"unified","kind":"runbook","description":"one flow","body":"# Unified\ncombined","sources":[1,2,3]}]}`)
+
+	res, err := g.Request(ctx, "the three memories are really one -- consolidate them", "")
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Total)
+	require.Equal(t, 1, res.ByKind[store.ProposalConsolidate])
+
+	cs, err := store.PendingProposals(ctx, db, store.ProposalConsolidate)
+	require.NoError(t, err)
+	require.Len(t, cs, 1)
+	require.Equal(t, "unified", cs[0].Payload["name"])
+	require.Equal(t, "runbook", cs[0].Payload["kind"])
+	require.Equal(t, "request", cs[0].Payload["source"])
+	srcs, ok := cs[0].Payload["sources"].([]any)
+	require.True(t, ok)
+	require.Len(t, srcs, 3, "all three referenced candidates become sources")
+}
+
 func TestRequest_SkipsInvalidOps(t *testing.T) {
 	ctx, db, g := newRequestGardener(t,
 		`{"ops":[{"op":"merge","keep":1,"drop":1},{"op":"archive","target":99,"reason":"x"},{"op":"delete","target":2}]}`)

@@ -65,6 +65,90 @@ func TestApplyMerge_SupersedesDropByKeep(t *testing.T) {
 	require.Equal(t, keep.ID, dropIdx.SupersededBy)
 }
 
+func TestApplyConsolidate_WritesUnifiedAndSupersedesSources(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "dfu-a", "seamless", "1", core.KindGotcha, now, "part a")
+	writeMem(t, mgr, "dfu-b", "seamless", "2", core.KindGotcha, now.Add(-time.Hour), "part b")
+	a, _, err := store.MemoryByName(ctx, g.db, "seamless", "dfu-a")
+	require.NoError(t, err)
+	b, _, err := store.MemoryByName(ctx, g.db, "seamless", "dfu-b")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalConsolidate, map[string]any{
+		"key": "consolidate:" + a.ID + "|" + b.ID, "name": "dfu-unified", "kind": "runbook",
+		"project": "seamless", "description": "the unified DFU flow", "body": "# DFU\ncombined steps",
+		"sources": []any{
+			map[string]any{"id": a.ID, "name": a.Name},
+			map[string]any{"id": b.ID, "name": b.Name},
+		},
+	})
+	require.NoError(t, err)
+
+	res, err := g.Apply(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, "applied", res["status"])
+
+	// The new unified memory is active with the requested kind.
+	unified, found, err := store.MemoryByName(ctx, g.db, "seamless", "dfu-unified")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, core.MemoryKind("runbook"), unified.Kind)
+
+	// Both sources are superseded by it (leave the active index, point at unified).
+	for _, name := range []string{"dfu-a", "dfu-b"} {
+		_, active, err := store.MemoryByName(ctx, g.db, "seamless", name)
+		require.NoError(t, err)
+		require.False(t, active, name+" should be superseded")
+		idx, _, err := store.MemoryByNameIncludingInvalid(ctx, g.db, "seamless", name)
+		require.NoError(t, err)
+		require.Equal(t, unified.ID, idx.SupersededBy)
+	}
+}
+
+// TestApplyConsolidate_RetryIsIdempotent drives applyConsolidate twice (as a
+// retry after Apply left the proposal pending on a partial failure would): it
+// must converge -- reuse the already-written unified memory and skip
+// already-superseded sources -- not write a second copy.
+func TestApplyConsolidate_RetryIsIdempotent(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "src-a", "", "1", core.KindGotcha, now, "a")
+	writeMem(t, mgr, "src-b", "", "2", core.KindGotcha, now, "b")
+	a, _, err := store.MemoryByName(ctx, g.db, "", "src-a")
+	require.NoError(t, err)
+	b, _, err := store.MemoryByName(ctx, g.db, "", "src-b")
+	require.NoError(t, err)
+
+	p := store.Proposal{Payload: map[string]any{
+		"name": "unified", "kind": "reference", "project": "", "description": "u", "body": "combined",
+		"sources": []any{
+			map[string]any{"id": a.ID, "name": "src-a"},
+			map[string]any{"id": b.ID, "name": "src-b"},
+		},
+	}}
+
+	_, err = g.applyConsolidate(ctx, p, now)
+	require.NoError(t, err)
+	_, err = g.applyConsolidate(ctx, p, now.Add(time.Minute))
+	require.NoError(t, err, "a second apply converges rather than erroring")
+
+	// Exactly one active "unified" memory exists -- no duplicate from the retry.
+	all, err := store.AllActiveMemories(ctx, g.db)
+	require.NoError(t, err)
+	n := 0
+	for _, m := range all {
+		if m.Name == "unified" {
+			n++
+		}
+	}
+	require.Equal(t, 1, n, "retry must not create a duplicate unified memory")
+}
+
 func TestApplyDigest_WritesNote(t *testing.T) {
 	g, _, cx := newApplyFixture(t)
 	ctx := cx()
