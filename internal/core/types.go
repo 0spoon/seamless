@@ -248,6 +248,12 @@ const (
 	EventGardenerAction   EventKind = "gardener.action"
 	EventToolCall         EventKind = "tool.call"   // MCP tool invocation, logged live by the middleware (also the shape used by import)
 	EventHookPrompt       EventKind = "hook.prompt" // a UserPromptSubmit that matched no memory (recall miss)
+
+	// Claude Code plan-mode capture (PostToolUse/PermissionRequest/SubagentStop hooks).
+	EventPlanCaptured     EventKind = "plan.captured"     // a plan-file iteration landed as a cc-plan note
+	EventPlanPresented    EventKind = "plan.presented"    // the user was prompted to review the plan
+	EventPlanApproved     EventKind = "plan.approved"     // the user approved the plan (ExitPlanMode)
+	EventSubagentCaptured EventKind = "subagent.captured" // a planning subagent's prompt+report landed as a cc-agent note
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

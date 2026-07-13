@@ -12,11 +12,15 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -25,30 +29,68 @@ import (
 // agent's turn.
 const hookTimeout = 2 * time.Second
 
+// captureTimeout bounds the plan/subagent capture endpoints. They read files
+// and write notes (which may embed synchronously), so they get more headroom
+// than the briefing path; the installed hook timeout is 10s.
+const captureTimeout = 8 * time.Second
+
+// maxHookBody caps every hook request body. PostToolUse payloads carry the
+// full tool_input (a plan-file Write includes the whole file), so the cap is
+// generous; anything larger is not a payload Seamless should buffer.
+const maxHookBody = 8 << 20
+
 // ambientPrefixLen is how many leading chars of the Claude session id name an
 // ambient session (cc/{prefix}); enough to be unique per machine, short enough
 // to read.
 const ambientPrefixLen = 8
+
+// Config carries the Handler's dependencies. DB backs ambient sessions and the
+// session-end harvest; Events may be nil (injection telemetry is then skipped);
+// Files may be nil (plan/subagent capture is then skipped). MaxEventChars caps
+// captured prompt/findings text (0 = unlimited); injected content is always
+// stored in full (it is already bounded by the briefing/recall budgets upstream).
+// PlansDir is where Claude Code writes plan-mode files; empty defaults to
+// ~/.claude/plans (tests override it).
+type Config struct {
+	DB            *sql.DB
+	Retrieve      *retrieve.Service
+	Events        *events.Recorder
+	Files         *files.Manager
+	APIKey        string
+	MaxEventChars int
+	PlanCapture   config.PlanCapture
+	PlansDir      string
+	Logger        *slog.Logger
+}
 
 // Handler serves the hook endpoints.
 type Handler struct {
 	db            *sql.DB
 	retrieve      *retrieve.Service
 	events        *events.Recorder
+	files         *files.Manager
 	apiKey        string
 	maxEventChars int
+	planCapture   config.PlanCapture
+	plansDir      string
 	logger        *slog.Logger
 }
 
-// NewHandler builds a hook Handler. db backs ambient sessions and the session-end
-// harvest; events may be nil (injection telemetry is then skipped). maxEventChars
-// caps captured prompt/findings text (0 = unlimited); injected content is always
-// stored in full (it is already bounded by the briefing/recall budgets upstream).
-func NewHandler(db *sql.DB, ret *retrieve.Service, rec *events.Recorder, apiKey string, maxEventChars int, logger *slog.Logger) *Handler {
-	if logger == nil {
-		logger = slog.Default()
+// NewHandler builds a hook Handler from cfg.
+func NewHandler(cfg Config) *Handler {
+	if cfg.Logger == nil {
+		cfg.Logger = slog.Default()
 	}
-	return &Handler{db: db, retrieve: ret, events: rec, apiKey: apiKey, maxEventChars: maxEventChars, logger: logger}
+	if cfg.PlansDir == "" {
+		if home, err := os.UserHomeDir(); err == nil {
+			cfg.PlansDir = filepath.Join(home, ".claude", "plans")
+		}
+	}
+	return &Handler{
+		db: cfg.DB, retrieve: cfg.Retrieve, events: cfg.Events, files: cfg.Files,
+		apiKey: cfg.APIKey, maxEventChars: cfg.MaxEventChars,
+		planCapture: cfg.PlanCapture, plansDir: cfg.PlansDir, logger: cfg.Logger,
+	}
 }
 
 // Register mounts the hook routes on mux at their full /api/hooks/* paths.
@@ -56,6 +98,9 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hooks/session-start", h.sessionStart)
 	mux.HandleFunc("POST /api/hooks/user-prompt-submit", h.userPromptSubmit)
 	mux.HandleFunc("POST /api/hooks/session-end", h.sessionEnd)
+	mux.HandleFunc("POST /api/hooks/post-tool-use", h.postToolUse)
+	mux.HandleFunc("POST /api/hooks/subagent-stop", h.subagentStop)
+	mux.HandleFunc("POST /api/hooks/permission-request", h.permissionRequest)
 }
 
 // hookPayload is the SessionStart request body (tolerant decode; unknown fields
@@ -82,6 +127,22 @@ type endPayload struct {
 	Reason         string `json:"reason"` // clear|logout|prompt_input_exit|other
 }
 
+// toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
+// SubagentStop request bodies. ToolInput/ToolResponse stay raw: their shape is
+// per-tool, and only the plan-capture paths decode the fields they need.
+type toolPayload struct {
+	SessionID      string          `json:"session_id"`
+	TranscriptPath string          `json:"transcript_path"`
+	CWD            string          `json:"cwd"`
+	PermissionMode string          `json:"permission_mode"` // plan|default|acceptEdits|...
+	ToolName       string          `json:"tool_name"`
+	HookEventName  string          `json:"hook_event_name"`
+	ToolInput      json.RawMessage `json:"tool_input"`
+	ToolResponse   json.RawMessage `json:"tool_response"`
+	AgentID        string          `json:"agent_id"`   // SubagentStop only
+	AgentType      string          `json:"agent_type"` // SubagentStop only
+}
+
 // hookResponse is the Claude Code hook response envelope; the field names are
 // load-bearing and case-sensitive.
 type hookResponse struct {
@@ -100,6 +161,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p hookPayload
 	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero
 
@@ -142,6 +204,7 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p endPayload
 	_ = json.NewDecoder(r.Body).Decode(&p)
 
@@ -267,6 +330,7 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p promptPayload
 	_ = json.NewDecoder(r.Body).Decode(&p)
 	if p.UserPrompt == "" {

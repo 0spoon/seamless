@@ -29,10 +29,11 @@ type Config struct {
 	// DataDir holds the SQLite database and markdown trees. A leading ~ expands.
 	DataDir string `yaml:"data_dir"`
 
-	MCP      MCP      `yaml:"mcp"`
-	Budgets  Budgets  `yaml:"budgets"`
-	LLM      LLM      `yaml:"llm"`
-	Gardener Gardener `yaml:"gardener"`
+	MCP         MCP         `yaml:"mcp"`
+	Budgets     Budgets     `yaml:"budgets"`
+	LLM         LLM         `yaml:"llm"`
+	Gardener    Gardener    `yaml:"gardener"`
+	PlanCapture PlanCapture `yaml:"plan_capture"`
 
 	// sourcePath records which config file was loaded (empty = defaults only).
 	sourcePath string `yaml:"-"`
@@ -87,6 +88,16 @@ type Anthropic struct {
 	ChatModel string `yaml:"chat_model"`
 }
 
+// PlanCapture configures capturing Claude Code plan-mode iterations and
+// planning subagents into notes via the PostToolUse/SubagentStop hooks.
+type PlanCapture struct {
+	// Enabled turns the plan-capture hook endpoints into no-ops when false.
+	Enabled bool `yaml:"enabled"`
+	// AutoTask creates a tracking task ("Implement plan: ...") when a plan is
+	// approved, composing it into the plan via plan_slug.
+	AutoTask bool `yaml:"auto_task"`
+}
+
 // Gardener configures the propose-only maintenance passes and their ticker.
 type Gardener struct {
 	Enabled bool `yaml:"enabled"`
@@ -138,6 +149,7 @@ func Defaults() Config {
 			DigestDays:             30,
 			ToolEventRetentionDays: 30,
 		},
+		PlanCapture: PlanCapture{Enabled: true, AutoTask: true},
 	}
 }
 
@@ -278,6 +290,12 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {
+		return err
+	}
+	if err := envBool("SEAMLESS_PLAN_CAPTURE_ENABLED", &c.PlanCapture.Enabled); err != nil {
+		return err
+	}
+	if err := envBool("SEAMLESS_PLAN_CAPTURE_AUTO_TASK", &c.PlanCapture.AutoTask); err != nil {
 		return err
 	}
 	return nil

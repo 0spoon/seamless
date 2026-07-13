@@ -94,6 +94,7 @@ observability:
 
 hooks (invoked by Claude Code, not by hand):
   seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
+  seam hook post-tool-use|subagent-stop|permission-request  plan-mode capture (post-tool-use pre-filters locally)
 `)
 }
 
@@ -360,15 +361,25 @@ func runHook(args []string) error {
 		"session-start":      "/api/hooks/session-start",
 		"user-prompt-submit": "/api/hooks/user-prompt-submit",
 		"session-end":        "/api/hooks/session-end",
+		"post-tool-use":      "/api/hooks/post-tool-use",
+		"subagent-stop":      "/api/hooks/subagent-stop",
+		"permission-request": "/api/hooks/permission-request",
 	}
+	const events = "session-start|user-prompt-submit|session-end|post-tool-use|subagent-stop|permission-request"
 	if len(args) < 1 {
-		return fmt.Errorf("usage: seam hook <session-start|user-prompt-submit|session-end>")
+		return fmt.Errorf("usage: seam hook <%s>", events)
 	}
 	ep, ok := endpoints[args[0]]
 	if !ok {
-		return fmt.Errorf("unknown hook event %q (want session-start|user-prompt-submit|session-end)", args[0])
+		return fmt.Errorf("unknown hook event %q (want %s)", args[0], events)
 	}
 	payload, _ := io.ReadAll(os.Stdin)
+
+	// PostToolUse fires machine-wide on every Write/Edit; drop non-plan events
+	// here, before any config load or network round-trip.
+	if args[0] == "post-tool-use" && !shouldForwardPostToolUse(payload, defaultPlansDir()) {
+		return nil
+	}
 
 	cfg, err := config.Load()
 	if err != nil {

@@ -193,7 +193,11 @@ func runServe(args []string) error {
 		APIKey: cfg.MCP.APIKey, Version: buildVersion(),
 		ToolEventMaxChars: cfg.Budgets.ToolEventMaxChars, Logger: logger,
 	})
-	hooksH := hooks.NewHandler(db, ret, rec, cfg.MCP.APIKey, cfg.Budgets.ToolEventMaxChars, logger)
+	hooksH := hooks.NewHandler(hooks.Config{
+		DB: db, Retrieve: ret, Events: rec, Files: mgr,
+		APIKey: cfg.MCP.APIKey, MaxEventChars: cfg.Budgets.ToolEventMaxChars,
+		PlanCapture: cfg.PlanCapture, Logger: logger,
+	})
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec,
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,
