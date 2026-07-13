@@ -186,17 +186,18 @@ func TestOverview_CoverageInPayload(t *testing.T) {
 	getJSON(t, mux, "/console/?format=json", &data)
 
 	require.Equal(t, 1, data.Covered)
+	require.Equal(t, 2, data.CovTotal)
 	require.Equal(t, 50, data.Coverage) // 1 of 2 sessions
 	require.Len(t, data.CoverageRows, 4)
 	require.Equal(t, "Findings", data.CoverageRows[0].Label)
 	require.Equal(t, 1, data.CoverageRows[0].Count)
 	require.Equal(t, 50, data.CoverageRows[0].Pct)
 
-	// The trend spans the dense 14-day window and today (local day, matching the
-	// store's local-day bucketing) reflects 1 of 2 covered.
-	require.Len(t, data.CoverageTrend, 14)
+	// Default window is all-time, so the daily trend runs from today's session
+	// back to itself: a single local-day bucket reflecting 1 of 2 covered.
+	require.NotEmpty(t, data.CoverageTrend)
 	today := data.CoverageTrend[len(data.CoverageTrend)-1]
-	require.Equal(t, now.Local().Format("2006-01-02"), today.Day)
+	require.Equal(t, now.Local().Format("Jan 02"), today.Label)
 	require.Equal(t, 2, today.Total)
 	require.Equal(t, 1, today.Covered)
 }

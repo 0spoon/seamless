@@ -8,14 +8,15 @@
   <span class="live"><span class="live-dot"></span> live</span>
 </div>
 
+<div class="win-tabs win-tabs-page">
+  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
+</div>
+
 <div class="ov-grid">
   <div class="ov-main">
 
     <div class="card">
       <h2>Retrieval health <span class="h2-meta">memory reach &middot; {{.WindowLabel}}</span></h2>
-      <div class="win-tabs">
-        {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
-      </div>
       {{if .Injections}}
       <div class="hero-banner">
         <div class="hero-num">
@@ -29,17 +30,17 @@
     </div>
 
     <div class="card">
-      <h2>Knowledge coverage <span class="h2-meta">daily share of sessions that retained knowledge &middot; 14d</span></h2>
-      {{if .SessTotal}}
+      <h2>Knowledge coverage <span class="h2-meta">share of sessions that retained knowledge &middot; {{.WindowLabel}}</span></h2>
+      {{if .CovTotal}}
       <div class="hero-banner">
         <div class="hero-num">
           <span class="big ok">{{.Coverage}}%</span>
           <span class="cap">Sessions covered</span>
-          <span class="sub">{{.Covered}} of {{.SessTotal}}{{range .CoverageRows}} &middot; {{.Label}} {{.Count}}{{end}}</span>
+          <span class="sub">{{.Covered}} of {{.CovTotal}}{{range .CoverageRows}} &middot; {{.Label}} {{.Count}}{{end}}</span>
         </div>
-        {{if .CoverageTrend}}{{coverageTrend .CoverageTrend}}{{else}}<div class="empty">No sessions in the last 14 days</div>{{end}}
+        {{if .CoverageTrend}}{{coverageTrend .CoverageTrend}}{{else}}<div class="empty">No sessions in this window</div>{{end}}
       </div>
-      {{else}}<div class="empty">No sessions yet</div>{{end}}
+      {{else}}<div class="empty">No sessions in this window</div>{{end}}
     </div>
 
     <div>

@@ -58,7 +58,7 @@ func TestGetSessionCoverage(t *testing.T) {
 	// s7: uncovered -- started and ended empty.
 	require.NoError(t, CreateSession(ctx, db, mk("s7", "cc/g")))
 
-	c, err := GetSessionCoverage(ctx, db)
+	c, err := GetSessionCoverage(ctx, db, time.Time{})
 	require.NoError(t, err)
 	require.Equal(t, 7, c.Total)
 	require.Equal(t, 5, c.Covered)  // s1..s5; s6,s7 uncovered
@@ -70,48 +70,77 @@ func TestGetSessionCoverage(t *testing.T) {
 
 func TestGetSessionCoverage_Empty(t *testing.T) {
 	db := openTestDB(t)
-	c, err := GetSessionCoverage(context.Background(), db)
+	c, err := GetSessionCoverage(context.Background(), db, time.Time{})
 	require.NoError(t, err)
 	require.Equal(t, SessionCoverage{}, c)
 }
 
-func TestSessionCoverageByDay(t *testing.T) {
+func TestGetSessionCoverage_Windowed(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	now := time.Now().UTC()
-	d0 := now                   // today
-	d1 := now.AddDate(0, 0, -1) // yesterday
 
-	mk := func(id, name string, created time.Time) core.Session {
-		return core.Session{ID: id, Name: name, Status: core.SessionCompleted, CreatedAt: created, UpdatedAt: created}
+	mk := func(id string, created time.Time) core.Session {
+		return core.Session{ID: id, Name: "cc/" + id, Status: core.SessionCompleted, CreatedAt: created, UpdatedAt: created}
 	}
+	// In-window: one covered (findings), one uncovered.
+	recent := mk("recent-a", now.Add(-time.Hour))
+	recent.Findings = "kept something"
+	require.NoError(t, CreateSession(ctx, db, recent))
+	require.NoError(t, CreateSession(ctx, db, mk("recent-b", now.Add(-2*time.Hour))))
+	// Out of the 24h window: a covered session two days ago.
+	old := mk("old-a", now.Add(-48*time.Hour))
+	old.Findings = "long ago"
+	require.NoError(t, CreateSession(ctx, db, old))
 
-	// Today: one covered (findings), one uncovered.
-	s1 := mk("d0a", "cc/d0a", d0)
-	s1.Findings = "kept something"
-	require.NoError(t, CreateSession(ctx, db, s1))
-	require.NoError(t, CreateSession(ctx, db, mk("d0b", "cc/d0b", d0)))
-	// Yesterday: one covered via a written memory.
-	require.NoError(t, CreateSession(ctx, db, mk("d1a", "cc/d1a", d1)))
-	insertSessionEvent(t, db, core.EventMemoryWritten, "d1a", now)
-
-	got, err := SessionCoverageByDay(ctx, db, 14)
+	win := ResolveRetrievalWindow("24h", now)
+	c, err := GetSessionCoverage(ctx, db, win.Since)
 	require.NoError(t, err)
-	require.Len(t, got, 2)
+	require.Equal(t, 2, c.Total, "the 48h-old session is outside the 24h window")
+	require.Equal(t, 1, c.Covered)
 
-	// Days are bucketed in local time, so assert against the local-day keys.
-	day0, day1 := d0.Local().Format("2006-01-02"), d1.Local().Format("2006-01-02")
-	byDay := map[string]DayCoverage{}
-	for _, d := range got {
-		byDay[d.Day] = d
-	}
-	require.Equal(t, DayCoverage{Day: day0, Total: 2, Covered: 1}, byDay[day0])
-	require.Equal(t, DayCoverage{Day: day1, Total: 1, Covered: 1}, byDay[day1])
+	all, err := GetSessionCoverage(ctx, db, time.Time{})
+	require.NoError(t, err)
+	require.Equal(t, 3, all.Total)
+	require.Equal(t, 2, all.Covered)
 }
 
-func TestSessionCoverageByDay_Empty(t *testing.T) {
+func TestSessionCoverageBuckets(t *testing.T) {
 	db := openTestDB(t)
-	got, err := SessionCoverageByDay(context.Background(), db, 14)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(id string, created time.Time) core.Session {
+		return core.Session{ID: id, Name: "cc/" + id, Status: core.SessionCompleted, CreatedAt: created, UpdatedAt: created}
+	}
+	// Two sessions this hour (one covered), one an hour earlier (uncovered).
+	s1 := mk("h0a", now.Add(-time.Minute))
+	s1.Findings = "kept something"
+	require.NoError(t, CreateSession(ctx, db, s1))
+	require.NoError(t, CreateSession(ctx, db, mk("h0b", now.Add(-2*time.Minute))))
+	require.NoError(t, CreateSession(ctx, db, mk("h1a", now.Add(-70*time.Minute))))
+
+	buckets, err := SessionCoverageBuckets(ctx, db, ResolveRetrievalWindow("24h", now), now)
 	require.NoError(t, err)
-	require.Empty(t, got)
+	require.NotEmpty(t, buckets)
+
+	// The final (current-hour) bucket holds the two recent sessions, one covered.
+	last := buckets[len(buckets)-1]
+	require.Equal(t, 2, last.Total)
+	require.Equal(t, 1, last.Covered)
+
+	total, covered := 0, 0
+	for _, b := range buckets {
+		total += b.Total
+		covered += b.Covered
+	}
+	require.Equal(t, 3, total, "all three in-window sessions land in some bucket")
+	require.Equal(t, 1, covered)
+}
+
+func TestSessionCoverageBuckets_Empty(t *testing.T) {
+	db := openTestDB(t)
+	got, err := SessionCoverageBuckets(context.Background(), db, ResolveRetrievalWindow("all", time.Now().UTC()), time.Now().UTC())
+	require.NoError(t, err)
+	require.Nil(t, got)
 }

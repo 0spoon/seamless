@@ -24,12 +24,17 @@ type sessionRow struct {
 	Updated  time.Time `json:"updated"`
 }
 
-// sessionsData is the payload for the sessions list page.
+// sessionsData is the payload for the sessions list page. Active/Completed count
+// the sessions shown (windowed); Total is the all-time session count for context.
 type sessionsData struct {
-	Filter   string       `json:"filter"`
-	Active   int          `json:"active"`
-	Total    int          `json:"total"`
-	Sessions []sessionRow `json:"sessions"`
+	Filter      string         `json:"filter"`
+	Active      int            `json:"active"`
+	Completed   int            `json:"completed"`
+	Total       int            `json:"total"`
+	Window      string         `json:"window"`
+	WindowLabel string         `json:"windowLabel"`
+	Windows     []windowOption `json:"-"`
+	Sessions    []sessionRow   `json:"sessions"`
 }
 
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
@@ -44,8 +49,9 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	default:
 		filter = ""
 	}
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
 
-	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, 200)
+	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, win.Since, 200)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -57,10 +63,12 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows := make([]sessionRow, 0, len(sessions))
-	active := 0
+	active, completed := 0, 0
 	for _, sess := range sessions {
 		if sess.Status == core.SessionActive {
 			active++
+		} else {
+			completed++
 		}
 		rows = append(rows, sessionRow{
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
@@ -72,7 +80,9 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		Title:  "Sessions",
 		Active: "sessions",
 		Data: sessionsData{
-			Filter: filter, Active: active, Total: counts.Sessions, Sessions: rows,
+			Filter: filter, Active: active, Completed: completed, Total: counts.Sessions,
+			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+			Sessions: rows,
 		},
 	})
 }

@@ -279,10 +279,9 @@ func injectedSessionKey(sessionID, payload string) string {
 	return ""
 }
 
-// buildTrend densifies the window into contiguous buckets in the viewer's local
-// time (so "today" is the local day, never a UTC-rollover day into tomorrow) and
-// tallies item-level injections into them. Granularity is hourly for the 24h
-// window and daily otherwise. For an all-time window the range starts at the
+// buildTrend densifies the window into contiguous local-time buckets (so "today"
+// is the local day, never a UTC-rollover day into tomorrow) and tallies
+// item-level injections into them. For an all-time window the range starts at the
 // earliest injection. Returns nil when the window holds no injections.
 func buildTrend(injections []injection, w RetrievalWindow, hourly bool, earliest, now time.Time) []TrendBucket {
 	var start time.Time
@@ -294,37 +293,56 @@ func buildTrend(injections []injection, w RetrievalWindow, hourly bool, earliest
 	default:
 		return nil
 	}
-	start, end := start.Local(), now.Local()
+	counts := make(map[string]int, len(injections))
+	for _, in := range injections {
+		counts[bucketKey(in.at, hourly)]++
+	}
+	axis := localBucketAxis(start, now, hourly)
+	out := make([]TrendBucket, 0, len(axis))
+	for _, t := range axis {
+		out = append(out, TrendBucket{Label: t.label, Count: counts[t.key]})
+	}
+	return out
+}
 
-	var keyFn, labelFn func(time.Time) string
-	var floor func(time.Time) time.Time
-	var next func(time.Time) time.Time
+// bucketTick is one contiguous trend bucket: its map key (for tallying) and its
+// pre-formatted x-axis label.
+type bucketTick struct{ key, label string }
+
+// localBucketAxis returns the contiguous local-time buckets spanning [start, now],
+// hourly or daily, in order. The injection and coverage trends share it so their
+// x-axes line up over the same window.
+func localBucketAxis(start, now time.Time, hourly bool) []bucketTick {
+	start, end := start.Local(), now.Local()
+	var labelFn func(time.Time) string
+	var floor, next func(time.Time) time.Time
 	if hourly {
-		keyFn = func(t time.Time) string { return t.Format("2006-01-02T15") }
 		labelFn = func(t time.Time) string { return t.Format("15:04") }
 		floor = func(t time.Time) time.Time {
 			return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
 		}
 		next = func(t time.Time) time.Time { return t.Add(time.Hour) }
 	} else {
-		keyFn = func(t time.Time) string { return t.Format("2006-01-02") }
 		labelFn = func(t time.Time) string { return t.Format("Jan 02") }
 		floor = func(t time.Time) time.Time {
 			return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, t.Location())
 		}
 		next = func(t time.Time) time.Time { return t.AddDate(0, 0, 1) }
 	}
-
-	counts := make(map[string]int, len(injections))
-	for _, in := range injections {
-		counts[keyFn(in.at.Local())]++
-	}
-
-	var out []TrendBucket
+	var out []bucketTick
 	for cur := floor(start); !cur.After(end); cur = next(cur) {
-		out = append(out, TrendBucket{Label: labelFn(cur), Count: counts[keyFn(cur)]})
+		out = append(out, bucketTick{key: bucketKey(cur, hourly), label: labelFn(cur)})
 	}
 	return out
+}
+
+// bucketKey is the local-time bucket key for t at the given granularity; it must
+// match the keys localBucketAxis emits so tallies land in the right bucket.
+func bucketKey(t time.Time, hourly bool) string {
+	if hourly {
+		return t.Local().Format("2006-01-02T15")
+	}
+	return t.Local().Format("2006-01-02")
 }
 
 // activeMemoryMeta loads id -> (kind, name, project) for every active memory, so
