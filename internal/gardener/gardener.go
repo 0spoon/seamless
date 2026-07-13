@@ -41,6 +41,10 @@ type Config struct {
 	// (tool.call, hook.prompt) older than this many days on each pass. 0 disables
 	// pruning -- deliberately not defaulted, since 0 means "keep forever".
 	ToolEventRetentionDays int
+	// StalePlanDays proposes abandoning captured Claude Code plans still in
+	// draft/presented after this many days. 0 disables the pass -- deliberately
+	// not defaulted, mirroring ToolEventRetentionDays.
+	StalePlanDays int
 }
 
 // withDefaults fills non-positive fields from the package defaults.
@@ -68,6 +72,7 @@ func FromConfig(g config.Gardener) Config {
 		DigestDays:             g.DigestDays,
 		Interval:               time.Duration(g.IntervalMinutes) * time.Minute,
 		ToolEventRetentionDays: g.ToolEventRetentionDays,
+		StalePlanDays:          g.StalePlanDays,
 	}
 }
 
@@ -98,13 +103,14 @@ func New(db *sql.DB, mgr *files.Manager, embedder llm.Embedder, chat llm.Chat, r
 
 // PassResult counts what a single RunOnce produced.
 type PassResult struct {
-	Merges   int `json:"merges"`
-	Archives int `json:"archives"`
-	Digests  int `json:"digests"`
+	Merges     int `json:"merges"`
+	Archives   int `json:"archives"`
+	Digests    int `json:"digests"`
+	StalePlans int `json:"stalePlans"`
 }
 
 // Total is the number of proposals created across all passes.
-func (r PassResult) Total() int { return r.Merges + r.Archives + r.Digests }
+func (r PassResult) Total() int { return r.Merges + r.Archives + r.Digests + r.StalePlans }
 
 // RunOnce refreshes retrieval stats, then runs all three propose-only passes and
 // returns what each created. A pass that fails is logged and skipped; a single
@@ -142,9 +148,15 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	} else {
 		res.Digests = n
 	}
+	if n, err := s.proposeStalePlans(ctx, existing); err != nil {
+		s.logger.Warn("gardener: stale-plan pass", "error", err)
+	} else {
+		res.StalePlans = n
+	}
 
 	if res.Total() > 0 {
-		s.logger.Info("gardener pass complete", "merges", res.Merges, "archives", res.Archives, "digests", res.Digests)
+		s.logger.Info("gardener pass complete", "merges", res.Merges, "archives", res.Archives,
+			"digests", res.Digests, "stale_plans", res.StalePlans)
 	}
 	return res, nil
 }

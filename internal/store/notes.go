@@ -107,6 +107,30 @@ func NoteBySlug(ctx context.Context, db *sql.DB, project, slug string) (core.Not
 	return notes[0], true, nil
 }
 
+// NotesByTag returns the notes carrying an exact tag, newest-updated first,
+// optionally scoped to a project ("" = every project). Tags are stored as a
+// JSON array, so the match runs through json_each rather than LIKE.
+func NotesByTag(ctx context.Context, db *sql.DB, project, tag string) ([]core.Note, error) {
+	q := `SELECT ` + noteCols + ` FROM notes_index
+		WHERE EXISTS (SELECT 1 FROM json_each(notes_index.tags) je WHERE je.value = ?)`
+	args := []any{tag}
+	if project != "" {
+		q += ` AND project = ?`
+		args = append(args, project)
+	}
+	q += ` ORDER BY updated_at DESC, id DESC`
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.NotesByTag: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	notes, err := scanNotes(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.NotesByTag: %w", err)
+	}
+	return notes, nil
+}
+
 // NotesByIDs returns the notes for the given ids keyed by ID; missing ids are
 // simply absent.
 func NotesByIDs(ctx context.Context, db *sql.DB, ids []string) (map[string]core.Note, error) {

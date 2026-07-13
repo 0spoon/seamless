@@ -83,6 +83,18 @@ type proposalCard struct {
 	// Reproject (move a memory across projects) and Split (set up a project split).
 	Reproject *reprojectView `json:"reproject,omitempty"`
 	Split     *splitView     `json:"split,omitempty"`
+
+	// AbandonPlan (retag a never-approved captured plan).
+	AbandonPlan *abandonPlanView `json:"abandonPlan,omitempty"`
+}
+
+// abandonPlanView is the abandon_plan projection: the stale captured plan.
+type abandonPlanView struct {
+	NoteID  string `json:"noteId"`
+	Slug    string `json:"slug"` // plan:<slug> composition key
+	Title   string `json:"title"`
+	Project string `json:"project,omitempty"`
+	Status  string `json:"status"` // draft | presented
 }
 
 // planGroup collects the pending proposals of one plan (a split batch) so the
@@ -263,6 +275,13 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			From: payloadStr(p.Payload, "from"), To: payloadStr(p.Payload, "to"),
 			Rationale: payloadStr(p.Payload, "rationale"),
 		}
+	case store.ProposalAbandonPlan:
+		c.AbandonPlan = &abandonPlanView{
+			NoteID: payloadStr(p.Payload, "id"), Slug: payloadStr(p.Payload, "slug"),
+			Title: payloadStr(p.Payload, "title"), Project: payloadStr(p.Payload, "project"),
+			Status: payloadStr(p.Payload, "plan_status"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalSplit:
 		sv := &splitView{
 			Source:       payloadStr(p.Payload, "source_project"),

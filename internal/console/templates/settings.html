@@ -33,6 +33,7 @@
       <dt>Staleness</dt><dd>{{.Gardener.StalenessDays}}d</dd>
       <dt>Digest window</dt><dd>{{.Gardener.DigestDays}}d</dd>
       <dt>Tool event retention</dt><dd>{{if .Gardener.ToolEventRetentionDays}}{{.Gardener.ToolEventRetentionDays}}d{{else}}disabled{{end}}</dd>
+      <dt>Stale plan cutoff</dt><dd>{{if .Gardener.StalePlanDays}}{{.Gardener.StalePlanDays}}d{{else}}disabled{{end}}</dd>
     </dl>
   </div>
 </div>

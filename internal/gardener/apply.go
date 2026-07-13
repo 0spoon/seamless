@@ -43,6 +43,8 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyReproject(ctx, p, now)
 	case store.ProposalSplit:
 		result, err = s.applySplit(ctx, p, now)
+	case store.ProposalAbandonPlan:
+		result, err = s.applyAbandonPlan(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}

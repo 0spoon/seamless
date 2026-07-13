@@ -97,6 +97,53 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	require.NotContains(t, gbIDs, "01A")
 }
 
+// insNote inserts a notes_index row (no fts), updated at ts.
+func insNote(t *testing.T, db *sql.DB, id, slug, title, project, tags string, ts time.Time) {
+	t.Helper()
+	stamp := core.FormatTime(ts.UTC())
+	_, err := db.ExecContext(context.Background(), `
+		INSERT INTO notes_index
+		    (id, title, slug, description, project, file_path, tags,
+		     source_url, content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'h', ?, ?)`,
+		id, title, slug, "d", project, "notes/x/"+slug+".md", tags, stamp, stamp)
+	require.NoError(t, err)
+}
+
+func TestBriefingPendingPlanLines(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/work/seam":"seam"}`))
+	insMem(t, db, "01A", "gotcha", "some-memory", "keeps the briefing non-empty", "seam")
+
+	now := time.Now()
+	// A fresh presented plan earns an awaiting-approval line.
+	insNote(t, db, "01P1", "cc-plan-fresh", "Fresh Plan", "seam",
+		`["plan:fresh-plan","cc-plan","plan-status:presented","created-by:agent"]`, now)
+	// An approved plan does not (its task rollup speaks for it).
+	insNote(t, db, "01P2", "cc-plan-done", "Done Plan", "seam",
+		`["plan:done-plan","cc-plan","plan-status:approved","created-by:agent"]`, now)
+	// A stale draft past the cutoff does not.
+	insNote(t, db, "01P3", "cc-plan-old", "Old Plan", "seam",
+		`["plan:old-plan","cc-plan","plan-status:draft","created-by:agent"]`, now.Add(-pendingPlanMaxAge-time.Hour))
+	// A fresh draft in another project does not leak into this scope.
+	insNote(t, db, "01P4", "cc-plan-other", "Other Plan", "other",
+		`["plan:other-plan","cc-plan","plan-status:draft","created-by:agent"]`, now)
+
+	svc := New(db, nil, budgets(), nil)
+	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, b, "PLAN (awaiting approval): fresh-plan -- Fresh Plan (presented,")
+	require.NotContains(t, b, "done-plan")
+	require.NotContains(t, b, "old-plan")
+	require.NotContains(t, b, "other-plan")
+
+	// Subagent briefings stay constraints-only.
+	sb, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", AgentType: "Explore"})
+	require.NoError(t, err)
+	require.NotContains(t, sb, "awaiting approval")
+}
+
 func TestBriefingSiblingProjects(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

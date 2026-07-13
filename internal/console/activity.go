@@ -96,6 +96,21 @@ func eventSummary(e core.Event) string {
 		return label
 	case core.EventHookPrompt:
 		return "prompt (no recall match)"
+	case core.EventPlanCaptured:
+		s := "captured plan " + payloadStr(p, "basename")
+		if it, ok := p["iteration"].(float64); ok {
+			s += fmt.Sprintf(" (iter %d)", int(it))
+		}
+		return s
+	case core.EventPlanPresented:
+		return "presented plan " + payloadStr(p, "basename")
+	case core.EventPlanApproved:
+		return "approved plan " + payloadStr(p, "basename")
+	case core.EventSubagentCaptured:
+		if at := payloadStr(p, "agent_type"); at != "" {
+			return "cached subagent (" + at + ")"
+		}
+		return "cached subagent"
 	default:
 		return string(e.Kind)
 	}

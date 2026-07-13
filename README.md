@@ -25,10 +25,11 @@ freed, with `~/.seam` preserved read-only as a fallback archive.
 | `internal/llm/` | OpenAI (default), Ollama, Anthropic chat + embeddings |
 | `internal/retrieve/` | briefing assembler, prompt-context matcher, recall (RRF) |
 | `internal/lifecycle/` | supersession, arbitration, provenance |
-| `internal/gardener/` | scheduled dedup / staleness / digest proposals |
+| `internal/gardener/` | scheduled dedup / staleness / digest / stale-plan proposals |
 | `internal/tasks/` | dependency-aware ready-queue |
+| `internal/plans/` | shared vocabulary of captured Claude Code plans (tags, statuses, tracking task) |
 | `internal/mcp/` | 26 MCP tools (streamable HTTP, static bearer key) |
-| `internal/hooks/` | SessionStart / UserPromptSubmit / SessionEnd endpoints |
+| `internal/hooks/` | SessionStart / UserPromptSubmit / SessionEnd + plan-mode capture (PostToolUse / SubagentStop / PermissionRequest) |
 | `internal/console/` | server-rendered observability UI (html/template + SSE) |
 | `internal/events/` | append-only event log; SSE fan-out; retrieval stats |
 | `internal/capture/` | SSRF-safe URL fetch |
@@ -88,3 +89,24 @@ and although SessionEnd does support `http`, at process exit the fire-and-forget
 request races the teardown and the ambient-session harvest often never lands, so
 it too runs as a `command` hook Claude Code waits on. UserPromptSubmit fires
 mid-turn where `http` is reliable and stays an `http` hook.
+
+## Claude Code plan-mode capture
+
+Plan-mode work is captured automatically once hooks are installed: every save of
+a `~/.claude/plans/*.md` file upserts a `cc-plan-<basename>` note (tagged
+`plan:<slug>`, lifecycle `plan-status:draft|presented|approved|abandoned`),
+planning subagents are cached as `cc-agent-<id>` notes in the same composition,
+and approval (ExitPlanMode) flips the note and creates an "Implement plan" task.
+The session's first captured iteration also returns related prior knowledge as
+`additionalContext`. Surfaces: `/console/plans`, briefing `PLAN (awaiting
+approval)` lines, and the CLI --
+
+```
+seam plan list                 # captured plans with status/iteration
+seam plan show <slug>          # body + attached notes + tasks
+seam plan check <slug>         # FRESH/STALE per note vs git history
+seam plan approve <slug>       # escape hatch when CC skipped the approval hook
+```
+
+The gardener proposes abandoning plans still unapproved after
+`gardener.stale_plan_days` (default 14; 0 disables).

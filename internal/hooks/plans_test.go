@@ -15,6 +15,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -89,6 +90,18 @@ func (e *captureEnv) planWrite(t *testing.T, toolName, filePath string) {
 	})
 }
 
+// planWriteOut is planWrite returning the decoded hook response, for asserting
+// on hookSpecificOutput.
+func (e *captureEnv) planWriteOut(t *testing.T, toolName, filePath string) map[string]any {
+	t.Helper()
+	resp, out := post(t, e.ts.URL+"/api/hooks/post-tool-use", testKey, map[string]any{
+		"session_id": testSID, "cwd": "/work/demo", "tool_name": toolName,
+		"tool_input": map[string]any{"file_path": filePath},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	return out
+}
+
 func (e *captureEnv) approve(t *testing.T, toolResponse map[string]any) {
 	t.Helper()
 	e.postHook(t, "post-tool-use", map[string]any{
@@ -135,7 +148,7 @@ func TestPlanCaptureIterationUpsert(t *testing.T) {
 	require.Contains(t, note.Tags, "created-by:agent")
 	require.Contains(t, note.Body, "> captured from cc/abcdef12 | clever-stallman.md | iter 1 | git ")
 	require.Contains(t, note.Body, "# My Plan\n\nStep one.")
-	require.Equal(t, 1, notePlanIteration(note))
+	require.Equal(t, 1, plans.NoteIteration(note))
 
 	meta := e.sessionPlanMeta(t)
 	require.Equal(t, "clever-stallman", meta["basename"])
@@ -160,7 +173,7 @@ func TestPlanCaptureIterationUpsert(t *testing.T) {
 	require.Equal(t, note.Created.Unix(), note2.Created.Unix())
 	require.Equal(t, "My Better Plan", note2.Title)
 	require.Contains(t, note2.Tags, "plan:my-plan", "title change must not re-slug the plan")
-	require.Equal(t, 2, notePlanIteration(note2))
+	require.Equal(t, 2, plans.NoteIteration(note2))
 	require.Contains(t, note2.Body, "Step two.")
 	require.NotContains(t, note2.Body, "Step one.")
 	require.Len(t, eventsOfKind(t, e.rec, core.EventPlanCaptured), 2)
@@ -202,7 +215,7 @@ func TestPlanApprovalFlipsStatusAndCreatesTask(t *testing.T) {
 	note, found := e.loadNote(t, "cc-plan-clever-stallman")
 	require.True(t, found)
 	require.Contains(t, note.Tags, "plan-status:approved")
-	require.Equal(t, 1, notePlanIteration(note), "approval must not bump the iteration")
+	require.Equal(t, 1, plans.NoteIteration(note), "approval must not bump the iteration")
 
 	tasks, err := store.ListTasksForPlan(ctx, e.db, "demo", "", "my-plan")
 	require.NoError(t, err)
@@ -310,6 +323,45 @@ func TestPermissionRequestWithoutDraftIsNoop(t *testing.T) {
 		"session_id": testSID, "cwd": "/work/demo", "tool_name": "ExitPlanMode",
 	})
 	require.Empty(t, eventsOfKind(t, e.rec, core.EventPlanPresented))
+}
+
+func TestFirstPlanCaptureInjectsRelated(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true})
+	e.startSession(t)
+	insertMemory(t, e.db, "01R", "decision", "gardener-pass-order",
+		"gardener passes run dedup then staleness then digest", "demo")
+
+	path := e.writePlanFile(t, "clever-stallman", "# Rework the gardener staleness pass\n\nSteps.\n")
+	out := e.planWriteOut(t, "Write", path)
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "<seam-plan-context>")
+	require.Contains(t, ac, "memory_read name=gardener-pass-order")
+	require.NotContains(t, ac, "cc-plan-clever-stallman", "the plan's own note is excluded")
+
+	// The injection feeds the funnel like any other.
+	evs := eventsOfKind(t, e.rec, core.EventInjected)
+	require.Len(t, evs, 1)
+	require.Equal(t, "post-tool-use", evs[0].Payload["hook"])
+
+	// Later iterations never re-inject: only the session's first capture does.
+	e.writePlanFile(t, "clever-stallman", "# Rework the gardener staleness pass\n\nMore.\n")
+	out = e.planWriteOut(t, "Edit", path)
+	_, has := out["hookSpecificOutput"]
+	require.False(t, has, "no hookSpecificOutput after the first capture")
+	require.Len(t, eventsOfKind(t, e.rec, core.EventInjected), 1)
+}
+
+func TestFirstPlanCaptureInjectRelatedDisabled(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
+	e.startSession(t)
+	insertMemory(t, e.db, "01R", "decision", "gardener-pass-order",
+		"gardener passes run dedup then staleness then digest", "demo")
+
+	path := e.writePlanFile(t, "clever-stallman", "# Rework the gardener staleness pass\n\nSteps.\n")
+	out := e.planWriteOut(t, "Write", path)
+	_, has := out["hookSpecificOutput"]
+	require.False(t, has)
+	require.Empty(t, eventsOfKind(t, e.rec, core.EventInjected))
 }
 
 func TestGitHeadStamp(t *testing.T) {

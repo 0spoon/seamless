@@ -111,11 +111,15 @@
 
     var body = el('div', 'ix-body');
     if (d.request) {
-      body.appendChild(el('h3', null, 'Request'));
+      body.appendChild(el('h3', null, d.kind === 'subagent.captured' ? 'Prompt' : 'Request'));
       body.appendChild(el('pre', 'pre', d.request));
     }
     if (d.response) {
-      body.appendChild(el('h3', null, d.kind === 'retrieval.injected' ? 'Injected content' : 'Response'));
+      var rh = 'Response';
+      if (d.kind === 'retrieval.injected') rh = 'Injected content';
+      else if (d.kind.indexOf('plan.') === 0) rh = 'Plan content';
+      else if (d.kind === 'subagent.captured') rh = 'Report';
+      body.appendChild(el('h3', null, rh));
       body.appendChild(el('pre', 'pre', d.response));
     }
     var links = el('div', 'ix-links');

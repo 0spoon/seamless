@@ -4,10 +4,17 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
+
+// pendingPlanMaxAge is how far back the briefing looks for captured-but-not-
+// approved Claude Code plans; anything older is presumed stale (the gardener
+// proposes abandoning it) and stops earning briefing space.
+const pendingPlanMaxAge = 7 * 24 * time.Hour
 
 // BriefingInput carries the SessionStart hook fields the briefing depends on.
 type BriefingInput struct {
@@ -70,20 +77,52 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	plans, err := store.ActivePlans(ctx, s.db, project)
+	rollups, err := store.ActivePlans(ctx, s.db, project)
+	if err != nil {
+		return "", nil, err
+	}
+	pending, err := s.pendingPlans(ctx, project)
 	if err != nil {
 		return "", nil, err
 	}
 	stages := s.pinnedStages(stageMems)
 	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
-		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 && len(plans) == 0 {
+		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 &&
+		len(rollups) == 0 && len(pending) == 0 {
 		return "", nil, nil
 	}
 	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
 		constraints: constraints, index: index, findings: findings,
-		ready: ready, siblings: siblings, stages: stages, plans: plans,
+		ready: ready, siblings: siblings, stages: stages, plans: rollups,
+		pendingPlans: pending,
 	})
 	return text, ids, nil
+}
+
+// pendingPlans returns the project's recently captured, not-yet-approved
+// Claude Code plans (plan-status draft/presented within pendingPlanMaxAge),
+// newest first. These earn budget-participating "awaiting approval" lines --
+// unlike the pinned active-plan rollups, a pending plan is a hint, not a
+// commitment.
+func (s *Service) pendingPlans(ctx context.Context, project string) ([]core.Note, error) {
+	if project == "" {
+		return nil, nil // the global scope aggregates too much to be useful
+	}
+	notes, err := store.NotesByTag(ctx, s.db, project, plans.TagPlan)
+	if err != nil {
+		return nil, err
+	}
+	cutoff := time.Now().Add(-pendingPlanMaxAge)
+	var out []core.Note
+	for _, n := range notes {
+		switch plans.StatusFromTags(n.Tags) {
+		case plans.StatusDraft, plans.StatusPresented:
+			if n.Updated.After(cutoff) {
+				out = append(out, n)
+			}
+		}
+	}
+	return out, nil
 }
 
 // familyMemoryScope returns the extra project slugs whose active memories should
@@ -139,13 +178,14 @@ func projectLabel(project string) string {
 // briefing (subagents use assembleSubagent instead). Grouping the sections keeps
 // the assembler signature stable as new sections are added.
 type briefingSections struct {
-	constraints []core.Memory
-	index       []core.Memory
-	findings    []core.Session
-	ready       []core.Task
-	siblings    []core.Session     // recent findings from family-member projects
-	stages      []stageLine        // non-done stage memories, pinned after constraints
-	plans       []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
+	constraints  []core.Memory
+	index        []core.Memory
+	findings     []core.Session
+	ready        []core.Task
+	siblings     []core.Session     // recent findings from family-member projects
+	stages       []stageLine        // non-done stage memories, pinned after constraints
+	plans        []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
+	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 }
 
 // assembleBriefing packs the sections against the token budget. Constraints, the
@@ -197,6 +237,19 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	used := estTokens(head.String()) + estTokens(tail.String())
 
 	var body strings.Builder
+	// Pending (unapproved) plan lines come first in the body so they read as a
+	// continuation of the pinned PLAN rollups, but unlike those they compete for
+	// budget: a stale hint should lose to memories, not crowd them out.
+	for _, n := range sec.pendingPlans {
+		line := fmt.Sprintf("PLAN (awaiting approval): %s -- %s (%s, %s)\n",
+			sanitizeField(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
+			plans.StatusFromTags(n.Tags), humanAge(n.Updated))
+		if used+estTokens(line) > budget {
+			break
+		}
+		body.WriteString(line)
+		used += estTokens(line)
+	}
 	dropped := 0
 	if len(index) > 0 {
 		lead := "\nMemories (" + sanitizeField(label, 80) + "):\n"

@@ -132,6 +132,60 @@ func TestInteractions_CursorAndSincePaging(t *testing.T) {
 	require.Equal(t, []string{"01TC2", "01TC1", "01SES", "01ERR"}, ids)
 }
 
+func TestInteractions_PlanCaptureRows(t *testing.T) {
+	db, mux := newConsole(t)
+	rec := events.NewRecorder(db)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 12, 0, 0, 0, 0, time.UTC)
+	rec0 := func(id string, min int, kind core.EventKind, p map[string]any) {
+		_, err := rec.Record(ctx, core.Event{
+			ID: id, TS: base.Add(time.Duration(min) * time.Minute),
+			Kind: kind, ProjectSlug: "demo", Payload: p,
+		})
+		require.NoError(t, err)
+	}
+	rec0("01PC1", 0, core.EventPlanCaptured, map[string]any{
+		"basename": "clever-stallman", "plan_slug": "my-plan", "iteration": 2,
+		"content": "# My Plan\n\nSteps.",
+	})
+	rec0("01PP1", 1, core.EventPlanPresented, map[string]any{"basename": "clever-stallman"})
+	rec0("01PA1", 2, core.EventPlanApproved, map[string]any{
+		"basename": "clever-stallman", "content": "# My Plan\n\nFinal.",
+	})
+	rec0("01SA1", 3, core.EventSubagentCaptured, map[string]any{
+		"agent_type": "Explore", "agent_id": "abc123",
+		"prompt": "Explore the gardener", "content": "Final report.",
+	})
+
+	var data interactionsData
+	getJSON(t, mux, "/console/interactions?format=json", &data)
+	require.Len(t, data.Rows, 4)
+	byID := map[string]interactionRow{}
+	for _, r := range data.Rows {
+		byID[r.ID] = r
+	}
+
+	cap := byID["01PC1"]
+	require.Equal(t, "clever-stallman", cap.Label)
+	require.Equal(t, "captured plan clever-stallman (iter 2)", cap.Summary)
+	require.Contains(t, cap.Response, "# My Plan")
+	require.Equal(t, "accent", cap.Tone)
+
+	require.Equal(t, "presented plan clever-stallman", byID["01PP1"].Summary)
+	require.Empty(t, byID["01PP1"].Response)
+
+	appr := byID["01PA1"]
+	require.Equal(t, "approved plan clever-stallman", appr.Summary)
+	require.Contains(t, appr.Response, "Final.")
+	require.Equal(t, "ok", appr.Tone)
+
+	sub := byID["01SA1"]
+	require.Equal(t, "Explore", sub.Label)
+	require.Equal(t, "cached subagent (Explore)", sub.Summary)
+	require.Equal(t, "Explore the gardener", sub.Request)
+	require.Equal(t, "Final report.", sub.Response)
+}
+
 func TestInteractions_HTMLShellRenders(t *testing.T) {
 	_, mux, _ := newConsoleWithSession(t, "cc/testsess")
 	req := httptest.NewRequest(http.MethodGet, "/console/interactions", nil)

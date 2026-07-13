@@ -33,9 +33,10 @@ internal/llm/      OpenAI (default), Ollama, Anthropic chat + embeddings   [P1]
 internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF) [P2/P4]
 internal/lifecycle/ supersession, arbitration, provenance                  [P3]
 internal/tasks/    dependency-aware ready-queue                            [P3]
-internal/gardener/ dedup / staleness / digest proposals                   [P4]
+internal/gardener/ dedup / staleness / digest / stale-plan proposals      [P4]
+internal/plans/    captured CC plan vocabulary: tags, statuses, tracking task
 internal/mcp/      26 MCP tools (streamable HTTP, static bearer key)       [P2+]
-internal/hooks/    SessionStart / UserPromptSubmit / SessionEnd endpoints  [P2/P3]
+internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
 ```
@@ -132,6 +133,14 @@ A "plan" is not a primitive -- it is a composition keyed by `plan:<slug>`:
   a lease (default 900s); re-claiming refreshes the lease (heartbeat); an expired
   lease is reclaimable. `tasks_release` (or closing the task, or `session_end`)
   frees it. The briefing surfaces each active plan as a `PLAN: <slug> -- ...` line.
+
+Claude Code plan mode feeds this automatically (`internal/hooks` capture +
+`internal/plans` vocabulary): plan-file saves upsert a `cc-plan-<basename>` note
+(`plan-status:draft|presented|approved|abandoned` tag), planning subagents cache
+as `cc-agent-<id>` notes in the composition, approval creates the tracking task,
+and the briefing lists unapproved captures as `PLAN (awaiting approval)` lines.
+Owner surfaces: `/console/plans` and `seam plan list|show|check|approve` (check =
+git-stamp staleness; approve = escape hatch when CC skips the approval hook).
 
 ## Working here
 

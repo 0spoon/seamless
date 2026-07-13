@@ -23,8 +23,9 @@ const (
 	ProposalArchive     = "archive"
 	ProposalDigest      = "digest"
 	ProposalConsolidate = "consolidate"
-	ProposalReproject   = "reproject" // move one memory to another project
-	ProposalSplit       = "split"     // set up child/shared projects + family for a project split
+	ProposalReproject   = "reproject"    // move one memory to another project
+	ProposalSplit       = "split"        // set up child/shared projects + family for a project split
+	ProposalAbandonPlan = "abandon_plan" // retag a never-approved captured plan plan-status:abandoned
 )
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

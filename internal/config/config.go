@@ -96,6 +96,9 @@ type PlanCapture struct {
 	// AutoTask creates a tracking task ("Implement plan: ...") when a plan is
 	// approved, composing it into the plan via plan_slug.
 	AutoTask bool `yaml:"auto_task"`
+	// InjectRelated returns related prior plans/memories as additionalContext on
+	// a session's first captured plan iteration.
+	InjectRelated bool `yaml:"inject_related"`
 }
 
 // Gardener configures the propose-only maintenance passes and their ticker.
@@ -116,6 +119,10 @@ type Gardener struct {
 	// events (tool.call, hook.prompt) are pruned by the gardener. 0 disables the
 	// prune; domain events are never pruned regardless.
 	ToolEventRetentionDays int `yaml:"tool_event_retention_days"`
+	// StalePlanDays is the age beyond which a captured, never-approved Claude
+	// Code plan (plan-status draft/presented) is proposed for abandonment.
+	// 0 disables the pass.
+	StalePlanDays int `yaml:"stale_plan_days"`
 }
 
 // Defaults returns the built-in configuration. File and env values are layered
@@ -148,8 +155,9 @@ func Defaults() Config {
 			StalenessDays:          90,
 			DigestDays:             30,
 			ToolEventRetentionDays: 30,
+			StalePlanDays:          14,
 		},
-		PlanCapture: PlanCapture{Enabled: true, AutoTask: true},
+		PlanCapture: PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true},
 	}
 }
 
@@ -223,6 +231,9 @@ func (c Config) Validate() error {
 	if c.Gardener.ToolEventRetentionDays < 0 {
 		return fmt.Errorf("config: gardener.tool_event_retention_days must be >= 0")
 	}
+	if c.Gardener.StalePlanDays < 0 {
+		return fmt.Errorf("config: gardener.stale_plan_days must be >= 0")
+	}
 	return nil
 }
 
@@ -289,6 +300,9 @@ func (c *Config) applyEnv() error {
 	if err := envInt("SEAMLESS_TOOL_EVENT_RETENTION_DAYS", &c.Gardener.ToolEventRetentionDays); err != nil {
 		return err
 	}
+	if err := envInt("SEAMLESS_GARDENER_STALE_PLAN_DAYS", &c.Gardener.StalePlanDays); err != nil {
+		return err
+	}
 	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {
 		return err
 	}
@@ -296,6 +310,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envBool("SEAMLESS_PLAN_CAPTURE_AUTO_TASK", &c.PlanCapture.AutoTask); err != nil {
+		return err
+	}
+	if err := envBool("SEAMLESS_PLAN_CAPTURE_INJECT_RELATED", &c.PlanCapture.InjectRelated); err != nil {
 		return err
 	}
 	return nil
