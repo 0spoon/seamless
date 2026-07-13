@@ -24,7 +24,7 @@
         <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}inbox{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}inbox{{end}} <span class="count">{{.Count}}</span></td></tr>
         {{range .Notes}}
         <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
-          <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
+          <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{copyBtn .Title}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
           <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
           <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
         </tr>

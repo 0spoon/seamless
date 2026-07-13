@@ -55,7 +55,7 @@
               <td class="muted" title="{{.When}}">{{ago .When}}</td>
               <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
               <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td>
-              <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}" data-peek>{{shortID .SessionID}}</a>{{end}}</td>
+              <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}" data-peek>{{shortID .SessionID}}</a>{{copyBtn .SessionID}}{{end}}</td>
             </tr>
             {{end}}
           </tbody>

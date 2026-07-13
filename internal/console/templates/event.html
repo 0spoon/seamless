@@ -13,12 +13,12 @@
   <div class="card">
     <h2>Metadata <span class="h2-meta">{{ago .Event.When}}</span></h2>
     <dl class="kv">
-      <dt>ID</dt><dd class="mono">{{.Event.ID}}</dd>
+      <dt>ID</dt><dd class="mono">{{.Event.ID}}{{copyBtn .Event.ID}}</dd>
       <dt>When</dt><dd title="{{.Event.When}}">{{ago .Event.When}}</dd>
       <dt>Kind</dt><dd>{{.Event.Kind}}</dd>
       <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
-      <dt>Session</dt><dd>{{if .Event.SessionID}}<a class="mono" href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{else}}&mdash;{{end}}</dd>
-      <dt>Item</dt><dd class="mono">{{if .Event.ItemID}}{{.Event.ItemID}}{{else}}&mdash;{{end}}</dd>
+      <dt>Session</dt><dd>{{if .Event.SessionID}}<a class="mono" href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{copyBtn .Event.SessionID}}{{else}}&mdash;{{end}}</dd>
+      <dt>Item</dt><dd class="mono">{{if .Event.ItemID}}{{.Event.ItemID}}{{copyBtn .Event.ItemID}}{{else}}&mdash;{{end}}</dd>
     </dl>
   </div>
 </div>

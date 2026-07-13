@@ -1,7 +1,7 @@
 {{define "peek-body"}}
 <article class="peek-entity">
   <header class="peek-head"><span class="kind">note</span></header>
-  <h2 class="peek-title">{{.Title}}</h2>
+  <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
 
   {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
@@ -12,7 +12,7 @@
     {{if .SourceURL}}<dt>Source</dt><dd><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.SourceURL}}</a></dd>{{end}}
     <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
-    <dt>File</dt><dd class="mono">{{.FilePath}}</dd>
+    <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
   </dl>
 
   <div class="peek-actions">

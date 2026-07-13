@@ -1,19 +1,19 @@
 {{define "peek-body"}}
 <article class="peek-entity">
   <header class="peek-head">
-    <span class="mono-id">{{shortID .ID}}</span>
+    <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}}
     <span class="badge {{taskTone .Status}}">{{.Status}}</span>
     {{if .PlanSlug}}<span class="kind">plan:{{.PlanSlug}}</span>{{end}}
   </header>
-  <h2 class="peek-title">{{.Title}}</h2>
+  <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
 
   {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
-    {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}</dd>{{end}}
+    {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}{{copyBtn .CreatedBy}}</dd>{{end}}
     {{if .ClaimedBy}}
-    <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}</dd>
+    <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}{{copyBtn .ClaimedBy}}</dd>
     <dt>Lease</dt><dd>{{if .ClaimLive}}live &middot; expires {{ago .LeaseExpiry}}{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
     {{end}}
     <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>

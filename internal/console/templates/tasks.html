@@ -23,7 +23,7 @@
       <tbody>
         {{range .Ready}}
         <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
-          <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td><span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} {{.Title}}</td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted">{{if .Deps}}{{.Deps}}{{else}}&mdash;{{end}}</td>
           <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
@@ -44,7 +44,7 @@
       <tbody>
         {{range .InProgress}}
         <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
-          <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} {{.Title}}</td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
         </tr>
@@ -64,7 +64,7 @@
       <tbody>
         {{range .Blocked}}
         <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
-          <td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td>
+          <td><span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} {{.Title}}</td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td>
             {{range .Blockers}}<a href="/console/tasks/{{.ID}}" data-peek class="badge {{if eq .Status "in_progress"}}accent{{else}}warn{{end}}" title="{{.ID}}">{{.Title}}</a> {{end}}

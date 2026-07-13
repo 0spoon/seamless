@@ -155,6 +155,45 @@
     label();
   };
 })();
+(function () {
+  /* Quick-copy: document-level delegation on .copy-btn[data-copy] so it keeps
+     working after the peek drawer swaps .peek-content innerHTML. Copies the
+     FULL value, flashes a check for ~1s, and stops propagation so copying
+     inside a table row doesn't also open the peek drawer / navigate. */
+  function flash(btn) {
+    btn.classList.add('copied');
+    btn.setAttribute('aria-label', 'Copied');
+    setTimeout(function () {
+      btn.classList.remove('copied');
+      btn.setAttribute('aria-label', 'Copy');
+    }, 1100);
+  }
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.top = '-1000px';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(ta);
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('.copy-btn[data-copy]') : null;
+    if (!btn) return;
+    e.preventDefault();
+    e.stopPropagation();
+    var text = btn.getAttribute('data-copy');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () { flash(btn); }, function () { fallbackCopy(text); flash(btn); });
+    } else {
+      fallbackCopy(text);
+      flash(btn);
+    }
+  });
+})();
 </script>
 {{block "scripts" .}}{{end}}
 </body>

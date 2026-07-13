@@ -11,7 +11,7 @@
   <div class="card">
     <h2>Storage</h2>
     <dl class="kv">
-      <dt>Data dir</dt><dd class="mono">{{.DataDir}}</dd>
+      <dt>Data dir</dt><dd class="mono">{{.DataDir}}{{copyBtn .DataDir}}</dd>
     </dl>
   </div>
 
@@ -46,7 +46,7 @@
       <thead><tr><th>Slug</th><th>Name</th><th>Description</th></tr></thead>
       <tbody>
         {{range .Projects}}
-        <tr><td class="mono"><a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}</a></td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
+        <tr><td class="mono"><a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}</a>{{copyBtn .Slug}}</td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -62,7 +62,7 @@
       <thead><tr><th>Repo path</th><th>Project</th></tr></thead>
       <tbody>
         {{range .RepoMap}}
-        <tr><td class="mono">{{.Repo}}</td><td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td></tr>
+        <tr><td class="mono">{{.Repo}}{{copyBtn .Repo}}</td><td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td></tr>
         {{end}}
       </tbody>
     </table>

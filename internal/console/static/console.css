@@ -769,6 +769,31 @@ a.link-act { color: var(--muted); }
 a.link-act:hover { color: var(--brand); text-decoration-color: var(--pop); }
 .link-act.danger:hover { color: var(--danger); text-decoration-color: var(--danger); }
 
+/* Quick-copy: a quiet icon button next to ids / names / slugs / paths. Muted by
+   default, brand on hover, a brief --ok "copied" flash. Always visible (quiet)
+   in detail/peek cells; revealed on hover inside dense list rows. The copy and
+   check glyphs both live in the button; .copied toggles which one shows. */
+.copy-btn {
+  display: inline-flex; align-items: center; justify-content: center; vertical-align: middle;
+  padding: 2px; margin-left: 5px; flex: none;
+  color: var(--muted); background: none; border: 0; cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), opacity var(--dur-fast) var(--ease-out);
+}
+.copy-btn .ico { width: 13px; height: 13px; }
+.copy-btn:hover { color: var(--brand); background: var(--surface-3); }
+.copy-btn:focus-visible { outline: none; color: var(--brand); box-shadow: var(--shadow-focus); }
+.copy-btn.copied { color: var(--ok); background: none; }
+.copy-btn .ico-check { display: none; }
+.copy-btn.copied .ico-check { display: inline-flex; }
+.copy-btn.copied .ico-copy { display: none; }
+/* Dense list rows: keep the button quiet until the row is hovered/focused,
+   but always show it while focused (keyboard) or flashing "copied". */
+tr .copy-btn, .sess-row .copy-btn { opacity: 0; }
+tr:hover .copy-btn, tr:focus-within .copy-btn,
+.sess-row:hover .copy-btn, .sess-row:focus-within .copy-btn,
+.copy-btn:focus-visible, .copy-btn.copied { opacity: 1; }
+
 /* --- Retrieval-health window selector (Overview card + Retrieval page) ------- */
 .win-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0 0; }
 .win-tabs-page { margin: 0 0 20px; }

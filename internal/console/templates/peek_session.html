@@ -4,7 +4,7 @@
     <span class="badge {{if eq .Session.Status "active"}}ok{{end}}">{{.Session.Status}}</span>
     {{if .Session.Ambient}}<span class="kind faint">ambient</span>{{end}}
   </header>
-  <h2 class="peek-title">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h2>
+  <h2 class="peek-title">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}{{copyBtn .Session.ID}}</h2>
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd>

@@ -25,7 +25,7 @@
         {{range .Kinds}}
         {{range .Memories}}
         <tr id="{{.ID}}">
-          <td class="mem-name"><strong><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a></strong>{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
+          <td class="mem-name"><strong><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a></strong>{{copyBtn .Name}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="num">{{.Injects}}</td>
           <td class="num">{{.Reads}}</td>
