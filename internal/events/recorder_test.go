@@ -3,6 +3,8 @@ package events
 import (
 	"context"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -281,4 +283,46 @@ func TestPublish_DropsWhenSubscriberFull(t *testing.T) {
 		_, err := r.Record(context.Background(), core.Event{Kind: core.EventMemoryRead, ItemID: "x"})
 		require.NoError(t, err)
 	}
+}
+
+// Race guard: publishers, subscribers, and unsubscribers all touch the subs map
+// and its channels concurrently -- exactly the daemon's shape (tool handlers
+// recording while console SSE clients connect and disconnect). Run under -race
+// this must show no data race, no send-on-closed panic, and no deadlock.
+func TestRecorder_ConcurrentPublishSubscribeUnsubscribe(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+
+	var wg sync.WaitGroup
+	// Writers: the single-conn SQLite serializes the inserts; the fan-out is the
+	// contended path.
+	for w := range 4 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for i := range 25 {
+				_, err := r.Record(ctx, core.Event{
+					Kind: core.EventMemoryRead, ItemID: "w" + strconv.Itoa(w) + "-" + strconv.Itoa(i),
+				})
+				require.NoError(t, err)
+			}
+		}()
+	}
+	// Churning subscribers: some drain a little, all unsubscribe mid-stream.
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			ch, unsubscribe := r.Subscribe()
+			for range 5 {
+				select {
+				case <-ch:
+				default:
+				}
+			}
+			unsubscribe()
+			unsubscribe() // idempotent under contention too
+		}()
+	}
+	wg.Wait()
 }

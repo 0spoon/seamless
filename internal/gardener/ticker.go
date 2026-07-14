@@ -17,9 +17,24 @@ const (
 // Start launches the gardener ticker in a background goroutine: one pass shortly
 // after startup, then every Interval, until ctx is cancelled. It never blocks the
 // caller and never panics the server (each pass is best-effort). Call it only
-// when the gardener is enabled.
+// when the gardener is enabled, at most once, from the goroutine that will later
+// call Wait (the daemon's serve path).
 func (s *Service) Start(ctx context.Context) {
-	go s.loop(ctx)
+	s.done = make(chan struct{})
+	go func() {
+		defer close(s.done)
+		s.loop(ctx)
+	}()
+}
+
+// Wait blocks until the goroutine launched by Start has exited (its ctx must
+// already be cancelled, or Wait blocks until it is). It returns immediately when
+// Start was never called. The daemon calls it during shutdown so no pass is
+// still touching the DB when the DB closes.
+func (s *Service) Wait() {
+	if s.done != nil {
+		<-s.done
+	}
 }
 
 func (s *Service) loop(ctx context.Context) {

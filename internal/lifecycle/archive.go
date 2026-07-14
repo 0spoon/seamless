@@ -16,6 +16,9 @@ import (
 // carry its full Body (read the file first; index rows have no body). It returns
 // the updated memory.
 func Archive(ctx context.Context, w MemoryWriter, old core.Memory, reason string, now time.Time) (core.Memory, error) {
+	if old.InvalidAt != nil {
+		return core.Memory{}, fmt.Errorf("lifecycle.Archive: %s: %w", old.Name, ErrAlreadyInvalid)
+	}
 	at := now.UTC()
 	old.InvalidAt = &at
 	old.SupersededBy = ""

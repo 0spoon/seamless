@@ -179,6 +179,63 @@ func TestPlanCaptureIterationUpsert(t *testing.T) {
 	require.Len(t, eventsOfKind(t, e.rec, core.EventPlanCaptured), 2)
 }
 
+// tagCount counts occurrences of v in tags, for duplicate-tag assertions.
+func tagCount(tags []string, v string) int {
+	n := 0
+	for _, t := range tags {
+		if t == v {
+			n++
+		}
+	}
+	return n
+}
+
+// TestPlanCapturePreservesForeignTags pins the upsert tag-merge: a tag the
+// owner (or another agent) added to a captured plan note survives the next
+// plan-file save and the approval, while the hook-managed tags (plan:<slug>,
+// cc-plan, created-by:agent, plan-status:*) stay authoritative and are never
+// duplicated.
+func TestPlanCapturePreservesForeignTags(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: false})
+	e.startSession(t)
+
+	path := e.writePlanFile(t, "clever-stallman", "# My Plan\n\nStep one.\n")
+	e.planWrite(t, "Write", path)
+
+	// The owner tags the captured note; a foreign plan:* tag is added too, to
+	// pin that the composition tag remains hook-managed.
+	note, found := e.loadNote(t, "cc-plan-clever-stallman")
+	require.True(t, found)
+	note.Tags = append(note.Tags, "priority:high", "plan:owner-renamed")
+	_, err := e.mgr.WriteNote(context.Background(), note)
+	require.NoError(t, err)
+
+	// Re-saving the plan file re-upserts the note: the foreign tag survives,
+	// the managed tags update without duplicating.
+	e.writePlanFile(t, "clever-stallman", "# My Plan\n\nStep two.\n")
+	e.planWrite(t, "Edit", path)
+
+	note, found = e.loadNote(t, "cc-plan-clever-stallman")
+	require.True(t, found)
+	require.Contains(t, note.Tags, "priority:high", "owner-added tag must survive a re-capture")
+	require.Contains(t, note.Tags, "plan:my-plan")
+	require.NotContains(t, note.Tags, "plan:owner-renamed", "the composition tag is hook-managed")
+	require.Contains(t, note.Tags, "plan-status:draft")
+	require.Equal(t, 1, tagCount(note.Tags, "plan:my-plan"))
+	require.Equal(t, 1, tagCount(note.Tags, "cc-plan"))
+	require.Equal(t, 1, tagCount(note.Tags, "created-by:agent"))
+	require.Equal(t, 1, tagCount(note.Tags, "priority:high"))
+
+	// Approval updates the managed status tag and still keeps the foreign tag.
+	e.approve(t, map[string]any{"filePath": path})
+	note, found = e.loadNote(t, "cc-plan-clever-stallman")
+	require.True(t, found)
+	require.Contains(t, note.Tags, "priority:high", "owner-added tag must survive approval")
+	require.Contains(t, note.Tags, "plan-status:approved")
+	require.NotContains(t, note.Tags, "plan-status:draft")
+	require.Equal(t, 1, tagCount(note.Tags, "plan:my-plan"))
+}
+
 func TestPlanCaptureIgnoresNonPlanWrites(t *testing.T) {
 	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
 	e.startSession(t)

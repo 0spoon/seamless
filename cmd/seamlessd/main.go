@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -230,11 +231,7 @@ func runServe(args []string) error {
 	hooksH.Register(mux)
 	consoleSrv.Register(mux)
 
-	srv := &http.Server{
-		Addr:              bind,
-		Handler:           mux,
-		ReadHeaderTimeout: 5 * time.Second,
-	}
+	srv := newHTTPServer(ctx, bind, mux)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -249,16 +246,38 @@ func runServe(args []string) error {
 	case <-ctx.Done():
 		slog.Info("shutdown signal received")
 	case err := <-errCh:
+		stop() // stop background work (gardener, watcher ctx) on the error path too
+		garden.Wait()
 		return fmt.Errorf("seamlessd.serve: %w", err)
 	}
 
+	// Drain order: cancel ctx (stops the gardener loop and unblocks long-lived
+	// request streams via the server's base context), shut the listener down,
+	// then wait for the gardener so no pass still touches the DB when the
+	// deferred mgr.Close/db.Close run.
+	stop()
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
+		garden.Wait()
 		return fmt.Errorf("seamlessd.serve: shutdown: %w", err)
 	}
+	garden.Wait()
 	slog.Info("seamlessd stopped")
 	return nil
+}
+
+// newHTTPServer builds the daemon's HTTP server. Requests inherit ctx as their
+// base context, so cancelling it (the shutdown signal) also cancels in-flight
+// request contexts -- without this, the console's open SSE streams never end and
+// every Shutdown stalls for its full deadline, then fails.
+func newHTTPServer(ctx context.Context, bind string, h http.Handler) *http.Server {
+	return &http.Server{
+		Addr:              bind,
+		Handler:           h,
+		ReadHeaderTimeout: 5 * time.Second,
+		BaseContext:       func(net.Listener) context.Context { return ctx },
+	}
 }
 
 // healthzHandler reports liveness plus a database ping.

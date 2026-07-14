@@ -57,6 +57,74 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	return nil
 }
 
+// ReactivateSessionByName resumes the named session with a single targeted
+// UPDATE: status flips back to active, project_slug is re-scoped (only when
+// project is non-empty), and updated_at is bumped -- findings and metadata are
+// never touched. The SessionStart hook resumes ambient sessions through it
+// instead of a full-row read-modify-write, so a concurrent transcript harvest
+// (which writes findings via UpdateSession) cannot be clobbered by a racing
+// resume that read the row before the harvest landed. found is false when no
+// session has that name.
+func ReactivateSessionByName(ctx context.Context, db *sql.DB, name, project string, now time.Time) (bool, error) {
+	if name == "" {
+		return false, nil
+	}
+	res, err := db.ExecContext(ctx, `
+		UPDATE sessions
+		   SET status = 'active',
+		       project_slug = CASE WHEN ? = '' THEN project_slug ELSE ? END,
+		       updated_at = ?
+		 WHERE name = ?`,
+		project, project, core.FormatTime(now.UTC()), name)
+	if err != nil {
+		return false, fmt.Errorf("store.ReactivateSessionByName: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store.ReactivateSessionByName: rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
+// ActiveSessionIDs reports which of the given session ids belong to a currently
+// active session. It backs the MCP server's connection-binding sweep: a binding
+// whose session is no longer active -- ended by the session_end tool, the
+// SessionEnd hook, or the idle reaper -- is evicted. Ids absent from the result
+// (unknown or non-active) are simply not set.
+func ActiveSessionIDs(ctx context.Context, db *sql.DB, ids []string) (map[string]bool, error) {
+	active := make(map[string]bool, len(ids))
+	const chunkSize = 500 // stay well under SQLite's bound-parameter limit
+	for start := 0; start < len(ids); start += chunkSize {
+		chunk := ids[start:min(start+chunkSize, len(ids))]
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			args[i] = id
+		}
+		rows, err := db.QueryContext(ctx, `SELECT id FROM sessions
+			WHERE status = 'active' AND id IN (`+placeholders(len(chunk))+`)`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("store.ActiveSessionIDs: %w", err)
+		}
+		if err := scanIDs(rows, active); err != nil {
+			return nil, fmt.Errorf("store.ActiveSessionIDs: %w", err)
+		}
+	}
+	return active, nil
+}
+
+// scanIDs collects single-column id rows into dst, closing rows.
+func scanIDs(rows *sql.Rows, dst map[string]bool) error {
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return err
+		}
+		dst[id] = true
+	}
+	return rows.Err()
+}
+
 // TouchSession heartbeats an active session by bumping its updated_at, marking it
 // still-alive for the idle reaper. It only touches active sessions (the WHERE
 // guard), so it never resurrects a completed or expired one, and is a no-op on an
@@ -94,23 +162,48 @@ func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.T
 // flipping each to SessionExpired. It leaves updated_at untouched so the row still
 // records when the session was last alive (the console orders and dates by it),
 // which also keeps the flip idempotent: a reaped session no longer matches the
-// active filter. It returns the reaped sessions (id + project) so the caller can
-// release their task claims and record telemetry. Passing updated_at unchanged
-// means a later graceful session_end/resume can still upgrade the row (its guards
-// key off completed/active, not expired).
+// active filter. It returns only the sessions it actually flipped (id + project)
+// so the caller can release their task claims and record telemetry -- a session
+// that was heartbeated or gracefully completed between the candidate read and the
+// flip is skipped, never falsely reaped. Passing updated_at unchanged means a
+// later graceful session_end/resume can still upgrade the row (its guards key off
+// completed/active, not expired).
 func ExpireStaleSessions(ctx context.Context, db *sql.DB, cutoff time.Time) ([]core.Session, error) {
-	stale, err := staleActiveSessions(ctx, db, cutoff)
+	candidates, err := staleActiveSessions(ctx, db, cutoff)
 	if err != nil {
 		return nil, err
 	}
-	for _, s := range stale {
-		if _, err := db.ExecContext(ctx,
-			`UPDATE sessions SET status = 'expired' WHERE id = ? AND status = 'active'`,
-			s.ID); err != nil {
-			return nil, fmt.Errorf("store.ExpireStaleSessions: %w", err)
+	var reaped []core.Session
+	for _, s := range candidates {
+		flipped, err := expireSessionIfStillStale(ctx, db, s.ID, cutoff)
+		if err != nil {
+			return nil, err
+		}
+		if flipped {
+			reaped = append(reaped, s)
 		}
 	}
-	return stale, nil
+	return reaped, nil
+}
+
+// expireSessionIfStillStale flips one session to expired iff it is STILL an
+// active session idle past cutoff at flip time, reporting whether it did. The
+// re-check closes the window between the candidate SELECT and this UPDATE: a
+// heartbeat (TouchSession bumping updated_at) or a graceful completion (status
+// leaving 'active') that lands in between wins, and the session is not reaped.
+func expireSessionIfStillStale(ctx context.Context, db *sql.DB, id string, cutoff time.Time) (bool, error) {
+	res, err := db.ExecContext(ctx,
+		`UPDATE sessions SET status = 'expired'
+		  WHERE id = ? AND status = 'active' AND updated_at < ?`,
+		id, core.FormatTime(cutoff.UTC()))
+	if err != nil {
+		return false, fmt.Errorf("store.ExpireStaleSessions: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store.ExpireStaleSessions: rows affected: %w", err)
+	}
+	return n == 1, nil
 }
 
 // staleActiveSessions returns the active sessions whose last activity predates

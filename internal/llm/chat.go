@@ -50,7 +50,7 @@ func NewChatClient(cfg config.LLM) (Chat, error) {
 		if cfg.Anthropic.APIKey == "" {
 			return nil, fmt.Errorf("llm.NewChatClient: anthropic selected but api_key is empty")
 		}
-		return newAnthropicChat(cfg.Anthropic.APIKey, cfg.Anthropic.ChatModel), nil
+		return newAnthropicChat(cfg.Anthropic.APIKey, cfg.Anthropic.BaseURL, cfg.Anthropic.ChatModel), nil
 	default:
 		return nil, fmt.Errorf("llm.NewChatClient: unknown provider %q", cfg.Provider)
 	}
@@ -64,14 +64,14 @@ type openAIChat struct {
 	baseURL string
 	apiKey  string
 	model   string
-	client  *http.Client
+	client  retryClient
 }
 
 func newOpenAIChat(apiKey, baseURL, model string) *openAIChat {
 	if baseURL == "" {
 		baseURL = defaultOpenAIBaseURL
 	}
-	return &openAIChat{baseURL: baseURL, apiKey: apiKey, model: model, client: &http.Client{Timeout: 2 * time.Minute}}
+	return &openAIChat{baseURL: baseURL, apiKey: apiKey, model: model, client: newRetryClient(2 * time.Minute)}
 }
 
 func (c *openAIChat) Model() string { return c.model }
@@ -109,14 +109,15 @@ func (c *openAIChat) Complete(ctx context.Context, system, user string) (string,
 	if err != nil {
 		return "", fmt.Errorf("llm.OpenAI.Complete: marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("llm.OpenAI.Complete: new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.client.Do(req)
+	resp, err := c.client.do(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		return req, nil
+	})
 	if err != nil {
 		return "", fmt.Errorf("llm.OpenAI.Complete: %w: %w", ErrUnavailable, err)
 	}
@@ -129,7 +130,9 @@ func (c *openAIChat) Complete(ctx context.Context, system, user string) (string,
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("llm.OpenAI.Complete: decode: %w", err)
 	}
-	if len(out.Choices) == 0 {
+	// Empty visible text is a real failure mode (a reasoning model can spend the
+	// whole token budget on reasoning); callers must not mistake it for a digest.
+	if len(out.Choices) == 0 || out.Choices[0].Message.Content == "" {
 		return "", fmt.Errorf("llm.OpenAI.Complete: empty completion")
 	}
 	return out.Choices[0].Message.Content, nil
@@ -144,14 +147,14 @@ var _ Chat = (*openAIChat)(nil)
 type ollamaChat struct {
 	baseURL string
 	model   string
-	client  *http.Client
+	client  retryClient
 }
 
 func newOllamaChat(baseURL, model string) *ollamaChat {
 	if baseURL == "" {
 		baseURL = defaultOllamaBaseURL
 	}
-	return &ollamaChat{baseURL: baseURL, model: model, client: &http.Client{Timeout: 2 * time.Minute}}
+	return &ollamaChat{baseURL: baseURL, model: model, client: newRetryClient(2 * time.Minute)}
 }
 
 func (c *ollamaChat) Model() string { return c.model }
@@ -180,13 +183,14 @@ func (c *ollamaChat) Complete(ctx context.Context, system, user string) (string,
 	if err != nil {
 		return "", fmt.Errorf("llm.Ollama.Complete: marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("llm.Ollama.Complete: new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.client.Do(req)
+	resp, err := c.client.do(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/chat", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	})
 	if err != nil {
 		return "", fmt.Errorf("llm.Ollama.Complete: %w: %w", ErrUnavailable, err)
 	}
@@ -198,6 +202,9 @@ func (c *ollamaChat) Complete(ctx context.Context, system, user string) (string,
 	var out ollamaChatResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("llm.Ollama.Complete: decode: %w", err)
+	}
+	if out.Message.Content == "" {
+		return "", fmt.Errorf("llm.Ollama.Complete: empty completion")
 	}
 	return out.Message.Content, nil
 }
@@ -212,11 +219,14 @@ type anthropicChat struct {
 	baseURL string
 	apiKey  string
 	model   string
-	client  *http.Client
+	client  retryClient
 }
 
-func newAnthropicChat(apiKey, model string) *anthropicChat {
-	return &anthropicChat{baseURL: defaultAnthropicBaseURL, apiKey: apiKey, model: model, client: &http.Client{Timeout: 2 * time.Minute}}
+func newAnthropicChat(apiKey, baseURL, model string) *anthropicChat {
+	if baseURL == "" {
+		baseURL = defaultAnthropicBaseURL
+	}
+	return &anthropicChat{baseURL: baseURL, apiKey: apiKey, model: model, client: newRetryClient(2 * time.Minute)}
 }
 
 func (c *anthropicChat) Model() string { return c.model }
@@ -246,15 +256,16 @@ func (c *anthropicChat) Complete(ctx context.Context, system, user string) (stri
 	if err != nil {
 		return "", fmt.Errorf("llm.Anthropic.Complete: marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(body))
-	if err != nil {
-		return "", fmt.Errorf("llm.Anthropic.Complete: new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", c.apiKey)
-	req.Header.Set("anthropic-version", anthropicVersion)
-
-	resp, err := c.client.Do(req)
+	resp, err := c.client.do(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/v1/messages", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("x-api-key", c.apiKey)
+		req.Header.Set("anthropic-version", anthropicVersion)
+		return req, nil
+	})
 	if err != nil {
 		return "", fmt.Errorf("llm.Anthropic.Complete: %w: %w", ErrUnavailable, err)
 	}
@@ -268,7 +279,7 @@ func (c *anthropicChat) Complete(ctx context.Context, system, user string) (stri
 		return "", fmt.Errorf("llm.Anthropic.Complete: decode: %w", err)
 	}
 	for _, block := range out.Content {
-		if block.Type == "text" {
+		if block.Type == "text" && block.Text != "" {
 			return block.Text, nil
 		}
 	}

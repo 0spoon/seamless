@@ -10,6 +10,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 func projectListTool() mcp.Tool {
@@ -52,6 +53,11 @@ func (s *Server) handleProjectCreate(ctx context.Context, req mcp.CallToolReques
 	}
 	if normalizeProject(slug) == "" {
 		return errResult("project_create", fmt.Errorf("slug %q is reserved for the global namespace", slug))
+	}
+	// The slug becomes a directory under the memory/ and notes/ trees; reject
+	// separators and ".." so no later write can escape its tree.
+	if err := validate.Name(slug); err != nil {
+		return errResult("project_create", fmt.Errorf("invalid slug %q: %w", slug, err))
 	}
 	id, err := core.NewID()
 	if err != nil {

@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -199,9 +200,10 @@ type planUpsert struct {
 }
 
 // upsertPlanNote creates or updates the cc-plan-<basename> note for one plan
-// iteration or approval. On update the note id, created time, and plan:<slug>
-// tag are preserved (the composition slug is minted once, at first capture);
-// the title, body, and status tag follow the latest content. An approval with
+// iteration or approval. On update the note id, created time, plan:<slug> tag
+// (the composition slug is minted once, at first capture), and any tags the
+// owner or another agent added are preserved; the title, body, and the managed
+// tags follow the latest content. An approval with
 // no readable content flips the status of an existing note without touching
 // its body; with no existing note it is dropped (fail-open). Agent-cache notes
 // captured before the plan existed (pending on the session) are adopted into
@@ -254,7 +256,7 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 		planSlug = core.Slugify(note.Title)
 	}
 	note.Description = plans.NoteDescription(basename, iter, status)
-	note.Tags = plans.SetStatusTag([]string{plans.SlugTag(planSlug), plans.TagPlan, "created-by:agent"}, status)
+	note.Tags = plans.SetStatusTag(mergePlanTags(note.Tags, planSlug), status)
 	note.Updated = now
 	if note.Extra == nil {
 		note.Extra = map[string]any{}
@@ -291,6 +293,25 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 	}
 	h.recordPlanEvent(ctx, kind, p.SessionID, written.ID, payload)
 	return planUpsert{note: written, planSlug: planSlug, first: prior.Basename == ""}, true
+}
+
+// mergePlanTags rebuilds a captured-plan note's tag set for an upsert. The
+// hook-managed tags stay authoritative and deduplicated -- plan:<slug> (the
+// composition tag, replacing any other plan:* tag), cc-plan, and
+// created-by:agent -- while every other tag already on the note (owner- or
+// agent-added) is preserved in order, so a re-captured iteration never wipes
+// them. The plan-status:* tag is managed separately via plans.SetStatusTag.
+func mergePlanTags(existing []string, planSlug string) []string {
+	managed := []string{plans.SlugTag(planSlug), plans.TagPlan, "created-by:agent"}
+	out := make([]string, 0, len(managed)+len(existing))
+	out = append(out, managed...)
+	for _, t := range existing {
+		if strings.HasPrefix(t, plans.SlugTagPrefix()) || slices.Contains(managed, t) {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out
 }
 
 // adoptPendingAgents adds the plan:<slug> tag to agent-cache notes captured

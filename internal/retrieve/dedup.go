@@ -29,7 +29,11 @@ func (s *Service) DedupHint(ctx context.Context, project, name, description stri
 		s.logger.Warn("retrieve.DedupHint: embed failed, no hint", "error", err)
 		return nil, nil
 	}
-	hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), []string{"memory"}, 3)
+	scope := []string{""}
+	if project != "" {
+		scope = append(scope, project)
+	}
+	hits, err := store.CosineSearchScoped(ctx, s.db, qvec, s.embedder.Model(), []string{"memory"}, scope, 3)
 	if err != nil {
 		return nil, err
 	}

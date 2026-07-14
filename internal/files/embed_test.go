@@ -5,9 +5,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -123,6 +125,79 @@ func TestDeleteRemovesVector(t *testing.T) {
 	require.NoError(t, m.Remove(ctx, written.FilePath))
 	require.Zero(t, indexedCount(t, db, "embeddings"))
 	require.Zero(t, indexedCount(t, db, "memories_index"))
+}
+
+// A failed embed must not be pinned behind the skip-unchanged check: the
+// content hash is cleared, so the next reconcile retries the embed and, once
+// the embedder recovers, stores the vector.
+func TestReconcileRetriesFailedEmbed(t *testing.T) {
+	m, db := newManager(t)
+	emb := &fakeEmbedder{model: "fake-v1", fail: true}
+	m.SetEmbedder(emb)
+	ctx := context.Background()
+
+	// Index from disk while the embedder is down: no vector, blank hash.
+	written, err := m.store.WriteMemory(sampleMemory())
+	require.NoError(t, err)
+	require.NoError(t, m.Reconcile(ctx))
+	require.Zero(t, indexedCount(t, db, "embeddings"))
+	var hash string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT content_hash FROM memories_index WHERE file_path = ?`, written.FilePath).Scan(&hash))
+	require.Empty(t, hash, "a failed embed must not record the content hash")
+
+	// The embedder recovers; the next reconcile retries and succeeds.
+	emb.fail = false
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "embeddings"))
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT content_hash FROM memories_index WHERE file_path = ?`, written.FilePath).Scan(&hash))
+	require.Equal(t, written.ContentHash, hash, "a successful embed records the hash again")
+
+	// Once in sync, a further reconcile is a skip (hash unchanged, vector kept).
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "embeddings"))
+}
+
+// The write-through path gets the same retry treatment: a managed write with a
+// down embedder clears the hash, so a later reconcile backfills the vector.
+func TestWriteThroughRetriesFailedEmbed(t *testing.T) {
+	m, db := newManager(t)
+	emb := &fakeEmbedder{model: "fake-v1", fail: true}
+	m.SetEmbedder(emb)
+	ctx := context.Background()
+
+	written, err := m.WriteMemory(ctx, sampleMemory())
+	require.NoError(t, err) // best-effort: the write itself succeeds
+	require.Zero(t, indexedCount(t, db, "embeddings"))
+
+	emb.fail = false
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "embeddings"))
+	var n int
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM embeddings WHERE item_id = ?`, written.ID).Scan(&n))
+	require.Equal(t, 1, n)
+}
+
+// A note's failed embed retries the same way (the clear is per-tree).
+func TestReconcileRetriesFailedNoteEmbed(t *testing.T) {
+	m, db := newManager(t)
+	emb := &fakeEmbedder{model: "fake-v1", fail: true}
+	m.SetEmbedder(emb)
+	ctx := context.Background()
+
+	_, err := m.store.WriteNote(core.Note{
+		ID: "01K0NOTE00000000000000000A", Title: "N", Slug: "n", Project: "seam",
+		Body: "outage note seam\n", Created: time.Now().UTC(), Updated: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	require.NoError(t, m.Reconcile(ctx))
+	require.Zero(t, indexedCount(t, db, "embeddings"))
+
+	emb.fail = false
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "embeddings"))
 }
 
 // Reconcile embeds files it indexes from disk.

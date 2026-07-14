@@ -53,13 +53,23 @@ type fusedItem struct {
 }
 
 // Recall fuses semantic (cosine) and FTS results with RRF, hydrates the winners
-// from the index, filters to the project+global scope, and packs them into the
-// recall token budget. With no embedder configured it degrades to FTS only.
+// from the index, and packs them into the recall token budget. The project+
+// global scope is enforced inside the candidate queries, so the fused depth is
+// entirely in-scope. With no embedder configured it degrades to FTS only.
 func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	kinds := scopeKinds(in.Scope)
 	limit := in.Limit
 	if limit <= 0 {
 		limit = 10
+	}
+
+	// The recall scope is the bound project plus global (project ""). Filtering
+	// happens in the candidate queries themselves: filtering only after fusion
+	// over a fixed depth would let a query dominated by out-of-scope hits starve
+	// in-scope matches that rank deeper than recallSourceDepth.
+	projects := []string{""}
+	if in.Project != "" {
+		projects = append(projects, in.Project)
 	}
 
 	acc := make(map[string]*fusedItem)
@@ -82,13 +92,13 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	if s.embedder != nil {
 		if qvec, err := s.embedder.Embed(ctx, in.Query); err != nil {
 			s.logger.Warn("retrieve.Recall: embed failed, FTS only", "error", err)
-		} else if hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, recallSourceDepth); err != nil {
+		} else if hits, err := store.CosineSearchScoped(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth); err != nil {
 			return nil, err
 		} else {
 			add(hits, true)
 		}
 	}
-	ftsHits, err := store.FTSSearch(ctx, s.db, in.Query, kinds, recallSourceDepth)
+	ftsHits, err := store.FTSSearchScoped(ctx, s.db, in.Query, kinds, projects, recallSourceDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +162,8 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 			}
 			h = memoryHit(m)
 		}
+		// The candidate queries already filter to scope; this is a final guard
+		// for link-expanded neighbors and any index/fts project drift.
 		if !scopeVisible(h.Project, in.Project) {
 			continue
 		}

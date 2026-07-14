@@ -25,7 +25,7 @@ PREFIX        ?= $(HOME)/.local
 PREFIX_BIN    := $(PREFIX)/bin
 PROD_CONFIG   := $(HOME)/.config/seamless/seamless.yaml
 
-.PHONY: help build test test-race lint vet fmt tidy run doctor console console-chrome dev \
+.PHONY: help build test test-race bench lint vet fmt tidy run doctor console console-chrome dev \
 	install-service install-hooks install-prod uninstall-prod _reload-service \
 	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
@@ -35,6 +35,7 @@ help:
 	@echo "  build      build ./bin/$(BINARY) and ./bin/$(CLI)"
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
+	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
 	@echo "  fmt        gofmt the tree"
@@ -69,6 +70,13 @@ test:
 
 test-race:
 	$(GO) test -race $(PKG)
+
+# Hot-path baseline benchmarks (recall, briefing, prompt matcher, event
+# append + SSE fan-out). -run '^$' skips unit tests so only benchmarks run.
+# Override BENCHTIME (e.g. BENCHTIME=1x) for a quick compile/smoke check.
+BENCHTIME ?= 1s
+bench:
+	$(GO) test -run '^$$' -bench . -benchmem -benchtime $(BENCHTIME) $(PKG)
 
 lint:
 	golangci-lint run

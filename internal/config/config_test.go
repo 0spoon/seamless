@@ -24,6 +24,7 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, ProviderOpenAI, d.LLM.Provider)
 	require.Equal(t, "text-embedding-3-large", d.LLM.OpenAI.EmbeddingModel)
 	require.Equal(t, 3072, d.LLM.OpenAI.EmbeddingDims)
+	require.Equal(t, "https://api.anthropic.com", d.LLM.Anthropic.BaseURL)
 	require.Equal(t, 1500, d.Budgets.MaxBriefingTokens)
 	require.Equal(t, 1000, d.Budgets.RecallBudgetTokens)
 	require.Equal(t, 0, d.Budgets.ToolEventMaxChars) // 0 = unlimited
@@ -118,6 +119,24 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	require.False(t, cfg.PlanCapture.AutoTask)
 	require.False(t, cfg.PlanCapture.InjectRelated)
 	require.Equal(t, "", cfg.SourcePath())
+}
+
+func TestLoadFrom_AnthropicBaseURL(t *testing.T) {
+	path := writeConfig(t, `
+llm:
+  anthropic:
+    base_url: "http://127.0.0.1:9911"
+`)
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, "http://127.0.0.1:9911", cfg.LLM.Anthropic.BaseURL)
+	// Absent sibling keys keep their defaults.
+	require.Equal(t, "claude-sonnet-5", cfg.LLM.Anthropic.ChatModel)
+
+	t.Setenv("SEAMLESS_ANTHROPIC_BASE_URL", "http://127.0.0.1:9922")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, "http://127.0.0.1:9922", cfg.LLM.Anthropic.BaseURL, "env wins over file")
 }
 
 func TestLoadFrom_ExpandsHome(t *testing.T) {

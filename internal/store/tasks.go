@@ -135,6 +135,15 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, act
 			t.LeaseExpiresAt = nil
 		} else {
 			t.ClosedAt = nil
+			if t.Status == core.TaskOpen {
+				// Reopening returns the task to the queue, so it releases the
+				// claim like ReleaseTask does, keeping the invariant that an
+				// open task carries no claim. ClaimTask tolerates stale residue
+				// on open rows (self-healing), but every write of status='open'
+				// still clears the claim so the residue never propagates.
+				t.ClaimedBy = ""
+				t.LeaseExpiresAt = nil
+			}
 		}
 	}
 	t.UpdatedAt = now.UTC()
@@ -177,12 +186,18 @@ type ClaimResult struct {
 // stamping a lease that expires at now+lease. It is a compare-and-set (mirrors
 // ResolveProposal): the write lands only when the task is claimable --
 //
-//	(a) open, unclaimed, and ready (no open/in_progress blocker), or
+//	(a) open and ready (no open/in_progress blocker), or
 //	(b) already held by sessionID (a re-claim / heartbeat that refreshes the lease), or
 //	(c) in_progress with an expired lease (a steal from a dead holder).
 //
 // Otherwise it returns ErrTaskClaimConflict. Lease expiry is enforced lazily
 // here -- there is no background sweeper. sessionID must be non-empty.
+//
+// Branch (a) deliberately ignores claimed_by: a live claim exists only on an
+// in_progress task with an unexpired lease (core.Task.ClaimLive), and every
+// path that writes status='open' clears the claim fields, so a claim value on
+// an open row can only be stale residue (rows written before reopen released
+// claims). Claiming such a row overwrites the residue, self-healing it.
 func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time.Duration, now time.Time) (ClaimResult, error) {
 	if sessionID == "" {
 		return ClaimResult{}, errors.New("store.ClaimTask: empty session id")
@@ -202,7 +217,7 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 		   SET status = 'in_progress', claimed_by = ?, lease_expires_at = ?, updated_at = ?
 		 WHERE id = ?
 		   AND (
-		         (status = 'open' AND claimed_by = '' AND NOT EXISTS (
+		         (status = 'open' AND NOT EXISTS (
 		             SELECT 1 FROM task_deps d
 		             JOIN tasks b ON b.id = d.depends_on
 		             WHERE d.task_id = tasks.id AND b.status IN ('open','in_progress')))
@@ -223,7 +238,11 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 	if err != nil {
 		return ClaimResult{}, err
 	}
-	reclaimed := prior.ClaimedBy != "" && prior.ClaimedBy != sessionID
+	// Only a steal from an in_progress holder counts as a reclaim; overwriting a
+	// stale claim left on an open row (branch (a)) is an ordinary claim of a
+	// ready task, not a lease steal.
+	reclaimed := prior.Status == core.TaskInProgress &&
+		prior.ClaimedBy != "" && prior.ClaimedBy != sessionID
 	holder := ""
 	if reclaimed {
 		holder = prior.ClaimedBy
@@ -312,13 +331,19 @@ type PlanRollup struct {
 
 // ActivePlans returns a rollup for each not-yet-complete plan in a project
 // (plans whose every step is closed are omitted, like a done stage). Claimable
-// counts ready open steps; the plan's status is derived, never stored.
+// counts ready open steps (same readiness rule as ReadyTasksForPlan); the
+// plan's status is derived, never stored. One grouped query covers every plan.
 func ActivePlans(ctx context.Context, db *sql.DB, project string) ([]PlanRollup, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT plan_slug,
 		       COUNT(*),
 		       SUM(CASE WHEN status IN ('done','dropped') THEN 1 ELSE 0 END),
-		       SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END)
+		       SUM(CASE WHEN status = 'in_progress' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status = 'open' AND NOT EXISTS (
+		             SELECT 1 FROM task_deps d
+		             JOIN tasks b ON b.id = d.depends_on
+		             WHERE d.task_id = tasks.id AND b.status IN ('open','in_progress'))
+		           THEN 1 ELSE 0 END)
 		  FROM tasks
 		 WHERE project_slug = ? AND plan_slug <> ''
 		 GROUP BY plan_slug
@@ -326,30 +351,20 @@ func ActivePlans(ctx context.Context, db *sql.DB, project string) ([]PlanRollup,
 	if err != nil {
 		return nil, fmt.Errorf("store.ActivePlans: %w", err)
 	}
+	defer func() { _ = rows.Close() }()
 	var plans []PlanRollup
-	func() {
-		defer func() { _ = rows.Close() }()
-		for rows.Next() {
-			var p PlanRollup
-			if err = rows.Scan(&p.Slug, &p.Total, &p.Done, &p.InFlight); err != nil {
-				return
-			}
-			if p.Done >= p.Total {
-				continue // every step closed -> plan complete, not active
-			}
-			plans = append(plans, p)
+	for rows.Next() {
+		var p PlanRollup
+		if err := rows.Scan(&p.Slug, &p.Total, &p.Done, &p.InFlight, &p.Claimable); err != nil {
+			return nil, fmt.Errorf("store.ActivePlans: scan: %w", err)
 		}
-		err = rows.Err()
-	}()
-	if err != nil {
-		return nil, fmt.Errorf("store.ActivePlans: %w", err)
+		if p.Done >= p.Total {
+			continue // every step closed -> plan complete, not active
+		}
+		plans = append(plans, p)
 	}
-	for i := range plans {
-		ready, err := ReadyTasksForPlan(ctx, db, project, plans[i].Slug)
-		if err != nil {
-			return nil, err
-		}
-		plans[i].Claimable = len(ready)
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ActivePlans: %w", err)
 	}
 	return plans, nil
 }
@@ -425,6 +440,46 @@ func dependsOnOf(ctx context.Context, q rowQuerier, taskID string) ([]string, er
 		out = append(out, id)
 	}
 	return out, rows.Err()
+}
+
+// depsBatchSize caps the ids per IN clause in dependsOnForTasks, comfortably
+// under SQLite's bound-parameter limit.
+const depsBatchSize = 500
+
+// dependsOnForTasks returns the depends-on ids for many tasks in a handful of
+// batched IN queries (instead of one query per task), keyed by task id and
+// ordered by depends_on within each task (the task_deps primary-key order, the
+// same order dependsOnOf yields). Tasks with no deps are absent from the map.
+func dependsOnForTasks(ctx context.Context, q rowQuerier, taskIDs []string) (map[string][]string, error) {
+	out := make(map[string][]string, len(taskIDs))
+	for start := 0; start < len(taskIDs); start += depsBatchSize {
+		batch := taskIDs[start:min(start+depsBatchSize, len(taskIDs))]
+		args := make([]any, len(batch))
+		for i, id := range batch {
+			args[i] = id
+		}
+		rows, err := q.QueryContext(ctx, `SELECT task_id, depends_on FROM task_deps
+			WHERE task_id IN (`+placeholders(len(batch))+`)
+			ORDER BY task_id ASC, depends_on ASC`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("store: dependsOnForTasks: %w", err)
+		}
+		err = func() error {
+			defer func() { _ = rows.Close() }()
+			for rows.Next() {
+				var taskID, dep string
+				if err := rows.Scan(&taskID, &dep); err != nil {
+					return fmt.Errorf("store: dependsOnForTasks scan: %w", err)
+				}
+				out[taskID] = append(out[taskID], dep)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func taskExists(ctx context.Context, q rowQuerier, id string) (bool, error) {
@@ -688,7 +743,8 @@ func taskByIDTx(ctx context.Context, q rowQuerier, id string) (core.Task, bool, 
 	return t, true, nil
 }
 
-// scanTasksWithDeps drains task rows and populates each task's DependsOn ids.
+// scanTasksWithDeps drains task rows and populates each task's DependsOn ids
+// with one batched query (not one per task).
 func scanTasksWithDeps(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]core.Task, error) {
 	defer func() { _ = rows.Close() }()
 	var tasks []core.Task
@@ -702,12 +758,19 @@ func scanTasksWithDeps(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]core.
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if len(tasks) == 0 {
+		return tasks, nil
+	}
+	ids := make([]string, len(tasks))
 	for i := range tasks {
-		deps, err := dependsOnOf(ctx, db, tasks[i].ID)
-		if err != nil {
-			return nil, err
-		}
-		tasks[i].DependsOn = deps
+		ids[i] = tasks[i].ID
+	}
+	deps, err := dependsOnForTasks(ctx, db, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i := range tasks {
+		tasks[i].DependsOn = deps[tasks[i].ID]
 	}
 	return tasks, nil
 }

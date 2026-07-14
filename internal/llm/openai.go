@@ -20,7 +20,7 @@ type OpenAIEmbedder struct {
 	apiKey  string
 	model   string
 	dims    int // 0 = omit dimensions (model's native size)
-	client  *http.Client
+	client  retryClient
 }
 
 // NewOpenAIEmbedder returns an OpenAI embeddings client. An empty baseURL uses
@@ -34,7 +34,7 @@ func NewOpenAIEmbedder(apiKey, baseURL, model string, dims int) *OpenAIEmbedder 
 		apiKey:  apiKey,
 		model:   model,
 		dims:    dims,
-		client:  &http.Client{Timeout: 2 * time.Minute},
+		client:  newRetryClient(2 * time.Minute),
 	}
 }
 
@@ -62,14 +62,15 @@ func (c *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	if err != nil {
 		return nil, fmt.Errorf("llm.OpenAI.Embed: marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/embeddings", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("llm.OpenAI.Embed: new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
-
-	resp, err := c.client.Do(req)
+	resp, err := c.client.do(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/embeddings", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+		return req, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("llm.OpenAI.Embed: %w: %w", ErrUnavailable, err)
 	}

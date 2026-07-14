@@ -141,7 +141,9 @@ func agentStamp(claudeSessionID, agentID, head string, now time.Time) string {
 // subagentTranscriptPath resolves the subagent's JSONL transcript: the payload
 // transcript_path when it already names a subagents/agent-*.jsonl file, else
 // constructed from the main transcript path and agent id (the verified layout:
-// <proj-dir>/<session-id>/subagents/agent-<agent_id>.jsonl).
+// <proj-dir>/<session-id>/subagents/agent-<agent_id>.jsonl). An agent id
+// carrying path separators or ".." is rejected rather than joined into the
+// path -- it is a filename fragment, never a path.
 func subagentTranscriptPath(p toolPayload) string {
 	if p.TranscriptPath == "" {
 		return ""
@@ -150,6 +152,9 @@ func subagentTranscriptPath(p toolPayload) string {
 	if filepath.Base(filepath.Dir(p.TranscriptPath)) == "subagents" &&
 		strings.HasPrefix(base, "agent-") && strings.HasSuffix(base, ".jsonl") {
 		return p.TranscriptPath
+	}
+	if strings.ContainsAny(p.AgentID, `/\`) || strings.Contains(p.AgentID, "..") {
+		return ""
 	}
 	return filepath.Join(strings.TrimSuffix(p.TranscriptPath, ".jsonl"),
 		"subagents", "agent-"+p.AgentID+".jsonl")

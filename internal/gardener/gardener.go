@@ -94,6 +94,7 @@ type Service struct {
 	cfg      Config
 	logger   *slog.Logger
 	now      func() time.Time // injectable clock (tests)
+	done     chan struct{}    // closed when the Start goroutine exits; nil until Start
 }
 
 // New builds a gardener Service. embedder and chat may each be nil, disabling

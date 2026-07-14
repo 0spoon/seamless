@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
@@ -300,7 +301,7 @@ func projectLabel(project string) string {
 type briefingSections struct {
 	constraints  []core.Memory
 	index        []core.Memory
-	indexOmitted int                // index lines cut by the recency/count trims, for the "+N older" trailer
+	indexOmitted int // index lines cut by the recency/count trims, for the "+N older" trailer
 	findings     []core.Session
 	ready        []core.Task
 	siblings     []core.Session     // recent findings from family-member projects
@@ -529,8 +530,12 @@ func hardTruncate(s string, hardCapTokens int) string {
 	}
 	body := strings.TrimSuffix(s, "</seam-briefing>")
 	body = strings.TrimRight(body, "\n")
-	if len(body) > maxChars-len(closeTag) {
-		body = body[:maxChars-len(closeTag)] + "..."
+	if cut := maxChars - len(closeTag); len(body) > cut {
+		// Back off to a rune boundary so truncation never emits invalid UTF-8.
+		for cut > 0 && !utf8.RuneStart(body[cut]) {
+			cut--
+		}
+		body = body[:cut] + "..."
 	}
 	return body + closeTag
 }

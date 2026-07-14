@@ -103,7 +103,7 @@ func backfillProjects(ctx context.Context, db *sql.DB, rep *Report) error {
 		slugs = append(slugs, slug)
 	}
 	if err := rows.Err(); err != nil {
-		return err
+		return fmt.Errorf("importer: distinct projects: %w", err)
 	}
 
 	for _, slug := range slugs {

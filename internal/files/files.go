@@ -2,6 +2,7 @@ package files
 
 import (
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,32 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/validate"
 )
+
+// ErrTreeEscape is returned when an item's computed file path would land
+// outside its own tree: a memory outside memory/, or a note outside notes/. A
+// hostile or corrupt project value (e.g. "../notes") cleans to a path that
+// stays inside the data dir -- which the traversal guard accepts -- but crosses
+// into the other tree; this containment check is the files-layer backstop
+// behind the MCP layer's project validation.
+var ErrTreeEscape = errors.New("computed path escapes the item's tree")
+
+// checkTree verifies that an item's project is a safe single path segment (the
+// same validate.Name rule the MCP layer applies to explicit project args) and
+// that the computed data-dir-relative path sits under the expected tree
+// ("memory" or "notes"). The project check catches hostile values like
+// "../notes" directly; the path check is the invariant backstop should path
+// construction ever change.
+func checkTree(project, relPath, wantTree string) error {
+	if project != "" {
+		if err := validate.Name(project); err != nil {
+			return fmt.Errorf("%w: project: %w", ErrTreeEscape, err)
+		}
+	}
+	if tree, _, ok := treeAndRel(filepath.ToSlash(filepath.Clean(filepath.FromSlash(relPath)))); !ok || tree != wantTree {
+		return fmt.Errorf("%w: %q is not under %s/", ErrTreeEscape, relPath, wantTree)
+	}
+	return nil
+}
 
 // Tree names, used as the first path segment of a data-dir-relative file_path
 // and as the on-disk directory for items with no project.
@@ -234,6 +261,9 @@ func (s *Store) WriteMemory(m core.Memory) (core.Memory, error) {
 		return core.Memory{}, fmt.Errorf("files.WriteMemory: name: %w", err)
 	}
 	m.FilePath = MemoryRelPath(m.Project, m.Name)
+	if err := checkTree(m.Project, m.FilePath, memoryTree); err != nil {
+		return core.Memory{}, fmt.Errorf("files.WriteMemory: %w", err)
+	}
 	content, err := RenderMemory(m)
 	if err != nil {
 		return core.Memory{}, err
@@ -261,6 +291,9 @@ func (s *Store) WriteNote(n core.Note) (core.Note, error) {
 		return core.Note{}, fmt.Errorf("files.WriteNote: slug: %w", err)
 	}
 	n.FilePath = NoteRelPath(n.Project, n.Slug)
+	if err := checkTree(n.Project, n.FilePath, notesTree); err != nil {
+		return core.Note{}, fmt.Errorf("files.WriteNote: %w", err)
+	}
 	content, err := RenderNote(n)
 	if err != nil {
 		return core.Note{}, err

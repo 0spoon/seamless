@@ -19,7 +19,7 @@ const (
 type OllamaEmbedder struct {
 	baseURL string
 	model   string
-	client  *http.Client
+	client  retryClient
 }
 
 // NewOllamaEmbedder returns an embedder for a local Ollama model. An empty
@@ -31,7 +31,7 @@ func NewOllamaEmbedder(baseURL, model string) *OllamaEmbedder {
 	return &OllamaEmbedder{
 		baseURL: baseURL,
 		model:   model,
-		client:  &http.Client{Timeout: 2 * time.Minute},
+		client:  newRetryClient(2 * time.Minute),
 	}
 }
 
@@ -56,13 +56,14 @@ func (c *OllamaEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	if err != nil {
 		return nil, fmt.Errorf("llm.Ollama.Embed: marshal: %w", err)
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/embed", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("llm.Ollama.Embed: new request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.client.Do(req)
+	resp, err := c.client.do(ctx, func() (*http.Request, error) {
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/api/embed", bytes.NewReader(body))
+		if err != nil {
+			return nil, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+		return req, nil
+	})
 	if err != nil {
 		return nil, fmt.Errorf("llm.Ollama.Embed: %w: %w", ErrUnavailable, err)
 	}

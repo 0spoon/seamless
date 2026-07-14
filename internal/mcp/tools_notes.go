@@ -13,6 +13,7 @@ import (
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 func notesCreateTool() mcp.Tool {
@@ -33,6 +34,9 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 	body := argBody(req)
 	if title == "" || strings.TrimSpace(body) == "" {
 		return errResult("notes_create", errors.New("title and body are required"))
+	}
+	if err := validate.Title(title); err != nil {
+		return errResult("notes_create", err)
 	}
 	project, err := s.resolveWriteScope(ctx, argString(req, "project"))
 	if err != nil {
@@ -106,7 +110,11 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 	oldProject := note.Project
 	changed := false
 	if v, ok := args["title"].(string); ok {
-		note.Title = strings.TrimSpace(v)
+		title := strings.TrimSpace(v)
+		if err := validate.Title(title); err != nil {
+			return errResult("notes_update", err)
+		}
+		note.Title = title
 		changed = true
 	}
 	if v, ok := args["description"].(string); ok {
@@ -118,7 +126,11 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 		changed = true
 	}
 	if v, ok := args["project"].(string); ok {
-		note.Project = normalizeProject(strings.TrimSpace(v))
+		project, perr := validateProjectArg(strings.TrimSpace(v))
+		if perr != nil {
+			return errResult("notes_update", perr)
+		}
+		note.Project = project
 		changed = true
 	}
 	if v, ok := args["tags"].(string); ok {
@@ -130,16 +142,28 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 	}
 	note.Updated = time.Now().UTC()
 
-	// The slug is id-addressed and stays stable; a project change moves the file,
-	// so drop the old path first to avoid an orphan.
+	// The slug is id-addressed and stays stable; a project change moves the file.
+	// Refuse when a different note already owns the target path (the UNIQUE
+	// file_path index would reject it after the file was already clobbered).
+	if note.Project != oldProject {
+		if other, ok, oerr := store.NoteBySlug(ctx, s.cfg.DB, note.Project, note.Slug); oerr != nil {
+			return errResult("notes_update", oerr)
+		} else if ok && other.ID != note.ID {
+			return errResult("notes_update",
+				fmt.Errorf("a different note with slug %q already exists in project %q", note.Slug, note.Project))
+		}
+	}
+	// Write the new file BEFORE removing the old one: the index row is keyed by
+	// id (the write repoints its file_path), so a failed write leaves the note
+	// intact at its old path instead of deleting it outright.
+	written, err := s.cfg.Files.WriteNote(ctx, note)
+	if err != nil {
+		return errResult("notes_update", err)
+	}
 	if note.Project != oldProject {
 		if err := s.cfg.Files.Remove(ctx, files.NoteRelPath(oldProject, note.Slug)); err != nil {
 			return errResult("notes_update", err)
 		}
-	}
-	written, err := s.cfg.Files.WriteNote(ctx, note)
-	if err != nil {
-		return errResult("notes_update", err)
 	}
 	return jsonResult(map[string]any{"id": written.ID, "title": written.Title})
 }

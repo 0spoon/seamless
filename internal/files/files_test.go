@@ -229,6 +229,46 @@ func TestStoreRejectsUnsafeName(t *testing.T) {
 	require.Error(t, err)
 }
 
+// A hostile project value must not steer a memory write into the notes tree or
+// vice versa: the computed path stays inside the item's own tree (defense in
+// depth behind the MCP layer's project validation).
+func TestStoreTreeContainment(t *testing.T) {
+	tests := []struct {
+		name    string
+		project string
+	}{
+		{"cross into notes", "../notes"},
+		{"cross via nested dots", "sub/../../notes"},
+		{"escape both trees", ".."},
+		{"land on tree root", "../memory"},
+	}
+	for _, tt := range tests {
+		t.Run("memory "+tt.name, func(t *testing.T) {
+			s := NewStore(t.TempDir())
+			m := sampleMemory()
+			m.Project = tt.project
+			_, err := s.WriteMemory(m)
+			require.ErrorIs(t, err, ErrTreeEscape)
+			require.False(t, s.Exists(NoteRelPath("", m.Name)), "nothing may be written")
+		})
+	}
+
+	// The note direction: a project that would cross into the memory tree.
+	s := NewStore(t.TempDir())
+	n := core.Note{
+		ID: "01K0NOTE00000000000000000A", Title: "T", Slug: "t", Project: "../memory",
+		Body: "b\n", Created: time.Now().UTC(), Updated: time.Now().UTC(),
+	}
+	_, err := s.WriteNote(n)
+	require.ErrorIs(t, err, ErrTreeEscape)
+
+	// A legitimate project still writes into its own tree.
+	m := sampleMemory()
+	written, err := s.WriteMemory(m)
+	require.NoError(t, err)
+	require.Equal(t, "memory/seam/chroma-boot-race.md", written.FilePath)
+}
+
 func TestAtomicWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "f.md")

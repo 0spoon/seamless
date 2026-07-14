@@ -7,12 +7,29 @@ package lifecycle
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/files"
+)
+
+// Domain errors guarding the supersession invariants: invalid_at is stamped
+// exactly once, and superseded_by edges always point from a newly invalidated
+// memory to an active one, so cycles cannot form.
+var (
+	// ErrAlreadyInvalid is returned when superseding or archiving a memory whose
+	// invalid_at is already set; re-stamping would rewrite supersession history.
+	ErrAlreadyInvalid = errors.New("memory is already superseded or archived")
+	// ErrSelfSupersede is returned when a memory would supersede itself, which
+	// would create a superseded_by self-cycle.
+	ErrSelfSupersede = errors.New("memory cannot supersede itself")
+	// ErrInvalidReplacement is returned when the replacement is missing an id or
+	// is itself invalid; pointing superseded_by at an inactive memory could form
+	// a cycle or a dangling chain.
+	ErrInvalidReplacement = errors.New("replacement memory is not active")
 )
 
 // MemoryWriter is the subset of files.Manager that Supersede needs, so the flow
@@ -31,6 +48,15 @@ type MemoryWriter interface {
 // same-name replacement is handled as an in-place update by memory_write and must
 // not reach here (guarded by the caller).
 func Supersede(ctx context.Context, w MemoryWriter, old, replacement core.Memory, now time.Time) (core.Memory, error) {
+	if old.ID == replacement.ID {
+		return core.Memory{}, fmt.Errorf("lifecycle.Supersede: %s: %w", old.Name, ErrSelfSupersede)
+	}
+	if old.InvalidAt != nil {
+		return core.Memory{}, fmt.Errorf("lifecycle.Supersede: %s: %w", old.Name, ErrAlreadyInvalid)
+	}
+	if replacement.ID == "" || replacement.InvalidAt != nil {
+		return core.Memory{}, fmt.Errorf("lifecycle.Supersede: %s: %w", replacement.Name, ErrInvalidReplacement)
+	}
 	at := now.UTC()
 	old.InvalidAt = &at
 	old.SupersededBy = replacement.ID

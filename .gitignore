@@ -37,3 +37,6 @@ Thumbs.db
 tmp/
 *.log
 .mcp.json
+
+# Claude Code local state (agent worktrees, local settings)
+.claude/
