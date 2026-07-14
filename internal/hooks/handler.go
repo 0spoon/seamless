@@ -417,7 +417,7 @@ func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, pr
 
 // recordHookPrompt logs a hook.prompt event for a UserPromptSubmit that matched
 // no memory -- the recall-miss case. Matched prompts ride on the retrieval.injected
-// event instead (no duplicate row), so InjectionsByDay (which counts injected
+// event instead (no duplicate row), so BuildRetrievalReport (which counts injected
 // rows) is unaffected. Session stamping mirrors recordInjection.
 func (h *Handler) recordHookPrompt(ctx context.Context, claudeSessionID, prompt string) {
 	if h.events == nil || prompt == "" {

@@ -170,8 +170,8 @@ type interactionsData struct {
 // its total plus a per-category split, so the bar can stack tool/injection/
 // session/plan/prompt hues like Sentry's events-over-time chart.
 type volBucket struct {
-	T       string `json:"t"`       // bucket start (canonical ts), for the tooltip
-	N       int    `json:"n"`       // total events in the bucket
+	T       string `json:"t"` // bucket start (canonical ts), for the tooltip
+	N       int    `json:"n"` // total events in the bucket
 	Tool    int    `json:"tool,omitempty"`
 	Inject  int    `json:"inject,omitempty"`
 	Session int    `json:"session,omitempty"`
