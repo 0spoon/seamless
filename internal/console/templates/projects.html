@@ -1,0 +1,71 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>All projects</h1>
+    <div class="sub">{{.Projects}} project{{if ne .Projects 1}}s{{end}}{{if eq .Group "family"}} grouped by family{{end}}{{if .Working}} &middot; {{.Working}} agent{{if ne .Working 1}}s{{end}} working now{{end}}</div>
+  </div>
+  <span class="live"><span class="live-dot"></span> live</span>
+</div>
+
+<div class="proj-toolbar">
+  <form class="search" method="get" action="/console/projects">
+    {{icon "search"}}
+    <input name="q" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
+    <input type="hidden" name="group" value="{{.Group}}">
+    <input type="hidden" name="sort" value="{{.Sort}}">
+    <input type="hidden" name="w" value="{{.Window}}">
+  </form>
+  <div class="seg">
+    <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
+    <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
+  </div>
+  <div class="seg">
+    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
+    <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
+    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
+  </div>
+</div>
+
+<div class="board">
+  <div class="board-colhd"><span>Project</span><span>Health</span><span>Sessions</span><span>Open tasks</span><span>Memories</span><span>Last active</span></div>
+  {{if eq .Group "flat"}}
+    {{if .Flat}}{{range .Flat}}{{template "projrow" .}}{{end}}{{else}}<div class="empty">No projects match "{{.Query}}"</div>{{end}}
+  {{else}}
+    {{if .Groups}}{{range .Groups}}
+    <div class="grp-hd">{{icon .Icon}}{{.Label}} <span class="n">{{.Count}}</span>{{if .Note}}<span class="note">{{.Note}}</span>{{end}}</div>
+    {{range .Rows}}{{template "projrow" .}}{{end}}
+    {{end}}{{else}}<div class="empty">No projects{{if .Query}} match "{{.Query}}"{{end}} yet</div>{{end}}
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "projrow"}}
+<div class="prow{{if .Child}} child{{end}}{{if .Retired}} retired{{end}}"{{if not .Global}} data-href="/console/projects/{{.Slug}}" data-peek{{end}}>
+  <div class="pname">
+    <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
+    <div class="txt">
+      {{if .Global}}
+      <span class="gname">{{.Name}}</span>
+      {{else}}
+      <a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}{{if .Retired}} <span class="kind warn">retired</span>{{end}}{{if .Working}} <span class="work-dot"><span class="live-dot"></span>{{.Working}} working</span>{{end}}</a>
+      {{end}}
+      <div class="cap">{{if .Description}}{{.Description}}{{else if .Global}}global scope &middot; belongs to no project{{else if .Unregistered}}unregistered &middot; not in the projects table{{else if .Child}}inherits {{.Inherited}} from parent{{end}}</div>
+    </div>
+  </div>
+  <div class="health">
+    {{if .HasReach}}
+    <div class="top"><span class="pct brand">{{.ReachRate}}%</span><span class="lbl">reach</span></div>
+    <div class="mtr"><span style="width:{{.ReachRate}}%"></span></div>
+    {{else}}
+    <div class="top"><span class="pct faint">&mdash;</span><span class="lbl">reach</span></div>
+    <div class="mtr"><span style="width:0%"></span></div>
+    {{end}}
+  </div>
+  <div class="cell-r{{if not .Sessions}} zero{{end}}"><span class="big">{{.Sessions}}</span>{{if .Working}} <span class="sm">{{.Working}} live</span>{{end}}</div>
+  <div class="cell-r{{if not .OpenTasks}} zero{{end}}"><span class="big">{{.OpenTasks}}</span>{{if .Blocked}} <span class="sm">{{.Blocked}} blk</span>{{end}}</div>
+  <div class="cell-r{{if not .Memories}} zero{{end}}"><span class="big">{{.Memories}}</span>{{if .Inherited}} <span class="sm">+{{.Inherited}}</span>{{end}}</div>
+  <div class="cell-r sm">{{ago .LastActive}}</div>
+</div>
+{{end}}
