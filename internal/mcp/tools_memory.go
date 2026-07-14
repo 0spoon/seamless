@@ -88,7 +88,7 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		if errors.Is(err, files.ErrPathOccupied) {
 			return errResult("memory_write", fmt.Errorf(
-				"name %q is still held by a superseded or archived memory (%v) -- free it with memory_delete or pick a different name", name, err))
+				"name %q is still held by a superseded or archived memory (%w) -- free it with memory_delete or pick a different name", name, err))
 		}
 		return errResult("memory_write", err)
 	}

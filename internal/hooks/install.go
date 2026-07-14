@@ -262,16 +262,6 @@ func shellArg(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// findManaged returns the index of the first Seamless-managed entry in arr, or -1.
-func findManaged(arr []any) int {
-	for i, e := range arr {
-		if isManaged(e) {
-			return i
-		}
-	}
-	return -1
-}
-
 // seamlessIndices returns the ascending indices of entries in arr that Seamless
 // owns for a hook: entries carrying the managed marker, plus unmarked entries
 // whose hook URL is desiredURL or whose command is a seam-CLI `hook <cliArg>`
