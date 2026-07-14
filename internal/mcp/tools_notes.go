@@ -55,7 +55,7 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 		tags = appendUnique(tags, plans.SlugTag(plan))
 	}
 	note := core.Note{
-		ID: id, Title: title, Slug: slugify(title), Description: argString(req, "description"),
+		ID: id, Title: title, Slug: core.Slugify(title), Description: argString(req, "description"),
 		Project: project, Body: body, Tags: tags,
 		SourceURL: argString(req, "source_url"), Created: now, Updated: now,
 	}

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
-	"unicode"
 
 	"github.com/mark3labs/mcp-go/mcp"
 )
@@ -95,32 +94,4 @@ func appendUnique(tags []string, v string) []string {
 		return tags
 	}
 	return append(tags, v)
-}
-
-// slugify converts a title into a filesystem-safe slug: lowercase, alphanumeric
-// runs joined by single dashes, capped at 80 runes, "untitled" when empty.
-func slugify(s string) string {
-	var b strings.Builder
-	prevDash := false
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case unicode.IsLetter(r) || unicode.IsNumber(r):
-			b.WriteRune(r)
-			prevDash = false
-		default:
-			if !prevDash && b.Len() > 0 {
-				b.WriteByte('-')
-				prevDash = true
-			}
-		}
-	}
-	slug := strings.Trim(b.String(), "-")
-	if slug == "" {
-		return "untitled"
-	}
-	if len([]rune(slug)) > 80 {
-		slug = string([]rune(slug)[:80])
-		slug = strings.Trim(slug, "-")
-	}
-	return slug
 }

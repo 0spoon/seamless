@@ -51,7 +51,7 @@ func (s *Server) handleCaptureURL(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	now := time.Now().UTC()
 	note := core.Note{
-		ID: id, Title: content.Title, Slug: slugify(content.Title), Description: "Captured from " + content.URL,
+		ID: id, Title: content.Title, Slug: core.Slugify(content.Title), Description: "Captured from " + content.URL,
 		Project: project, Body: body, Tags: []string{"created-by:agent", "captured-url"},
 		SourceURL: content.URL, Created: now, Updated: now,
 	}
