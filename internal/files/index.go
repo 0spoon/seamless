@@ -184,6 +184,47 @@ func (ix *Indexer) DeleteByFilePath(ctx context.Context, relPath string) error {
 	return nil
 }
 
+// IDByFilePath returns the id of the index row holding a data-dir-relative
+// path, and whether such a row exists. The write guard uses it to detect a path
+// already owned by a different item (the file_path column is UNIQUE).
+func (ix *Indexer) IDByFilePath(ctx context.Context, relPath string) (id string, found bool, err error) {
+	tree, _, ok := treeAndRel(relPath)
+	if !ok {
+		return "", false, fmt.Errorf("files.IDByFilePath: %q is not under a known tree", relPath)
+	}
+	table := "memories_index"
+	if tree == notesTree {
+		table = "notes_index"
+	}
+	err = ix.db.QueryRowContext(ctx, `SELECT id FROM `+table+` WHERE file_path = ?`, relPath).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("files.IDByFilePath: %w", err)
+	}
+	return id, true, nil
+}
+
+// ClearContentHash blanks the recorded content hash for the row at a path. The
+// empty hash never matches a real digest, so the next reconcile (or watcher
+// event) treats the file as changed and re-indexes it -- the retry mechanism
+// for a failed embed. A missing row is a no-op.
+func (ix *Indexer) ClearContentHash(ctx context.Context, relPath string) error {
+	tree, _, ok := treeAndRel(relPath)
+	if !ok {
+		return fmt.Errorf("files.ClearContentHash: %q is not under a known tree", relPath)
+	}
+	table := "memories_index"
+	if tree == notesTree {
+		table = "notes_index"
+	}
+	if _, err := ix.db.ExecContext(ctx, `UPDATE `+table+` SET content_hash = '' WHERE file_path = ?`, relPath); err != nil {
+		return fmt.Errorf("files.ClearContentHash: %w", err)
+	}
+	return nil
+}
+
 // ContentHashByFilePath returns the indexed content hash for a path, and whether
 // a row exists. The reconciler uses it to skip unchanged files.
 func (ix *Indexer) ContentHashByFilePath(ctx context.Context, relPath string) (hash string, found bool, err error) {

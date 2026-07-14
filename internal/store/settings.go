@@ -283,22 +283,50 @@ func ResolveProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, 
 // AddRepoMapping records repoPath -> slug in the repo_project_map and persists
 // it, so the mapping survives restarts and is shared by every agent. It is a
 // no-op when that exact entry already exists, so callers may invoke it on every
-// resolve without churning the setting.
+// resolve without churning the setting. The read-decode-write runs inside one
+// transaction: the pool is capped at a single connection (see Open), so the
+// whole mutation is serialized against concurrent mutators and two agents
+// registering different repos at once can no longer clobber each other's entry.
 func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) error {
 	repoPath = filepath.Clean(repoPath)
-	m, err := RepoProjectMap(ctx, db)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("store.AddRepoMapping: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	m := map[string]string{}
+	var raw string
+	err = tx.QueryRowContext(ctx,
+		`SELECT value FROM settings WHERE key = ?`, SettingRepoProjectMap).Scan(&raw)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		// Unset: start from an empty map.
+	case err != nil:
+		return fmt.Errorf("store.AddRepoMapping: %w", err)
+	case strings.TrimSpace(raw) != "":
+		if err := json.Unmarshal([]byte(raw), &m); err != nil {
+			return fmt.Errorf("store.AddRepoMapping: decode: %w", err)
+		}
 	}
 	if m[repoPath] == slug {
-		return nil
+		return nil // rollback of the read-only transaction is harmless
 	}
 	m[repoPath] = slug
 	b, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("store.AddRepoMapping: %w", err)
 	}
-	return SetSetting(ctx, db, SettingRepoProjectMap, string(b))
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO settings (key, value) VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+		SettingRepoProjectMap, string(b)); err != nil {
+		return fmt.Errorf("store.AddRepoMapping: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store.AddRepoMapping: commit: %w", err)
+	}
+	return nil
 }
 
 // RegisterProjectForCWD resolves cwd to a project slug like ResolveProjectForCWD,

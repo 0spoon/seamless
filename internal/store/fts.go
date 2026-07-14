@@ -14,6 +14,19 @@ import (
 // filter searches all kinds. A query with no usable terms yields no hits (not an
 // error), so recall degrades quietly on punctuation-only input.
 func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds []string, limit int) ([]SearchHit, error) {
+	return ftsSearch(ctx, db, query, kinds, nil, limit)
+}
+
+// FTSSearchScoped is FTSSearch restricted to items whose project is in projects
+// (recall passes the bound project plus "" for global). An empty projects filter
+// searches all projects. Filtering inside the candidate query keeps the whole
+// candidate depth in scope, so a corpus dominated by out-of-scope matches cannot
+// starve in-scope results out of the top-limit window.
+func FTSSearchScoped(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
+	return ftsSearch(ctx, db, query, kinds, projects, limit)
+}
+
+func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -30,7 +43,16 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds []string, li
 			args = append(args, k)
 		}
 	}
-	sqlStr += ` ORDER BY rank LIMIT ?`
+	if len(projects) > 0 {
+		sqlStr += ` AND project IN (` + placeholders(len(projects)) + `)`
+		for _, p := range projects {
+			args = append(args, p)
+		}
+	}
+	// item_id is a deterministic tiebreak: equal-bm25 rows would otherwise come
+	// back in an undefined order that can flip between runs and destabilize
+	// downstream rank fusion.
+	sqlStr += ` ORDER BY rank, item_id LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

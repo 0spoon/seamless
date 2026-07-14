@@ -3,10 +3,12 @@ package retrieve
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/stretchr/testify/require"
 
@@ -453,6 +455,92 @@ func TestPromptRecall(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, none)
 	require.Empty(t, noneIDs)
+}
+
+func TestHardTruncatePreservesUTF8AndClosingTag(t *testing.T) {
+	// A briefing made of multibyte runes: byte-slicing at the cap would split a
+	// rune; the truncation must back off to a rune boundary.
+	body := strings.Repeat("é世界", 400) // 2- and 3-byte runes
+	s := "<seam-briefing>\n" + body + "\n</seam-briefing>"
+	for _, capTokens := range []int{10, 25, 40, 100} {
+		got := hardTruncate(s, capTokens)
+		require.True(t, utf8.ValidString(got), "cap %d must not split a rune", capTokens)
+		require.True(t, strings.HasSuffix(got, "</seam-briefing>"), "cap %d must keep the closing tag", capTokens)
+		require.Less(t, len(got), len(s))
+	}
+	// Under the cap: unchanged.
+	require.Equal(t, s, hardTruncate(s, estTokens(s)+1))
+}
+
+// Scope filtering must happen inside the candidate queries, not after fusion:
+// when more than recallSourceDepth out-of-scope items outrank every in-scope
+// match, post-fusion filtering would starve the in-scope results to zero even
+// though good matches exist deeper. FTS-only path.
+func TestRecall_InScopeSurvivesOutOfScopeDominance(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	// 30 (> recallSourceDepth) out-of-scope memories matching every query term
+	// twice: each strictly outranks any single-term match under bm25.
+	for i := range 30 {
+		id := fmt.Sprintf("OUT%027d", i)
+		insMem(t, db, id, "gotcha", fmt.Sprintf("noise-%02d", i),
+			"chroma health check chroma health check", "other")
+	}
+	// In-scope and global matches, each hitting exactly one query term.
+	insMem(t, db, "01IN1", "gotcha", "seam-config", "chroma settings for this local project", "seam")
+	insMem(t, db, "01IN2", "runbook", "seam-probes", "health probes for the local daemon", "seam")
+	insMem(t, db, "01GLB", "reference", "global-invariants", "check invariants shared everywhere", "")
+
+	svc := New(db, nil, budgets(), nil) // nil embedder => FTS-only
+
+	hits, err := svc.Recall(ctx, RecallInput{Query: "chroma health check", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.Name
+		require.NotEqual(t, "other", h.Project, "out-of-scope hit %q leaked into recall", h.Name)
+	}
+	require.ElementsMatch(t, []string{"seam-config", "seam-probes", "global-invariants"}, names)
+}
+
+// fixedEmbedder returns the same vector for every text, letting a test steer the
+// semantic path with hand-planted stored vectors.
+type fixedEmbedder struct{ vec []float32 }
+
+func (e fixedEmbedder) Model() string { return "test-embed" }
+
+func (e fixedEmbedder) Embed(context.Context, string) ([]float32, error) { return e.vec, nil }
+
+// The semantic (cosine) candidate query is scoped the same way: 30 out-of-scope
+// vectors perfectly aligned with the query must not crowd a weaker in-scope
+// vector out of the candidate depth. The query shares no FTS terms with the
+// corpus, so this isolates the cosine path.
+func TestRecall_SemanticScopeNotStarved(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	for i := range 30 {
+		id := fmt.Sprintf("OUT%027d", i)
+		insMem(t, db, id, "gotcha", fmt.Sprintf("vecnoise-%02d", i), "unrelated words entirely", "other")
+		require.NoError(t, store.UpsertEmbedding(ctx, db, id, "memory", "test-embed", []float32{1, 0, 0}))
+	}
+	insMem(t, db, "01IN1", "gotcha", "seam-vector", "different unrelated words", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01IN1", "memory", "test-embed", []float32{0.9, 0.435, 0}))
+	insMem(t, db, "01GLB", "reference", "global-vector", "other unrelated words", "")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01GLB", "memory", "test-embed", []float32{0.8, 0.6, 0}))
+
+	svc := New(db, fixedEmbedder{vec: []float32{1, 0, 0}}, budgets(), nil)
+
+	hits, err := svc.Recall(ctx, RecallInput{Query: "quantum flux capacitor", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.Name
+		require.NotEqual(t, "other", h.Project, "out-of-scope hit %q leaked into recall", h.Name)
+		require.Equal(t, "semantic", h.Source)
+	}
+	require.Equal(t, []string{"seam-vector", "global-vector"}, names) // best-first
 }
 
 func TestRecallFTSFusionAndScope(t *testing.T) {

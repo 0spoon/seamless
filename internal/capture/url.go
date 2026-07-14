@@ -1,7 +1,8 @@
 // Package capture fetches external URLs into note content behind SSRF guards. It
 // is ported and trimmed from Seam v1 internal/capture: the URL path is kept
-// as-is (private-IP rejection, DNS-rebinding-safe dialer, redirect-scheme
-// validation, response size cap); voice transcription is dropped.
+// (private-IP rejection, DNS-rebinding-safe pinned dialer, port allowlist,
+// redirect-scheme and downgrade validation, response size cap); voice
+// transcription is dropped.
 package capture
 
 import (
@@ -12,6 +13,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,10 +23,11 @@ import (
 
 // Domain errors.
 var (
-	ErrInvalidURL   = errors.New("invalid URL")
-	ErrFetchFailed  = errors.New("URL fetch failed")
-	ErrPrivateIP    = errors.New("URL points to private/loopback address")
-	ErrUnsafeScheme = errors.New("URL scheme not allowed")
+	ErrInvalidURL     = errors.New("invalid URL")
+	ErrFetchFailed    = errors.New("URL fetch failed")
+	ErrPrivateIP      = errors.New("URL points to private/loopback address")
+	ErrUnsafeScheme   = errors.New("URL scheme not allowed")
+	ErrDisallowedPort = errors.New("URL port not allowed")
 )
 
 // userAgent identifies Seamless when fetching a page.
@@ -38,57 +41,148 @@ type URLFetcher struct {
 // allowedRedirectSchemes are the only URL schemes allowed in redirect targets.
 var allowedRedirectSchemes = map[string]bool{"http": true, "https": true}
 
+// allowedPorts are the only destination ports capture may dial (initial URL and
+// every redirect hop -- the check lives in the dialer, the single choke point).
+// Hardcoded to the standard web ports; if a tunable is ever warranted it belongs
+// in internal/config alongside the other capture knobs (follow-up, not done here).
+var allowedPorts = map[int]bool{80: true, 443: true}
+
 // NewURLFetcher creates a URLFetcher whose transport rejects private/loopback
-// addresses (connecting to the validated IP, so DNS rebinding cannot slip past
-// the check) and caps redirects at 10, each re-validated for an HTTP(S) scheme.
+// addresses and non-web ports (connecting only to a validated IP, so DNS
+// rebinding cannot slip past the check) and caps redirects at 10, each hop
+// re-validated for an HTTP(S) scheme, no https->http downgrade, and -- because
+// every hop dials through the same transport -- a public IP on an allowed port.
 func NewURLFetcher() *URLFetcher {
-	transport := &http.Transport{DialContext: ssrfSafeDialer}
+	dialer := &net.Dialer{Timeout: 5 * time.Second}
+	transport := &http.Transport{
+		DialContext: ssrfSafeDialer(net.DefaultResolver.LookupIPAddr, dialer.DialContext),
+	}
 	return &URLFetcher{
 		client: &http.Client{
-			Timeout:   15 * time.Second,
-			Transport: transport,
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("too many redirects")
-				}
-				if scheme := strings.ToLower(req.URL.Scheme); !allowedRedirectSchemes[scheme] {
-					return fmt.Errorf("%w: redirect to %s", ErrUnsafeScheme, scheme)
-				}
-				return nil
-			},
+			Timeout:       15 * time.Second,
+			Transport:     transport,
+			CheckRedirect: checkRedirect,
 		},
 	}
 }
 
-// ssrfSafeDialer rejects connections to private/loopback addresses and connects
-// to the validated IP directly to prevent DNS rebinding (TOCTOU).
-func ssrfSafeDialer(ctx context.Context, network, addr string) (net.Conn, error) {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return nil, fmt.Errorf("capture.ssrfSafeDialer: %w", err)
+// checkRedirect enforces the redirect policy: at most 10 hops, HTTP(S) targets
+// only, and never a downgrade to http once any hop in the chain used https.
+func checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("too many redirects")
 	}
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-	if err != nil {
-		return nil, fmt.Errorf("capture.ssrfSafeDialer: resolve: %w", err)
+	scheme := strings.ToLower(req.URL.Scheme)
+	if !allowedRedirectSchemes[scheme] {
+		return fmt.Errorf("%w: redirect to %s", ErrUnsafeScheme, scheme)
 	}
-	if len(ips) == 0 {
-		return nil, fmt.Errorf("capture.ssrfSafeDialer: no addresses for %s", host)
-	}
-	for _, ip := range ips {
-		if isPrivateIP(ip.IP) {
-			return nil, ErrPrivateIP
+	if scheme == "http" {
+		for _, prev := range via {
+			if strings.EqualFold(prev.URL.Scheme, "https") {
+				return fmt.Errorf("%w: redirect downgrades https to http", ErrUnsafeScheme)
+			}
 		}
 	}
-	validatedAddr := net.JoinHostPort(ips[0].IP.String(), port)
-	var dialer net.Dialer
-	return dialer.DialContext(ctx, network, validatedAddr)
+	return nil
 }
 
-// isPrivateIP reports whether ip is loopback, private, link-local, or
-// unspecified (0.0.0.0 routes to localhost on many OSes).
+// lookupIPFunc resolves a hostname to its addresses; injectable for tests.
+type lookupIPFunc func(ctx context.Context, host string) ([]net.IPAddr, error)
+
+// dialContextFunc matches net.Dialer.DialContext; injectable for tests.
+type dialContextFunc func(ctx context.Context, network, addr string) (net.Conn, error)
+
+// ssrfSafeDialer returns a DialContext that enforces the SSRF policy at the
+// single point every connection (initial request and each redirect hop) passes
+// through: the destination port must be allowed, and the host must resolve to
+// exclusively non-private addresses -- one private record among public ones
+// rejects the whole lookup (fail closed; public hostnames have no business
+// mixing in private records). It then dials the validated IP literals
+// themselves, in resolution order until one connects, so the connection is
+// pinned to an address that passed validation and a racing resolver (DNS
+// rebinding) cannot swap in a different one between check and dial.
+func ssrfSafeDialer(lookup lookupIPFunc, dial dialContextFunc) dialContextFunc {
+	return func(ctx context.Context, network, addr string) (net.Conn, error) {
+		host, portStr, err := net.SplitHostPort(addr)
+		if err != nil {
+			return nil, fmt.Errorf("capture.ssrfSafeDialer: %w", err)
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil || !allowedPorts[port] {
+			return nil, fmt.Errorf("capture.ssrfSafeDialer: %w: %q", ErrDisallowedPort, portStr)
+		}
+		ips, err := lookup(ctx, host)
+		if err != nil {
+			return nil, fmt.Errorf("capture.ssrfSafeDialer: resolve: %w", err)
+		}
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("capture.ssrfSafeDialer: no addresses for %s", host)
+		}
+		for _, ip := range ips {
+			if isPrivateIP(ip.IP) {
+				return nil, fmt.Errorf("capture.ssrfSafeDialer: %s: %w", host, ErrPrivateIP)
+			}
+		}
+		var errs error
+		for _, ip := range ips {
+			conn, dialErr := dial(ctx, network, net.JoinHostPort(ip.IP.String(), portStr))
+			if dialErr == nil {
+				return conn, nil
+			}
+			errs = errors.Join(errs, dialErr)
+		}
+		return nil, fmt.Errorf("capture.ssrfSafeDialer: dial %s: %w", host, errs)
+	}
+}
+
+// reservedNets are non-global ranges the stdlib net.IP helpers do not cover:
+// "this host" (0.0.0.0/8 routes to localhost on Linux), CGNAT / shared address
+// space (100.64.0.0/10, also used by tailnets), IETF protocol assignments
+// (192.0.0.0/24), benchmarking (198.18.0.0/15), and reserved-plus-broadcast
+// (240.0.0.0/4).
+var reservedNets = mustCIDRs(
+	"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4",
+)
+
+// nat64Prefix is the RFC 6052 well-known NAT64 prefix; an address inside it
+// stands for the IPv4 address embedded in its last four bytes, which decides
+// privateness (so a NAT64 mapping cannot smuggle in a private target).
+var nat64Prefix = mustCIDRs("64:ff9b::/96")[0]
+
+// mustCIDRs parses literal CIDRs at package init; a bad literal is a programmer
+// error (caught by any test run), analogous to regexp.MustCompile.
+func mustCIDRs(cidrs ...string) []*net.IPNet {
+	nets := make([]*net.IPNet, len(cidrs))
+	for i, c := range cidrs {
+		_, n, err := net.ParseCIDR(c)
+		if err != nil {
+			panic("capture: bad reserved CIDR " + c)
+		}
+		nets[i] = n
+	}
+	return nets
+}
+
+// isPrivateIP reports whether ip must not be fetched: loopback, private,
+// link-local, multicast, unspecified, a reserved/internal-use range, or a NAT64
+// mapping of any of those. A nil ip (unparseable) is rejected too (fail closed).
 func isPrivateIP(ip net.IP) bool {
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
-		ip.IsLinkLocalMulticast() || ip.IsUnspecified()
+	if ip == nil {
+		return true
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() ||
+		ip.IsMulticast() || ip.IsUnspecified() {
+		return true
+	}
+	for _, n := range reservedNets {
+		if n.Contains(ip) {
+			return true
+		}
+	}
+	if nat64Prefix.Contains(ip) {
+		return isPrivateIP(net.IP(ip.To16()[12:16]))
+	}
+	return false
 }
 
 // URLContent holds the extracted content from a fetched URL.

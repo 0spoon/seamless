@@ -35,6 +35,13 @@ type watcher struct {
 	suppressed map[string]time.Time   // absolute path -> expiry
 	pending    map[string]*time.Timer // absolute path -> debounce timer
 	gen        map[string]uint64      // absolute path -> debounce generation
+	closed     bool                   // set by close(); no debounce handler starts after it
+
+	// inflight tracks debounce handler invocations so close() can drain them:
+	// the callback only Adds under mu with closed still false, and close() Waits
+	// after setting closed, so a caller tearing down (watcher first, DB second)
+	// never races an in-flight re-index.
+	inflight sync.WaitGroup
 
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -125,14 +132,20 @@ func (w *watcher) run(ctx context.Context) error {
 	}
 }
 
+// close stops the watcher: no debounce handler starts after it returns, and any
+// handler already running is drained first, so the caller can safely tear down
+// what the handler touches (the DB) right after. Idempotent.
 func (w *watcher) close() error {
 	w.cancel()
 	w.mu.Lock()
+	w.closed = true
 	for _, t := range w.pending {
 		t.Stop()
 	}
 	w.pending = make(map[string]*time.Timer)
+	clear(w.gen) // a stopped timer never fires; without this a mid-flight one would still match
 	w.mu.Unlock()
+	w.inflight.Wait()
 	return w.fsw.Close()
 }
 
@@ -198,6 +211,9 @@ func (w *watcher) suppressedNow(abs string) bool {
 func (w *watcher) debounceFire(ctx context.Context, abs, relPath string) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
+	if w.closed {
+		return // shutting down: never arm a timer close() cannot see
+	}
 
 	if t, ok := w.pending[abs]; ok {
 		t.Stop()
@@ -207,13 +223,20 @@ func (w *watcher) debounceFire(ctx context.Context, abs, relPath string) {
 
 	w.pending[abs] = time.AfterFunc(w.debounce, func() {
 		w.mu.Lock()
-		if w.gen[abs] != gen {
+		// closed: the watcher is shutting down -- a timer that already fired and
+		// was waiting on the lock while close() ran must not start a handler now
+		// (its target, e.g. the DB, may be about to close). Checked under the same
+		// lock that close() sets it under, and the inflight Add happens here too,
+		// so close()'s Wait cannot miss a handler that got past this check.
+		if w.closed || w.gen[abs] != gen {
 			w.mu.Unlock()
 			return
 		}
 		delete(w.pending, abs)
 		delete(w.gen, abs)
+		w.inflight.Add(1)
 		w.mu.Unlock()
+		defer w.inflight.Done()
 
 		if ctx.Err() != nil {
 			return

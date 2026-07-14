@@ -6,8 +6,11 @@ import (
 	"math"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 func newEmbedDB(t *testing.T) *sql.DB {
@@ -91,6 +94,49 @@ func TestCosineSearchSkipsDimMismatch(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "a", hits[0].ItemID)
+}
+
+// CosineSearchScoped resolves each item's project through the index tables and
+// filters at query time, so out-of-scope vectors never occupy candidate slots.
+func TestCosineSearchScoped_ProjectAndGlobal(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	insertMemory(t, db, "a", "gotcha", "seam-mem", "d", "seam", "b", now, "")
+	insertMemory(t, db, "b", "gotcha", "other-mem", "d", "other", "b", now, "")
+	insertMemory(t, db, "c", "reference", "global-mem", "d", "", "b", now, "")
+	insertNote(t, db, "n", "Seam Note", "seam-note", "seam", now)
+
+	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m1", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "c", "memory", "m1", []float32{0.9, 0.1, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "n", "note", "m1", []float32{0.8, 0.2, 0}))
+	// An embedding orphaned from both index tables resolves to no project.
+	require.NoError(t, UpsertEmbedding(ctx, db, "z", "memory", "m1", []float32{1, 0, 0}))
+
+	q := []float32{1, 0, 0}
+
+	// seam + global: the other-project row and the orphan are excluded.
+	hits, err := CosineSearchScoped(ctx, db, q, "m1", nil, []string{"", "seam"}, 10)
+	require.NoError(t, err)
+	require.Equal(t, []string{"a", "c", "n"}, hitIDs(hits)) // best-first
+
+	// Global-only scope sees only the global memory.
+	hits, err = CosineSearchScoped(ctx, db, q, "m1", nil, []string{""}, 10)
+	require.NoError(t, err)
+	require.Equal(t, []string{"c"}, hitIDs(hits))
+
+	// Kind and project filters compose: notes in scope only.
+	hits, err = CosineSearchScoped(ctx, db, q, "m1", []string{"note"}, []string{"", "seam"}, 10)
+	require.NoError(t, err)
+	require.Equal(t, []string{"n"}, hitIDs(hits))
+
+	// An empty projects filter keeps the unscoped full-scan behavior, orphan
+	// included.
+	hits, err = CosineSearchScoped(ctx, db, q, "m1", nil, nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 5)
 }
 
 func TestUpsertReplacesAndDelete(t *testing.T) {

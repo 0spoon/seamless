@@ -221,6 +221,10 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 // ambient session cc/{prefix} for the agent's Claude session id, scoped to the
 // cwd-resolved project. It returns the session name, or "" when there is no
 // session id, no DB, or a store error (best-effort; never blocks the hook).
+// The resume path is a store-side targeted UPDATE of only the fields this hook
+// owns (status, project scope, recency) -- never a full-row read-modify-write,
+// which could clobber the findings a concurrent transcript harvest wrote to the
+// same session between the read and the write-back.
 func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) string {
 	if h.db == nil || p.SessionID == "" {
 		return ""
@@ -232,24 +236,15 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 		project = ""
 	}
 
-	existing, ok, err := store.SessionByName(ctx, h.db, name)
+	// Resume: reactivate and re-scope, so a compact/resume continues the same
+	// ambient session rather than forking a new one.
+	now := time.Now().UTC()
+	resumed, err := store.ReactivateSessionByName(ctx, h.db, name, project, now)
 	if err != nil {
-		h.logger.Warn("hooks: ambient lookup", "error", err)
+		h.logger.Warn("hooks: ambient resume", "error", err)
 		return ""
 	}
-	now := time.Now().UTC()
-	if ok {
-		// Resume: reactivate and re-scope, so a compact/resume continues the same
-		// ambient session rather than forking a new one.
-		existing.Status = core.SessionActive
-		if project != "" {
-			existing.ProjectSlug = project
-		}
-		existing.UpdatedAt = now
-		if err := store.UpdateSession(ctx, h.db, existing); err != nil {
-			h.logger.Warn("hooks: ambient resume", "error", err)
-			return ""
-		}
+	if resumed {
 		return name
 	}
 
@@ -264,6 +259,12 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := store.CreateSession(ctx, h.db, sess); err != nil {
+		// Two SessionStart hooks racing the same Claude session can both miss the
+		// resume and collide on the UNIQUE session name; the loser resumes the
+		// winner's row instead of dropping its ambient line.
+		if resumed, rerr := store.ReactivateSessionByName(ctx, h.db, name, project, now); rerr == nil && resumed {
+			return name
+		}
 		h.logger.Warn("hooks: ambient create", "error", err)
 		return ""
 	}

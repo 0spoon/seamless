@@ -165,6 +165,24 @@ func TestSubagentCaptureMissingTranscriptFailsOpen(t *testing.T) {
 	require.Empty(t, eventsOfKind(t, e.rec, core.EventSubagentCaptured))
 }
 
+// TestSubagentTranscriptPathRejectsTraversalAgentID pins the agent-id guard:
+// the id is a filename fragment, so one carrying separators or ".." must not be
+// joined into the transcript path (it could point the read anywhere on disk).
+func TestSubagentTranscriptPathRejectsTraversalAgentID(t *testing.T) {
+	base := toolPayload{TranscriptPath: "/tmp/sess.jsonl"}
+
+	for _, id := range []string{"../../../etc/passwd", "a/b", `a\b`, "a..b"} {
+		p := base
+		p.AgentID = id
+		require.Empty(t, subagentTranscriptPath(p), "agent id %q must be rejected", id)
+	}
+
+	ok := base
+	ok.AgentID = "agent01"
+	require.Equal(t, filepath.Join("/tmp/sess", "subagents", "agent-agent01.jsonl"),
+		subagentTranscriptPath(ok))
+}
+
 func TestParseSubagentTranscript(t *testing.T) {
 	prompt, report := parseSubagentTranscript(filepath.Join("testdata", "agent-transcript.jsonl"))
 	require.Equal(t, "Explore the gardener package and report its structure", prompt,

@@ -10,6 +10,7 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -27,6 +28,7 @@ import (
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 const (
@@ -89,6 +91,24 @@ func normalizeProject(explicit string) string {
 	}
 }
 
+// validateProjectArg normalizes an explicit project argument and rejects slugs
+// unsafe as a path segment (separators, "..", null bytes). The project becomes a
+// directory under the memory/ and notes/ trees, and validate.PathWithinDir only
+// guards the data-dir boundary: an unvalidated slug like "../notes/inbox" cleans
+// to a path INSIDE the data dir but outside its tree, letting one item clobber
+// another tree's files. Every tool taking a project/slug argument resolves it
+// through here (via resolveReadScope/resolveWriteScope or directly).
+func validateProjectArg(explicit string) (string, error) {
+	project := normalizeProject(explicit)
+	if project == "" {
+		return "", nil
+	}
+	if err := validate.Name(project); err != nil {
+		return "", fmt.Errorf("invalid project %q: %w", explicit, err)
+	}
+	return project, nil
+}
+
 // Config wires the MCP server's dependencies.
 type Config struct {
 	DB       *sql.DB
@@ -114,8 +134,9 @@ type Server struct {
 	fetcher   *capture.URLFetcher // SSRF-safe URL fetch backing capture_url
 	toolNames []string            // registered tool names, in registration order
 
-	mu       sync.Mutex
-	bindings map[string]binding // mcp client-session id -> binding
+	mu        sync.Mutex
+	bindings  map[string]binding // mcp client-session id -> binding
+	lastSweep time.Time          // last opportunistic bindings sweep (guarded by mu)
 }
 
 // NumTools returns the number of registered MCP tools. doctor asserts it equals
@@ -130,9 +151,10 @@ func (s *Server) addTool(t mcp.Tool, h mcpserver.ToolHandlerFunc) {
 
 // binding is the session context inherited by later tool calls on a connection.
 type binding struct {
-	sessionID string // ULID of the bound session
-	project   string // resolved project slug ("" = global)
-	lab       string // current research lab (set by lab_open), inherited by trial_record
+	sessionID string    // ULID of the bound session
+	project   string    // resolved project slug ("" = global)
+	lab       string    // current research lab (set by lab_open), inherited by trial_record
+	touchedAt time.Time // last set/lookup; the sweep's staleness signal for session-less bindings
 }
 
 // New constructs a Server and registers the tool surface.
@@ -268,8 +290,9 @@ func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
 		return
 	}
 	s.mu.Lock()
-	s.bindings[id] = binding{sessionID: sessionID, project: project}
+	s.bindings[id] = binding{sessionID: sessionID, project: project, touchedAt: time.Now()}
 	s.mu.Unlock()
+	s.maybeSweepBindings(ctx)
 }
 
 func (s *Server) getBinding(ctx context.Context) (binding, bool) {
@@ -279,8 +302,91 @@ func (s *Server) getBinding(ctx context.Context) (binding, bool) {
 	}
 	s.mu.Lock()
 	b, ok := s.bindings[id]
+	if ok {
+		b.touchedAt = time.Now()
+		s.bindings[id] = b
+	}
 	s.mu.Unlock()
+	s.maybeSweepBindings(ctx)
 	return b, ok
+}
+
+// evictSessionBindings drops every connection binding pointing at sessionID.
+// session_end calls it the moment a session completes, so a long-lived daemon
+// does not keep a binding for a session that is over; sessions ended by other
+// paths (the SessionEnd hook, the idle reaper) are caught by the sweep instead.
+func (s *Server) evictSessionBindings(sessionID string) {
+	if sessionID == "" {
+		return
+	}
+	s.mu.Lock()
+	for id, b := range s.bindings {
+		if b.sessionID == sessionID {
+			delete(s.bindings, id)
+		}
+	}
+	s.mu.Unlock()
+}
+
+// bindingSweepInterval gates the opportunistic bindings sweep: at most one tool
+// call per interval pays for the single SQLite lookup the sweep costs.
+const bindingSweepInterval = 5 * time.Minute
+
+// bindingIdleTTL is the sweep's fallback for session-less bindings (a lab_open
+// with no session_start): with no session whose lifecycle can end them, they are
+// evicted after going untouched this long. It mirrors ambientFallbackWindow --
+// past that, the connection would no longer inherit anything useful anyway.
+const bindingIdleTTL = ambientFallbackWindow
+
+// maybeSweepBindings opportunistically evicts stale connection bindings, at most
+// once per bindingSweepInterval. A binding is stale when its session is no longer
+// active (completed via session_end or the SessionEnd hook, or expired by the
+// idle reaper -- the transport never tells us a client went away) or, for a
+// session-less binding, untouched past bindingIdleTTL. Without eviction the map
+// grows by one entry per MCP connection for the daemon's lifetime. The DB read
+// runs outside the lock; the delete pass re-checks each entry under the lock so
+// a binding replaced or refreshed mid-sweep survives.
+func (s *Server) maybeSweepBindings(ctx context.Context) {
+	if s.cfg.DB == nil {
+		return
+	}
+	now := time.Now()
+	type sample struct{ id, sessionID string }
+	s.mu.Lock()
+	if now.Sub(s.lastSweep) < bindingSweepInterval || len(s.bindings) == 0 {
+		s.mu.Unlock()
+		return
+	}
+	s.lastSweep = now
+	samples := make([]sample, 0, len(s.bindings))
+	sessionIDs := make([]string, 0, len(s.bindings))
+	for id, b := range s.bindings {
+		samples = append(samples, sample{id: id, sessionID: b.sessionID})
+		if b.sessionID != "" {
+			sessionIDs = append(sessionIDs, b.sessionID)
+		}
+	}
+	s.mu.Unlock()
+
+	active, err := store.ActiveSessionIDs(ctx, s.cfg.DB, sessionIDs)
+	if err != nil {
+		s.logger.Warn("mcp: binding sweep", "error", err)
+		return
+	}
+
+	s.mu.Lock()
+	for _, smp := range samples {
+		b, ok := s.bindings[smp.id]
+		if !ok || b.sessionID != smp.sessionID {
+			continue // re-bound mid-sweep; the fresh binding is not ours to judge
+		}
+		stale := (smp.sessionID != "" && !active[smp.sessionID]) ||
+			(smp.sessionID == "" && now.Sub(b.touchedAt) >= bindingIdleTTL)
+		if stale {
+			delete(s.bindings, smp.id)
+		}
+	}
+	s.mu.Unlock()
 }
 
 // ambientFallbackWindow bounds how stale an ambient (cc/*) session may be and
@@ -300,7 +406,7 @@ const ambientFallbackWindow = 6 * time.Hour
 // project's items, the read-side twin of the cross-agent write bleed.
 func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
-		return normalizeProject(explicit), nil
+		return validateProjectArg(explicit)
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
@@ -324,7 +430,7 @@ func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string,
 // the write into the wrong project.
 func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
-		return normalizeProject(explicit), nil
+		return validateProjectArg(explicit)
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
@@ -350,6 +456,7 @@ func (s *Server) setBindingLab(ctx context.Context, lab string) {
 	s.mu.Lock()
 	b := s.bindings[id]
 	b.lab = lab
+	b.touchedAt = time.Now()
 	s.bindings[id] = b
 	s.mu.Unlock()
 }

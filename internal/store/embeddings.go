@@ -97,6 +97,21 @@ func DeleteEmbedding(ctx context.Context, db *sql.DB, itemID string) error {
 // searches all kinds. At the corpus scale this system targets (thousands of
 // items) a full scan is milliseconds, which is why there is no vector index.
 func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds []string, limit int) ([]SearchHit, error) {
+	return cosineSearch(ctx, db, query, model, kinds, nil, limit)
+}
+
+// CosineSearchScoped is CosineSearch restricted to items whose project is in
+// projects (recall passes the bound project plus "" for global). An empty
+// projects filter searches all projects. Filtering inside the candidate query
+// keeps the whole candidate depth in scope, so a corpus dominated by
+// out-of-scope vectors cannot starve in-scope results out of the top-limit
+// window. Embedding rows carry no project, so the scope is resolved by joining
+// the index tables; an embedding orphaned from both indexes matches no scope.
+func CosineSearchScoped(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
+	return cosineSearch(ctx, db, query, model, kinds, projects, limit)
+}
+
+func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
 	if len(query) == 0 {
 		return nil, fmt.Errorf("store.CosineSearch: empty query vector")
 	}
@@ -104,12 +119,30 @@ func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string
 		limit = 10
 	}
 
-	sqlStr := `SELECT item_id, kind, vec FROM embeddings WHERE model = ?`
+	var sqlStr string
 	args := []any{model}
-	if len(kinds) > 0 {
-		sqlStr += ` AND kind IN (` + placeholders(len(kinds)) + `)`
-		for _, k := range kinds {
-			args = append(args, k)
+	if len(projects) == 0 {
+		sqlStr = `SELECT item_id, kind, vec FROM embeddings WHERE model = ?`
+		if len(kinds) > 0 {
+			sqlStr += ` AND kind IN (` + placeholders(len(kinds)) + `)`
+			for _, k := range kinds {
+				args = append(args, k)
+			}
+		}
+	} else {
+		sqlStr = `SELECT e.item_id, e.kind, e.vec FROM embeddings e
+			LEFT JOIN memories_index mi ON mi.id = e.item_id
+			LEFT JOIN notes_index ni ON ni.id = e.item_id
+			WHERE e.model = ?`
+		if len(kinds) > 0 {
+			sqlStr += ` AND e.kind IN (` + placeholders(len(kinds)) + `)`
+			for _, k := range kinds {
+				args = append(args, k)
+			}
+		}
+		sqlStr += ` AND COALESCE(mi.project, ni.project) IN (` + placeholders(len(projects)) + `)`
+		for _, p := range projects {
+			args = append(args, p)
 		}
 	}
 

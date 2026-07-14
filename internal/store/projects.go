@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
+
 	"github.com/0spoon/seamless/internal/core"
 )
 
@@ -99,12 +102,24 @@ func CreateProject(ctx context.Context, db *sql.DB, p core.Project) error {
 		p.ID, p.Slug, p.Name, p.Description,
 		core.FormatTime(p.CreatedAt), core.FormatTime(p.UpdatedAt))
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if isUniqueViolation(err) {
 			return ErrSlugExists
 		}
 		return fmt.Errorf("store.CreateProject: %w", err)
 	}
 	return nil
+}
+
+// isUniqueViolation reports whether err is a SQLite UNIQUE (or PRIMARY KEY)
+// constraint failure, via the driver's typed error code rather than matching
+// on the message text.
+func isUniqueViolation(err error) bool {
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	code := se.Code()
+	return code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY
 }
 
 func scanProject(rows *sql.Rows) (core.Project, error) {

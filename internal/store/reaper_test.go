@@ -26,10 +26,10 @@ func TestExpireStaleSessions(t *testing.T) {
 		return id
 	}
 
-	live := mk("cc/live", now.Add(-5*time.Minute), core.SessionActive)         // fresh -> kept
-	stale := mk("sess/stale", now.Add(-2*time.Hour), core.SessionActive)       // idle -> reaped
-	done := mk("cc/done", now.Add(-3*time.Hour), core.SessionCompleted)        // terminal -> untouched
-	borderline := mk("sess/edge", now.Add(-time.Minute), core.SessionActive)   // just active -> kept
+	live := mk("cc/live", now.Add(-5*time.Minute), core.SessionActive)       // fresh -> kept
+	stale := mk("sess/stale", now.Add(-2*time.Hour), core.SessionActive)     // idle -> reaped
+	done := mk("cc/done", now.Add(-3*time.Hour), core.SessionCompleted)      // terminal -> untouched
+	borderline := mk("sess/edge", now.Add(-time.Minute), core.SessionActive) // just active -> kept
 
 	reaped, err := ExpireStaleSessions(ctx, db, cutoff)
 	require.NoError(t, err)
@@ -58,6 +58,84 @@ func TestExpireStaleSessions(t *testing.T) {
 	again, err := ExpireStaleSessions(ctx, db, cutoff)
 	require.NoError(t, err)
 	require.Empty(t, again)
+}
+
+// Regression: a heartbeat landing between the reaper's candidate SELECT and its
+// per-row flip must win -- the session is provably alive and must not be expired
+// (nor have its task claims released). Reconstructs the interleaving with the
+// same pieces ExpireStaleSessions runs: candidate read, then TouchSession, then
+// the guarded flip.
+func TestExpireStaleSessions_HeartbeatBetweenSelectAndFlip(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	now := time.Now().UTC()
+	cutoff := now.Add(-core.SessionIdleTTL)
+
+	id, err := core.NewID()
+	require.NoError(t, err)
+	idle := now.Add(-2 * core.SessionIdleTTL)
+	require.NoError(t, CreateSession(ctx, db, core.Session{
+		ID: id, Name: "cc/racing", ProjectSlug: "seamless", Status: core.SessionActive,
+		CreatedAt: idle, UpdatedAt: idle,
+	}))
+
+	// Reaper step 1: the candidate read sees the session as stale.
+	candidates, err := staleActiveSessions(ctx, db, cutoff)
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+
+	// Interleaved heartbeat: the agent proves it is alive.
+	require.NoError(t, TouchSession(ctx, db, id, now))
+
+	// Reaper step 2: the flip must observe the heartbeat and decline.
+	flipped, err := expireSessionIfStillStale(ctx, db, id, cutoff)
+	require.NoError(t, err)
+	require.False(t, flipped, "a heartbeated session must not be reaped")
+
+	got, ok, err := SessionByID(ctx, db, id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, got.Status, "session stays active after the heartbeat")
+}
+
+// Regression: a graceful completion (session_end / SessionEnd hook) landing
+// between the candidate SELECT and the flip must win -- the reaper must neither
+// flip the row nor report it as reaped, or the caller would record a duplicate
+// session.ended event and double-release its claims.
+func TestExpireStaleSessions_GracefulEndBetweenSelectAndFlip(t *testing.T) {
+	ctx := context.Background()
+	db := openTestDB(t)
+	now := time.Now().UTC()
+	cutoff := now.Add(-core.SessionIdleTTL)
+
+	id, err := core.NewID()
+	require.NoError(t, err)
+	idle := now.Add(-2 * core.SessionIdleTTL)
+	sess := core.Session{
+		ID: id, Name: "sess/ending", ProjectSlug: "seamless", Status: core.SessionActive,
+		CreatedAt: idle, UpdatedAt: idle,
+	}
+	require.NoError(t, CreateSession(ctx, db, sess))
+
+	candidates, err := staleActiveSessions(ctx, db, cutoff)
+	require.NoError(t, err)
+	require.Len(t, candidates, 1)
+
+	// Interleaved graceful end.
+	sess.Status = core.SessionCompleted
+	sess.Findings = "done"
+	sess.UpdatedAt = now
+	require.NoError(t, UpdateSession(ctx, db, sess))
+
+	flipped, err := expireSessionIfStillStale(ctx, db, id, cutoff)
+	require.NoError(t, err)
+	require.False(t, flipped, "a completed session must not be reported as reaped")
+
+	got, ok, err := SessionByID(ctx, db, id)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionCompleted, got.Status, "graceful completion is preserved")
+	require.Equal(t, "done", got.Findings)
 }
 
 func TestTouchSession(t *testing.T) {

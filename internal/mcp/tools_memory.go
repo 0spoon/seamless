@@ -10,6 +10,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/lifecycle"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -18,7 +19,7 @@ const maxDescriptionRunes = 150
 
 func memoryWriteTool() mcp.Tool {
 	return mcp.NewTool("memory_write",
-		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here."),
+		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
 		mcp.WithString("kind", mcp.Required(), mcp.Enum("constraint", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage"), mcp.Description("memory kind")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
@@ -85,6 +86,10 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 
 	written, err := s.cfg.Files.WriteMemory(ctx, mem)
 	if err != nil {
+		if errors.Is(err, files.ErrPathOccupied) {
+			return errResult("memory_write", fmt.Errorf(
+				"name %q is still held by a superseded or archived memory (%v) -- free it with memory_delete or pick a different name", name, err))
+		}
 		return errResult("memory_write", err)
 	}
 	s.record(ctx, core.EventMemoryWritten, s.boundSession(ctx), project, written.ID,
@@ -97,8 +102,18 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if supersedes := argString(req, "supersedes"); supersedes != "" {
 		superseded, serr := s.supersedeMemory(ctx, project, supersedes, written, now)
 		if serr != nil {
-			resp["supersede_error"] = serr.Error()
-		} else if superseded != "" {
+			// Partial failure: the new memory is kept -- its content is valid
+			// knowledge, an update-in-place has no previous body to restore, and
+			// re-writing the same name is a lossless in-place update, so fixing
+			// the target and retrying is safe. But the supersession did NOT
+			// happen, so this must be an explicit tool error: an error field
+			// embedded in a success payload reads as success, and the agent
+			// would leave the old memory live alongside its replacement.
+			return errResult("memory_write", fmt.Errorf(
+				"memory %q written and kept (id %s), but superseding %q failed: %w -- %q is STILL ACTIVE; fix the supersedes target and retry (re-writing %q updates it in place)",
+				name, written.ID, supersedes, serr, supersedes, name))
+		}
+		if superseded != "" {
 			resp["superseded"] = superseded
 		}
 	}
@@ -107,14 +122,30 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 
 // supersedeMemory marks the memory named target (in project, falling back to
 // global) as superseded by replacement. It returns the superseded memory's name
-// (project-qualified) on success, "" when there is nothing to supersede, or an
-// error the caller surfaces without failing the write.
+// (project-qualified) on success, "" when the target IS the replacement (an
+// in-place update, nothing to supersede), or an error the caller surfaces as a
+// tool error (the write itself is kept). A target already superseded by this
+// same replacement reports success, so retrying a memory_write whose supersede
+// already landed stays idempotent.
 func (s *Server) supersedeMemory(ctx context.Context, project, target string, replacement core.Memory, now time.Time) (string, error) {
 	old, found, err := s.resolveMemory(ctx, project, target, true)
 	if err != nil {
 		return "", err
 	}
 	if !found {
+		// The active index missed: either the name is wrong, or the target is
+		// already invalid. Already superseded by this exact replacement is the
+		// goal state (a retried call), not a failure.
+		prev, ok, perr := s.resolveSupersededMemory(ctx, project, target)
+		if perr != nil {
+			return "", perr
+		}
+		if ok && prev.SupersededBy == replacement.ID {
+			return lifecycle.MemoryRef(prev.Project, prev.Name), nil
+		}
+		if ok {
+			return "", fmt.Errorf("memory %q is already superseded or archived", target)
+		}
 		return "", fmt.Errorf("no memory named %q to supersede", target)
 	}
 	if old.ID == replacement.ID {
@@ -282,13 +313,16 @@ func (s *Server) handleMemoryDelete(ctx context.Context, req mcp.CallToolRequest
 		return errResult("memory_delete", err)
 	}
 	if !found {
-		return errResult("memory_delete", fmt.Errorf("no memory named %q", name))
+		return errResult("memory_delete", scopedNotFound("memory", project, name))
 	}
 	if err := s.cfg.Files.Remove(ctx, idx.FilePath); err != nil {
 		return errResult("memory_delete", err)
 	}
 	s.record(ctx, core.EventMemoryArchived, s.boundSession(ctx), idx.Project, idx.ID, map[string]any{"name": name})
-	return jsonResult(map[string]any{"status": "deleted", "id": idx.ID, "name": name})
+	// project names the scope actually deleted from: the lookup falls back to the
+	// global scope, so a delete aimed at a project can land on a global memory --
+	// the response must say so rather than implying the project-scoped one.
+	return jsonResult(map[string]any{"status": "deleted", "id": idx.ID, "name": name, "project": idx.Project})
 }
 
 // scopedNotFound builds a "no such item" error that names the scope searched, so

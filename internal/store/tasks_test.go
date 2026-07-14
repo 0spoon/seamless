@@ -155,6 +155,28 @@ func TestUpdateTaskStampsAndClearsClosedAt(t *testing.T) {
 	require.Nil(t, reopened.ClosedAt, "reopening clears closed_at")
 }
 
+// TestListTasksPopulatesDependsOn pins the batched dependency loading in
+// scanTasksWithDeps: every listed task carries its own depends-on ids (and only
+// its own), dep-less tasks carry none.
+func TestListTasksPopulatesDependsOn(t *testing.T) {
+	db := newTaskDB(t)
+	a := addTask(t, db, "demo", "A", 1)
+	b := addTask(t, db, "demo", "B", 2)
+	c := addTask(t, db, "demo", "C", 3, a, b)
+	addTask(t, db, "demo", "D", 4)
+
+	all, err := ListTasks(context.Background(), db, "demo", "")
+	require.NoError(t, err)
+	require.Len(t, all, 4)
+	byID := map[string][]string{}
+	for _, tk := range all {
+		byID[tk.ID] = tk.DependsOn
+	}
+	require.ElementsMatch(t, []string{a, b}, byID[c], "C carries both dep ids")
+	require.Empty(t, byID[a])
+	require.Empty(t, byID[b])
+}
+
 func TestListTasksFiltersByStatus(t *testing.T) {
 	db := newTaskDB(t)
 	a := addTask(t, db, "demo", "A", 1)

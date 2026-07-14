@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"time"
 
@@ -88,13 +89,19 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	}
 	if req.GetArguments()["title"] != nil {
 		title := argString(req, "title")
+		if title == "" {
+			return errResult("tasks_update", errors.New("title must not be blank; omit it to keep the current title"))
+		}
 		patch.Title = &title
 	}
 	if body, ok := firstStringArg(req.GetArguments(), "body", "content", "text"); ok {
 		patch.Body = &body
 	}
 	if req.GetArguments()["project"] != nil {
-		project := normalizeProject(argString(req, "project"))
+		project, perr := validateProjectArg(argString(req, "project"))
+		if perr != nil {
+			return errResult("tasks_update", perr)
+		}
 		patch.ProjectSlug = &project
 	}
 	patch.AddDependsOn = parseCommaList(argString(req, "add_depends_on"))
@@ -230,7 +237,10 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 	lease := defaultClaimLease
 	if v := argString(req, "lease_seconds"); v != "" {
 		secs, err := strconv.Atoi(v)
-		if err != nil || secs <= 0 {
+		// The upper bound guards int64 overflow in the seconds->Duration
+		// conversion: an overflowed lease goes negative, so the claim would
+		// report success while being instantly expired (silently reclaimable).
+		if err != nil || secs <= 0 || int64(secs) > int64(math.MaxInt64/time.Second) {
 			return errResult("tasks_claim", fmt.Errorf("invalid lease_seconds %q", v))
 		}
 		lease = time.Duration(secs) * time.Second

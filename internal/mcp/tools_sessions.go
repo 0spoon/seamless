@@ -47,12 +47,20 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			if project == "" {
 				project = existing.ProjectSlug
 			}
+			// Reactivate: a resumed session is live again. Without this a
+			// completed/expired session stays terminal -- the per-call heartbeat
+			// (TouchSession) only touches active sessions, so the idle reaper and
+			// every active-session surface would treat the resumed agent as gone.
+			existing.Status = core.SessionActive
+			existing.UpdatedAt = time.Now().UTC()
+			if err := store.UpdateSession(ctx, s.cfg.DB, existing); err != nil {
+				return errResult("session_start", err)
+			}
 			s.setBinding(ctx, existing.ID, project)
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
-			briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
 			return jsonResult(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
-				"project": project, "resumed": true, "briefing": briefing,
+				"project": project, "resumed": true, "briefing": s.briefing(ctx, cwd, source),
 			})
 		}
 	}
@@ -76,10 +84,9 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.setBinding(ctx, ambient.ID, project)
 			s.record(ctx, core.EventSessionStarted, ambient.ID, project, "",
 				map[string]any{"resumed": true, "adopted": true})
-			briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
 			return jsonResult(map[string]any{
 				"session_id": ambient.ID, "name": ambient.Name,
-				"project": project, "resumed": true, "briefing": briefing,
+				"project": project, "resumed": true, "briefing": s.briefing(ctx, cwd, source),
 			})
 		}
 	}
@@ -102,10 +109,21 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
-	briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
 	return jsonResult(map[string]any{
-		"session_id": id, "name": name, "project": project, "briefing": briefing,
+		"session_id": id, "name": name, "project": project, "briefing": s.briefing(ctx, cwd, source),
 	})
+}
+
+// briefing assembles the session_start briefing, degrading to "" on error. The
+// failure is logged (it was previously discarded silently): a broken briefing
+// should never fail a session_start, but it must not vanish without a trace.
+func (s *Server) briefing(ctx context.Context, cwd, source string) string {
+	briefing, _, err := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
+	if err != nil {
+		s.logger.Warn("session_start: briefing", "error", err)
+		return ""
+	}
+	return briefing
 }
 
 // linkedClaudeID resolves the Claude session id to stamp on a freshly created
@@ -196,6 +214,11 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	if err := store.UpdateSession(ctx, s.cfg.DB, sess); err != nil {
 		return errResult("session_end", err)
 	}
+	// The session is over: drop every connection binding pointing at it, so the
+	// bindings map does not grow one dead entry per ended session on a
+	// long-lived daemon (sessions ended by the hook or the reaper are swept
+	// separately -- see maybeSweepBindings).
+	s.evictSessionBindings(sess.ID)
 	// Release any task claims this session still holds so its in-flight work
 	// returns to the queue rather than sitting claimed by a departed agent.
 	// Keyed off the resolved sess.ID (not the connection binding) because

@@ -150,6 +150,7 @@ type Ollama struct {
 // Anthropic is a chat-only provider (no embeddings API).
 type Anthropic struct {
 	APIKey    string `yaml:"api_key"`
+	BaseURL   string `yaml:"base_url"`
 	ChatModel string `yaml:"chat_model"`
 }
 
@@ -225,7 +226,10 @@ func Defaults() Config {
 				EmbeddingModel: "qwen3-embedding:8b",
 				EmbeddingDims:  0,
 			},
-			Anthropic: Anthropic{ChatModel: "claude-sonnet-5"},
+			Anthropic: Anthropic{
+				BaseURL:   "https://api.anthropic.com",
+				ChatModel: "claude-sonnet-5",
+			},
 		},
 		Gardener: Gardener{
 			Enabled:                true,
@@ -390,6 +394,7 @@ func (c *Config) applyEnv() error {
 	}
 
 	envStr("SEAMLESS_ANTHROPIC_API_KEY", &c.LLM.Anthropic.APIKey)
+	envStr("SEAMLESS_ANTHROPIC_BASE_URL", &c.LLM.Anthropic.BaseURL)
 	envStr("SEAMLESS_ANTHROPIC_CHAT_MODEL", &c.LLM.Anthropic.ChatModel)
 
 	if err := envBool("SEAMLESS_GARDENER_ENABLED", &c.Gardener.Enabled); err != nil {
