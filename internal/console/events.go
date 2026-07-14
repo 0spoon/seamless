@@ -81,10 +81,25 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	s.render(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Data: data})
 }
 
-// resolveEventItems turns the memory ids an event referenced (ItemID plus any
-// payload item_ids) into display rows, looking each up in the memory index.
-// Order follows first appearance; unresolved ids are kept and marked Missing.
+// eventSurfacesMemories reports whether an event's item ids point at memories in
+// the index. Only injection events (retrieval.injected) carry surfaced-memory ids
+// -- recall and the briefing hook record them in the payload's item_ids array.
+// Every other kind's ItemID points at a task, note, trial, or plan, so it must not
+// be resolved against the memory index: doing so renders a phantom "removed" row
+// (e.g. a task.transition echoing its own task id as a deleted memory). hook.prompt
+// is a recall miss and carries no item ids, so it is excluded too.
+func eventSurfacesMemories(k core.EventKind) bool {
+	return k == core.EventInjected
+}
+
+// resolveEventItems turns the memory ids an injection event surfaced (its payload
+// item_ids) into display rows, looking each up in the memory index. Order follows
+// first appearance; unresolved ids are kept and marked Missing. Non-injection kinds
+// surface nothing (see eventSurfacesMemories).
 func (s *Service) resolveEventItems(ctx context.Context, ev core.Event) ([]eventItem, error) {
+	if !eventSurfacesMemories(ev.Kind) {
+		return nil, nil
+	}
 	ids := injectedEventItemIDs(ev)
 	if len(ids) == 0 {
 		return nil, nil
