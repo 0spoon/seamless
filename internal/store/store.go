@@ -25,9 +25,14 @@ func Open(dbPath string) (*sql.DB, error) {
 	}
 
 	// Set PRAGMAs on the DSN (not via db.Exec) so foreign_keys and busy_timeout
-	// apply to every connection the pool opens, not just the first.
+	// apply to every connection the pool opens, not just the first. mmap_size
+	// serves reads from file-backed mapped pages instead of one pread per 4KB
+	// page -- the embeddings full scan behind CosineSearch outgrows the default
+	// 2MB page cache immediately, and mapped pages are OS-evictable, so this is
+	// an address-space reservation, not a 256MB heap commitment.
 	dsn := "file:" + url.PathEscape(dbPath) +
-		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
+		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)" +
+		"&_pragma=mmap_size(268435456)"
 
 	db, err := sql.Open("sqlite", dsn)
 	if err != nil {

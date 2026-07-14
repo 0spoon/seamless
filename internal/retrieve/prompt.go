@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -129,7 +130,7 @@ func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promp
 	if err != nil {
 		return nil, err
 	}
-	var cands []promptCand
+	cands := make([]promptCand, 0, len(mems))
 	df := make(map[string]int)
 	for _, m := range mems {
 		toks := promptTokenize(m.Name + " " + m.Description)
@@ -222,7 +223,7 @@ func promptTokenize(s string) []string {
 	})
 	out := make([]string, 0, len(fields))
 	for _, f := range fields {
-		if len([]rune(f)) < promptMinTokenLen {
+		if utf8.RuneCountInString(f) < promptMinTokenLen {
 			continue
 		}
 		if _, stop := promptStopwords[f]; stop {

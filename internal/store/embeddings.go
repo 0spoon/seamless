@@ -152,37 +152,98 @@ func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string
 	}
 	defer func() { _ = rows.Close() }()
 
-	var hits []SearchHit
+	// The scan is allocation-hostile at corpus scale (thousands of ~6KB BLOBs
+	// per query), so score each row without materializing it: columns land in
+	// sql.RawBytes (database/sql reuses its buffers instead of cloning every
+	// row), the dot product and row norm accumulate straight off the BLOB
+	// bytes, and only rows that enter the running top-limit window allocate
+	// their id/kind strings. The accumulation order matches Cosine exactly, so
+	// scores are bit-identical to the DecodeVector+Cosine equivalent.
+	var qq float64
+	for _, v := range query {
+		f := float64(v)
+		qq += f * f
+	}
+	qnorm := math.Sqrt(qq)
+	wantBytes := len(query) * 4
+
+	// better reports whether (score, id) outranks h under the result order:
+	// highest score first, ties broken by item_id for deterministic output.
+	better := func(score float64, id sql.RawBytes, h SearchHit) bool {
+		if score != h.Score {
+			return score > h.Score
+		}
+		return string(id) < h.ItemID
+	}
+
+	// Insertion into a sorted window costs O(limit) per admitted row, which is
+	// fine at recall's depths (<= 24) but not for an unbounded caller; past the
+	// threshold, fall back to collect-and-sort.
+	bounded := limit <= cosineTopKMax
+	var (
+		idRaw, kindRaw, blob sql.RawBytes
+		hits                 []SearchHit
+	)
+	if bounded {
+		hits = make([]SearchHit, 0, limit+1)
+	}
 	for rows.Next() {
-		var (
-			itemID, kind string
-			blob         []byte
-		)
-		if err := rows.Scan(&itemID, &kind, &blob); err != nil {
+		if err := rows.Scan(&idRaw, &kindRaw, &blob); err != nil {
 			return nil, fmt.Errorf("store.CosineSearch: scan: %w", err)
 		}
-		vec := DecodeVector(blob)
-		if len(vec) != len(query) {
+		if len(blob) != wantBytes {
 			continue // corrupt row or a different model's dimensionality
 		}
-		hits = append(hits, SearchHit{ItemID: itemID, Kind: kind, Score: Cosine(query, vec)})
+		var dot, nn float64
+		for i, av := range query {
+			bv := float64(math.Float32frombits(binary.LittleEndian.Uint32(blob[i*4:])))
+			dot += float64(av) * bv
+			nn += bv * bv
+		}
+		var score float64
+		if qq != 0 && nn != 0 {
+			score = dot / (qnorm * math.Sqrt(nn))
+		}
+		if !bounded {
+			hits = append(hits, SearchHit{ItemID: string(idRaw), Kind: string(kindRaw), Score: score})
+			continue
+		}
+		if len(hits) == limit && !better(score, idRaw, hits[limit-1]) {
+			continue
+		}
+		idx := sort.Search(len(hits), func(i int) bool { return better(score, idRaw, hits[i]) })
+		hits = append(hits, SearchHit{})
+		copy(hits[idx+1:], hits[idx:])
+		hits[idx] = SearchHit{ItemID: string(idRaw), Kind: string(kindRaw), Score: score}
+		if len(hits) > limit {
+			hits = hits[:limit]
+		}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store.CosineSearch: %w", err)
 	}
 
-	// Highest score first; ties broken by item_id for deterministic output.
-	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].Score != hits[j].Score {
-			return hits[i].Score > hits[j].Score
+	if !bounded {
+		// Highest score first; ties broken by item_id for deterministic output.
+		sort.Slice(hits, func(i, j int) bool {
+			if hits[i].Score != hits[j].Score {
+				return hits[i].Score > hits[j].Score
+			}
+			return hits[i].ItemID < hits[j].ItemID
+		})
+		if len(hits) > limit {
+			hits = hits[:limit]
 		}
-		return hits[i].ItemID < hits[j].ItemID
-	})
-	if len(hits) > limit {
-		hits = hits[:limit]
+	}
+	if len(hits) == 0 {
+		return nil, nil
 	}
 	return hits, nil
 }
+
+// cosineTopKMax bounds the sorted-window insertion path in cosineSearch; a
+// larger limit falls back to collecting every row and sorting once.
+const cosineTopKMax = 256
 
 // placeholders returns "?, ?, ..." with n placeholders for an IN clause.
 func placeholders(n int) string {
