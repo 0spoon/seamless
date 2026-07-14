@@ -49,7 +49,7 @@ func (s *Server) handleProjectCreate(ctx context.Context, req mcp.CallToolReques
 	}
 	slug := argString(req, "slug")
 	if slug == "" {
-		slug = slugify(name)
+		slug = core.Slugify(name)
 	}
 	if normalizeProject(slug) == "" {
 		return errResult("project_create", fmt.Errorf("slug %q is reserved for the global namespace", slug))

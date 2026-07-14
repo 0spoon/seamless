@@ -8,17 +8,8 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
-func TestSlugify(t *testing.T) {
-	require.Equal(t, "backup-strategy", slugify("backup-strategy"))
-	require.Equal(t, "sync-sh-windows-ssh-pitfalls", slugify("sync.sh Windows SSH pitfalls"))
-	require.Equal(t, "deploy-runner-parallel-agent-worktree-pitfalls",
-		slugify("deploy-runner: parallel-agent worktree pitfalls"))
-	require.Equal(t, "widget9-2-4ghz-antenna", slugify("Widget9 2.4GHz antenna"))
-	require.Equal(t, "untitled", slugify("!!!"))
-	require.LessOrEqual(t, len(slugify(veryLong)), 80)
-}
-
-const veryLong = "this is an extremely long memory name that keeps going well past the eighty character filesystem-safe limit we impose"
+// Slugging is core.Slugify's contract now (see internal/core/slug_test.go); the
+// v1 name-slugging cases that used to live here moved with it.
 
 func TestParseV1WithUnquotedTimestamps(t *testing.T) {
 	content := `---

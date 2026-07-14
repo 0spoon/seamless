@@ -100,35 +100,6 @@ func parseTime(s string) time.Time {
 	return t
 }
 
-// slugify turns arbitrary text into a filesystem-safe lowercase slug (a-z0-9
-// and single dashes), capped in length. Empty input yields "untitled".
-func slugify(s string) string {
-	s = strings.ToLower(s)
-	var b strings.Builder
-	lastDash := false
-	for _, r := range s {
-		switch {
-		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
-			b.WriteRune(r)
-			lastDash = false
-		default:
-			if !lastDash && b.Len() > 0 {
-				b.WriteByte('-')
-				lastDash = true
-			}
-		}
-	}
-	out := strings.Trim(b.String(), "-")
-	const maxLen = 80
-	if len(out) > maxLen {
-		out = strings.Trim(out[:maxLen], "-")
-	}
-	if out == "" {
-		return "untitled"
-	}
-	return out
-}
-
 // memoryFromV1 maps a v1 "Knowledge:" note into a v2 memory. The title encodes
 // kind + name ("Knowledge: {kind} - {name}"); the semantic project and provenance
 // live in the tags (project:, session:). Returns the memory and any warning.
@@ -164,7 +135,7 @@ func memoryFromV1(fm v1Frontmatter, body string) (core.Memory, string) {
 	return core.Memory{
 		ID:            fm.ID,
 		Kind:          kind,
-		Name:          slugify(name),
+		Name:          core.Slugify(name),
 		Description:   fm.Description,
 		Project:       tagValue(fm.Tags, "project"),
 		Body:          body,

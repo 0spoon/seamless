@@ -1,31 +1,44 @@
 package core
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
+
+// SlugMaxRunes is the cap Slugify applies to its output.
+const SlugMaxRunes = 80
 
 // Slugify turns arbitrary text into a filesystem- and URL-safe lowercase slug:
-// lowercase, alphanumeric runs joined by single dashes, trimmed and capped at 80
-// chars. Empty input yields "untitled". It is the canonical slugifier for
-// derived project slugs and mirrors the importer's note/memory slugging.
+// lowercase, letter/number runs joined by single dashes, trimmed and capped at
+// SlugMaxRunes runes. Empty input yields "untitled".
+//
+// It is the ONE slugifier: every derived slug (project slugs from a repo dir or
+// project_create, note slugs from notes_create/capture_url, plan slugs from a
+// captured plan title, imported memory names) flows through it, so the same
+// title yields the same slug whatever the entry path.
+//
+// Letters and numbers are kept per Unicode, not ASCII, so a non-Latin title
+// slugs to itself rather than collapsing to "untitled" -- which matters because
+// note slugs become filenames and notes_create does not disambiguate a
+// collision. The cap is in runes, so it can never split a multi-byte rune.
 func Slugify(s string) string {
-	s = strings.ToLower(s)
 	var b strings.Builder
-	lastDash := false
-	for _, r := range s {
+	prevDash := false
+	for _, r := range strings.ToLower(s) {
 		switch {
-		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+		case unicode.IsLetter(r) || unicode.IsNumber(r):
 			b.WriteRune(r)
-			lastDash = false
+			prevDash = false
 		default:
-			if !lastDash && b.Len() > 0 {
+			if !prevDash && b.Len() > 0 {
 				b.WriteByte('-')
-				lastDash = true
+				prevDash = true
 			}
 		}
 	}
 	out := strings.Trim(b.String(), "-")
-	const maxLen = 80
-	if len(out) > maxLen {
-		out = strings.Trim(out[:maxLen], "-")
+	if rs := []rune(out); len(rs) > SlugMaxRunes {
+		out = strings.Trim(string(rs[:SlugMaxRunes]), "-")
 	}
 	if out == "" {
 		return "untitled"
