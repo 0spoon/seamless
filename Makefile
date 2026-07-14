@@ -25,7 +25,7 @@ PREFIX        ?= $(HOME)/.local
 PREFIX_BIN    := $(PREFIX)/bin
 PROD_CONFIG   := $(HOME)/.config/seamless/seamless.yaml
 
-.PHONY: help build test test-race lint vet fmt tidy run doctor console dev \
+.PHONY: help build test test-race lint vet fmt tidy run doctor console console-chrome dev \
 	install-service install-hooks install-prod uninstall-prod _reload-service \
 	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
@@ -42,6 +42,7 @@ help:
 	@echo "  run        build and start the server (127.0.0.1:8081)"
 	@echo "  doctor     build and run config + DB self-checks"
 	@echo "  console    open the console in a browser, pre-authenticated"
+	@echo "  console-chrome  same, but force Google Chrome (for agent testing)"
 	@echo "  Dev deploy (runs from ./bin -- fast iteration, tracks the working tree):"
 	@echo "    dev                rebuild + restart the running service (quick iterate loop)"
 	@echo "    install-service    render+install+load the launchd service, then restart it"
@@ -92,6 +93,12 @@ doctor: build
 # and open it in the default browser. Requires the server to be running.
 console: build
 	$(BIN_DIR)/$(BINARY) console-open
+
+# Same, but force Google Chrome regardless of the default browser -- agents
+# drive Chrome (Claude-in-Chrome), so this hands the auth cookie to the browser
+# they can actually see.
+console-chrome: build
+	$(BIN_DIR)/$(BINARY) console-open --browser "Google Chrome"
 
 # Quick dev loop: rebuild and get the latest code running. If the dev service is
 # already installed (its plist points at ./bin), restart it in place -- fast, no

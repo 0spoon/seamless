@@ -88,6 +88,14 @@ func TestMemoryPeek_FragmentFullJSON(t *testing.T) {
 
 	// Missing id -> 404.
 	require.Equal(t, http.StatusNotFound, getPeek(t, mux, "/console/memories/nope").Code)
+
+	// Missing id on a fragment fetch -> a fragment-shaped 404 (the pane injects
+	// the body verbatim, so a layout-wrapped error page must never come back).
+	nf := getPeek(t, mux, "/console/memories/nope?peek=1")
+	require.Equal(t, http.StatusNotFound, nf.Code)
+	require.NotContains(t, nf.Body.String(), "<html", "error fragment must not carry the page layout")
+	require.Contains(t, nf.Body.String(), "peek-entity")
+	require.Contains(t, nf.Body.String(), "Not found")
 }
 
 func TestMemoryPeek_SupersessionAndStats(t *testing.T) {

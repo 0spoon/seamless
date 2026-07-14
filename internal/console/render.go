@@ -267,6 +267,18 @@ type errorData struct {
 // browsers; JSON/CLI callers are answered before reaching here. Falls back to
 // plaintext if the template is somehow unavailable.
 func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status int, heading, msg string) {
+	// A ?peek=1 fetch is injected verbatim into the in-page detail pane; a
+	// layout-wrapped page there nests the whole console inside the pane. Answer
+	// fragment fetches (e.g. a stale row whose entity is gone) with a
+	// fragment-shaped error instead.
+	if r.URL.Query().Get("peek") == "1" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(status)
+		fmt.Fprintf(w,
+			`<article class="peek-entity"><div class="peek-head"><span class="badge danger">%d</span></div><h2 class="peek-title">%s</h2><p class="peek-desc">%s</p><p class="peek-note">The row may be stale &mdash; reload the list.</p></article>`,
+			status, template.HTMLEscapeString(heading), template.HTMLEscapeString(msg))
+		return
+	}
 	tmpl, ok := s.pages["error"]
 	if !ok {
 		http.Error(w, msg, status)

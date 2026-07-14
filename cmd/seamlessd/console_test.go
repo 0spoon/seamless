@@ -31,6 +31,34 @@ func TestRenderConsoleLoginPage(t *testing.T) {
 	require.Contains(t, page, `.submit();`)
 }
 
+func TestBrowserCommand(t *testing.T) {
+	tests := []struct {
+		name     string
+		goos     string
+		app      string
+		wantArgs []string
+		wantErr  bool
+	}{
+		{"darwin default", "darwin", "", []string{"open", "/tmp/x.html"}, false},
+		{"darwin named app", "darwin", "Google Chrome", []string{"open", "-a", "Google Chrome", "/tmp/x.html"}, false},
+		{"linux default", "linux", "", []string{"xdg-open", "/tmp/x.html"}, false},
+		{"windows default", "windows", "", []string{"cmd", "/c", "start", "", "/tmp/x.html"}, false},
+		{"linux named app rejected", "linux", "firefox", nil, true},
+		{"windows named app rejected", "windows", "chrome", nil, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd, err := browserCommand(tt.goos, "/tmp/x.html", tt.app)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			require.Equal(t, tt.wantArgs, cmd.Args)
+		})
+	}
+}
+
 func TestRenderConsoleLoginPage_EscapesKey(t *testing.T) {
 	// A key with attribute-breaking characters must be contextually escaped so
 	// it cannot terminate the value="" attribute or inject markup.
