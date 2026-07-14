@@ -2,6 +2,7 @@ package gardener
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -87,10 +88,10 @@ func (s *Service) applyMerge(ctx context.Context, p store.Proposal, now time.Tim
 	keepID := payloadString(payloadMap(p.Payload, "keep"), "id")
 	dropID := payloadString(payloadMap(p.Payload, "drop"), "id")
 	if keepID == "" || dropID == "" {
-		return nil, fmt.Errorf("merge proposal missing keep/drop ids")
+		return nil, errors.New("merge proposal missing keep/drop ids")
 	}
 	if keepID == dropID {
-		return nil, fmt.Errorf("merge proposal keep and drop are the same memory")
+		return nil, errors.New("merge proposal keep and drop are the same memory")
 	}
 	keep, err := s.loadActiveMemory(ctx, keepID)
 	if err != nil {
@@ -117,7 +118,7 @@ func (s *Service) applyDigest(ctx context.Context, p store.Proposal, now time.Ti
 	title := payloadString(p.Payload, "title")
 	body := payloadString(p.Payload, "body")
 	if title == "" || body == "" {
-		return nil, fmt.Errorf("digest proposal missing title/body")
+		return nil, errors.New("digest proposal missing title/body")
 	}
 	id, err := core.NewID()
 	if err != nil {
@@ -149,7 +150,7 @@ func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now ti
 	project := payloadString(p.Payload, "project")
 	body := payloadString(p.Payload, "body")
 	if name == "" || body == "" {
-		return nil, fmt.Errorf("consolidate proposal missing name/body")
+		return nil, errors.New("consolidate proposal missing name/body")
 	}
 
 	// Resolve-or-create the unified target. An already-active (project,name)
@@ -221,7 +222,7 @@ func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now ti
 func (s *Service) applyReproject(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
 	to := payloadString(p.Payload, "to")
 	if to == "" {
-		return nil, fmt.Errorf("reproject proposal missing target project")
+		return nil, errors.New("reproject proposal missing target project")
 	}
 	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
 	if err != nil {
@@ -271,7 +272,7 @@ func (s *Service) applySplit(ctx context.Context, p store.Proposal, now time.Tim
 		specs = append(specs, projSpec{sharedSlug, payloadString(shared, "label")})
 	}
 	if len(specs) == 0 {
-		return nil, fmt.Errorf("split proposal has no child or shared projects")
+		return nil, errors.New("split proposal has no child or shared projects")
 	}
 
 	created := make([]string, 0, len(specs))
@@ -330,7 +331,7 @@ func (s *Service) applySplit(ctx context.Context, p store.Proposal, now time.Tim
 // either case the proposal's effect no longer applies.
 func (s *Service) loadActiveMemory(ctx context.Context, id string) (core.Memory, error) {
 	if id == "" {
-		return core.Memory{}, fmt.Errorf("empty memory id")
+		return core.Memory{}, errors.New("empty memory id")
 	}
 	idx, ok, err := store.MemoryByID(ctx, s.db, id)
 	if err != nil {

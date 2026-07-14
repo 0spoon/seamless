@@ -46,6 +46,10 @@ func (s *Service) proposeDigests(ctx context.Context, seen map[string]struct{}) 
 		}
 		body = strings.TrimSpace(body)
 		if body == "" {
+			// Same class of failure as a completion error: the model produced
+			// nothing usable, so there is no digest to propose. Logged rather
+			// than returned -- one project must not block the others.
+			s.logger.Warn("gardener: digest completion empty", "project", project)
 			continue
 		}
 		payload := map[string]any{
