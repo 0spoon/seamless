@@ -6,7 +6,11 @@
   </header>
   <h2 class="peek-title">{{.Name}}{{copyBtn .Name}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
+  {{template "detail-body" .}}
+</article>
+{{end}}
 
+{{define "detail-body"}}
   {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
 
   <dl class="peek-kv">
@@ -38,5 +42,4 @@
     </form>
     {{end}}
   </div>
-</article>
 {{end}}

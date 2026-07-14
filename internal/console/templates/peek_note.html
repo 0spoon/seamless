@@ -3,7 +3,11 @@
   <header class="peek-head"><span class="kind">note</span></header>
   <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}
+  {{template "detail-body" .}}
+</article>
+{{end}}
 
+{{define "detail-body"}}
   {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
 
   <dl class="peek-kv">
@@ -18,5 +22,4 @@
   <div class="peek-actions">
     <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
   </div>
-</article>
 {{end}}

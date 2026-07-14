@@ -6,15 +6,20 @@
     {{if .PlanSlug}}<span class="kind">plan:{{.PlanSlug}}</span>{{end}}
   </header>
   <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
+  {{template "detail-body" .}}
+</article>
+{{end}}
 
-  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
+{{define "detail-body"}}
+  {{if .Body}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">No description</div>{{end}}
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
+    {{if .PlanSlug}}<dt>Plan</dt><dd class="mono"><a href="/console/plans/{{.PlanSlug}}">{{.PlanSlug}}</a></dd>{{end}}
     {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}{{copyBtn .CreatedBy}}</dd>{{end}}
     {{if .ClaimedBy}}
     <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}{{copyBtn .ClaimedBy}}</dd>
-    <dt>Lease</dt><dd>{{if .ClaimLive}}live &middot; expires {{ago .LeaseExpiry}}{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
+    <dt>Lease</dt><dd>{{if .ClaimLive}}<span class="badge ok">live</span> <span class="muted">&middot; expires {{ago .LeaseExpiry}}</span>{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
     {{end}}
     <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>
@@ -46,5 +51,4 @@
     </form>
   </div>
   {{end}}
-</article>
 {{end}}
