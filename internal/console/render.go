@@ -432,3 +432,21 @@ func percent(n, d int) int {
 	}
 	return int(float64(n)/float64(d)*100 + 0.5)
 }
+
+// durUntil renders the remaining time until t as a compact "22m left" / "1h left".
+// It is the countdown half of ago(): both the project workspace and the sessions
+// screen render task leases with it.
+func durUntil(t, now time.Time) string {
+	d := t.Sub(now)
+	if d <= 0 {
+		return "expired"
+	}
+	switch {
+	case d < time.Hour:
+		return fmt.Sprintf("%dm left", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh left", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd left", int(d.Hours()/24))
+	}
+}
