@@ -1,12 +1,18 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
-    <h1>{{.Row.Title}}</h1>
-    <div class="sub mono">plan:{{.Row.Slug}} &middot; {{.Row.Basename}}.md{{if .Row.Iteration}} &middot; iter {{.Row.Iteration}}{{end}}{{if .Row.Project}} &middot; {{.Row.Project}}{{end}}</div>
-  </div>
-  <div class="btn-row">
-    <span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>
+<div class="crumb"><a href="/console/plans">Plans</a> <span class="faint">/</span> <b>{{.Row.Slug}}</b> {{copyBtn .Row.Slug}}</div>
+
+<div class="detail-head">
+  <div class="row-between">
+    <div>
+      <div class="title-row">
+        <span class="tile">{{icon "map"}}</span>
+        <h1>{{.Row.Title}}</h1>
+        <span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>
+        {{if .Row.Project}}<span class="chip-parent">{{icon "git-branch"}}{{.Row.Project}}</span>{{end}}
+      </div>
+      <div class="desc mono">plan:{{.Row.Slug}} &middot; {{.Row.Basename}}.md{{if .Row.Iteration}} &middot; iter {{.Row.Iteration}}{{end}}</div>
+    </div>
     {{if .CanApprove}}
     <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
       <button class="btn small primary" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">Approve</button>

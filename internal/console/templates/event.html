@@ -1,12 +1,17 @@
 {{define "content"}}
 {{with .Data}}
-<div class="crumb"><a href="/console/">Overview</a> / activity / {{shortID .Event.ID}}</div>
-<div class="topbar">
-  <div>
-    <h1><span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span></h1>
-    <div class="sub">{{.Event.Summary}}</div>
+<div class="crumb"><a href="/console/">Overview</a> <span class="faint">/</span> activity <span class="faint">/</span> <b>{{shortID .Event.ID}}</b> {{copyBtn .Event.ID}}</div>
+
+<div class="detail-head">
+  <div class="row-between">
+    <div class="title-row">
+      <span class="tile">{{icon "activity"}}</span>
+      <h1>{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h1>
+      <span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span>
+      {{if .Event.Project}}<span class="chip-parent">{{icon "git-branch"}}{{.Event.Project}}</span>{{end}}
+    </div>
+    <span class="muted" title="{{.Event.When}}">{{ago .Event.When}}</span>
   </div>
-  <span class="muted" title="{{.Event.When}}">{{ago .Event.When}}</span>
 </div>
 
 <div class="section">

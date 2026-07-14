@@ -1,0 +1,71 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/tasks">Tasks</a> <span class="faint">/</span> <b>{{shortID .ID}}</b> {{copyBtn .ID}}</div>
+
+<div class="detail-head">
+  <div class="title-row">
+    <span class="tile">{{icon "list-checks"}}</span>
+    <h1>{{.Title}}</h1>
+    <span class="badge {{taskTone .Status}}">{{.Status}}</span>
+    {{if .PlanSlug}}<span class="kind">plan:{{.PlanSlug}}</span>{{end}}
+    <span class="chip-parent">{{icon "git-branch"}}{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
+  </div>
+</div>
+
+<div class="drail">
+  <div class="dcol">
+    <div class="card">
+      <h2>Body</h2>
+      {{if .Body}}<div class="prose">{{.Body}}</div>{{else}}<div class="empty">No description</div>{{end}}
+    </div>
+
+    {{if .Deps}}
+    <div class="card">
+      <h2>Depends on <span class="h2-meta">{{len .Deps}}</span></h2>
+      <div class="rail-list">
+        {{range .Deps}}<div class="row"><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></div>{{end}}
+      </div>
+    </div>
+    {{end}}
+
+    {{if .Blocks}}
+    <div class="card">
+      <h2>Blocks <span class="h2-meta">{{len .Blocks}}</span></h2>
+      <div class="rail-list">
+        {{range .Blocks}}<div class="row"><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></div>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="dside">
+    <div class="card">
+      <h2>Details</h2>
+      <dl class="kv">
+        <dt>Project</dt><dd class="mono">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
+        {{if .PlanSlug}}<dt>Plan</dt><dd class="mono"><a href="/console/plans/{{.PlanSlug}}">{{.PlanSlug}}</a></dd>{{end}}
+        {{if .CreatedBy}}<dt>Created by</dt><dd class="mono">{{.CreatedBy}}{{copyBtn .CreatedBy}}</dd>{{end}}
+        {{if .ClaimedBy}}
+        <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}{{copyBtn .ClaimedBy}}</dd>
+        <dt>Lease</dt><dd>{{if .ClaimLive}}<span class="badge ok">live</span> <span class="muted">&middot; expires {{ago .LeaseExpiry}}</span>{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
+        {{end}}
+        <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
+        <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+        {{if .Closed}}<dt>Closed</dt><dd title="{{.Closed}}">{{ago .Closed}}</dd>{{end}}
+      </dl>
+    </div>
+
+    {{if .ClaimedBy}}
+    <div class="card">
+      <h2>Actions</h2>
+      <div class="peek-actions">
+        <form method="post" action="/console/tasks/{{.ID}}/release" onsubmit="return confirm('Release the lock on this task? It reopens for any agent to claim.');">
+          <button class="link-act danger" type="submit">release lock</button>
+        </form>
+      </div>
+    </div>
+    {{end}}
+  </div>
+</div>
+{{end}}
+{{end}}

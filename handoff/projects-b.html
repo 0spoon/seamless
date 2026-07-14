@@ -1,0 +1,1517 @@
+<!-- @dsCard group="Projects-first console — directions" viewport="1440x960" -->
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Direction B — Workspace · Seamless projects-first console</title>
+<link rel="stylesheet" href="console-base.css">
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<style>
+/* =========================================================================
+   DIRECTION B — "Workspace"
+   Same projects-first idea as A, different geometry. All Projects is a dense
+   board grouped by family (root / shared-briefing parents / labs / retired),
+   each project a compact row with inline health. Project detail is a tabbed
+   workspace, and Relations is an indented tree (plan -> step -> session ->
+   memory) rather than parallel lanes. Surfaces the same hidden relations:
+   PlanSlug, DependsOn, ClaimedBy/LeaseExpiresAt, SourceSession/SupersededBy,
+   ParentSlug/RetiredAt. Overrides layer on console-base.css.
+   ========================================================================= */
+
+.main { --content-max: 1280px; }
+.topbar h1 { font-size: var(--text-2xl); }
+.faint { color: var(--faint); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.tile { width: 28px; height: 28px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; flex: none; background: var(--surface-2); border: 1px solid var(--border); color: var(--muted); }
+.tile .ico { width: 16px; height: 16px; }
+.tile.go { background: color-mix(in oklab, var(--k-reference) 22%, var(--surface)); color: var(--k-reference); border-color: transparent; }
+.tile.fw { background: color-mix(in oklab, var(--warn) 22%, var(--surface)); color: var(--warn); border-color: transparent; }
+.tile.ios { background: color-mix(in oklab, var(--k-stage) 22%, var(--surface)); color: var(--k-stage); border-color: transparent; }
+.tile.and { background: color-mix(in oklab, var(--ok) 22%, var(--surface)); color: var(--ok); border-color: transparent; }
+.tile.web { background: color-mix(in oklab, var(--brand) 22%, var(--surface)); color: var(--brand); border-color: transparent; }
+.tile.grp { background: color-mix(in oklab, var(--k-decision) 22%, var(--surface)); color: var(--k-decision); border-color: transparent; }
+
+/* --- toolbar -------------------------------------------------------------- */
+.proj-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+.search { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-sm); }
+.search .ico { width: 15px; height: 15px; }
+.search input { flex: 1; border: 0; background: none; color: var(--text-primary); font: inherit; outline: none; }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--muted); font: inherit; font-size: var(--text-xs); font-weight: 600; padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--border); }
+.seg button:last-child { border-right: 0; }
+.seg button.on { background: var(--brand-soft); color: var(--brand); }
+
+/* --- BOARD (grouped rows) ------------------------------------------------- */
+.board { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.board-colhd { display: grid; grid-template-columns: minmax(0,1fr) 132px 78px 84px 78px 74px; gap: 12px; padding: 9px 16px; border-bottom: 1px solid var(--border); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; }
+.board-colhd span:not(:first-child) { text-align: right; }
+.grp-hd { display: flex; align-items: center; gap: 9px; padding: 10px 16px; background: var(--surface-3); border-top: 2px solid var(--border-strong); border-bottom: 1px solid var(--border); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wider); color: var(--ink-2); font-weight: 700; }
+.board .grp-hd:first-of-type { border-top: 0; }
+.grp-hd .ico { width: 13px; height: 13px; color: var(--muted); }
+.grp-hd .n { color: var(--faint); font-weight: 500; }
+.grp-hd .note { margin-left: auto; text-transform: none; letter-spacing: 0; font-weight: 500; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--faint); }
+.prow { display: grid; grid-template-columns: minmax(0,1fr) 132px 78px 84px 78px 74px; gap: 12px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background var(--dur-fast) var(--ease-out); }
+.prow:hover { background: var(--surface-2); }
+.prow:last-child { border-bottom: 0; }
+.prow.child .pname { padding-left: 20px; position: relative; }
+.prow.child .pname::before { content: ""; position: absolute; left: 6px; top: 50%; width: 9px; height: 1px; background: var(--border-strong); }
+.prow.retired { opacity: 0.66; }
+.pname { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pname .txt { min-width: 0; }
+.pname a { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); color: var(--brand); display: inline-flex; align-items: center; gap: 7px; }
+.pname .cap { font-size: var(--text-2xs); color: var(--faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-r { text-align: right; font-variant-numeric: tabular-nums; font-size: var(--text-sm); }
+.cell-r .big { font-family: var(--font-display); font-weight: 700; }
+.cell-r .sm { font-size: var(--text-2xs); color: var(--muted); }
+.cell-r.zero .big { color: var(--faint); }
+/* inline health meter + spark */
+.health { display: flex; flex-direction: column; gap: 5px; align-items: flex-end; }
+.health .top { display: flex; align-items: baseline; gap: 6px; }
+.health .pct { font-family: var(--font-display); font-weight: 700; font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.health .pct.brand { color: var(--brand); }
+.health .pct.ok { color: var(--ok); }
+.health .lbl { font-size: var(--text-2xs); color: var(--faint); }
+.health .mtr { width: 108px; height: 5px; background: var(--surface-3); border-radius: var(--radius-pill); overflow: hidden; }
+.health .mtr > span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--brand); }
+.health .mtr > span.ok { background: var(--ok); }
+.work-dot { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-2xs); color: var(--ok); font-weight: 600; }
+
+/* --- DETAIL: header + tabs ------------------------------------------------ */
+.detail-head { margin-bottom: 14px; }
+.detail-head .title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.detail-head h1 { margin: 0; font-family: var(--font-display); font-size: var(--text-2xl); letter-spacing: var(--tracking-tight); font-weight: 600; }
+.detail-head .desc { color: var(--muted); font-size: var(--text-sm); margin-top: 6px; max-width: 760px; }
+.chip-parent { font-size: var(--text-2xs); font-family: var(--font-mono); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); padding: 1px 8px; border-radius: var(--radius-pill); display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.chip-parent .ico { width: 11px; height: 11px; }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--border); margin-bottom: 18px; overflow-x: auto; }
+.tabs button { border: 0; background: none; color: var(--muted); font: inherit; font-size: var(--text-sm); font-weight: 600; padding: 10px 14px; cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
+.tabs button .ico { width: 15px; height: 15px; }
+.tabs button:hover { color: var(--text-primary); }
+.tabs button.on { color: var(--brand); border-bottom-color: var(--brand); }
+.tabs button .pill { font-size: var(--text-2xs); background: var(--surface-2); color: var(--muted); padding: 0 6px; border-radius: var(--radius-pill); font-variant-numeric: tabular-nums; }
+.tabs button.on .pill { background: var(--brand-soft); color: var(--brand); }
+.tabpanel { display: none; }
+.tabpanel.on { display: block; }
+
+/* inline metric bar (overview tab) */
+.metricbar { display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px; margin-bottom: 20px; }
+.metricbar .m { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); padding: 13px 15px; }
+.metricbar .k { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; }
+.metricbar .v { font-family: var(--font-display); font-weight: 700; font-size: var(--text-2xl); line-height: 1.05; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.metricbar .v.brand { color: var(--brand); }
+.metricbar .v.ok { color: var(--ok); }
+.metricbar .v small { font-size: var(--text-xs); color: var(--muted); font-family: var(--font-sans); }
+@media (max-width: 1000px) { .metricbar { grid-template-columns: repeat(3, 1fr); } }
+
+.two { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; align-items: start; }
+@media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
+.card h2 { display: flex; align-items: baseline; gap: 10px; }
+.card h2 .h2-meta { font-weight: 500; letter-spacing: 0; text-transform: none; color: var(--faint); font-variant-numeric: tabular-nums; margin-left: auto; }
+
+/* --- PLAN + TASKS (workspace) --------------------------------------------- */
+.plan { border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 18px; }
+.plan-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.plan-head .ico { width: 15px; height: 15px; color: var(--k-decision); }
+.plan-head .nm { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); }
+.plan-head .prog { margin-left: auto; font-size: var(--text-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.plan-bar { height: 4px; background: var(--surface-3); display: flex; }
+.plan-bar span { height: 100%; display: block; }
+.plan-bar .done { background: var(--ok); }
+.plan-bar .doing { background: var(--brand); }
+.step { display: grid; grid-template-columns: 20px minmax(0,1fr) auto; gap: 12px; padding: 13px 14px; border-bottom: 1px solid var(--border); }
+.step:last-child { border-bottom: 0; }
+.step .marker { display: flex; flex-direction: column; align-items: center; }
+.step .dot { width: 15px; height: 15px; border-radius: 50%; border: 2px solid var(--border-strong); background: var(--surface); flex: none; margin-top: 2px; }
+.step.done .dot { background: var(--ok); border-color: var(--ok); }
+.step.doing .dot { border-color: var(--brand); box-shadow: 0 0 0 3px var(--brand-soft); }
+.step.blocked .dot { border-color: var(--warn); }
+.step .rail { flex: 1; width: 2px; background: var(--border); margin-top: 3px; }
+.step:last-child .rail { display: none; }
+.step .t { font-size: var(--text-sm); font-weight: 600; }
+.step.done .t { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--faint); }
+.step .meta { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 6px; font-size: var(--text-2xs); color: var(--muted); align-items: center; }
+.step .meta .mono { font-family: var(--font-mono); }
+.edge { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.edge.ok { background: var(--ok-soft); color: var(--ok); }
+.edge .ico { width: 11px; height: 11px; }
+.claim { display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--brand-soft); color: var(--brand); font-weight: 600; font-family: var(--font-mono); }
+.claim .ico { width: 11px; height: 11px; }
+
+/* --- sessions + memory rows ----------------------------------------------- */
+.sess .r { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 12px; padding: 10px 2px; border-bottom: 1px solid var(--border); }
+.sess .r:last-child { border-bottom: 0; }
+.sess .id { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sess .id a { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; }
+.sess .find { color: var(--muted); font-size: var(--text-xs); margin-top: 3px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.sess .when { font-size: var(--text-xs); color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+.mem-name strong { font-weight: 600; }
+.mem-name .desc { color: var(--muted); font-size: var(--text-xs); margin-top: 2px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
+.lineage { display: inline-flex; align-items: center; gap: 4px; font-size: var(--text-2xs); color: var(--muted); }
+.lineage .ico { width: 11px; height: 11px; }
+
+/* --- RELATIONS as an indented tree ---------------------------------------- */
+.tree { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); padding: 8px 6px; }
+.tnode { position: relative; }
+.tline { display: flex; align-items: center; gap: 9px; padding: 8px 10px; border-radius: var(--radius-sm); }
+.tline:hover { background: var(--surface-2); }
+.tline .ico-lead { width: 26px; height: 26px; border-radius: var(--radius-sm); display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.tline .ico-lead .ico { width: 15px; height: 15px; }
+.tline .nm { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; min-width: 0; }
+.tline .cap { font-size: var(--text-2xs); color: var(--muted); }
+.tkids { margin-left: 23px; padding-left: 18px; border-left: 1.5px solid var(--border); }
+.lead-plan { background: color-mix(in oklab, var(--k-decision) 20%, var(--surface)); color: var(--k-decision); }
+.lead-task { background: var(--brand-soft); color: var(--brand); }
+.lead-sess { background: var(--ok-soft); color: var(--ok); }
+.lead-mem  { background: color-mix(in oklab, var(--k-reference) 20%, var(--surface)); color: var(--k-reference); }
+.tflag { display: inline-flex; align-items: center; gap: 4px; }
+
+.relbanner { display: flex; align-items: center; gap: 12px; padding: 12px 15px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm); }
+.relbanner .ico { width: 17px; height: 17px; color: var(--brand); flex: none; }
+.relbanner.retired { background: var(--warn-soft); border-color: transparent; }
+.relbanner.retired .ico { color: var(--warn); }
+.relbanner b { font-family: var(--font-mono); font-weight: 600; }
+
+/* --- trials table --------------------------------------------------------- */
+.outcome { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-2xs); padding: 1px 8px; border-radius: var(--radius-xs); }
+.outcome.pass { background: var(--ok-soft); color: var(--ok); }
+.outcome.fail { background: var(--danger-soft); color: var(--danger); }
+.outcome.partial { background: var(--warn-soft); color: var(--warn); }
+
+/* --- expanded console: shared helpers ------------------------------------ */
+tr.group-row td { background: var(--surface-3); border-top: 2px solid var(--border-strong); font-family: var(--font-mono); font-weight: 700; font-size: var(--text-xs); letter-spacing: var(--tracking-wide); color: var(--ink-2); padding: 9px 12px; }
+tr.group-row:first-child td { border-top: 0; }
+tr.group-row .count { color: var(--faint); font-weight: 500; margin-left: 6px; }
+.claim-sm { display: inline-flex; align-items: center; gap: 4px; font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--brand); }
+.claim-sm .ico { width: 11px; height: 11px; }
+.findcell { color: var(--muted); font-size: var(--text-xs); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; max-width: 380px; }
+
+/* detail: main + side rail */
+.drail { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 16px; align-items: start; }
+.dcol, .dside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+@media (max-width: 1000px) { .drail { grid-template-columns: 1fr; } }
+
+/* timeline */
+.tl { display: flex; flex-direction: column; }
+.tl .ev { display: grid; grid-template-columns: 64px minmax(0,1fr); gap: 12px; padding: 9px 2px; border-bottom: 1px solid var(--border); }
+.tl .ev:last-child { border-bottom: 0; }
+.tl .when { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tl .what { font-size: var(--text-sm); }
+.tl .what .sub { color: var(--muted); font-size: var(--text-xs); margin-top: 2px; }
+
+/* prose body */
+.prose { font-size: var(--text-sm); color: var(--ink-2); line-height: 1.6; }
+.prose p { margin: 0 0 10px; } .prose h3 { font-family: var(--font-display); font-size: var(--text-sm); color: var(--text-primary); margin: 14px 0 6px; }
+.prose code { font-family: var(--font-mono); font-size: 0.9em; background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.prose ul { margin: 0 0 10px; padding-left: 18px; } .prose li { margin: 3px 0; }
+.prose a.wiki { color: var(--brand); border-bottom: 1px dashed var(--border-strong); }
+
+/* funnel (retrieval) */
+.funnel { display: grid; grid-template-columns: repeat(3, auto) minmax(0,1fr); gap: 26px; align-items: center; padding: 4px 2px 0; }
+.funnel .fstep { display: flex; flex-direction: column; gap: 2px; }
+.funnel .fstep .v { font-family: var(--font-display); font-weight: 700; font-size: var(--text-3xl); line-height: 1; font-variant-numeric: tabular-nums; }
+.funnel .fstep .v.brand { color: var(--brand); }
+.funnel .fstep .l { color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); }
+.funnel .arrow { color: var(--faint); display: flex; align-items: center; }
+.funnel-bar { display: flex; flex-direction: column; gap: 8px; min-width: 180px; }
+.funnel-bar .track { height: 20px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+.funnel-bar .track > span { display: block; height: 100%; width: 41%; background: var(--brand); }
+.funnel-bar .cap { font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
+@media (max-width: 820px) { .funnel { grid-template-columns: repeat(3, auto); } .funnel-bar { grid-column: 1 / -1; } }
+.kindbars { display: flex; flex-direction: column; gap: 12px; padding-top: 2px; }
+.kindbar { display: grid; grid-template-columns: 84px minmax(0,1fr) 66px; gap: 12px; align-items: center; }
+.kindbar .bars { display: flex; flex-direction: column; gap: 3px; }
+.kindbar .track { height: 7px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.kindbar .track > span { display: block; height: 100%; border-radius: var(--radius-pill); }
+.kindbar .track > span.inj { background: var(--brand); } .kindbar .track > span.read { background: var(--ok); }
+.kindbar .nums { font-size: var(--text-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.kb-legend { display: flex; gap: 16px; margin-top: 12px; font-size: var(--text-2xs); color: var(--muted); }
+.kb-legend span { display: inline-flex; align-items: center; gap: 6px; } .kb-legend i { width: 8px; height: 8px; border-radius: 3px; display: inline-block; }
+.stale-strip { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); color: var(--muted); font-size: var(--text-sm); }
+.stale-strip .lab { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; margin-right: 6px; }
+.stale-strip .okdot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+
+/* settings + gardener */
+.set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 820px) { .set-grid { grid-template-columns: 1fr; } }
+.kv-lg dt { padding: 7px 0; } .kv-lg dd { padding: 7px 0; }
+.gard-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); padding: 14px; box-shadow: var(--shadow-sm); }
+.gard-card .top { display: flex; align-items: center; gap: 8px; margin-bottom: 9px; }
+.gard-card .top .cap { color: var(--muted); font-size: var(--text-xs); margin-left: auto; }
+.gard-card .body { font-size: var(--text-sm); }
+.gard-card .targets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.gard-card .acts { display: flex; gap: 8px; margin-top: 13px; }
+
+/* --- INTERACTIONS: live transport feed ----------------------------------- */
+.ix-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 16px; flex-wrap: wrap; }
+.ix-tabs { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.ix-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; font-size: var(--text-xs); color: var(--muted); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-pill); cursor: pointer; font: inherit; font-size: var(--text-xs); font-weight: 600; white-space: nowrap; }
+.ix-tab:hover { color: var(--text-primary); border-color: var(--border-strong); }
+.ix-tab.active { color: var(--brand); background: var(--brand-soft); border-color: transparent; }
+.ix-tab .n { font-family: var(--font-mono); font-variant-numeric: tabular-nums; opacity: .8; font-weight: 500; }
+.ix-tab.muted { color: var(--faint); background: transparent; border-style: dashed; }
+.ix-actions { display: flex; align-items: center; gap: 8px; flex: none; }
+.ix-window { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
+.ix-window select { font: inherit; font-size: var(--text-xs); color: var(--text-primary); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 4px 7px; cursor: pointer; }
+.ix-window select:hover { border-color: var(--border-strong); }
+.ix-window select:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.ix-feed { display: flex; flex-direction: column; gap: 6px; }
+.ix-row { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-sm); }
+.ix-row > summary { display: flex; align-items: center; gap: 10px; padding: 9px 13px; cursor: pointer; list-style: none; font-family: var(--font-sans); }
+.ix-row > summary::-webkit-details-marker { display: none; }
+.ix-row > summary:hover { background: var(--surface-2); }
+.ix-row[open] > summary { border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.ix-row.err { border-left: 2px solid var(--danger); }
+.ix-row.hide { display: none; }
+.ix-when { color: var(--muted); font-size: var(--text-xs); font-variant-numeric: tabular-nums; flex: none; min-width: 32px; }
+.ix-label { color: var(--ink-2); font-size: var(--text-xs); flex: none; font-family: var(--font-mono); }
+.ix-sum { color: var(--muted); font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; min-width: 0; }
+.ix-meta { color: var(--faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; flex: none; margin-left: auto; }
+.ix-body { padding: 13px; display: flex; flex-direction: column; gap: 8px; }
+.ix-body h3 { font-family: var(--font-display); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); margin: 2px 0 0; font-weight: 600; }
+.ix-links { display: flex; gap: 16px; font-size: var(--text-xs); padding-top: 4px; }
+.ix-more { display: flex; justify-content: center; padding: 14px 0 2px; }
+.kind.danger { background: var(--danger-soft); color: var(--danger); border-color: transparent; }
+.live.off .live-dot { animation: none; background: var(--faint); }
+@media (max-width: 640px) { .ix-meta { display: none; } }
+
+.view { display: none; }
+.view.on { display: block; }
+.crumb a { color: var(--muted); }
+.opt-banner { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: 60; display: flex; align-items: center; gap: 10px; padding: 7px 9px 7px 16px; border-radius: var(--radius-pill); background: var(--surface); border: 1px solid var(--border-strong); box-shadow: var(--shadow-md); font-size: var(--text-xs); color: var(--muted); }
+.opt-banner b { color: var(--text-primary); font-family: var(--font-display); }
+.opt-banner a.go { display: inline-flex; padding: 4px 12px; border-radius: var(--radius-pill); background: var(--brand); color: var(--brand-ink); font-weight: 600; }
+.opt-banner a.go:hover { background: var(--brand-strong); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand"><span class="dot on"></span> Seamless</div>
+    <div class="brand-by">by <span>0spoon</span></div>
+    <nav class="nav" id="nav">
+      <a href="#overview" data-view="overview"><i data-lucide="gauge" class="ico"></i><span class="nav-label">Overview</span></a>
+      <a href="#retrieval" data-view="retrieval"><i data-lucide="arrow-down-to-line" class="ico"></i><span class="nav-label">Retrieval</span></a>
+      <a href="#interactions" data-view="interactions"><i data-lucide="activity" class="ico"></i><span class="nav-label">Interactions</span></a>
+      <a href="#projects" data-view="projects" class="active"><i data-lucide="table-2" class="ico"></i><span class="nav-label">Projects</span><span class="count">12</span></a>
+      <a href="#sessions" data-view="sessions"><i data-lucide="terminal" class="ico"></i><span class="nav-label">Sessions</span><span class="count">82</span></a>
+      <a href="#memories" data-view="memories"><i data-lucide="brain" class="ico"></i><span class="nav-label">Memories</span><span class="count">87</span></a>
+      <a href="#notes" data-view="notes"><i data-lucide="file-text" class="ico"></i><span class="nav-label">Notes</span><span class="count">41</span></a>
+      <a href="#tasks" data-view="tasks-page"><i data-lucide="list-checks" class="ico"></i><span class="nav-label">Tasks</span><span class="count">5</span></a>
+      <a href="#plans" data-view="plans"><i data-lucide="map" class="ico"></i><span class="nav-label">Plans</span></a>
+      <a href="#relations" data-view="relations"><i data-lucide="git-fork" class="ico"></i><span class="nav-label">Relations</span></a>
+      <a href="#gardener" data-view="gardener"><i data-lucide="sprout" class="ico"></i><span class="nav-label">Gardener</span><span class="count">2</span></a>
+      <a href="#settings" data-view="settings"><i data-lucide="settings" class="ico"></i><span class="nav-label">Settings</span></a>
+    </nav>
+    <div class="side-foot">
+      <button class="btn small theme-toggle" type="button" id="theme-toggle"><span class="tt-ico ico-light"><i data-lucide="sun" class="ico"></i></span><span class="tt-ico ico-dark"><i data-lucide="moon" class="ico"></i></span><span class="tt-label">Light theme</span></button>
+      <button class="btn small" type="button"><i data-lucide="log-out" class="ico"></i><span>Sign out</span></button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+  <!-- ==================== ALL PROJECTS (board) ==================== -->
+  <section class="view on" id="view-projects" data-screen-label="B · All projects">
+    <div class="topbar">
+      <div>
+        <h1>All projects</h1>
+        <div class="sub">12 projects grouped by family · 3 agents working now</div>
+      </div>
+      <span class="live"><span class="live-dot"></span> live</span>
+    </div>
+
+    <div class="proj-toolbar">
+      <div class="search"><i data-lucide="search" class="ico"></i><input placeholder="Filter by slug, tag, or parent…" value=""></div>
+      <div class="seg"><button class="on">Family</button><button>Flat</button></div>
+      <div class="seg"><button class="on">Recent</button><button>Coverage</button><button>Name</button></div>
+    </div>
+
+    <div class="board">
+      <div class="board-colhd"><span>Project</span><span>Health</span><span>Sessions</span><span>Open tasks</span><span>Memories</span><span>Last active</span></div>
+
+      <!-- ROOT -->
+      <div class="grp-hd"><i data-lucide="server" class="ico"></i>Root <span class="n">1</span></div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile go"><i data-lucide="server" class="ico"></i></span><div class="txt"><a href="#project">seamless <span class="work-dot"><span class="live-dot"></span>3 working</span></a><div class="cap">go · server · the console lives here</div></div></div>
+        <div class="health"><div class="top"><span class="pct brand">41%</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:41%"></span></div></div>
+        <div class="cell-r"><span class="big">82</span> <span class="sm">8 live</span></div>
+        <div class="cell-r"><span class="big">5</span> <span class="sm">1 blk</span></div>
+        <div class="cell-r"><span class="big">13</span></div>
+        <div class="cell-r sm">just now</div>
+      </div>
+
+      <!-- SHARED BRIEFING FAMILY -->
+      <div class="grp-hd"><i data-lucide="folder-tree" class="ico"></i>arctop-mobile-apps · shared briefing <span class="n">3</span><span class="note">parent injects 6 memories into 2 children</span></div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile grp"><i data-lucide="folder-tree" class="ico"></i></span><div class="txt"><a href="#project">arctop-mobile-apps</a><div class="cap">parent · shared briefing only</div></div></div>
+        <div class="health"><div class="top"><span class="pct">6</span><span class="lbl">shared memories</span></div><div class="mtr"><span style="width:100%;background:var(--k-decision)"></span></div></div>
+        <div class="cell-r"><span class="big">2</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r"><span class="big">6</span></div>
+        <div class="cell-r sm">3d</div>
+      </div>
+      <div class="prow child" data-open="project">
+        <div class="pname"><span class="tile ios"><i data-lucide="smartphone" class="ico"></i></span><div class="txt"><a href="#project">arctop-ios</a><div class="cap">swift · inherits 6 from parent</div></div></div>
+        <div class="health"><div class="top"><span class="pct ok">91%</span><span class="lbl">coverage</span></div><div class="mtr"><span class="ok" style="width:91%"></span></div></div>
+        <div class="cell-r"><span class="big">12</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r"><span class="big">6</span> <span class="sm">+6</span></div>
+        <div class="cell-r sm">5h</div>
+      </div>
+      <div class="prow child" data-open="project">
+        <div class="pname"><span class="tile and"><i data-lucide="smartphone" class="ico"></i></span><div class="txt"><a href="#project">arctop-android</a><div class="cap">kotlin · inherits 6 from parent</div></div></div>
+        <div class="health"><div class="top"><span class="pct ok">84%</span><span class="lbl">coverage</span></div><div class="mtr"><span class="ok" style="width:84%"></span></div></div>
+        <div class="cell-r"><span class="big">9</span></div>
+        <div class="cell-r"><span class="big">2</span></div>
+        <div class="cell-r"><span class="big">4</span> <span class="sm">+6</span></div>
+        <div class="cell-r sm">1d</div>
+      </div>
+
+      <!-- LABS -->
+      <div class="grp-hd"><i data-lucide="flask-conical" class="ico"></i>Labs <span class="n">2</span></div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile fw"><i data-lucide="cpu" class="ico"></i></span><div class="txt"><a href="#project">mw75-neuro-firmware <span class="work-dot"><span class="live-dot"></span>1 working</span></a><div class="cap">firmware · 9 trials · fest/eeg</div></div></div>
+        <div class="health"><div class="top"><span class="pct brand">62%</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:62%"></span></div></div>
+        <div class="cell-r"><span class="big">24</span> <span class="sm">1 live</span></div>
+        <div class="cell-r"><span class="big">3</span></div>
+        <div class="cell-r"><span class="big">15</span></div>
+        <div class="cell-r sm">40m</div>
+      </div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile grp"><i data-lucide="flask-conical" class="ico"></i></span><div class="txt"><a href="#project">research</a><div class="cap">lab · 4 trials · 33 notes</div></div></div>
+        <div class="health"><div class="top"><span class="pct brand">48%</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:48%"></span></div></div>
+        <div class="cell-r"><span class="big">14</span></div>
+        <div class="cell-r"><span class="big">2</span></div>
+        <div class="cell-r"><span class="big">5</span></div>
+        <div class="cell-r sm">6h</div>
+      </div>
+
+      <!-- STANDALONE -->
+      <div class="grp-hd"><i data-lucide="box" class="ico"></i>Standalone <span class="n">5</span></div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile web"><i data-lucide="key-round" class="ico"></i></span><div class="txt"><a href="#project">pass-mgr</a><div class="cap">rust · cli</div></div></div>
+        <div class="health"><div class="top"><span class="pct brand">55%</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:55%"></span></div></div>
+        <div class="cell-r"><span class="big">18</span></div>
+        <div class="cell-r"><span class="big">1</span></div>
+        <div class="cell-r"><span class="big">15</span></div>
+        <div class="cell-r sm">2d</div>
+      </div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile web"><i data-lucide="git-commit-horizontal" class="ico"></i></span><div class="txt"><a href="#project">comma</a><div class="cap">python · openpilot</div></div></div>
+        <div class="health"><div class="top"><span class="pct">—</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:0%"></span></div></div>
+        <div class="cell-r"><span class="big">7</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r"><span class="big">11</span></div>
+        <div class="cell-r sm">4d</div>
+      </div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile go"><i data-lucide="database" class="ico"></i></span><div class="txt"><a href="#project">arctop-backend</a><div class="cap">go · service</div></div></div>
+        <div class="health"><div class="top"><span class="pct">—</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:0%"></span></div></div>
+        <div class="cell-r"><span class="big">4</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r"><span class="big">2</span></div>
+        <div class="cell-r sm">2d</div>
+      </div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile web"><i data-lucide="globe" class="ico"></i></span><div class="txt"><a href="#project">arctop-web</a><div class="cap">ts · next</div></div></div>
+        <div class="health"><div class="top"><span class="pct brand">33%</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:33%"></span></div></div>
+        <div class="cell-r"><span class="big">6</span></div>
+        <div class="cell-r"><span class="big">1</span></div>
+        <div class="cell-r"><span class="big">4</span></div>
+        <div class="cell-r sm">3d</div>
+      </div>
+      <div class="prow" data-open="project">
+        <div class="pname"><span class="tile go"><i data-lucide="database" class="ico"></i></span><div class="txt"><a href="#project">comma-personal-backend</a><div class="cap">go · service</div></div></div>
+        <div class="health"><div class="top"><span class="pct">—</span><span class="lbl">read/inject</span></div><div class="mtr"><span style="width:0%"></span></div></div>
+        <div class="cell-r"><span class="big">3</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r"><span class="big">4</span></div>
+        <div class="cell-r sm">8d</div>
+      </div>
+
+      <!-- RETIRED -->
+      <div class="grp-hd"><i data-lucide="archive" class="ico"></i>Retired by split <span class="n">1</span></div>
+      <div class="prow retired" data-open="project">
+        <div class="pname"><span class="tile"><i data-lucide="archive" class="ico"></i></span><div class="txt"><a href="#project">arctop-agent <span class="badge warn" style="margin-left:4px">retired</span></a><div class="cap">split 21d ago → ios, android, backend</div></div></div>
+        <div class="health"><div class="top"><span class="pct faint">9</span><span class="lbl">moved out</span></div><div class="mtr"><span style="width:100%;background:var(--faint)"></span></div></div>
+        <div class="cell-r sm">— readable</div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r zero"><span class="big">0</span></div>
+        <div class="cell-r sm">21d</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== PROJECT DETAIL (tabs) ==================== -->
+  <section class="view" id="view-project" data-screen-label="B · Project detail (seamless)">
+    <div class="crumb"><a href="#projects" data-back>All projects</a> <span class="faint">/</span> <b style="color:var(--text-primary)">seamless</b></div>
+
+    <div class="detail-head">
+      <div class="row-between">
+        <div>
+          <div class="title-row">
+            <span class="tile go" style="width:34px;height:34px"><i data-lucide="server" class="ico" style="width:19px;height:19px"></i></span>
+            <h1>seamless</h1>
+            <span class="badge ok"><span class="live-dot"></span>3 agents working</span>
+            <span class="chip-parent"><i data-lucide="git-branch" class="ico"></i>root project</span>
+          </div>
+          <div class="desc">Local-first agent memory &amp; coordination substrate. The console is built here — most in-flight work is console + retrieval.</div>
+        </div>
+        <div class="btn-row">
+          <button class="btn small"><i data-lucide="folder-open" class="ico"></i> Open in editor</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="tabs" id="tabs">
+      <button data-tab="overview" class="on"><i data-lucide="gauge" class="ico"></i>Overview</button>
+      <button data-tab="tasks"><i data-lucide="list-checks" class="ico"></i>Plans &amp; tasks <span class="pill">5</span></button>
+      <button data-tab="sessions"><i data-lucide="terminal" class="ico"></i>Sessions <span class="pill">82</span></button>
+      <button data-tab="memories"><i data-lucide="brain" class="ico"></i>Memories <span class="pill">13</span></button>
+      <button data-tab="notes"><i data-lucide="file-text" class="ico"></i>Notes <span class="pill">18</span></button>
+      <button data-tab="interactions"><i data-lucide="activity" class="ico"></i>Interactions</button>
+      <button data-tab="trials"><i data-lucide="flask-conical" class="ico"></i>Relations</button>
+    </div>
+
+    <!-- TAB: overview -->
+    <div class="tabpanel on" data-panel="overview">
+      <div class="metricbar">
+        <div class="m"><div class="k">Active memories</div><div class="v">13</div></div>
+        <div class="m"><div class="k">Sessions</div><div class="v">82 <small>· 8 live</small></div></div>
+        <div class="m"><div class="k">Open tasks</div><div class="v">5 <small>· 1 blk</small></div></div>
+        <div class="m"><div class="k">Read-after-inject</div><div class="v brand">41%</div></div>
+        <div class="m"><div class="k">Coverage</div><div class="v ok">87%</div></div>
+      </div>
+      <div class="two">
+        <div class="card">
+          <h2>Retrieval trend <span class="h2-meta">14d · peak Jul 11</span></h2>
+          <div class="area">
+            <svg class="area-svg" viewBox="0 0 560 150" preserveAspectRatio="none" height="150">
+              <line x1="0" y1="112" x2="560" y2="112" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+              <line x1="0" y1="72" x2="560" y2="72" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+              <line x1="0" y1="32" x2="560" y2="32" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+              <polygon points="0,140 47,124 94,132 140,96 187,112 234,76 280,96 327,52 374,74 420,40 467,58 514,20 560,36 560,146 0,146" fill="var(--brand-soft)" opacity="0.7"></polygon>
+              <polyline points="0,140 47,124 94,132 140,96 187,112 234,76 280,96 327,52 374,74 420,40 467,58 514,20 560,36" fill="none" stroke="var(--brand)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>
+              <circle cx="514" cy="20" r="3.5" fill="var(--pop)"></circle>
+            </svg>
+            <div class="area-ticks"><span>Jun 29</span><span>Jul 06</span><span>Jul 12</span></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Memories by kind <span class="h2-meta">13</span></h2>
+          <div class="legend">
+            <div class="legend-row"><span class="kdot" data-kind="reference"></span><span class="legend-label">reference</span><div class="legend-bar"><span data-kind="reference" style="width:100%"></span></div><span class="legend-val">4</span></div>
+            <div class="legend-row"><span class="kdot" data-kind="gotcha"></span><span class="legend-label">gotcha</span><div class="legend-bar"><span data-kind="gotcha" style="width:75%"></span></div><span class="legend-val">3</span></div>
+            <div class="legend-row"><span class="kdot" data-kind="stage"></span><span class="legend-label">stage</span><div class="legend-bar"><span data-kind="stage" style="width:50%"></span></div><span class="legend-val">2</span></div>
+            <div class="legend-row"><span class="kdot" data-kind="runbook"></span><span class="legend-label">runbook</span><div class="legend-bar"><span data-kind="runbook" style="width:50%"></span></div><span class="legend-val">2</span></div>
+            <div class="legend-row"><span class="kdot" data-kind="decision"></span><span class="legend-label">decision</span><div class="legend-bar"><span data-kind="decision" style="width:50%"></span></div><span class="legend-val">2</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="section" style="margin-top:16px">
+        <div class="card">
+          <h2>Recent activity</h2>
+          <table>
+            <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
+            <tbody>
+              <tr class="row-link"><td class="muted">2m</td><td><span class="kind ok">memory.written</span></td><td>wrote <span class="mono">mcp-ambient-fallback-cross-agent-bleed</span> from cc/0ba0566b</td></tr>
+              <tr class="row-link"><td class="muted">3m</td><td><span class="kind">task.transition</span></td><td>step 2 → in_progress · claimed by sess/9n02wexq</td></tr>
+              <tr class="row-link"><td class="muted">6m</td><td><span class="kind brand">retrieval.injected</span></td><td>session-start injection · 7 memories, 1,840 tokens</td></tr>
+              <tr class="row-link"><td class="muted">9m</td><td><span class="kind pop">memory.superseded</span></td><td><span class="mono">mcp-session-id-opaque-v1</span> → …restart-unstable</td></tr>
+              <tr class="row-link"><td class="muted">20m</td><td><span class="kind">task.transition</span></td><td>step 1 → done · by sess/cmx3m5vp</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: tasks -->
+    <div class="tabpanel" data-panel="tasks">
+      <div class="plan">
+        <div class="plan-head"><i data-lucide="git-merge" class="ico"></i><span class="nm">plan:console-projects-first</span><span class="prog">2 done · 1 in progress · 2 open · 5 steps</span></div>
+        <div class="plan-bar"><span class="done" style="width:40%"></span><span class="doing" style="width:20%"></span></div>
+        <div class="step done">
+          <div class="marker"><span class="dot"></span><span class="rail"></span></div>
+          <div class="body"><div class="t">Lift project fields &amp; relations from core/types.go</div><div class="meta"><span class="mono">01KXA·9f2</span><span class="edge ok"><i data-lucide="check" class="ico"></i>closed 2d ago</span><span class="mono">by sess/cmx3m5vp</span></div></div>
+          <span class="kind ok" style="align-self:start">done</span>
+        </div>
+        <div class="step doing">
+          <div class="marker"><span class="dot"></span><span class="rail"></span></div>
+          <div class="body"><div class="t">Build All-Projects grid + per-project health card</div><div class="meta"><span class="mono">01KXA·b71</span><span class="claim"><i data-lucide="lock" class="ico"></i>claimed by sess/9n02wexq</span><span><i data-lucide="timer" class="ico" style="width:11px;vertical-align:-1px"></i> lease 22m left</span></div></div>
+          <span class="kind brand" style="align-self:start">in_progress</span>
+        </div>
+        <div class="step blocked">
+          <div class="marker"><span class="dot"></span><span class="rail"></span></div>
+          <div class="body"><div class="t">Assemble dense project-detail page + tabs</div><div class="meta"><span class="mono">01KXA·c3d</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 2</span></div></div>
+          <span class="kind" style="align-self:start">open</span>
+        </div>
+        <div class="step blocked">
+          <div class="marker"><span class="dot"></span><span class="rail"></span></div>
+          <div class="body"><div class="t">Trace plan → task → session → memory relations</div><div class="meta"><span class="mono">01KXA·e08</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 3</span></div></div>
+          <span class="kind" style="align-self:start">open</span>
+        </div>
+        <div class="step blocked">
+          <div class="marker"><span class="dot"></span></div>
+          <div class="body"><div class="t">Owner review &amp; merge into internal/console</div><div class="meta"><span class="mono">01KXA·f5a</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 4</span></div></div>
+          <span class="kind" style="align-self:start">open</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Ready queue <span class="h2-meta">off-plan · claimable now</span></h2>
+        <table>
+          <thead><tr><th>Task</th><th>Status</th><th>Depends on</th><th>Created</th></tr></thead>
+          <tbody>
+            <tr class="row-link"><td><span class="mono-id">01KXA·h20</span> Kill throwaway console runs by port, document in runbook</td><td><span class="kind">open</span></td><td class="muted">—</td><td class="muted">6h</td></tr>
+            <tr class="row-link"><td><span class="mono-id">01KXA·j91</span> Backfill embeddings for legacy notes</td><td><span class="kind">open</span></td><td class="muted">—</td><td class="muted">1d</td></tr>
+            <tr class="row-link"><td><span class="mono-id">01KXA·k34</span> Add coverage sparkline to project rows</td><td><span class="kind brand">in_progress</span></td><td><span class="edge ok" style="padding:1px 8px"><i data-lucide="lock" class="ico"></i>sess/xg6prn6t</span></td><td class="muted">3h</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: sessions -->
+    <div class="tabpanel" data-panel="sessions">
+      <div class="card">
+        <h2>Sessions <span class="h2-meta">8 active · 74 completed</span></h2>
+        <div class="sess">
+          <div class="r"><div><div class="id"><a href="#">sess/9n02wexq</a><span class="badge ok"><span class="live-dot"></span>active</span><span class="kind">explicit</span><span class="claim"><i data-lucide="lock" class="ico"></i>holds step 2</span></div><div class="find">Building the All-Projects grid — sparkline + hero metric per card, wiring GetProjectCounts into the footer.</div></div><span class="when">33m</span></div>
+          <div class="r"><div><div class="id"><a href="#">sess/xg6prn6t</a><span class="badge ok"><span class="live-dot"></span>active</span><span class="kind">startup</span><span class="claim"><i data-lucide="lock" class="ico"></i>holds 01KXA·k34</span></div><div class="find">Adding the coverage sparkline to project rows.</div></div><span class="when">10h</span></div>
+          <div class="r"><div><div class="id"><a href="#">cc/0ba0566b</a><span class="kind">ambient</span></div><div class="find">Shipped the fix for cross-agent-session-bleed (01KXAEF3, done). Wrote memory mcp-ambient-fallback-cross-agent-bleed.</div></div><span class="when">44m</span></div>
+          <div class="r"><div><div class="id"><a href="#">sess/cmx3m5vp</a><span class="kind">explicit</span></div><div class="find">Closed plan step 1 — lifted project fields &amp; relations from core/types.go into the console projection.</div></div><span class="when">20m</span></div>
+          <div class="r"><div><div class="id"><a href="#">sess/sw4tc258</a><span class="kind">explicit</span></div><div class="find">Console event-detail feature shipped (commit f9ac720). Wrote current-state-and-todos.</div></div><span class="when">1h</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: memories -->
+    <div class="tabpanel" data-panel="memories">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
+          <tbody>
+            <tr class="row-link"><td class="mem-name"><strong>current-state-and-todos</strong><div class="desc">Live snapshot of in-flight console work and owner todos.</div></td><td><span class="kind">stage</span></td><td><span class="lineage"><i data-lucide="git-commit-horizontal" class="ico"></i>from sess/sw4tc258</span></td><td class="num">2</td><td class="num">3</td><td class="muted">1h</td></tr>
+            <tr class="row-link"><td class="mem-name"><strong>mcp-ambient-fallback-cross-agent-bleed</strong><div class="desc">Ambient fallback can bleed sessions across agents when the MCP session id is reused.</div></td><td><span class="kind">gotcha</span></td><td><span class="lineage"><i data-lucide="git-commit-horizontal" class="ico"></i>from cc/0ba0566b</span></td><td class="num">0</td><td class="num">0</td><td class="muted">2m</td></tr>
+            <tr class="row-link"><td class="mem-name"><strong>mcp-session-id-opaque-v1</strong><div class="desc">Superseded — assumed session ids were stable across restart.</div></td><td><span class="kind">reference</span></td><td><span class="lineage" style="color:var(--pop-strong)"><i data-lucide="arrow-right" class="ico"></i>superseded by …restart-unstable</span></td><td class="num">1</td><td class="num">0</td><td class="muted">9m</td></tr>
+            <tr class="row-link"><td class="mem-name"><strong>console-throwaway-run-kill-by-port</strong><div class="desc">Kill throwaway console runs by port, not pkill — the daemon shares the binary name.</div></td><td><span class="kind">gotcha</span></td><td><span class="lineage faint">—</span></td><td class="num">1</td><td class="num">1</td><td class="muted">6h</td></tr>
+            <tr class="row-link"><td class="mem-name"><strong>cli-first-mcp-second-beads-approach</strong><div class="desc">Ship features CLI-first, expose over MCP second.</div></td><td><span class="kind">reference</span></td><td><span class="lineage faint">—</span></td><td class="num">1</td><td class="num">0</td><td class="muted">2d</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: notes -->
+    <div class="tabpanel" data-panel="notes">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
+          <tbody>
+            <tr class="row-link" data-open="note"><td class="mem-name"><strong>Projects-first console — review notes</strong><div class="desc">Direction B (Workspace) selected; open questions on nav order and default theme.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">console</span><span class="badge">review</span></div></td><td class="muted">12m</td></tr>
+            <tr class="row-link" data-open="note"><td class="mem-name"><strong>SSE fan-out design sketch</strong><div class="desc">Per-connection channel, drop-oldest under backpressure, gap-fill on reconnect.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">sse</span><span class="badge">retrieval</span></div></td><td class="muted">3h</td></tr>
+            <tr class="row-link" data-open="note"><td class="mem-name"><strong>Why RRF over a weighted sum</strong><div class="desc">Rank fusion is scale-free across FTS5 + vector; weighted sum needs per-kind tuning.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">retrieval</span><span class="badge">decision</span></div></td><td class="muted">1d</td></tr>
+            <tr class="row-link" data-open="note"><td class="mem-name"><strong>Console keyboard-shortcut wishlist</strong><div class="desc">j/k row nav, / to focus filter, g-then-key to jump between screens.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">ux</span></div></td><td class="muted">6d</td></tr>
+            <tr class="more-row"><td colspan="3" style="color:var(--faint);font-style:italic;text-align:center">+ 14 more notes in seamless</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: interactions (filtered to this project) -->
+    <div class="tabpanel" data-panel="interactions">
+      <div class="ix-controls">
+        <div class="ix-tabs">
+          <button class="ix-tab active" type="button">All <span class="n">10</span></button>
+          <button class="ix-tab" type="button">sess/9n02wexq <span class="n">6</span></button>
+          <button class="ix-tab" type="button">sess/xg6prn6t <span class="n">2</span></button>
+          <button class="ix-tab" type="button">cc/0ba0566b <span class="n">2</span></button>
+        </div>
+        <div class="ix-actions">
+          <span class="chip-parent"><i data-lucide="git-branch" class="ico"></i>seamless only</span>
+          <button class="btn small" type="button">Pause</button>
+        </div>
+      </div>
+      <div class="ix-feed">
+        <details class="ix-row" data-session="sess/9n02wexq">
+          <summary><span class="ix-when">12s</span><span class="kind">tool.call</span><span class="ix-label">memory_search</span><span class="ix-sum">"project card" — 5 hits</span><span class="ix-meta">34ms · 5 items</span></summary>
+          <div class="ix-body"><h3>Request</h3><pre class="pre">{ "query": "project card health metric", "project": "seamless", "k": 5 }</pre><h3>Response</h3><pre class="pre">5 memories · rrf fused · recall budget 1,180 / 2,000 tok</pre><div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div></div>
+        </details>
+        <details class="ix-row" data-session="sess/9n02wexq">
+          <summary><span class="ix-when">40s</span><span class="kind brand">retrieval.injected</span><span class="ix-label">UserPromptSubmit</span><span class="ix-sum">session-start briefing — 7 memories, 1,840 tokens</span><span class="ix-meta">7 items</span></summary>
+          <div class="ix-body"><h3>Injected content</h3><pre class="pre">## Briefing — seamless (7 memories · 1,840 tokens)
+[constraint] No CGO — use modernc.org/sqlite
+[decision]   Console is read-mostly
+[gotcha]     modernc sqlite lacks JSON1</pre><div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div></div>
+        </details>
+        <details class="ix-row err" data-session="sess/xg6prn6t">
+          <summary><span class="ix-when">3m</span><span class="kind danger">tool.call</span><span class="ix-label">memory_search</span><span class="ix-sum">modernc sqlite: no such function: json_extract</span><span class="badge danger">error</span><span class="ix-meta">8ms</span></summary>
+          <div class="ix-body"><h3>Response</h3><pre class="pre">error: sqlite: no such function: json_extract
+  at retrieve/fts.go:88 — JSON1 is off by default in modernc</pre><div class="ix-links"><a href="#" data-open="session">sess/xg6prn6t →</a><a href="#">event →</a></div></div>
+        </details>
+        <details class="ix-row" data-session="cc/0ba0566b">
+          <summary><span class="ix-when">4m</span><span class="kind ok">tool.call</span><span class="ix-label">memory_write</span><span class="ix-sum">wrote mcp-ambient-fallback-cross-agent-bleed</span><span class="badge">ambient</span><span class="ix-meta">21ms</span></summary>
+          <div class="ix-body"><h3>Response</h3><pre class="pre">written · id 01KXB4Q…7f2 · 812 chars · 0 inj / 0 read (new)</pre><div class="ix-links"><a href="#" data-open="session">cc/0ba0566b →</a><a href="#">event →</a></div></div>
+        </details>
+        <details class="ix-row" data-session="sess/9n02wexq">
+          <summary><span class="ix-when">6m</span><span class="kind">plan.captured</span><span class="ix-label">plan:console-projects-first</span><span class="ix-sum">5-step plan captured from plan mode</span></summary>
+          <div class="ix-body"><h3>Plan content</h3><pre class="pre">plan:console-projects-first · 5 steps · 2 done · 1 in progress</pre><div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div></div>
+        </details>
+      </div>
+      <div class="ix-more"><button class="btn small" type="button">Load older</button></div>
+    </div>
+
+    <!-- TAB: relations (in-detail summary) -->
+    <div class="tabpanel" data-panel="trials">
+      <div class="tree" style="margin-bottom:18px">
+        <div class="tnode">
+          <div class="tline"><span class="ico-lead lead-plan"><i data-lucide="git-merge" class="ico"></i></span><span class="nm">plan:console-projects-first</span><span class="cap">· 5 steps · 40% done</span></div>
+          <div class="tkids">
+            <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="check" class="ico"></i></span><span class="nm">step 1 · lift fields</span><span class="cap"><span class="kind ok" style="padding:0 6px">done</span></span></div>
+              <div class="tkids"><div class="tline"><span class="ico-lead lead-sess"><i data-lucide="terminal" class="ico"></i></span><span class="nm">sess/cmx3m5vp</span><span class="cap">closed it · 2d ago</span></div></div>
+            </div>
+            <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="loader" class="ico"></i></span><span class="nm">step 2 · projects grid</span><span class="cap"><span class="kind brand" style="padding:0 6px">in_progress</span></span></div>
+              <div class="tkids">
+                <div class="tnode"><div class="tline"><span class="ico-lead lead-sess"><i data-lucide="terminal" class="ico"></i></span><span class="nm">sess/9n02wexq</span><span class="cap tflag"><span class="live-dot"></span>active · <span class="claim" style="padding:0 6px"><i data-lucide="lock" class="ico"></i>claim · 22m lease</span></span></div>
+                  <div class="tkids"><div class="tline"><span class="ico-lead lead-mem"><i data-lucide="brain" class="ico"></i></span><span class="nm">current-state-and-todos</span><span class="cap"><span class="kind" style="padding:0 6px">stage</span> read 3× / inj 2×</span></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="circle" class="ico"></i></span><span class="nm">step 3 · detail page</span><span class="cap"><span class="kind" style="padding:0 6px">open</span> <span class="edge" style="padding:0 6px">← blocked by step 2</span></span></div></div>
+            <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="circle" class="ico"></i></span><span class="nm">step 4 · relations</span><span class="cap"><span class="kind" style="padding:0 6px">open</span> <span class="edge" style="padding:0 6px">← blocked by step 3</span></span></div></div>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="relbanner"><i data-lucide="git-branch" class="ico"></i><div>As a root project, <b>seamless</b> injects only its own memories — it has no parent to inherit from and no children.</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RELATIONS (tree) ==================== -->
+  <section class="view" id="view-relations" data-screen-label="B · Relations">
+    <div class="crumb"><a href="#projects" data-back>All projects</a> <span class="faint">/</span> <b style="color:var(--text-primary)">relations</b></div>
+    <div class="topbar">
+      <div>
+        <h1>Relations</h1>
+        <div class="sub">The dependency spine the flat console can't show: a plan expands into steps, each step's claiming session, and the memories it left behind.</div>
+      </div>
+      <div class="seg"><button class="on">seamless</button><button>all projects</button></div>
+    </div>
+
+    <div class="tree" style="margin-bottom:24px">
+      <div class="tnode">
+        <div class="tline"><span class="ico-lead lead-plan"><i data-lucide="git-merge" class="ico"></i></span><span class="nm">plan:console-projects-first</span><span class="cap">· 5 steps · 2 done · 1 in progress</span></div>
+        <div class="tkids">
+          <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="check" class="ico"></i></span><span class="nm">step 1 · lift fields &amp; relations</span><span class="cap"><span class="kind ok" style="padding:0 6px">done</span></span></div>
+            <div class="tkids"><div class="tline"><span class="ico-lead lead-sess"><i data-lucide="terminal" class="ico"></i></span><span class="nm">sess/cmx3m5vp</span><span class="cap">explicit · closed 2d ago</span></div></div>
+          </div>
+          <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="loader" class="ico"></i></span><span class="nm">step 2 · projects grid + health card</span><span class="cap"><span class="kind brand" style="padding:0 6px">in_progress</span></span></div>
+            <div class="tkids">
+              <div class="tnode"><div class="tline"><span class="ico-lead lead-sess"><i data-lucide="terminal" class="ico"></i></span><span class="nm">sess/9n02wexq</span><span class="cap tflag"><span class="live-dot"></span>active · <span class="claim" style="padding:0 6px"><i data-lucide="lock" class="ico"></i>claim · 22m lease left</span></span></div>
+                <div class="tkids"><div class="tline"><span class="ico-lead lead-mem"><i data-lucide="brain" class="ico"></i></span><span class="nm">current-state-and-todos</span><span class="cap"><span class="kind" style="padding:0 6px">stage</span> · source of the plan's live snapshot</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="circle" class="ico"></i></span><span class="nm">step 3 · project-detail page</span><span class="cap"><span class="kind" style="padding:0 6px">open</span> <span class="edge" style="padding:0 6px">← blocked by step 2</span></span></div></div>
+          <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="circle" class="ico"></i></span><span class="nm">step 4 · relations view</span><span class="cap"><span class="kind" style="padding:0 6px">open</span> <span class="edge" style="padding:0 6px">← blocked by step 3</span></span></div></div>
+          <div class="tnode"><div class="tline"><span class="ico-lead lead-task"><i data-lucide="circle" class="ico"></i></span><span class="nm">step 5 · owner review &amp; merge</span><span class="cap"><span class="kind" style="padding:0 6px">open</span> <span class="edge" style="padding:0 6px">← blocked by step 4</span></span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:0 0 12px;font-weight:600">Cross-project ties</h2>
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <div class="relbanner"><i data-lucide="git-branch" class="ico"></i><div><b>arctop-mobile-apps</b> shares 6 active memories into <b>arctop-ios</b> and <b>arctop-android</b> at briefing time — children inherit cross-platform knowledge without duplicating it.</div></div>
+      <div class="relbanner retired"><i data-lucide="split" class="ico"></i><div><b>arctop-agent</b> was split 21 days ago; its 9 memories moved to <b>arctop-ios</b>, <b>arctop-android</b>, and <b>arctop-backend</b>. Kept readable for provenance, no longer the live home.</div></div>
+    </div>
+  </section>
+
+  <!-- ==================== OVERVIEW (global) ==================== -->
+  <section class="view" id="view-overview" data-screen-label="B · Overview">
+    <div class="topbar">
+      <div><h1>Overview</h1><div class="sub">Local-first agent memory &amp; coordination substrate · 12 projects</div></div>
+      <span class="live"><span class="live-dot"></span> live</span>
+    </div>
+
+    <div class="metricbar">
+      <div class="m"><div class="k">Active memories</div><div class="v">87</div></div>
+      <div class="m"><div class="k">Sessions</div><div class="v">82 <small>· 8 live</small></div></div>
+      <div class="m"><div class="k">Open tasks</div><div class="v">5 <small>· 1 blk</small></div></div>
+      <div class="m"><div class="k">Read-after-inject</div><div class="v brand">41%</div></div>
+      <div class="m"><div class="k">Coverage</div><div class="v ok">87%</div></div>
+    </div>
+
+    <div class="two">
+      <div class="card">
+        <h2>Retrieval trend <span class="h2-meta">14d · peak Jul 11</span></h2>
+        <div class="area">
+          <svg class="area-svg" viewBox="0 0 560 140" preserveAspectRatio="none" height="140">
+            <line x1="0" y1="104" x2="560" y2="104" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <line x1="0" y1="66" x2="560" y2="66" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <line x1="0" y1="28" x2="560" y2="28" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <polygon points="0,130 47,116 94,122 140,90 187,104 234,70 280,90 327,48 374,68 420,36 467,54 514,18 560,32 560,136 0,136" fill="var(--brand-soft)" opacity="0.7"></polygon>
+            <polyline points="0,130 47,116 94,122 140,90 187,104 234,70 280,90 327,48 374,68 420,36 467,54 514,18 560,32" fill="none" stroke="var(--brand)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>
+            <circle cx="514" cy="18" r="3.5" fill="var(--pop)"></circle>
+          </svg>
+          <div class="area-ticks"><span>Jun 29</span><span>Jul 06</span><span>Jul 12</span></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Knowledge coverage <span class="h2-meta">retained via · 14d</span></h2>
+        <div class="legend">
+          <div class="legend-row"><span class="kdot" style="background:var(--brand)"></span><span class="legend-label">findings</span><div class="legend-bar"><span style="background:var(--brand);width:83%"></span></div><span class="legend-val">68</span></div>
+          <div class="legend-row"><span class="kdot" style="background:var(--ok)"></span><span class="legend-label">memories</span><div class="legend-bar"><span style="background:var(--ok);width:13%"></span></div><span class="legend-val">11</span></div>
+          <div class="legend-row"><span class="kdot" style="background:var(--pop)"></span><span class="legend-label">notes</span><div class="legend-bar"><span style="background:var(--pop);width:5%"></span></div><span class="legend-val">1</span></div>
+          <div class="legend-row"><span class="kdot" style="background:var(--warn)"></span><span class="legend-label">trials</span><div class="legend-bar"><span style="background:var(--warn);width:11%"></span></div><span class="legend-val">9</span></div>
+        </div>
+        <div class="muted" style="font-size:var(--text-xs);margin-top:12px">71 of 82 sessions left at least one durable artifact.</div>
+      </div>
+    </div>
+
+    <div class="section" style="margin-top:16px">
+      <div class="card">
+        <h2>Projects at a glance <a href="#projects" class="more" data-back-to="projects" style="margin-left:auto;font-size:var(--text-2xs);text-transform:none;letter-spacing:0;font-weight:600">all projects →</a></h2>
+        <table>
+          <thead><tr><th>Project</th><th>Read/inject</th><th class="num">Sessions</th><th class="num">Open</th><th class="num">Memories</th><th>Active</th></tr></thead>
+          <tbody>
+            <tr class="row-link" data-open="project"><td><span class="mono">seamless</span> <span class="work-dot"><span class="live-dot"></span>3</span></td><td><span style="color:var(--brand);font-weight:700">41%</span></td><td class="num">82</td><td class="num">5</td><td class="num">13</td><td class="muted">now</td></tr>
+            <tr class="row-link" data-open="project"><td><span class="mono">mw75-neuro-firmware</span></td><td><span style="color:var(--brand);font-weight:700">62%</span></td><td class="num">24</td><td class="num">3</td><td class="num">15</td><td class="muted">40m</td></tr>
+            <tr class="row-link" data-open="project"><td><span class="mono">arctop-ios</span></td><td><span style="color:var(--ok);font-weight:700">91%</span></td><td class="num">12</td><td class="num">0</td><td class="num">6</td><td class="muted">5h</td></tr>
+            <tr class="row-link" data-open="project"><td><span class="mono">pass-mgr</span></td><td><span style="color:var(--brand);font-weight:700">55%</span></td><td class="num">18</td><td class="num">1</td><td class="num">15</td><td class="muted">2d</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="card">
+        <h2>Recent activity <span class="h2-meta">all projects</span></h2>
+        <table>
+          <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
+          <tbody>
+            <tr class="row-link"><td class="muted">2m</td><td><span class="kind ok">memory.written</span></td><td class="muted">seamless</td><td>wrote <span class="mono">mcp-ambient-fallback-cross-agent-bleed</span></td></tr>
+            <tr class="row-link"><td class="muted">3m</td><td><span class="kind">task.transition</span></td><td class="muted">seamless</td><td>step 2 → in_progress · claimed by sess/9n02wexq</td></tr>
+            <tr class="row-link"><td class="muted">6m</td><td><span class="kind brand">retrieval.injected</span></td><td class="muted">seamless</td><td>session-start · 7 memories, 1,840 tokens</td></tr>
+            <tr class="row-link"><td class="muted">14m</td><td><span class="kind">trial.recorded</span></td><td class="muted">mw75-neuro-firmware</td><td>gatt-over-br-edr · <span style="color:var(--danger)">fail</span></td></tr>
+            <tr class="row-link"><td class="muted">22m</td><td><span class="kind pop">memory.superseded</span></td><td class="muted">seamless</td><td><span class="mono">mcp-session-id-opaque-v1</span> → …restart-unstable</td></tr>
+            <tr class="row-link"><td class="muted">44m</td><td><span class="kind">session.ended</span></td><td class="muted">seamless</td><td>cc/0ba0566b · closed 01KXAEF3</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== SESSIONS ==================== -->
+  <section class="view" id="view-sessions" data-screen-label="B · Sessions">
+    <div class="topbar">
+      <div><h1>Sessions</h1><div class="sub">82 total · 8 active · claimed tasks shown inline</div></div>
+      <div class="seg"><button class="on">All</button><button>Active</button><button>Completed</button></div>
+    </div>
+    <div class="proj-toolbar">
+      <div class="search"><i data-lucide="search" class="ico"></i><input placeholder="Filter sessions by id, project, or source…"></div>
+      <div class="seg"><button class="on">All projects</button><button>seamless</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Session</th><th>Project</th><th>Source</th><th>Findings</th><th>Claimed</th><th>When</th></tr></thead>
+        <tbody>
+          <tr class="group-row"><td colspan="6">Active <span class="count">8</span></td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">sess/9n02wexq</span> <span class="badge ok"><span class="live-dot"></span>active</span></td><td class="muted">seamless</td><td><span class="kind">explicit</span></td><td class="findcell">Building the All-Projects grid — sparkline + hero metric per card.</td><td><span class="claim-sm"><i data-lucide="lock" class="ico"></i>01KXA·b71</span></td><td class="muted">33m</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">sess/xg6prn6t</span> <span class="badge ok"><span class="live-dot"></span>active</span></td><td class="muted">seamless</td><td><span class="kind">startup</span></td><td class="findcell">Adding the coverage sparkline to project rows.</td><td><span class="claim-sm"><i data-lucide="lock" class="ico"></i>01KXA·k34</span></td><td class="muted">10h</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">sess/hgb4m4y0</span> <span class="badge ok"><span class="live-dot"></span>active</span></td><td class="muted">seamless</td><td><span class="kind">explicit</span></td><td class="findcell muted">no findings yet</td><td class="muted">—</td><td class="muted">19h</td></tr>
+          <tr class="group-row"><td colspan="6">Completed <span class="count">74</span></td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">cc/0ba0566b</span> <span class="kind">ambient</span></td><td class="muted">seamless</td><td><span class="kind">startup</span></td><td class="findcell">Shipped the fix for cross-agent-session-bleed. Wrote mcp-ambient-fallback-cross-agent-bleed.</td><td><span class="claim-sm" style="color:var(--ok)"><i data-lucide="check" class="ico"></i>closed 01KXAEF3</span></td><td class="muted">44m</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">sess/cmx3m5vp</span></td><td class="muted">seamless</td><td><span class="kind">explicit</span></td><td class="findcell">Closed plan step 1 — lifted project fields &amp; relations from core/types.go.</td><td><span class="claim-sm" style="color:var(--ok)"><i data-lucide="check" class="ico"></i>closed 01KXA·9f2</span></td><td class="muted">20m</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">sess/sw4tc258</span></td><td class="muted">seamless</td><td><span class="kind">explicit</span></td><td class="findcell">Console event-detail feature shipped. Wrote current-state-and-todos.</td><td class="muted">—</td><td class="muted">1h</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">cc/d6dc92a9</span> <span class="kind">ambient</span></td><td class="muted">arctop-ios</td><td><span class="kind">startup</span></td><td class="findcell">(auto-harvested) Reached workload calibration on the API tab.</td><td class="muted">—</td><td class="muted">7m</td></tr>
+          <tr class="row-link" data-open="session"><td><span class="mono">lab/mw75-firmware-ble/gatt-go-no-go</span></td><td class="muted">mw75-neuro-firmware</td><td><span class="kind">import</span></td><td class="findcell">GATT over BR/EDR: NO-GO, plus critical regression rolled back.</td><td class="muted">—</td><td class="muted">3d</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== SESSION DETAIL ==================== -->
+  <section class="view" id="view-session" data-screen-label="B · Session detail">
+    <div class="crumb"><a href="#projects" data-back-to="sessions">Sessions</a> <span class="faint">/</span> <b style="color:var(--text-primary)">sess/9n02wexq</b></div>
+    <div class="detail-head">
+      <div class="row-between">
+        <div>
+          <div class="title-row">
+            <span class="tile" style="width:32px;height:32px"><i data-lucide="terminal" class="ico" style="width:18px;height:18px"></i></span>
+            <h1 style="font-family:var(--font-mono);font-size:var(--text-xl)">sess/9n02wexq</h1>
+            <span class="badge ok"><span class="live-dot"></span>active</span>
+            <span class="chip-parent"><i data-lucide="git-branch" class="ico"></i>seamless</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="drail">
+      <div class="dcol">
+        <div class="card">
+          <h2>Findings</h2>
+          <div class="prose"><p>Building the All-Projects grid for the projects-first console. Sparkline + hero metric per card, wiring <code>store.GetProjectCounts</code> into the card footer. Next: fold read-after-inject into the card header and make rows link to project detail.</p></div>
+        </div>
+        <div class="card">
+          <h2>Timeline <span class="h2-meta">4 events</span></h2>
+          <div class="tl">
+            <div class="ev"><span class="when">33m</span><div class="what"><span class="kind">session.started</span> <span class="muted">explicit session opened</span></div></div>
+            <div class="ev"><span class="when">32m</span><div class="what"><span class="kind brand">retrieval.injected</span><div class="sub">7 memories, 1,840 tokens injected at session start</div></div></div>
+            <div class="ev"><span class="when">31m</span><div class="what"><span class="kind">task.transition</span><div class="sub">claimed <span class="mono">01KXA·b71</span> — step 2 → in_progress, lease 30m</div></div></div>
+            <div class="ev"><span class="when">3m</span><div class="what"><span class="kind">tool.call</span> <span class="muted">memory_search · "project card" (5 hits)</span></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dside">
+        <div class="card">
+          <h2>Session</h2>
+          <dl class="kv">
+            <dt>Status</dt><dd><span class="badge ok"><span class="live-dot"></span>active</span></dd>
+            <dt>Project</dt><dd class="mono">seamless</dd>
+            <dt>Source</dt><dd class="mono">explicit</dd>
+            <dt>Ambient</dt><dd class="muted">no</dd>
+            <dt>Started</dt><dd>33m ago</dd>
+            <dt>CWD</dt><dd class="mono" style="font-size:var(--text-2xs)">~/seamless</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>Claimed task</h2>
+          <div class="rel-item" style="border:0;padding:0">
+            <span class="tile" style="width:26px;height:26px"><i data-lucide="list-checks" class="ico"></i></span>
+            <div class="nm"><a href="#tasks" data-back-to="tasks-page">01KXA·b71</a><div class="cap">step 2 · projects grid · <span class="claim-sm"><i data-lucide="timer" class="ico"></i>22m lease</span></div></div>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Memories written <span class="h2-meta">0</span></h2>
+          <div class="muted" style="font-size:var(--text-sm);font-style:italic">Nothing durable yet — findings will be harvested on session end.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== INTERACTIONS (live transport feed) ==================== -->
+  <section class="view" id="view-interactions" data-screen-label="B · Interactions">
+    <div class="topbar">
+      <div><h1>Interactions</h1><div class="sub">Every agent request and response, live — tool calls, hook injections, plan &amp; session lifecycle</div></div>
+      <span class="live" id="ix-live"><span class="live-dot"></span> live</span>
+    </div>
+
+    <div class="ix-controls">
+      <div class="ix-tabs">
+        <button class="ix-tab active" type="button" data-key="all">All <span class="n">11</span></button>
+        <button class="ix-tab" type="button" data-key="sess/9n02wexq">sess/9n02wexq <span class="n">6</span></button>
+        <button class="ix-tab" type="button" data-key="sess/xg6prn6t">sess/xg6prn6t <span class="n">2</span></button>
+        <button class="ix-tab" type="button" data-key="cc/0ba0566b">cc/0ba0566b <span class="n">2</span></button>
+        <button class="ix-tab" type="button" data-key="__none__">unattributed <span class="n">1</span></button>
+      </div>
+      <div class="ix-actions">
+        <label class="ix-window">active
+          <select aria-label="Show sessions active within">
+            <option value="60">1m</option>
+            <option value="300" selected>5m</option>
+            <option value="900">15m</option>
+            <option value="3600">1h</option>
+            <option value="0">all</option>
+          </select>
+        </label>
+        <button class="btn small" type="button" id="ix-pause" data-paused="0">Pause</button>
+      </div>
+    </div>
+
+    <div class="ix-feed">
+      <!-- 1 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when" title="2026-07-13T14:41:12Z">12s</span><span class="kind">tool.call</span><span class="ix-label">memory_search</span><span class="ix-sum">"project card" — 5 hits</span><span class="ix-meta">34ms · 5 items</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">{
+  "query": "project card health metric",
+  "project": "seamless",
+  "k": 5
+}</pre>
+          <h3>Response</h3>
+          <pre class="pre">5 memories · rrf fused (fts5 + vector), recall budget 1,180 / 2,000 tok
+  1. current-state-and-todos            stage      read 3× inj 2×
+  2. console-throwaway-run-kill-by-port gotcha     read 1× inj 1×
+  3. cli-first-mcp-second-beads-approach reference read 0× inj 1×
+  4. mcp-bearer-key-is-static           protocol   read 0× inj 1×
+  5. console-is-read-mostly             decision   read 0× inj 1×</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 2 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when">40s</span><span class="kind brand">retrieval.injected</span><span class="ix-label">UserPromptSubmit</span><span class="ix-sum">session-start briefing assembled — 7 memories, 1,840 tokens</span><span class="ix-meta">7 items</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">Build the All-Projects grid for the projects-first console.</pre>
+          <h3>Injected content</h3>
+          <pre class="pre">## Briefing — seamless (7 memories · 1,840 tokens)
+
+[constraint] No CGO — use modernc.org/sqlite (CGO=0 in CI)
+[protocol]   MCP bearer key is static — single token over streamable HTTP
+[decision]   Console is read-mostly — only writes: archive, apply/dismiss
+[gotcha]     modernc sqlite lacks JSON1 — register it or avoid json_extract
+[decision]   Use RRF for recall fusion — k=60 constant
+[reference]  Dev port 8081 / prod 8080
+[stage]      current-state-and-todos — projects-first console in review</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 3 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when">1m</span><span class="kind">tool.call</span><span class="ix-label">task_claim</span><span class="ix-sum">01KXA·b71 — step 2 → in_progress, 30m lease</span><span class="ix-meta">12ms</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">{
+  "task": "01KXA·b71",
+  "lease_secs": 1800
+}</pre>
+          <h3>Response</h3>
+          <pre class="pre">claimed by sess/9n02wexq · lease expires in 22m · step 2 · projects grid</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 4 -->
+      <details class="ix-row" data-session="sess/xg6prn6t">
+        <summary><span class="ix-when">2m</span><span class="kind warn">hook.prompt</span><span class="ix-label">PreToolUse</span><span class="ix-sum">recall miss — nothing matched "coverage sparkline"</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">Agent asked to recall before edit; FTS5 + vector returned 0 hits above
+the 0.30 floor for "coverage sparkline project row". No briefing added.
+Logged so the Interactions feed can show "why didn't recall fire?" cases.</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/xg6prn6t →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 5 -->
+      <details class="ix-row err" data-session="sess/xg6prn6t">
+        <summary><span class="ix-when">3m</span><span class="kind danger">tool.call</span><span class="ix-label">memory_search</span><span class="ix-sum">modernc sqlite: no such function: json_extract</span><span class="badge danger">error</span><span class="ix-meta">8ms</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">{
+  "query": "sparkline",
+  "filter": "json_extract(meta,'$.kind') = 'stage'"
+}</pre>
+          <h3>Response</h3>
+          <pre class="pre">error: sqlite: no such function: json_extract
+  at retrieve/fts.go:88 — JSON1 is off by default in modernc; register it
+  or drop the json_extract filter (see gotcha: modernc-sqlite-lacks-json1)</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/xg6prn6t →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 6 -->
+      <details class="ix-row" data-session="cc/0ba0566b">
+        <summary><span class="ix-when">4m</span><span class="kind ok">tool.call</span><span class="ix-label">memory_write</span><span class="ix-sum">wrote mcp-ambient-fallback-cross-agent-bleed</span><span class="badge">ambient</span><span class="ix-meta">21ms</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">{
+  "name": "mcp-ambient-fallback-cross-agent-bleed",
+  "kind": "gotcha",
+  "project": "seamless",
+  "body": "Ambient fallback can bleed sessions across agents when the
+           MCP session id is reused after a daemon restart."
+}</pre>
+          <h3>Response</h3>
+          <pre class="pre">written · id 01KXB4Q…7f2 · 812 chars · 0 inj / 0 read (new)</pre>
+          <div class="ix-links"><a href="#" data-open="session">cc/0ba0566b →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 7 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when">6m</span><span class="kind">plan.captured</span><span class="ix-label">plan:console-projects-first</span><span class="ix-sum">5-step plan captured from plan mode</span></summary>
+        <div class="ix-body">
+          <h3>Plan content</h3>
+          <pre class="pre">plan:console-projects-first · 5 steps
+
+  1. Lift project fields &amp; relations from core/types.go        [done]
+  2. Build All-Projects grid + per-project health card          [in_progress]
+  3. Assemble dense project-detail page + tabs                  [open]
+  4. Trace plan → task → session → memory relations             [open]
+  5. Owner review &amp; merge into internal/console                [open]</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 8 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when">10m</span><span class="kind">subagent.captured</span><span class="ix-label">explore</span><span class="ix-sum">subagent report — 3 candidate merges at ≥0.86</span></summary>
+        <div class="ix-body">
+          <h3>Prompt</h3>
+          <pre class="pre">Scan seamless memories for near-duplicates above the gardener dedup
+threshold (0.86). Report clusters, not individual pairs.</pre>
+          <h3>Report</h3>
+          <pre class="pre">3 clusters over threshold:
+  • mcp-session-id-opaque-v1 ↔ …-restart-unstable      0.91
+  • gardener-cadence-30m ↔ gardener-runs-twice-hourly  0.88
+  • prefer-make-targets ↔ dev-tasks-use-make           0.86
+Recommend: queue 2 merges, leave the 0.86 pair for owner review.</pre>
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 9 -->
+      <details class="ix-row" data-session="sess/9n02wexq">
+        <summary><span class="ix-when">20m</span><span class="kind">session.started</span><span class="ix-label">session</span><span class="ix-sum">explicit session opened in ~/seamless</span></summary>
+        <div class="ix-body">
+          <div class="ix-links"><a href="#" data-open="session">sess/9n02wexq →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 10 -->
+      <details class="ix-row" data-session="cc/0ba0566b">
+        <summary><span class="ix-when">44m</span><span class="kind">session.ended</span><span class="ix-label">session</span><span class="ix-sum">closed 01KXAEF3 · 5 memory writes, 34 tool calls</span><span class="badge">ambient</span></summary>
+        <div class="ix-body">
+          <h3>Findings</h3>
+          <pre class="pre">Shipped the fix for cross-agent-session-bleed (01KXAEF3, done).
+Ambient fallback now scopes on (mcp_session_id, agent_id) rather than
+mcp_session_id alone. Wrote mcp-ambient-fallback-cross-agent-bleed.</pre>
+          <div class="ix-links"><a href="#" data-open="session">cc/0ba0566b →</a><a href="#">event →</a></div>
+        </div>
+      </details>
+
+      <!-- 11 -->
+      <details class="ix-row" data-session="">
+        <summary><span class="ix-when">1h</span><span class="kind">tool.call</span><span class="ix-label">gardener_pass</span><span class="ix-sum">gardener dedup sweep — 2 proposals queued</span><span class="ix-meta">9ms</span></summary>
+        <div class="ix-body">
+          <h3>Request</h3>
+          <pre class="pre">{
+  "merge_threshold": 0.86,
+  "stale_days": 90,
+  "trigger": "schedule"
+}</pre>
+          <h3>Response</h3>
+          <pre class="pre">2 proposals · 1 merge (mcp-session-id-opaque-v1), 1 archive (94d stale)
+1 split suggestion held for owner review</pre>
+          <div class="ix-links"><a href="#">event →</a></div>
+        </div>
+      </details>
+    </div>
+    <div class="ix-more"><button class="btn small" type="button">Load older</button></div>
+  </section>
+
+  <!-- ==================== NOTES ==================== -->
+  <section class="view" id="view-notes" data-screen-label="B · Notes">
+    <div class="topbar">
+      <div><h1>Notes</h1><div class="sub">41 total · freeform working notes, grouped by project</div></div>
+    </div>
+    <div class="proj-toolbar">
+      <div class="search"><i data-lucide="search" class="ico"></i><input placeholder="Filter notes by title, tag, or project…"></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
+        <tbody>
+          <tr class="group-row"><td colspan="3">seamless <span class="count">18</span></td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>Projects-first console — review notes</strong><div class="desc">Direction B (Workspace) selected; open questions on nav order and default theme.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">console</span><span class="badge">review</span></div></td><td class="muted">12m</td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>SSE fan-out design sketch</strong><div class="desc">Per-connection channel, drop-oldest under backpressure, gap-fill on reconnect.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">sse</span><span class="badge">retrieval</span></div></td><td class="muted">3h</td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>Why RRF over a weighted sum</strong><div class="desc">Rank fusion is scale-free across FTS5 + vector; weighted sum needs per-kind tuning.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">retrieval</span><span class="badge">decision</span></div></td><td class="muted">1d</td></tr>
+          <tr class="group-row"><td colspan="3">mw75-neuro-firmware <span class="count">14</span></td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>GATT over BR/EDR — go/no-go log</strong><div class="desc">NO-GO on fw 2.0.3.2; throughput regressed and a critical rollback was needed.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">ble</span><span class="badge">trial</span></div></td><td class="muted">3d</td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>EEG MTU snapshot debugging</strong><div class="desc">Snapshot before subscription reads zero — poll after the CCCD write.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">eeg</span><span class="badge">gotcha</span></div></td><td class="muted">10d</td></tr>
+          <tr class="group-row"><td colspan="3">research <span class="count">8</span></td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>Embedding model comparison — ada-002 vs 3-small</strong><div class="desc">3-small wins recall@10 at a third of the cost; migrate legacy vectors.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">embeddings</span><span class="badge">lab</span></div></td><td class="muted">4d</td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>Recall budget tuning trials</strong><div class="desc">2,000 tok holds constraints + top gotchas without crowding the briefing.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">retrieval</span></div></td><td class="muted">9d</td></tr>
+          <tr class="group-row"><td colspan="3">inbox <span class="count">1</span> <span class="muted" style="font-weight:400">· unattributed</span></td></tr>
+          <tr class="row-link" data-open="note"><td class="mem-name"><strong>Console keyboard-shortcut wishlist</strong><div class="desc">j/k row nav, / to focus filter, g-then-key to jump between screens.</div></td><td><div style="display:flex;gap:6px;flex-wrap:wrap"><span class="badge">ux</span></div></td><td class="muted">6d</td></tr>
+          <tr class="more-row"><td colspan="3" style="color:var(--faint);font-style:italic;text-align:center">+ 33 more notes across 5 projects — same grouping</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== MEMORIES ==================== -->
+  <section class="view" id="view-memories" data-screen-label="B · Memories">
+    <div class="topbar">
+      <div><h1>Memories</h1><div class="sub">87 active · 34 inactive · grouped by project</div></div>
+    </div>
+    <div class="proj-toolbar">
+      <div class="search"><i data-lucide="search" class="ico"></i><input placeholder="Filter memories by name, kind, or tag…"></div>
+      <div class="seg"><button class="on">Active</button><button>Inactive</button><button>All</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
+        <tbody>
+          <tr class="group-row"><td colspan="6">seamless <span class="count">13</span></td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>current-state-and-todos</strong><div class="desc">Live snapshot of in-flight console work and owner todos.</div></td><td><span class="kind">stage</span></td><td><span class="lineage"><i data-lucide="git-commit-horizontal" class="ico"></i>from sess/sw4tc258</span></td><td class="num">2</td><td class="num">3</td><td class="muted">1h</td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>mcp-ambient-fallback-cross-agent-bleed</strong><div class="desc">Ambient fallback can bleed sessions across agents when the MCP session id is reused.</div></td><td><span class="kind">gotcha</span></td><td><span class="lineage"><i data-lucide="git-commit-horizontal" class="ico"></i>from cc/0ba0566b</span></td><td class="num">0</td><td class="num">0</td><td class="muted">2m</td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>mcp-session-id-opaque-v1</strong><div class="desc">Superseded — assumed session ids were stable across restart.</div></td><td><span class="kind">reference</span></td><td><span class="lineage" style="color:var(--pop-strong)"><i data-lucide="arrow-right" class="ico"></i>superseded</span></td><td class="num">1</td><td class="num">0</td><td class="muted">9m</td></tr>
+          <tr class="group-row"><td colspan="6">mw75-neuro-firmware <span class="count">15</span></td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>mw75-usb-hid-dfu-plan</strong><div class="desc">USB HID DFU is supported by the QCC514x ADK but not wired into the MW75 build.</div></td><td><span class="kind">runbook</span></td><td><span class="lineage faint">—</span></td><td class="num">1</td><td class="num">0</td><td class="muted">3d</td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>mw75-ble-eeg-mtu-snapshot-zero-data</strong><div class="desc">MTU snapshot before subscription reports zero data — poll after CCCD write.</div></td><td><span class="kind">gotcha</span></td><td><span class="lineage"><i data-lucide="git-commit-horizontal" class="ico"></i>from lab/mw75-firmware-ble</span></td><td class="num">1</td><td class="num">0</td><td class="muted">10d</td></tr>
+          <tr class="group-row"><td colspan="6">arctop-mobile-apps <span class="count">6</span> <span class="muted" style="font-weight:400">· shared into 2 children</span></td></tr>
+          <tr class="row-link" data-open="memory"><td class="mem-name"><strong>eeg-stream-reconnect-protocol</strong><div class="desc">Cross-platform reconnect handshake shared by iOS and Android clients.</div></td><td><span class="kind">protocol</span></td><td><span class="lineage"><i data-lucide="git-branch" class="ico"></i>inherited by 2</span></td><td class="num">2</td><td class="num">2</td><td class="muted">6d</td></tr>
+          <tr class="more-row"><td colspan="6" style="color:var(--faint);font-style:italic;text-align:center">+ 11 more projects — same grouping</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== MEMORY DETAIL ==================== -->
+  <section class="view" id="view-memory" data-screen-label="B · Memory detail">
+    <div class="crumb"><a href="#memories" data-back-to="memories">Memories</a> <span class="faint">/</span> <b style="color:var(--text-primary)">current-state-and-todos</b></div>
+    <div class="detail-head">
+      <div class="title-row">
+        <span class="tile" style="width:32px;height:32px"><i data-lucide="brain" class="ico" style="width:18px;height:18px"></i></span>
+        <h1 style="font-size:var(--text-xl)">current-state-and-todos</h1>
+        <span class="kind">stage</span>
+        <span class="badge ok">active</span>
+        <span class="chip-parent"><i data-lucide="git-branch" class="ico"></i>seamless</span>
+      </div>
+      <div class="desc">Live snapshot of in-flight console work and owner todos, refreshed each session.</div>
+    </div>
+    <div class="drail">
+      <div class="dcol">
+        <div class="card">
+          <h2>Body</h2>
+          <div class="prose">
+            <h3>Status</h3>
+            <p>Projects-first console in review. Direction B (Workspace) selected; expanding to all pages.</p>
+            <h3>Gate lines</h3>
+            <ul>
+              <li>Grid + health card — <code>in_progress</code> (sess/9n02wexq)</li>
+              <li>Project detail — blocked on grid</li>
+              <li>Relations spine — references <a class="wiki" href="#">[[plan:console-projects-first]]</a></li>
+            </ul>
+            <h3>Owner todos</h3>
+            <ul><li>Confirm nav order (projects-first vs overview-first)</li><li>Decide light vs dark default</li></ul>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Lineage</h2>
+          <div class="tl">
+            <div class="ev"><span class="when">source</span><div class="what"><span class="claim-sm" style="color:var(--ok)"><i data-lucide="terminal" class="ico"></i>sess/sw4tc258</span> <span class="muted">wrote this memory</span></div></div>
+            <div class="ev"><span class="when">now</span><div class="what"><strong>current-state-and-todos</strong> <span class="muted">· this memory · active</span></div></div>
+            <div class="ev"><span class="when">refs</span><div class="what"><span class="muted">links</span> <a class="mono" href="#" style="font-size:var(--text-xs)">[[plan:console-projects-first]]</a></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="dside">
+        <div class="card">
+          <h2>Metadata</h2>
+          <dl class="kv kv-lg">
+            <dt>Kind</dt><dd><span class="kind">stage</span></dd>
+            <dt>Project</dt><dd class="mono">seamless</dd>
+            <dt>Created</dt><dd>Jun 30</dd>
+            <dt>Updated</dt><dd>1h ago</dd>
+            <dt>Valid from</dt><dd>Jun 30</dd>
+            <dt>Superseded</dt><dd class="muted">no</dd>
+            <dt>Source</dt><dd class="mono" style="font-size:var(--text-2xs)">sess/sw4tc258</dd>
+            <dt>Hash</dt><dd class="mono" style="font-size:var(--text-2xs)">8c2e…f1a4</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>Retrieval</h2>
+          <dl class="kv">
+            <dt>Injected</dt><dd>2×</dd>
+            <dt>Read after</dt><dd><span style="color:var(--ok);font-weight:700">3×</span></dd>
+            <dt>Last injected</dt><dd class="muted">6m ago</dd>
+          </dl>
+        </div>
+        <div class="card">
+          <h2>Tags</h2>
+          <div style="display:flex;flex-wrap:wrap;gap:6px"><span class="badge">console</span><span class="badge">todos</span><span class="badge">state</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== RETRIEVAL ==================== -->
+  <section class="view" id="view-retrieval" data-screen-label="B · Retrieval">
+    <div class="topbar">
+      <div><h1>Retrieval</h1><div class="sub">How memories reach agents, and whether they get read</div></div>
+      <div class="seg"><button>24h</button><button class="on">7d</button><button>30d</button><button>all</button></div>
+    </div>
+    <div class="card section">
+      <h2>Read-after-inject funnel</h2>
+      <div class="funnel">
+        <div class="fstep"><span class="v">22</span><span class="l">Injections</span></div>
+        <div class="arrow"><i data-lucide="arrow-right" class="ico"></i></div>
+        <div class="fstep"><span class="v brand">9</span><span class="l">Reads</span></div>
+        <div class="funnel-bar"><div class="track"><span></span></div><span class="cap">41% of injected memories were read back by an agent</span></div>
+      </div>
+    </div>
+    <div class="two section">
+      <div class="card">
+        <h2>By kind <span class="h2-meta">inj vs read</span></h2>
+        <div class="kindbars">
+          <div class="kindbar"><span class="kind">gotcha</span><div class="bars"><div class="track"><span class="inj" style="width:60%"></span></div><div class="track"><span class="read" style="width:100%"></span></div></div><span class="nums">3 → 5</span></div>
+          <div class="kindbar"><span class="kind">stage</span><div class="bars"><div class="track"><span class="inj" style="width:40%"></span></div><div class="track"><span class="read" style="width:60%"></span></div></div><span class="nums">2 → 3</span></div>
+          <div class="kindbar"><span class="kind">reference</span><div class="bars"><div class="track"><span class="inj" style="width:20%"></span></div><div class="track"><span class="read" style="width:20%"></span></div></div><span class="nums">1 → 1</span></div>
+          <div class="kindbar"><span class="kind">runbook</span><div class="bars"><div class="track"><span class="inj" style="width:40%"></span></div><div class="track"><span class="read" style="width:0%"></span></div></div><span class="nums">2 → 0</span></div>
+        </div>
+        <div class="kb-legend"><span><i style="background:var(--brand)"></i> injected</span><span><i style="background:var(--ok)"></i> read</span></div>
+      </div>
+      <div class="card">
+        <h2>Injection trend · 14d <span class="h2-meta">peak 18 · Jul 11</span></h2>
+        <div class="area">
+          <svg class="area-svg" viewBox="0 0 560 150" preserveAspectRatio="none" height="150">
+            <line x1="0" y1="108" x2="560" y2="108" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <line x1="0" y1="70" x2="560" y2="70" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <line x1="0" y1="32" x2="560" y2="32" stroke="var(--border)" stroke-width="1" stroke-dasharray="3 5"></line>
+            <polygon points="0,144 473,144 516,14 560,58 560,148 0,148" fill="var(--brand-soft)" opacity="0.75"></polygon>
+            <polyline points="0,144 473,144 516,14 560,58" fill="none" stroke="var(--brand)" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round"></polyline>
+            <circle cx="516" cy="14" r="3.5" fill="var(--pop)"></circle>
+          </svg>
+          <div class="area-ticks"><span>Jun 29</span><span>Jul 06</span><span>Jul 12</span></div>
+        </div>
+      </div>
+    </div>
+    <div class="card section">
+      <h2>Most injected</h2>
+      <table>
+        <thead><tr><th>Memory</th><th>Project</th><th>Kind</th><th class="num">Inj</th><th class="num">Read</th></tr></thead>
+        <tbody>
+          <tr class="row-link" data-open="memory"><td><span class="mono">current-state-and-todos</span></td><td class="muted">seamless</td><td><span class="kind">stage</span></td><td class="num">2</td><td class="num">3</td></tr>
+          <tr class="row-link"><td><span class="mono">mw75-usb-hid-dfu-plan</span></td><td class="muted">mw75-neuro-firmware</td><td><span class="kind">runbook</span></td><td class="num">1</td><td class="num">0</td></tr>
+          <tr class="row-link"><td><span class="mono">eeg-stream-reconnect-protocol</span></td><td class="muted">arctop-mobile-apps</td><td><span class="kind">protocol</span></td><td class="num">2</td><td class="num">2</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="stale-strip section"><span class="lab">Stale · no activity in 90d</span><span class="okdot"></span><span>No stale memories — everything has been touched recently.</span></div>
+  </section>
+
+  <!-- ==================== TASKS ==================== -->
+  <section class="view" id="view-tasks-page" data-screen-label="B · Tasks">
+    <div class="topbar">
+      <div><h1>Tasks</h1><div class="sub">5 open · 1 in progress · 1 blocked · plan &amp; ready-queue split</div></div>
+      <div class="seg"><button class="on">All projects</button><button>seamless</button></div>
+    </div>
+
+    <h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:0 0 12px;font-weight:600">Plans <span class="muted" style="font-size:var(--text-xs);font-weight:500">· steps excluded from the default ready-queue</span></h2>
+    <div class="plan">
+      <div class="plan-head"><i data-lucide="git-merge" class="ico"></i><span class="nm">plan:console-projects-first</span><span class="chip-parent" style="margin-left:8px"><i data-lucide="git-branch" class="ico"></i>seamless</span><span class="prog">2 done · 1 in progress · 2 open · 5 steps</span></div>
+      <div class="plan-bar"><span class="done" style="width:40%"></span><span class="doing" style="width:20%"></span></div>
+      <div class="step done"><div class="marker"><span class="dot"></span><span class="rail"></span></div><div class="body"><div class="t">Lift project fields &amp; relations from core/types.go</div><div class="meta"><span class="mono">01KXA·9f2</span><span class="edge ok"><i data-lucide="check" class="ico"></i>closed 2d ago</span><span class="mono">by sess/cmx3m5vp</span></div></div><span class="kind ok" style="align-self:start">done</span></div>
+      <div class="step doing"><div class="marker"><span class="dot"></span><span class="rail"></span></div><div class="body"><div class="t">Build All-Projects grid + per-project health card</div><div class="meta"><span class="mono">01KXA·b71</span><span class="claim"><i data-lucide="lock" class="ico"></i>claimed by sess/9n02wexq</span><span><i data-lucide="timer" class="ico" style="width:11px;vertical-align:-1px"></i> lease 22m left</span></div></div><span class="kind brand" style="align-self:start">in_progress</span></div>
+      <div class="step blocked"><div class="marker"><span class="dot"></span><span class="rail"></span></div><div class="body"><div class="t">Assemble dense project-detail page + tabs</div><div class="meta"><span class="mono">01KXA·c3d</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 2</span></div></div><span class="kind" style="align-self:start">open</span></div>
+      <div class="step blocked"><div class="marker"><span class="dot"></span><span class="rail"></span></div><div class="body"><div class="t">Trace plan → task → session → memory relations</div><div class="meta"><span class="mono">01KXA·e08</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 3</span></div></div><span class="kind" style="align-self:start">open</span></div>
+      <div class="step blocked"><div class="marker"><span class="dot"></span></div><div class="body"><div class="t">Owner review &amp; merge into internal/console</div><div class="meta"><span class="mono">01KXA·f5a</span><span class="edge"><i data-lucide="link" class="ico"></i>blocked by step 4</span></div></div><span class="kind" style="align-self:start">open</span></div>
+    </div>
+
+    <div class="card section" style="margin-top:20px">
+      <h2>Ready queue <span class="h2-meta">off-plan · claimable now</span></h2>
+      <table>
+        <thead><tr><th>Task</th><th>Project</th><th>Status</th><th>Depends on / claim</th><th>Created</th></tr></thead>
+        <tbody>
+          <tr class="row-link"><td><span class="mono-id">01KXA·h20</span> Kill throwaway console runs by port</td><td class="muted">seamless</td><td><span class="kind">open</span></td><td class="muted">—</td><td class="muted">6h</td></tr>
+          <tr class="row-link"><td><span class="mono-id">01KXA·j91</span> Backfill embeddings for legacy notes</td><td class="muted">seamless</td><td><span class="kind">open</span></td><td class="muted">—</td><td class="muted">1d</td></tr>
+          <tr class="row-link"><td><span class="mono-id">01KXA·k34</span> Add coverage sparkline to project rows</td><td class="muted">seamless</td><td><span class="kind brand">in_progress</span></td><td><span class="claim-sm"><i data-lucide="lock" class="ico"></i>sess/xg6prn6t · 14m</span></td><td class="muted">3h</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card section">
+      <h2>Blocked <span class="h2-meta">1 · waiting on dependencies</span></h2>
+      <table>
+        <thead><tr><th>Task</th><th>Project</th><th>Blocked by</th></tr></thead>
+        <tbody>
+          <tr class="row-link"><td><span class="mono-id">01KXA·m55</span> Wire release-notes generator to deploy hook</td><td class="muted">arctop-android</td><td><span class="edge" style="padding:1px 8px"><i data-lucide="link" class="ico"></i>01KXA·m10 · open</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="card section">
+      <h2>Closed <span class="h2-meta">recent · 25 shown of 118</span></h2>
+      <table>
+        <thead><tr><th>Task</th><th>Project</th><th>Result</th><th>Closed</th></tr></thead>
+        <tbody>
+          <tr class="row-link"><td><span class="mono-id">01KXAEF3</span> Fix cross-agent-session-bleed</td><td class="muted">seamless</td><td><span class="kind ok">done</span></td><td class="muted">44m</td></tr>
+          <tr class="row-link"><td><span class="mono-id">01KXA·9f2</span> Lift project fields from types.go</td><td class="muted">seamless</td><td><span class="kind ok">done</span></td><td class="muted">2d</td></tr>
+          <tr class="row-link"><td><span class="mono-id">01KX9·zz1</span> Try GATT over BR/EDR on fw 2.0.3.2</td><td class="muted">mw75-neuro-firmware</td><td><span class="kind">dropped</span></td><td class="muted">3d</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== PLANS ==================== -->
+  <section class="view" id="view-plans" data-screen-label="B · Plans">
+    <div class="topbar">
+      <div><h1>Plans</h1><div class="sub">4 captured plans · fleet-wide roster · plan mode → steps → claiming sessions</div></div>
+      <div class="seg"><button>24h</button><button class="on">7d</button><button>30d</button><button>all</button></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Plan</th><th>Status</th><th>Project</th><th class="num">Iter</th><th class="num">Agents</th><th class="num">Tasks</th><th>Updated</th></tr></thead>
+        <tbody>
+          <tr class="row-link" data-open="project"><td class="mem-name"><strong>Projects-first console</strong><div class="desc mono">plan:console-projects-first · console-projects-first.md</div></td><td><span class="badge brand">in_progress</span></td><td class="muted">seamless</td><td class="num">2</td><td class="num">3</td><td class="num">2/5</td><td class="muted">3m</td></tr>
+          <tr class="row-link" data-open="project"><td class="mem-name"><strong>MW75 BLE bring-up</strong><div class="desc mono">plan:mw75-ble-bringup · mw75-ble-bringup.md</div></td><td><span class="badge ok"><span class="live-dot"></span>active</span></td><td class="muted">mw75-neuro-firmware</td><td class="num">1</td><td class="num">1</td><td class="num">4/9</td><td class="muted">40m</td></tr>
+          <tr class="row-link" data-open="project"><td class="mem-name"><strong>Import v1 memories</strong><div class="desc mono">plan:legacy-import · legacy-import.md</div></td><td><span class="badge ok">done</span></td><td class="muted">seamless</td><td class="num">1</td><td class="num">1</td><td class="num">6/6</td><td class="muted">2d</td></tr>
+          <tr class="row-link" data-open="project"><td class="mem-name"><strong>Backfill embeddings</strong><div class="desc mono">plan:embeddings-backfill · embeddings-backfill.md</div></td><td><span class="badge">dropped</span></td><td class="muted">research</td><td class="num muted">—</td><td class="num muted">—</td><td class="num">0/3</td><td class="muted">25d</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="relbanner" style="margin-top:16px"><i data-lucide="map" class="ico"></i><div>A plan is captured from an agent's plan mode, then its steps become claimable tasks. Follow any plan into <a href="#relations" data-back>Relations</a> to see the step → session → memory spine.</div></div>
+  </section>
+
+  <!-- ==================== GARDENER ==================== -->
+  <section class="view" id="view-gardener" data-screen-label="B · Gardener">
+    <div class="topbar">
+      <div><h1>Gardener</h1><div class="sub">Automated tidying proposals — the console applies or dismisses; nothing runs on its own</div></div>
+      <button class="btn small"><i data-lucide="sprout" class="ico"></i> Request a pass</button>
+    </div>
+
+    <h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:0 0 12px;font-weight:600">Pending <span class="muted" style="font-size:var(--text-xs);font-weight:500">· 2 proposals</span></h2>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="gard-card">
+        <div class="top"><span class="kind pop">merge</span><span style="font-weight:600;font-size:var(--text-sm)">Deduplicate near-identical memories</span><span class="cap">0.91 similarity</span></div>
+        <div class="body">Merge <b class="mono">mcp-session-id-opaque-v1</b> into <b class="mono">mcp-session-id-opaque-and-restart-unstable</b> — the v1 note is fully covered by the newer one.</div>
+        <div class="targets"><span class="badge">seamless</span><span class="badge">reference</span><span class="badge">2 memories</span></div>
+        <div class="acts"><button class="btn small primary">Apply merge</button><button class="btn small">Dismiss</button><button class="btn small">Retarget</button></div>
+      </div>
+      <div class="gard-card">
+        <div class="top"><span class="kind warn">archive</span><span style="font-weight:600;font-size:var(--text-sm)">Archive a stale memory</span><span class="cap">no reads in 94d</span></div>
+        <div class="body">Archive <b class="mono">prefer-make-targets-for-dev-tasks</b> — superseded in practice and never read back since Apr.</div>
+        <div class="targets"><span class="badge">seamless</span><span class="badge">reference</span></div>
+        <div class="acts"><button class="btn small primary">Apply archive</button><button class="btn small">Dismiss</button></div>
+      </div>
+    </div>
+
+    <h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:24px 0 12px;font-weight:600">Split suggestion <span class="muted" style="font-size:var(--text-xs);font-weight:500">· project too broad</span></h2>
+    <div class="gard-card">
+      <div class="top"><span class="kind" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">split</span><span style="font-weight:600;font-size:var(--text-sm)">comma is accumulating two distinct topics</span><span class="cap">36 memories</span></div>
+      <div class="body">Memories cluster into <b class="mono">comma-openpilot</b> and <b class="mono">comma-personal-backend</b>. Splitting keeps each briefing focused; the parent stays as shared briefing.</div>
+      <div class="acts"><button class="btn small primary">Preview split</button><button class="btn small">Dismiss</button></div>
+    </div>
+
+    <h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:24px 0 12px;font-weight:600">Recently applied</h2>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Action</th><th>Detail</th><th>When</th></tr></thead>
+        <tbody>
+          <tr><td><span class="kind pop">merge</span></td><td>Folded 3 duplicate mw75 EEG notes into one protocol</td><td class="muted">2d</td></tr>
+          <tr><td><span class="kind" style="background:var(--brand-soft);color:var(--brand);border-color:transparent">split</span></td><td>arctop-agent → ios / android / backend (9 memories moved)</td><td class="muted">21d</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ==================== SETTINGS ==================== -->
+  <section class="view" id="view-settings" data-screen-label="B · Settings">
+    <div class="topbar"><div><h1>Settings</h1><div class="sub">Read-only view of the daemon configuration</div></div></div>
+    <div class="set-grid">
+      <div class="card">
+        <h2>Connection</h2>
+        <dl class="kv kv-lg">
+          <dt>Console URL</dt><dd class="mono" style="font-size:var(--text-2xs)">http://127.0.0.1:8787/console</dd>
+          <dt>API key</dt><dd class="mono">sk-seam-••••••••4f2a</dd>
+          <dt>Data dir</dt><dd class="mono" style="font-size:var(--text-2xs)">~/.seamless</dd>
+          <dt>Daemon</dt><dd><span class="badge ok"><span class="live-dot"></span>running</span></dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Briefing budgets</h2>
+        <dl class="kv kv-lg">
+          <dt>Max memories</dt><dd>40</dd>
+          <dt>Max tokens</dt><dd>6,000</dd>
+          <dt>Pin constraints</dt><dd><span class="badge ok">on</span></dd>
+          <dt>Parent inheritance</dt><dd><span class="badge ok">on</span></dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Gardener</h2>
+        <dl class="kv kv-lg">
+          <dt>Schedule</dt><dd class="mono" style="font-size:var(--text-xs)">nightly · 03:00</dd>
+          <dt>Merge threshold</dt><dd>0.86</dd>
+          <dt>Stale after</dt><dd>90 days</dd>
+          <dt>Auto-apply</dt><dd><span class="badge">off — proposals only</span></dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Retrieval windows</h2>
+        <dl class="kv kv-lg">
+          <dt>Available</dt><dd class="mono" style="font-size:var(--text-xs)">24h · 7d · 30d · all</dd>
+          <dt>Default</dt><dd>7d</dd>
+          <dt>Rebuild stats</dt><dd class="muted">on each overview load</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Appearance</h2>
+        <dl class="kv kv-lg"><dt>Theme</dt><dd><button class="btn small theme-toggle" type="button" id="theme-toggle-2"><span class="tt-ico ico-light"><i data-lucide="sun" class="ico"></i></span><span class="tt-ico ico-dark"><i data-lucide="moon" class="ico"></i></span><span class="tt-label">Light theme</span></button></dd></dl>
+      </div>
+      <div class="card">
+        <h2>Session</h2>
+        <p class="muted" style="font-size:var(--text-sm);margin:0 0 12px">The console trades the static key for a scoped cookie. Sign out to clear it.</p>
+        <a class="btn small danger" href="login-b.html"><i data-lucide="log-out" class="ico"></i> Sign out</a>
+      </div>
+    </div>
+  </section>
+
+  </main>
+</div>
+
+<div class="opt-banner"><span>Direction <b>B — Workspace</b></span><a class="go" href="projects-a.html">Direction A →</a></div>
+
+<script>
+lucide.createIcons();
+(function () {
+  var nav = document.getElementById('nav');
+  function show(view) {
+    document.querySelectorAll('.view').forEach(function (s) { s.classList.toggle('on', s.id === 'view-' + view); });
+    window.scrollTo(0, 0);
+  }
+  function setActive(view) { nav.querySelectorAll('a').forEach(function (x) { x.classList.toggle('active', x.getAttribute('data-view') === view); }); }
+  nav.addEventListener('click', function (e) {
+    var a = e.target.closest('a'); if (!a) return;
+    e.preventDefault();
+    var v = a.getAttribute('data-view'); if (!v) return;
+    setActive(v); show(v);
+  });
+  document.addEventListener('click', function (e) {
+    var open = e.target.closest('[data-open]');
+    if (open) { setActive('__none__'); show(open.getAttribute('data-open')); return; }
+    var backTo = e.target.closest('[data-back-to]');
+    if (backTo) { e.preventDefault(); var v = backTo.getAttribute('data-back-to'); setActive(v); show(v); return; }
+    var back = e.target.closest('[data-back]');
+    if (back) { e.preventDefault(); setActive('projects'); show('projects'); return; }
+  });
+  var tabs = document.getElementById('tabs');
+  if (tabs) tabs.addEventListener('click', function (e) {
+    var b = e.target.closest('button'); if (!b) return;
+    var t = b.getAttribute('data-tab');
+    tabs.querySelectorAll('button').forEach(function (x) { x.classList.toggle('on', x === b); });
+    document.querySelectorAll('.tabpanel').forEach(function (p) { p.classList.toggle('on', p.getAttribute('data-panel') === t); });
+  });
+})();
+(function () {
+  var root = document.documentElement;
+  function label(btn) { var l = btn.querySelector('.tt-label'); if (l) l.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; }
+  var btns = document.querySelectorAll('.theme-toggle');
+  btns.forEach(function (b) { label(b); b.addEventListener('click', function () { root.setAttribute('data-theme', root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'); btns.forEach(label); }); });
+})();
+(function () {
+  var root = document.getElementById('view-interactions');
+  if (!root) return;
+  var tabs = Array.prototype.slice.call(root.querySelectorAll('.ix-tab'));
+  var rows = Array.prototype.slice.call(root.querySelectorAll('.ix-row'));
+  tabs.forEach(function (t) {
+    t.addEventListener('click', function () {
+      tabs.forEach(function (x) { x.classList.remove('active'); });
+      t.classList.add('active');
+      var key = t.getAttribute('data-key');
+      rows.forEach(function (r) {
+        var s = r.getAttribute('data-session') || '';
+        var show = key === 'all' || (key === '__none__' && !s) || key === s;
+        r.classList.toggle('hide', !show);
+      });
+    });
+  });
+  var pause = document.getElementById('ix-pause');
+  var live = document.getElementById('ix-live');
+  if (pause) pause.addEventListener('click', function () {
+    var paused = pause.getAttribute('data-paused') === '1';
+    pause.setAttribute('data-paused', paused ? '0' : '1');
+    pause.textContent = paused ? 'Pause' : 'Resume';
+    if (live) live.classList.toggle('off', !paused);
+  });
+})();
+</script>
+</body>
+</html>
+

@@ -22,7 +22,7 @@ var consoleCSS []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
-	"memories", "notes", "retrieval", "tasks", "plans", "plan", "gardener", "settings", "event",
+	"memories", "memory", "notes", "note", "retrieval", "tasks", "task", "plans", "plan", "gardener", "settings", "event",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -33,8 +33,10 @@ var peekNames = []string{"memory", "note", "task", "project", "session", "event"
 
 // detailPageNames are the peek entities that have no pre-existing full page and
 // so get the generic layout+detail wrapper as their default (non-peek) render.
-// session/event are excluded: they already own session.html/event.html.
-var detailPageNames = []string{"memory", "note", "task", "project"}
+// memory/note/task/session/event own bespoke full pages; only project still falls
+// back here -- and only for ?peek=1/JSON, since its full page is the tabbed
+// workspace (projectWorkspace), never the generic wrapper.
+var detailPageNames = []string{"project"}
 
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
@@ -169,6 +171,14 @@ func (s *Service) renderDetail(w http.ResponseWriter, r *http.Request, name stri
 	}
 	if r.URL.Query().Get("peek") == "1" {
 		s.renderFragment(w, r, name, pd.Data)
+		return
+	}
+	// Default: a full layout-wrapped page. An entity with a bespoke full page
+	// (e.g. memory owns memory.html) renders it so its detail view matches the
+	// rest of the console; the rest fall back to the generic layout+detail
+	// wrapper keyed "peek-<name>".
+	if _, ok := s.pages[name]; ok {
+		s.render(w, r, name, pd)
 		return
 	}
 	s.render(w, r, "peek-"+name, pd)
