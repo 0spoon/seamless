@@ -183,7 +183,7 @@ func (s *Service) memoryArchive(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No memory with id "+id+".")
 		return
 	}
 	if idx.InvalidAt != nil {

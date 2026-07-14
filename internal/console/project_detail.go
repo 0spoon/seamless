@@ -183,7 +183,7 @@ func (s *Service) projectDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No project with slug "+slug+".")
 		return
 	}
 	if r.URL.Query().Get("peek") == "1" || wantsJSON(r) {

@@ -23,8 +23,8 @@
   --border-strong: #d3cfc3;
   --ink:           #1c1e24;
   --ink-2:         #3b3e46;
-  --muted:         #6b6f78;
-  --faint:         #9a9ca4;
+  --muted:         #676a72; /* AA: 4.71:1 on --surface-2 (neutral chips) */
+  --faint:         #6f7178; /* AA: 4.5:1 small text on --surface/--paper */
 
   /* brand (indigo) + pop (coral) */
   --brand:        #3f56e8;
@@ -32,16 +32,18 @@
   --brand-soft:   #eaecfd;
   --brand-ink:    #ffffff;
   --pop:          #ff6a3d;
-  --pop-strong:   #e8542a;
+  --pop-strong:   #b0431a; /* AA: readable as text on --pop-soft + as button bg under white */
   --pop-soft:     #ffece4;
+  --pop-ink:      #3a1405; /* dark ink for text on the bright --pop button */
 
   /* semantic */
-  --ok:          #14884a;
+  --ok:          #0e7a42; /* AA: 4.76:1 on --ok-soft */
   --ok-soft:     #e2f5ea;
-  --warn:        #a56a10;
+  --warn:        #855510; /* AA: 5.5:1 on --warn-soft */
   --warn-soft:   #f8efd6;
-  --danger:      #d33f38;
+  --danger:      #c02e27; /* AA: 4.8:1 on --danger-soft */
   --danger-soft: #fbe7e5;
+  --danger-ink:  #ffffff; /* text on a solid --danger fill (btn.danger:hover) */
 
   /* semantic aliases (product code consumes these) */
   --text-primary:   var(--ink);
@@ -114,7 +116,7 @@
   --ink:          #e8eaf0;
   --ink-2:        #c4c8d2;
   --muted:        #949aa8;
-  --faint:        #6b717d;
+  --faint:        #8b909d; /* AA: 4.9:1 on the dark surface */
   --brand:        #7d8cff;
   --brand-strong: #97a3ff;
   --brand-soft:   #202748;
@@ -128,6 +130,12 @@
   --warn-soft:    #33280f;
   --danger:       #f0857d;
   --danger-soft:  #3a1c1a;
+  --danger-ink:   #3a1c1a; /* dark ink on the light-red dark-theme --danger fill */
+  /* per-kind hues -- brightened for the dark surface, matching the aliased four */
+  --k-reference:  #2dd4bf;
+  --k-decision:   #a78bfa;
+  --k-protocol:   #f2777b;
+  --k-stage:      #38bdf8;
   --scrim:        rgba(0, 0, 0, 0.55);
   --shadow-xs: none;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
@@ -140,10 +148,11 @@
   :root:not([data-theme="light"]) {
     --paper:#101217; --surface:#181b22; --surface-2:#20242e; --surface-3:#2a2f3a;
     --border:#2b303b; --border-strong:#3a4150; --ink:#e8eaf0; --ink-2:#c4c8d2;
-    --muted:#949aa8; --faint:#6b717d; --brand:#7d8cff; --brand-strong:#97a3ff;
+    --muted:#949aa8; --faint:#8b909d; --brand:#7d8cff; --brand-strong:#97a3ff;
     --brand-soft:#202748; --brand-ink:#0d0f14; --pop:#ff855f; --pop-strong:#ff9d7d;
     --pop-soft:#3a251c; --ok:#45c07f; --ok-soft:#143020; --warn:#e0b25b;
-    --warn-soft:#33280f; --danger:#f0857d; --danger-soft:#3a1c1a;
+    --warn-soft:#33280f; --danger:#f0857d; --danger-soft:#3a1c1a; --danger-ink:#3a1c1a;
+    --k-reference:#2dd4bf; --k-decision:#a78bfa; --k-protocol:#f2777b; --k-stage:#38bdf8;
     --scrim:rgba(0,0,0,0.55);
     --shadow-xs:none; --shadow-sm:0 1px 2px rgba(0,0,0,0.35);
     --shadow-md:0 4px 14px rgba(0,0,0,0.40); --shadow-lg:0 12px 32px rgba(0,0,0,0.55);
@@ -424,7 +433,8 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
   border: 1px solid var(--border);
 }
 /* Toned event chips (activity / timeline) -- see evtTone in render.go. */
-.kind.brand { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
+.kind.brand  { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
+.kind.accent { background: var(--brand-soft); color: var(--brand); border-color: transparent; }
 .kind.ok    { background: var(--ok-soft); color: var(--ok); border-color: transparent; }
 .kind.pop   { background: var(--pop-soft); color: var(--pop-strong); border-color: transparent; }
 .kind.warn  { background: var(--warn-soft); color: var(--warn); border-color: transparent; }
@@ -437,6 +447,15 @@ code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 .section > h2 .count { font-size: var(--text-xs); color: var(--muted); font-weight: 500; }
 
 .empty { color: var(--muted); font-style: italic; padding: 34px 18px; text-align: center; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+
+/* Styled in-console error page (404/400/500) -- sidebar chrome + a way back, so
+   a stale/mistyped URL never drops the observer on a bare browser error. */
+.errpage { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 8px; min-height: 52vh; padding: 24px; }
+.errpage .err-ico { color: var(--warn); display: inline-flex; }
+.errpage .err-ico .ico { width: 34px; height: 34px; }
+.errpage .err-code { font-family: var(--font-display); font-weight: 700; font-size: var(--text-2xl); color: var(--faint); letter-spacing: var(--tracking-wide); font-variant-numeric: tabular-nums; margin-top: 6px; }
+.errpage h1.err-head { font-family: var(--font-display); font-size: var(--text-xl); margin: 0; font-weight: 600; letter-spacing: var(--tracking-tight); }
+.errpage .err-msg { color: var(--muted); font-size: var(--text-sm); max-width: 460px; margin: 0 0 6px; word-break: break-word; }
 
 details > summary { font-family: var(--font-display); }
 
@@ -466,10 +485,10 @@ details > summary { font-family: var(--font-display); }
 .btn:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .btn.primary { background: var(--brand); border-color: var(--brand); color: var(--brand-ink); }
 .btn.primary:hover, .btn.primary:active { background: var(--brand-strong); border-color: var(--brand-strong); }
-.btn.pop { background: var(--pop); border-color: var(--pop); color: #fff; }
-.btn.pop:hover, .btn.pop:active { background: var(--pop-strong); border-color: var(--pop-strong); }
+.btn.pop { background: var(--pop); border-color: var(--pop); color: var(--pop-ink); }
+.btn.pop:hover, .btn.pop:active { background: var(--pop-strong); border-color: var(--pop-strong); color: var(--brand-ink); }
 .btn.danger { color: var(--danger); border-color: var(--danger); background: var(--danger-soft); }
-.btn.danger:hover, .btn.danger:active { background: var(--danger); color: #fff; }
+.btn.danger:hover, .btn.danger:active { background: var(--danger); color: var(--danger-ink); }
 .btn.small { padding: 4px 10px; font-size: var(--text-xs); border-radius: var(--radius-xs); }
 .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
@@ -545,7 +564,7 @@ details > summary { font-family: var(--font-display); }
 /* Area chart -- injection trend */
 .area { padding: 6px 0 2px; }
 .area-svg { display: block; overflow: visible; width: 100%; }
-.area-ticks { display: flex; justify-content: space-between; margin-top: 8px; font-size: var(--text-2xs); color: var(--faint); font-family: var(--font-mono); }
+.area-ticks { display: flex; justify-content: space-between; margin-top: 8px; font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
 .area-fill { animation: seam-fade 0.8s var(--ease-out) both; }
 .area-line { stroke-dasharray: 1; animation: area-draw 1.1s var(--ease-out) both; }
 .area-peak { animation: seam-fade 0.4s ease 0.85s both; }
@@ -555,7 +574,7 @@ details > summary { font-family: var(--font-display); }
 .cov-fill { animation: seam-fade 0.8s var(--ease-out) both; }
 .cov-line { animation: seam-fade 0.9s var(--ease-out) both; }
 .cov-dot { animation: seam-fade 0.4s ease 0.5s both; }
-.cov-axis { fill: var(--faint); font-size: 10px; font-family: var(--font-mono); }
+.cov-axis { fill: var(--muted); font-size: 10px; font-family: var(--font-mono); }
 
 /* Bar chart -- events by kind */
 .barchart { display: flex; align-items: flex-end; gap: 10px; height: 168px; padding: 8px 2px 0; }
@@ -563,7 +582,7 @@ details > summary { font-family: var(--font-display); }
 .bartrack { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
 .barval { font-size: var(--text-2xs); font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
 .bar { width: 100%; max-width: 40px; min-height: 3px; border-radius: var(--radius-xs) var(--radius-xs) 0 0; transform-origin: bottom; animation: bar-grow 0.7s var(--ease-out) both; }
-.barlabel { margin-top: 7px; text-align: center; font-size: var(--text-2xs); color: var(--faint); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.barlabel { margin-top: 7px; text-align: center; font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
 
 /* Stacked bar -- task pipeline */
@@ -654,10 +673,14 @@ details > summary { font-family: var(--font-display); }
 }
 
 /* Phone -- collapse the nav to icons and drop the sign-out label so the top bar
-   fits, and shrink the big display numerals a touch. */
+   fits, and shrink the big display numerals a touch. The labels are visually
+   hidden (not display:none) so they stay in the accessibility tree: the nav
+   icons are aria-hidden, so a screen reader would otherwise hit nameless links. */
 @media (max-width: 460px) {
-  .nav-label { display: none; }
-  .side-foot form .btn span { display: none; }
+  .nav-label, .side-foot form .btn span {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+  }
   .main { padding: 16px 12px 48px; }
   .stat .value { font-size: var(--text-2xl); }
 }
@@ -1115,6 +1138,26 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .health .mtr > span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--brand); }
 .health .mtr > span.ok { background: var(--ok); }
 .work-dot { display: inline-flex; align-items: center; gap: 5px; font-size: var(--text-2xs); color: var(--ok); font-weight: 600; }
+
+/* Board responsive collapse: the 6-track grid holds ~566px of fixed columns, so
+   the project-name track is crushed (and the right columns clip under
+   overflow:hidden) once the content band narrows. Drop the lowest-value columns
+   in step -- Last active + Memories, then Open tasks, then Health -- keeping the
+   header and rows in lockstep. Cells hide by source position (nth-child); the
+   grid template loses the matching track so the visible cells stay aligned. */
+@media (max-width: 1000px) {
+  .board-colhd, .prow { grid-template-columns: minmax(0, 1fr) 120px 78px 84px; }
+  .board-colhd span:nth-child(5), .board-colhd span:nth-child(6),
+  .prow > :nth-child(5), .prow > :nth-child(6) { display: none; }
+}
+@media (max-width: 720px) {
+  .board-colhd, .prow { grid-template-columns: minmax(0, 1fr) 108px 72px; }
+  .board-colhd span:nth-child(4), .prow > :nth-child(4) { display: none; }
+}
+@media (max-width: 460px) {
+  .board-colhd, .prow { grid-template-columns: minmax(0, 1fr) 66px; }
+  .board-colhd span:nth-child(2), .prow > :nth-child(2) { display: none; }
+}
 
 /* --- DETAIL: header + tabs ------------------------------------------------ */
 .detail-head { margin-bottom: 14px; }

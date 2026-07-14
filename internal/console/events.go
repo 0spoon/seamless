@@ -44,7 +44,7 @@ type eventDetailData struct {
 func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.cfg.Events == nil {
-		http.NotFound(w, r)
+		s.notFound(w, r, "Event history is not available on this server.")
 		return
 	}
 	id := r.PathValue("id")
@@ -54,7 +54,7 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No event with id "+id+".")
 		return
 	}
 

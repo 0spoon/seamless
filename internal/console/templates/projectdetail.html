@@ -50,7 +50,7 @@
         <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
         <tbody>
           {{range .Recent}}
-          <tr class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td><td>{{.Summary}}</td></tr>
+          <tr class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
           {{end}}
         </tbody>
       </table>
@@ -82,7 +82,7 @@
       <thead><tr><th>Task</th><th>Status</th><th>Depends on</th><th>Created</th></tr></thead>
       <tbody>
         {{range .Ready}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> <a href="/console/tasks/{{.ID}}">{{.Title}}</a></td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -111,12 +111,12 @@
       <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Memories}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><strong>{{.Name}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="6"><div class="empty">No memories in {{.Slug}}</div></td></tr>{{end}}
         {{if .Inherited}}
         <tr><td colspan="6" style="background:var(--surface-2);color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);font-weight:600">Inherited &mdash; counted in parent/global scope, not {{.Slug}}</td></tr>
         {{range .Inherited}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><strong>{{.Name}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{end}}
         {{end}}
       </tbody>
@@ -131,7 +131,7 @@
       <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Notes}}
-        <tr class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><strong>{{.Title}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><a href="/console/notes/{{.ID}}"><strong>{{.Title}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="3"><div class="empty">No notes in {{.Slug}}</div></td></tr>
         {{end}}
       </tbody>

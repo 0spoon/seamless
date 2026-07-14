@@ -41,14 +41,14 @@
   </main>
 </div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
-<aside id="peek" class="peek" hidden aria-label="Detail panel">
+<aside id="peek" class="peek" hidden role="dialog" aria-modal="false" aria-label="Detail panel">
   <div class="peek-chrome">
     <button class="peek-back btn small" type="button" title="Back" aria-label="Back">&larr;</button>
     <span class="peek-spacer"></span>
     <a class="peek-open btn small" href="#" title="Open full page">open &nearr;</a>
     <button class="peek-close btn small" type="button" title="Close" aria-label="Close">&times;</button>
   </div>
-  <div class="peek-content"></div>
+  <div class="peek-content" aria-live="polite"></div>
 </aside>
 <script>
 (function () {
@@ -80,7 +80,9 @@
   var panel = document.getElementById('peek');
   var content = panel && panel.querySelector('.peek-content');
   var openLink = panel && panel.querySelector('.peek-open');
+  var closeBtn = panel && panel.querySelector('.peek-close');
   var stack = [];
+  var lastTrigger = null; // element to restore focus to when the drawer closes
 
   function peekURL(href) { return href + (href.indexOf('?') >= 0 ? '&' : '?') + 'peek=1'; }
   function targetHref(el) {
@@ -97,7 +99,16 @@
     }
   }
   function show() { panel.hidden = false; document.body.classList.add('peek-open'); }
-  function hide() { panel.hidden = true; document.body.classList.remove('peek-open'); stack = []; clearHash(); }
+  function hide() {
+    panel.hidden = true;
+    document.body.classList.remove('peek-open');
+    stack = [];
+    clearHash();
+    // Return focus to whatever opened the drawer, so keyboard users aren't
+    // dropped at the top of the document.
+    if (lastTrigger && typeof lastTrigger.focus === 'function') { try { lastTrigger.focus(); } catch (e) {} }
+    lastTrigger = null;
+  }
   function load(href) {
     return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
       content.innerHTML = html;
@@ -107,10 +118,14 @@
   }
   function open(href, push) {
     if (!panel || !href) return;
+    var wasHidden = panel.hidden;
     if (push !== false) stack.push(href);
     show();
     setHash(href);
     load(href);
+    // On a fresh open, move focus into the dialog (the close button) so the
+    // keyboard is inside the drawer and Escape/Tab act on it.
+    if (wasHidden && closeBtn) { try { closeBtn.focus(); } catch (e) {} }
   }
 
   document.addEventListener('click', function (e) {
@@ -119,7 +134,7 @@
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // let modified clicks open a tab
       if (e.target.closest('button, form')) return; // inline actions (archive) act normally
       var href = targetHref(peek);
-      if (href) { e.preventDefault(); open(href, true); return; }
+      if (href) { e.preventDefault(); lastTrigger = e.target.closest('a[href]') || peek; open(href, true); return; }
     }
     var row = e.target.closest ? e.target.closest('.row-link[data-href]') : null;
     if (!row) return;

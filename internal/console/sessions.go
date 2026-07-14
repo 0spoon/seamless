@@ -131,7 +131,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No session with id "+id+".")
 		return
 	}
 

@@ -29,7 +29,7 @@
             {{range .Timeline}}
             <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
               <td class="muted" title="{{.When}}">{{ago .When}}</td>
-              <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
+              <td><a href="/console/events/{{.ID}}" data-peek><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
               <td>{{.Summary}}</td>
             </tr>
             {{end}}
