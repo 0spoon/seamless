@@ -12,10 +12,11 @@ import (
 )
 
 // The peek handlers render a single entity three ways through renderDetail: JSON
-// for the CLI, an HTML fragment for the drawer (?peek=1), and a full
-// layout-wrapped page by default (a shareable, no-JS fallback). Every entity
-// reference across the console links to one of these routes with data-peek, so
-// the drawer can surface related items without a page navigation.
+// for the CLI, an HTML fragment for the in-page detail pane (?peek=1), and a
+// full layout-wrapped page by default (a shareable, no-JS fallback). Every
+// entity reference across the console links to one of these routes with
+// data-peek, so split list screens can surface related items in the pane
+// without a page navigation.
 
 // memoryRef is a compact pointer to another memory (a supersession neighbor),
 // enough to render a peek link.

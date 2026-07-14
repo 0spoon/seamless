@@ -306,10 +306,10 @@ func TestPlans_HTMLShellRenders(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "agent-cache")
 }
 
-// TestPlanPeek_FragmentAndAffordance covers the plan drawer path added when
+// TestPlanPeek_FragmentAndAffordance covers the plan fragment path added when
 // plans rows became peek triggers: planDetail now serves three ways through
 // renderDetail (JSON / ?peek=1 fragment / full plan.html page), and the list
-// rows carry data-peek so a whole-row click opens the drawer.
+// rows carry data-peek so a whole-row click loads the detail pane.
 func TestPlanPeek_FragmentAndAffordance(t *testing.T) {
 	_, mgr, mux := newConsoleWithFiles(t)
 	seedPlanComposition(t, mgr)
@@ -330,7 +330,7 @@ func TestPlanPeek_FragmentAndAffordance(t *testing.T) {
 	require.Contains(t, full.Body.String(), "<html")
 	require.Contains(t, full.Body.String(), "Do the thing.")
 
-	// The list rows are peek triggers now (whole-row click opens the drawer).
+	// The list rows are peek triggers now (whole-row click loads the pane).
 	list := getPeek(t, mux, "/console/plans?w=all")
 	require.Equal(t, http.StatusOK, list.Code)
 	require.Contains(t, list.Body.String(), `data-href="/console/plans/my-plan" data-peek`)

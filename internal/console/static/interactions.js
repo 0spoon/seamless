@@ -402,8 +402,8 @@
   // Auto-upgrade any server-rendered <pre class="ix-raw" data-ix-title> on the
   // page into formatted, copyable IX sections once the DOM is ready, so a plain
   // detail page (event, session timeline, project tab) needs no per-page script
-  // to get the feed's value rendering. Fragments injected later (the peek drawer)
-  // are enhanced by the drawer loader in layout.html.
+  // to get the feed's value rendering. Fragments injected later (the detail
+  // pane) are enhanced by the pane loader in layout.html.
   function autoEnhance() { try { enhance(document); } catch (e) {} }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', autoEnhance);

@@ -44,15 +44,6 @@
   </main>
 </div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
-<aside id="peek" class="peek" hidden role="dialog" aria-modal="false" aria-label="Detail panel">
-  <div class="peek-chrome">
-    <button class="peek-back btn small" type="button" title="Back" aria-label="Back">&larr;</button>
-    <span class="peek-spacer"></span>
-    <a class="peek-open btn small" href="#" title="Open full page">open &nearr;</a>
-    <button class="peek-close btn small" type="button" title="Close" aria-label="Close">&times;</button>
-  </div>
-  <div class="peek-content" aria-live="polite"></div>
-</aside>
 <script src="/console/static/interactions.js"></script>
 <script>
 (function () {
@@ -80,134 +71,26 @@
   if (pill) pill.onclick = function () { location.reload(); };
 })();
 (function () {
-  /* Peek panel: intercept clicks on [data-peek] elements (links and whole
-     rows), fetch the entity's fragment (?peek=1), and slide it into the fixed
-     right drawer with a back-stack + #peek= deep-link. Falls back to plain
-     whole-row navigation for a .row-link[data-href] with no data-peek. Server
-     fragments are auto-escaped html/template output, injected same-origin. */
-  // Split list screens (.list-detail-split) render detail in an in-page pane
-  // below the list, not this right drawer -- stand down entirely there.
+  /* Whole-row navigation on screens WITHOUT a detail pane (overview,
+     project-detail, gardener, ...): a .row-link[data-href] row navigates to
+     its full page. [data-peek] anchors on these screens need no JS -- they
+     navigate natively; the attribute only matters where a pane exists.
+     Split list screens are owned by the pane IIFE below -- stand down there. */
   if (document.querySelector('.list-detail-split')) return;
-  var panel = document.getElementById('peek');
-  var content = panel && panel.querySelector('.peek-content');
-  var openLink = panel && panel.querySelector('.peek-open');
-  var closeBtn = panel && panel.querySelector('.peek-close');
-  var stack = [];
-  var lastTrigger = null; // element to restore focus to when the drawer closes
-
-  function peekURL(href) { return href + (href.indexOf('?') >= 0 ? '&' : '?') + 'peek=1'; }
-  function targetHref(el) {
-    if (el.getAttribute('href')) return el.getAttribute('href');
-    var h = el.closest('[data-href]');
-    return h ? h.getAttribute('data-href') : null;
-  }
-  var pushedPeek = false; // true once we own a browser-history entry for the drawer
-  function show() { panel.hidden = false; }
-  // hideNow tears down the UI only; it never touches history (used by popstate,
-  // where history has already moved, and by the fresh-deep-link close path).
-  function hideNow() {
-    panel.hidden = true;
-    stack = [];
-    pushedPeek = false;
-    // Return focus to whatever opened the drawer, so keyboard users aren't
-    // dropped at the top of the document.
-    if (lastTrigger && typeof lastTrigger.focus === 'function') { try { lastTrigger.focus(); } catch (e) {} }
-    lastTrigger = null;
-  }
-  // requestClose is the user-initiated close (X, Escape, back off the last
-  // level). If we pushed a history entry, step back so browser history stays in
-  // sync (popstate then calls hideNow); otherwise hide and strip a deep-link hash.
-  function requestClose() {
-    if (pushedPeek) { history.back(); return; }
-    if (location.hash.indexOf('#peek=') === 0) {
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    }
-    hideNow();
-  }
-  function load(href) {
-    return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
-      content.innerHTML = html;
-      if (window.IX) window.IX.enhance(content);
-      content.scrollTop = 0;
-      if (openLink) openLink.setAttribute('href', href);
-    }).catch(function () {});
-  }
-  function open(href, push) {
-    if (!panel || !href) return;
-    var wasHidden = panel.hidden;
-    if (push !== false) stack.push(href);
-    show();
-    load(href);
-    // Opening the drawer pushes ONE history entry so browser Back closes it;
-    // drilling into a related item replaces that entry (Back still closes the
-    // whole drawer, while the in-drawer back arrow steps the internal stack).
-    var hash = '#peek=' + encodeURIComponent(href);
-    try {
-      if (wasHidden) { history.pushState({ peek: 1 }, '', hash); pushedPeek = true; }
-      else { history.replaceState({ peek: 1 }, '', hash); }
-    } catch (e) {}
-    // On a fresh open, move focus into the dialog (the close button) so the
-    // keyboard is inside the drawer and Escape/Tab act on it.
-    if (wasHidden && closeBtn) { try { closeBtn.focus(); } catch (e) {} }
-  }
-
   document.addEventListener('click', function (e) {
-    var peek = e.target.closest ? e.target.closest('[data-peek]') : null;
-    if (peek && panel) {
-      if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // let modified clicks open a tab
-      if (e.target.closest('button, form')) return; // inline actions (archive) act normally
-      // A plain link inside a peek row (e.g. a memory's "edit" link) is not the
-      // peek target -- let it navigate to its own href instead of being hijacked.
-      var plainLink = e.target.closest('a[href]');
-      if (plainLink && !plainLink.hasAttribute('data-peek')) return;
-      var href = targetHref(peek);
-      if (href) { e.preventDefault(); lastTrigger = e.target.closest('a[href]') || peek; open(href, true); return; }
-    }
     var row = e.target.closest ? e.target.closest('.row-link[data-href]') : null;
     if (!row) return;
-    if (e.target.closest('a, button')) return;
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+    if (e.target.closest('a, button, form')) return; // inner links + inline actions act normally
     var sel = window.getSelection && window.getSelection();
     if (sel && sel.type === 'Range' && sel.toString()) return;
     location.href = row.getAttribute('data-href');
   });
-
-  if (panel) {
-    var back = panel.querySelector('.peek-back');
-    var close = panel.querySelector('.peek-close');
-    if (back) back.onclick = function () {
-      stack.pop();
-      if (stack.length === 0) { requestClose(); return; }
-      open(stack[stack.length - 1], false);
-    };
-    if (close) close.onclick = requestClose;
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) requestClose(); });
-    // Browser Back/Forward: reflect the URL's #peek= state in the drawer.
-    window.addEventListener('popstate', function () {
-      var mm = location.hash.match(/^#peek=(.+)$/);
-      if (mm) {
-        var hp = decodeURIComponent(mm[1]);
-        stack = [hp]; pushedPeek = true; show(); load(hp);
-        if (closeBtn) { try { closeBtn.focus(); } catch (e) {} }
-      } else if (!panel.hidden) {
-        hideNow();
-      }
-    });
-    // Deep-link on load: the current entry already carries #peek, so adopt it
-    // without pushing a new one (Back should leave the page, not reopen).
-    var m = location.hash.match(/^#peek=(.+)$/);
-    if (m) {
-      try {
-        var h0 = decodeURIComponent(m[1]);
-        stack = [h0]; pushedPeek = false; show(); load(h0);
-        if (closeBtn) closeBtn.focus();
-      } catch (e) {}
-    }
-  }
 })();
 (function () {
   /* Detail-below split: on a list screen wrapped in .list-detail-split, a
      [data-peek] row/link fetches the entity fragment (?peek=1) and loads it into
-     #detail-pane below the list (instead of the right drawer). The clicked row is
+     #detail-pane below the list. The clicked row is
      marked .selected/aria-current; a #peek= hash + one history entry make browser
      Back deselect, while in-pane wiki-links/chips drill into the same pane (each a
      new history entry, so Back steps back through them). Inert unless the page has
@@ -333,9 +216,9 @@
 })();
 (function () {
   /* Quick-copy: document-level delegation on .copy-btn[data-copy] so it keeps
-     working after the peek drawer swaps .peek-content innerHTML. Copies the
+     working after the detail pane swaps .detail-pane-body innerHTML. Copies the
      FULL value, flashes a check for ~1s, and stops propagation so copying
-     inside a table row doesn't also open the peek drawer / navigate. */
+     inside a table row doesn't also select the row / navigate. */
   function flash(btn) {
     btn.classList.add('copied');
     btn.setAttribute('aria-label', 'Copied');
