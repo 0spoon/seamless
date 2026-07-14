@@ -126,18 +126,24 @@ const (
 	SessionExpired SessionStatus = "expired"
 )
 
-// SessionIdleTTL is the no-activity age beyond which an active session is
-// considered dead: heartbeats (MCP tool calls for bound sessions, the ambient
+// SessionIdleTTL is the default no-activity age beyond which an active session
+// is considered dead: heartbeats (MCP tool calls for bound sessions, the ambient
 // hooks for cc/* sessions) bump updated_at, and anything quiet past this is
 // reaped to SessionExpired and shown as idle in the console. It is the canonical
 // liveness threshold shared by the gardener reaper and the console; it must
 // comfortably exceed a long single agent turn so live work is never reaped.
+// gardener.session_idle_minutes overrides it; every consumer takes the
+// configured duration and falls back to this const when given <= 0.
 const SessionIdleTTL = 45 * time.Minute
 
-// LiveAsOf reports whether an active session counts as live at now: still active
-// and updated within SessionIdleTTL. Completed/expired sessions are never live.
-func (s Session) LiveAsOf(now time.Time) bool {
-	return s.Status == SessionActive && now.Sub(s.UpdatedAt) < SessionIdleTTL
+// LiveAsOf reports whether an active session counts as live at now: still
+// active and updated within ttl (<= 0 falls back to SessionIdleTTL).
+// Completed/expired sessions are never live.
+func (s Session) LiveAsOf(now time.Time, ttl time.Duration) bool {
+	if ttl <= 0 {
+		ttl = SessionIdleTTL
+	}
+	return s.Status == SessionActive && now.Sub(s.UpdatedAt) < ttl
 }
 
 // Session is one agent work session. Ambient sessions are created by the

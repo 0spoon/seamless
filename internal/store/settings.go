@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 )
 
@@ -172,6 +173,49 @@ func dedupeSlugs(slugs []string) []string {
 	return out
 }
 
+// SettingBriefingConfig is the settings key holding the console-saved briefing
+// override: a JSON-encoded config.Briefing. When present it layers over the
+// file/env briefing config (see BriefingConfig), so the owner can tune the
+// SessionStart injection from the console without editing seamless.yaml or
+// restarting the daemon.
+const SettingBriefingConfig = "briefing_config"
+
+// BriefingConfig returns the effective briefing config: base (the file/env
+// values) with the console-saved override row, when present, decoded over it.
+// overridden reports whether such a row exists. Absent fields in a stored
+// override keep their base value, so a row written by an older console version
+// stays forward-compatible.
+func BriefingConfig(ctx context.Context, db *sql.DB, base config.Briefing) (cfg config.Briefing, overridden bool, err error) {
+	raw, found, err := GetSetting(ctx, db, SettingBriefingConfig)
+	if err != nil {
+		return base, false, err
+	}
+	if !found || strings.TrimSpace(raw) == "" {
+		return base, false, nil
+	}
+	cfg = base
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return base, false, fmt.Errorf("store.BriefingConfig: decode: %w", err)
+	}
+	return cfg, true, nil
+}
+
+// SetBriefingConfig persists b as the console briefing override. Callers
+// validate first (config.Briefing.Validate); this only encodes and stores.
+func SetBriefingConfig(ctx context.Context, db *sql.DB, b config.Briefing) error {
+	raw, err := json.Marshal(b)
+	if err != nil {
+		return fmt.Errorf("store.SetBriefingConfig: %w", err)
+	}
+	return SetSetting(ctx, db, SettingBriefingConfig, string(raw))
+}
+
+// ClearBriefingConfig removes the console briefing override, reverting the
+// effective briefing config to the file/env base.
+func ClearBriefingConfig(ctx context.Context, db *sql.DB) error {
+	return DeleteSetting(ctx, db, SettingBriefingConfig)
+}
+
 // GetSetting returns the value for a settings key. found is false when unset.
 func GetSetting(ctx context.Context, db *sql.DB, key string) (string, bool, error) {
 	var v string
@@ -192,6 +236,14 @@ func SetSetting(ctx context.Context, db *sql.DB, key, value string) error {
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	if err != nil {
 		return fmt.Errorf("store.SetSetting: %w", err)
+	}
+	return nil
+}
+
+// DeleteSetting removes a settings key. Deleting an absent key is a no-op.
+func DeleteSetting(ctx context.Context, db *sql.DB, key string) error {
+	if _, err := db.ExecContext(ctx, `DELETE FROM settings WHERE key = ?`, key); err != nil {
+		return fmt.Errorf("store.DeleteSetting: %w", err)
 	}
 	return nil
 }

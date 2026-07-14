@@ -98,7 +98,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		if !sessionMatches(sess.Name, sess.ProjectSlug, plain, sess.ID, q) {
 			continue
 		}
-		live := sess.LiveAsOf(now)
+		live := sess.LiveAsOf(now, s.cfg.SessionIdleTTL)
 		switch sess.Status {
 		case core.SessionActive:
 			if live {

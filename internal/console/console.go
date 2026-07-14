@@ -43,7 +43,14 @@ type Config struct {
 	DataDir     string // for resolving memory/note file paths to absolute editor links
 	Budgets     config.Budgets
 	GardenerCfg config.Gardener // for the Settings page (read-only display)
-	Logger      *slog.Logger
+	// BriefingCfg is the file/env briefing base the Settings page edits: the
+	// form's effective values are this plus the store's override row, and a
+	// save writes the override (never the file).
+	BriefingCfg config.Briefing
+	// SessionIdleTTL is the configured live/idle threshold for session displays
+	// (gardener.session_idle_minutes); <= 0 falls back to core.SessionIdleTTL.
+	SessionIdleTTL time.Duration
+	Logger         *slog.Logger
 }
 
 // Service renders the console and serves its routes.
@@ -103,6 +110,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
 	mux.HandleFunc("POST /console/gardener/{id}/retarget", s.auth(s.gardenerRetarget))
 	mux.HandleFunc("GET /console/settings", s.auth(s.settings))
+	mux.HandleFunc("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
+	mux.HandleFunc("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
 	mux.HandleFunc("GET /console/events", s.auth(s.sse))
 	mux.HandleFunc("GET /console/events/{id}", s.auth(s.eventDetail))
 }
@@ -370,7 +379,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	// "Projects at a glance": the top projects by recent activity, from the same
 	// batched board query -- strict per-slug counts, so these rows equal the
 	// board's rows exactly. The global ("") scope is not a project row.
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now, s.cfg.SessionIdleTTL)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

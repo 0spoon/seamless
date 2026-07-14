@@ -45,6 +45,10 @@ type Config struct {
 	// draft/presented after this many days. 0 disables the pass -- deliberately
 	// not defaulted, mirroring ToolEventRetentionDays.
 	StalePlanDays int
+	// SessionIdle is the no-activity age past which the reaper expires an
+	// active session. Non-positive falls back to core.SessionIdleTTL, keeping
+	// the reaper cutoff aligned with the console's live/idle derivation.
+	SessionIdle time.Duration
 }
 
 // withDefaults fills non-positive fields from the package defaults.
@@ -61,6 +65,9 @@ func (c Config) withDefaults() Config {
 	if c.Interval <= 0 {
 		c.Interval = defaultInterval
 	}
+	if c.SessionIdle <= 0 {
+		c.SessionIdle = core.SessionIdleTTL
+	}
 	return c
 }
 
@@ -73,6 +80,7 @@ func FromConfig(g config.Gardener) Config {
 		Interval:               time.Duration(g.IntervalMinutes) * time.Minute,
 		ToolEventRetentionDays: g.ToolEventRetentionDays,
 		StalePlanDays:          g.StalePlanDays,
+		SessionIdle:            time.Duration(g.SessionIdleMinutes) * time.Minute,
 	}
 }
 
@@ -185,7 +193,8 @@ func (s *Service) pruneToolEvents(ctx context.Context) {
 	}
 }
 
-// reapStaleSessions closes sessions idle past core.SessionIdleTTL: it flips each
+// reapStaleSessions closes sessions idle past the configured SessionIdle
+// threshold (gardener.session_idle_minutes): it flips each
 // to expired, returns any task claims it still held to the queue, and records a
 // session.ended event stamped reason=expired. Best-effort: a failure is logged,
 // not returned, so a reap problem never aborts the pass. This is the backstop for
@@ -193,7 +202,7 @@ func (s *Service) pruneToolEvents(ctx context.Context) {
 // session_end or the SessionEnd hook, neither of which fires on a crash/kill.
 func (s *Service) reapStaleSessions(ctx context.Context) {
 	now := s.now().UTC()
-	cutoff := now.Add(-core.SessionIdleTTL)
+	cutoff := now.Add(-s.cfg.SessionIdle)
 	stale, err := store.ExpireStaleSessions(ctx, s.db, cutoff)
 	if err != nil {
 		s.logger.Warn("gardener: reap stale sessions", "error", err)
@@ -216,7 +225,7 @@ func (s *Service) reapStaleSessions(ctx context.Context) {
 			}
 		}
 	}
-	s.logger.Info("gardener reaped idle sessions", "count", len(stale), "idle_ttl", core.SessionIdleTTL)
+	s.logger.Info("gardener reaped idle sessions", "count", len(stale), "idle_ttl", s.cfg.SessionIdle)
 }
 
 // createProposal persists a proposal and records a gardener.action event. The
