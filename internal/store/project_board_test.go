@@ -46,6 +46,9 @@ func TestProjectsWithCounts(t *testing.T) {
 	}
 	mkSession("s-seam-a", "cc/seam-a", "seam", core.SessionActive, tsAt(1))
 	mkSession("s-seam-b", "cc/seam-b", "seam", core.SessionCompleted, tsAt(5)) // newest -> LastActive
+	// Active but idle: last updated beyond SessionIdleTTL of the query's now, so
+	// it counts as a session but never as live (matches the Sessions screen).
+	mkSession("s-seam-i", "cc/seam-i", "seam", core.SessionActive, tsAt(10).Add(-core.SessionIdleTTL-time.Minute))
 	mkSession("s-glob", "cc/glob", "", core.SessionActive, tsAt(2))
 	mkSession("s-ghost", "cc/ghost", "ghost", core.SessionActive, tsAt(3))
 
@@ -60,7 +63,7 @@ func TestProjectsWithCounts(t *testing.T) {
 	// One injection of a seam memory so reach joins in (seam: 1/2 surfaced -> 50%).
 	insertRetrievalEvent(t, db, core.EventInjected, "s-seam-a", "m1", "{}", tsAt(1))
 
-	rows, err := ProjectsWithCounts(ctx, db, ResolveRetrievalWindow("all", tsAt(10)))
+	rows, err := ProjectsWithCounts(ctx, db, ResolveRetrievalWindow("all", tsAt(10)), tsAt(10))
 	require.NoError(t, err)
 
 	byProject := map[string]ProjectBoardRow{}
@@ -83,8 +86,8 @@ func TestProjectsWithCounts(t *testing.T) {
 	require.Equal(t, peek.OpenTasks, seam.OpenTasks, "board open tasks == GetProjectCounts")
 	require.Equal(t, peek.Notes, seam.Notes, "board notes == GetProjectCounts")
 	require.Equal(t, 2, seam.Memories)
-	require.Equal(t, 2, seam.Sessions)
-	require.Equal(t, 1, seam.LiveSessions) // only the active session
+	require.Equal(t, 3, seam.Sessions)
+	require.Equal(t, 1, seam.LiveSessions) // active within TTL; the idle active one is excluded
 	require.Equal(t, 3, seam.OpenTasks)    // A + P + B (D done excluded)
 	require.Equal(t, 1, seam.Blocked)      // B blocked by open A
 	require.Equal(t, 1, seam.Notes)
@@ -130,7 +133,8 @@ func TestProjectsWithCounts(t *testing.T) {
 
 func TestProjectsWithCounts_Empty(t *testing.T) {
 	db := openTestDB(t)
-	rows, err := ProjectsWithCounts(context.Background(), db, ResolveRetrievalWindow("all", time.Now().UTC()))
+	now := time.Now().UTC()
+	rows, err := ProjectsWithCounts(context.Background(), db, ResolveRetrievalWindow("all", now), now)
 	require.NoError(t, err)
 	require.Empty(t, rows)
 }

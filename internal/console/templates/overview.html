@@ -96,7 +96,7 @@
       <div class="rail-kv">
         <div class="row"><span class="k">Active memories</span><span class="v">{{.Memories}}</span></div>
         <div class="row"><span class="k">Notes</span><span class="v">{{.Notes}}</span></div>
-        <div class="row"><span class="k">Sessions</span><span class="v">{{.SessTotal}}{{if .SessActive}} <span class="v-sub">&middot; {{.SessActive}} active</span>{{end}}</span></div>
+        <div class="row"><span class="k">Sessions</span><span class="v">{{.SessTotal}}{{if .SessActive}} <span class="v-sub">&middot; {{.SessActive}} live</span>{{end}}</span></div>
         <div class="row"><span class="k">Open tasks</span><span class="v{{if not .TasksOpen}} zero{{end}}">{{.TasksOpen}}</span></div>
         <div class="row"><span class="k">Pending proposals</span><span class="v{{if not .Pending}} zero{{end}}">{{.Pending}}</span></div>
       </div>

@@ -252,7 +252,7 @@ type overviewData struct {
 	Memories         int
 	MemByKind        []kindCount
 	Notes            int
-	SessActive       int
+	SessActive       int // live sessions: active AND within core.SessionIdleTTL, per the board query
 	SessTotal        int
 	TasksOpen        int
 	TasksInProg      int
@@ -370,13 +370,18 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	// "Projects at a glance": the top projects by recent activity, from the same
 	// batched board query -- strict per-slug counts, so these rows equal the
 	// board's rows exactly. The global ("") scope is not a project row.
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
+	// Live sessions across every scope (global "" included), TTL-aware via the
+	// board query, so the headline matches the Sessions screen instead of the raw
+	// active status count an idle session inflates until the reaper runs.
+	liveSessions := 0
 	glance := make([]projectGlanceRow, 0, len(board))
 	for _, b := range board {
+		liveSessions += b.LiveSessions
 		if b.Project == "" {
 			continue
 		}
@@ -402,7 +407,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		Memories:         sum.Memories.Active,
 		MemByKind:        orderKinds(sum.Memories.ByKind),
 		Notes:            sum.Notes,
-		SessActive:       sum.Sessions[string(core.SessionActive)],
+		SessActive:       liveSessions,
 		SessTotal:        sumValues(sum.Sessions),
 		TasksOpen:        sum.Tasks[string(core.TaskOpen)],
 		TasksInProg:      sum.Tasks[string(core.TaskInProgress)],
