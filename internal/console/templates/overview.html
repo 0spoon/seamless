@@ -43,6 +43,29 @@
       {{else}}<div class="empty">No sessions in this window</div>{{end}}
     </div>
 
+    <div class="card">
+      <h2>Projects at a glance <span class="h2-meta"><a href="/console/projects">all projects &rarr;</a></span></h2>
+      {{if .Projects}}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Project</th><th>Reach</th><th class="num">Sessions</th><th class="num">Open</th><th class="num">Memories</th><th>Active</th></tr></thead>
+          <tbody>
+            {{range .Projects}}
+            <tr class="row-link" data-href="/console/projects/{{.Slug}}" data-peek>
+              <td><span class="mono">{{.Slug}}</span>{{if .Live}} <span class="work-dot"><span class="live-dot"></span>{{.Live}}</span>{{end}}</td>
+              <td>{{if .HasReach}}<span style="color:var(--brand);font-weight:700">{{.ReachRate}}%</span>{{else}}<span class="faint">&mdash;</span>{{end}}</td>
+              <td class="num">{{.Sessions}}</td>
+              <td class="num{{if not .OpenTasks}} zero{{end}}">{{.OpenTasks}}</td>
+              <td class="num">{{.Memories}}</td>
+              <td class="muted">{{ago .LastActive}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}<div class="empty">No projects yet</div>{{end}}
+    </div>
+
     <div>
       <h2 class="flow-title">Recent activity</h2>
       {{if .Recent}}

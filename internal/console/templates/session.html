@@ -1,86 +1,94 @@
 {{define "content"}}
 {{with .Data}}
-<div class="crumb"><a href="/console/sessions">Sessions</a> / {{shortID .Session.ID}}</div>
-<div class="topbar">
-  <div>
-    <h1>{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h1>
-    <div class="sub">
-      {{if eq .Session.Status "active"}}<span class="badge ok">active</span>{{else}}<span class="badge">completed</span>{{end}}
-      {{if .Session.Ambient}}<span class="badge">ambient</span>{{end}}
-      &middot; {{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}
+<div class="crumb"><a href="/console/sessions">Sessions</a> <span class="faint">/</span> <b>{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</b> {{copyBtn .Session.ID}}</div>
+
+<div class="detail-head">
+  <div class="title-row">
+    <span class="tile">{{icon "terminal"}}</span>
+    <h1 style="font-family:var(--font-mono);font-size:var(--text-xl)">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h1>
+    {{if eq .Session.Status "active"}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">completed</span>{{end}}
+    {{if .Session.Ambient}}<span class="kind">ambient</span>{{end}}
+    <span class="chip-parent">{{icon "git-branch"}}{{if .Session.ProjectSlug}}{{.Session.ProjectSlug}}{{else}}global{{end}}</span>
+  </div>
+</div>
+
+<div class="drail">
+  <div class="dcol">
+    <div class="card">
+      <h2>Findings</h2>
+      {{if .Findings}}<div class="prose">{{.FindingsHTML}}</div>{{else}}<div class="empty">No findings recorded yet</div>{{end}}
+    </div>
+
+    <div class="card">
+      <h2>Timeline <span class="h2-meta">{{len .Timeline}} event{{if ne (len .Timeline) 1}}s{{end}}</span></h2>
+      {{if .Timeline}}
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
+          <tbody>
+            {{range .Timeline}}
+            <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
+              <td class="muted" title="{{.When}}">{{ago .When}}</td>
+              <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
+              <td>{{.Summary}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+      </div>
+      {{else}}<div class="empty">No recorded events for this session</div>{{end}}
     </div>
   </div>
-</div>
 
-<div class="card section">
-  <h2>Read-after-inject <span class="h2-meta">memories surfaced this session</span></h2>
-  {{if .Injected}}
-  <div class="funnel">
-    <div class="step"><span class="v">{{.Injected}}</span><span class="l">Injected</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="step"><span class="v brand">{{.ReadBack}}</span><span class="l">Read back</span></div>
-    <div class="funnel-bar">
-      <div class="track"><span style="width:{{pct .ReadBack .Injected}}%"></span></div>
-      <span class="cap">{{pct .ReadBack .Injected}}% of injected memories were read back by an agent</span>
+  <div class="dside">
+    <div class="card">
+      <h2>Session</h2>
+      <dl class="kv">
+        <dt>Status</dt><dd>{{if eq .Session.Status "active"}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">completed</span>{{end}}</dd>
+        <dt>Project</dt><dd class="mono">{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd>
+        <dt>Source</dt><dd class="mono">{{if .Session.Source}}{{.Session.Source}}{{else}}&mdash;{{end}}</dd>
+        <dt>Ambient</dt><dd class="muted">{{if .Session.Ambient}}yes{{else}}no{{end}}</dd>
+        <dt>Started</dt><dd title="{{.Session.CreatedAt}}">{{ago .Session.CreatedAt}}</dd>
+        <dt>Updated</dt><dd title="{{.Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd>
+        <dt>CWD</dt><dd class="mono">{{if .Session.CWD}}{{.Session.CWD}}{{copyBtn .Session.CWD}}{{else}}&mdash;{{end}}</dd>
+        <dt>Claude</dt><dd class="mono">{{if .Session.ClaudeSessionID}}{{shortID .Session.ClaudeSessionID}}{{copyBtn .Session.ClaudeSessionID}}{{else}}&mdash;{{end}}</dd>
+      </dl>
     </div>
-  </div>
-  {{else}}<div class="empty">No memories were injected into this session</div>{{end}}
-</div>
 
-<div class="grid-2 section">
-  <div class="card">
-    <h2>Activity</h2>
-    <div class="rail-kv">
-      <div class="row"><span class="k">Tool calls</span><span class="v{{if not .ToolCalls}} zero{{end}}">{{.ToolCalls}}</span></div>
-      <div class="row"><span class="k">Memory writes</span><span class="v{{if not .Writes}} zero{{end}}">{{.Writes}}</span></div>
-      <div class="row"><span class="k">Memory reads</span><span class="v{{if not .Reads}} zero{{end}}">{{.Reads}}</span></div>
+    <div class="card">
+      <h2>Activity</h2>
+      <dl class="kv">
+        <dt>Tool calls</dt><dd>{{.ToolCalls}}</dd>
+        <dt>Memory writes</dt><dd>{{.Writes}}</dd>
+        <dt>Memory reads</dt><dd>{{.Reads}}</dd>
+        <dt>Injected</dt><dd>{{.Injected}}</dd>
+        <dt>Read back</dt><dd>{{.ReadBack}}{{if .Injected}} <span class="muted">&middot; {{pct .ReadBack .Injected}}%</span>{{end}}</dd>
+      </dl>
     </div>
-  </div>
-  <div class="card">
-    <h2>Events by kind</h2>
-    {{if .ByKind}}{{barChart .ByKind}}{{else}}<div class="empty">No events</div>{{end}}
-  </div>
-</div>
 
-<div class="section">
-  <div class="card">
-    <h2>Metadata</h2>
-    <dl class="kv">
-      <dt>ID</dt><dd class="mono">{{.Session.ID}}{{copyBtn .Session.ID}}</dd>
-      <dt>Source</dt><dd>{{.Session.Source}}</dd>
-      <dt>Claude session</dt><dd class="mono">{{if .Session.ClaudeSessionID}}{{.Session.ClaudeSessionID}}{{copyBtn .Session.ClaudeSessionID}}{{else}}&mdash;{{end}}</dd>
-      <dt>CWD</dt><dd class="mono">{{if .Session.CWD}}{{.Session.CWD}}{{copyBtn .Session.CWD}}{{else}}&mdash;{{end}}</dd>
-      <dt>Created</dt><dd title="{{.Session.CreatedAt}}">{{ago .Session.CreatedAt}}</dd>
-      <dt>Updated</dt><dd title="{{.Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd>
-    </dl>
-  </div>
-</div>
-
-{{if .Findings}}
-<div class="section">
-  <h2>Findings</h2>
-  <div class="card"><div class="prose">{{.FindingsHTML}}</div></div>
-</div>
-{{end}}
-
-<div class="section">
-  <h2>Timeline <span class="count">{{len .Timeline}} events</span></h2>
-  {{if .Timeline}}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
-      <tbody>
-        {{range .Timeline}}
-        <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
-          <td class="muted" title="{{.When}}">{{ago .When}}</td>
-          <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
-          <td>{{.Summary}}</td>
-        </tr>
+    <div class="card">
+      <h2>Claimed task{{if ne (len .ClaimedTasks) 1}}s{{end}}{{if .ClaimedTasks}} <span class="h2-meta">{{len .ClaimedTasks}}</span>{{end}}</h2>
+      {{if .ClaimedTasks}}
+      <div style="display:flex;flex-direction:column;gap:12px">
+        {{range .ClaimedTasks}}
+        <div>
+          <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a>
+          <div class="muted" style="font-size:var(--text-2xs);margin-top:3px">{{if .PlanSlug}}plan:{{.PlanSlug}}{{end}}{{if and .PlanSlug .LeaseLeft}} &middot; {{end}}{{if .LeaseLeft}}<span class="claim-sm">{{icon "timer"}}{{.LeaseLeft}} left</span>{{end}}</div>
+        </div>
         {{end}}
-      </tbody>
-    </table>
+      </div>
+      {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">No task claimed by this session.</div>{{end}}
+    </div>
+
+    <div class="card">
+      <h2>Memories written <span class="h2-meta">{{len .Memories}}</span></h2>
+      {{if .Memories}}
+      <div class="rail-list">
+        {{range .Memories}}<div class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="kind">{{.Kind}}</span></div>{{end}}
+      </div>
+      {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">Nothing durable yet &mdash; findings are harvested on session end.</div>{{end}}
+    </div>
   </div>
-  {{else}}<div class="empty">No recorded events for this session</div>{{end}}
 </div>
 {{end}}
 {{end}}

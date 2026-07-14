@@ -1,0 +1,50 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/projects">All projects</a> <span class="faint">/</span> <b>relations</b></div>
+
+<div class="topbar">
+  <div>
+    <h1>Relations</h1>
+    <div class="sub">The dependency spine the flat console can't show: a plan expands into its steps, each step's claiming session, and the memories it left behind.</div>
+  </div>
+  <div class="seg">
+    {{range .Options}}<a class="{{if .Active}}on{{end}}" href="{{.Href}}">{{.Label}}</a>{{end}}
+  </div>
+</div>
+
+{{if .Sections}}
+{{range .Sections}}
+{{if .Header}}
+<div class="detail-head" style="margin:20px 0 8px">
+  <div class="title-row">
+    <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
+    <h2 style="font-size:var(--text-md);margin:0"><a href="{{.Href}}">{{.Name}}</a></h2>
+    {{if .Retired}}<span class="kind warn">retired</span>{{end}}
+  </div>
+</div>
+{{end}}
+{{if .Tree}}
+<div class="tree" style="margin-bottom:18px">
+  {{range .Tree}}{{template "treenode" .}}{{end}}
+</div>
+{{else}}<div class="empty">No plans traced in {{.Project}} yet</div>{{end}}
+{{end}}
+{{else}}
+<div class="empty">No plans traced yet &mdash; a plan appears here once its steps are created</div>
+{{end}}
+
+{{if .Banners}}
+<h2 style="font-family:var(--font-display);font-size:var(--text-md);margin:22px 0 12px;font-weight:600">Cross-project ties</h2>
+<div style="display:flex;flex-direction:column;gap:10px">
+  {{range .Banners}}<div class="relbanner{{if .Retired}} retired{{end}}">{{icon .Icon}}<div>{{.HTML}}</div></div>{{end}}
+</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "treenode"}}
+<div class="tnode">
+  <div class="tline"><span class="ico-lead lead-{{.Lead}}">{{icon .Icon}}</span><span class="nm">{{if .Href}}<a href="{{.Href}}" data-peek>{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>{{if .Cap}}<span class="cap{{if .Flag}} tflag{{end}}">{{.Cap}}</span>{{end}}</div>
+  {{if .Kids}}<div class="tkids">{{range .Kids}}{{template "treenode" .}}{{end}}</div>{{end}}
+</div>
+{{end}}

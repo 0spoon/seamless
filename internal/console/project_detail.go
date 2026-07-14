@@ -573,11 +573,15 @@ func (s *Service) buildProjectTree(ctx context.Context, project string) ([]treeN
 		return nil, err
 	}
 	now := time.Now().UTC()
+	cache := map[string]core.Task{} // task IDs are global, so one cache spans plans
 	var out []treeNode
 	for _, plan := range slugs {
 		steps, err := store.ListTasksForPlan(ctx, s.cfg.DB, project, "", plan)
 		if err != nil {
 			return nil, err
+		}
+		for _, st := range steps {
+			cache[st.ID] = st
 		}
 		done := 0
 		for _, st := range steps {
@@ -591,23 +595,52 @@ func (s *Service) buildProjectTree(ctx context.Context, project string) ([]treeN
 				len(steps), percent(done, len(steps)))),
 		}
 		for _, st := range steps {
-			node.Kids = append(node.Kids, s.treeStep(ctx, st, now))
+			node.Kids = append(node.Kids, s.treeStep(ctx, st, cache, now))
 		}
 		out = append(out, node)
 	}
 	return out, nil
 }
 
-// treeStep builds a step node and its claiming-session / memory subtree.
-func (s *Service) treeStep(ctx context.Context, t core.Task, now time.Time) treeNode {
+// treeStep builds a step node and its claiming-session / memory subtree. An open
+// step whose dependency is still unfinished carries a "blocked by" edge in its
+// caption, so the tree reads the dependency spine like the mock's relations view.
+func (s *Service) treeStep(ctx context.Context, t core.Task, cache map[string]core.Task, now time.Time) treeNode {
 	step := treeNode{Lead: "task", Icon: taskTreeIcon(string(t.Status)), Name: t.Title}
-	step.Cap = template.HTML(kindChip(string(t.Status), taskTone(string(t.Status))))
+	capHTML := kindChip(string(t.Status), taskTone(string(t.Status)))
+	if t.Status == core.TaskOpen {
+		if blocker := s.blockingDep(ctx, t, cache); blocker != "" {
+			capHTML += ` <span class="edge" style="padding:0 6px">&larr; blocked by ` +
+				template.HTMLEscapeString(blocker) + `</span>`
+		}
+	}
+	step.Cap = template.HTML(capHTML)
 	if t.ClaimLive(now) {
 		if sess, ok, err := store.SessionByID(ctx, s.cfg.DB, t.ClaimedBy); err == nil && ok {
 			step.Kids = append(step.Kids, s.treeSession(ctx, sess))
 		}
 	}
 	return step
+}
+
+// blockingDep returns the title of the first unfinished dependency (open or
+// in-progress) of an open step, or "" if nothing blocks it. It mirrors
+// planStep's dependency walk and caches resolved tasks across the whole tree.
+func (s *Service) blockingDep(ctx context.Context, t core.Task, cache map[string]core.Task) string {
+	for _, depID := range t.DependsOn {
+		dep, ok := cache[depID]
+		if !ok {
+			d, err := store.TaskByID(ctx, s.cfg.DB, depID)
+			if err != nil {
+				continue
+			}
+			dep, cache[depID] = d, d
+		}
+		if dep.Status == core.TaskOpen || dep.Status == core.TaskInProgress {
+			return dep.Title
+		}
+	}
+	return ""
 }
 
 // treeSession builds a claiming-session node and its produced-memory leaves.

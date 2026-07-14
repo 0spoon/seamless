@@ -17,14 +17,15 @@
     <div class="brand-by">by <span>0spoon</span></div>
     <nav class="nav">
       <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
-      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
+      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "arrow-down-to-line"}}<span class="nav-label">Retrieval</span></a>
       <a href="/console/interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
       <a href="/console/projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
+      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
       <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
       <a href="/console/notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
-      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "arrow-down-to-line"}}<span class="nav-label">Retrieval</span></a>
       <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count">{{.Nav.Tasks}}</span></a>
       <a href="/console/plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span></a>
+      <a href="/console/relations" class="{{if eq .Active "relations"}}active{{end}}">{{icon "git-fork"}}<span class="nav-label">Relations</span></a>
       <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count">{{.Nav.Proposals}}</span></a>
       <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
     </nav>

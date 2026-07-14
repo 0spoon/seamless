@@ -98,9 +98,28 @@ type sessionDetail struct {
 	ToolCalls    int           `json:"toolCalls"`
 	Reads        int           `json:"memoryReads"`
 	Writes       int           `json:"memoryWrites"`
-	Injected     int           `json:"injectedItems"`
-	ReadBack     int           `json:"readAfterInject"`
-	ByKind       []kindCount   `json:"eventsByKind"`
+	Injected     int             `json:"injectedItems"`
+	ReadBack     int             `json:"readAfterInject"`
+	ByKind       []kindCount     `json:"eventsByKind"`
+	ClaimedTasks []claimedTaskVM `json:"claimedTasks"`
+	Memories     []sessMemVM     `json:"memoriesWritten"`
+}
+
+// claimedTaskVM is a task the session currently holds (a live claim), shown on
+// the session detail's right rail.
+type claimedTaskVM struct {
+	ID        string `json:"id"`
+	Title     string `json:"title"`
+	PlanSlug  string `json:"planSlug,omitempty"`
+	LeaseLeft string `json:"leaseLeft,omitempty"`
+}
+
+// sessMemVM is a memory the session produced (its source_session is the session
+// name), shown on the session detail's "Memories written" list.
+type sessMemVM struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Kind string `json:"kind"`
 }
 
 func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +180,36 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
 	}
 	data.FindingsHTML = s.renderBody(ctx, sess.Findings, sess.ProjectSlug)
+
+	// Claimed tasks (live claims this session holds) + memories it produced --
+	// the T2b relation joins. Best-effort: a legacy non-ULID session id or empty
+	// name (the joins guard against mis-keyed calls) leaves the panel empty
+	// rather than failing the whole detail page.
+	now := time.Now().UTC()
+	if held, herr := store.TasksClaimedBy(ctx, s.cfg.DB, sess.ID); herr == nil {
+		for _, t := range held {
+			if !t.ClaimLive(now) {
+				continue
+			}
+			vm := claimedTaskVM{ID: t.ID, Title: t.Title, PlanSlug: t.PlanSlug}
+			if t.LeaseExpiresAt != nil {
+				vm.LeaseLeft = durUntil(*t.LeaseExpiresAt, now)
+			}
+			data.ClaimedTasks = append(data.ClaimedTasks, vm)
+		}
+	} else {
+		s.logger.Warn("console: session claimed tasks", "session", sess.ID, "error", herr)
+	}
+	if sess.Name != "" {
+		if mems, merr := store.MemoriesForSession(ctx, s.cfg.DB, sess.Name); merr == nil {
+			for _, m := range mems {
+				data.Memories = append(data.Memories, sessMemVM{ID: m.ID, Name: m.Name, Kind: string(m.Kind)})
+			}
+		} else {
+			s.logger.Warn("console: session memories written", "session", sess.Name, "error", merr)
+		}
+	}
+
 	if r.URL.Query().Get("peek") == "1" {
 		s.renderFragment(w, r, "session", data)
 		return

@@ -21,7 +21,7 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "interactions", "projects", "projectdetail", "sessions", "session",
+	"login", "overview", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
 	"memories", "notes", "retrieval", "tasks", "plans", "plan", "gardener", "settings", "event",
 }
 
@@ -224,6 +224,17 @@ func (s *Service) badRequest(w http.ResponseWriter, r *http.Request, msg string)
 		return
 	}
 	http.Error(w, msg, http.StatusBadRequest)
+}
+
+// notFound reports a 404 in the caller's preferred format, naming the missing
+// entity so an agent driving the console by URL sees exactly what was not found
+// (rather than a bare "404 page not found").
+func (s *Service) notFound(w http.ResponseWriter, r *http.Request, msg string) {
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": msg})
+		return
+	}
+	http.Error(w, msg, http.StatusNotFound)
 }
 
 // serverError logs and reports a 500 in the caller's preferred format.
