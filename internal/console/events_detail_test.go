@@ -72,6 +72,34 @@ func TestEventDetail_InjectionContentAndItems(t *testing.T) {
 	require.Contains(t, body, "watcher-race")
 }
 
+// A task.transition event's ItemID is a task id, not a memory. It must not be
+// resolved against the memory index -- doing so rendered a phantom "removed /
+// no longer in the index" surfaced-memory row (the task echoing its own id).
+func TestEventDetail_TaskTransitionSurfacesNoMemories(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	taskID := mustID(t)
+	id, err := rec.Record(ctx, core.Event{
+		Kind: core.EventTaskTransition, ProjectSlug: "seamless", ItemID: taskID,
+		Payload: map[string]any{"created": true, "to": "open"},
+	})
+	require.NoError(t, err)
+
+	var d eventDetailData
+	getJSON(t, mux, "/console/events/"+id+"?format=json", &d)
+	require.Empty(t, d.Items, "task.transition item id must not resolve as a surfaced memory")
+
+	req := httptest.NewRequest(http.MethodGet, "/console/events/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.NotContains(t, body, "Surfaced memories")
+	require.NotContains(t, body, "no longer in the index")
+}
+
 func TestEventDetail_NotFound(t *testing.T) {
 	_, mux := newConsole(t)
 	req := httptest.NewRequest(http.MethodGet, "/console/events/NOSUCHID", nil)
