@@ -120,6 +120,40 @@ func ActiveMemoriesForScope(ctx context.Context, db *sql.DB, project string, ext
 	return mems, nil
 }
 
+// ActiveMemoriesForProjects returns the active memories belonging to exactly
+// the given project slugs -- no own-project or global union, unlike
+// ActiveMemoriesForScope -- newest-updated first. It backs the briefing's
+// opt-in sibling-memories cross-over, where the caller already holds the own
+// scope and wants only the family members' rows. Blank/duplicate slugs are
+// ignored; no slugs yields nil.
+func ActiveMemoriesForProjects(ctx context.Context, db *sql.DB, slugs []string) ([]core.Memory, error) {
+	seen := map[string]bool{}
+	args := make([]any, 0, len(slugs))
+	for _, s := range slugs {
+		if s == "" || seen[s] {
+			continue
+		}
+		seen[s] = true
+		args = append(args, s)
+	}
+	if len(args) == 0 {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
+		FROM memories_index
+		WHERE invalid_at IS NULL AND project IN (`+placeholders(len(args))+`)
+		ORDER BY updated_at DESC, id DESC`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveMemoriesForProjects: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	mems, err := scanMemories(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveMemoriesForProjects: %w", err)
+	}
+	return mems, nil
+}
+
 // AllMemoriesIncludingInvalid returns every memory index row -- active and
 // invalid (superseded or archived) -- newest-updated first. It backs the console
 // Memories browser, which renders supersession chains and archived items.

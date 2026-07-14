@@ -167,6 +167,35 @@ func TestReapStaleSessions(t *testing.T) {
 	require.True(t, reaped, "the reap recorded a session.ended event")
 }
 
+func TestReapStaleSessions_ConfiguredIdleTTL(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	id := mustID(t)
+	// Quiet for 20 minutes: inside the 45m default, outside a 10m configured TTL.
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: "cc/quiet", ProjectSlug: "seamless", Status: core.SessionActive,
+		CreatedAt: now.Add(-20 * time.Minute), UpdatedAt: now.Add(-20 * time.Minute),
+	}))
+
+	gDefault := New(db, nil, nil, nil, nil, Config{}, slog.Default())
+	gDefault.now = func() time.Time { return now }
+	gDefault.reapStaleSessions(ctx)
+	got, _, err := store.SessionByID(ctx, db, id)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionActive, got.Status, "inside the default TTL: not reaped")
+
+	gShort := New(db, nil, nil, nil, nil, Config{SessionIdle: 10 * time.Minute}, slog.Default())
+	gShort.now = func() time.Time { return now }
+	gShort.reapStaleSessions(ctx)
+	got, _, err = store.SessionByID(ctx, db, id)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionExpired, got.Status, "outside the configured TTL: reaped")
+}
+
 func TestRunOnce_ProducesAllThreeProposalKinds(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

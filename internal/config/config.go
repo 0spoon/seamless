@@ -31,6 +31,7 @@ type Config struct {
 
 	MCP         MCP         `yaml:"mcp"`
 	Budgets     Budgets     `yaml:"budgets"`
+	Briefing    Briefing    `yaml:"briefing"`
 	LLM         LLM         `yaml:"llm"`
 	Gardener    Gardener    `yaml:"gardener"`
 	PlanCapture PlanCapture `yaml:"plan_capture"`
@@ -53,6 +54,70 @@ type Budgets struct {
 	// many runes. 0 = unlimited (the default): content is stored in full, and the
 	// tool-event retention prune -- not truncation -- is the growth control.
 	ToolEventMaxChars int `yaml:"tool_event_max_chars"`
+}
+
+// Briefing tunes what the SessionStart briefing auto-injects: how many items
+// each section carries, recency filters, related-project cross-over, and the
+// hard-cap multiplier. Defaults reproduce the historical hardcoded behavior.
+// The JSON tags back the console's runtime override row (see
+// store.BriefingConfig), which layers on top of this file/env base.
+//
+// The never-drop invariant: constraints, pinned stages, and active-plan rollups
+// are exempt from every knob here -- recency and count filters apply only to
+// the memory index, findings, and sibling sections.
+type Briefing struct {
+	// MemoryMaxAgeDays drops memory-index lines not updated within this many
+	// days. 0 = no recency filter. Constraints and stages are exempt.
+	MemoryMaxAgeDays int `yaml:"memory_max_age_days" json:"memoryMaxAgeDays"`
+	// MemoryMaxItems caps the memory-index line count before budget packing.
+	// 0 = budget-only (no cap).
+	MemoryMaxItems int `yaml:"memory_max_items" json:"memoryMaxItems"`
+	// FindingsCount is how many recent findings to inject. 0 hides the section.
+	FindingsCount int `yaml:"findings_count" json:"findingsCount"`
+	// FindingsMaxAgeDays drops findings older than this many days. 0 = no filter.
+	FindingsMaxAgeDays int `yaml:"findings_max_age_days" json:"findingsMaxAgeDays"`
+	// ReadyTasksShown is how many ready-task titles the ready line names.
+	// 0 hides the line entirely.
+	ReadyTasksShown int `yaml:"ready_tasks_shown" json:"readyTasksShown"`
+	// PendingPlanMaxDays is how far back captured-but-unapproved Claude Code
+	// plans earn "awaiting approval" lines. 0 = no age cutoff.
+	PendingPlanMaxDays int `yaml:"pending_plan_max_days" json:"pendingPlanMaxDays"`
+	// HardCapMultiplier times budgets.max_briefing_tokens is the absolute
+	// truncation ceiling. 0 falls back to 2.
+	HardCapMultiplier int `yaml:"hard_cap_multiplier" json:"hardCapMultiplier"`
+	// IncludeParentMemories folds a shared parent project's active memories
+	// into a child project's briefing (the historical automatic behavior).
+	IncludeParentMemories bool `yaml:"include_parent_memories" json:"includeParentMemories"`
+	// SiblingFindingsCount is how many recent findings from family-member
+	// projects to inject. 0 hides the section.
+	SiblingFindingsCount int `yaml:"sibling_findings_count" json:"siblingFindingsCount"`
+	// IncludeSiblingMemories folds family-member projects' active memories
+	// (constraints and stages excluded) into the briefing as a low-priority
+	// "Sibling memories" section. Off by default to avoid crowding.
+	IncludeSiblingMemories bool `yaml:"include_sibling_memories" json:"includeSiblingMemories"`
+}
+
+// Validate rejects hard-invalid briefing knobs. Shared by the file/env load
+// path and the console's settings form.
+func (b Briefing) Validate() error {
+	for _, f := range []struct {
+		name string
+		v    int
+	}{
+		{"memory_max_age_days", b.MemoryMaxAgeDays},
+		{"memory_max_items", b.MemoryMaxItems},
+		{"findings_count", b.FindingsCount},
+		{"findings_max_age_days", b.FindingsMaxAgeDays},
+		{"ready_tasks_shown", b.ReadyTasksShown},
+		{"pending_plan_max_days", b.PendingPlanMaxDays},
+		{"hard_cap_multiplier", b.HardCapMultiplier},
+		{"sibling_findings_count", b.SiblingFindingsCount},
+	} {
+		if f.v < 0 {
+			return fmt.Errorf("config: briefing.%s must be >= 0", f.name)
+		}
+	}
+	return nil
 }
 
 // LLM configures chat (digests) and embeddings. OpenAI is the default provider.
@@ -123,6 +188,12 @@ type Gardener struct {
 	// Code plan (plan-status draft/presented) is proposed for abandonment.
 	// 0 disables the pass.
 	StalePlanDays int `yaml:"stale_plan_days"`
+	// SessionIdleMinutes is the no-activity age beyond which an active session
+	// is considered dead: the gardener reaper expires it and the console stops
+	// counting it as live. It is the single liveness threshold shared by both,
+	// so the reaper cutoff and the console "live" window never drift.
+	// 0 falls back to core.SessionIdleTTL (45m).
+	SessionIdleMinutes int `yaml:"session_idle_minutes"`
 }
 
 // Defaults returns the built-in configuration. File and env values are layered
@@ -132,6 +203,14 @@ func Defaults() Config {
 		Addr:    "127.0.0.1:8081",
 		DataDir: "~/.seamless",
 		Budgets: Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000},
+		Briefing: Briefing{
+			FindingsCount:         3,
+			ReadyTasksShown:       3,
+			PendingPlanMaxDays:    7,
+			HardCapMultiplier:     2,
+			IncludeParentMemories: true,
+			SiblingFindingsCount:  2,
+		},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
 			OpenAI: OpenAI{
@@ -156,6 +235,7 @@ func Defaults() Config {
 			DigestDays:             30,
 			ToolEventRetentionDays: 30,
 			StalePlanDays:          14,
+			SessionIdleMinutes:     45,
 		},
 		PlanCapture: PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true},
 	}
@@ -234,6 +314,12 @@ func (c Config) Validate() error {
 	if c.Gardener.StalePlanDays < 0 {
 		return fmt.Errorf("config: gardener.stale_plan_days must be >= 0")
 	}
+	if c.Gardener.SessionIdleMinutes < 0 {
+		return fmt.Errorf("config: gardener.session_idle_minutes must be >= 0")
+	}
+	if err := c.Briefing.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -262,6 +348,27 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envInt("SEAMLESS_TOOL_EVENT_MAX_CHARS", &c.Budgets.ToolEventMaxChars); err != nil {
+		return err
+	}
+
+	for key, dst := range map[string]*int{
+		"SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS":    &c.Briefing.MemoryMaxAgeDays,
+		"SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS":       &c.Briefing.MemoryMaxItems,
+		"SEAMLESS_BRIEFING_FINDINGS_COUNT":         &c.Briefing.FindingsCount,
+		"SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS":  &c.Briefing.FindingsMaxAgeDays,
+		"SEAMLESS_BRIEFING_READY_TASKS_SHOWN":      &c.Briefing.ReadyTasksShown,
+		"SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS":  &c.Briefing.PendingPlanMaxDays,
+		"SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER":    &c.Briefing.HardCapMultiplier,
+		"SEAMLESS_BRIEFING_SIBLING_FINDINGS_COUNT": &c.Briefing.SiblingFindingsCount,
+	} {
+		if err := envInt(key, dst); err != nil {
+			return err
+		}
+	}
+	if err := envBool("SEAMLESS_BRIEFING_INCLUDE_PARENT_MEMORIES", &c.Briefing.IncludeParentMemories); err != nil {
+		return err
+	}
+	if err := envBool("SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES", &c.Briefing.IncludeSiblingMemories); err != nil {
 		return err
 	}
 
@@ -301,6 +408,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envInt("SEAMLESS_GARDENER_STALE_PLAN_DAYS", &c.Gardener.StalePlanDays); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_GARDENER_SESSION_IDLE_MINUTES", &c.Gardener.SessionIdleMinutes); err != nil {
 		return err
 	}
 	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {

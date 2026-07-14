@@ -6,15 +6,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
-
-// pendingPlanMaxAge is how far back the briefing looks for captured-but-not-
-// approved Claude Code plans; anything older is presumed stale (the gardener
-// proposes abandoning it) and stops earning briefing space.
-const pendingPlanMaxAge = 7 * 24 * time.Hour
 
 // BriefingInput carries the SessionStart hook fields the briefing depends on.
 type BriefingInput struct {
@@ -32,6 +28,7 @@ type BriefingInput struct {
 // can record them as a retrieval.injected event and feed the read-after-inject
 // funnel -- the same telemetry the recall tool emits.
 func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []string, error) {
+	cfg := s.effectiveBriefing(ctx)
 	project, err := store.ResolveProjectForCWD(ctx, s.db, in.CWD)
 	if err != nil {
 		return "", nil, err
@@ -39,7 +36,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	// A child project (one with a parent) sees its shared parent's active memories
 	// in-briefing too, so cross-platform knowledge kept in the parent surfaces in
 	// each child without being duplicated (see the arctop-app split).
-	extra, err := s.familyMemoryScope(ctx, project)
+	extra, err := s.familyMemoryScope(ctx, project, cfg.IncludeParentMemories)
 	if err != nil {
 		return "", nil, err
 	}
@@ -65,15 +62,30 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		return text, ids, nil
 	}
 
-	findings, err := store.RecentFindings(ctx, s.db, project, 3)
+	// Recency/count trims run AFTER the kind partition above, so constraints and
+	// pinned stages are exempt (the never-drop invariant).
+	index, omitted := trimMemoryIndex(index, cfg, time.Now())
+
+	var findings []core.Session
+	if cfg.FindingsCount > 0 {
+		findings, err = store.RecentFindings(ctx, s.db, project, cfg.FindingsCount)
+		if err != nil {
+			return "", nil, err
+		}
+		findings = filterFindingsByAge(findings, cfg.FindingsMaxAgeDays, time.Now())
+	}
+	var ready []core.Task
+	if cfg.ReadyTasksShown > 0 {
+		ready, err = store.ReadyTasks(ctx, s.db, project)
+		if err != nil {
+			return "", nil, err
+		}
+	}
+	siblings, err := s.siblingFindings(ctx, project, cfg.SiblingFindingsCount)
 	if err != nil {
 		return "", nil, err
 	}
-	ready, err := store.ReadyTasks(ctx, s.db, project)
-	if err != nil {
-		return "", nil, err
-	}
-	siblings, err := s.siblingFindings(ctx, project)
+	siblingMems, err := s.siblingMemories(ctx, project, extra, cfg)
 	if err != nil {
 		return "", nil, err
 	}
@@ -81,30 +93,85 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	pending, err := s.pendingPlans(ctx, project)
+	pending, err := s.pendingPlans(ctx, project, cfg.PendingPlanMaxDays)
 	if err != nil {
 		return "", nil, err
 	}
 	stages := s.pinnedStages(stageMems)
-	if len(constraints) == 0 && len(index) == 0 && len(findings) == 0 &&
-		len(ready) == 0 && len(siblings) == 0 && len(stages) == 0 &&
+	if len(constraints) == 0 && len(index) == 0 && omitted == 0 && len(findings) == 0 &&
+		len(ready) == 0 && len(siblings) == 0 && len(siblingMems) == 0 && len(stages) == 0 &&
 		len(rollups) == 0 && len(pending) == 0 {
 		return "", nil, nil
 	}
 	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
-		constraints: constraints, index: index, findings: findings,
-		ready: ready, siblings: siblings, stages: stages, plans: rollups,
+		constraints: constraints, index: index, indexOmitted: omitted,
+		findings: findings, ready: ready, siblings: siblings,
+		siblingMems: siblingMems, stages: stages, plans: rollups,
 		pendingPlans: pending,
-	})
+	}, cfg)
 	return text, ids, nil
 }
 
+// effectiveBriefing resolves the briefing knobs for one assembly: the file/env
+// base layered with the console's runtime override row, so a console save takes
+// effect on the next session start without a daemon restart. Failure-soft: an
+// unreadable override degrades to the base config rather than blocking the
+// agent's session start.
+func (s *Service) effectiveBriefing(ctx context.Context) config.Briefing {
+	cfg, _, err := store.BriefingConfig(ctx, s.db, s.briefing)
+	if err != nil {
+		s.logger.Warn("retrieve: briefing override unavailable, using base config", "error", err)
+		return s.briefing
+	}
+	return cfg
+}
+
+// trimMemoryIndex applies the recency filter (MemoryMaxAgeDays) and item cap
+// (MemoryMaxItems) to the briefing's memory index, returning the kept lines and
+// how many were omitted. The omitted count folds into the assembler's
+// "(+N older -- use recall)" trailer so trimmed knowledge stays discoverable.
+// Zero-valued knobs disable their trim (the default: budget-only).
+func trimMemoryIndex(index []core.Memory, cfg config.Briefing, now time.Time) ([]core.Memory, int) {
+	kept := index
+	if cfg.MemoryMaxAgeDays > 0 {
+		cutoff := now.AddDate(0, 0, -cfg.MemoryMaxAgeDays)
+		fresh := make([]core.Memory, 0, len(kept))
+		for _, m := range kept {
+			if m.Updated.After(cutoff) {
+				fresh = append(fresh, m)
+			}
+		}
+		kept = fresh
+	}
+	if cfg.MemoryMaxItems > 0 && len(kept) > cfg.MemoryMaxItems {
+		kept = kept[:cfg.MemoryMaxItems]
+	}
+	return kept, len(index) - len(kept)
+}
+
+// filterFindingsByAge drops findings older than maxAgeDays (0 = keep all).
+// Findings arrive newest-first, so only the tail is ever dropped.
+func filterFindingsByAge(findings []core.Session, maxAgeDays int, now time.Time) []core.Session {
+	if maxAgeDays <= 0 {
+		return findings
+	}
+	cutoff := now.AddDate(0, 0, -maxAgeDays)
+	kept := make([]core.Session, 0, len(findings))
+	for _, f := range findings {
+		if f.UpdatedAt.After(cutoff) {
+			kept = append(kept, f)
+		}
+	}
+	return kept
+}
+
 // pendingPlans returns the project's recently captured, not-yet-approved
-// Claude Code plans (plan-status draft/presented within pendingPlanMaxAge),
-// newest first. These earn budget-participating "awaiting approval" lines --
-// unlike the pinned active-plan rollups, a pending plan is a hint, not a
-// commitment.
-func (s *Service) pendingPlans(ctx context.Context, project string) ([]core.Note, error) {
+// Claude Code plans (plan-status draft/presented updated within maxDays days;
+// 0 = no age cutoff), newest first. Anything older is presumed stale (the
+// gardener proposes abandoning it) and stops earning briefing space. These earn
+// budget-participating "awaiting approval" lines -- unlike the pinned
+// active-plan rollups, a pending plan is a hint, not a commitment.
+func (s *Service) pendingPlans(ctx context.Context, project string, maxDays int) ([]core.Note, error) {
 	if project == "" {
 		return nil, nil // the global scope aggregates too much to be useful
 	}
@@ -112,7 +179,10 @@ func (s *Service) pendingPlans(ctx context.Context, project string) ([]core.Note
 	if err != nil {
 		return nil, err
 	}
-	cutoff := time.Now().Add(-pendingPlanMaxAge)
+	var cutoff time.Time
+	if maxDays > 0 {
+		cutoff = time.Now().AddDate(0, 0, -maxDays)
+	}
 	var out []core.Note
 	for _, n := range notes {
 		switch plans.StatusFromTags(n.Tags) {
@@ -126,12 +196,13 @@ func (s *Service) pendingPlans(ctx context.Context, project string) ([]core.Note
 }
 
 // familyMemoryScope returns the extra project slugs whose active memories should
-// be folded into project's briefing: its shared parent, when set. It is a no-op
-// (nil) for the global scope or a project with no parent. Kept small on purpose --
-// a child inherits its parent's shared memories, not its siblings' platform-
-// specific ones (siblings still contribute recent findings via siblingFindings).
-func (s *Service) familyMemoryScope(ctx context.Context, project string) ([]string, error) {
-	if project == "" {
+// be folded into project's briefing: its shared parent, when set and the
+// IncludeParentMemories knob is on (the default). It is a no-op (nil) for the
+// global scope or a project with no parent. Kept small on purpose -- a child
+// inherits its parent's shared memories, not its siblings' platform-specific
+// ones (those cross over only via siblingFindings/siblingMemories).
+func (s *Service) familyMemoryScope(ctx context.Context, project string, includeParent bool) ([]string, error) {
+	if project == "" || !includeParent {
 		return nil, nil
 	}
 	p, ok, err := store.ProjectBySlug(ctx, s.db, project)
@@ -141,16 +212,65 @@ func (s *Service) familyMemoryScope(ctx context.Context, project string) ([]stri
 	return []string{p.ParentSlug}, nil
 }
 
-// siblingFindings gathers up to two recent findings from a project's family
+// siblingFindings gathers up to limit recent findings from a project's family
 // members (see store.SiblingProjects/SiblingFindings), for the briefing's
-// "Sibling projects" section. It is a no-op for the global scope or a project
-// with no configured family.
-func (s *Service) siblingFindings(ctx context.Context, project string) ([]core.Session, error) {
+// "Sibling projects" section. It is a no-op for the global scope, a project
+// with no configured family, or limit 0 (the section disabled).
+func (s *Service) siblingFindings(ctx context.Context, project string, limit int) ([]core.Session, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
 	siblings, err := store.SiblingProjects(ctx, s.db, project)
 	if err != nil || len(siblings) == 0 {
 		return nil, err
 	}
-	return store.SiblingFindings(ctx, s.db, siblings, 2)
+	return store.SiblingFindings(ctx, s.db, siblings, limit)
+}
+
+// siblingMemories gathers family members' active memories for the opt-in
+// "Sibling memories" cross-over (IncludeSiblingMemories, default off).
+// Constraints and stages are excluded -- a sibling's gates bind its own
+// sessions, not this one -- and slugs already folded into the main scope (the
+// shared parent) are skipped so nothing renders twice. The memory recency
+// filter applies here too; the item cap does not (the section already packs
+// after the own-project index, so budget drops it first).
+func (s *Service) siblingMemories(ctx context.Context, project string, already []string, cfg config.Briefing) ([]core.Memory, error) {
+	if !cfg.IncludeSiblingMemories {
+		return nil, nil
+	}
+	siblings, err := store.SiblingProjects(ctx, s.db, project)
+	if err != nil || len(siblings) == 0 {
+		return nil, err
+	}
+	skip := make(map[string]bool, len(already))
+	for _, slug := range already {
+		skip[slug] = true
+	}
+	fetch := make([]string, 0, len(siblings))
+	for _, slug := range siblings {
+		if !skip[slug] {
+			fetch = append(fetch, slug)
+		}
+	}
+	mems, err := store.ActiveMemoriesForProjects(ctx, s.db, fetch)
+	if err != nil {
+		return nil, err
+	}
+	var cutoff time.Time
+	if cfg.MemoryMaxAgeDays > 0 {
+		cutoff = time.Now().AddDate(0, 0, -cfg.MemoryMaxAgeDays)
+	}
+	var out []core.Memory
+	for _, m := range mems {
+		if m.Kind == core.KindConstraint || m.Kind == core.KindStage {
+			continue
+		}
+		if !m.Updated.After(cutoff) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out, nil
 }
 
 // RegisterProjectForCWD resolves cwd to a project slug and, for a not-yet-mapped
@@ -180,9 +300,11 @@ func projectLabel(project string) string {
 type briefingSections struct {
 	constraints  []core.Memory
 	index        []core.Memory
+	indexOmitted int                // index lines cut by the recency/count trims, for the "+N older" trailer
 	findings     []core.Session
 	ready        []core.Task
 	siblings     []core.Session     // recent findings from family-member projects
+	siblingMems  []core.Memory      // family members' memories (opt-in cross-over)
 	stages       []stageLine        // non-done stage memories, pinned after constraints
 	plans        []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
@@ -190,14 +312,15 @@ type briefingSections struct {
 
 // assembleBriefing packs the sections against the token budget. Constraints, the
 // header, and the trailer are counted first and never dropped; the memory index,
-// sibling findings, and findings are packed against the soft budget, then the
-// whole is hard-capped. Section order: constraints > memory index > sibling
-// findings > recent findings > ready tasks. The second return value is the ids of
-// the memories actually rendered (constraints, pinned stages, and the index lines
-// that survived budgeting) -- for retrieval instrumentation. Findings, siblings,
-// and ready tasks are sessions/tasks, not memory_read-able memories, so they are
-// omitted from the funnel.
-func (s *Service) assembleBriefing(project, source string, sec briefingSections) (string, []string) {
+// sibling findings/memories, and findings are packed against the soft budget,
+// then the whole is hard-capped. Section order: constraints > memory index >
+// sibling findings > sibling memories > recent findings > ready tasks. The
+// second return value is the ids of the memories actually rendered
+// (constraints, pinned stages, and the index/sibling lines that survived
+// budgeting) -- for retrieval instrumentation. Findings, siblings, and ready
+// tasks are sessions/tasks, not memory_read-able memories, so they are omitted
+// from the funnel.
+func (s *Service) assembleBriefing(project, source string, sec briefingSections, cfg config.Briefing) (string, []string) {
 	constraints, index := sec.constraints, sec.index
 	findings, ready := sec.findings, sec.ready
 	label := projectLabel(project)
@@ -205,7 +328,11 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 	if budget <= 0 {
 		budget = 1500
 	}
-	hardCap := budget * 2
+	mult := cfg.HardCapMultiplier
+	if mult <= 0 {
+		mult = 2
+	}
+	hardCap := budget * mult
 
 	ids := make([]string, 0, len(constraints)+len(sec.stages)+len(index))
 
@@ -251,7 +378,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 		used += estTokens(line)
 	}
 	dropped := 0
-	if len(index) > 0 {
+	if len(index) > 0 || sec.indexOmitted > 0 {
 		lead := "\nMemories (" + sanitizeField(label, 80) + "):\n"
 		body.WriteString(lead)
 		used += estTokens(lead)
@@ -265,8 +392,10 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 			used += estTokens(line)
 			ids = append(ids, m.ID)
 		}
-		if dropped > 0 {
-			extra := fmt.Sprintf("- (+%d older -- use recall)\n", dropped)
+		// The trailer counts both budget-dropped lines and the recency/count trims,
+		// so filtered-out knowledge stays discoverable via recall.
+		if dropped+sec.indexOmitted > 0 {
+			extra := fmt.Sprintf("- (+%d older -- use recall)\n", dropped+sec.indexOmitted)
 			body.WriteString(extra)
 			used += estTokens(extra)
 		}
@@ -284,6 +413,25 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 				}
 				body.WriteString(line)
 				used += estTokens(line)
+			}
+		}
+	}
+
+	// Sibling memories pack right after the sibling findings: durable cross-over
+	// knowledge, deliberately below the own-project index so budget drops it first.
+	if len(sec.siblingMems) > 0 {
+		lead := "\nSibling memories:\n"
+		if used+estTokens(lead) <= budget {
+			body.WriteString(lead)
+			used += estTokens(lead)
+			for _, m := range sec.siblingMems {
+				line := "- " + sanitizeField(m.Project, 60) + "/" + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+				if used+estTokens(line) > budget {
+					break
+				}
+				body.WriteString(line)
+				used += estTokens(line)
+				ids = append(ids, m.ID)
 			}
 		}
 	}
@@ -306,7 +454,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections)
 
 	// Ready tasks is the last body section, so its cost is only checked against
 	// the budget, not accumulated (nothing follows it).
-	if line := readyTasksLine(ready); line != "" && used+estTokens(line) <= budget {
+	if line := readyTasksLine(ready, cfg.ReadyTasksShown); line != "" && used+estTokens(line) <= budget {
 		body.WriteString(line)
 	}
 
@@ -331,15 +479,16 @@ func planHead(plans []store.PlanRollup) string {
 }
 
 // readyTasksLine renders the briefing's ready-queue line ("Ready tasks: N -- t1;
-// t2; t3"), naming up to the three oldest ready tasks, or "" when none are ready.
-// The ordering matches store.ReadyTasks (oldest first), which the CLI shares.
-func readyTasksLine(ready []core.Task) string {
-	if len(ready) == 0 {
+// t2; t3"), naming up to shown oldest ready tasks, or "" when none are ready or
+// the line is disabled (shown 0). The ordering matches store.ReadyTasks (oldest
+// first), which the CLI shares.
+func readyTasksLine(ready []core.Task, shown int) string {
+	if len(ready) == 0 || shown <= 0 {
 		return ""
 	}
-	titles := make([]string, 0, 3)
+	titles := make([]string, 0, min(shown, len(ready)))
 	for _, t := range ready {
-		if len(titles) == 3 {
+		if len(titles) == shown {
 			break
 		}
 		titles = append(titles, sanitizeField(t.Title, 60))

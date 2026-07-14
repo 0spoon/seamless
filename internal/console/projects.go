@@ -93,7 +93,7 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 	now := time.Now().UTC()
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now, s.cfg.SessionIdleTTL)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

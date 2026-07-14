@@ -24,13 +24,15 @@ type Service struct {
 	embedder   llm.Embedder     // nil => lexical-only (FTS); recall degrades gracefully
 	bodyReader MemoryBodyReader // nil => briefing omits the pinned-stage section
 	budgets    config.Budgets
+	briefing   config.Briefing // file/env base; console overrides layer on at briefing time
 	logger     *slog.Logger
 
 	corpus *corpusCache // prompt-matcher IDF corpus, cached per project scope
 }
 
 // New builds a retrieval Service. embedder may be nil, in which case recall uses
-// FTS only and the semantic paths are skipped.
+// FTS only and the semantic paths are skipped. Briefing knobs start at their
+// defaults; SetBriefingConfig overrides them with the loaded file/env values.
 func New(db *sql.DB, embedder llm.Embedder, budgets config.Budgets, logger *slog.Logger) *Service {
 	if logger == nil {
 		logger = slog.Default()
@@ -39,10 +41,17 @@ func New(db *sql.DB, embedder llm.Embedder, budgets config.Budgets, logger *slog
 		db:       db,
 		embedder: embedder,
 		budgets:  budgets,
+		briefing: config.Defaults().Briefing,
 		logger:   logger,
 		corpus:   newCorpusCache(),
 	}
 }
+
+// SetBriefingConfig sets the file/env briefing knobs the Service starts from.
+// The console's runtime override row (store.SettingBriefingConfig) still layers
+// on top of these at briefing-assembly time, so a console save takes effect on
+// the next session start without a restart.
+func (s *Service) SetBriefingConfig(b config.Briefing) { s.briefing = b }
 
 // injectionRe strips imperative prompt-injection phrases from any field lifted
 // out of stored content and shown to an agent as trusted context.

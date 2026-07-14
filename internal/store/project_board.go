@@ -44,15 +44,16 @@ type ProjectBoardRow struct {
 // backpressure, and last-active recency computed in SQL, then retrieval reach
 // (ReachRate/Surfaced/Active) joined by slug from BuildRetrievalReport over the
 // given window. LiveSessions counts sessions that are active AND updated within
-// core.SessionIdleTTL of now, matching the Sessions screen's live bucket, so an
-// active-but-idle session awaiting the reaper never inflates the board.
+// idleTTL of now (<= 0 falls back to core.SessionIdleTTL), matching the
+// Sessions screen's live bucket, so an active-but-idle session awaiting the
+// reaper never inflates the board.
 //
 // The counts mirror GetProjectCounts exactly (same strict per-slug predicates),
 // so a single row equals the single-project peek. The global scope ("") is its
 // own row (never folded into named projects); it is never flagged Unregistered
 // because the global scope is legitimately never registered. Rows are ordered by
 // slug (the global "" scope first).
-func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow, now time.Time) ([]ProjectBoardRow, error) {
+func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow, now time.Time, idleTTL time.Duration) ([]ProjectBoardRow, error) {
 	rows := map[string]*ProjectBoardRow{}
 	row := func(slug string) *ProjectBoardRow {
 		r := rows[slug]
@@ -74,7 +75,10 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow,
 	// plus live count (active within the idle TTL) and MAX(updated_at) for
 	// recency, in one pass. LastActive deliberately ignores the cutoff: it
 	// reflects last activity regardless of live/idle.
-	liveCutoff := core.FormatTime(now.UTC().Add(-core.SessionIdleTTL))
+	if idleTTL <= 0 {
+		idleTTL = core.SessionIdleTTL
+	}
+	liveCutoff := core.FormatTime(now.UTC().Add(-idleTTL))
 	sessRows, err := db.QueryContext(ctx, `
 		SELECT project_slug, COUNT(*),
 		       SUM(CASE WHEN status = 'active' AND updated_at >= ? THEN 1 ELSE 0 END),

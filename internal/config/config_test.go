@@ -34,6 +34,18 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 30, d.Gardener.DigestDays)
 	require.Equal(t, 30, d.Gardener.ToolEventRetentionDays)
 	require.Equal(t, 14, d.Gardener.StalePlanDays)
+	require.Equal(t, 45, d.Gardener.SessionIdleMinutes)
+	// Briefing defaults reproduce the historical hardcoded auto-inject behavior.
+	require.Equal(t, 0, d.Briefing.MemoryMaxAgeDays)
+	require.Equal(t, 0, d.Briefing.MemoryMaxItems)
+	require.Equal(t, 3, d.Briefing.FindingsCount)
+	require.Equal(t, 0, d.Briefing.FindingsMaxAgeDays)
+	require.Equal(t, 3, d.Briefing.ReadyTasksShown)
+	require.Equal(t, 7, d.Briefing.PendingPlanMaxDays)
+	require.Equal(t, 2, d.Briefing.HardCapMultiplier)
+	require.True(t, d.Briefing.IncludeParentMemories)
+	require.Equal(t, 2, d.Briefing.SiblingFindingsCount)
+	require.False(t, d.Briefing.IncludeSiblingMemories)
 	require.True(t, d.PlanCapture.Enabled)
 	require.True(t, d.PlanCapture.AutoTask)
 	require.True(t, d.PlanCapture.InjectRelated)
@@ -128,6 +140,50 @@ func TestLoadFrom_BadEnvInt(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLoadFrom_BriefingFileAndEnv(t *testing.T) {
+	path := writeConfig(t, `
+briefing:
+  memory_max_age_days: 60
+  findings_count: 5
+  include_sibling_memories: true
+gardener:
+  session_idle_minutes: 30
+`)
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, 60, cfg.Briefing.MemoryMaxAgeDays)
+	require.Equal(t, 5, cfg.Briefing.FindingsCount)
+	require.True(t, cfg.Briefing.IncludeSiblingMemories)
+	require.Equal(t, 30, cfg.Gardener.SessionIdleMinutes)
+	// Absent briefing keys keep their defaults.
+	require.Equal(t, 3, cfg.Briefing.ReadyTasksShown)
+	require.Equal(t, 7, cfg.Briefing.PendingPlanMaxDays)
+	require.True(t, cfg.Briefing.IncludeParentMemories)
+
+	t.Setenv("SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS", "90")
+	t.Setenv("SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS", "25")
+	t.Setenv("SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS", "14")
+	t.Setenv("SEAMLESS_BRIEFING_READY_TASKS_SHOWN", "1")
+	t.Setenv("SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS", "3")
+	t.Setenv("SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER", "3")
+	t.Setenv("SEAMLESS_BRIEFING_SIBLING_FINDINGS_COUNT", "0")
+	t.Setenv("SEAMLESS_BRIEFING_INCLUDE_PARENT_MEMORIES", "false")
+	t.Setenv("SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES", "false")
+	t.Setenv("SEAMLESS_GARDENER_SESSION_IDLE_MINUTES", "20")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, 90, cfg.Briefing.MemoryMaxAgeDays, "env wins over file")
+	require.Equal(t, 25, cfg.Briefing.MemoryMaxItems)
+	require.Equal(t, 14, cfg.Briefing.FindingsMaxAgeDays)
+	require.Equal(t, 1, cfg.Briefing.ReadyTasksShown)
+	require.Equal(t, 3, cfg.Briefing.PendingPlanMaxDays)
+	require.Equal(t, 3, cfg.Briefing.HardCapMultiplier)
+	require.Equal(t, 0, cfg.Briefing.SiblingFindingsCount)
+	require.False(t, cfg.Briefing.IncludeParentMemories)
+	require.False(t, cfg.Briefing.IncludeSiblingMemories)
+	require.Equal(t, 20, cfg.Gardener.SessionIdleMinutes)
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -146,6 +202,12 @@ func TestValidate(t *testing.T) {
 		{"negative-tool-event-retention", func(c *Config) { c.Gardener.ToolEventRetentionDays = -1 }, true},
 		{"zero-stale-plan-days-ok", func(c *Config) { c.Gardener.StalePlanDays = 0 }, false},
 		{"negative-stale-plan-days", func(c *Config) { c.Gardener.StalePlanDays = -1 }, true},
+		{"zero-session-idle-ok", func(c *Config) { c.Gardener.SessionIdleMinutes = 0 }, false},
+		{"negative-session-idle", func(c *Config) { c.Gardener.SessionIdleMinutes = -1 }, true},
+		{"zero-briefing-knobs-ok", func(c *Config) { c.Briefing = Briefing{} }, false},
+		{"negative-briefing-findings", func(c *Config) { c.Briefing.FindingsCount = -1 }, true},
+		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
+		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

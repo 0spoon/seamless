@@ -24,7 +24,7 @@ preserved read-only as a fallback archive.
 cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
 internal/core/     domain types: Project, Memory, Session, Task, Trial, Event
-internal/config/   single YAML + env config (static key, budgets, llm)
+internal/config/   single YAML + env config (static key, budgets, briefing tunables, llm)
 internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations
 internal/events/   append-only event log; SSE fan-out; retrieval stats
 internal/validate/ path/title/name guards
@@ -73,6 +73,18 @@ go test ./internal/validate -run TestTitle -v
 | Auth | single static bearer key, localhost bind (no JWT) |
 | Console | `html/template` + vanilla JS + SSE (no node/React) |
 | Tests | testify/require, table-driven, fresh/in-memory SQLite |
+
+## Configuration
+
+Single YAML file (`$SEAMLESS_CONFIG`, `~/.config/seamless/seamless.yaml`, or
+`./seamless.yaml`; see `seamless.yaml.example` for every key) with `SEAMLESS_*`
+env overrides -- env wins over file, file over defaults. The `briefing:` block
+tunes what the SessionStart `<seam-briefing>` auto-injects (section counts,
+recency filters, family cross-over, hard-cap multiplier); those knobs are also
+editable live in the console (Settings -> Briefing injection), which stores a
+runtime override in the DB that wins over file/env until reset and applies from
+the next session start without a daemon restart. `gardener.session_idle_minutes`
+is the single live/idle threshold shared by the session reaper and the console.
 
 ## Storage layout
 

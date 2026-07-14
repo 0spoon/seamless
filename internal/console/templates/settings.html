@@ -3,7 +3,7 @@
 <div class="topbar">
   <div>
     <h1>Settings</h1>
-    <div class="sub">Read-only view of the running configuration</div>
+    <div class="sub">Running configuration &mdash; briefing injection is tunable, the rest is read-only</div>
   </div>
 </div>
 
@@ -34,7 +34,74 @@
       <dt>Digest window</dt><dd>{{.Gardener.DigestDays}}d</dd>
       <dt>Tool event retention</dt><dd>{{if .Gardener.ToolEventRetentionDays}}{{.Gardener.ToolEventRetentionDays}}d{{else}}disabled{{end}}</dd>
       <dt>Stale plan cutoff</dt><dd>{{if .Gardener.StalePlanDays}}{{.Gardener.StalePlanDays}}d{{else}}disabled{{end}}</dd>
+      <dt>Session idle TTL</dt><dd>{{if .Gardener.SessionIdleMinutes}}{{.Gardener.SessionIdleMinutes}}m{{else}}45m (default){{end}}</dd>
     </dl>
+  </div>
+</div>
+
+<div class="section">
+  <div class="card brief-form">
+    <form method="post" action="/console/settings/briefing">
+      <h2>Briefing injection <span class="h2-meta">{{if .BriefingOverridden}}console override active{{else}}matches file/env config{{end}}</span></h2>
+      <p class="fnote">Tunes what the SessionStart <span class="mono">&lt;seam-briefing&gt;</span> auto-injects.
+        Saving stores a runtime override in the database (the config file is never written) and applies from the
+        next session start &mdash; no restart needed. Constraints, pinned stages, and active-plan rollups are
+        never filtered, whatever is set here.</p>
+      <div class="fgrid">
+        <label class="f">Memory index max items
+          <input type="number" name="memory_max_items" min="0" value="{{.Briefing.MemoryMaxItems}}">
+          <span class="fhelp">cap on index lines &middot; 0 = budget-only</span>
+        </label>
+        <label class="f">Memory index max age
+          <input type="number" name="memory_max_age_days" min="0" value="{{.Briefing.MemoryMaxAgeDays}}">
+          <span class="fhelp">days &middot; 0 = no recency filter</span>
+        </label>
+        <label class="f">Recent findings
+          <input type="number" name="findings_count" min="0" value="{{.Briefing.FindingsCount}}">
+          <span class="fhelp">findings injected &middot; 0 hides the section</span>
+        </label>
+        <label class="f">Findings max age
+          <input type="number" name="findings_max_age_days" min="0" value="{{.Briefing.FindingsMaxAgeDays}}">
+          <span class="fhelp">days &middot; 0 = no age filter</span>
+        </label>
+        <label class="f">Ready task titles
+          <input type="number" name="ready_tasks_shown" min="0" value="{{.Briefing.ReadyTasksShown}}">
+          <span class="fhelp">titles on the ready line &middot; 0 hides it</span>
+        </label>
+        <label class="f">Pending plan window
+          <input type="number" name="pending_plan_max_days" min="0" value="{{.Briefing.PendingPlanMaxDays}}">
+          <span class="fhelp">days a captured plan stays &ldquo;awaiting approval&rdquo; &middot; 0 = no cutoff</span>
+        </label>
+        <label class="f">Sibling findings
+          <input type="number" name="sibling_findings_count" min="0" value="{{.Briefing.SiblingFindingsCount}}">
+          <span class="fhelp">findings from family projects &middot; 0 hides the section</span>
+        </label>
+        <label class="f">Hard cap multiplier
+          <input type="number" name="hard_cap_multiplier" min="0" value="{{.Briefing.HardCapMultiplier}}">
+          <span class="fhelp">&times; max briefing tokens = truncation ceiling &middot; 0 = 2</span>
+        </label>
+      </div>
+      <div class="fchecks">
+        <label class="fcheck">
+          <input type="checkbox" name="include_parent_memories" value="1"{{if .Briefing.IncludeParentMemories}} checked{{end}}>
+          Include parent memories
+          <span class="fhelp">a child project inherits its shared parent&rsquo;s memories</span>
+        </label>
+        <label class="fcheck">
+          <input type="checkbox" name="include_sibling_memories" value="1"{{if .Briefing.IncludeSiblingMemories}} checked{{end}}>
+          Include sibling memories
+          <span class="fhelp">fold family projects&rsquo; memories in as a low-priority section</span>
+        </label>
+      </div>
+      <div class="btn-row frow-actions">
+        <button class="btn primary" type="submit">Save briefing settings</button>
+        {{if .BriefingOverridden}}
+        <button class="btn" type="submit" form="brief-reset"
+          onclick="return confirm('Clear the console override and go back to the file/env configuration?');">Reset to file config</button>
+        {{end}}
+      </div>
+    </form>
+    {{if .BriefingOverridden}}<form id="brief-reset" method="post" action="/console/settings/briefing/reset"></form>{{end}}
   </div>
 </div>
 

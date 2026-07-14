@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 func TestSettingsGetSet(t *testing.T) {
@@ -21,6 +23,52 @@ func TestSettingsGetSet(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, found)
 	require.Equal(t, "v2", v)
+}
+
+func TestBriefingConfigOverride(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	base := config.Defaults().Briefing
+
+	// No override row: the base config passes through untouched.
+	got, overridden, err := BriefingConfig(ctx, db, base)
+	require.NoError(t, err)
+	require.False(t, overridden)
+	require.Equal(t, base, got)
+
+	// A saved override layers over the base and round-trips every field.
+	saved := base
+	saved.FindingsCount = 5
+	saved.MemoryMaxAgeDays = 30
+	saved.IncludeSiblingMemories = true
+	require.NoError(t, SetBriefingConfig(ctx, db, saved))
+	got, overridden, err = BriefingConfig(ctx, db, base)
+	require.NoError(t, err)
+	require.True(t, overridden)
+	require.Equal(t, saved, got)
+
+	// A partial row (an older console version) keeps base values for absent
+	// fields instead of zeroing them.
+	require.NoError(t, SetSetting(ctx, db, SettingBriefingConfig, `{"findingsCount":1}`))
+	got, overridden, err = BriefingConfig(ctx, db, base)
+	require.NoError(t, err)
+	require.True(t, overridden)
+	require.Equal(t, 1, got.FindingsCount)
+	require.Equal(t, base.ReadyTasksShown, got.ReadyTasksShown)
+	require.Equal(t, base.IncludeParentMemories, got.IncludeParentMemories)
+
+	// A corrupt row errors (and reports the base) rather than silently zeroing.
+	require.NoError(t, SetSetting(ctx, db, SettingBriefingConfig, `{not json`))
+	_, _, err = BriefingConfig(ctx, db, base)
+	require.Error(t, err)
+
+	// Clearing reverts to the base; clearing twice is a no-op.
+	require.NoError(t, ClearBriefingConfig(ctx, db))
+	require.NoError(t, ClearBriefingConfig(ctx, db))
+	got, overridden, err = BriefingConfig(ctx, db, base)
+	require.NoError(t, err)
+	require.False(t, overridden)
+	require.Equal(t, base, got)
 }
 
 func TestSiblingProjects(t *testing.T) {

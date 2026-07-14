@@ -63,7 +63,7 @@ func TestProjectsWithCounts(t *testing.T) {
 	// One injection of a seam memory so reach joins in (seam: 1/2 surfaced -> 50%).
 	insertRetrievalEvent(t, db, core.EventInjected, "s-seam-a", "m1", "{}", tsAt(1))
 
-	rows, err := ProjectsWithCounts(ctx, db, ResolveRetrievalWindow("all", tsAt(10)), tsAt(10))
+	rows, err := ProjectsWithCounts(ctx, db, ResolveRetrievalWindow("all", tsAt(10)), tsAt(10), 0)
 	require.NoError(t, err)
 
 	byProject := map[string]ProjectBoardRow{}
@@ -134,7 +134,7 @@ func TestProjectsWithCounts(t *testing.T) {
 func TestProjectsWithCounts_Empty(t *testing.T) {
 	db := openTestDB(t)
 	now := time.Now().UTC()
-	rows, err := ProjectsWithCounts(context.Background(), db, ResolveRetrievalWindow("all", now), now)
+	rows, err := ProjectsWithCounts(context.Background(), db, ResolveRetrievalWindow("all", now), now, 0)
 	require.NoError(t, err)
 	require.Empty(t, rows)
 }
