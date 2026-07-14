@@ -1,0 +1,45 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/notes">Notes</a> <span class="faint">/</span> <b>{{.Title}}</b> {{copyBtn .Title}}</div>
+
+<div class="detail-head">
+  <div class="title-row">
+    <span class="tile">{{icon "file-text"}}</span>
+    <h1>{{.Title}}</h1>
+    <span class="kind">note</span>
+    <span class="chip-parent">{{icon "git-branch"}}{{if .Project}}{{.Project}}{{else}}inbox{{end}}</span>
+  </div>
+  {{if .Description}}<div class="desc">{{.Description}}</div>{{end}}
+</div>
+
+<div class="drail">
+  <div class="dcol">
+    <div class="card">
+      <h2>Body</h2>
+      {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="empty">Body unavailable</div>{{end}}
+    </div>
+  </div>
+
+  <div class="dside">
+    <div class="card">
+      <h2>Details</h2>
+      <dl class="kv">
+        <dt>Project</dt><dd class="mono">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}inbox{{end}}</dd>
+        {{if .Tags}}<dt>Tags</dt><dd>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>{{end}}
+        {{if .SourceURL}}<dt>Source</dt><dd class="mono"><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.SourceURL}}</a></dd>{{end}}
+        <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
+        <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+        <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Actions</h2>
+      <div class="peek-actions">
+        <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+{{end}}

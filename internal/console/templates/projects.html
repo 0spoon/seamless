@@ -42,14 +42,14 @@
 {{end}}
 
 {{define "projrow"}}
-<div class="prow{{if .Child}} child{{end}}{{if .Retired}} retired{{end}}"{{if not .Global}} data-href="/console/projects/{{.Slug}}" data-peek{{end}}>
+<div class="prow{{if not .Global}} row-link{{end}}{{if .Child}} child{{end}}{{if .Retired}} retired{{end}}"{{if not .Global}} data-href="/console/projects/{{.Slug}}"{{end}}>
   <div class="pname">
     <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
     <div class="txt">
       {{if .Global}}
       <span class="gname">{{.Name}}</span>
       {{else}}
-      <a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}{{if .Retired}} <span class="kind warn">retired</span>{{end}}{{if .Working}} <span class="work-dot"><span class="live-dot"></span>{{.Working}} working</span>{{end}}</a>
+      <a href="/console/projects/{{.Slug}}">{{.Slug}}{{if .Retired}} <span class="kind warn">retired</span>{{end}}{{if .Working}} <span class="work-dot"><span class="live-dot"></span>{{.Working}} working</span>{{end}}</a>
       {{end}}
       <div class="cap">{{if .Description}}{{.Description}}{{else if .Global}}global scope &middot; belongs to no project{{else if .Unregistered}}unregistered &middot; not in the projects table{{else if .Child}}inherits {{.Inherited}} from parent{{end}}</div>
     </div>

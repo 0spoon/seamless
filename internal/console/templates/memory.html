@@ -1,0 +1,69 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/memories">Memories</a> <span class="faint">/</span> <b>{{.Name}}</b> {{copyBtn .Name}}</div>
+
+<div class="detail-head">
+  <div class="title-row">
+    <span class="tile">{{icon "database"}}</span>
+    <h1>{{.Name}}</h1>
+    <span class="badge {{if eq .Status "active"}}ok{{else if eq .Status "superseded"}}warn{{end}}">{{.Status}}</span>
+    <span class="kind">{{.Kind}}</span>
+    <span class="chip-parent">{{icon "git-branch"}}{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
+  </div>
+  {{if .Description}}<div class="desc">{{.Description}}</div>{{end}}
+</div>
+
+<div class="drail">
+  <div class="dcol">
+    <div class="card">
+      <h2>Body</h2>
+      {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="empty">Body unavailable</div>{{end}}
+    </div>
+
+    {{if .Supersedes}}
+    <div class="card">
+      <h2>Supersedes <span class="h2-meta">{{len .Supersedes}}</span></h2>
+      <div class="rail-list">
+        {{range .Supersedes}}<div class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="kind">{{.Kind}}</span></div>{{end}}
+      </div>
+    </div>
+    {{end}}
+  </div>
+
+  <div class="dside">
+    <div class="card">
+      <h2>Details</h2>
+      <dl class="kv">
+        <dt>Project</dt><dd class="mono">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
+        {{if .Tags}}<dt>Tags</dt><dd>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>{{end}}
+        {{if .Source}}<dt>Source</dt><dd class="mono">{{if .SourceID}}<a href="/console/sessions/{{.SourceID}}" data-peek>{{.Source}}</a>{{else}}{{.Source}}{{end}}</dd>{{end}}
+        {{if .ReplacedByID}}<dt>Superseded by</dt><dd><a href="/console/memories/{{.ReplacedByID}}" data-peek>{{.ReplacedBy}}</a></dd>{{end}}
+        <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
+        <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+        <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Retrieval</h2>
+      <dl class="kv">
+        <dt>Injected</dt><dd>{{.Injects}}{{if .LastInjected}} <span class="muted">&middot; last {{ago .LastInjected}}</span>{{end}}</dd>
+        <dt>Read</dt><dd>{{.Reads}}{{if .LastRead}} <span class="muted">&middot; last {{ago .LastRead}}</span>{{end}}</dd>
+      </dl>
+    </div>
+
+    <div class="card">
+      <h2>Actions</h2>
+      <div class="peek-actions">
+        <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
+        {{if .CanArchive}}
+        <form method="post" action="/console/memories/{{.ID}}/archive" onsubmit="return confirm('Archive {{.Name}}?');">
+          <button class="link-act danger" type="submit">archive</button>
+        </form>
+        {{end}}
+      </div>
+    </div>
+  </div>
+</div>
+{{end}}
+{{end}}
