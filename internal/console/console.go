@@ -16,6 +16,7 @@ import (
 	"html/template"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -92,6 +93,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
 	mux.HandleFunc("GET /console/projects", s.auth(s.projectsList))
 	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
+	mux.HandleFunc("GET /console/relations", s.auth(s.relations))
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
 	mux.HandleFunc("POST /console/gardener/request", s.auth(s.gardenerRequest))
 	mux.HandleFunc("POST /console/gardener/split", s.auth(s.gardenerSplit))
@@ -263,6 +265,22 @@ type overviewData struct {
 	CovTotal         int                    // in-window sessions (coverage denominator)
 	CoverageRows     []coverageRow          // per-channel breakdown (findings/memories/notes/trials), in-window
 	CoverageTrend    []store.CoverageBucket // windowed coverage-rate trend (nil = no in-window sessions)
+	Projects         []projectGlanceRow     // top projects by recent activity ("projects at a glance")
+}
+
+// projectGlanceRow is one row of the overview's "projects at a glance" table: a
+// project's strict per-slug health (reach %, sessions, open tasks, memories,
+// last-active) from the same batched query the board uses, so a row reconciles
+// with the board exactly.
+type projectGlanceRow struct {
+	Slug       string
+	Live       int
+	Sessions   int
+	OpenTasks  int
+	Memories   int
+	ReachRate  int
+	HasReach   bool
+	LastActive time.Time
 }
 
 // windowOption is one entry in the retrieval-health window selector: a stable key
@@ -340,6 +358,34 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// "Projects at a glance": the top projects by recent activity, from the same
+	// batched board query -- strict per-slug counts, so these rows equal the
+	// board's rows exactly. The global ("") scope is not a project row.
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	glance := make([]projectGlanceRow, 0, len(board))
+	for _, b := range board {
+		if b.Project == "" {
+			continue
+		}
+		glance = append(glance, projectGlanceRow{
+			Slug: b.Project, Live: b.LiveSessions, Sessions: b.Sessions,
+			OpenTasks: b.OpenTasks, Memories: b.Memories,
+			ReachRate: b.ReachRate, HasReach: b.Active > 0, LastActive: b.LastActive,
+		})
+	}
+	sort.SliceStable(glance, func(i, j int) bool {
+		if !glance[i].LastActive.Equal(glance[j].LastActive) {
+			return glance[i].LastActive.After(glance[j].LastActive)
+		}
+		return glance[i].Slug < glance[j].Slug
+	})
+	if len(glance) > 8 {
+		glance = glance[:8]
+	}
 
 	data := overviewData{
 		Trend:            report.Trend,
@@ -367,6 +413,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		Covered:          cov.Covered,
 		CovTotal:         cov.Total,
 		CoverageRows:     coverageRows(cov),
+		Projects:         glance,
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }

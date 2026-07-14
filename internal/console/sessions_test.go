@@ -112,3 +112,73 @@ func TestSessionDetail_NotFound(t *testing.T) {
 	rr := do(mux, req)
 	require.Equal(t, http.StatusNotFound, rr.Code)
 }
+
+// TestSessionDetail_ClaimedTaskAndMemories covers the T2b relation joins the
+// session-detail rail renders: the live task a session holds and the memories it
+// produced.
+func TestSessionDetail_ClaimedTaskAndMemories(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: mustID(t), Slug: "seamless", Name: "Seamless", CreatedAt: now, UpdatedAt: now,
+	}))
+	sessID := mustID(t)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: sessID, Name: "cc/holder", ProjectSlug: "seamless", Status: core.SessionActive,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+	taskID := mustID(t)
+	require.NoError(t, store.CreateTask(ctx, db, core.Task{
+		ID: taskID, ProjectSlug: "seamless", Title: "Wire the rail", Status: core.TaskOpen,
+		PlanSlug: "detail", CreatedAt: now, UpdatedAt: now,
+	}))
+	_, err := store.ClaimTask(ctx, db, taskID, sessID, 30*time.Minute, now)
+	require.NoError(t, err)
+	insertRawMemory(t, db, mustID(t), "seamless", "cc/holder", now)
+
+	var detail sessionDetail
+	getJSON(t, mux, "/console/sessions/"+sessID+"?format=json", &detail)
+	require.Len(t, detail.ClaimedTasks, 1, "the live claim shows on the rail")
+	require.Equal(t, "Wire the rail", detail.ClaimedTasks[0].Title)
+	require.Equal(t, "detail", detail.ClaimedTasks[0].PlanSlug)
+	require.NotEmpty(t, detail.ClaimedTasks[0].LeaseLeft)
+	require.Len(t, detail.Memories, 1, "the produced memory shows on the rail")
+
+	// The HTML page renders both panels.
+	body := getHTMLBody(t, mux, "/console/sessions/"+sessID)
+	require.Contains(t, body, "Claimed task")
+	require.Contains(t, body, "Wire the rail")
+	require.Contains(t, body, "Memories written")
+}
+
+// TestOverview_ProjectsAtAGlance covers the projects-at-a-glance table: strict
+// per-slug rows sorted by recent activity, from the batched board query.
+func TestOverview_ProjectsAtAGlance(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: mustID(t), Slug: "older", Name: "older", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: mustID(t), Slug: "newer", Name: "newer", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: mustID(t), Name: "cc/o", ProjectSlug: "older", Status: core.SessionCompleted,
+		CreatedAt: now.Add(-48 * time.Hour), UpdatedAt: now.Add(-48 * time.Hour),
+	}))
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: mustID(t), Name: "cc/n", ProjectSlug: "newer", Status: core.SessionActive,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+
+	var data overviewData
+	getJSON(t, mux, "/console/?format=json", &data)
+	require.Len(t, data.Projects, 2)
+	require.Equal(t, "newer", data.Projects[0].Slug, "most recently active project first")
+	require.Equal(t, "older", data.Projects[1].Slug)
+	require.Equal(t, 1, data.Projects[0].Live, "the active session counts as live")
+}
