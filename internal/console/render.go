@@ -22,7 +22,7 @@ var consoleCSS []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
-	"memories", "memory", "notes", "note", "retrieval", "tasks", "task", "plans", "plan", "gardener", "settings", "event",
+	"memories", "memory", "notes", "note", "retrieval", "tasks", "task", "plans", "plan", "gardener", "settings", "event", "error",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -224,37 +224,72 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	_ = enc.Encode(v)
 }
 
+// errorData is the payload for the styled in-console error page.
+type errorData struct {
+	Status  int
+	Heading string
+	Message string
+}
+
+// renderErrorPage renders a full, layout-wrapped error page (sidebar + a way
+// back) at the given HTTP status, so a bad/stale URL keeps the observer inside
+// the console instead of dropping them on a bare "404 page not found". Only for
+// browsers; JSON/CLI callers are answered before reaching here. Falls back to
+// plaintext if the template is somehow unavailable.
+func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status int, heading, msg string) {
+	tmpl, ok := s.pages["error"]
+	if !ok {
+		http.Error(w, msg, status)
+		return
+	}
+	pd := pageData{
+		Title: heading,
+		Nav:   s.navCounts(r.Context()),
+		Data:  errorData{Status: status, Heading: heading, Message: msg},
+	}
+	var buf bytes.Buffer
+	if err := tmpl.ExecuteTemplate(&buf, "layout", pd); err != nil {
+		http.Error(w, msg, status)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = buf.WriteTo(w)
+}
+
 // badRequest reports a 400 in the caller's preferred format, for a strictly
 // validated query param (an unknown enum value). The message names the bad
 // param and lists the valid values so an agent driving the console by URL sees
-// the fix rather than a silent default.
+// the fix rather than a silent default; a browser gets the styled error page.
 func (s *Service) badRequest(w http.ResponseWriter, r *http.Request, msg string) {
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
 		return
 	}
-	http.Error(w, msg, http.StatusBadRequest)
+	s.renderErrorPage(w, r, http.StatusBadRequest, "Bad request", msg)
 }
 
 // notFound reports a 404 in the caller's preferred format, naming the missing
-// entity so an agent driving the console by URL sees exactly what was not found
-// (rather than a bare "404 page not found").
+// entity so an agent driving the console by URL sees exactly what was not found;
+// a browser gets the styled error page with a way back.
 func (s *Service) notFound(w http.ResponseWriter, r *http.Request, msg string) {
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusNotFound, map[string]string{"error": msg})
 		return
 	}
-	http.Error(w, msg, http.StatusNotFound)
+	s.renderErrorPage(w, r, http.StatusNotFound, "Not found", msg)
 }
 
-// serverError logs and reports a 500 in the caller's preferred format.
+// serverError logs and reports a 500 in the caller's preferred format. The
+// browser page stays generic (the detail is in the log, not the response).
 func (s *Service) serverError(w http.ResponseWriter, r *http.Request, err error) {
 	s.logger.Error("console: request failed", "path", r.URL.Path, "error", err)
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	http.Error(w, "internal error", http.StatusInternalServerError)
+	s.renderErrorPage(w, r, http.StatusInternalServerError, "Something went wrong",
+		"An internal error occurred and has been logged.")
 }
 
 // ---------------------------------------------------------------------------

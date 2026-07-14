@@ -52,7 +52,7 @@
           <tbody>
             {{range .Projects}}
             <tr class="row-link" data-href="/console/projects/{{.Slug}}" data-peek>
-              <td><span class="mono">{{.Slug}}</span>{{if .Live}} <span class="work-dot"><span class="live-dot"></span>{{.Live}}</span>{{end}}</td>
+              <td><a class="mono" href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}</a>{{if .Live}} <span class="work-dot"><span class="live-dot"></span>{{.Live}}</span>{{end}}</td>
               <td>{{if .HasReach}}<span style="color:var(--brand);font-weight:700">{{.ReachRate}}%</span>{{else}}<span class="faint">&mdash;</span>{{end}}</td>
               <td class="num">{{.Sessions}}</td>
               <td class="num{{if not .OpenTasks}} zero{{end}}">{{.OpenTasks}}</td>
@@ -76,7 +76,7 @@
             {{range .Recent}}
             <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
               <td class="muted" title="{{.When}}">{{ago .When}}</td>
-              <td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td>
+              <td><a href="/console/events/{{.ID}}" data-peek><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
               <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td>
               <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}" data-peek>{{shortID .SessionID}}</a>{{copyBtn .SessionID}}{{end}}</td>
             </tr>

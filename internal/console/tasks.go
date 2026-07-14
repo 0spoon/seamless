@@ -98,7 +98,7 @@ func (s *Service) taskRelease(w http.ResponseWriter, r *http.Request) {
 	released, err := store.ForceReleaseTask(ctx, s.cfg.DB, id, time.Now().UTC())
 	if err != nil {
 		if errors.Is(err, store.ErrTaskNotFound) {
-			http.NotFound(w, r)
+			s.notFound(w, r, "No task with id "+id+".")
 			return
 		}
 		// Not in progress (nothing to release) or a store error: surface it

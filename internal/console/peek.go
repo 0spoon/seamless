@@ -66,7 +66,7 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No memory with id "+id+".")
 		return
 	}
 
@@ -165,7 +165,7 @@ func (s *Service) noteDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		http.NotFound(w, r)
+		s.notFound(w, r, "No note with id "+id+".")
 		return
 	}
 	abs, edit := absAndEditURL(s.cfg.DataDir, n.FilePath)
@@ -223,7 +223,7 @@ func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
 	t, err := store.TaskByID(ctx, s.cfg.DB, id)
 	if err != nil {
 		if errors.Is(err, store.ErrTaskNotFound) {
-			http.NotFound(w, r)
+			s.notFound(w, r, "No task with id "+id+".")
 			return
 		}
 		s.serverError(w, r, err)

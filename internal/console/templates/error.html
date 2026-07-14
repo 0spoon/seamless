@@ -1,0 +1,11 @@
+{{define "content"}}
+{{with .Data}}
+<div class="errpage">
+  <div class="err-ico">{{icon "triangle-alert"}}</div>
+  <div class="err-code">{{.Status}}</div>
+  <h1 class="err-head">{{.Heading}}</h1>
+  <p class="err-msg">{{.Message}}</p>
+  <a class="btn" href="/console/">&larr;&nbsp;Back to console</a>
+</div>
+{{end}}
+{{end}}
