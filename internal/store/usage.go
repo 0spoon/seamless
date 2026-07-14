@@ -90,7 +90,10 @@ func countBy(ctx context.Context, db *sql.DB, query string) (map[string]int, err
 		}
 		out[key] = n
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.countBy: %w", err)
+	}
+	return out, nil
 }
 
 // topInjected returns the most-injected active memories, highest first.
@@ -114,5 +117,8 @@ func topInjected(ctx context.Context, db *sql.DB, limit int) ([]NamedCount, erro
 		}
 		out = append(out, nc)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.topInjected: %w", err)
+	}
+	return out, nil
 }

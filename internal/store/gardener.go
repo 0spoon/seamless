@@ -190,7 +190,10 @@ func scanProposals(rows *sql.Rows) ([]Proposal, error) {
 		}
 		out = append(out, p)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.scanProposals: %w", err)
+	}
+	return out, nil
 }
 
 // ---------------------------------------------------------------------------

@@ -362,5 +362,8 @@ func activeMemoryMeta(ctx context.Context, db *sql.DB) (map[string]memMeta, erro
 		}
 		out[id] = memMeta{kind: kind, name: name, project: project}
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.activeMemoryMeta: %w", err)
+	}
+	return out, nil
 }

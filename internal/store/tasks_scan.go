@@ -25,7 +25,7 @@ func scanTasksWithDeps(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]core.
 		tasks = append(tasks, t)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("store.scanTasksWithDeps: %w", err)
 	}
 	if len(tasks) == 0 {
 		return tasks, nil
