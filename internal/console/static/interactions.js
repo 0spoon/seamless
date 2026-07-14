@@ -337,10 +337,56 @@
     return bars;
   }
 
+  // ---- category filter + volume mounting (server-rendered IX surfaces) --------
+  // catOf maps an event kind to its filter/stack category (mirrors the server
+  // volCategory and the live feed's local cat), so the .ix-seg segments and the
+  // histogram bars agree.
+  function catOf(kind) {
+    if (kind === 'tool.call') return 'tool';
+    if (kind === 'retrieval.injected') return 'inject';
+    if (kind === 'hook.prompt') return 'prompt';
+    if (kind.indexOf('session.') === 0) return 'session';
+    if (kind.indexOf('plan.') === 0 || kind === 'subagent.captured') return 'plan';
+    return '';
+  }
+
+  // wireKindFilter connects a segmented .ix-seg[data-cat] control to a
+  // server-rendered .ix-feed, hiding rows by category (or errors-only). Shared by
+  // the project-detail and session-detail surfaces; the live feed runs its own
+  // compound filter (session AND category AND time bucket) instead.
+  function wireKindFilter(kindsEl, feedEl) {
+    if (!kindsEl || !feedEl) return;
+    kindsEl.addEventListener('click', function (e) {
+      var seg = e.target.closest ? e.target.closest('.ix-seg[data-cat]') : null;
+      if (!seg) return;
+      var c = seg.getAttribute('data-cat');
+      var segs = kindsEl.querySelectorAll('.ix-seg');
+      for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('active', segs[i] === seg);
+      var rows = feedEl.querySelectorAll('.ix-row');
+      for (var j = 0; j < rows.length; j++) {
+        var kind = rows[j].getAttribute('data-kind') || '';
+        var show = c === 'all' ||
+          (c === '__err__' ? rows[j].getAttribute('data-err') === '1' : catOf(kind) === c);
+        rows[j].hidden = !show;
+      }
+    });
+  }
+
+  // mountVolume renders the histogram a server embedded as JSON in el's data-vol
+  // attribute (static, hover-only). Used by the project- and session-detail pages.
+  function mountVolume(el) {
+    if (!el) return;
+    var buckets;
+    try { buckets = JSON.parse(el.getAttribute('data-vol') || '[]'); } catch (e) { return; }
+    renderVolume(buckets, el, {});
+    el.setAttribute('aria-hidden', buckets.length ? 'false' : 'true');
+  }
+
   global.IX = {
     el: el,
     iconEl: iconEl,
     evtIcon: evtIcon,
+    catOf: catOf,
     renderValue: renderValue,
     section: section,
     highlights: highlights,
@@ -348,6 +394,20 @@
     shortId: shortId,
     buildRow: buildRow,
     enhance: enhance,
+    wireKindFilter: wireKindFilter,
+    mountVolume: mountVolume,
     renderVolume: renderVolume
   };
+
+  // Auto-upgrade any server-rendered <pre class="ix-raw" data-ix-title> on the
+  // page into formatted, copyable IX sections once the DOM is ready, so a plain
+  // detail page (event, session timeline, project tab) needs no per-page script
+  // to get the feed's value rendering. Fragments injected later (the peek drawer)
+  // are enhanced by the drawer loader in layout.html.
+  function autoEnhance() { try { enhance(document); } catch (e) {} }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', autoEnhance);
+  } else {
+    autoEnhance();
+  }
 })(window);

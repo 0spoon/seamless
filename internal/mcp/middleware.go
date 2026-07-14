@@ -10,6 +10,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // logMiddleware records one tool.call event per invocation for the console's
@@ -25,6 +26,18 @@ func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHan
 		start := time.Now()
 		result, err := next(ctx, req)
 		durMS := time.Since(start).Milliseconds()
+
+		// Attribution doubles as the session heartbeat: any tool call is proof the
+		// agent is alive, so bump the attributed session's updated_at to keep the
+		// idle reaper from expiring it. Covers bound (explicit session_start) and
+		// ambient-fallback sessions alike; the active-only guard in TouchSession
+		// makes it a no-op for a just-ended one. Best-effort.
+		sessionID, project := s.attribution(ctx)
+		if sessionID != "" {
+			if terr := store.TouchSession(ctx, s.cfg.DB, sessionID, time.Now().UTC()); terr != nil {
+				s.logger.Warn("mcp: session heartbeat", "session", sessionID, "error", terr)
+			}
+		}
 
 		if s.cfg.Events == nil {
 			return result, err
@@ -54,7 +67,6 @@ func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHan
 				payload["error"] = firstLine(text)
 			}
 		}
-		sessionID, project := s.attribution(ctx)
 		s.record(ctx, core.EventToolCall, sessionID, project, "", payload)
 		return result, err
 	}

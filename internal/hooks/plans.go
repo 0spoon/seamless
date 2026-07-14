@@ -41,6 +41,12 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p)
 
+	// Heartbeat the ambient session on any tool activity, so a long turn that never
+	// calls a seamless MCP tool still keeps its cc/* session live for the reaper.
+	hbCtx, hbCancel := context.WithTimeout(r.Context(), hookTimeout)
+	h.touchAmbient(hbCtx, p.SessionID)
+	hbCancel()
+
 	extra := ""
 	if h.captureEnabled() {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)

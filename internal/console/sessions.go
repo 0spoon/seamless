@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -17,7 +19,9 @@ import (
 // sessionSortKeys are the accepted ?sort values on the sessions list.
 var sessionSortKeys = []string{"recent", "name"}
 
-// sessionRow is a display projection of a session for the list page.
+// sessionRow is a display projection of a session for the list page. Live is true
+// only for an active session whose last activity is within core.SessionIdleTTL;
+// an active-but-stale (idle) row has Live false and is awaiting the reaper.
 type sessionRow struct {
 	ID       string    `json:"id"`
 	Name     string    `json:"name"`
@@ -25,18 +29,23 @@ type sessionRow struct {
 	Status   string    `json:"status"`
 	Source   string    `json:"source"`
 	Ambient  bool      `json:"ambient"`
+	Live     bool      `json:"live"`
 	Findings string    `json:"findings"`
 	Updated  time.Time `json:"updated"`
 }
 
-// sessionsData is the payload for the sessions list page. Active/Completed count
-// the sessions shown (windowed); Total is the all-time session count for context.
+// sessionsData is the payload for the sessions list page. Active counts genuinely
+// live sessions (active + heartbeated within the idle TTL); Idle counts active
+// sessions gone quiet past it (the reaper will expire them); Completed and Expired
+// count those terminal states. All are windowed; Total is the all-time count.
 type sessionsData struct {
 	Filter      string         `json:"filter"`
 	Query       string         `json:"query,omitempty"`
 	Sort        string         `json:"sort"`
 	Active      int            `json:"active"`
+	Idle        int            `json:"idle"`
 	Completed   int            `json:"completed"`
+	Expired     int            `json:"expired"`
 	Total       int            `json:"total"`
 	Window      string         `json:"window"`
 	WindowLabel string         `json:"windowLabel"`
@@ -46,13 +55,15 @@ type sessionsData struct {
 
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	filter := r.URL.Query().Get("status") // "", active, completed
+	filter := r.URL.Query().Get("status") // "", active, completed, expired
 	var statusFilter core.SessionStatus
 	switch filter {
 	case string(core.SessionActive):
 		statusFilter = core.SessionActive
 	case string(core.SessionCompleted):
 		statusFilter = core.SessionCompleted
+	case string(core.SessionExpired):
+		statusFilter = core.SessionExpired
 	default:
 		filter = ""
 	}
@@ -79,22 +90,31 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	now := time.Now()
 	rows := make([]sessionRow, 0, len(sessions))
-	active, completed := 0, 0
+	active, idle, completed, expired := 0, 0, 0, 0
 	for _, sess := range sessions {
 		plain := markdown.PlainText(sess.Findings)
 		if !sessionMatches(sess.Name, sess.ProjectSlug, plain, sess.ID, q) {
 			continue
 		}
-		if sess.Status == core.SessionActive {
-			active++
-		} else {
+		live := sess.LiveAsOf(now)
+		switch sess.Status {
+		case core.SessionActive:
+			if live {
+				active++
+			} else {
+				idle++
+			}
+		case core.SessionExpired:
+			expired++
+		default:
 			completed++
 		}
 		rows = append(rows, sessionRow{
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
 			Status: string(sess.Status), Source: sess.Source, Ambient: sess.Ambient,
-			Findings: snippet(plain, 120), Updated: sess.UpdatedAt,
+			Live: live, Findings: snippet(plain, 120), Updated: sess.UpdatedAt,
 		})
 	}
 	if sortKey == "name" {
@@ -107,7 +127,8 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		Active: "sessions",
 		Data: sessionsData{
 			Filter: filter, Query: query, Sort: sortKey,
-			Active: active, Completed: completed, Total: counts.Sessions,
+			Active: active, Idle: idle, Completed: completed, Expired: expired,
+			Total:  counts.Sessions,
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			Sessions: rows,
 		},
@@ -140,18 +161,20 @@ func sessionSortName(row sessionRow) string {
 // markdown (JSON output); FindingsHTML is the rendered, sanitized version the
 // template shows.
 type sessionDetail struct {
-	Session      core.Session    `json:"session"`
-	Findings     string          `json:"findings"`
-	FindingsHTML template.HTML   `json:"-"`
-	Timeline     []eventRow      `json:"timeline"`
-	ToolCalls    int             `json:"toolCalls"`
-	Reads        int             `json:"memoryReads"`
-	Writes       int             `json:"memoryWrites"`
-	Injected     int             `json:"injectedItems"`
-	ReadBack     int             `json:"readAfterInject"`
-	ByKind       []kindCount     `json:"eventsByKind"`
-	ClaimedTasks []claimedTaskVM `json:"claimedTasks"`
-	Memories     []sessMemVM     `json:"memoriesWritten"`
+	Session      core.Session     `json:"session"`
+	Findings     string           `json:"findings"`
+	FindingsHTML template.HTML    `json:"-"`
+	Timeline     []eventRow       `json:"timeline"`
+	Interactions []interactionRow `json:"interactions"` // the timeline as shared IX feed rows
+	IxVolumeJSON string           `json:"-"`            // session-scoped volume buckets for IX.mountVolume
+	ToolCalls    int              `json:"toolCalls"`
+	Reads        int              `json:"memoryReads"`
+	Writes       int              `json:"memoryWrites"`
+	Injected     int              `json:"injectedItems"`
+	ReadBack     int              `json:"readAfterInject"`
+	ByKind       []kindCount      `json:"eventsByKind"`
+	ClaimedTasks []claimedTaskVM  `json:"claimedTasks"`
+	Memories     []sessMemVM      `json:"memoriesWritten"`
 }
 
 // claimedTaskVM is a task the session currently holds (a live claim), shown on
@@ -185,6 +208,8 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var timeline []eventRow
+	var interactions []interactionRow
+	var ixVolume string
 	byKind := map[string]int{}
 	toolCalls, reads, writes := 0, 0, 0
 	injected := map[string]struct{}{}
@@ -215,6 +240,33 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 		}
+		// Interactions surface: the session's events projected into the shared IX
+		// feed rows (newest first) plus a session-scoped volume histogram, built
+		// in-Go from the same fetch (no extra query). Scoped to the feed's
+		// interaction kinds so the rows, histogram, and kind filter all agree; the
+		// right-rail cards cover the non-interaction detail (reads/writes, produced
+		// memories, claimed tasks). BySession returns oldest-first, so we walk it in
+		// reverse to build both newest-first.
+		namer := func(string) (string, bool) { return sess.Name, sess.Ambient }
+		var ticks []events.KindTick
+		for i := len(evs) - 1; i >= 0; i-- {
+			e := evs[i]
+			if !isInteraction(e) || skipInteraction(e) {
+				continue
+			}
+			interactions = append(interactions, toInteractionRow(e, namer))
+			ticks = append(ticks, events.KindTick{TS: e.TS, Kind: string(e.Kind)})
+		}
+		if len(ticks) > 0 {
+			// Span the session's own activity (first -> last event), not up to now,
+			// so a short historical session isn't crushed into a single bucket.
+			newest, oldest := ticks[0].TS, ticks[len(ticks)-1].TS
+			if vol := buildVolume(ticks, newest.Sub(oldest), newest); len(vol) > 0 {
+				if b, jerr := json.Marshal(vol); jerr == nil {
+					ixVolume = string(b)
+				}
+			}
+		}
 	}
 	readBack := 0
 	for itemID := range injected {
@@ -225,6 +277,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 
 	data := sessionDetail{
 		Session: sess, Findings: sess.Findings, Timeline: timeline,
+		Interactions: interactions, IxVolumeJSON: ixVolume,
 		ToolCalls: toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
 	}

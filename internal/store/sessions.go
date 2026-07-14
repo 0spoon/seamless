@@ -57,6 +57,144 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	return nil
 }
 
+// TouchSession heartbeats an active session by bumping its updated_at, marking it
+// still-alive for the idle reaper. It only touches active sessions (the WHERE
+// guard), so it never resurrects a completed or expired one, and is a no-op on an
+// empty id. Callers fire it on activity (a bound MCP tool call), best-effort.
+func TouchSession(ctx context.Context, db *sql.DB, id string, now time.Time) error {
+	if id == "" {
+		return nil
+	}
+	_, err := db.ExecContext(ctx,
+		`UPDATE sessions SET updated_at = ? WHERE id = ? AND status = 'active'`,
+		core.FormatTime(now.UTC()), id)
+	if err != nil {
+		return fmt.Errorf("store.TouchSession: %w", err)
+	}
+	return nil
+}
+
+// TouchSessionByName is TouchSession keyed by the unique session name, for the
+// ambient hooks which know the cc/{prefix} name (not the ULID). Same active-only
+// guard and no-op-on-empty semantics.
+func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.Time) error {
+	if name == "" {
+		return nil
+	}
+	_, err := db.ExecContext(ctx,
+		`UPDATE sessions SET updated_at = ? WHERE name = ? AND status = 'active'`,
+		core.FormatTime(now.UTC()), name)
+	if err != nil {
+		return fmt.Errorf("store.TouchSessionByName: %w", err)
+	}
+	return nil
+}
+
+// ExpireStaleSessions reaps active sessions whose last activity predates cutoff,
+// flipping each to SessionExpired. It leaves updated_at untouched so the row still
+// records when the session was last alive (the console orders and dates by it),
+// which also keeps the flip idempotent: a reaped session no longer matches the
+// active filter. It returns the reaped sessions (id + project) so the caller can
+// release their task claims and record telemetry. Passing updated_at unchanged
+// means a later graceful session_end/resume can still upgrade the row (its guards
+// key off completed/active, not expired).
+func ExpireStaleSessions(ctx context.Context, db *sql.DB, cutoff time.Time) ([]core.Session, error) {
+	stale, err := staleActiveSessions(ctx, db, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range stale {
+		if _, err := db.ExecContext(ctx,
+			`UPDATE sessions SET status = 'expired' WHERE id = ? AND status = 'active'`,
+			s.ID); err != nil {
+			return nil, fmt.Errorf("store.ExpireStaleSessions: %w", err)
+		}
+	}
+	return stale, nil
+}
+
+// staleActiveSessions returns the active sessions whose last activity predates
+// cutoff, oldest first -- the reap candidate set. Split out so the read (with its
+// deferred Close) is done before ExpireStaleSessions issues its UPDATEs.
+func staleActiveSessions(ctx context.Context, db *sql.DB, cutoff time.Time) ([]core.Session, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
+		FROM sessions
+		WHERE status = 'active' AND updated_at < ?
+		ORDER BY updated_at ASC`, core.FormatTime(cutoff.UTC()))
+	if err != nil {
+		return nil, fmt.Errorf("store.staleActiveSessions: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var stale []core.Session
+	for rows.Next() {
+		s, serr := scanSession(rows)
+		if serr != nil {
+			return nil, fmt.Errorf("store.staleActiveSessions: %w", serr)
+		}
+		stale = append(stale, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.staleActiveSessions: %w", err)
+	}
+	return stale, nil
+}
+
+// ActiveAmbientByCWD returns the active ambient (cc/*) sessions whose cwd matches,
+// most recent first. session_start consults it to link a freshly created explicit
+// session to the Claude session that owns the cwd (via its claude_session_id), so a
+// graceful SessionEnd can close both at once instead of leaving the explicit one to
+// the idle reaper. An empty cwd matches nothing (no basis to link).
+func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, cwd string) ([]core.Session, error) {
+	if cwd == "" {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
+		FROM sessions
+		WHERE status = 'active' AND ambient = 1 AND cwd = ?
+		ORDER BY updated_at DESC, id DESC`, cwd)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientByCWD: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		s, serr := scanSession(rows)
+		if serr != nil {
+			return nil, fmt.Errorf("store.ActiveAmbientByCWD: %w", serr)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// ActiveSessionsByClaudeID returns every active session -- the ambient cc/* plus
+// any explicit session_start that linked to it -- stamped with claudeSessionID,
+// ambient first. The SessionEnd hook uses it to complete a whole Claude session's
+// sessions the moment we know it ended, rather than waiting out the idle TTL. An
+// empty id matches nothing.
+func ActiveSessionsByClaudeID(ctx context.Context, db *sql.DB, claudeSessionID string) ([]core.Session, error) {
+	if claudeSessionID == "" {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
+		FROM sessions
+		WHERE status = 'active' AND claude_session_id = ?
+		ORDER BY ambient DESC, updated_at DESC, id DESC`, claudeSessionID)
+	if err != nil {
+		return nil, fmt.Errorf("store.ActiveSessionsByClaudeID: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Session
+	for rows.Next() {
+		s, serr := scanSession(rows)
+		if serr != nil {
+			return nil, fmt.Errorf("store.ActiveSessionsByClaudeID: %w", serr)
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // SessionByID returns the session with the given id. found is false when absent.
 func SessionByID(ctx context.Context, db *sql.DB, id string) (core.Session, bool, error) {
 	return sessionOne(ctx, db, `SELECT `+sessionCols+` FROM sessions WHERE id = ? LIMIT 1`, id)

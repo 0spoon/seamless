@@ -3,12 +3,13 @@
 <div class="topbar">
   <div>
     <h1>Sessions</h1>
-    <div class="sub">{{.Total}} total &middot; {{.Active}} active</div>
+    <div class="sub">{{.Total}} total &middot; {{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}}</div>
   </div>
   <div class="btn-row">
     <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
     <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
     <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
+    <a class="btn small {{if eq .Filter "expired"}}primary{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Expired</a>
   </div>
 </div>
 
@@ -30,16 +31,18 @@
   {{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}{{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
 </div>
 
+<div class="list-detail-split">
+  <div class="list-pane">
 {{if .Sessions}}
 
-{{if and (or (eq .Filter "") (eq .Filter "active")) .Active}}
+{{if and (or (eq .Filter "") (eq .Filter "active")) (or .Active .Idle)}}
 <div class="sess-group">
-  <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span></h2>
+  <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span>{{if .Idle}} <span class="h2-meta faint">+{{.Idle}} idle</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "active"}}
-    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
+    <div class="sess-row row-link{{if not .Live}} idle{{end}}" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
         {{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
@@ -72,6 +75,27 @@
 {{end}}
 {{end}}
 
+{{if or (eq .Filter "") (eq .Filter "expired")}}
+{{if .Expired}}
+<div class="sess-group">
+  <h2>Expired{{if eq .Filter ""}} <span class="count">{{.Expired}}</span>{{end}}</h2>
+  <div class="sess-list">
+    {{range .Sessions}}{{if eq .Status "expired"}}
+    <div class="sess-row row-link expired" data-href="/console/sessions/{{.ID}}" data-peek>
+      <div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
+        <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
+      </div>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
+      <span class="src">{{.Source}}</span>
+      <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
+    </div>
+    {{end}}{{end}}
+  </div>
+</div>
+{{end}}
+{{end}}
+
 {{else}}
 {{if .Query}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions match &ldquo;{{.Query}}&rdquo;{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{end}}.</div></div>
@@ -79,5 +103,14 @@
 <div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}} &mdash; each hooked agent run records a session here.</div></div>
 {{end}}
 {{end}}
+  </div><!-- .list-pane -->
+  <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Session detail">
+    <div class="detail-pane-chrome">
+      <a class="detail-open btn small" href="#">open full &nearr;</a>
+      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+    </div>
+    <div class="detail-pane-body"></div>
+  </section>
+</div><!-- .list-detail-split -->
 {{end}}
 {{end}}

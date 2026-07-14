@@ -31,14 +31,14 @@
 {{if .Prompt}}
 <div class="section">
   <h2>Prompt</h2>
-  <div class="card"><pre class="pre">{{.Prompt}}</pre></div>
+  <pre class="ix-raw" data-ix-title="">{{.Prompt}}</pre>
 </div>
 {{end}}
 
 {{if .Content}}
 <div class="section">
   <h2>Injected content</h2>
-  <div class="card"><pre class="pre">{{.Content}}</pre></div>
+  <pre class="ix-raw" data-ix-title="">{{.Content}}</pre>
 </div>
 {{end}}
 
@@ -77,7 +77,7 @@
 <div class="section">
   <details>
     <summary class="muted">Raw payload</summary>
-    <div class="card" style="margin-top:8px"><pre class="pre">{{.RawJSON}}</pre></div>
+    <div style="margin-top:8px"><pre class="ix-raw" data-ix-title="">{{.RawJSON}}</pre></div>
   </details>
 </div>
 {{end}}
