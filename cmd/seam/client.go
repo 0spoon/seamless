@@ -33,7 +33,10 @@ func consoleJSON(cfg config.Config, path string, v any) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("console returned %s", resp.Status)
 	}
-	return json.NewDecoder(resp.Body).Decode(v)
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("unreadable console response from %s: %w", path, err)
+	}
+	return nil
 }
 
 // consolePOST performs an authenticated POST to a console action endpoint and
@@ -70,5 +73,8 @@ func consolePOST(cfg config.Config, path string, v any) error {
 	if v == nil {
 		return nil
 	}
-	return json.NewDecoder(resp.Body).Decode(v)
+	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+		return fmt.Errorf("unreadable console response from %s: %w", path, err)
+	}
+	return nil
 }

@@ -51,9 +51,14 @@ func runDoctor(args []string) error {
 		}
 	} else {
 		var hz map[string]any
-		_ = json.NewDecoder(resp.Body).Decode(&hz)
+		derr := json.NewDecoder(resp.Body).Decode(&hz)
 		_ = resp.Body.Close()
-		report(str(hz["status"]) == "ok", "server", fmt.Sprintf("%s (%s)", str(hz["status"]), base))
+		if derr != nil {
+			// Without this the check still fails, but reports a blank status and no reason.
+			report(false, "server", "unreadable health response from "+base+": "+derr.Error())
+		} else {
+			report(str(hz["status"]) == "ok", "server", fmt.Sprintf("%s (%s)", str(hz["status"]), base))
+		}
 	}
 
 	// Key + tool count via MCP tools/list.

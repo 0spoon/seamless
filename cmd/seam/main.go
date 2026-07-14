@@ -154,7 +154,12 @@ func callTool(ctx context.Context, cli *mcpclient.Client, name string, args map[
 	}
 	var out map[string]any
 	if text != "" {
-		_ = json.Unmarshal([]byte(text), &out)
+		// Every successful tool result is marshalled JSON, so unreadable text means
+		// something other than seamlessd answered. Propagate rather than returning a
+		// nil map, which callers would render as a confident empty result.
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			return nil, fmt.Errorf("unreadable %s response from seamlessd: %w", name, err)
+		}
 	}
 	return out, nil
 }
@@ -328,9 +333,13 @@ func runStatus(args []string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	var hz map[string]any
-	_ = json.NewDecoder(resp.Body).Decode(&hz)
-	fmt.Printf("server:   %s (%s)\n", str(hz["status"]), base)
-	fmt.Printf("version:  %s\n", str(hz["version"]))
+	if derr := json.NewDecoder(resp.Body).Decode(&hz); derr != nil {
+		// Degrade like the mcp branch below rather than printing a blank status.
+		fmt.Printf("server:   (unreadable health response: %v)\n", derr)
+	} else {
+		fmt.Printf("server:   %s (%s)\n", str(hz["status"]), base)
+		fmt.Printf("version:  %s\n", str(hz["version"]))
+	}
 	fmt.Printf("data dir: %s\n", cfg.DataDir)
 
 	// Project count via MCP (also proves the static key works).
