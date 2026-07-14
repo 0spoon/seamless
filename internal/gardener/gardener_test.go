@@ -107,6 +107,66 @@ func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
 	require.Len(t, got2, 2)
 }
 
+func TestReapStaleSessions(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	rec := events.NewRecorder(db)
+
+	now := time.Date(2026, 7, 12, 12, 0, 0, 0, time.UTC)
+	mk := func(name string, updatedAt time.Time, status core.SessionStatus) string {
+		id := mustID(t)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: "seamless", Status: status,
+			CreatedAt: updatedAt, UpdatedAt: updatedAt,
+		}))
+		return id
+	}
+
+	live := mk("cc/live", now.Add(-2*time.Minute), core.SessionActive)
+	stale := mk("sess/stale", now.Add(-2*time.Hour), core.SessionActive)
+
+	// The stale session holds a task claim, which reaping must return to the queue.
+	taskID := mustID(t)
+	require.NoError(t, store.CreateTask(ctx, db, core.Task{
+		ID: taskID, ProjectSlug: "seamless", Title: "held work", Status: core.TaskOpen,
+		CreatedAt: now.Add(-3 * time.Hour), UpdatedAt: now.Add(-3 * time.Hour),
+	}))
+	_, err = store.ClaimTask(ctx, db, taskID, stale, 30*time.Minute, now.Add(-2*time.Hour))
+	require.NoError(t, err)
+
+	g := New(db, nil, nil, nil, rec, Config{}, slog.Default())
+	g.now = func() time.Time { return now }
+	g.reapStaleSessions(ctx)
+
+	// Stale -> expired; live untouched.
+	gotStale, _, err := store.SessionByID(ctx, db, stale)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionExpired, gotStale.Status)
+	gotLive, _, err := store.SessionByID(ctx, db, live)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionActive, gotLive.Status)
+
+	// The held task is released back to open.
+	task, err := store.TaskByID(ctx, db, taskID)
+	require.NoError(t, err)
+	require.Equal(t, core.TaskOpen, task.Status)
+	require.Empty(t, task.ClaimedBy)
+
+	// A session.ended event stamped reason=expired was recorded for the reap.
+	evs, err := rec.Recent(ctx, 20)
+	require.NoError(t, err)
+	var reaped bool
+	for _, e := range evs {
+		if e.Kind == core.EventSessionEnded && e.SessionID == stale {
+			require.Equal(t, "expired", e.Payload["reason"])
+			reaped = true
+		}
+	}
+	require.True(t, reaped, "the reap recorded a session.ended event")
+}
+
 func TestRunOnce_ProducesAllThreeProposalKinds(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()

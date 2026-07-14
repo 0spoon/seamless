@@ -492,7 +492,7 @@ details > summary { font-family: var(--font-display); }
 /* ===========================================================================
    MISC
    =========================================================================== */
-.pre { font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; margin: 0; max-height: 320px; overflow: auto; line-height: 1.6; }
+.pre, .ix-raw { font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; margin: 0; max-height: 320px; overflow: auto; line-height: 1.6; }
 
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); display: inline-block; margin-right: 5px; animation: seam-pulse 2s var(--ease-in-out) infinite; flex: none; }
 
@@ -709,6 +709,10 @@ details > summary { font-family: var(--font-display); }
 .sess-row .proj { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--muted); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-row .src { font-size: var(--text-xs); color: var(--faint); text-align: right; }
 .sess-row .when { font-size: var(--text-xs); color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* Idle (active-but-stale, awaiting the reaper) and expired (reaped) rows read as
+   dimmed: the id no longer carries the live emphasis, and expired is faded. */
+.sess-row.idle .id-line a, .sess-row.expired .id-line a { color: var(--muted); font-weight: 500; }
+.sess-row.expired { opacity: .72; }
 @media (max-width: 720px) {
   .sess-row { grid-template-columns: minmax(0, 1fr) auto; }
   .sess-row .proj, .sess-row .src { display: none; }
@@ -981,6 +985,37 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .peek-actions form { margin: 0; }
 
 @media (max-width: 900px) { .peek { width: 100vw; } }
+
+/* ===========================================================================
+   LIST + DETAIL SPLIT -- an in-page detail pane below a list (the drawer's
+   successor, per plan:console-detail-split). A [data-peek] row loads the entity
+   fragment into #detail-pane; the list caps its height and scrolls on its own
+   only once a detail is open, so both stay visible without a page-length scroll.
+   The .peek* drawer above still serves screens not yet rolled over (until T4).
+   =========================================================================== */
+.list-detail-split { display: flex; flex-direction: column; gap: 18px; }
+.list-pane { min-width: 0; }
+/* Cap + independently scroll the list only while a detail is showing; the table
+   header and jump-index stay pinned to the scrollport top. */
+.list-detail-split.detail-open .list-pane { max-height: 58vh; overflow: auto; }
+.list-detail-split.detail-open .list-pane .table-wrap { overflow: visible; }
+.list-detail-split.detail-open .list-pane thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); }
+.list-detail-split.detail-open .mem-index { top: 0; }
+
+.detail-pane { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
+.detail-pane[hidden] { display: none; }
+.detail-pane:not([hidden]) { animation: peek-in var(--dur-med) var(--ease-out); }
+.detail-pane-chrome { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.detail-pane-body { padding: 18px; }
+
+/* Selected row in a split list -- a brand left-accent + soft wash, held while its
+   detail pane is open; overrides the transient hover cue. */
+.list-detail-split .row-link.selected td { background: var(--brand-soft); }
+.list-detail-split .row-link.selected td:first-child { box-shadow: inset 2px 0 0 var(--brand); }
+.list-detail-split .row-link.selected:hover td { background: var(--brand-soft); }
+/* Session rows are grid divs, not table cells -- give them the same selected wash. */
+.list-detail-split .sess-row.selected,
+.list-detail-split .sess-row.selected:hover { background: var(--brand-soft); box-shadow: inset 2px 0 0 var(--brand); }
 
 /* --- Interactions: live transport feed (Sentry-style stream) --- */
 .ix-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 4px 0 14px; flex-wrap: wrap; }

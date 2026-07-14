@@ -20,23 +20,39 @@
     </div>
 
     <div class="card">
-      <h2>Timeline <span class="h2-meta">{{len .Timeline}} event{{if ne (len .Timeline) 1}}s{{end}}</span></h2>
-      {{if .Timeline}}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
-          <tbody>
-            {{range .Timeline}}
-            <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
-              <td class="muted" title="{{ts .When}}">{{ago .When}}</td>
-              <td><a href="/console/events/{{.ID}}" data-peek><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
-              <td>{{.Summary}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+      <h2>Timeline <span class="h2-meta">{{len .Interactions}} interaction{{if ne (len .Interactions) 1}}s{{end}}</span></h2>
+      {{if .Interactions}}
+      <div class="ix-volume empty" id="ix-svol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
+      <div class="ix-controls">
+        <div class="ix-filters" id="ix-skinds">
+          <button class="ix-seg active" type="button" data-cat="all">All <span class="n">{{len .Interactions}}</span></button>
+          <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
+          <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
+          <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
+          <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
+          <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
+        </div>
       </div>
-      {{else}}<div class="empty">No recorded events for this session</div>{{end}}
+      <div class="ix-feed" id="ix-sfeed">
+        {{range .Interactions}}
+        <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
+          <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when" title="{{ts .TS}}">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .Ambient}}<span class="badge">ambient</span>{{end}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .DurationMS}}<span class="ix-meta">{{.DurationMS}}ms</span>{{else if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
+          <div class="ix-body">
+            {{if or .DurationMS .Items .IsError}}
+            <div class="ix-highlights">
+              {{if .DurationMS}}<span class="ix-chip"><span class="ix-chip-k">took</span><span class="ix-chip-v">{{.DurationMS}}ms</span></span>{{end}}
+              {{if .Items}}<span class="ix-chip"><span class="ix-chip-k">surfaced</span><span class="ix-chip-v">{{.Items}}</span></span>{{end}}
+              {{if .IsError}}<span class="ix-chip danger"><span class="ix-chip-k">status</span><span class="ix-chip-v">error</span></span>{{end}}
+            </div>
+            {{end}}
+            {{if .Request}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "subagent.captured"}}Prompt{{else}}Request{{end}}">{{.Request}}</pre>{{end}}
+            {{if .Response}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "retrieval.injected"}}Injected content{{else if hasPrefix .Kind "plan."}}Plan content{{else if eq .Kind "subagent.captured"}}Report{{else}}Response{{end}}">{{.Response}}</pre>{{end}}
+            <div class="ix-links"><a href="/console/events/{{.ID}}" data-peek>event &rarr;</a></div>
+          </div>
+        </details>
+        {{end}}
+      </div>
+      {{else}}<div class="empty">No interactions recorded for this session</div>{{end}}
     </div>
   </div>
 
@@ -91,4 +107,17 @@
   </div>
 </div>
 {{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  /* The shared IX module auto-formats the server-rendered request/response bodies
+     (enhance) on load; here we draw the session's volume histogram and wire the
+     kind filter, reusing the shared IX helpers so it matches the live feed. */
+  if (!window.IX) return;
+  window.IX.mountVolume(document.getElementById('ix-svol'));
+  window.IX.wireKindFilter(document.getElementById('ix-skinds'), document.getElementById('ix-sfeed'));
+})();
+</script>
 {{end}}

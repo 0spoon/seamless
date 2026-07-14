@@ -221,6 +221,67 @@ func TestHookEventCapture(t *testing.T) {
 	require.Contains(t, payloadString(ended[0].Payload["findings"]), "Did the thing.")
 }
 
+// TestSessionEndCascade_ClosesLinkedExplicitSession verifies the known-end
+// principle: a graceful SessionEnd closes not just the ambient cc/* session but any
+// explicit session_start linked to the same Claude session -- immediately, without
+// waiting out the idle TTL -- releasing its task claims and keeping its own findings.
+func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+	claudeID := "abcdef12-9999"
+
+	// SessionStart creates the ambient cc/abcdef12 stamped with claude_session_id.
+	_, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": claudeID, "cwd": "/work/demo", "source": "startup",
+	})
+	amb, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, claudeID, amb.ClaudeSessionID)
+
+	// An explicit session_start that linked to the same Claude session (ambient=0,
+	// claude_session_id set), carrying its own interim findings and holding a claim.
+	explID, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: explID, Name: "sess/work", ProjectSlug: "demo", Status: core.SessionActive,
+		ClaudeSessionID: claudeID, CWD: "/work/demo", Findings: "interim progress",
+		CreatedAt: amb.CreatedAt, UpdatedAt: amb.CreatedAt,
+	}))
+	taskID, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateTask(ctx, db, core.Task{
+		ID: taskID, ProjectSlug: "demo", Title: "held", Status: core.TaskOpen,
+		CreatedAt: amb.CreatedAt, UpdatedAt: amb.CreatedAt,
+	}))
+	_, err = store.ClaimTask(ctx, db, taskID, explID, 30*time.Minute, amb.CreatedAt)
+	require.NoError(t, err)
+
+	// SessionEnd (a known end) closes BOTH immediately.
+	transcript := writeTranscript(t,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done."}]}}`)
+	_, _ = post(t, ts.URL+"/api/hooks/session-end", testKey, map[string]any{
+		"session_id": claudeID, "transcript_path": transcript, "reason": "logout",
+	})
+
+	gotAmb, _, err := store.SessionByID(ctx, db, amb.ID)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionCompleted, gotAmb.Status)
+	require.Contains(t, gotAmb.Findings, "All done.", "ambient harvested from transcript")
+
+	gotExpl, _, err := store.SessionByID(ctx, db, explID)
+	require.NoError(t, err)
+	require.Equal(t, core.SessionCompleted, gotExpl.Status, "linked explicit session closed immediately")
+	require.Equal(t, "interim progress", gotExpl.Findings, "explicit session keeps its own findings")
+
+	task, err := store.TaskByID(ctx, db, taskID)
+	require.NoError(t, err)
+	require.Equal(t, core.TaskOpen, task.Status, "the explicit session's claim was released")
+
+	require.Len(t, eventsOfKind(t, rec, core.EventSessionEnded), 2, "one session.ended per closed session")
+}
+
 func TestAmbientSessionLifecycle(t *testing.T) {
 	ts, db := newHandlerServer(t)
 	ctx := context.Background()

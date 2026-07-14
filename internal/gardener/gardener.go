@@ -127,6 +127,11 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	// domain events, so retrieval stats (built above) are unaffected.
 	s.pruneToolEvents(ctx)
 
+	// Reap sessions that went idle without a graceful session_end (crashed agents,
+	// explicit session_starts whose agent never ended them). Keeps the "active" set
+	// honest -- the only reliable close for these, since no hook fires on a kill.
+	s.reapStaleSessions(ctx)
+
 	existing, err := store.AllProposalKeys(ctx, s.db)
 	if err != nil {
 		return PassResult{}, err
@@ -178,6 +183,40 @@ func (s *Service) pruneToolEvents(ctx context.Context) {
 	if n > 0 {
 		s.logger.Info("gardener pruned tool events", "deleted", n, "older_than_days", s.cfg.ToolEventRetentionDays)
 	}
+}
+
+// reapStaleSessions closes sessions idle past core.SessionIdleTTL: it flips each
+// to expired, returns any task claims it still held to the queue, and records a
+// session.ended event stamped reason=expired. Best-effort: a failure is logged,
+// not returned, so a reap problem never aborts the pass. This is the backstop for
+// the fact that an active session is only otherwise cleared by an explicit
+// session_end or the SessionEnd hook, neither of which fires on a crash/kill.
+func (s *Service) reapStaleSessions(ctx context.Context) {
+	now := s.now().UTC()
+	cutoff := now.Add(-core.SessionIdleTTL)
+	stale, err := store.ExpireStaleSessions(ctx, s.db, cutoff)
+	if err != nil {
+		s.logger.Warn("gardener: reap stale sessions", "error", err)
+		return
+	}
+	if len(stale) == 0 {
+		return
+	}
+	for _, sess := range stale {
+		released, rerr := store.ReleaseClaimsForSession(ctx, s.db, sess.ID, now)
+		if rerr != nil {
+			s.logger.Warn("gardener: reap release claims", "session", sess.ID, "error", rerr)
+		}
+		if s.events != nil {
+			if _, eerr := s.events.Record(ctx, core.Event{
+				Kind: core.EventSessionEnded, SessionID: sess.ID, ProjectSlug: sess.ProjectSlug,
+				Payload: map[string]any{"reason": "expired", "reaped": true, "claims_released": released},
+			}); eerr != nil {
+				s.logger.Warn("gardener: reap record event", "session", sess.ID, "error", eerr)
+			}
+		}
+	}
+	s.logger.Info("gardener reaped idle sessions", "count", len(stale), "idle_ttl", core.SessionIdleTTL)
 }
 
 // createProposal persists a proposal and records a gardener.action event. The

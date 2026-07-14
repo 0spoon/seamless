@@ -581,3 +581,40 @@ func TestMCPAuthRejectsBadKey(t *testing.T) {
 	require.True(t, res.IsError)
 	require.Contains(t, resultText(t, res), "unauthorized")
 }
+
+// TestSessionStart_LinksClaudeSessionID checks that session_start stamps a new
+// explicit session with the Claude session id of the sole active ambient sharing its
+// cwd, so a graceful SessionEnd closes it too. Two same-cwd ambients make the link
+// ambiguous, so it is skipped and the idle reaper handles that session instead.
+func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	now := time.Now().UTC()
+
+	seedAmbient := func(name, claudeID string) {
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: "demo", Status: core.SessionActive,
+			Ambient: true, ClaudeSessionID: claudeID, CWD: "/work/demo",
+			CreatedAt: now, UpdatedAt: now,
+		}))
+	}
+
+	// Sole same-cwd ambient -> the new explicit session links to it.
+	seedAmbient("cc/claude99", "claude99-full")
+	cli := dialClient(t, ctx, url, testKey)
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	expl, ok, err := store.SessionByID(ctx, db, start["session_id"].(string))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "claude99-full", expl.ClaudeSessionID, "linked to the sole same-cwd ambient")
+
+	// A second same-cwd ambient makes the link ambiguous -> no link.
+	seedAmbient("cc/claudeaa", "claudeaa-full")
+	cli2 := dialClient(t, ctx, url, testKey)
+	start2 := callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	expl2, _, err := store.SessionByID(ctx, db, start2["session_id"].(string))
+	require.NoError(t, err)
+	require.Empty(t, expl2.ClaudeSessionID, "ambiguous same-cwd ambients -> no link")
+}

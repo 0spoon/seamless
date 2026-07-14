@@ -119,7 +119,26 @@ type SessionStatus string
 const (
 	SessionActive    SessionStatus = "active"
 	SessionCompleted SessionStatus = "completed"
+	// SessionExpired is a session the reaper closed after it went idle past
+	// SessionIdleTTL without a graceful session_end (a crashed/killed agent, or an
+	// explicit session_start whose agent never called session_end). Distinct from
+	// completed so the console can tell a harvested session from an abandoned one.
+	SessionExpired SessionStatus = "expired"
 )
+
+// SessionIdleTTL is the no-activity age beyond which an active session is
+// considered dead: heartbeats (MCP tool calls for bound sessions, the ambient
+// hooks for cc/* sessions) bump updated_at, and anything quiet past this is
+// reaped to SessionExpired and shown as idle in the console. It is the canonical
+// liveness threshold shared by the gardener reaper and the console; it must
+// comfortably exceed a long single agent turn so live work is never reaped.
+const SessionIdleTTL = 45 * time.Minute
+
+// LiveAsOf reports whether an active session counts as live at now: still active
+// and updated within SessionIdleTTL. Completed/expired sessions are never live.
+func (s Session) LiveAsOf(now time.Time) bool {
+	return s.Status == SessionActive && now.Sub(s.UpdatedAt) < SessionIdleTTL
+}
 
 // Session is one agent work session. Ambient sessions are created by the
 // SessionStart hook (named cc/{prefix}); explicit ones by session_start.

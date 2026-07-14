@@ -211,7 +211,7 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	h.completeAmbientSession(ctx, p)
+	h.completeClaudeSessions(ctx, p)
 	// SessionEnd has no hookSpecificOutput variant in Claude Code's schema, so
 	// the response is a bare ack -- emitting one fails root validation.
 	writeHookAck(w)
@@ -271,33 +271,58 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 	return name
 }
 
-// completeAmbientSession harvests findings from the transcript and completes the
-// ambient session cc/{prefix}. It is a no-op when the session is absent or was
-// already completed (e.g. an explicit session_end ran first). Never errors: the
-// hook must always return 200.
-func (h *Handler) completeAmbientSession(ctx context.Context, p endPayload) {
+// completeClaudeSessions completes every active session owned by the ending Claude
+// session: its ambient cc/{prefix} (findings harvested from the transcript) plus any
+// explicit session_start that linked to it via claude_session_id. Because a graceful
+// SessionEnd is a KNOWN end, these close immediately rather than waiting out the idle
+// TTL -- the reaper is only for sessions we get no end signal for. Task claims are
+// released. It is a no-op when nothing is active (an explicit session_end already
+// ran, or a crash left it to the reaper). Never errors: the hook must always 200.
+func (h *Handler) completeClaudeSessions(ctx context.Context, p endPayload) {
 	if h.db == nil || p.SessionID == "" {
 		return
 	}
-	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(p.SessionID))
+	sessions, err := store.ActiveSessionsByClaudeID(ctx, h.db, p.SessionID)
 	if err != nil {
 		h.logger.Warn("hooks: session-end lookup", "error", err)
 		return
 	}
-	if !ok || sess.Status == core.SessionCompleted {
-		return // nothing to harvest, or already ended
+	if len(sessions) == 0 {
+		// Legacy ambient rows may predate claude_session_id linking; fall back to the
+		// name key so a graceful end still harvests the ambient.
+		if amb, ok, aerr := store.SessionByName(ctx, h.db, ambientName(p.SessionID)); aerr != nil {
+			h.logger.Warn("hooks: session-end ambient fallback", "error", aerr)
+			return
+		} else if ok && amb.Status == core.SessionActive {
+			sessions = []core.Session{amb}
+		}
 	}
-	sess.Status = core.SessionCompleted
-	sess.Findings = harvestFindings(p.TranscriptPath)
-	sess.UpdatedAt = time.Now().UTC()
-	if err := store.UpdateSession(ctx, h.db, sess); err != nil {
-		h.logger.Warn("hooks: session-end complete", "error", err)
-		return
+
+	now := time.Now().UTC()
+	harvested := "" // harvest the transcript once, lazily, only when an ambient needs it
+	for _, sess := range sessions {
+		sess.Status = core.SessionCompleted
+		sess.UpdatedAt = now
+		if sess.Ambient {
+			if harvested == "" {
+				harvested = harvestFindings(p.TranscriptPath)
+			}
+			sess.Findings = harvested // explicit sessions keep their session_update findings
+		}
+		if err := store.UpdateSession(ctx, h.db, sess); err != nil {
+			h.logger.Warn("hooks: session-end complete", "session", sess.ID, "error", err)
+			continue
+		}
+		released, rerr := store.ReleaseClaimsForSession(ctx, h.db, sess.ID, now)
+		if rerr != nil {
+			h.logger.Warn("hooks: session-end release claims", "session", sess.ID, "error", rerr)
+		}
+		h.recordSession(ctx, core.EventSessionEnded, sess, map[string]any{
+			"ambient": sess.Ambient, "harvested": sess.Ambient, "linked": !sess.Ambient,
+			"reason": p.Reason, "claims_released": released,
+			"findings": events.Truncate(sess.Findings, h.maxEventChars),
+		})
 	}
-	h.recordSession(ctx, core.EventSessionEnded, sess, map[string]any{
-		"ambient": true, "harvested": true,
-		"reason": p.Reason, "findings": events.Truncate(sess.Findings, h.maxEventChars),
-	})
 }
 
 // ambientName is the ambient session name for a Claude session id: cc/{prefix}.
@@ -340,6 +365,8 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
+
+	h.touchAmbient(ctx, p.SessionID)
 
 	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
 	if err != nil {
@@ -406,6 +433,21 @@ func (h *Handler) recordHookPrompt(ctx context.Context, claudeSessionID, prompt 
 		},
 	}); err != nil {
 		h.logger.Warn("hooks: record hook prompt", "error", err)
+	}
+}
+
+// touchAmbient heartbeats the ambient session (cc/{prefix}) for a Claude session
+// id, keeping it live for the idle reaper. Every hook that carries a session id is
+// proof the agent is alive, so prompt/tool hooks bump updated_at between the MCP
+// tool calls that heartbeat it via the connection binding -- covering a long, quiet
+// turn that makes no seamless MCP calls. Best-effort: a no-op when the DB or id is
+// absent, or the session is not active.
+func (h *Handler) touchAmbient(ctx context.Context, claudeSessionID string) {
+	if h.db == nil || claudeSessionID == "" {
+		return
+	}
+	if err := store.TouchSessionByName(ctx, h.db, ambientName(claudeSessionID), time.Now().UTC()); err != nil {
+		h.logger.Warn("hooks: ambient heartbeat", "error", err)
 	}
 }
 

@@ -11,6 +11,8 @@
   {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/plans?w={{.Key}}">{{.Label}}</a>{{end}}
 </div>
 
+<div class="list-detail-split">
+  <div class="list-pane">
 {{if .Rows}}
 
 {{if .InProgress}}
@@ -37,6 +39,15 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "map"}}</span><div>No plans{{if ne .Window "all"}} in this window{{end}} &mdash; Claude Code plan-mode captures and plan:&lt;slug&gt; compositions land here.</div></div>
 {{end}}
+  </div><!-- .list-pane -->
+  <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Plan detail">
+    <div class="detail-pane-chrome">
+      <a class="detail-open btn small" href="#">open full &nearr;</a>
+      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+    </div>
+    <div class="detail-pane-body"></div>
+  </section>
+</div><!-- .list-detail-split -->
 {{end}}
 {{end}}
 

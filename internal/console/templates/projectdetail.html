@@ -207,7 +207,6 @@
 {{end}}
 
 {{define "scripts"}}
-<script src="/console/static/interactions.js"></script>
 <script>
 (function () {
   /* Project-detail tabs: server renders every panel (the active one via ?tab=),
@@ -233,47 +232,13 @@
 })();
 
 (function () {
-  /* Interactions tab: upgrade the server-rendered rows (format + clamp + copy the
-     request/response bodies), draw the project's volume histogram, and wire the
-     category filter -- reusing the shared IX module so it matches the live feed. */
+  /* Interactions tab: the shared IX module auto-formats the server-rendered
+     request/response bodies (enhance) on load; here we draw the project's volume
+     histogram and wire the category filter, reusing the shared IX helpers so it
+     matches the live feed. */
   if (!window.IX) return;
-  var feed = document.getElementById('ix-pfeed');
-  if (feed) window.IX.enhance(feed);
-
-  var vol = document.getElementById('ix-pvol');
-  if (vol) {
-    try {
-      var buckets = JSON.parse(vol.getAttribute('data-vol') || '[]');
-      window.IX.renderVolume(buckets, vol, {});
-      vol.setAttribute('aria-hidden', buckets.length ? 'false' : 'true');
-    } catch (e) {}
-  }
-
-  var kinds = document.getElementById('ix-pkinds');
-  if (kinds && feed) {
-    function cat(kind) {
-      if (kind === 'tool.call') return 'tool';
-      if (kind === 'retrieval.injected') return 'inject';
-      if (kind === 'hook.prompt') return 'prompt';
-      if (kind.indexOf('session.') === 0) return 'session';
-      if (kind.indexOf('plan.') === 0 || kind === 'subagent.captured') return 'plan';
-      return '';
-    }
-    kinds.addEventListener('click', function (e) {
-      var seg = e.target.closest ? e.target.closest('.ix-seg[data-cat]') : null;
-      if (!seg) return;
-      var c = seg.getAttribute('data-cat');
-      var segs = kinds.querySelectorAll('.ix-seg');
-      for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('active', segs[i] === seg);
-      var rows = feed.querySelectorAll('.ix-row');
-      for (var j = 0; j < rows.length; j++) {
-        var kind = rows[j].getAttribute('data-kind') || '';
-        var show = c === 'all' ||
-          (c === '__err__' ? rows[j].getAttribute('data-err') === '1' : cat(kind) === c);
-        rows[j].hidden = !show;
-      }
-    });
-  }
+  window.IX.mountVolume(document.getElementById('ix-pvol'));
+  window.IX.wireKindFilter(document.getElementById('ix-pkinds'), document.getElementById('ix-pfeed'));
 })();
 </script>
 {{end}}

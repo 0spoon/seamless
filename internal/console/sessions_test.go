@@ -78,6 +78,47 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "found the bug in the watcher")
 }
 
+// TestSessionsPage_LiveIdleExpired covers the liveness split the reaper feeds:
+// a heartbeated active session is live, an active session gone quiet past the idle
+// TTL is idle (awaiting the reaper), and a reaped session is expired.
+func TestSessionsPage_LiveIdleExpired(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	mk := func(name string, updatedAgo time.Duration, status core.SessionStatus) {
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: "seamless", Status: status,
+			CreatedAt: now.Add(-updatedAgo), UpdatedAt: now.Add(-updatedAgo),
+		}))
+	}
+	mk("cc/live", 2*time.Minute, core.SessionActive)                  // heartbeated -> live
+	mk("sess/idle", core.SessionIdleTTL+time.Hour, core.SessionActive) // quiet -> idle
+	mk("sess/reaped", 3*time.Hour, core.SessionExpired)              // reaped -> expired
+
+	var list sessionsData
+	getJSON(t, mux, "/console/sessions?format=json", &list)
+	require.Equal(t, 1, list.Active, "only the heartbeated session is live")
+	require.Equal(t, 1, list.Idle, "the quiet active session is idle")
+	require.Equal(t, 1, list.Expired)
+
+	byName := map[string]sessionRow{}
+	for _, r := range list.Sessions {
+		byName[r.Name] = r
+	}
+	require.True(t, byName["cc/live"].Live)
+	require.False(t, byName["sess/idle"].Live, "idle session is not live")
+	require.Equal(t, "expired", byName["sess/reaped"].Status)
+
+	// The expired filter lists only the reaped session.
+	var expired sessionsData
+	getJSON(t, mux, "/console/sessions?status=expired&format=json", &expired)
+	require.Len(t, expired.Sessions, 1)
+	require.Equal(t, "sess/reaped", expired.Sessions[0].Name)
+}
+
 func TestSessionsPage_WindowFilter(t *testing.T) {
 	db, mux := newConsole(t)
 	ctx := context.Background()
