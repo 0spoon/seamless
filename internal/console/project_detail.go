@@ -9,6 +9,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -59,6 +60,7 @@ type projectWorkspaceData struct {
 	Notes []projNoteVM
 
 	Interactions []interactionRow
+	IxVolumeJSON string // compact JSON of the project's volume buckets, for IX.renderVolume
 
 	Tree    []treeNode
 	Banners []relBanner
@@ -558,6 +560,15 @@ func (s *Service) fillInteractionsTab(ctx context.Context, data *projectWorkspac
 		data.Interactions = append(data.Interactions, toInteractionRow(e, name))
 		if len(data.Interactions) >= 40 {
 			break
+		}
+	}
+	// Project-scoped volume histogram over all of the project's history; embedded
+	// as compact JSON for the shared IX.renderVolume client renderer.
+	if vol, err := s.interactionVolume(ctx, slug, 0); err != nil {
+		return err
+	} else if len(vol) > 0 {
+		if b, err := json.Marshal(vol); err == nil {
+			data.IxVolumeJSON = string(b)
 		}
 	}
 	return nil

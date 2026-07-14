@@ -71,6 +71,7 @@ func New(cfg Config) (*Service, error) {
 // login page and the stylesheet; everything else requires the key.
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
+	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
 	mux.HandleFunc("GET /console/login", s.loginForm)
 	mux.HandleFunc("POST /console/login", s.loginSubmit)
 	mux.HandleFunc("POST /console/logout", s.logout)
@@ -226,6 +227,14 @@ func (s *Service) serveCSS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/css; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(consoleCSS)
+}
+
+// serveJS serves the shared Interactions client module (value rendering + the
+// volume histogram), used by both the live feed and the project-detail tab.
+func (s *Service) serveJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(interactionsJS)
 }
 
 // ---------------------------------------------------------------------------

@@ -258,6 +258,54 @@ func (r *Recorder) ByKindsSince(ctx context.Context, kinds []core.EventKind, sin
 	return scanEvents(rows)
 }
 
+// KindTick is one event's timestamp and kind -- the minimal projection the
+// console buckets into the interaction-volume histogram.
+type KindTick struct {
+	TS   time.Time
+	Kind string
+}
+
+// KindTimeline returns the (ts, kind) of every event of the given kinds at or
+// after sinceTS, newest first and capped at limit. project scopes to one project
+// slug when non-empty. Only two columns are read, so a wide window stays cheap.
+// An empty sinceTS spans all history (bounded by limit); an empty kinds slice or
+// non-positive limit returns nil.
+func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, project, sinceTS string, limit int) ([]KindTick, error) {
+	ph, args := kindArgs(kinds)
+	if ph == "" || limit <= 0 {
+		return nil, nil
+	}
+	q := `SELECT ts, kind FROM events WHERE kind IN (` + ph + `)`
+	if project != "" {
+		q += ` AND project_slug = ?`
+		args = append(args, project)
+	}
+	if sinceTS != "" {
+		q += ` AND ts >= ?`
+		args = append(args, sinceTS)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.KindTimeline: %w", err)
+	}
+	defer rows.Close()
+	var out []KindTick
+	for rows.Next() {
+		var tsStr, kind string
+		if err := rows.Scan(&tsStr, &kind); err != nil {
+			return nil, fmt.Errorf("events.KindTimeline scan: %w", err)
+		}
+		ts, err := core.ParseTime(tsStr)
+		if err != nil {
+			return nil, fmt.Errorf("events.KindTimeline time: %w", err)
+		}
+		out = append(out, KindTick{TS: ts, Kind: kind})
+	}
+	return out, rows.Err()
+}
+
 // RecentExcluding returns the most recent events, newest first, omitting the
 // given kinds -- the overview's business-level feed, which hides transport-level
 // tool.call / hook.prompt noise. A non-positive limit defaults to 50.
