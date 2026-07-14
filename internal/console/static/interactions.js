@@ -251,6 +251,8 @@
       else if (d.kind === 'subagent.captured') rh = 'Report';
       body.appendChild(section(rh, d.response));
     }
+    // data-peek on these links is consumed by the pane loader in layout.html:
+    // on the live feed they open in the #detail-pane below the stream.
     var links = el('div', 'ix-links');
     if (d.sessionId) {
       var sl = el('a', null, (d.sessionName || shortId(d.sessionId)) + ' →');
