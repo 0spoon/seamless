@@ -7,21 +7,32 @@
   <span class="live" id="ix-live"><span class="live-dot"></span> live</span>
 </div>
 
+<div class="ix-volume empty" id="ix-volume" aria-hidden="true"></div>
+
 <div class="ix-controls">
-  <div class="ix-tabs" id="ix-tabs"></div>
+  <div class="ix-filters" id="ix-kinds">
+    <button class="ix-seg active" type="button" data-cat="all">All</button>
+    <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
+    <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
+    <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
+    <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
+    <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
+  </div>
   <div class="ix-actions">
-    <label class="ix-window">active
-      <select id="ix-window" aria-label="Show sessions active within">
+    <label class="ix-window">range
+      <select id="ix-window" aria-label="Time range">
         <option value="60">1m</option>
-        <option value="300" selected>5m</option>
+        <option value="300">5m</option>
         <option value="900">15m</option>
-        <option value="3600">1h</option>
+        <option value="3600" selected>1h</option>
         <option value="0">all</option>
       </select>
     </label>
     <button class="btn small" type="button" id="ix-pause">Pause</button>
   </div>
 </div>
+
+<div class="ix-tabs" id="ix-tabs"></div>
 
 <div class="ix-feed" id="ix-feed"></div>
 <div class="empty" id="ix-empty" hidden>No interactions yet &mdash; run a hooked agent and its calls will stream in here.</div>
@@ -30,21 +41,24 @@
 {{end}}
 
 {{define "scripts"}}
+<script src="/console/static/interactions.js"></script>
 <script>
 (function () {
   var feed = document.getElementById('ix-feed');
   var tabsEl = document.getElementById('ix-tabs');
+  var kindsEl = document.getElementById('ix-kinds');
+  var volEl = document.getElementById('ix-volume');
   var emptyEl = document.getElementById('ix-empty');
   var pauseBtn = document.getElementById('ix-pause');
   var olderWrap = document.querySelector('.ix-more');
   var olderBtn = document.getElementById('ix-older');
   var liveEl = document.getElementById('ix-live');
   var windowSel = document.getElementById('ix-window');
-  if (!feed) return;
+  if (!feed || !window.IX) return;
 
-  // Session tabs default to those active in the last 5 minutes; the user can
-  // narrow to 1m or widen up to "all". 0 means no window (show every session).
-  var windowSecs = 300;
+  // The time range drives both the session-tab activity window and the volume
+  // histogram. Defaults to 1h; the user can narrow to 1m or widen to "all" (0).
+  var windowSecs = 3600;
   try {
     var savedW = parseInt(localStorage.getItem('ix-window'), 10);
     if (!isNaN(savedW)) windowSecs = savedW;
@@ -57,7 +71,10 @@
   var maxRows = 500;         // cap on buffered rows; grows as older pages are loaded
   var rows = {};              // id -> {data, el}
   var order = [];            // ids, newest-first
-  var filter = 'all';
+  var filter = 'all';        // session filter: 'all' | sessionId | '__none__'
+  var kindFilter = 'all';    // category filter: 'all' | '__err__' | tool | inject | session | plan
+  var timeSel = null;        // {from,to,idx} selected histogram bucket, or null
+  var volBars = [];          // current histogram bar elements (for selection UI)
   var paused = false;
   var loaded = false;
   var preload = [];          // SSE frames that arrived before the initial fetch
@@ -65,193 +82,47 @@
   var cursor = null;         // {ts,id} for the next older page
   var last = null;           // {ts,id} of the newest row seen (gap-fill anchor)
 
-  function esc(s) { return s == null ? '' : String(s); }
-  function shortId(id) { return id && id.length > 8 ? id.slice(-8) : (id || ''); }
+  function shortId(id) { return window.IX.shortId(id); }
 
-  function rel(ts) {
-    var t = Date.parse(ts);
-    if (isNaN(t)) return '';
-    var s = Math.max(0, (Date.now() - t) / 1000);
-    if (s < 1) return 'now';
-    if (s < 60) return Math.floor(s) + 's';
-    if (s < 3600) return Math.floor(s / 60) + 'm';
-    if (s < 86400) return Math.floor(s / 3600) + 'h';
-    return Math.floor(s / 86400) + 'd';
+  function anyOpen() { return !!feed.querySelector('details.ix-row[open]'); }
+
+  function el(tag, cls, text) { return window.IX.el(tag, cls, text); }
+
+  // Category of an event kind -- mirrors internal/console volCategory + the
+  // histogram stack keys, so the kind filter and the bars agree.
+  function cat(kind) {
+    if (kind === 'tool.call') return 'tool';
+    if (kind === 'retrieval.injected') return 'inject';
+    if (kind === 'hook.prompt') return 'prompt';
+    if (kind.indexOf('session.') === 0) return 'session';
+    if (kind.indexOf('plan.') === 0 || kind === 'subagent.captured') return 'plan';
+    return '';
   }
 
-  function anyOpen() {
-    return !!feed.querySelector('details.ix-row[open]');
-  }
+  function buildRow(d) { return window.IX.buildRow(d); }
 
-  function el(tag, cls, text) {
-    var e = document.createElement(tag);
-    if (cls) e.className = cls;
-    if (text != null) e.textContent = text;
-    return e;
-  }
-
-  // ---- Value rendering: pretty-print + highlight JSON, decode escapes -------
-  // A body value (tool args, tool result, prompt, injected content, findings) is
-  // shown as a syntax-highlighted, collapsible JSON block when it parses as a JSON
-  // object/array; as its decoded text when it is a JSON-encoded string; and as a
-  // best-effort escape-decoded text block otherwise. All text enters via
-  // textContent (never innerHTML), so highlighting stays XSS-safe.
-  var JSON_MAX_LINES = 40; // above this a JSON block starts collapsed with a toggle
-  var JSON_TOKEN = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false)\b|\b(null)\b|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)/g;
-
-  function tryJSON(s) {
-    var c = s.charAt(0);
-    if (c !== '{' && c !== '[' && c !== '"') return null; // only structured/quoted values
-    try { return { v: JSON.parse(s) }; } catch (e) { return null; }
-  }
-
-  // Decode the common backslash escapes when a value is a single-line string still
-  // carrying literal escape sequences (e.g. an error line). Left untouched when the
-  // text already has real newlines/tabs (it is already-decoded content) or has
-  // nothing to decode, so genuine backslashes (e.g. paths) are not mangled.
-  function decodeEscapes(s) {
-    if (/[\n\r\t]/.test(s)) return s;
-    if (!/\\(?:u[0-9a-fA-F]{4}|[nrtbf"\\/])/.test(s)) return s;
-    return s.replace(/\\u([0-9a-fA-F]{4})|\\([nrtbf"\\/])/g, function (m, u, c) {
-      if (u) return String.fromCharCode(parseInt(u, 16));
-      return { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '"': '"', '\\': '\\', '/': '/' }[c] || m;
-    });
-  }
-
-  function textBlock(s) { return el('pre', 'pre', s); }
-  function jspan(cls, text) { return el('span', cls, text); }
-
-  // Decode a JSON string token (quotes included) for display: \n/\t become real
-  // line breaks/tabs, \uXXXX become their glyph, \" and \\ their literal char.
-  // So a multi-line string value (e.g. captured markdown) reads as a real block
-  // instead of a wall of literal \n.
-  function unescapeJSONText(tok) {
-    return tok.replace(/\\u([0-9a-fA-F]{4})|\\([nrtbf"\\/])/g, function (m, u, c) {
-      if (u) return String.fromCharCode(parseInt(u, 16));
-      return { n: '\n', r: '', t: '\t', b: '', f: '', '"': '"', '\\': '\\', '/': '/' }[c];
-    });
-  }
-
-  // Tokenize pretty-printed JSON, appending coloured spans + literal punctuation.
-  function highlightInto(pre, text) {
-    JSON_TOKEN.lastIndex = 0;
-    var last = 0, m;
-    while ((m = JSON_TOKEN.exec(text)) !== null) {
-      if (m.index > last) pre.appendChild(document.createTextNode(text.slice(last, m.index)));
-      if (m[1] !== undefined) {
-        if (m[2] !== undefined) {                 // "key":
-          pre.appendChild(jspan('jk', unescapeJSONText(m[1])));
-          pre.appendChild(document.createTextNode(m[2]));
-        } else {                                   // "string value"
-          pre.appendChild(jspan('js', unescapeJSONText(m[1])));
-        }
-      } else if (m[3] !== undefined) {
-        pre.appendChild(jspan('jbool', m[3]));
-      } else if (m[4] !== undefined) {
-        pre.appendChild(jspan('jnull', m[4]));
-      } else {
-        pre.appendChild(jspan('jnum', m[5]));
-      }
-      last = JSON_TOKEN.lastIndex;
+  // --- Filtering: session AND category AND selected-time-bucket all apply ---
+  function matches(d) {
+    var sess = filter === 'all' ||
+      (filter === '__none__' && !d.sessionId) ||
+      filter === d.sessionId;
+    var kind = kindFilter === 'all' ||
+      (kindFilter === '__err__' ? !!d.isError : cat(d.kind) === kindFilter);
+    var time = true;
+    if (timeSel) {
+      var t = Date.parse(d.ts);
+      time = !isNaN(t) && t >= timeSel.from && t < timeSel.to;
     }
-    if (last < text.length) pre.appendChild(document.createTextNode(text.slice(last)));
+    return sess && kind && time;
   }
 
-  function jsonBlock(value) {
-    var pretty;
-    try { pretty = JSON.stringify(value, null, 2); } catch (e) { return textBlock(String(value)); }
-    var wrap = el('div', 'ix-json');
-    var pre = el('pre', 'pre pre-json');
-    highlightInto(pre, pretty);
-    wrap.appendChild(pre);
-    // Count displayed lines (string values may decode to real multi-line blocks),
-    // so the collapse threshold reflects on-screen height, not the escaped source.
-    var shown = unescapeJSONText(pretty);
-    var total = 1;
-    for (var i = 0; i < shown.length; i++) if (shown.charCodeAt(i) === 10) total++;
-    if (total > JSON_MAX_LINES) {
-      pre.classList.add('clamp');
-      var btn = el('button', 'btn small ix-expand', 'Show all ' + total + ' lines');
-      btn.type = 'button';
-      btn.onclick = function () {
-        var collapsed = pre.classList.toggle('clamp');
-        btn.textContent = collapsed ? ('Show all ' + total + ' lines') : 'Show less';
-      };
-      wrap.appendChild(btn);
-    }
-    return wrap;
-  }
-
-  function renderValue(value) {
-    var s = String(value);
-    var parsed = tryJSON(s.replace(/^\s+/, ''));
-    if (parsed) {
-      if (parsed.v !== null && typeof parsed.v === 'object') return jsonBlock(parsed.v);
-      if (typeof parsed.v === 'string') return textBlock(parsed.v); // JSON.parse already decoded it
-    }
-    return textBlock(decodeEscapes(s));
-  }
-
-  function buildRow(d) {
-    var row = el('details', 'ix-row' + (d.isError ? ' err' : ''));
-    row.setAttribute('data-id', d.id);
-    row.setAttribute('data-session', d.sessionId || '');
-    var sum = el('summary');
-    var when = el('span', 'ix-when', rel(d.ts));
-    when.title = d.ts;
-    sum.appendChild(when);
-    sum.appendChild(el('span', 'kind ' + (d.tone || ''), d.kind));
-    if (d.label) sum.appendChild(el('span', 'ix-label mono', d.label));
-    sum.appendChild(el('span', 'ix-sum', d.summary || ''));
-    if (d.ambient) sum.appendChild(el('span', 'badge', 'ambient'));
-    if (d.isError) sum.appendChild(el('span', 'badge danger', 'error'));
-    var meta = [];
-    if (d.durationMs) meta.push(d.durationMs + 'ms');
-    if (d.items) meta.push(d.items + (d.items === 1 ? ' item' : ' items'));
-    if (meta.length) sum.appendChild(el('span', 'ix-meta', meta.join(' · ')));
-    row.appendChild(sum);
-
-    var body = el('div', 'ix-body');
-    if (d.request) {
-      body.appendChild(el('h2', null, d.kind === 'subagent.captured' ? 'Prompt' : 'Request'));
-      body.appendChild(renderValue(d.request));
-    }
-    if (d.response) {
-      var rh = 'Response';
-      if (d.kind === 'retrieval.injected') rh = 'Injected content';
-      else if (d.kind.indexOf('plan.') === 0) rh = 'Plan content';
-      else if (d.kind === 'subagent.captured') rh = 'Report';
-      body.appendChild(el('h2', null, rh));
-      body.appendChild(renderValue(d.response));
-    }
-    var links = el('div', 'ix-links');
-    if (d.sessionId) {
-      var sl = el('a', null, (d.sessionName || shortId(d.sessionId)) + ' →');
-      sl.href = '/console/sessions/' + d.sessionId;
-      sl.setAttribute('data-peek', '');
-      links.appendChild(sl);
-    }
-    var evl = el('a', null, 'event →');
-    evl.href = '/console/events/' + d.id;
-    evl.setAttribute('data-peek', '');
-    links.appendChild(evl);
-    body.appendChild(links);
-    row.appendChild(body);
-    return row;
-  }
-
-  function applyFilter(el2, sessionId) {
-    var show = filter === 'all' ||
-      (filter === '__none__' && !sessionId) ||
-      filter === sessionId;
-    el2.hidden = !show;
-  }
+  function applyFilter(node, d) { node.hidden = !matches(d); }
 
   function insert(d, atTop) {
     if (rows[d.id]) return; // dedupe
     var node = buildRow(d);
     rows[d.id] = { data: d, el: node };
-    applyFilter(node, d.sessionId || '');
+    applyFilter(node, d);
     if (atTop) {
       feed.insertBefore(node, feed.firstChild);
       order.unshift(d.id);
@@ -288,7 +159,6 @@
 
   function flushBuffer() {
     if (!buffer.length) return;
-    // Oldest-first so prepending yields newest-on-top.
     buffer.sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1); });
     buffer.forEach(function (d) {
       if (rows[d.id]) return;
@@ -317,7 +187,11 @@
     windowSecs = secs;
     if (windowSel) windowSel.value = String(secs);
     try { localStorage.setItem('ix-window', String(secs)); } catch (e) {}
+    // A window change invalidates any selected bucket and re-scopes the chart.
+    timeSel = null;
     refreshTabs();
+    applyAll();
+    loadVolume();
   }
 
   function refreshTabs() {
@@ -329,9 +203,6 @@
       names[d.sessionId] = d.sessionName || shortId(d.sessionId);
       if (!latest[d.sessionId] || d.ts > latest[d.sessionId]) latest[d.sessionId] = d.ts;
     });
-    // Most-recently-active session first, then apply the activity window. The
-    // active filter is always kept visible so a session under inspection is
-    // never yanked out from under the user.
     var sids = Object.keys(counts).sort(function (a, b) {
       return latest[a] < latest[b] ? 1 : latest[a] > latest[b] ? -1 : 0;
     });
@@ -344,9 +215,7 @@
     });
 
     var tabs = [{ key: 'all', label: 'All', n: order.length }];
-    visible.forEach(function (sid) {
-      tabs.push({ key: sid, label: names[sid], n: counts[sid] });
-    });
+    visible.forEach(function (sid) { tabs.push({ key: sid, label: names[sid], n: counts[sid] }); });
     if (none) tabs.push({ key: '__none__', label: 'unattributed', n: none });
 
     tabsEl.textContent = '';
@@ -370,8 +239,45 @@
   function applyAll() {
     order.forEach(function (id) {
       var r = rows[id];
-      applyFilter(r.el, r.data.sessionId || '');
+      applyFilter(r.el, r.data);
     });
+  }
+
+  // --- Kind (category) filter segments ---
+  if (kindsEl) {
+    kindsEl.addEventListener('click', function (e) {
+      var seg = e.target.closest ? e.target.closest('.ix-seg[data-cat]') : null;
+      if (!seg) return;
+      kindFilter = seg.getAttribute('data-cat');
+      var segs = kindsEl.querySelectorAll('.ix-seg');
+      for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('active', segs[i] === seg);
+      applyAll();
+    });
+  }
+
+  // --- Volume histogram ---
+  function highlightSel() {
+    for (var i = 0; i < volBars.length; i++) {
+      volBars[i].classList.toggle('sel', !!timeSel && timeSel.idx === i);
+    }
+  }
+
+  function onBarSelect(from, to, idx) {
+    if (timeSel && timeSel.idx === idx) timeSel = null; // toggle off
+    else timeSel = { from: from, to: to, idx: idx };
+    applyAll();
+    highlightSel();
+  }
+
+  function loadVolume() {
+    fetch('/console/interactions?volume=' + windowSecs, { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (data) {
+        volBars = window.IX.renderVolume(data.volume || [], volEl, { onSelect: onBarSelect });
+        volEl.setAttribute('aria-hidden', volBars.length ? 'false' : 'true');
+        highlightSel();
+      })
+      .catch(function () {});
   }
 
   // --- Load older (descending page via before/beforeTs) ---
@@ -382,15 +288,12 @@
           '&beforeTs=' + encodeURIComponent(cursor.ts), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        // Raise the cap by the page size FIRST so the older rows we're about to
-        // append aren't immediately trimmed off the oldest end (trim() drops from
-        // there). Load-older is an explicit request to retain more history.
         var older = data.rows || [];
         maxRows += older.length;
         older.forEach(function (d) { insert(d, false); });
         cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
         olderBtn.disabled = false;
-        refreshTabs(); updateEmpty(); applyAll();
+        refreshTabs(); updateEmpty();
       })
       .catch(function () { olderBtn.disabled = false; });
   }
@@ -402,13 +305,12 @@
           '&sinceTs=' + encodeURIComponent(last.ts), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        // rows are oldest-first; prepend each so newest lands on top.
         (data.rows || []).forEach(function (d) {
           if (rows[d.id]) return;
           insert(d, true);
           if (newer(d, last)) last = { ts: d.ts, id: d.id };
         });
-        refreshTabs(); updateEmpty(); applyAll();
+        refreshTabs(); updateEmpty();
       })
       .catch(function () {});
   }
@@ -420,7 +322,6 @@
     if (list.length) last = { ts: list[0].ts, id: list[0].id };
     cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
     loaded = true;
-    // Drain any SSE frames that arrived during the fetch.
     preload.forEach(handleLive);
     preload = [];
     refreshTabs();
@@ -433,7 +334,7 @@
     es = new EventSource('/console/events?feed=interactions');
     es.onopen = function () {
       if (liveEl) liveEl.classList.remove('off');
-      if (loaded) gapFill(); // recover rows missed during a drop
+      if (loaded) gapFill();
     };
     es.onmessage = function (ev) {
       var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
@@ -455,15 +356,15 @@
       setWindow(isNaN(v) ? 0 : v);
     };
   }
-  // Re-evaluate the activity window on a timer so idle sessions age out of the
-  // tab bar even when no new frames arrive.
+  // Age idle sessions out of the tab bar, and refresh the histogram, on a timer.
   setInterval(function () { if (order.length) refreshTabs(); }, 15000);
+  setInterval(function () { if (!paused) loadVolume(); }, 20000);
   if (olderBtn) olderBtn.onclick = loadOlder;
-  // Flush the pause/open buffer when the last open row is collapsed.
   feed.addEventListener('toggle', function () {
     if (!paused && !anyOpen()) flushBuffer();
   }, true);
 
+  loadVolume();
   fetch('/console/interactions?format=json', { headers: { Accept: 'application/json' } })
     .then(function (r) { return r.json(); })
     .then(hydrate)

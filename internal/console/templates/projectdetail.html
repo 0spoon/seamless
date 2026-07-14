@@ -145,17 +145,36 @@
 
 <!-- TAB: interactions -->
 <div class="tabpanel{{if eq .ActiveTab "interactions"}} on{{end}}" data-panel="interactions">
+  {{if .Interactions}}
+  <div class="ix-volume empty" id="ix-pvol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
   <div class="ix-controls">
-    <div class="ix-tabs"><button class="ix-tab active" type="button">All <span class="n">{{len .Interactions}}</span></button></div>
+    <div class="ix-filters" id="ix-pkinds">
+      <button class="ix-seg active" type="button" data-cat="all">All <span class="n">{{len .Interactions}}</span></button>
+      <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
+      <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
+      <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
+      <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
+      <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
+    </div>
     <div class="ix-actions"><span class="chip-parent">{{icon "git-branch"}}{{.Slug}} only</span></div>
   </div>
-  <div class="ix-feed">
+  {{end}}
+  <div class="ix-feed" id="ix-pfeed">
     {{range .Interactions}}
-    <details class="ix-row{{if .IsError}} err{{end}}"{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
-      <summary><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
+    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
+      <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
-        {{if .Request}}<h2>Request</h2><pre class="pre">{{.Request}}</pre>{{end}}
-        {{if .Response}}<h2>Response</h2><pre class="pre">{{.Response}}</pre>{{end}}
+        {{if or .SessionName .DurationMS .Items .IsError .Ambient}}
+        <div class="ix-highlights">
+          {{if .SessionName}}<span class="ix-chip"><span class="ix-chip-k">session</span><span class="ix-chip-v">{{.SessionName}}</span></span>{{end}}
+          {{if .Ambient}}<span class="ix-chip"><span class="ix-chip-k">mode</span><span class="ix-chip-v">ambient</span></span>{{end}}
+          {{if .DurationMS}}<span class="ix-chip"><span class="ix-chip-k">took</span><span class="ix-chip-v">{{.DurationMS}}ms</span></span>{{end}}
+          {{if .Items}}<span class="ix-chip"><span class="ix-chip-k">surfaced</span><span class="ix-chip-v">{{.Items}}</span></span>{{end}}
+          {{if .IsError}}<span class="ix-chip danger"><span class="ix-chip-k">status</span><span class="ix-chip-v">error</span></span>{{end}}
+        </div>
+        {{end}}
+        {{if .Request}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "subagent.captured"}}Prompt{{else}}Request{{end}}">{{.Request}}</pre>{{end}}
+        {{if .Response}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "retrieval.injected"}}Injected content{{else if hasPrefix .Kind "plan."}}Plan content{{else if eq .Kind "subagent.captured"}}Report{{else}}Response{{end}}">{{.Response}}</pre>{{end}}
         <div class="ix-links">{{if .SessionID}}<a href="/console/sessions/{{.SessionID}}" data-peek>{{.SessionName}} &rarr;</a>{{end}}<a href="/console/events/{{.ID}}">event &rarr;</a></div>
       </div>
     </details>
@@ -188,6 +207,7 @@
 {{end}}
 
 {{define "scripts"}}
+<script src="/console/static/interactions.js"></script>
 <script>
 (function () {
   /* Project-detail tabs: server renders every panel (the active one via ?tab=),
@@ -210,6 +230,50 @@
     e.preventDefault();
     activate(t.getAttribute('data-tab'));
   });
+})();
+
+(function () {
+  /* Interactions tab: upgrade the server-rendered rows (format + clamp + copy the
+     request/response bodies), draw the project's volume histogram, and wire the
+     category filter -- reusing the shared IX module so it matches the live feed. */
+  if (!window.IX) return;
+  var feed = document.getElementById('ix-pfeed');
+  if (feed) window.IX.enhance(feed);
+
+  var vol = document.getElementById('ix-pvol');
+  if (vol) {
+    try {
+      var buckets = JSON.parse(vol.getAttribute('data-vol') || '[]');
+      window.IX.renderVolume(buckets, vol, {});
+      vol.setAttribute('aria-hidden', buckets.length ? 'false' : 'true');
+    } catch (e) {}
+  }
+
+  var kinds = document.getElementById('ix-pkinds');
+  if (kinds && feed) {
+    function cat(kind) {
+      if (kind === 'tool.call') return 'tool';
+      if (kind === 'retrieval.injected') return 'inject';
+      if (kind === 'hook.prompt') return 'prompt';
+      if (kind.indexOf('session.') === 0) return 'session';
+      if (kind.indexOf('plan.') === 0 || kind === 'subagent.captured') return 'plan';
+      return '';
+    }
+    kinds.addEventListener('click', function (e) {
+      var seg = e.target.closest ? e.target.closest('.ix-seg[data-cat]') : null;
+      if (!seg) return;
+      var c = seg.getAttribute('data-cat');
+      var segs = kinds.querySelectorAll('.ix-seg');
+      for (var i = 0; i < segs.length; i++) segs[i].classList.toggle('active', segs[i] === seg);
+      var rows = feed.querySelectorAll('.ix-row');
+      for (var j = 0; j < rows.length; j++) {
+        var kind = rows[j].getAttribute('data-kind') || '';
+        var show = c === 'all' ||
+          (c === '__err__' ? rows[j].getAttribute('data-err') === '1' : cat(kind) === c);
+        rows[j].hidden = !show;
+      }
+    });
+  }
 })();
 </script>
 {{end}}

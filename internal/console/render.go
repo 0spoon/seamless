@@ -17,6 +17,9 @@ var templateFS embed.FS
 //go:embed static/console.css
 var consoleCSS []byte
 
+//go:embed static/interactions.js
+var interactionsJS []byte
+
 // pageNames are the page templates; each is parsed together with the shared
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
@@ -70,6 +73,7 @@ var funcs = template.FuncMap{
 	"hasPrefix":     strings.HasPrefix,
 	"copyBtn":       copyBtn,
 	"evtTone":       evtTone,
+	"evtIcon":       evtIcon,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
 	"phaseRows":     phaseRows,
@@ -100,6 +104,28 @@ func evtTone(kind string) string {
 		return "ok"
 	default:
 		return ""
+	}
+}
+
+// evtIcon maps an event kind to a lucide icon name for the Interactions feed's
+// type glyph, so tool calls, injections, sessions, and plans read at a glance.
+// Mirrors the JS icon map in interactions.js. Unknown kinds get the activity mark.
+func evtIcon(kind string) string {
+	switch {
+	case kind == "tool.call":
+		return "terminal"
+	case kind == "retrieval.injected":
+		return "brain"
+	case kind == "hook.prompt":
+		return "search"
+	case strings.HasPrefix(kind, "session."):
+		return "circle"
+	case kind == "subagent.captured":
+		return "git-fork"
+	case strings.HasPrefix(kind, "plan."):
+		return "map"
+	default:
+		return "activity"
 	}
 }
 

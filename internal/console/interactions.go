@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -153,15 +156,118 @@ func (s *Service) sessionNamer(ctx context.Context) func(string) (string, bool) 
 }
 
 // interactionsData is the Interactions screen payload (also the JSON endpoint the
-// screen's JS polls). NextTS/NextID cursor the next (older) page.
+// screen's JS polls). NextTS/NextID cursor the next (older) page. Volume carries
+// the histogram buckets for the ?volume=<secs> refresh (empty on a rows fetch).
 type interactionsData struct {
 	Rows   []interactionRow `json:"rows"`
+	Volume []volBucket      `json:"volume,omitempty"`
+	Window int              `json:"window,omitempty"` // seconds the Volume spans (0 = all history)
 	NextTS string           `json:"nextTs,omitempty"`
 	NextID string           `json:"nextId,omitempty"`
 }
 
+// volBucket is one column of the interaction-volume histogram: a time slice with
+// its total plus a per-category split, so the bar can stack tool/injection/
+// session/plan/prompt hues like Sentry's events-over-time chart.
+type volBucket struct {
+	T       string `json:"t"`       // bucket start (canonical ts), for the tooltip
+	N       int    `json:"n"`       // total events in the bucket
+	Tool    int    `json:"tool,omitempty"`
+	Inject  int    `json:"inject,omitempty"`
+	Session int    `json:"session,omitempty"`
+	Plan    int    `json:"plan,omitempty"`
+	Prompt  int    `json:"prompt,omitempty"`
+}
+
 // interactionsPageLimit bounds one page / gap-fill batch of the feed.
 const interactionsPageLimit = 200
+
+// volBuckets is the histogram column count; volTickCap bounds the "all" window.
+const (
+	volBuckets = 40
+	volTickCap = 20000
+)
+
+// volCategory maps an event kind to a histogram stack key (mirrored by the CSS
+// .ix-vbar-<cat> hues and the JS renderer).
+func volCategory(kind string) string {
+	switch {
+	case kind == string(core.EventToolCall):
+		return "tool"
+	case kind == string(core.EventInjected):
+		return "inject"
+	case kind == string(core.EventHookPrompt):
+		return "prompt"
+	case strings.HasPrefix(kind, "session."):
+		return "session"
+	case strings.HasPrefix(kind, "plan."), kind == string(core.EventSubagentCaptured):
+		return "plan"
+	default:
+		return ""
+	}
+}
+
+// buildVolume buckets ticks (newest-first) into volBuckets columns spanning the
+// window ending at now. A non-positive window spans from the oldest tick to now
+// ("all"). Empty input yields nil so the client hides the chart.
+func buildVolume(ticks []events.KindTick, window time.Duration, now time.Time) []volBucket {
+	if len(ticks) == 0 {
+		return nil
+	}
+	if window <= 0 {
+		window = now.Sub(ticks[len(ticks)-1].TS) // ticks are newest-first
+	}
+	window = max(window, time.Minute)
+	slice := max(window/volBuckets, time.Nanosecond)
+	start := now.Add(-window)
+	out := make([]volBucket, volBuckets)
+	for i := range out {
+		out[i].T = core.FormatTime(start.Add(time.Duration(i) * slice))
+	}
+	for _, tk := range ticks {
+		if tk.TS.Before(start) {
+			continue
+		}
+		idx := int(tk.TS.Sub(start) / slice)
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= volBuckets {
+			idx = volBuckets - 1
+		}
+		b := &out[idx]
+		b.N++
+		switch volCategory(tk.Kind) {
+		case "tool":
+			b.Tool++
+		case "inject":
+			b.Inject++
+		case "session":
+			b.Session++
+		case "plan":
+			b.Plan++
+		case "prompt":
+			b.Prompt++
+		}
+	}
+	return out
+}
+
+// interactionVolume computes the histogram for the given window (seconds; 0 = all
+// history) optionally scoped to a project slug.
+func (s *Service) interactionVolume(ctx context.Context, project string, windowSecs int) ([]volBucket, error) {
+	now := time.Now().UTC()
+	var sinceTS string
+	window := time.Duration(windowSecs) * time.Second
+	if windowSecs > 0 {
+		sinceTS = core.FormatTime(now.Add(-window))
+	}
+	ticks, err := s.cfg.Events.KindTimeline(ctx, interactionKinds, project, sinceTS, volTickCap)
+	if err != nil {
+		return nil, err
+	}
+	return buildVolume(ticks, window, now), nil
+}
 
 // interactions serves the live transport feed: an HTML shell (default) that its
 // JS hydrates from this same handler's JSON (?format=json), paging older via
@@ -173,6 +279,21 @@ func (s *Service) interactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	q := r.URL.Query()
+
+	// Volume-only refresh: the client re-fetches just the histogram when the
+	// window changes, so skip the heavier row query. Always JSON (a browser
+	// hitting this URL falls through to the full page).
+	if vs := q.Get("volume"); vs != "" && wantsJSON(r) {
+		secs, _ := strconv.Atoi(vs)
+		vol, err := s.interactionVolume(ctx, "", secs)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		s.render(w, r, "interactions", pageData{Data: interactionsData{Volume: vol, Window: secs}})
+		return
+	}
+
 	name := s.sessionNamer(ctx)
 
 	gapFill := q.Get("since") != "" || q.Get("sinceTs") != ""
