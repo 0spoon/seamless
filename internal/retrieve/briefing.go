@@ -45,7 +45,8 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	var constraints, index, stageMems []core.Memory
+	var constraints, stageMems []core.Memory
+	index := make([]core.Memory, 0, len(mems))
 	for _, m := range mems {
 		switch m.Kind {
 		case core.KindConstraint:

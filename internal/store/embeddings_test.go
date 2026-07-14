@@ -3,8 +3,12 @@ package store
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"math"
+	"math/rand/v2"
 	"path/filepath"
+	"slices"
+	"sort"
 	"testing"
 	"time"
 
@@ -164,6 +168,94 @@ func TestUpsertRejectsEmpty(t *testing.T) {
 	ctx := context.Background()
 	require.Error(t, UpsertEmbedding(ctx, db, "", "memory", "m1", []float32{1}))
 	require.Error(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", nil))
+}
+
+// TestCosineSearchMatchesNaiveReference pins the fused scan (RawBytes columns,
+// running top-limit window, precomputed query norm) to the naive
+// DecodeVector+Cosine+sort implementation it replaced: same hit set, same
+// order, bit-identical scores. The corpus includes exact-duplicate vectors so
+// score ties cross the window boundary and must resolve by item_id, and the
+// limits exercise both the bounded window and the collect-and-sort fallback
+// past cosineTopKMax.
+func TestCosineSearchMatchesNaiveReference(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	const dims = 32
+
+	rng := rand.New(rand.NewPCG(42, 7))
+	randVec := func() []float32 {
+		v := make([]float32, dims)
+		for i := range v {
+			v[i] = float32(rng.Float64()*2 - 1)
+		}
+		return v
+	}
+
+	stored := make(map[string][]float32)
+	kinds := make(map[string]string)
+	for i := range 260 {
+		id := fmt.Sprintf("it%03d", i)
+		kind := "memory"
+		if i%3 == 0 {
+			kind = "note"
+		}
+		stored[id], kinds[id] = randVec(), kind
+	}
+	// Exact duplicates of the first 40 vectors under later-sorting ids, so tie
+	// groups straddle every window boundary the limits below produce.
+	for i := range 40 {
+		id := fmt.Sprintf("zz%03d", i)
+		stored[id], kinds[id] = stored[fmt.Sprintf("it%03d", i)], "memory"
+	}
+	for id, v := range stored {
+		require.NoError(t, UpsertEmbedding(ctx, db, id, kinds[id], "m1", v))
+	}
+	// A dimensionality-mismatched row must be skipped by both implementations.
+	require.NoError(t, UpsertEmbedding(ctx, db, "bad", "memory", "m1", []float32{1, 0}))
+
+	query := randVec()
+
+	naive := func(kindFilter []string, limit int) []SearchHit {
+		var hits []SearchHit
+		for id, v := range stored {
+			if len(kindFilter) > 0 && !slices.Contains(kindFilter, kinds[id]) {
+				continue
+			}
+			dec := DecodeVector(EncodeVector(v))
+			hits = append(hits, SearchHit{ItemID: id, Kind: kinds[id], Score: Cosine(query, dec)})
+		}
+		sort.Slice(hits, func(i, j int) bool {
+			if hits[i].Score != hits[j].Score {
+				return hits[i].Score > hits[j].Score
+			}
+			return hits[i].ItemID < hits[j].ItemID
+		})
+		if len(hits) > limit {
+			hits = hits[:limit]
+		}
+		return hits
+	}
+
+	for _, tc := range []struct {
+		name  string
+		kinds []string
+		limit int
+	}{
+		{"window-smaller-than-corpus", nil, 10},
+		{"recall-depth", []string{"memory", "note"}, 24},
+		{"kind-filtered", []string{"note"}, 24},
+		{"window-equals-corpus", nil, 300},
+		{"fallback-truncated", nil, 257},
+		{"fallback-all-rows", nil, 400},
+		{"no-matches", []string{"nope"}, 10},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := CosineSearch(ctx, db, query, "m1", tc.kinds, tc.limit)
+			require.NoError(t, err)
+			want := naive(tc.kinds, tc.limit)
+			require.Equal(t, want, got)
+		})
+	}
 }
 
 func TestUnitVectorNormIsOne(t *testing.T) {
