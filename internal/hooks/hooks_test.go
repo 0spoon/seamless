@@ -420,7 +420,7 @@ func TestInstalledStatus(t *testing.T) {
 	path := filepath.Join(dir, ".claude", "settings.json")
 
 	// Missing file -> nothing installed, no error.
-	present, err := InstalledStatus(path)
+	present, err := InstalledStatus(path, "http://127.0.0.1:8081")
 	require.NoError(t, err)
 	require.Empty(t, present)
 
@@ -429,10 +429,48 @@ func TestInstalledStatus(t *testing.T) {
 	_, err = Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
 	require.NoError(t, err)
 
-	present, err = InstalledStatus(path)
+	present, err = InstalledStatus(path, "http://127.0.0.1:8081")
 	require.NoError(t, err)
 	require.ElementsMatch(t, InstalledEvents(), present)
 	require.Len(t, present, 6)
+}
+
+// Claude Code re-serializes settings.json through its own schema when the
+// owner edits config or permissions, dropping keys it does not know --
+// including the seamless_managed marker -- while keeping the functional hook
+// entries. Those still-firing hooks must count as installed, matched by their
+// seam-CLI command (command hooks) or hook URL (http hooks).
+func TestInstalledStatusSurvivesMarkerStripping(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "settings.json")
+	_, err := Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
+	require.NoError(t, err)
+
+	// Simulate the Claude Code rewrite: strip the marker from every entry.
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	var settings map[string]any
+	require.NoError(t, json.Unmarshal(raw, &settings))
+	for _, arr := range settings["hooks"].(map[string]any) {
+		for _, e := range arr.([]any) {
+			delete(e.(map[string]any), managedMarker)
+		}
+	}
+	raw, err = json.Marshal(settings)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, raw, 0o600))
+
+	present, err := InstalledStatus(path, "http://127.0.0.1:8081")
+	require.NoError(t, err)
+	require.ElementsMatch(t, InstalledEvents(), present)
+
+	// An unmarked http entry at a different base URL is not ours (e.g. a v1
+	// leftover): the http hook must drop out while the seam-CLI command hooks
+	// still match by their `hook <event>` command.
+	present, err = InstalledStatus(path, "http://127.0.0.1:9999")
+	require.NoError(t, err)
+	require.NotContains(t, present, "UserPromptSubmit")
+	require.Len(t, present, 5)
 }
 
 // Mirrors the plan-capture dogfood state: an older installer left UNMARKED
