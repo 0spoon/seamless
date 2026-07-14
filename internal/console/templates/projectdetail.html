@@ -1,0 +1,211 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/projects">All projects</a> <span class="faint">/</span> <b>{{.Slug}}</b> {{copyBtn .Slug}}</div>
+
+<div class="detail-head">
+  <div class="row-between">
+    <div>
+      <div class="title-row">
+        <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
+        <h1>{{.Name}}</h1>
+        {{if .Live}}<span class="badge ok"><span class="live-dot"></span>{{.Live}} agent{{if ne .Live 1}}s{{end}} working</span>{{end}}
+        {{if .Retired}}<span class="kind warn">retired</span>{{end}}
+        {{if .IsRoot}}<span class="chip-parent">{{icon "git-branch"}}root project</span>{{else}}<span class="chip-parent">{{icon "git-branch"}}child of {{.Parent}}</span>{{end}}
+      </div>
+      {{if .Description}}<div class="desc">{{.Description}}</div>{{end}}
+    </div>
+  </div>
+</div>
+
+<div class="tabs" id="tabs">
+  {{range .Tabs}}
+  <a data-tab="{{.Key}}" href="?tab={{.Key}}" class="{{if .Active}}on{{end}}">{{icon .Icon}}{{.Label}}{{if .HasCount}} <span class="pill">{{.Count}}</span>{{end}}</a>
+  {{end}}
+</div>
+
+<!-- TAB: overview -->
+<div class="tabpanel{{if eq .ActiveTab "overview"}} on{{end}}" data-panel="overview">
+  <div class="metricbar">
+    <div class="m"><div class="k">Active memories</div><div class="v">{{.Metrics.Memories}}</div></div>
+    <div class="m"><div class="k">Sessions</div><div class="v">{{.Metrics.Sessions}}{{if .Metrics.Live}} <small>&middot; {{.Metrics.Live}} live</small>{{end}}</div></div>
+    <div class="m"><div class="k">Open tasks</div><div class="v">{{.Metrics.OpenTasks}}{{if .Metrics.Blocked}} <small>&middot; {{.Metrics.Blocked}} blk</small>{{end}}</div></div>
+    <div class="m"><div class="k">Reach</div><div class="v brand">{{if .Metrics.HasReach}}{{.Metrics.ReachRate}}%{{else}}&mdash;{{end}}</div></div>
+    <div class="m"><div class="k">Coverage</div><div class="v ok">{{if .Metrics.HasCoverage}}{{.Metrics.Coverage}}%{{else}}&mdash;{{end}}</div></div>
+  </div>
+  <div class="two">
+    <div class="card">
+      <h2>Retrieval trend <span class="h2-meta">all projects</span></h2>
+      {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
+    </div>
+    <div class="card">
+      <h2>Memories by kind <span class="h2-meta">{{.Metrics.Memories}}</span></h2>
+      {{if .MemByKind}}{{kindLegend .MemByKind}}{{else}}<div class="empty">No memories yet</div>{{end}}
+    </div>
+  </div>
+  <div class="section" style="margin-top:16px">
+    <div class="card">
+      <h2>Recent activity</h2>
+      {{if .Recent}}
+      <table>
+        <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
+        <tbody>
+          {{range .Recent}}
+          <tr class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></td><td>{{.Summary}}</td></tr>
+          {{end}}
+        </tbody>
+      </table>
+      {{else}}<div class="empty">No recent activity for {{.Slug}}</div>{{end}}
+    </div>
+  </div>
+</div>
+
+<!-- TAB: tasks -->
+<div class="tabpanel{{if eq .ActiveTab "tasks"}} on{{end}}" data-panel="tasks">
+  {{range .Plans}}
+  <div class="plan">
+    <div class="plan-head">{{icon "git-merge"}}<span class="nm">plan:{{.Slug}}</span><span class="prog">{{.Done}} done &middot; {{.InFlight}} in progress &middot; {{.Open}} open &middot; {{.Total}} steps</span></div>
+    <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
+    {{range .Steps}}
+    <div class="step {{.State}}">
+      <div class="marker"><span class="dot"></span><span class="rail"></span></div>
+      <div class="body"><div class="t">{{.Title}}</div><div class="meta"><span class="mono">{{shortID .ID}}</span>{{if .ClaimedBy}}<span class="claim">{{icon "lock"}}claimed by {{.ClaimedBy}}</span>{{if .LeaseLeft}}<span>{{icon "timer"}} lease {{.LeaseLeft}}</span>{{end}}{{end}}{{if .BlockedBy}}<span class="edge">{{icon "link"}}blocked by {{.BlockedBy}}</span>{{end}}</div></div>
+      <span class="kind {{taskTone .Status}}" style="align-self:start">{{.Status}}</span>
+    </div>
+    {{end}}
+  </div>
+  {{else}}<div class="empty">No active plans in {{.Slug}}</div>{{end}}
+
+  <div class="card">
+    <h2>Ready queue <span class="h2-meta">off-plan &middot; claimable now</span></h2>
+    {{if .Ready}}
+    <table>
+      <thead><tr><th>Task</th><th>Status</th><th>Depends on</th><th>Created</th></tr></thead>
+      <tbody>
+        {{range .Ready}}
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> {{.Title}}</td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
+        {{end}}
+      </tbody>
+    </table>
+    {{else}}<div class="empty">Nothing claimable right now</div>{{end}}
+  </div>
+</div>
+
+<!-- TAB: sessions -->
+<div class="tabpanel{{if eq .ActiveTab "sessions"}} on{{end}}" data-panel="sessions">
+  <div class="card">
+    <h2>Sessions <span class="h2-meta">{{.Metrics.Live}} active &middot; {{sub .Metrics.Sessions .Metrics.Live}} completed</span></h2>
+    {{if .Sessions}}
+    <div class="sess">
+      {{range .Sessions}}
+      <div class="r"><div><div class="id"><a href="/console/sessions/{{.ID}}" data-peek>{{.Name}}</a>{{if .Active}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">{{.Source}}</span>{{end}}{{if .Ambient}}<span class="kind">ambient</span>{{end}}{{range .Holds}}<span class="claim">{{icon "lock"}}holds {{.}}</span>{{end}}</div>{{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}</div><span class="when">{{ago .Updated}}</span></div>
+      {{end}}
+    </div>
+    {{else}}<div class="empty">No sessions in {{.Slug}}</div>{{end}}
+  </div>
+</div>
+
+<!-- TAB: memories -->
+<div class="tabpanel{{if eq .ActiveTab "memories"}} on{{end}}" data-panel="memories">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
+      <tbody>
+        {{range .Memories}}
+        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><strong>{{.Name}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        {{else}}<tr><td colspan="6"><div class="empty">No memories in {{.Slug}}</div></td></tr>{{end}}
+        {{if .Inherited}}
+        <tr><td colspan="6" style="background:var(--surface-2);color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);font-weight:600">Inherited &mdash; counted in parent/global scope, not {{.Slug}}</td></tr>
+        {{range .Inherited}}
+        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><strong>{{.Name}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        {{end}}
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB: notes -->
+<div class="tabpanel{{if eq .ActiveTab "notes"}} on{{end}}" data-panel="notes">
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
+      <tbody>
+        {{range .Notes}}
+        <tr class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><strong>{{.Title}}</strong>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
+        {{else}}<tr><td colspan="3"><div class="empty">No notes in {{.Slug}}</div></td></tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- TAB: interactions -->
+<div class="tabpanel{{if eq .ActiveTab "interactions"}} on{{end}}" data-panel="interactions">
+  <div class="ix-controls">
+    <div class="ix-tabs"><button class="ix-tab active" type="button">All <span class="n">{{len .Interactions}}</span></button></div>
+    <div class="ix-actions"><span class="chip-parent">{{icon "git-branch"}}{{.Slug}} only</span></div>
+  </div>
+  <div class="ix-feed">
+    {{range .Interactions}}
+    <details class="ix-row{{if .IsError}} err{{end}}"{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
+      <summary><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
+      <div class="ix-body">
+        {{if .Request}}<h3>Request</h3><pre class="pre">{{.Request}}</pre>{{end}}
+        {{if .Response}}<h3>Response</h3><pre class="pre">{{.Response}}</pre>{{end}}
+        <div class="ix-links">{{if .SessionID}}<a href="/console/sessions/{{.SessionID}}" data-peek>{{.SessionName}} &rarr;</a>{{end}}<a href="/console/events/{{.ID}}">event &rarr;</a></div>
+      </div>
+    </details>
+    {{else}}<div class="empty">No interactions for {{.Slug}}</div>
+    {{end}}
+  </div>
+</div>
+
+<!-- TAB: relations -->
+<div class="tabpanel{{if eq .ActiveTab "relations"}} on{{end}}" data-panel="relations">
+  {{if .Tree}}
+  <div class="tree" style="margin-bottom:18px">
+    {{range .Tree}}{{template "treenode" .}}{{end}}
+  </div>
+  {{else}}<div class="empty">No plans traced in {{.Slug}} yet</div>{{end}}
+  {{if .Banners}}
+  <div style="display:flex;flex-direction:column;gap:10px">
+    {{range .Banners}}<div class="relbanner{{if .Retired}} retired{{end}}">{{icon .Icon}}<div>{{.HTML}}</div></div>{{end}}
+  </div>
+  {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "treenode"}}
+<div class="tnode">
+  <div class="tline"><span class="ico-lead lead-{{.Lead}}">{{icon .Icon}}</span><span class="nm">{{if .Href}}<a href="{{.Href}}" data-peek>{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>{{if .Cap}}<span class="cap{{if .Flag}} tflag{{end}}">{{.Cap}}</span>{{end}}</div>
+  {{if .Kids}}<div class="tkids">{{range .Kids}}{{template "treenode" .}}{{end}}</div>{{end}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  /* Project-detail tabs: server renders every panel (the active one via ?tab=),
+     JS switches them client-side without a reload and syncs ?tab= for deep-links.
+     Without JS the tab links navigate to the server-rendered tab. */
+  var bar = document.getElementById('tabs');
+  if (!bar) return;
+  var tabs = bar.querySelectorAll('[data-tab]');
+  var panels = document.querySelectorAll('.tabpanel[data-panel]');
+  function activate(key) {
+    var found = false;
+    panels.forEach(function (p) { var on = p.getAttribute('data-panel') === key; p.classList.toggle('on', on); if (on) found = true; });
+    if (!found) return;
+    tabs.forEach(function (t) { t.classList.toggle('on', t.getAttribute('data-tab') === key); });
+    try { history.replaceState(null, '', location.pathname + '?tab=' + key); } catch (e) {}
+  }
+  bar.addEventListener('click', function (e) {
+    var t = e.target.closest ? e.target.closest('[data-tab]') : null;
+    if (!t) return;
+    e.preventDefault();
+    activate(t.getAttribute('data-tab'));
+  });
+})();
+</script>
+{{end}}

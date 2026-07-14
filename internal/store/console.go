@@ -17,6 +17,7 @@ type NavCounts struct {
 	Notes            int // all notes
 	OpenTasks        int // open or in_progress
 	PendingProposals int // pending gardener proposals
+	Projects         int // registered projects
 }
 
 // GetNavCounts computes the sidebar counts.
@@ -41,6 +42,9 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 		return n, err
 	}
 	if err := scalar(&n.PendingProposals, `SELECT COUNT(*) FROM gardener_proposals WHERE status = 'pending'`); err != nil {
+		return n, err
+	}
+	if err := scalar(&n.Projects, `SELECT COUNT(*) FROM projects`); err != nil {
 		return n, err
 	}
 	return n, nil

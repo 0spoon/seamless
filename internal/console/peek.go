@@ -275,31 +275,9 @@ type projectDetail struct {
 	Updated     time.Time `json:"updated"`
 }
 
-func (s *Service) projectDetail(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slug := r.PathValue("slug")
-	p, ok, err := store.ProjectBySlug(ctx, s.cfg.DB, slug)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	if !ok {
-		http.NotFound(w, r)
-		return
-	}
-	counts, err := store.GetProjectCounts(ctx, s.cfg.DB, slug)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	d := projectDetail{
-		Slug: p.Slug, Name: p.Name, Description: p.Description,
-		Memories: counts.Memories, Sessions: counts.Sessions,
-		OpenTasks: counts.OpenTasks, Notes: counts.Notes,
-		Created: p.CreatedAt, Updated: p.UpdatedAt,
-	}
-	s.renderDetail(w, r, "project", pageData{Title: "Project " + p.Slug, Active: "settings", Data: d})
-}
+// The project detail handler (dispatcher + tabbed workspace) lives in
+// project_detail.go; the thin projectDetail struct above is the peek/CLI summary
+// it renders via projectSummary.
 
 // renderBody renders a memory/note/task body -- or session findings -- as
 // sanitized markdown HTML for the peek panel and the no-JS detail page. [[name]]

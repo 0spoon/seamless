@@ -21,8 +21,8 @@ var consoleCSS []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "interactions", "sessions", "session", "memories", "notes",
-	"retrieval", "tasks", "plans", "plan", "gardener", "settings", "event",
+	"login", "overview", "interactions", "projects", "projectdetail", "sessions", "session",
+	"memories", "notes", "retrieval", "tasks", "plans", "plan", "gardener", "settings", "event",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -212,6 +212,18 @@ func writeJSON(w http.ResponseWriter, code int, v any) {
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(v)
+}
+
+// badRequest reports a 400 in the caller's preferred format, for a strictly
+// validated query param (an unknown enum value). The message names the bad
+// param and lists the valid values so an agent driving the console by URL sees
+// the fix rather than a silent default.
+func (s *Service) badRequest(w http.ResponseWriter, r *http.Request, msg string) {
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": msg})
+		return
+	}
+	http.Error(w, msg, http.StatusBadRequest)
 }
 
 // serverError logs and reports a 500 in the caller's preferred format.

@@ -90,6 +90,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/plans", s.auth(s.plansList))
 	mux.HandleFunc("GET /console/plans/{slug}", s.auth(s.planDetail))
 	mux.HandleFunc("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
+	mux.HandleFunc("GET /console/projects", s.auth(s.projectsList))
 	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
 	mux.HandleFunc("POST /console/gardener/request", s.auth(s.gardenerRequest))
@@ -403,6 +404,7 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 		Notes:     n.Notes,
 		Tasks:     n.OpenTasks,
 		Proposals: n.PendingProposals,
+		Projects:  n.Projects,
 	}
 }
 
@@ -413,4 +415,5 @@ type navCounts struct {
 	Notes     int
 	Tasks     int
 	Proposals int
+	Projects  int
 }
