@@ -90,9 +90,10 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
-	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	now := time.Now().UTC()
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

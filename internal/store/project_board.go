@@ -13,7 +13,7 @@ import (
 
 // ProjectBoardRow is one project's health roll-up for the project board: the
 // same strict per-slug counts GetProjectCounts computes for a single project,
-// batched across every project in one pass, plus liveness (active sessions),
+// batched across every project in one pass, plus liveness (live sessions),
 // backpressure (blocked tasks), recency (last session activity), and retrieval
 // reach joined from BuildRetrievalReport.
 //
@@ -27,7 +27,7 @@ type ProjectBoardRow struct {
 	Project      string    `json:"project"`      // slug; "" is the global scope
 	Memories     int       `json:"memories"`     // active memories, project = slug (strict, matches GetProjectCounts.Memories)
 	Sessions     int       `json:"sessions"`     // all sessions project_slug = slug (matches GetProjectCounts.Sessions)
-	LiveSessions int       `json:"liveSessions"` // status = 'active' sessions in the project
+	LiveSessions int       `json:"liveSessions"` // live sessions: active AND updated within core.SessionIdleTTL (matches the Sessions screen)
 	OpenTasks    int       `json:"openTasks"`    // status IN ('open','in_progress') (matches GetProjectCounts.OpenTasks)
 	Blocked      int       `json:"blocked"`      // open tasks with >=1 open/in_progress blocker (== len(BlockedTasks))
 	Notes        int       `json:"notes"`        // notes project = slug (matches GetProjectCounts.Notes)
@@ -43,14 +43,16 @@ type ProjectBoardRow struct {
 // the projects table -- with strict per-slug counts, liveness, blocked-task
 // backpressure, and last-active recency computed in SQL, then retrieval reach
 // (ReachRate/Surfaced/Active) joined by slug from BuildRetrievalReport over the
-// given window.
+// given window. LiveSessions counts sessions that are active AND updated within
+// core.SessionIdleTTL of now, matching the Sessions screen's live bucket, so an
+// active-but-idle session awaiting the reaper never inflates the board.
 //
 // The counts mirror GetProjectCounts exactly (same strict per-slug predicates),
 // so a single row equals the single-project peek. The global scope ("") is its
 // own row (never folded into named projects); it is never flagged Unregistered
 // because the global scope is legitimately never registered. Rows are ordered by
 // slug (the global "" scope first).
-func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow) ([]ProjectBoardRow, error) {
+func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow, now time.Time) ([]ProjectBoardRow, error) {
 	rows := map[string]*ProjectBoardRow{}
 	row := func(slug string) *ProjectBoardRow {
 		r := rows[slug]
@@ -69,12 +71,15 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow)
 	}
 
 	// Sessions per project: all statuses (matches GetProjectCounts.Sessions),
-	// plus live (active) count and MAX(updated_at) for recency, in one pass.
+	// plus live count (active within the idle TTL) and MAX(updated_at) for
+	// recency, in one pass. LastActive deliberately ignores the cutoff: it
+	// reflects last activity regardless of live/idle.
+	liveCutoff := core.FormatTime(now.UTC().Add(-core.SessionIdleTTL))
 	sessRows, err := db.QueryContext(ctx, `
 		SELECT project_slug, COUNT(*),
-		       SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN status = 'active' AND updated_at >= ? THEN 1 ELSE 0 END),
 		       MAX(updated_at)
-		FROM sessions GROUP BY project_slug`)
+		FROM sessions GROUP BY project_slug`, liveCutoff)
 	if err != nil {
 		return nil, fmt.Errorf("store.ProjectsWithCounts: sessions: %w", err)
 	}

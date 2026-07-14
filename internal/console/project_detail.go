@@ -227,7 +227,8 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 			tab, strings.Join(projectTabKeys, ", ")))
 		return
 	}
-	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	now := time.Now().UTC()
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 
 	data := projectWorkspaceData{
 		Slug: slug, Name: p.Name, Description: p.Description,
@@ -241,7 +242,7 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 
 	// Header + metric bar: strict per-slug health from the same batched query the
 	// board uses, so a single row equals the board row exactly.
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

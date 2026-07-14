@@ -215,6 +215,12 @@ func TestOverview_ProjectsAtAGlance(t *testing.T) {
 		ID: mustID(t), Name: "cc/n", ProjectSlug: "newer", Status: core.SessionActive,
 		CreatedAt: now, UpdatedAt: now,
 	}))
+	// Active but idle (last updated beyond SessionIdleTTL, not yet reaped): still
+	// a session, never live -- on the glance rows or the headline count.
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: mustID(t), Name: "cc/i", ProjectSlug: "older", Status: core.SessionActive,
+		CreatedAt: now.Add(-2 * core.SessionIdleTTL), UpdatedAt: now.Add(-2 * core.SessionIdleTTL),
+	}))
 
 	var data overviewData
 	getJSON(t, mux, "/console/?format=json", &data)
@@ -222,4 +228,7 @@ func TestOverview_ProjectsAtAGlance(t *testing.T) {
 	require.Equal(t, "newer", data.Projects[0].Slug, "most recently active project first")
 	require.Equal(t, "older", data.Projects[1].Slug)
 	require.Equal(t, 1, data.Projects[0].Live, "the active session counts as live")
+	require.Equal(t, 0, data.Projects[1].Live, "an idle active session is not live")
+	require.Equal(t, 1, data.SessActive, "the headline counts live sessions, not raw active status")
+	require.Equal(t, 3, data.SessTotal)
 }
