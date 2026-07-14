@@ -258,9 +258,17 @@ func (w *watcher) fire(ctx context.Context, relPath string) {
 // newly created directory. The handler is idempotent (content-hash skip), so
 // double-firing with the live watch is harmless.
 func (w *watcher) rescanDir(ctx context.Context, dir string) {
+	// The callback never returns an error, so the walk always reports success:
+	// an unreadable subtree is warned about and skipped, not fatal.
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
-		if walkErr != nil || d.IsDir() || !strings.HasSuffix(path, ".md") {
+		if walkErr != nil {
+			// Skipping here means files under path are not caught up until the
+			// next startup Reconcile; log it rather than walk on silently.
+			w.logger.Warn("files.watcher: rescan walk", "path", path, "error", walkErr)
 			return nil //nolint:nilerr // best-effort catch-up scan
+		}
+		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+			return nil
 		}
 		rel, err := filepath.Rel(w.dataDir, path)
 		if err != nil {
