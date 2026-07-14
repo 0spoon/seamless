@@ -11,6 +11,7 @@
 package validate
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -20,11 +21,11 @@ import (
 var (
 	// ErrPathTraversal is returned when a path contains "..", is absolute, or
 	// contains null bytes.
-	ErrPathTraversal = fmt.Errorf("path contains traversal sequence, absolute path, or null bytes")
+	ErrPathTraversal = errors.New("path contains traversal sequence, absolute path, or null bytes")
 
 	// ErrUnsafeName is returned when a name contains filesystem-unsafe
 	// characters or patterns.
-	ErrUnsafeName = fmt.Errorf("name contains unsafe characters")
+	ErrUnsafeName = errors.New("name contains unsafe characters")
 )
 
 // Path rejects file paths that could escape a base directory. It checks for
