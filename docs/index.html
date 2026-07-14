@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Seamless — your agents share a brain. You can read it.</title>
+<meta name="description" content="Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans — markdown files in a folder you own, indexed by one Go binary, curated with you in the loop.">
+<link rel="canonical" href="https://thereisnospoon.org/">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://thereisnospoon.org/">
+<meta property="og:title" content="Seamless — your agents share a brain. You can read it.">
+<meta property="og:description" content="A local-first coordination substrate for fleets of coding agents: memory, tasks, and plans as markdown files you own. One Go binary. No black box.">
+<meta property="og:image" content="https://thereisnospoon.org/static/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<link rel="stylesheet" href="static/site.css">
+</head>
+<body>
+
+<header class="site-head">
+  <div class="wrap">
+    <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="seam" aria-hidden="true"></span>less</a>
+    <nav class="head-nav" aria-label="Site">
+      <a href="#why">Why</a>
+      <a href="#how">How it works</a>
+      <a href="#console">Console</a>
+      <a href="#quickstart">Quickstart</a>
+      <a href="#faq">FAQ</a>
+      <button class="theme-toggle" type="button" aria-label="Toggle color theme">
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4m11.4-11.4 1.4-1.4"/></svg>
+      </button>
+      <a class="gh-link" href="https://github.com/0spoon/seamless">
+        <svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ======================================================= HERO -->
+<section class="hero">
+  <div class="wrap">
+    <div>
+      <p class="kicker"><span class="live-dot" aria-hidden="true"></span> local-first coordination substrate for coding agents</p>
+      <h1>Your agents share a brain. <em>You can read it.</em></h1>
+      <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> — as markdown files in a folder you own, indexed by a single Go binary, curated with you in the loop.</p>
+      <div class="cta-row">
+        <span class="install-pill"><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/seamlessd@latest">go install github.com/0spoon/seamless/cmd/seamlessd@latest</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+      </div>
+      <div class="cta-secondary">
+        <a href="https://github.com/0spoon/seamless">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+          Star on GitHub</a>
+        <a href="#console">See the console &rarr;</a>
+      </div>
+    </div>
+    <div class="term" role="img" aria-label="Terminal session showing that Seamless memories are plain markdown files, readable and diffable with git">
+      <div class="term-bar"><i></i><i></i><i></i><span>~/.seamless</span></div>
+      <div class="term-body">
+<span class="ln"><span class="p">$</span> ls memory/myapp/</span>
+<span class="ln">chroma-boot-race.md     deploy-runbook.md</span>
+<span class="ln">edge-cache-gotcha.md    postgres-timeouts.md</span>
+<span class="ln">&nbsp;</span>
+<span class="ln"><span class="p">$</span> head -5 memory/myapp/edge-cache-gotcha.md</span>
+<span class="ln"><span class="dim">---</span></span>
+<span class="ln"><span class="k">kind:</span> <span class="s">gotcha</span></span>
+<span class="ln"><span class="k">description:</span> <span class="s">CDN strips Vary on 304s; never cache HTML</span></span>
+<span class="ln"><span class="k">superseded_by:</span> <span class="s">null</span></span>
+<span class="ln"><span class="k">source_session:</span> <span class="s">cc/ab12cd34</span></span>
+<span class="ln">&nbsp;</span>
+<span class="ln"><span class="p">$</span> git diff --stat</span>
+<span class="ln"> memory/myapp/postgres-timeouts.md | 9 <span class="k">++++++</span><span class="s">---</span></span>
+<span class="ln">&nbsp;</span>
+<span class="ln"><span class="c"># that's it. that's the database.</span> <span class="cursor" aria-hidden="true"></span></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= PILLARS -->
+<section class="section tint" id="why">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">why seamless</p>
+      <h2>A substrate, not a bolt-on memory layer.</h2>
+      <p>Memory APIs remember things for one agent. Seamless is the shared ground a whole fleet stands on — and the human stays in the loop, by design.</p>
+    </div>
+    <div class="pillars">
+      <article class="pillar rv">
+        <span class="prob">problem: n agents, zero coordination</span>
+        <h3>Built for a fleet, not a lone agent</h3>
+        <p>Run several agents on one codebase and they duplicate work and step on each other. Seamless ships real coordination primitives — a dependency-aware ready-queue, atomic lease-based task claiming, plans composed of notes and steps — so agents divide labor instead of colliding.</p>
+      </article>
+      <article class="pillar rv">
+        <span class="prob">problem: your knowledge, their database</span>
+        <h3>Files are the source of truth</h3>
+        <p>Every memory and note is a markdown file with frontmatter under <code>~/.seamless</code> — git-diffable, greppable, hand-editable. SQLite is just a rebuildable index. Delete the database and lose nothing.</p>
+      </article>
+      <article class="pillar rv">
+        <span class="prob">problem: silent auto-forgetting</span>
+        <h3>A gardener that asks first</h3>
+        <p>Other systems consolidate and decay memory on a curve you can't veto. The Seamless gardener only <em>proposes</em> — dedup, staleness, merges, splits — and you approve. Supersession keeps provenance: nothing vanishes, it gets replaced, with a pointer back.</p>
+      </article>
+      <article class="pillar rv">
+        <span class="prob">problem: a runtime to babysit</span>
+        <h3>One binary. No ceremony.</h3>
+        <p>A single static Go binary with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. <code>go install</code>, <code>serve</code>, done.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= HOW IT WORKS -->
+<section class="section" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">how it works</p>
+      <h2>Ambient for agents. Legible to you.</h2>
+    </div>
+    <div class="how">
+      <div class="how-diagram rv" aria-label="Architecture diagram: multiple agents connect through hooks and MCP to the seamlessd binary, which indexes a folder of markdown files; the human watches through the console">
+        <svg viewBox="0 0 480 410" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <!-- agents -->
+          <g>
+            <rect class="d-box" x="10" y="14" width="140" height="46" rx="8"/>
+            <text class="d-title" x="80" y="34" text-anchor="middle" font-size="11">claude code</text>
+            <text class="d-dim" x="80" y="49" text-anchor="middle" font-size="9.5">session #1</text>
+            <rect class="d-box" x="170" y="14" width="140" height="46" rx="8"/>
+            <text class="d-title" x="240" y="34" text-anchor="middle" font-size="11">claude code</text>
+            <text class="d-dim" x="240" y="49" text-anchor="middle" font-size="9.5">session #2</text>
+            <rect class="d-box" x="330" y="14" width="140" height="46" rx="8"/>
+            <text class="d-title" x="400" y="34" text-anchor="middle" font-size="11">any mcp agent</text>
+            <text class="d-dim" x="400" y="49" text-anchor="middle" font-size="9.5">session #n</text>
+          </g>
+          <path class="d-arrow" d="M80 60 L80 92 Q80 100 88 100 L152 100" stroke-width="1.3"/>
+          <path class="d-arrow" d="M240 60 L240 100" stroke-width="1.3"/>
+          <path class="d-arrow" d="M400 60 L400 92 Q400 100 392 100 L328 100" stroke-width="1.3"/>
+          <text class="d-dim" x="240" y="118" text-anchor="middle" font-size="9.5">hooks + 26 mcp tools</text>
+          <!-- daemon -->
+          <path class="d-arrow" d="M240 100 L240 128" stroke-width="1.3"/>
+          <polygon class="d-arrowhead" points="240,134 236,126 244,126"/>
+          <rect class="d-core" x="45" y="136" width="310" height="86" rx="10" stroke-width="1.4"/>
+          <text class="d-title" x="200" y="164" text-anchor="middle" font-size="13">seamlessd</text>
+          <text x="200" y="182" text-anchor="middle" font-size="9.5">one Go binary &#183; no CGO &#183; localhost</text>
+          <text class="d-dim" x="200" y="200" text-anchor="middle" font-size="9">briefing &#183; recall &#183; ready-queue &#183; gardener</text>
+          <!-- you -->
+          <rect class="d-box" x="372" y="136" width="98" height="86" rx="10"/>
+          <text class="d-title" x="421" y="168" text-anchor="middle" font-size="12">you</text>
+          <text class="d-dim" x="421" y="186" text-anchor="middle" font-size="9.5">console &#183; CLI</text>
+          <text class="d-dim" x="421" y="200" text-anchor="middle" font-size="9.5">approve &#183; edit</text>
+          <path class="d-arrow" d="M359 179 L368 179" stroke-width="1.3"/>
+          <polygon class="d-arrowhead" points="356,179 364,175 364,183"/>
+          <polygon class="d-arrowhead" points="370,179 362,175 362,183"/>
+          <!-- files -->
+          <path class="d-arrow" d="M200 222 L200 252" stroke-width="1.3"/>
+          <polygon class="d-arrowhead" points="200,258 196,250 204,250"/>
+          <polygon class="d-arrowhead" points="200,220 196,228 204,228"/>
+          <rect class="d-file" x="45" y="260" width="310" height="96" rx="10"/>
+          <text class="d-title" x="200" y="286" text-anchor="middle" font-size="12">~/.seamless/</text>
+          <text x="200" y="306" text-anchor="middle" font-size="9.5">memory/*.md &#183; notes/*.md</text>
+          <text class="d-dim" x="200" y="324" text-anchor="middle" font-size="9.5">markdown + frontmatter &#183; source of truth &#183; in git</text>
+          <text class="d-dim" x="200" y="342" text-anchor="middle" font-size="9.5">sqlite = rebuildable index</text>
+          <text class="d-dim" x="240" y="392" text-anchor="middle" font-size="10" font-style="italic"># kill -9 the daemon; the files don't care</text>
+        </svg>
+      </div>
+      <div class="steps">
+        <div class="step rv">
+          <div>
+            <h3>Hooks make it ambient</h3>
+            <p>Claude Code hooks inject a project briefing at session start and matched memories on every prompt. Capture and recall cost your agents zero effort — and zero prompt-engineering from you.</p>
+          </div>
+        </div>
+        <div class="step rv">
+          <div>
+            <h3>26 MCP tools when agents want more</h3>
+            <p><code>memory_write</code> with supersession, <code>recall</code>, notes, <code>tasks_claim</code> with leases, research trials. Any agent that speaks MCP is a citizen, not just Claude.</p>
+          </div>
+        </div>
+        <div class="step rv">
+          <div>
+            <h3>Hybrid recall, one store</h3>
+            <p>Full-text (FTS5) and vector search fused with reciprocal-rank fusion — inside the same SQLite file. No vector database to run, back up, or explain.</p>
+          </div>
+        </div>
+        <div class="step rv">
+          <div>
+            <h3>Files stay the truth</h3>
+            <p>Each memory is one markdown file with YAML frontmatter. Edit it in your editor; the watcher reindexes. The database can always be rebuilt from the folder.</p>
+          </div>
+        </div>
+        <div class="step rv">
+          <div>
+            <h3>The gardener proposes; you approve</h3>
+            <p>Scheduled passes flag duplicates, stale knowledge, and abandoned plans — as proposals in the console and CLI. Nothing is merged, archived, or forgotten without you.</p>
+          </div>
+        </div>
+        <div class="step rv">
+          <div>
+            <h3>Watch the fleet, live</h3>
+            <p>A server-rendered console streams every interaction over SSE: what was injected, what was recalled, who claimed which task, and how much of the store is actually being used.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= CONSOLE -->
+<section class="section tint" id="console">
+  <div class="wrap">
+    <div class="console-grid">
+      <div>
+        <p class="kicker">the console</p>
+        <div class="section-head" style="margin-bottom:0">
+          <h2>See what the fleet knows — and what it's doing right now.</h2>
+        </div>
+        <ul class="console-points">
+          <li><span class="pt">01</span><span><strong>Interactions feed.</strong> Every injection, recall, and tool call from every agent, streamed live.</span></li>
+          <li><span class="pt">02</span><span><strong>Plans board.</strong> Captured Claude Code plans with their notes, steps, and claim status.</span></li>
+          <li><span class="pt">03</span><span><strong>Retrieval health.</strong> How much of the store is actually reaching agents — not how big it is.</span></li>
+          <li><span class="pt">04</span><span><strong>Relations graph.</strong> How memories, notes, sessions, and tasks connect across projects.</span></li>
+        </ul>
+        <p class="console-note"># this is a sketch. the real one ships inside the binary at<br>#&nbsp;127.0.0.1:8081/console — your data never leaves the machine.</p>
+      </div>
+      <div class="console-mini rv" role="img" aria-label="Stylized sketch of the Seamless console overview: memory reach and knowledge coverage stats, memories by kind, and a live interactions feed">
+        <div class="cm-side">
+          <span class="cm-brand"><span class="live-dot" aria-hidden="true"></span> Seamless</span>
+          <span class="cm-group">observe</span>
+          <span class="cm-item on"><span>Overview</span></span>
+          <span class="cm-item"><span>Interactions</span></span>
+          <span class="cm-group">browse</span>
+          <span class="cm-item"><span>Projects</span><span>4</span></span>
+          <span class="cm-item"><span>Sessions</span><span>212</span></span>
+          <span class="cm-item"><span>Memories</span><span>128</span></span>
+          <span class="cm-item"><span>Notes</span><span>57</span></span>
+          <span class="cm-item"><span>Tasks</span><span>9</span></span>
+          <span class="cm-item"><span>Plans</span><span>6</span></span>
+          <span class="cm-group">system</span>
+          <span class="cm-item"><span>Gardener</span><span>2</span></span>
+        </div>
+        <div class="cm-main">
+          <span class="cm-title">Overview</span>
+          <div class="cm-cards">
+            <div class="cm-card">
+              <div class="cm-label">memory reach</div>
+              <div class="cm-big brand">61%</div>
+              <div class="cm-sub">78 of 128 memories surfaced</div>
+              <div class="cm-spark" aria-hidden="true">
+                <i style="height:30%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:55%"></i><i style="height:64%" class="hot"></i><i style="height:58%"></i><i style="height:72%" class="hot"></i><i style="height:61%"></i>
+              </div>
+            </div>
+            <div class="cm-card">
+              <div class="cm-label">knowledge coverage</div>
+              <div class="cm-big ok">88%</div>
+              <div class="cm-sub">sessions that retained knowledge</div>
+              <div class="cm-kinds" style="margin-top:10px">
+                <div class="cm-kind"><span>gotcha</span><span class="bar"><i style="width:72%;background:var(--pop)"></i></span><span>31</span></div>
+                <div class="cm-kind"><span>decision</span><span class="bar"><i style="width:54%;background:#8b5cf6"></i></span><span>23</span></div>
+                <div class="cm-kind"><span>runbook</span><span class="bar"><i style="width:38%;background:var(--brand)"></i></span><span>16</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="cm-rows">
+            <div class="cm-row"><span class="tag inj">injection</span> briefing &rarr; cc/ab12cd34 &#183; 3 memories, 1 plan <span class="t">2s</span></div>
+            <div class="cm-row"><span class="tag tool">tool.call</span> tasks_claim &rarr; release-checklist &#183; lease 900s <span class="t">1m</span></div>
+            <div class="cm-row"><span class="tag tool">tool.call</span> memory_write &rarr; edge-cache-gotcha &#183; supersedes v1 <span class="t">4m</span></div>
+            <div class="cm-row"><span class="tag">proposal</span> gardener: merge 2 near-duplicates &#183; awaiting you <span class="t">12m</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= ALSO IN THE BOX -->
+<section class="section">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">also in the box</p>
+      <h2>The parts you'd expect, done plainly.</h2>
+    </div>
+    <div class="stakes">
+      <div class="stake rv"><b>ambient capture</b> SessionStart briefing, prompt-matched recall, session-end harvest — via plain Claude Code hooks.</div>
+      <div class="stake rv"><b>plan-mode capture</b> Claude Code plans are captured, tracked, and checked for staleness against git.</div>
+      <div class="stake rv"><b>memory lifecycle</b> Supersession with provenance and arbitration — history is kept, never silently rewritten.</div>
+      <div class="stake rv"><b>research lab</b> Structured trials so parallel agents can run one investigation without trampling each other.</div>
+      <div class="stake rv"><b>projects &amp; scoping</b> Per-project and global memory, mapped to repos; agents inherit scope from their session.</div>
+      <div class="stake rv"><b>bring your own models</b> OpenAI by default; fully offline with Ollama; Anthropic supported.</div>
+      <div class="stake rv"><b>events &amp; telemetry</b> Append-only event log with SSE fan-out; retrieval stats you can audit.</div>
+      <div class="stake rv"><b>doctor</b> <code style="font-size:12px">seamlessd doctor</code> self-checks config, DB, hooks, and models before you wonder why.</div>
+      <div class="stake rv"><b>headless CLI</b> <code style="font-size:12px">seam</code> for scripts and owners: plans, tasks, observability from the terminal.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= QUICKSTART -->
+<section class="section tint" id="quickstart">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">quickstart</p>
+      <h2>Three commands to a shared brain.</h2>
+    </div>
+    <div class="qs-steps">
+      <div class="qs rv">
+        <span class="n">01</span>
+        <div>
+          <h3>Install</h3>
+          <div class="code"><span><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/seamlessd@latest">go install github.com/0spoon/seamless/cmd/seamlessd@latest</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">One static binary. Go 1.25+, no CGO, nothing else to install.</p>
+        </div>
+      </div>
+      <div class="qs rv">
+        <span class="n">02</span>
+        <div>
+          <h3>Serve</h3>
+          <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd serve">seamlessd serve</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">Binds to <code>127.0.0.1:8081</code>, data in <code>~/.seamless</code>. Set an API key in <code>seamless.yaml</code>; <code>seamlessd doctor</code> checks the rest.</p>
+        </div>
+      </div>
+      <div class="qs rv">
+        <span class="n">03</span>
+        <div>
+          <h3>Wire your agents</h3>
+          <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd install-hooks">seamlessd install-hooks</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">Installs the Claude Code hooks: briefing on session start, recall on every prompt. Other agents connect over MCP.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= FAQ -->
+<section class="section" id="faq">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">fair questions</p>
+      <h2>&ldquo;Why not just use&hellip;&rdquo;</h2>
+    </div>
+    <div class="faq">
+      <details class="rv">
+        <summary>&hellip;Mem0 or Zep?</summary>
+        <div class="a"><p>They're solid memory APIs for products you're <em>building</em>, and they're cloud-first. Seamless is for the agents you <em>run</em> — it lives on your machine, binds to localhost, and needs no account. Different job.</p></div>
+      </details>
+      <details class="rv">
+        <summary>&hellip;Anthropic's built-in memory?</summary>
+        <div class="a"><p>Claude's managed memory is a per-agent directory in a sandbox: one tool's silo. Seamless is shared ground across every agent you run — plus tasks, plans, atomic claiming, and a console. And it's yours: files on your disk, not files in someone's sandbox.</p></div>
+      </details>
+      <details class="rv">
+        <summary>&hellip;agentmemory?</summary>
+        <div class="a"><p>agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless is one Go binary; the source of truth is markdown in git; and forgetting is a proposal you approve — never a curve you're on.</p></div>
+      </details>
+      <details class="rv">
+        <summary>&hellip;Supermemory?</summary>
+        <div class="a"><p>Supermemory is a cloud memory API with a broad personal-and-company-brain scope, and its Claude Code integration sits behind a paid plan. Seamless is free, local, and narrowly aimed at one job: a fleet of coding agents sharing one legible brain.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Where are the benchmarks?</summary>
+        <div class="a"><p>Memory benchmarks in this category are mostly self-refereed, and every vendor publishes one where they win. We don't play. Judge Seamless differently: open the folder, read what your agents wrote, diff it in git. Legibility is the benchmark.</p></div>
+      </details>
+      <details class="rv">
+        <summary>Does it phone home?</summary>
+        <div class="a"><p>No. Localhost bind, a static bearer key, no telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either — view source; it's a static file.</p></div>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- ======================================================= MANIFESTO -->
+<section class="manifesto">
+  <div class="wrap">
+    <p class="kicker">thereisnospoon.org</p>
+    <h2>There is no spoon.</h2>
+    <p>Every memory product asks you to trust a spoon: an embedding space you can't read, a decay curve you can't veto, a cloud you can't leave. Seamless is built on the opposite bet — <strong>the magic memory layer doesn't exist.</strong> It never did.</p>
+    <p>What exists is a folder of markdown files, in git, on your disk. And a single Go binary that indexes them, briefs your agents, queues their work, and asks your permission before it forgets anything. <strong>That's the trick: there isn't one.</strong></p>
+    <p class="ls">$ ls ~/.seamless/memory/ <span class="dim">&nbsp;# go ahead. look.</span></p>
+  </div>
+</section>
+
+</main>
+
+<footer class="site-foot">
+  <div class="wrap">
+    <div class="fm">
+      <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="seam" aria-hidden="true"></span>less</a>
+      <p class="tagline">No seams. No spoons.</p>
+      <p class="colophon">Type set in Space Grotesk, Hanken Grotesk &amp; JetBrains Mono, self-hosted (<a href="static/fonts/OFL-NOTICE.txt">OFL</a>). No trackers, no cookies, no CDNs — this page is a static file. Naturally, it's <a href="https://github.com/0spoon/seamless/tree/main/docs">in the repo</a>.</p>
+    </div>
+    <nav aria-label="Footer">
+      <div>
+        <b>project</b>
+        <a href="https://github.com/0spoon/seamless">GitHub</a>
+        <a href="https://github.com/0spoon/seamless#readme">README</a>
+        <a href="https://github.com/0spoon/seamless/issues">Issues</a>
+      </div>
+      <div>
+        <b>on this page</b>
+        <a href="#why">Why Seamless</a>
+        <a href="#how">How it works</a>
+        <a href="#quickstart">Quickstart</a>
+      </div>
+    </nav>
+  </div>
+</footer>
+
+<script src="static/site.js"></script>
+</body>
+</html>

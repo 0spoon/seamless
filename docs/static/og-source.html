@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<!-- Source for og.png (1200x630). Render in a browser and screenshot the #card
+     region; see docs/README-site.md. Kept in the repo so the card is reproducible. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<style>
+  @font-face { font-family: "Space Grotesk"; src: url("fonts/space-grotesk.woff2") format("woff2"); font-weight: 300 700; }
+  @font-face { font-family: "JetBrains Mono"; src: url("fonts/jetbrains-mono.woff2") format("woff2"); font-weight: 100 800; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: #34363c; }
+  #card {
+    position: fixed; top: 0; left: 0;
+    width: 1200px; height: 630px;
+    background: #14161c;
+    color: #e8eaf0;
+    font-family: "Space Grotesk", sans-serif;
+    padding: 72px 80px;
+    display: flex; flex-direction: column; justify-content: space-between;
+    overflow: hidden;
+  }
+  .row { display: flex; justify-content: space-between; align-items: center; }
+  .wordmark { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: baseline; }
+  .wordmark .seam {
+    display: inline-block; width: 2px; height: 0.95em; margin: 0 2px; align-self: center;
+    background: linear-gradient(to bottom, transparent, #ff6a3d 30%, #ff6a3d 70%, transparent);
+  }
+  .mark { width: 56px; height: 56px; border-radius: 13px; background: #3f56e8; position: relative; }
+  .mark::before {
+    content: ""; position: absolute; inset: 14px; border-radius: 50%;
+    border: 4.5px solid #f7f6f2;
+  }
+  .mark::after {
+    content: ""; position: absolute; left: 10px; right: 10px; top: 50%;
+    height: 4.5px; border-radius: 3px; background: #f7f6f2;
+    transform: rotate(-45deg);
+  }
+  h1 { font-size: 88px; font-weight: 700; letter-spacing: -0.025em; line-height: 1.02; }
+  h1 em { font-style: normal; color: #93a0ff; }
+  .foot { font-family: "JetBrains Mono", monospace; font-size: 24px; color: #7d8291; }
+  .foot .green { color: #7fd6a4; }
+</style>
+</head>
+<body>
+  <div id="card">
+    <div class="row">
+      <span class="wordmark">seam<span class="seam"></span>less</span>
+      <span class="mark"></span>
+    </div>
+    <h1>Your agents share a brain.<br><em>You can read it.</em></h1>
+    <div class="row foot">
+      <span><span class="green">$</span> ls ~/.seamless/memory/</span>
+      <span>thereisnospoon.org</span>
+    </div>
+  </div>
+</body>
+</html>

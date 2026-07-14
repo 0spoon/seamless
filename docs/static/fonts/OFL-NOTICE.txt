@@ -1,0 +1,2 @@
+Space Grotesk (c) Florian Karsten; Hanken Grotesk (c) Hanken Design Co.; JetBrains Mono (c) JetBrains.
+All three are licensed under the SIL Open Font License 1.1 (https://openfontlicense.org) and self-hosted here as variable-font woff2 subsets (latin).

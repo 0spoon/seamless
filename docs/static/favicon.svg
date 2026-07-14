@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- 0spoon mark: an empty set. there is no spoon. -->
+  <rect width="32" height="32" rx="7" fill="#3f56e8"/>
+  <circle cx="16" cy="16" r="7.5" fill="none" stroke="#f7f6f2" stroke-width="2.6"/>
+  <line x1="7.5" y1="24.5" x2="24.5" y2="7.5" stroke="#f7f6f2" stroke-width="2.6" stroke-linecap="round"/>
+</svg>
