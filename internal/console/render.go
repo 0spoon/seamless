@@ -176,8 +176,8 @@ func parseTemplates() (pages, fragments map[string]*template.Template, err error
 }
 
 // renderFragment writes an entity's peek body -- the "peek-body" block of
-// templates/peek_<name>.html -- as a standalone HTML fragment, for a drawer
-// fetch (?peek=1). data is the entity payload (the fragment's dot).
+// templates/peek_<name>.html -- as a standalone HTML fragment, for a detail
+// pane fetch (?peek=1). data is the entity payload (the fragment's dot).
 func (s *Service) renderFragment(w http.ResponseWriter, r *http.Request, name string, data any) {
 	tmpl, ok := s.fragments[name]
 	if !ok {
@@ -194,7 +194,7 @@ func (s *Service) renderFragment(w http.ResponseWriter, r *http.Request, name st
 }
 
 // renderDetail serves an entity detail three ways: JSON for the CLI (wantsJSON),
-// an HTML fragment for a drawer fetch (?peek=1), or -- by default -- a full
+// an HTML fragment for a detail-pane fetch (?peek=1), or -- by default -- a full
 // layout-wrapped page (a shareable, no-JS fallback URL). name is the peek entity
 // ("memory", "task", ...); pd.Data is its payload.
 func (s *Service) renderDetail(w http.ResponseWriter, r *http.Request, name string, pd pageData) {

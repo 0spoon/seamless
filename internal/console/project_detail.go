@@ -1,7 +1,7 @@
 package console
 
-// The project-detail workspace turns the thin project peek (a summary drawer)
-// into a full tabbed page: the peek drawer stays the at-a-glance summary, while
+// The project-detail workspace turns the thin project peek into a full tabbed
+// page: the peek fragment stays the at-a-glance summary, while
 // the full page (the "open" target) is a 7-tab workspace over the project's
 // health, plans/tasks, sessions, memories, notes, interactions, and relations.
 // The relations tree + cross-project banners are built by helpers here and
@@ -172,7 +172,7 @@ type relBanner struct {
 	HTML    template.HTML
 }
 
-// projectDetail dispatches the /console/projects/{slug} route: the peek drawer
+// projectDetail dispatches the /console/projects/{slug} route: the peek fragment
 // (?peek=1) and the CLI (JSON) get the thin summary; a browser hitting the full
 // page gets the tabbed workspace. A retired project still renders (with its
 // banner), only an unknown slug 404s.
@@ -196,7 +196,7 @@ func (s *Service) projectDetail(w http.ResponseWriter, r *http.Request) {
 }
 
 // projectSummary renders the thin project peek: metadata + per-channel counts,
-// served as the drawer fragment (?peek=1) or CLI JSON.
+// served as the peek fragment (?peek=1) or CLI JSON.
 func (s *Service) projectSummary(w http.ResponseWriter, r *http.Request, p core.Project) {
 	ctx := r.Context()
 	counts, err := store.GetProjectCounts(ctx, s.cfg.DB, p.Slug)
@@ -242,7 +242,7 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 
 	// Header + metric bar: strict per-slug health from the same batched query the
 	// board uses, so a single row equals the board row exactly.
-	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now)
+	board, err := store.ProjectsWithCounts(ctx, s.cfg.DB, win, now, s.cfg.SessionIdleTTL)
 	if err != nil {
 		s.serverError(w, r, err)
 		return

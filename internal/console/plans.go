@@ -241,7 +241,7 @@ func (s *Service) planDetail(w http.ResponseWriter, r *http.Request) {
 		d.Tasks = append(d.Tasks, planTaskRef{ID: t.ID, Title: t.Title, Status: string(t.Status)})
 	}
 	// renderDetail serves this three ways: JSON (CLI), the peek fragment
-	// (?peek=1, for the drawer that plans rows now open), or -- by default -- the
+	// (?peek=1, for the detail pane plans rows open), or -- by default -- the
 	// bespoke full plan.html page (since "plan" is a registered page).
 	s.renderDetail(w, r, "plan", pageData{Title: "Plan " + d.Row.Title, Active: "plans", Data: d})
 }

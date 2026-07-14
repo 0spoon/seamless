@@ -34,8 +34,8 @@ func TestCopyButton_HelperEmitsFullValue(t *testing.T) {
 }
 
 // TestCopyButton_RendersFullValueAcrossSurfaces proves the button reaches both a
-// peek fragment (so it works after the drawer swaps innerHTML) and a full page,
-// always carrying the full id/path rather than the shortID display text.
+// peek fragment (so it works after the detail pane swaps innerHTML) and a full
+// page, always carrying the full id/path rather than the shortID display text.
 func TestCopyButton_RendersFullValueAcrossSurfaces(t *testing.T) {
 	db, mux := newConsole(t)
 	ctx := context.Background()
@@ -56,7 +56,7 @@ func TestCopyButton_RendersFullValueAcrossSurfaces(t *testing.T) {
 	require.Contains(t, full, `data-copy="`+cwd+`"`)
 	require.NotContains(t, full, `data-copy="`+shortID(sessID)+`"`, "must copy the full id, not the shortID")
 
-	// Peek fragment (drawer body only, no layout): still carries the copy button,
+	// Peek fragment (pane body only, no layout): still carries the copy button,
 	// which the document-level delegated handler drives after the innerHTML swap.
 	frag := getPeek(t, mux, "/console/sessions/"+sessID+"?peek=1").Body.String()
 	require.NotContains(t, frag, "<html")
