@@ -297,7 +297,10 @@ func importSessions(ctx context.Context, src, db *sql.DB, rep *Report) error {
 		}
 		countInsert(res, &rep.Sessions, &rep.Skipped)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("importer: query agent_sessions: %w", err)
+	}
+	return nil
 }
 
 func importEvents(ctx context.Context, src, db *sql.DB, rep *Report) error {
@@ -332,7 +335,10 @@ func importEvents(ctx context.Context, src, db *sql.DB, rep *Report) error {
 		}
 		countInsert(res, &rep.Events, &rep.Skipped)
 	}
-	return rows.Err()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("importer: query agent_tool_calls: %w", err)
+	}
+	return nil
 }
 
 // idExists reports whether an id is already present in a v2 index table.
