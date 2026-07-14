@@ -1,10 +1,30 @@
 # Seamless
 
-Seamless is a local-first agent memory and coordination substrate: persistent
-memory, sessions, tasks, and research trials for the AI agents you run (Claude
-Code and friends), with a read-mostly observability console for the human.
+> Your agents share a brain. You can read it.
+
+Seamless is a local-first coordination substrate for the fleet of coding agents
+you run (Claude Code and friends): persistent memory, dependency-aware tasks,
+and shared plans -- stored as markdown files you own, indexed by a single Go
+binary, curated with you in the loop, with a read-mostly observability console
+for the human.
+
+Website: [thereisnospoon.org](https://thereisnospoon.org) (source in [`docs/`](docs/))
 
 It is a ground-up rebuild of Seam (v1).
+
+## Why Seamless
+
+- **Built for a fleet, not a lone agent.** Real coordination primitives: a
+  dependency-aware ready-queue, atomic lease-based task claiming, and plans
+  composed of notes and steps -- agents divide labor instead of colliding.
+- **Files are the source of truth.** Every memory and note is a markdown file
+  with frontmatter under `~/.seamless` -- git-diffable, greppable,
+  hand-editable. SQLite is a rebuildable index; delete it and lose nothing.
+- **A gardener that asks first.** Dedup, staleness, merge, and stale-plan
+  passes only *propose*; the human approves. Supersession keeps provenance --
+  nothing is silently rewritten or forgotten.
+- **One binary, no ceremony.** Single static Go binary, no CGO, pure-Go
+  SQLite, no Node, no separate engine, no cloud account.
 
 ## Status
 
