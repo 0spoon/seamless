@@ -34,7 +34,7 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
-	_ = json.NewDecoder(r.Body).Decode(&p)
+	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no agent id -> no capture)
 
 	if h.captureEnabled() {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)

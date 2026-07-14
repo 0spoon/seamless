@@ -206,7 +206,7 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p endPayload
-	_ = json.NewDecoder(r.Body).Decode(&p)
+	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no session id -> no-op)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -358,7 +358,7 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p promptPayload
-	_ = json.NewDecoder(r.Body).Decode(&p)
+	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no prompt -> empty response)
 	if p.UserPrompt == "" {
 		writeHookResponse(w, "UserPromptSubmit", "")
 		return
