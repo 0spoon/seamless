@@ -4,7 +4,7 @@
   <h2 class="peek-title">{{.Event.Summary}}</h2>
 
   <dl class="peek-kv">
-    <dt>When</dt><dd title="{{.Event.When}}">{{ago .Event.When}}</dd>
+    <dt>When</dt><dd title="{{ts .Event.When}}">{{ago .Event.When}}</dd>
     <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
     <dt>Session</dt><dd>{{if .Event.SessionID}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{copyBtn .Event.SessionID}}{{else}}&mdash;{{end}}</dd>
   </dl>
@@ -24,7 +24,5 @@
     </ul>
   </section>
   {{end}}
-
-  <div class="peek-actions"><a href="/console/events/{{.Event.ID}}">Open full view &rarr;</a></div>
 </article>
 {{end}}

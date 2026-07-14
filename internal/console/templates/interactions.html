@@ -54,7 +54,7 @@
   var pill = document.getElementById('live-pill');
   if (pill) pill.remove();
 
-  var MAX_ROWS = 500;
+  var maxRows = 500;         // cap on buffered rows; grows as older pages are loaded
   var rows = {};              // id -> {data, el}
   var order = [];            // ids, newest-first
   var filter = 'all';
@@ -213,7 +213,7 @@
 
     var body = el('div', 'ix-body');
     if (d.request) {
-      body.appendChild(el('h3', null, d.kind === 'subagent.captured' ? 'Prompt' : 'Request'));
+      body.appendChild(el('h2', null, d.kind === 'subagent.captured' ? 'Prompt' : 'Request'));
       body.appendChild(renderValue(d.request));
     }
     if (d.response) {
@@ -221,7 +221,7 @@
       if (d.kind === 'retrieval.injected') rh = 'Injected content';
       else if (d.kind.indexOf('plan.') === 0) rh = 'Plan content';
       else if (d.kind === 'subagent.captured') rh = 'Report';
-      body.appendChild(el('h3', null, rh));
+      body.appendChild(el('h2', null, rh));
       body.appendChild(renderValue(d.response));
     }
     var links = el('div', 'ix-links');
@@ -263,7 +263,7 @@
   }
 
   function trim() {
-    while (order.length > MAX_ROWS) {
+    while (order.length > maxRows) {
       var id = order.pop();
       var r = rows[id];
       if (r && r.el && r.el.parentNode) r.el.parentNode.removeChild(r.el);
@@ -382,7 +382,12 @@
           '&beforeTs=' + encodeURIComponent(cursor.ts), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        (data.rows || []).forEach(function (d) { insert(d, false); });
+        // Raise the cap by the page size FIRST so the older rows we're about to
+        // append aren't immediately trimmed off the oldest end (trim() drops from
+        // there). Load-older is an explicit request to retain more history.
+        var older = data.rows || [];
+        maxRows += older.length;
+        older.forEach(function (d) { insert(d, false); });
         cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
         olderBtn.disabled = false;
         refreshTabs(); updateEmpty(); applyAll();

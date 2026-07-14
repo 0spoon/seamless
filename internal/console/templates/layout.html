@@ -16,16 +16,17 @@
     <div class="brand"><span class="dot"></span> Seamless</div>
     <div class="brand-by">by <span>0spoon</span></div>
     <nav class="nav">
+      <div class="nav-sec">Observe</div>
       <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
-      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "arrow-down-to-line"}}<span class="nav-label">Retrieval</span></a>
       <a href="/console/interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
+      <div class="nav-sec">Browse</div>
       <a href="/console/projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
       <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
       <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
       <a href="/console/notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
       <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count">{{.Nav.Tasks}}</span></a>
-      <a href="/console/plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span></a>
-      <a href="/console/relations" class="{{if eq .Active "relations"}}active{{end}}">{{icon "git-fork"}}<span class="nav-label">Relations</span></a>
+      <a href="/console/plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span><span class="count">{{.Nav.Plans}}</span></a>
+      <div class="nav-sec">System</div>
       <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count">{{.Nav.Proposals}}</span></a>
       <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
     </nav>
@@ -37,6 +38,8 @@
     </div>
   </aside>
   <main class="main">
+    {{if .Notice}}<div class="section notice" role="status">{{.Notice}}</div>{{end}}
+    {{if .FlashErr}}<div class="section login-err" role="alert">{{.FlashErr}}</div>{{end}}
     {{template "content" .}}
   </main>
 </div>
@@ -52,12 +55,16 @@
 </aside>
 <script>
 (function () {
-  if (!window.EventSource) return;
+  // Static "live" pills (Overview, Projects topbar). #ix-live is excluded --
+  // the Interactions screen drives it from its own feed=interactions stream.
+  var livePills = document.querySelectorAll('.topbar .live:not(#ix-live)');
+  function setLive(on) { livePills.forEach(function (p) { p.classList.toggle('off', !on); }); }
+  if (!window.EventSource) { setLive(false); return; }
   var pill = document.getElementById('live-pill');
   var dot = document.querySelector('.brand .dot');
   var n = 0;
   var es = new EventSource('/console/events');
-  es.onopen = function () { if (dot) dot.classList.add('on'); };
+  es.onopen = function () { if (dot) dot.classList.add('on'); setLive(true); };
   es.onmessage = function (ev) {
     // Ignore transport-level rows (tool.call / hook.prompt): those live on the
     // Interactions screen and would spam the "refresh" pill on every tool call.
@@ -68,7 +75,7 @@
       pill.hidden = false;
     }
   };
-  es.onerror = function () { if (dot) dot.classList.remove('on'); };
+  es.onerror = function () { if (dot) dot.classList.remove('on'); setLive(false); };
   if (pill) pill.onclick = function () { location.reload(); };
 })();
 (function () {
@@ -90,24 +97,28 @@
     var h = el.closest('[data-href]');
     return h ? h.getAttribute('data-href') : null;
   }
-  function setHash(href) {
-    try { history.replaceState(null, '', location.pathname + location.search + '#peek=' + encodeURIComponent(href)); } catch (e) {}
-  }
-  function clearHash() {
-    if (location.hash.indexOf('#peek=') === 0) {
-      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
-    }
-  }
-  function show() { panel.hidden = false; document.body.classList.add('peek-open'); }
-  function hide() {
+  var pushedPeek = false; // true once we own a browser-history entry for the drawer
+  function show() { panel.hidden = false; }
+  // hideNow tears down the UI only; it never touches history (used by popstate,
+  // where history has already moved, and by the fresh-deep-link close path).
+  function hideNow() {
     panel.hidden = true;
-    document.body.classList.remove('peek-open');
     stack = [];
-    clearHash();
+    pushedPeek = false;
     // Return focus to whatever opened the drawer, so keyboard users aren't
     // dropped at the top of the document.
     if (lastTrigger && typeof lastTrigger.focus === 'function') { try { lastTrigger.focus(); } catch (e) {} }
     lastTrigger = null;
+  }
+  // requestClose is the user-initiated close (X, Escape, back off the last
+  // level). If we pushed a history entry, step back so browser history stays in
+  // sync (popstate then calls hideNow); otherwise hide and strip a deep-link hash.
+  function requestClose() {
+    if (pushedPeek) { history.back(); return; }
+    if (location.hash.indexOf('#peek=') === 0) {
+      try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    }
+    hideNow();
   }
   function load(href) {
     return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
@@ -121,8 +132,15 @@
     var wasHidden = panel.hidden;
     if (push !== false) stack.push(href);
     show();
-    setHash(href);
     load(href);
+    // Opening the drawer pushes ONE history entry so browser Back closes it;
+    // drilling into a related item replaces that entry (Back still closes the
+    // whole drawer, while the in-drawer back arrow steps the internal stack).
+    var hash = '#peek=' + encodeURIComponent(href);
+    try {
+      if (wasHidden) { history.pushState({ peek: 1 }, '', hash); pushedPeek = true; }
+      else { history.replaceState({ peek: 1 }, '', hash); }
+    } catch (e) {}
     // On a fresh open, move focus into the dialog (the close button) so the
     // keyboard is inside the drawer and Escape/Tab act on it.
     if (wasHidden && closeBtn) { try { closeBtn.focus(); } catch (e) {} }
@@ -133,6 +151,10 @@
     if (peek && panel) {
       if (e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return; // let modified clicks open a tab
       if (e.target.closest('button, form')) return; // inline actions (archive) act normally
+      // A plain link inside a peek row (e.g. a memory's "edit" link) is not the
+      // peek target -- let it navigate to its own href instead of being hijacked.
+      var plainLink = e.target.closest('a[href]');
+      if (plainLink && !plainLink.hasAttribute('data-peek')) return;
       var href = targetHref(peek);
       if (href) { e.preventDefault(); lastTrigger = e.target.closest('a[href]') || peek; open(href, true); return; }
     }
@@ -149,13 +171,32 @@
     var close = panel.querySelector('.peek-close');
     if (back) back.onclick = function () {
       stack.pop();
-      if (stack.length === 0) { hide(); return; }
+      if (stack.length === 0) { requestClose(); return; }
       open(stack[stack.length - 1], false);
     };
-    if (close) close.onclick = hide;
-    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) hide(); });
+    if (close) close.onclick = requestClose;
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !panel.hidden) requestClose(); });
+    // Browser Back/Forward: reflect the URL's #peek= state in the drawer.
+    window.addEventListener('popstate', function () {
+      var mm = location.hash.match(/^#peek=(.+)$/);
+      if (mm) {
+        var hp = decodeURIComponent(mm[1]);
+        stack = [hp]; pushedPeek = true; show(); load(hp);
+        if (closeBtn) { try { closeBtn.focus(); } catch (e) {} }
+      } else if (!panel.hidden) {
+        hideNow();
+      }
+    });
+    // Deep-link on load: the current entry already carries #peek, so adopt it
+    // without pushing a new one (Back should leave the page, not reopen).
     var m = location.hash.match(/^#peek=(.+)$/);
-    if (m) { try { open(decodeURIComponent(m[1]), true); } catch (e) {} }
+    if (m) {
+      try {
+        var h0 = decodeURIComponent(m[1]);
+        stack = [h0]; pushedPeek = false; show(); load(h0);
+        if (closeBtn) closeBtn.focus();
+      } catch (e) {}
+    }
   }
 })();
 (function () {

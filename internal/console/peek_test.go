@@ -235,6 +235,50 @@ func TestNotesPage(t *testing.T) {
 	require.Contains(t, html.Body.String(), "Alpha Note")
 }
 
+func TestNotesSearchAndSort(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	// Written oldest-first so recent order (newest-updated first) is Zeta, Alpha
+	// while name order is Alpha, Zeta -- distinguishing the two sorts.
+	writeNote(t, mgr, "seamless", "n-alpha", "Alpha design doc", "x")
+	writeNote(t, mgr, "seamless", "n-zeta", "Zeta runbook", "y")
+
+	noteTitles := func(d notesData) []string {
+		var out []string
+		for _, g := range d.Groups {
+			for _, n := range g.Notes {
+				out = append(out, n.Title)
+			}
+		}
+		return out
+	}
+
+	// ?q filters by title substring (case-insensitive).
+	var filtered notesData
+	getJSON(t, mux, "/console/notes?format=json&q=RUNBOOK", &filtered)
+	require.Equal(t, 1, filtered.Count)
+	require.Equal(t, "RUNBOOK", filtered.Query) // echoes the raw query; matching is case-insensitive
+	require.Equal(t, []string{"Zeta runbook"}, noteTitles(filtered))
+
+	// A miss yields zero, not an error.
+	var none notesData
+	getJSON(t, mux, "/console/notes?format=json&q=nomatchxyz", &none)
+	require.Equal(t, 0, none.Count)
+
+	// Default sort=recent -> newest-updated first.
+	var recent notesData
+	getJSON(t, mux, "/console/notes?format=json", &recent)
+	require.Equal(t, []string{"Zeta runbook", "Alpha design doc"}, noteTitles(recent))
+
+	// sort=name -> alphabetical by title.
+	var byName notesData
+	getJSON(t, mux, "/console/notes?format=json&sort=name", &byName)
+	require.Equal(t, []string{"Alpha design doc", "Zeta runbook"}, noteTitles(byName))
+
+	// An invalid sort is a styled 400, not a silent fallback.
+	bad := getPeek(t, mux, "/console/notes?sort=bogus")
+	require.Equal(t, http.StatusBadRequest, bad.Code)
+}
+
 func TestSessionAndEventPeekFragments(t *testing.T) {
 	db, mux := newConsole(t)
 	ctx := context.Background()

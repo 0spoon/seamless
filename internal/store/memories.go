@@ -87,7 +87,7 @@ func ActiveMemories(ctx context.Context, db *sql.DB, project string) ([]core.Mem
 // ActiveMemoriesForScope returns the active memories visible to a project widened
 // by extra project slugs (e.g. a shared parent whose memories a split injects into
 // each child). It is ActiveMemories plus the union of extra: rows where invalid_at
-// IS NULL and project is the project, global (''), or any extra slug -- deduped,
+// IS NULL and project is the project, global (”), or any extra slug -- deduped,
 // newest-updated first. Blank/duplicate extras are ignored; with no extras it is
 // exactly ActiveMemories.
 func ActiveMemoriesForScope(ctx context.Context, db *sql.DB, project string, extra []string) ([]core.Memory, error) {

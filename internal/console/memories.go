@@ -2,16 +2,25 @@ package console
 
 import (
 	"errors"
+	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/lifecycle"
 	"github.com/0spoon/seamless/internal/store"
 )
+
+// memorySortKeys are the accepted ?sort values on the memories list. name is the
+// default (preserving the by-name order within each kind group); recent orders by
+// last-updated, reach by injection count.
+var memorySortKeys = []string{"name", "recent", "reach"}
 
 // errNoFiles is returned when a write action needs the files subsystem but the
 // console was built without it (should not happen in serve).
@@ -53,11 +62,23 @@ type memoriesData struct {
 	Inactive      []memoryRow    `json:"inactive"`
 	ActiveCount   int            `json:"activeCount"`
 	InactiveCount int            `json:"inactiveCount"`
+	Query         string         `json:"query,omitempty"`
+	Sort          string         `json:"sort"`
 	CanArchive    bool           `json:"-"`
 }
 
 func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	sortKey := r.URL.Query().Get("sort")
+	if sortKey == "" {
+		sortKey = "name"
+	}
+	if !slices.Contains(memorySortKeys, sortKey) {
+		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(memorySortKeys, ", ")))
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	q := strings.ToLower(query)
 	if err := store.RebuildRetrievalStats(ctx, s.cfg.DB); err != nil {
 		s.logger.Warn("console: rebuild retrieval stats", "error", err)
 	}
@@ -77,11 +98,15 @@ func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 		nameByID[m.ID] = m.Name
 	}
 
-	// project -> kind -> rows (active only); inactive collected separately.
+	// project -> kind -> rows (active only); inactive collected separately. The
+	// ?q filter applies to both sets.
 	active := map[string]map[string][]memoryRow{}
 	var inactive []memoryRow
 	activeCount := 0
 	for _, m := range mems {
+		if !memoryMatches(m, q) {
+			continue
+		}
 		row := toMemoryRow(m, stats[m.ID], nameByID, s.cfg.DataDir)
 		if m.Active() {
 			activeCount++
@@ -95,13 +120,35 @@ func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := memoriesData{
-		Groups:        buildGroups(active),
+		Groups:        buildGroups(active, sortKey),
 		Inactive:      inactive,
 		ActiveCount:   activeCount,
 		InactiveCount: len(inactive),
+		Query:         query,
+		Sort:          sortKey,
 		CanArchive:    s.cfg.Files != nil,
 	}
 	s.render(w, r, "memories", pageData{Title: "Memories", Active: "memories", Data: data})
+}
+
+// memoryMatches reports whether a memory satisfies the ?q text filter (empty q
+// matches all): a case-insensitive substring of name, description, kind, or any
+// tag.
+func memoryMatches(m core.Memory, q string) bool {
+	if q == "" {
+		return true
+	}
+	if strings.Contains(strings.ToLower(m.Name), q) ||
+		strings.Contains(strings.ToLower(m.Description), q) ||
+		strings.Contains(strings.ToLower(string(m.Kind)), q) {
+		return true
+	}
+	for _, t := range m.Tags {
+		if strings.Contains(strings.ToLower(t), q) {
+			return true
+		}
+	}
+	return false
 }
 
 func toMemoryRow(m core.Memory, stat store.RetrievalStat, nameByID map[string]string, dataDir string) memoryRow {
@@ -137,7 +184,7 @@ func absAndEditURL(dataDir, relPath string) (string, template.URL) {
 
 // buildGroups turns the project->kind->rows map into an ordered slice: global
 // ("") first then projects alphabetically, kinds in canonical order.
-func buildGroups(active map[string]map[string][]memoryRow) []projectGroup {
+func buildGroups(active map[string]map[string][]memoryRow, sortKey string) []projectGroup {
 	projects := make([]string, 0, len(active))
 	for p := range active {
 		projects = append(projects, p)
@@ -159,13 +206,37 @@ func buildGroups(active map[string]map[string][]memoryRow) []projectGroup {
 			if len(rows) == 0 {
 				continue
 			}
-			sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+			sortMemoryRows(rows, sortKey)
 			kinds = append(kinds, kindGroup{Kind: string(k), Memories: rows})
 			count += len(rows)
 		}
 		groups = append(groups, projectGroup{Project: p, Count: count, Kinds: kinds})
 	}
 	return groups
+}
+
+// sortMemoryRows orders the rows within a kind group per the ?sort key: name
+// (A-Z, the default), recent (newest-updated first), or reach (most-injected
+// first). Ties fall back to name for a stable, readable order.
+func sortMemoryRows(rows []memoryRow, sortKey string) {
+	switch sortKey {
+	case "recent":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if !rows[i].Updated.Equal(rows[j].Updated) {
+				return rows[i].Updated.After(rows[j].Updated)
+			}
+			return rows[i].Name < rows[j].Name
+		})
+	case "reach":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if rows[i].Injects != rows[j].Injects {
+				return rows[i].Injects > rows[j].Injects
+			}
+			return rows[i].Name < rows[j].Name
+		})
+	default: // name
+		sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+	}
 }
 
 // memoryArchive retires an active memory (the console's one write to memory
@@ -209,5 +280,5 @@ func (s *Service) memoryArchive(w http.ResponseWriter, r *http.Request) {
 			s.logger.Warn("console: record archive event", "error", err)
 		}
 	}
-	http.Redirect(w, r, "/console/memories", http.StatusSeeOther)
+	http.Redirect(w, r, "/console/memories?notice="+url.QueryEscape("Archived "+updated.Name+"."), http.StatusSeeOther)
 }

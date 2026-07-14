@@ -3,7 +3,19 @@
 <div class="topbar">
   <div>
     <h1>Notes</h1>
-    <div class="sub">{{.Count}} total</div>
+    <div class="sub">{{.Count}}{{if .Query}} matching{{else}} total{{end}}</div>
+  </div>
+</div>
+
+<div class="proj-toolbar">
+  <form class="search" method="get" action="/console/notes">
+    {{icon "search"}}
+    <input name="q" aria-label="Search notes by title, description, or tag" placeholder="Search title, description, tags&hellip;" value="{{.Query}}">
+    <input type="hidden" name="sort" value="{{.Sort}}">
+  </form>
+  <div class="seg">
+    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/notes?sort=recent&amp;q={{.Query}}">Recent</a>
+    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/notes?sort=name&amp;q={{.Query}}">Name</a>
   </div>
 </div>
 
@@ -26,7 +38,7 @@
         <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
           <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{copyBtn .Title}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
           <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
-          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
         </tr>
         {{end}}
         {{end}}
@@ -35,7 +47,11 @@
   </div>
 </div>
 {{else}}
-<div class="empty">No notes yet</div>
+{{if .Query}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>No notes match &ldquo;{{.Query}}&rdquo;.</div></div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>No notes yet &mdash; agents capture research, decisions, and summaries here with notes_create.</div></div>
+{{end}}
 {{end}}
 {{end}}
 {{end}}

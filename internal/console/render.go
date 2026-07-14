@@ -29,7 +29,7 @@ var pageNames = []string{
 // defines a "peek-body" block, parsed twice: as a standalone fragment (executed
 // for ?peek=1 drawer fetches) and -- for the entities without a pre-existing
 // full page -- wrapped in layout+detail for a shareable, no-JS page.
-var peekNames = []string{"memory", "note", "task", "project", "session", "event"}
+var peekNames = []string{"memory", "note", "task", "project", "session", "event", "plan"}
 
 // detailPageNames are the peek entities that have no pre-existing full page and
 // so get the generic layout+detail wrapper as their default (non-peek) render.
@@ -41,15 +41,28 @@ var detailPageNames = []string{"project"}
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
 type pageData struct {
-	Title  string
-	Active string // nav key to highlight
-	Nav    navCounts
-	Data   any
+	Title    string
+	Active   string // nav key to highlight
+	Nav      navCounts
+	Notice   string // positive flash banner (from ?notice=)
+	FlashErr string // error flash banner (from ?error=)
+	Data     any
+}
+
+// withFlash populates the banner fields from the ?notice= / ?error= query params
+// a redirect-after-mutate handler set, so any full page renders the flash without
+// per-page plumbing.
+func withFlash(r *http.Request, pd pageData) pageData {
+	q := r.URL.Query()
+	pd.Notice = q.Get("notice")
+	pd.FlashErr = q.Get("error")
+	return pd
 }
 
 // funcs are the template helpers shared by every page.
 var funcs = template.FuncMap{
 	"ago":           ago,
+	"ts":            ts,
 	"shortID":       shortID,
 	"pct":           func(n, d int) int { return percent(n, d) },
 	"add":           func(a, b int) int { return a + b },
@@ -59,11 +72,11 @@ var funcs = template.FuncMap{
 	"evtTone":       evtTone,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
+	"phaseRows":     phaseRows,
 	"icon":          icon,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
 	"areaChart":     areaChart,
-	"barChart":      barChart,
 	"stackedBar":    stackedBar,
 	"coverageTrend": coverageTrend,
 }
@@ -192,6 +205,7 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 		return
 	}
 	pd.Nav = s.navCounts(r.Context())
+	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
 	if !ok {
 		s.serverError(w, r, fmt.Errorf("console: no such page %q", page))
@@ -334,6 +348,29 @@ func ago(v any) string {
 	}
 }
 
+// ts formats a timestamp for a title= tooltip: a clean minute-precision UTC
+// stamp ("2026-07-14 07:29 UTC"), instead of Go's default time.Time String()
+// with microseconds and a "+0000 UTC" suffix. Accepts time.Time or *time.Time;
+// a nil or zero time renders "" so the attribute is simply empty.
+func ts(v any) string {
+	var t time.Time
+	switch x := v.(type) {
+	case time.Time:
+		t = x
+	case *time.Time:
+		if x == nil {
+			return ""
+		}
+		t = *x
+	default:
+		return ""
+	}
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02 15:04 MST")
+}
+
 // copyBtn renders a small quiet copy-to-clipboard button carrying the FULL
 // value in a data-copy attribute; the global handler in layout.html copies it
 // on click. Pass the untruncated id/name/slug/path -- not the shortID display
@@ -349,12 +386,15 @@ func copyBtn(value string) template.HTML {
 		`" aria-label="Copy" title="Copy">` + string(icon("copy")) + string(icon("check")) + `</button>`)
 }
 
-// shortID returns the first 8 chars of a ULID for compact display.
+// shortID returns the last 8 chars of a ULID for compact display. The last 8
+// distinguish ULIDs better than the first 8 (ULID prefixes are the timestamp,
+// so recent ids share them); the Interactions client does the same (id.slice(-8))
+// so a given id renders identically server-side and client-side.
 func shortID(id string) string {
 	if len(id) <= 8 {
 		return id
 	}
-	return id[:8]
+	return id[len(id)-8:]
 }
 
 // percent computes n/d as a rounded whole percentage (0 when d == 0).

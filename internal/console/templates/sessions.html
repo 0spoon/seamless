@@ -6,14 +6,28 @@
     <div class="sub">{{.Total}} total &middot; {{.Active}} active</div>
   </div>
   <div class="btn-row">
-    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions?w={{.Window}}">All</a>
-    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active&w={{.Window}}">Active</a>
-    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed&w={{.Window}}">Completed</a>
+    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
+    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
+    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
+  </div>
+</div>
+
+<div class="proj-toolbar">
+  <form class="search" method="get" action="/console/sessions">
+    {{icon "search"}}
+    <input name="q" aria-label="Search sessions by name, project, or findings" placeholder="Search name, project, findings&hellip;" value="{{.Query}}">
+    <input type="hidden" name="status" value="{{.Filter}}">
+    <input type="hidden" name="w" value="{{.Window}}">
+    <input type="hidden" name="sort" value="{{.Sort}}">
+  </form>
+  <div class="seg">
+    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
+    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
   </div>
 </div>
 
 <div class="win-tabs win-tabs-page">
-  {{$filter := .Filter}}{{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/sessions?status={{$filter}}&w={{.Key}}">{{.Label}}</a>{{end}}
+  {{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}{{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
 </div>
 
 {{if .Sessions}}
@@ -26,11 +40,11 @@
     <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
         <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
-        <div class="find">{{if .Findings}}{{.Findings}}{{else}}no findings yet{{end}}</div>
+        {{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
       <span class="src">{{.Source}}</span>
-      <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
+      <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
     {{end}}{{end}}
   </div>
@@ -50,7 +64,7 @@
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
       <span class="src">{{.Source}}</span>
-      <span class="when" title="{{.Updated}}">{{ago .Updated}}</span>
+      <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
     {{end}}{{end}}
   </div>
@@ -59,7 +73,11 @@
 {{end}}
 
 {{else}}
-<div class="empty">No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}}</div>
+{{if .Query}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions match &ldquo;{{.Query}}&rdquo;{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{end}}.</div></div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}} &mdash; each hooked agent run records a session here.</div></div>
+{{end}}
 {{end}}
 {{end}}
 {{end}}

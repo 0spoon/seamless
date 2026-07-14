@@ -46,14 +46,16 @@
     <div class="card">
       <h2>Recent activity</h2>
       {{if .Recent}}
+      <div class="table-wrap">
       <table>
         <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
         <tbody>
           {{range .Recent}}
-          <tr class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
+          <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}" data-peek><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
           {{end}}
         </tbody>
       </table>
+      </div>
       {{else}}<div class="empty">No recent activity for {{.Slug}}</div>{{end}}
     </div>
   </div>
@@ -78,14 +80,16 @@
   <div class="card">
     <h2>Ready queue <span class="h2-meta">off-plan &middot; claimable now</span></h2>
     {{if .Ready}}
+    <div class="table-wrap">
     <table>
       <thead><tr><th>Task</th><th>Status</th><th>Depends on</th><th>Created</th></tr></thead>
       <tbody>
         {{range .Ready}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> <a href="/console/tasks/{{.ID}}">{{.Title}}</a></td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
+        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek><td><span class="mono-id">{{shortID .ID}}</span> <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
         {{end}}
       </tbody>
     </table>
+    </div>
     {{else}}<div class="empty">Nothing claimable right now</div>{{end}}
   </div>
 </div>
@@ -111,12 +115,12 @@
       <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Memories}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/memories/{{.ID}}" data-peek><td class="mem-name"><a href="/console/memories/{{.ID}}" data-peek><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="6"><div class="empty">No memories in {{.Slug}}</div></td></tr>{{end}}
         {{if .Inherited}}
-        <tr><td colspan="6" style="background:var(--surface-2);color:var(--muted);font-size:var(--text-2xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);font-weight:600">Inherited &mdash; counted in parent/global scope, not {{.Slug}}</td></tr>
+        <tr class="subhead-row"><td colspan="6">Inherited &mdash; counted in parent/global scope, not {{.Slug}}</td></tr>
         {{range .Inherited}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/memories/{{.ID}}" data-peek><td class="mem-name"><a href="/console/memories/{{.ID}}" data-peek><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{end}}
         {{end}}
       </tbody>
@@ -131,7 +135,7 @@
       <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Notes}}
-        <tr class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><a href="/console/notes/{{.ID}}"><strong>{{.Title}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek><td class="mem-name"><a href="/console/notes/{{.ID}}" data-peek><strong>{{.Title}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="3"><div class="empty">No notes in {{.Slug}}</div></td></tr>
         {{end}}
       </tbody>
@@ -150,8 +154,8 @@
     <details class="ix-row{{if .IsError}} err{{end}}"{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
       <summary><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
-        {{if .Request}}<h3>Request</h3><pre class="pre">{{.Request}}</pre>{{end}}
-        {{if .Response}}<h3>Response</h3><pre class="pre">{{.Response}}</pre>{{end}}
+        {{if .Request}}<h2>Request</h2><pre class="pre">{{.Request}}</pre>{{end}}
+        {{if .Response}}<h2>Response</h2><pre class="pre">{{.Response}}</pre>{{end}}
         <div class="ix-links">{{if .SessionID}}<a href="/console/sessions/{{.SessionID}}" data-peek>{{.SessionName}} &rarr;</a>{{end}}<a href="/console/events/{{.ID}}">event &rarr;</a></div>
       </div>
     </details>

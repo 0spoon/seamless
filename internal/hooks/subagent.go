@@ -95,8 +95,8 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 		h.setSessionPlanMeta(ctx, p.SessionID, meta)
 	}
 	h.recordPlanEvent(ctx, core.EventSubagentCaptured, p.SessionID, written.ID, map[string]any{
-		"content": report, // verbatim, unbounded by design
-		"prompt":  events.Truncate(prompt, h.maxEventChars),
+		"content":  report, // verbatim, unbounded by design
+		"prompt":   events.Truncate(prompt, h.maxEventChars),
 		"agent_id": p.AgentID, "agent_type": p.AgentType, "plan_slug": meta.PlanSlug,
 	})
 }

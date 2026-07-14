@@ -11,6 +11,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -22,6 +23,7 @@ func notesCreateTool() mcp.Tool {
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global (inbox) note. With no session and no explicit project the create is rejected as ambiguous.")),
 		mcp.WithString("tags", mcp.Description("comma-separated tags")),
+		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=<slug> steps. Use it whenever this note is a plan's narrative or supporting context.")),
 		mcp.WithString("source_url", mcp.Description("optional source URL")),
 	)
 }
@@ -41,9 +43,16 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 		return errResult("notes_create", err)
 	}
 	now := time.Now().UTC()
+	tags := appendUnique(argTags(req, "tags"), "created-by:agent")
+	// A plan slug carries the note into the plan:<slug> composition -- the same
+	// key tasks_add plan= writes -- so agents attach a plan's narrative without
+	// having to hand-type the tag prefix.
+	if plan := argString(req, "plan"); plan != "" {
+		tags = appendUnique(tags, plans.SlugTag(plan))
+	}
 	note := core.Note{
 		ID: id, Title: title, Slug: slugify(title), Description: argString(req, "description"),
-		Project: project, Body: body, Tags: appendUnique(argTags(req, "tags"), "created-by:agent"),
+		Project: project, Body: body, Tags: tags,
 		SourceURL: argString(req, "source_url"), Created: now, Updated: now,
 	}
 	written, err := s.cfg.Files.WriteNote(ctx, note)
@@ -51,7 +60,11 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 		return errResult("notes_create", err)
 	}
 	s.record(ctx, core.EventNoteWritten, s.boundSession(ctx), project, written.ID, map[string]any{"title": title})
-	return jsonResult(map[string]any{"id": written.ID, "slug": written.Slug, "title": title, "project": project})
+	out := map[string]any{"id": written.ID, "slug": written.Slug, "title": title, "project": project}
+	if plan := plans.SlugFromTags(written.Tags); plan != "" {
+		out["plan"] = plan
+	}
+	return jsonResult(out)
 }
 
 func notesReadTool() mcp.Tool {

@@ -333,7 +333,7 @@ func (s *Service) gardenerApply(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, err.Error())
 		return
 	}
-	http.Redirect(w, r, "/console/gardener", http.StatusSeeOther)
+	redirectNotice(w, r, "Applied the proposal.")
 }
 
 func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
@@ -347,7 +347,7 @@ func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, err.Error())
 		return
 	}
-	http.Redirect(w, r, "/console/gardener", http.StatusSeeOther)
+	redirectNotice(w, r, "Dismissed the proposal.")
 }
 
 // gardenerRequest interprets a natural-language maintenance request into pending

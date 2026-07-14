@@ -16,9 +16,9 @@
     <dt>Claimed by</dt><dd class="mono">{{.ClaimedBy}}{{copyBtn .ClaimedBy}}</dd>
     <dt>Lease</dt><dd>{{if .ClaimLive}}live &middot; expires {{ago .LeaseExpiry}}{{else}}<span class="muted">expired {{ago .LeaseExpiry}}</span>{{end}}</dd>
     {{end}}
-    <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
-    <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
-    {{if .Closed}}<dt>Closed</dt><dd title="{{.Closed}}">{{ago .Closed}}</dd>{{end}}
+    <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
+    <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>
+    {{if .Closed}}<dt>Closed</dt><dd title="{{ts .Closed}}">{{ago .Closed}}</dd>{{end}}
   </dl>
 
   {{if .Deps}}

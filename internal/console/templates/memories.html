@@ -3,7 +3,20 @@
 <div class="topbar">
   <div>
     <h1>Memories</h1>
-    <div class="sub">{{.ActiveCount}} active &middot; {{.InactiveCount}} inactive</div>
+    <div class="sub">{{.ActiveCount}} active &middot; {{.InactiveCount}} inactive{{if .Query}} &middot; matching &ldquo;{{.Query}}&rdquo;{{end}}</div>
+  </div>
+</div>
+
+<div class="proj-toolbar">
+  <form class="search" method="get" action="/console/memories">
+    {{icon "search"}}
+    <input name="q" aria-label="Search memories by name, description, kind, or tag" placeholder="Search name, description, kind, tags&hellip;" value="{{.Query}}">
+    <input type="hidden" name="sort" value="{{.Sort}}">
+  </form>
+  <div class="seg">
+    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/memories?sort=name&amp;q={{.Query}}">Name</a>
+    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/memories?sort=recent&amp;q={{.Query}}">Recent</a>
+    <a class="{{if eq .Sort "reach"}}on{{end}}" href="/console/memories?sort=reach&amp;q={{.Query}}">Reach</a>
   </div>
 </div>
 
@@ -18,19 +31,19 @@
 
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Name</th><th>Kind</th><th class="num">Inj</th><th class="num">Read</th><th>Last inj</th><th>Updated</th><th></th></tr></thead>
+      <thead><tr><th>Name</th><th>Kind</th><th class="num">Inj</th><th class="num" title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under Inj), so agents rarely re-read a memory they already have.">Read</th><th>Last inj</th><th>Updated</th><th></th></tr></thead>
       <tbody>
         {{range .Groups}}
         <tr class="group-row" id="proj-{{if .Project}}{{.Project}}{{else}}global{{end}}"><td colspan="7">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} <span class="count">{{.Count}}</span></td></tr>
         {{range .Kinds}}
         {{range .Memories}}
-        <tr id="{{.ID}}">
+        <tr id="{{.ID}}" class="row-link" data-href="/console/memories/{{.ID}}" data-peek>
           <td class="mem-name"><strong><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a></strong>{{copyBtn .Name}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="num">{{.Injects}}</td>
           <td class="num">{{.Reads}}</td>
-          <td class="muted" title="{{if .LastInjected}}{{.LastInjected}}{{end}}">{{ago .LastInjected}}</td>
-          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          <td class="muted" title="{{ts .LastInjected}}">{{ago .LastInjected}}</td>
+          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
           <td>
             <div class="row-actions">
               <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit</a>
@@ -50,19 +63,23 @@
   </div>
 </div>
 {{else}}
-<div class="empty">No active memories yet</div>
+{{if .Query}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "brain"}}</span><div>No active memories match &ldquo;{{.Query}}&rdquo;.</div></div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "brain"}}</span><div>No active memories yet &mdash; durable knowledge agents write with memory_write shows up here.</div></div>
+{{end}}
 {{end}}
 
 {{if .Inactive}}
 <div class="section" style="margin-top:24px">
   <details>
-    <summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px;">Archived &amp; superseded <span class="count muted">{{.InactiveCount}}</span></summary>
+    <summary style="cursor:pointer;font-weight:600;font-size:var(--text-md);margin-bottom:12px;">Archived &amp; superseded <span class="count muted">{{.InactiveCount}}</span></summary>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Name</th><th>Kind</th><th>Project</th><th>Status</th><th>Updated</th></tr></thead>
         <tbody>
           {{range .Inactive}}
-          <tr id="{{.ID}}">
+          <tr id="{{.ID}}" class="row-link" data-href="/console/memories/{{.ID}}" data-peek>
             <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a></td>
             <td><span class="kind">{{.Kind}}</span></td>
             <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
@@ -70,7 +87,7 @@
               {{if eq .Status "superseded"}}<span class="badge warn">superseded{{if .ReplacedBy}} by <a href="/console/memories/{{.ReplacedByID}}" data-peek>{{.ReplacedBy}}</a>{{end}}</span>
               {{else}}<span class="badge">archived</span>{{end}}
             </td>
-            <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+            <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
           </tr>
           {{end}}
         </tbody>

@@ -54,6 +54,29 @@ func TestPlanComposition(t *testing.T) {
 	require.Empty(t, released["claimed_by"])
 }
 
+// TestNotesCreatePlanTag confirms notes_create plan=<slug> carries the note into
+// the plan:<slug> composition -- the same key tasks_add plan= writes -- so an
+// agent attaches a plan's narrative without hand-typing the tag prefix.
+func TestNotesCreatePlanTag(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+
+	nc := callJSON(t, ctx, cli, "notes_create", map[string]any{
+		"title": "Refactor plan", "body": "The narrative.", "plan": "refactor-x",
+	})
+	require.Equal(t, "refactor-x", nc["plan"])
+
+	nr := callJSON(t, ctx, cli, "notes_read", map[string]any{"id": nc["id"]})
+	tags := nr["tags"].([]any)
+	require.Contains(t, tags, "plan:refactor-x")
+
+	// A note created without a plan carries no composition tag.
+	plain := callJSON(t, ctx, cli, "notes_create", map[string]any{"title": "Loose note", "body": "b"})
+	require.NotContains(t, plain, "plan")
+}
+
 // TestClaimConflictAcrossSessions confirms a second session cannot claim a task
 // the first session already holds.
 func TestClaimConflictAcrossSessions(t *testing.T) {

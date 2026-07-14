@@ -327,4 +327,3 @@ func matchesQuery(vm projectRowVM, q string) bool {
 		strings.Contains(strings.ToLower(vm.Name), q) ||
 		strings.Contains(strings.ToLower(vm.Description), q)
 }
-

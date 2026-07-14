@@ -16,13 +16,13 @@
   <div class="ov-main">
 
     <div class="card">
-      <h2>Retrieval health <span class="h2-meta">memory reach &middot; {{.WindowLabel}}</span></h2>
+      <h2>Retrieval health <span class="h2-meta">{{.WindowLabel}} &middot; <a href="/console/retrieval">details &rarr;</a></span></h2>
       {{if .Injections}}
       <div class="hero-banner">
         <div class="hero-num">
           <span class="big">{{.ReachRate}}%</span>
-          <span class="cap">Memory reach</span>
-          <span class="sub">{{.MemoriesSurfaced}} of {{.ActiveMemories}} memories surfaced &middot; {{.Injections}} injections across {{.SessionsReached}} sessions</span>
+          <span class="cap" title="Share of active memories surfaced to an agent at least once in this window (distinct memories surfaced / active memories).">Memory reach</span>
+          <span class="sub">{{.MemoriesSurfaced}} of {{.ActiveMemories}} <span title="a memory was included in at least one briefing or recall">memories surfaced</span> &middot; {{.Injections}} <span title="total times any memory was injected into an agent's context">injections</span> across {{.SessionsReached}} sessions</span>
         </div>
         {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
       </div>
@@ -75,7 +75,7 @@
           <tbody>
             {{range .Recent}}
             <tr class="row-link" data-href="/console/events/{{.ID}}" data-peek>
-              <td class="muted" title="{{.When}}">{{ago .When}}</td>
+              <td class="muted" title="{{ts .When}}">{{ago .When}}</td>
               <td><a href="/console/events/{{.ID}}" data-peek><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
               <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td>
               <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}" data-peek>{{shortID .SessionID}}</a>{{copyBtn .SessionID}}{{end}}</td>

@@ -26,13 +26,13 @@
           <td><span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted">{{if .Deps}}{{.Deps}}{{else}}&mdash;{{end}}</td>
-          <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
+          <td class="muted" title="{{ts .Created}}">{{ago .Created}}</td>
         </tr>
         {{end}}
       </tbody>
     </table>
   </div>
-  {{else}}<div class="empty">Nothing ready to pick up</div>{{end}}
+  {{else}}<div class="empty dotgrid"><span class="empty-ico">{{icon "list-checks"}}</span><div>Nothing ready to pick up &mdash; add work with tasks_add; a task appears here once its blockers clear.</div></div>{{end}}
 </div>
 
 {{if .InProgress}}
@@ -46,7 +46,7 @@
         <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
-          <td class="muted" title="{{.Created}}">{{ago .Created}}</td>
+          <td class="muted" title="{{ts .Created}}">{{ago .Created}}</td>
         </tr>
         {{end}}
       </tbody>
@@ -80,7 +80,7 @@
 {{if .Closed}}
 <div class="section">
   <details>
-    <summary style="cursor:pointer;font-weight:600;font-size:15px;margin-bottom:12px;">Recently closed <span class="count muted">{{len .Closed}}{{if .ClosedMore}} of {{add (len .Closed) .ClosedMore}}{{end}}</span></summary>
+    <summary style="cursor:pointer;font-weight:600;font-size:var(--text-md);margin-bottom:12px;">Recently closed <span class="count muted">{{len .Closed}}{{if .ClosedMore}} of {{add (len .Closed) .ClosedMore}}{{end}}</span></summary>
     <div class="table-wrap">
       <table>
         <thead><tr><th>Task</th><th>Project</th><th>Status</th><th>Closed</th></tr></thead>

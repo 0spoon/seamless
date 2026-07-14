@@ -73,7 +73,7 @@
 
   --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px;
   --text-md: 15px;  --text-lg: 17px; --text-xl: 20px; --text-2xl: 26px;
-  --text-3xl: 34px;
+  --text-3xl: 34px; --text-4xl: 52px;
 
   --tracking-tight: -0.02em;
   --tracking-wide:  0.04em;
@@ -167,7 +167,6 @@
 /* Animated ring fill. Registered so conic-gradient stops can tween; degrades to
    a static (correct) ring where @property is unsupported. */
 @property --ring-val { syntax: "<number>"; inherits: false; initial-value: 0; }
-@keyframes ring-fill { from { --ring-val: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; }
@@ -232,6 +231,8 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 .brand-by span { font-family: var(--font-display); font-weight: 600; color: var(--muted); }
 
 .nav { display: flex; flex-direction: column; gap: 2px; }
+.nav-sec { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--faint); font-weight: 600; padding: 14px 12px 4px; }
+.nav-sec:first-child { padding-top: 4px; }
 .nav a {
   display: flex;
   align-items: center;
@@ -294,10 +295,7 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 /* ===========================================================================
    CARDS, GRID, STATS
    =========================================================================== */
-.grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
 .grid-2 { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
-.grid-hero { display: grid; gap: 16px; grid-template-columns: 0.85fr 1fr 1.3fr; margin-bottom: 16px; }
-@media (max-width: 900px) { .grid-hero { grid-template-columns: 1fr !important; } }
 
 .card {
   background: var(--surface);
@@ -329,31 +327,9 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 .kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
 .kv dd.mono { font-family: var(--font-mono); font-size: var(--text-xs); word-break: break-all; }
 
-/* Ring gauge -- CSS conic-gradient, punched center. Signature read-after-inject
-   visual. Set --ring-val (0-100) inline; optional --ring-size/--ring-accent. */
-.ring-wrap { display: flex; justify-content: center; padding: 6px 0 2px; }
-.ring {
-  --ring-val: 0;
-  --ring-size: 132px;
-  --ring-stroke: 13px;
-  --ring-accent: var(--brand);
-  position: relative;
-  width: var(--ring-size);
-  height: var(--ring-size);
-  border-radius: 50%;
-  flex: none;
-  background: conic-gradient(var(--ring-accent) calc(var(--ring-val) * 1%), var(--surface-2) 0);
-  animation: ring-fill 1.1s var(--ease-out);
-}
-.ring::before { content: ""; position: absolute; inset: var(--ring-stroke); border-radius: 50%; background: var(--ring-bg, var(--surface)); }
-.ring-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
-.ring-num { font-family: var(--font-display); font-weight: 700; font-size: var(--text-2xl); letter-spacing: var(--tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; }
-.ring-sub { font-size: var(--text-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
-.ring-label { display: block; text-align: center; margin-top: 8px; font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; }
-
-/* Memories-by-kind legend (donut stand-in): colored dot + bar + count. */
+/* Memories-by-kind legend: colored dot + bar + count. */
 .legend { display: flex; flex-direction: column; gap: 9px; }
-.legend-row { display: grid; grid-template-columns: 10px 1fr 90px auto; align-items: center; gap: 9px; font-size: var(--text-sm); }
+.legend-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 90px auto; align-items: center; gap: 9px; font-size: var(--text-sm); }
 .kdot { width: 9px; height: 9px; border-radius: 3px; background: var(--muted); }
 .legend-label { color: var(--muted); font-family: var(--font-mono); font-size: var(--text-xs); }
 .legend-bar { height: 6px; background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; }
@@ -382,6 +358,11 @@ tbody tr { transition: background var(--dur-fast) var(--ease-out); }
 tbody tr:hover { background: var(--surface-2); }
 tbody tr.row-link { cursor: pointer; }
 tbody tr.row-link:hover { background: var(--surface-3, var(--surface-2)); }
+/* A brand left-accent bar on hover signals that the whole row is a peek trigger
+   (opens the detail drawer), not just its inner link. Applied to the first cell
+   so it never overlaps trailing content. .sess-row (a flex row-link) gets the
+   same cue directly. */
+tbody tr.row-link:hover td:first-child { box-shadow: inset 2px 0 0 var(--brand); }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 code, .mono { font-family: var(--font-mono); font-size: 0.92em; }
 
@@ -509,12 +490,8 @@ details > summary { font-family: var(--font-display); }
 .login-err { background: var(--danger-soft); color: var(--danger); padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--text-sm); margin-bottom: 16px; }
 
 /* ===========================================================================
-   METERS & MISC
+   MISC
    =========================================================================== */
-.meter { height: 6px; background: var(--surface-2); border-radius: var(--radius-pill); overflow: hidden; margin-top: 6px; }
-.meter > span { display: block; height: 100%; background: var(--brand); border-radius: var(--radius-pill); transition: width var(--dur-slow) var(--ease-out); }
-.meter > span.peak { background: var(--pop); }
-
 .pre { font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border-radius: var(--radius-sm); padding: 12px; margin: 0; max-height: 320px; overflow: auto; line-height: 1.6; }
 
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); display: inline-block; margin-right: 5px; animation: seam-pulse 2s var(--ease-in-out) infinite; flex: none; }
@@ -527,7 +504,7 @@ details > summary { font-family: var(--font-display); }
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 50;
+  z-index: 70; /* above the peek drawer (60) so "new activity" stays tappable */
   padding: 9px 16px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--brand);
@@ -549,18 +526,6 @@ details > summary { font-family: var(--font-display); }
    CHARTS -- hand-rolled SVG/flex primitives (see charts.go)
    =========================================================================== */
 
-/* Donut -- memories by kind */
-.donut { display: flex; align-items: center; gap: 20px; padding: 6px 0; }
-.donut-ring { position: relative; width: 128px; height: 128px; flex: none; animation: seam-pop 0.5s var(--ease-out) both; }
-.donut-svg { display: block; }
-.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; }
-.donut-total { font-family: var(--font-display); font-weight: 700; font-size: var(--text-xl); line-height: 1; font-variant-numeric: tabular-nums; }
-.donut-cap { font-size: var(--text-2xs); color: var(--muted); }
-.donut-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; flex: 1; min-width: 0; }
-.donut-legend li { display: flex; align-items: center; gap: 8px; font-size: var(--text-sm); }
-.donut-k { flex: 1; color: var(--muted); font-family: var(--font-mono); font-size: var(--text-xs); }
-.donut-n { font-variant-numeric: tabular-nums; font-weight: 600; }
-
 /* Area chart -- injection trend */
 .area { padding: 6px 0 2px; }
 .area-svg { display: block; overflow: visible; width: 100%; }
@@ -574,16 +539,7 @@ details > summary { font-family: var(--font-display); }
 .cov-fill { animation: seam-fade 0.8s var(--ease-out) both; }
 .cov-line { animation: seam-fade 0.9s var(--ease-out) both; }
 .cov-dot { animation: seam-fade 0.4s ease 0.5s both; }
-.cov-axis { fill: var(--muted); font-size: 10px; font-family: var(--font-mono); }
-
-/* Bar chart -- events by kind */
-.barchart { display: flex; align-items: flex-end; gap: 10px; height: 168px; padding: 8px 2px 0; }
-.barcol { flex: 1; height: 100%; display: flex; flex-direction: column; min-width: 0; }
-.bartrack { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 6px; }
-.barval { font-size: var(--text-2xs); font-variant-numeric: tabular-nums; color: var(--muted); font-weight: 600; }
-.bar { width: 100%; max-width: 40px; min-height: 3px; border-radius: var(--radius-xs) var(--radius-xs) 0 0; transform-origin: bottom; animation: bar-grow 0.7s var(--ease-out) both; }
-.barlabel { margin-top: 7px; text-align: center; font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@keyframes bar-grow { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.cov-axis { fill: var(--muted); font-size: var(--text-2xs); font-family: var(--font-mono); }
 
 /* Stacked bar -- task pipeline */
 .stackbar-wrap { padding: 4px 0 2px; }
@@ -658,6 +614,7 @@ details > summary { font-family: var(--font-display); }
   }
   .nav a { padding: 6px 9px; white-space: nowrap; }
   .nav .count { display: none; }
+  .nav-sec { display: none; } /* section labels don't fit the horizontal nav */
   .side-foot {
     margin-top: 0;
     padding: 0;
@@ -709,16 +666,16 @@ details > summary { font-family: var(--font-display); }
 /* --- Overview: main column + right rail ----------------------------------- */
 .ov-grid { display: grid; grid-template-columns: minmax(0, 1fr) 304px; gap: 16px; align-items: start; }
 .ov-main, .ov-rail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-@media (max-width: 1020px) { .ov-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .ov-grid { grid-template-columns: 1fr; } }
 
 /* Hero banner: one headline number, its context, and the trend in one card. */
 .hero-banner { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 34px; align-items: center; padding: 6px 4px 2px; }
 .hero-num { display: flex; flex-direction: column; gap: 4px; min-width: 172px; }
-.hero-num .big { font-family: var(--font-display); font-weight: 700; font-size: 52px; letter-spacing: var(--tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; color: var(--brand); }
+.hero-num .big { font-family: var(--font-display); font-weight: 700; font-size: var(--text-4xl); letter-spacing: var(--tracking-tight); line-height: 1; font-variant-numeric: tabular-nums; color: var(--brand); }
 .hero-num .big.ok { color: var(--ok); }
 .hero-num .cap { font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--muted); font-weight: 600; }
 .hero-num .sub { font-size: var(--text-sm); color: var(--muted); font-variant-numeric: tabular-nums; }
-@media (max-width: 700px) { .hero-banner { grid-template-columns: 1fr; } }
+@media (max-width: 720px) { .hero-banner { grid-template-columns: 1fr; } }
 
 /* Rail counters: quiet label:value rows instead of five display tiles. */
 .rail-kv { display: flex; flex-direction: column; }
@@ -745,7 +702,7 @@ details > summary { font-family: var(--font-display); }
 .sess-list { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); box-shadow: var(--shadow-sm); overflow: hidden; }
 .sess-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 64px 52px; gap: 16px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); transition: background var(--dur-fast) var(--ease-out); cursor: pointer; }
 .sess-row:last-child { border-bottom: none; }
-.sess-row:hover { background: var(--surface-2); }
+.sess-row.row-link:hover { background: var(--surface-2); box-shadow: inset 2px 0 0 var(--brand); }
 .sess-row .id-line { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .sess-row .id-line a { font-family: var(--font-mono); font-size: var(--text-xs); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sess-row .find { color: var(--muted); font-size: var(--text-xs); margin-top: 3px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; }
@@ -778,6 +735,9 @@ tr.group-row td { background: var(--surface-3); border-top: 2px solid var(--bord
 tr.group-row:first-child td { border-top: 0; }
 tr.group-row .count { color: var(--faint); font-weight: 500; margin-left: 6px; }
 tr.group-row:hover td { background: var(--surface-3); }
+/* Lighter full-width caption row (e.g. the "Inherited" separator on a project's
+   memories tab) -- a muted sub-header, distinct from the mono group-row label. */
+tr.subhead-row td { background: var(--surface-2); color: var(--muted); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: 600; }
 
 /* Memory name cell: description tucks under the name, clamped to one line. */
 .mem-name { max-width: 380px; }
@@ -836,7 +796,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .funnel-bar .track { height: 22px; border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
 .funnel-bar .track > span { display: block; height: 100%; background: var(--brand); border-radius: 0 var(--radius-xs) var(--radius-xs) 0; transition: width var(--dur-slow) var(--ease-out); }
 .funnel-bar .cap { font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
-@media (max-width: 860px) { .funnel { grid-template-columns: repeat(3, auto); } .funnel-bar { grid-column: 1 / -1; } }
+@media (max-width: 900px) { .funnel { grid-template-columns: repeat(3, auto); } .funnel-bar { grid-column: 1 / -1; } }
 
 /* Reach-by-project: an inline reach bar inside a table cell. */
 .reach-cell { display: flex; align-items: center; gap: 10px; min-width: 150px; }
@@ -901,7 +861,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 /* Two side-by-side request cards (ask + split); stacks on narrow viewports. */
 .req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 .req-grid .req-card { margin-bottom: 0; }
-@media (max-width: 860px) { .req-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .req-grid { grid-template-columns: 1fr; } }
 
 /* A plan batch (a split's setup + its reproject cards) reviewed as a unit. */
 .plan-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px; background: var(--surface-2); }
@@ -1050,7 +1010,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-meta { color: var(--faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; flex: none; margin-left: auto; }
 
 .ix-body { padding: 12px; display: flex; flex-direction: column; gap: 6px; }
-.ix-body h3 { font-family: var(--font-display); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 0 0; font-weight: 600; }
+.ix-body h2 { font-family: var(--font-display); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 0 0; font-weight: 600; }
 .ix-links { display: flex; gap: 14px; font-size: var(--text-xs); padding-top: 4px; }
 .ix-more { display: flex; justify-content: center; padding: 12px 0; }
 .live.off .live-dot { animation: none; background: var(--faint); }
@@ -1099,6 +1059,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .proj-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
 .search { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-sm); }
 .search .ico { width: 15px; height: 15px; }
+.search:focus-within { border-color: var(--brand); box-shadow: var(--shadow-focus); }
 .search input { flex: 1; border: 0; background: none; color: var(--text-primary); font: inherit; outline: none; }
 .seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
 .seg button, .seg a { border: 0; background: var(--surface); color: var(--muted); font: inherit; font-size: var(--text-xs); font-weight: 600; padding: 6px 12px; cursor: pointer; border-right: 1px solid var(--border); }
@@ -1145,7 +1106,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
    in step -- Last active + Memories, then Open tasks, then Health -- keeping the
    header and rows in lockstep. Cells hide by source position (nth-child); the
    grid template loses the matching track so the visible cells stay aligned. */
-@media (max-width: 1000px) {
+@media (max-width: 900px) {
   .board-colhd, .prow { grid-template-columns: minmax(0, 1fr) 120px 78px 84px; }
   .board-colhd span:nth-child(5), .board-colhd span:nth-child(6),
   .prow > :nth-child(5), .prow > :nth-child(6) { display: none; }
@@ -1184,7 +1145,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .metricbar .v.brand { color: var(--brand); }
 .metricbar .v.ok { color: var(--ok); }
 .metricbar .v small { font-size: var(--text-xs); color: var(--muted); font-family: var(--font-sans); }
-@media (max-width: 1000px) { .metricbar { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 900px) { .metricbar { grid-template-columns: repeat(3, 1fr); } }
 .two { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 16px; align-items: start; }
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 
@@ -1265,7 +1226,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 /* detail: main column + side rail */
 .drail { display: grid; grid-template-columns: minmax(0,1fr) 300px; gap: 16px; align-items: start; }
 .dcol, .dside { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-@media (max-width: 1000px) { .drail { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .drail { grid-template-columns: 1fr; } }
 
 /* detail timeline */
 .tl { display: flex; flex-direction: column; }
@@ -1282,7 +1243,12 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 
 /* --- settings + gardener workspace ---------------------------------------- */
 .set-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
-@media (max-width: 820px) { .set-grid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .set-grid { grid-template-columns: 1fr; } }
+/* The three config cards (Storage/Budgets/Gardener) as one equal-height row --
+   default grid stretch aligns their bottoms so a sparse card no longer leaves a
+   ragged wrap. */
+.conf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 900px) { .conf-grid { grid-template-columns: 1fr; } }
 .kv-lg dt { padding: 7px 0; }
 .kv-lg dd { padding: 7px 0; }
 .gard-card { border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); padding: 14px; box-shadow: var(--shadow-sm); }
