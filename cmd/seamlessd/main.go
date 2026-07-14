@@ -113,6 +113,7 @@ usage:
   seamlessd map-repo       map a repo path to a project slug (repo_project_map)
   seamlessd family         manage project families (list|add|remove)
   seamlessd console-open   open the console in a browser, pre-authenticated
+                           (--browser "Google Chrome" targets a specific browser; macOS only)
   seamlessd version        print the version
 `, version)
 }
@@ -172,6 +173,7 @@ func runServe(args []string) error {
 
 	ret := retrieve.New(db, embedder, cfg.Budgets, logger)
 	ret.SetBodyReader(mgr.Store()) // enables the pinned-stage briefing section
+	ret.SetBriefingConfig(cfg.Briefing)
 	rec := events.NewRecorder(db)
 
 	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool
@@ -201,7 +203,9 @@ func runServe(args []string) error {
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec,
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,
-		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, Logger: logger,
+		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
+		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
+		Logger:         logger,
 	})
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: console: %w", err)

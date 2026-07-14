@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"html/template"
 	"net"
@@ -41,10 +42,18 @@ var consoleLoginTmpl = template.Must(template.New("console-login").Parse(`<!doct
 `))
 
 // runConsoleOpen renders a self-submitting console login page, writes it to a
-// 0600 temp file, and opens it in the default browser -- pre-authenticating the
-// session so the console loads without a manual key paste. It refuses to run if
-// the key is unset or the server is unreachable, since the page POSTs to it.
-func runConsoleOpen(_ []string) error {
+// 0600 temp file, and opens it in a browser -- pre-authenticating the session
+// so the console loads without a manual key paste. By default it opens the OS
+// default browser; --browser <app> targets a specific one (e.g. "Google
+// Chrome", so an agent driving Chrome gets the auth cookie even when another
+// browser is the default). It refuses to run if the key is unset or the server
+// is unreachable, since the page POSTs to it.
+func runConsoleOpen(args []string) error {
+	fs := flag.NewFlagSet("console-open", flag.ContinueOnError)
+	browser := fs.String("browser", "", `browser application to open instead of the default (e.g. "Google Chrome"; macOS only)`)
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("seamlessd.console-open: %w", err)
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("seamlessd.console-open: %w", err)
@@ -73,10 +82,14 @@ func runConsoleOpen(_ []string) error {
 	if err := f.Close(); err != nil {
 		return fmt.Errorf("seamlessd.console-open: close login page: %w", err)
 	}
-	if err := openInBrowser(f.Name()); err != nil {
+	if err := openInBrowser(f.Name(), *browser); err != nil {
 		return fmt.Errorf("seamlessd.console-open: open browser: %w", err)
 	}
-	fmt.Printf("opened pre-authenticated console at http://%s/console/\n", host)
+	where := "default browser"
+	if *browser != "" {
+		where = *browser
+	}
+	fmt.Printf("opened pre-authenticated console at http://%s/console/ in %s\n", host, where)
 	return nil
 }
 
@@ -115,16 +128,33 @@ func serverReachable(host string) bool {
 	return true
 }
 
-// openInBrowser opens target (a file path or URL) in the OS default browser.
-func openInBrowser(target string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", target)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", target)
-	default:
-		cmd = exec.Command("xdg-open", target)
+// openInBrowser opens target (a file path or URL) in a browser: the OS default
+// when app is empty, or the named browser application (macOS only).
+func openInBrowser(target, app string) error {
+	cmd, err := browserCommand(runtime.GOOS, target, app)
+	if err != nil {
+		return err
 	}
 	return cmd.Run()
+}
+
+// browserCommand builds the OS launch command for target. A non-empty app
+// names a specific browser application; that is only expressible on macOS
+// (`open -a`), so other platforms reject it rather than silently opening the
+// default.
+func browserCommand(goos, target, app string) (*exec.Cmd, error) {
+	if app != "" && goos != "darwin" {
+		return nil, fmt.Errorf("--browser is only supported on macOS (got GOOS=%s)", goos)
+	}
+	switch goos {
+	case "darwin":
+		if app != "" {
+			return exec.Command("open", "-a", app, target), nil
+		}
+		return exec.Command("open", target), nil
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "", target), nil
+	default:
+		return exec.Command("xdg-open", target), nil
+	}
 }
