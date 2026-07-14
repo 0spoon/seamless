@@ -72,13 +72,9 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Fields = scalarFields(ev.Payload, "content", "item_ids", "prompt")
 
-	if r.URL.Query().Get("peek") == "1" {
-		s.renderFragment(w, r, "event", data)
-		return
-	}
 	// No Active nav key: the event detail is a leaf reached from Overview/
 	// Interactions via the crumb, so highlighting a nav item would mislead.
-	s.render(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Data: data})
+	s.renderDetail(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Data: data})
 }
 
 // eventSurfacesMemories reports whether an event's item ids point at memories in

@@ -29,17 +29,16 @@ var pageNames = []string{
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
-// defines a "peek-body" block, parsed twice: as a standalone fragment (executed
-// for ?peek=1 drawer fetches) and -- for the entities without a pre-existing
-// full page -- wrapped in layout+detail for a shareable, no-JS page.
+// defines a "peek-body" block (the standalone ?peek=1 fragment) wrapping a
+// "detail-body" block (the entity's one body source).
 var peekNames = []string{"memory", "note", "task", "project", "session", "event", "plan"}
 
-// detailPageNames are the peek entities that have no pre-existing full page and
-// so get the generic layout+detail wrapper as their default (non-peek) render.
-// memory/note/task/session/event own bespoke full pages; only project still falls
-// back here -- and only for ?peek=1/JSON, since its full page is the tabbed
-// workspace (projectWorkspace), never the generic wrapper.
-var detailPageNames = []string{"project"}
+// entityPeekPages are the entities whose bespoke full page composes the shared
+// "detail-body" block from templates/peek_<name>.html, so the peek fragment and
+// the full page render one source (page chrome aside). session and project are
+// absent on purpose: their fragments are deliberate compact summaries of much
+// richer bespoke surfaces (the session workspace, the tabbed project workspace).
+var entityPeekPages = map[string]bool{"memory": true, "note": true, "task": true, "event": true, "plan": true}
 
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
@@ -145,30 +144,25 @@ func taskTone(status string) string {
 	}
 }
 
-// parseTemplates parses the layout + every page into its own template set, plus
-// the peek entities: a full layout+detail page per detailPageNames entry (keyed
-// "peek-<name>") and a standalone body fragment per peekNames entry.
+// parseTemplates parses the layout + every page into its own template set (an
+// entity page also parses its peek_<name>.html companion so its content block
+// can compose the shared "detail-body"), plus a standalone body fragment per
+// peekNames entry.
 func parseTemplates() (pages, fragments map[string]*template.Template, err error) {
-	pages = make(map[string]*template.Template, len(pageNames)+len(detailPageNames))
+	pages = make(map[string]*template.Template, len(pageNames))
 	for _, name := range pageNames {
 		t := template.New("layout").Funcs(funcs)
-		t, perr := t.ParseFS(templateFS, "templates/layout.html", "templates/"+name+".html")
+		files := []string{"templates/layout.html", "templates/" + name + ".html"}
+		if entityPeekPages[name] {
+			files = append(files, "templates/peek_"+name+".html")
+		}
+		t, perr := t.ParseFS(templateFS, files...)
 		if perr != nil {
 			return nil, nil, fmt.Errorf("console: parse %s: %w", name, perr)
 		}
 		pages[name] = t
 	}
-	// Full detail pages: layout + generic detail wrapper + the entity's body.
-	for _, name := range detailPageNames {
-		t := template.New("layout").Funcs(funcs)
-		t, perr := t.ParseFS(templateFS,
-			"templates/layout.html", "templates/detail.html", "templates/peek_"+name+".html")
-		if perr != nil {
-			return nil, nil, fmt.Errorf("console: parse peek page %s: %w", name, perr)
-		}
-		pages["peek-"+name] = t
-	}
-	// Standalone fragments: just the peek body, executed into the drawer.
+	// Standalone fragments: just the peek body, executed into the detail pane.
 	fragments = make(map[string]*template.Template, len(peekNames))
 	for _, name := range peekNames {
 		t := template.New("peek_" + name).Funcs(funcs)
@@ -212,15 +206,11 @@ func (s *Service) renderDetail(w http.ResponseWriter, r *http.Request, name stri
 		s.renderFragment(w, r, name, pd.Data)
 		return
 	}
-	// Default: a full layout-wrapped page. An entity with a bespoke full page
-	// (e.g. memory owns memory.html) renders it so its detail view matches the
-	// rest of the console; the rest fall back to the generic layout+detail
-	// wrapper keyed "peek-<name>".
-	if _, ok := s.pages[name]; ok {
-		s.render(w, r, name, pd)
-		return
-	}
-	s.render(w, r, "peek-"+name, pd)
+	// Default: the entity's bespoke full page, whose content block composes the
+	// same "detail-body" the fragment renders. Every full-page caller has one
+	// (project routes non-peek requests to its workspace before reaching here);
+	// render 500s on an unregistered page.
+	s.render(w, r, name, pd)
 }
 
 // render writes a page as HTML, or -- when the caller asked for JSON (the CLI) --

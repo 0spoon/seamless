@@ -1,13 +1,26 @@
 {{define "peek-body"}}
 <article class="peek-entity">
   <header class="peek-head"><span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span></header>
-  <h2 class="peek-title">{{.Event.Summary}}</h2>
+  <h2 class="peek-title">{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h2>
+  {{template "detail-body" .}}
+</article>
+{{end}}
 
+{{define "detail-body"}}
   <dl class="peek-kv">
+    <dt>ID</dt><dd class="mono">{{.Event.ID}}{{copyBtn .Event.ID}}</dd>
     <dt>When</dt><dd title="{{ts .Event.When}}">{{ago .Event.When}}</dd>
     <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
     <dt>Session</dt><dd>{{if .Event.SessionID}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{copyBtn .Event.SessionID}}{{else}}&mdash;{{end}}</dd>
+    {{if .Event.ItemID}}<dt>Item</dt><dd class="mono">{{.Event.ItemID}}{{copyBtn .Event.ItemID}}</dd>{{end}}
   </dl>
+
+  {{if .Prompt}}
+  <section class="peek-section">
+    <h3>Prompt</h3>
+    <pre class="ix-raw" data-ix-title="">{{.Prompt}}</pre>
+  </section>
+  {{end}}
 
   {{if .Content}}
   <section class="peek-section">
@@ -19,10 +32,36 @@
   {{if .Items}}
   <section class="peek-section">
     <h3>Surfaced memories <span class="count">{{len .Items}}</span></h3>
-    <ul class="peek-refs">
-      {{range .Items}}<li>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span> <span class="badge warn">removed</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}</li>{{end}}
-    </ul>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Name</th><th>Kind</th><th>Description</th></tr></thead>
+        <tbody>
+          {{range .Items}}
+          <tr>
+            <td>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{end}}</td>
+            <td>{{if .Missing}}<span class="badge warn">removed</span>{{else}}<span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}</td>
+            <td class="muted">{{if .Missing}}no longer in the index{{else}}{{.Description}}{{end}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
   </section>
   {{end}}
-</article>
+
+  {{if .Fields}}
+  <section class="peek-section">
+    <h3>Payload</h3>
+    <dl class="peek-kv">
+      {{range .Fields}}<dt>{{.Key}}</dt><dd class="mono">{{.Value}}</dd>{{end}}
+    </dl>
+  </section>
+  {{end}}
+
+  {{if .RawJSON}}
+  <details>
+    <summary class="muted">Raw payload</summary>
+    <div style="margin-top:8px"><pre class="ix-raw" data-ix-title="">{{.RawJSON}}</pre></div>
+  </details>
+  {{end}}
 {{end}}

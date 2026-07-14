@@ -5,8 +5,12 @@
     {{if .Row.Status}}<span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>{{end}}
   </header>
   <h2 class="peek-title">{{.Row.Title}}</h2>
+  {{template "detail-body" .}}
+</article>
+{{end}}
 
-  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
+{{define "detail-body"}}
+  {{if .BodyLoaded}}<div class="prose">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
 
   <dl class="peek-kv">
     <dt>Project</dt><dd>{{if .Row.Project}}<a href="/console/projects/{{.Row.Project}}" data-peek>{{.Row.Project}}</a>{{else}}global{{end}}</dd>
@@ -21,18 +25,39 @@
   {{if .Attached}}
   <section class="peek-section">
     <h3>Attached notes <span class="count">{{len .Attached}}</span></h3>
-    <ul class="peek-refs">
-      {{range .Attached}}<li><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a> {{if .IsAgent}}<span class="badge">agent-cache</span>{{end}}</li>{{end}}
-    </ul>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Note</th><th>Kind</th><th>Updated</th></tr></thead>
+        <tbody>
+          {{range .Attached}}
+          <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
+            <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong><div class="desc mono">{{.Slug}}</div></td>
+            <td>{{if .IsAgent}}<span class="badge">agent-cache</span>{{else}}<span class="badge">note</span>{{end}}</td>
+            <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
   </section>
   {{end}}
 
   {{if .Tasks}}
   <section class="peek-section">
     <h3>Tasks <span class="count">{{len .Tasks}}</span></h3>
-    <ul class="peek-refs">
-      {{range .Tasks}}<li><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
-    </ul>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Task</th><th>Status</th></tr></thead>
+        <tbody>
+          {{range .Tasks}}
+          <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+            <td><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
+            <td><span class="badge {{taskTone .Status}}">{{.Status}}</span></td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </div>
   </section>
   {{end}}
 
@@ -43,5 +68,4 @@
     </form>
   </div>
   {{end}}
-</article>
 {{end}}

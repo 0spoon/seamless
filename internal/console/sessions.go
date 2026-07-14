@@ -312,11 +312,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.URL.Query().Get("peek") == "1" {
-		s.renderFragment(w, r, "session", data)
-		return
-	}
-	s.render(w, r, "session", pageData{
+	s.renderDetail(w, r, "session", pageData{
 		Title:  "Session " + shortID(sess.ID),
 		Active: "sessions",
 		Data:   data,

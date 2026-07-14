@@ -886,8 +886,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
    PEEK PANEL -- slide-over drawer for entity detail (see layout.html + peek.go)
    A fixed right drawer that fetches an entity's server-rendered fragment
    (?peek=1) and injects it, with a back-stack and #peek= deep-link. Non-modal:
-   no backdrop, the list behind stays scrollable. The same fragments render as
-   a centered .peek-page on a full detail URL (the no-JS fallback).
+   no backdrop, the list behind stays scrollable.
    =========================================================================== */
 .peek {
   position: fixed;
@@ -920,18 +919,8 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .peek-chrome .peek-spacer { flex: 1; }
 .peek-content { flex: 1; overflow-y: auto; padding: 18px; }
 
-/* Full-page variant of the same fragment (shareable URL, no-JS fallback). */
-.peek-page {
-  max-width: 720px;
-  margin: 0 auto;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 22px 24px;
-  box-shadow: var(--shadow-sm);
-}
-
-/* Entity body internals -- shared by drawer and full page. */
+/* Entity body internals -- shared by the detail pane, the drawer, and (via the
+   detail-body block) each entity's full page. */
 .peek-entity { display: flex; flex-direction: column; gap: 14px; }
 .peek-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .peek-title { font-family: var(--font-display); font-size: var(--text-lg); margin: 0; font-weight: 600; letter-spacing: var(--tracking-tight); word-break: break-word; }
@@ -1007,6 +996,11 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .detail-pane:not([hidden]) { animation: peek-in var(--dur-med) var(--ease-out); }
 .detail-pane-chrome { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2); }
 .detail-pane-body { padding: 18px; }
+
+/* An entity's full page renders the same detail-body block the fragment does,
+   inside one card under the crumb + detail-head chrome. Width-capped so the
+   ledger-style .peek-kv rows stay readable on wide screens. */
+.detail-body { max-width: 920px; }
 
 /* Selected row in a split list -- a brand left-accent + soft wash, held while its
    detail pane is open; overrides the transient hover cue. */
