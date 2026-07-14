@@ -75,12 +75,15 @@ func newWatcher(dataDir string, handler changeHandler, debounce time.Duration, l
 
 // watchTree recursively adds every directory under root to the fsnotify watch
 // list. A missing root is not an error (the tree may not exist yet).
+//
+// It holds no lock: w.mu guards the suppressed/pending/gen maps, none of which
+// this touches, and fsnotify's Add is internally synchronized -- which is why
+// handleEvent already Adds a newly created directory without w.mu. Taking it
+// here would only mean holding a mutex across a full filesystem walk.
 func (w *watcher) watchTree(root string) error {
 	if _, err := os.Stat(root); os.IsNotExist(err) {
 		return nil
 	}
-	w.mu.Lock()
-	defer w.mu.Unlock()
 	return filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr

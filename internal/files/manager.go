@@ -38,10 +38,12 @@ const (
 // writes are suppressed in the watcher (no re-index loop). An optional embedder
 // keeps the vector index in sync with the file content (best-effort).
 type Manager struct {
-	store    *Store
-	indexer  *Indexer
-	watcher  *watcher
-	db       *sql.DB
+	store   *Store
+	indexer *Indexer
+	watcher *watcher
+	db      *sql.DB
+	// embedder is fixed before Start and read by handler goroutines after it;
+	// see SetEmbedder for the ownership contract.
 	embedder llm.Embedder
 	logger   *slog.Logger
 
@@ -75,6 +77,13 @@ func NewManager(dataDir string, db *sql.DB, logger *slog.Logger) (*Manager, erro
 // SetEmbedder enables vector indexing. When set, every (re)indexed item is
 // embedded and its vector upserted; embedding failures are logged, not fatal, so
 // a slow or down embedder never blocks a write or an edit. Nil disables it.
+//
+// It MUST be called before Start, from the goroutine that owns the Manager.
+// After Start, the watcher's handler goroutines read m.embedder without
+// synchronization, so setting it on a running Manager is a data race. The field
+// is unguarded deliberately: the embedder is fixed at startup (main.go resolves
+// it from config, then starts), so a lock would cost every indexed write to
+// protect against a call that has no legitimate reason to happen.
 func (m *Manager) SetEmbedder(e llm.Embedder) { m.embedder = e }
 
 // Store exposes the filesystem layer (read-only helpers for other packages).
