@@ -27,8 +27,8 @@
         <dt>Project</dt><dd class="mono">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}inbox{{end}}</dd>
         {{if .Tags}}<dt>Tags</dt><dd>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>{{end}}
         {{if .SourceURL}}<dt>Source</dt><dd class="mono"><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.SourceURL}}</a></dd>{{end}}
-        <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
-        <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+        <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
+        <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>
         <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
       </dl>
     </div>

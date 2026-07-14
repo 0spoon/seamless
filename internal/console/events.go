@@ -76,7 +76,9 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 		s.renderFragment(w, r, "event", data)
 		return
 	}
-	s.render(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Active: "overview", Data: data})
+	// No Active nav key: the event detail is a leaf reached from Overview/
+	// Interactions via the crumb, so highlighting a nav item would mislead.
+	s.render(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Data: data})
 }
 
 // resolveEventItems turns the memory ids an event referenced (ItemID plus any

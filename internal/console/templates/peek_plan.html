@@ -1,0 +1,47 @@
+{{define "peek-body"}}
+<article class="peek-entity">
+  <header class="peek-head">
+    <span class="kind">plan:{{.Row.Slug}}</span>{{copyBtn .Row.Slug}}
+    {{if .Row.Status}}<span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>{{end}}
+  </header>
+  <h2 class="peek-title">{{.Row.Title}}</h2>
+
+  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
+
+  <dl class="peek-kv">
+    <dt>Project</dt><dd>{{if .Row.Project}}<a href="/console/projects/{{.Row.Project}}" data-peek>{{.Row.Project}}</a>{{else}}global{{end}}</dd>
+    <dt>Source</dt><dd>{{if eq .Row.Source "capture"}}CC capture{{if .Row.Basename}} &middot; <span class="mono">{{.Row.Basename}}.md</span>{{end}}{{else}}composed{{end}}</dd>
+    {{if .Row.Iteration}}<dt>Iteration</dt><dd>{{.Row.Iteration}}</dd>{{end}}
+    {{if .Row.TasksTotal}}<dt>Steps</dt><dd>{{.Row.TasksDone}}/{{.Row.TasksTotal}} done{{if .Row.TasksWIP}} &middot; {{.Row.TasksWIP}} in progress{{end}}</dd>{{end}}
+    {{if .Row.Agents}}<dt>Agents</dt><dd>{{.Row.Agents}}</dd>{{end}}
+    <dt>Updated</dt><dd title="{{ts .Row.Updated}}">{{ago .Row.Updated}}</dd>
+    <dt>Note</dt><dd><a href="/console/notes/{{.Row.NoteID}}" data-peek>note &rarr;</a></dd>
+  </dl>
+
+  {{if .Attached}}
+  <section class="peek-section">
+    <h3>Attached notes <span class="count">{{len .Attached}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Attached}}<li><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a> {{if .IsAgent}}<span class="badge">agent-cache</span>{{end}}</li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  {{if .Tasks}}
+  <section class="peek-section">
+    <h3>Tasks <span class="count">{{len .Tasks}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Tasks}}<li><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+
+  {{if .CanApprove}}
+  <div class="peek-actions">
+    <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
+      <button class="link-act" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">approve plan</button>
+    </form>
+  </div>
+  {{end}}
+</article>
+{{end}}

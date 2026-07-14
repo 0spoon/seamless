@@ -1,5 +1,6 @@
 {{define "content"}}
 {{with .Data}}
+<div class="crumb"><a href="/console/">Overview</a> <span class="faint">/</span> <b>Retrieval</b></div>
 <div class="topbar">
   <div>
     <h1>Retrieval</h1>
@@ -97,7 +98,7 @@
         <tr>
           <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
           <td><span class="kind">{{.Kind}}</span></td>
-          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
         </tr>
         {{end}}
       </tbody>

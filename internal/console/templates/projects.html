@@ -11,7 +11,7 @@
 <div class="proj-toolbar">
   <form class="search" method="get" action="/console/projects">
     {{icon "search"}}
-    <input name="q" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
+    <input name="q" aria-label="Filter projects by slug, name, or description" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
     <input type="hidden" name="group" value="{{.Group}}">
     <input type="hidden" name="sort" value="{{.Sort}}">
     <input type="hidden" name="w" value="{{.Window}}">
@@ -25,6 +25,7 @@
     <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
     <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
   </div>
+  <a class="btn small" href="/console/relations" title="Relations graph: plans expand into steps, each step's claiming session, and the memories it left behind">{{icon "git-fork"}}<span>Relations</span></a>
 </div>
 
 <div class="board">

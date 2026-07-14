@@ -452,6 +452,7 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 		Tasks:     n.OpenTasks,
 		Proposals: n.PendingProposals,
 		Projects:  n.Projects,
+		Plans:     n.Plans,
 	}
 }
 
@@ -463,4 +464,5 @@ type navCounts struct {
 	Tasks     int
 	Proposals int
 	Projects  int
+	Plans     int
 }

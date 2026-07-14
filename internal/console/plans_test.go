@@ -2,9 +2,11 @@ package console
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -81,6 +83,78 @@ func TestPlans_ListAndDetail(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, do(mux, req).Code)
 }
 
+// seedComposedPlan writes a plain plans-as-composition plan: a narrative note
+// tagged plan:<slug> (no cc-plan capture) plus a supporting note, in project demo.
+func seedComposedPlan(t *testing.T, mgr *files.Manager, slug string) core.Note {
+	t.Helper()
+	ctx := context.Background()
+	now := time.Now().UTC()
+	primaryID, err := core.NewID()
+	require.NoError(t, err)
+	primary, err := mgr.WriteNote(ctx, core.Note{
+		ID: primaryID, Slug: "composed-narrative", Title: "Composed Plan", Project: "demo",
+		Description: "the composed plan narrative",
+		Body:        "# Composed Plan\n\nShip the composed surface.",
+		Tags:        []string{plans.SlugTag(slug), "created-by:agent"},
+		Created:     now.Add(-time.Hour), Updated: now,
+	})
+	require.NoError(t, err)
+
+	supportID, err := core.NewID()
+	require.NoError(t, err)
+	_, err = mgr.WriteNote(ctx, core.Note{
+		ID: supportID, Slug: "composed-support", Title: "Supporting Research", Project: "demo",
+		Description: "supporting context for the composed plan",
+		Body:        "Some supporting findings.",
+		Tags:        []string{plans.SlugTag(slug), "created-by:agent"},
+		Created:     now, Updated: now,
+	})
+	require.NoError(t, err)
+	return primary
+}
+
+func TestPlans_ComposedPlanSurfaces(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	seedPlanComposition(t, mgr)                         // a cc-plan capture (slug my-plan)
+	primary := seedComposedPlan(t, mgr, "composed-one") // a composed plan
+
+	var list plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &list)
+	require.Equal(t, 2, list.Count)
+
+	bySlug := map[string]planRow{}
+	for _, row := range list.Rows {
+		bySlug[row.Slug] = row
+	}
+	capRow := bySlug["my-plan"]
+	require.Equal(t, "capture", capRow.Source)
+	require.Equal(t, "clever-stallman", capRow.Basename)
+
+	comp, ok := bySlug["composed-one"]
+	require.True(t, ok)
+	require.Equal(t, "composed", comp.Source)
+	require.Equal(t, "Composed Plan", comp.Title)
+	require.Equal(t, primary.ID, comp.NoteID) // earliest-created note is the primary
+	require.Empty(t, comp.Basename)
+	require.Empty(t, comp.Status)
+
+	// Detail resolves the composed primary and lists the supporting note; the
+	// capture-only approve action is withheld.
+	var d planDetailData
+	getJSON(t, mux, "/console/plans/composed-one?format=json", &d)
+	require.Equal(t, primary.ID, d.Row.NoteID)
+	require.Equal(t, "composed", d.Row.Source)
+	require.False(t, d.CanApprove)
+	require.Contains(t, d.BodyText, "Ship the composed surface.")
+	require.Len(t, d.Attached, 1)
+	require.Equal(t, "composed-support", d.Attached[0].Slug)
+
+	// The escape-hatch POST is refused for a composed plan.
+	req := httptest.NewRequest(http.MethodPost, "/console/plans/composed-one/approve?format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	require.Equal(t, http.StatusNotFound, do(mux, req).Code)
+}
+
 func TestPlans_ApproveEscapeHatch(t *testing.T) {
 	db, mgr, mux := newConsoleWithFiles(t)
 	seedPlanComposition(t, mgr)
@@ -134,6 +208,85 @@ func TestPlans_ApproveEscapeHatch(t *testing.T) {
 	require.False(t, d.CanApprove)
 }
 
+// seedPlanNarrative writes a single composed-plan narrative note tagged
+// plan:<slug> in project demo, with a note slug unique to the plan.
+func seedPlanNarrative(t *testing.T, mgr *files.Manager, slug string) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	_, err = mgr.WriteNote(context.Background(), core.Note{
+		ID: id, Slug: "narrative-" + slug, Title: "Plan " + slug, Project: "demo",
+		Description: "narrative for " + slug, Body: "# " + slug,
+		Tags:    []string{plans.SlugTag(slug), "created-by:agent"},
+		Created: now, Updated: now,
+	})
+	require.NoError(t, err)
+}
+
+// addPlanTask inserts a step task under plan:<slug> in project demo with the
+// given status.
+func addPlanTask(t *testing.T, db *sql.DB, slug string, status core.TaskStatus) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateTask(context.Background(), db, core.Task{
+		ID: id, ProjectSlug: "demo", Title: "step for " + slug, Status: status,
+		CreatedBy: "test", PlanSlug: slug, CreatedAt: now, UpdatedAt: now,
+	}))
+}
+
+func TestPlans_PhaseGrouping(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+
+	// A plan with an in-progress step, one with only an open step, one whose
+	// single step is done, and one with no steps at all.
+	seedPlanNarrative(t, mgr, "wip-plan")
+	addPlanTask(t, db, "wip-plan", core.TaskInProgress)
+	seedPlanNarrative(t, mgr, "ready-plan")
+	addPlanTask(t, db, "ready-plan", core.TaskOpen)
+	seedPlanNarrative(t, mgr, "done-plan")
+	addPlanTask(t, db, "done-plan", core.TaskDone)
+	seedPlanNarrative(t, mgr, "fresh-plan") // no steps -> ready
+
+	var list plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &list)
+	require.Equal(t, 4, list.Count)
+	require.Equal(t, 1, list.InProgress)
+	require.Equal(t, 2, list.Ready)
+	require.Equal(t, 1, list.Done)
+
+	phase := map[string]string{}
+	for _, row := range list.Rows {
+		phase[row.Slug] = row.Phase
+	}
+	require.Equal(t, planPhaseInProgress, phase["wip-plan"])
+	require.Equal(t, planPhaseReady, phase["ready-plan"])
+	require.Equal(t, planPhaseDone, phase["done-plan"])
+	require.Equal(t, planPhaseReady, phase["fresh-plan"])
+}
+
+func TestPlanPhase(t *testing.T) {
+	cases := []struct {
+		name string
+		row  planRow
+		want string
+	}{
+		{"wip wins over everything", planRow{TasksWIP: 1, TasksOpen: 2, TasksTotal: 3}, planPhaseInProgress},
+		{"abandoned capture is done", planRow{Status: plans.StatusAbandoned}, planPhaseDone},
+		{"all steps closed is done", planRow{TasksDone: 2, TasksTotal: 2}, planPhaseDone},
+		{"open steps remain is ready", planRow{TasksOpen: 1, TasksTotal: 2, TasksDone: 1}, planPhaseReady},
+		{"no steps is ready", planRow{}, planPhaseReady},
+		{"presented capture with no steps is ready", planRow{Status: plans.StatusPresented}, planPhaseReady},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, planPhase(tc.row))
+		})
+	}
+}
+
 func TestPlans_HTMLShellRenders(t *testing.T) {
 	_, mgr, mux := newConsoleWithFiles(t)
 	seedPlanComposition(t, mgr)
@@ -151,4 +304,63 @@ func TestPlans_HTMLShellRenders(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Contains(t, rr.Body.String(), "Do the thing.")
 	require.Contains(t, rr.Body.String(), "agent-cache")
+}
+
+// TestPlanPeek_FragmentAndAffordance covers the plan drawer path added when
+// plans rows became peek triggers: planDetail now serves three ways through
+// renderDetail (JSON / ?peek=1 fragment / full plan.html page), and the list
+// rows carry data-peek so a whole-row click opens the drawer.
+func TestPlanPeek_FragmentAndAffordance(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	seedPlanComposition(t, mgr)
+
+	// ?peek=1 -> a standalone fragment (no layout) with the plan body + refs.
+	frag := getPeek(t, mux, "/console/plans/my-plan?peek=1")
+	require.Equal(t, http.StatusOK, frag.Code)
+	fb := frag.Body.String()
+	require.NotContains(t, fb, "<html", "fragment must not carry the page layout")
+	require.Contains(t, fb, "plan:my-plan")
+	require.Contains(t, fb, "Do the thing.")   // rendered body
+	require.Contains(t, fb, "agent-cache")     // attached agent note ref
+	require.Contains(t, fb, "/console/notes/") // note refs are peek links
+
+	// Default (no peek) still renders the bespoke full plan.html page.
+	full := getPeek(t, mux, "/console/plans/my-plan")
+	require.Equal(t, http.StatusOK, full.Code)
+	require.Contains(t, full.Body.String(), "<html")
+	require.Contains(t, full.Body.String(), "Do the thing.")
+
+	// The list rows are peek triggers now (whole-row click opens the drawer).
+	list := getPeek(t, mux, "/console/plans?w=all")
+	require.Equal(t, http.StatusOK, list.Code)
+	require.Contains(t, list.Body.String(), `data-href="/console/plans/my-plan" data-peek`)
+
+	// Unknown slug still 404s through the styled path.
+	require.Equal(t, http.StatusNotFound, getPeek(t, mux, "/console/plans/no-such-plan?peek=1").Code)
+}
+
+// TestPlans_HTMLGroupsInOrder renders the list HTML with a plan in each phase
+// and asserts the three grouped sections appear, newest-first order aside, in
+// the fixed order: In progress, then Ready, then Done.
+func TestPlans_HTMLGroupsInOrder(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	seedPlanNarrative(t, mgr, "wip-plan")
+	addPlanTask(t, db, "wip-plan", core.TaskInProgress)
+	seedPlanNarrative(t, mgr, "ready-plan")
+	addPlanTask(t, db, "ready-plan", core.TaskOpen)
+	seedPlanNarrative(t, mgr, "done-plan")
+	addPlanTask(t, db, "done-plan", core.TaskDone)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/plans?w=all", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+
+	inProgress := strings.Index(body, `In progress <span class="count">`)
+	ready := strings.Index(body, `Ready <span class="count">`)
+	done := strings.Index(body, `Done <span class="count">`)
+	require.Greater(t, inProgress, -1, "In progress header present")
+	require.Greater(t, ready, inProgress, "Ready header after In progress")
+	require.Greater(t, done, ready, "Done header after Ready")
 }

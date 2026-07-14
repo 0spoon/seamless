@@ -37,7 +37,7 @@
         <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
           <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong><div class="desc mono">{{.Slug}}</div></td>
           <td>{{if .IsAgent}}<span class="badge">agent-cache</span>{{else}}<span class="badge">note</span>{{end}}</td>
-          <td class="muted" title="{{.Updated}}">{{ago .Updated}}</td>
+          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
         </tr>
         {{end}}
       </tbody>

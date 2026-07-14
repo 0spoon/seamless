@@ -10,8 +10,8 @@
     <dt><a href="/console/sessions">Sessions</a></dt><dd>{{.Sessions}}</dd>
     <dt><a href="/console/tasks">Open tasks</a></dt><dd>{{.OpenTasks}}</dd>
     <dt><a href="/console/notes">Notes</a></dt><dd>{{.Notes}}</dd>
-    <dt>Created</dt><dd title="{{.Created}}">{{ago .Created}}</dd>
-    <dt>Updated</dt><dd title="{{.Updated}}">{{ago .Updated}}</dd>
+    <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
+    <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>
   </dl>
 </article>
 {{end}}

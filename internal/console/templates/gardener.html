@@ -11,7 +11,7 @@
 <div class="req-grid">
   <form class="card req-card" method="post" action="/console/gardener/request" id="req-form">
     <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
-    <textarea class="field" name="request" id="req-text" rows="3"
+    <textarea class="field" name="request" id="req-text" rows="3" aria-label="Describe what the gardener should propose"
       placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; and archive anything about the old port 8080"></textarea>
     <div class="req-row">
       {{$scope := .Scope}}
@@ -31,7 +31,7 @@
         {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
       </select>
     </div>
-    <textarea class="field" name="instruction" id="split-text" rows="2"
+    <textarea class="field" name="instruction" id="split-text" rows="2" aria-label="How to split the project"
       placeholder="e.g. split into arctop-ios and arctop-android; keep cross-platform memories in a shared arctop-mobile-apps"></textarea>
     <div class="req-row">
       <span class="prop-note" style="margin-right:auto;">Creates reviewable move proposals &mdash; nothing changes until you apply.</span>
@@ -45,9 +45,6 @@
   <div class="prop-note">Natural-language requests need an LLM chat client. Configure a provider (an API key) to enable this.</div>
 </div>
 {{end}}
-
-{{if .Notice}}<div class="section notice">{{.Notice}}</div>{{end}}
-{{if .Error}}<div class="login-err section">{{.Error}}</div>{{end}}
 
 {{/* Plan groups: a split's setup card + its per-memory reproject cards. */}}
 {{range .Groups}}
@@ -68,7 +65,7 @@
     <div class="card">
       <div class="prop-head">
         <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
-        <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
+        <span class="when" title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</span>
       </div>
       {{template "cardKindBody" .}}
       {{if and (eq .Kind "reproject") $.Data.CanAct $targets}}
@@ -86,7 +83,7 @@
         <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
           <button class="btn small primary" type="submit">Apply</button>
         </form>
-        <form method="post" action="/console/gardener/{{.ID}}/dismiss">
+        <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal?');">
           <button class="btn small" type="submit">Dismiss</button>
         </form>
       </div>
@@ -103,7 +100,7 @@
   <div class="card">
     <div class="prop-head">
       <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
-      <span class="when" title="{{.CreatedAt}}">{{ago .CreatedAt}}</span>
+      <span class="when" title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</span>
     </div>
     {{template "cardKindBody" .}}
     {{if $.Data.CanAct}}

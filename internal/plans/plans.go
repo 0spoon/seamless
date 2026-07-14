@@ -81,6 +81,10 @@ func SetStatusTag(tags []string, status string) []string {
 // SlugTag renders the composition tag for a plan slug.
 func SlugTag(planSlug string) string { return slugTagPrefix + planSlug }
 
+// SlugTagPrefix is the literal prefix every composition tag carries, for
+// surfaces that enumerate the plan:<slug> family without a known slug.
+func SlugTagPrefix() string { return slugTagPrefix }
+
 // Basename recovers the CC plan file basename from a captured-plan note slug.
 func Basename(noteSlug string) string { return strings.TrimPrefix(noteSlug, NotePrefix) }
 

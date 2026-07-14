@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 
 	"github.com/0spoon/seamless/internal/core"
 )
@@ -129,6 +130,39 @@ func NotesByTag(ctx context.Context, db *sql.DB, project, tag string) ([]core.No
 		return nil, fmt.Errorf("store.NotesByTag: %w", err)
 	}
 	return notes, nil
+}
+
+// NotesByTagPrefix returns the notes carrying at least one tag that begins with
+// prefix (e.g. "plan:" for every plan composition), newest-updated first,
+// optionally scoped to a project ("" = every project). It backs surfaces that
+// enumerate a tag family without knowing the concrete values up front. prefix
+// is treated literally: its LIKE metacharacters are escaped.
+func NotesByTagPrefix(ctx context.Context, db *sql.DB, project, prefix string) ([]core.Note, error) {
+	q := `SELECT ` + noteCols + ` FROM notes_index
+		WHERE EXISTS (SELECT 1 FROM json_each(notes_index.tags) je WHERE je.value LIKE ? ESCAPE '\')`
+	args := []any{escapeLikePrefix(prefix) + "%"}
+	if project != "" {
+		q += ` AND project = ?`
+		args = append(args, project)
+	}
+	q += ` ORDER BY updated_at DESC, id DESC`
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.NotesByTagPrefix: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	notes, err := scanNotes(rows)
+	if err != nil {
+		return nil, fmt.Errorf("store.NotesByTagPrefix: %w", err)
+	}
+	return notes, nil
+}
+
+// escapeLikePrefix escapes the LIKE metacharacters (\ % _) in a literal prefix
+// so it matches as plain text under `ESCAPE '\'`.
+func escapeLikePrefix(s string) string {
+	r := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+	return r.Replace(s)
 }
 
 // NotesByIDs returns the notes for the given ids keyed by ID; missing ids are

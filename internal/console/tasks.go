@@ -3,6 +3,7 @@ package console
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"sort"
 	"time"
 
@@ -118,7 +119,7 @@ func (s *Service) taskRelease(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, taskDetailJSON(released))
 		return
 	}
-	http.Redirect(w, r, "/console/tasks/"+released.ID, http.StatusSeeOther)
+	http.Redirect(w, r, "/console/tasks/"+released.ID+"?notice="+url.QueryEscape("Released the claim."), http.StatusSeeOther)
 }
 
 // taskDetailJSON is the minimal task view returned to a CLI/JSON caller of

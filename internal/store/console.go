@@ -18,6 +18,7 @@ type NavCounts struct {
 	OpenTasks        int // open or in_progress
 	PendingProposals int // pending gardener proposals
 	Projects         int // registered projects
+	Plans            int // distinct plan:<slug> compositions (captures + composed)
 }
 
 // GetNavCounts computes the sidebar counts.
@@ -45,6 +46,12 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 		return n, err
 	}
 	if err := scalar(&n.Projects, `SELECT COUNT(*) FROM projects`); err != nil {
+		return n, err
+	}
+	// A "plan" is a composition keyed by a plan:<slug> tag (both cc-plan captures
+	// and composed plans carry it), so distinct plan:<slug> tag values across all
+	// notes is the plan count. Prefix matches internal/plans slugTagPrefix.
+	if err := scalar(&n.Plans, `SELECT COUNT(DISTINCT je.value) FROM notes_index n, json_each(n.tags) je WHERE je.value LIKE 'plan:%'`); err != nil {
 		return n, err
 	}
 	return n, nil

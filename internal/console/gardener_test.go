@@ -25,7 +25,7 @@ import (
 // prompt, so the console can exercise the natural-language request path.
 type stubChat struct{ out string }
 
-func (c stubChat) Model() string                                     { return "stub-chat" }
+func (c stubChat) Model() string                                            { return "stub-chat" }
 func (c stubChat) Complete(context.Context, string, string) (string, error) { return c.out, nil }
 
 // newConsoleWithGardener wires a real gardener (no embedder/chat) so apply/dismiss

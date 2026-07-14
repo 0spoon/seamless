@@ -1,8 +1,10 @@
 package console
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -11,6 +13,9 @@ import (
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
+
+// sessionSortKeys are the accepted ?sort values on the sessions list.
+var sessionSortKeys = []string{"recent", "name"}
 
 // sessionRow is a display projection of a session for the list page.
 type sessionRow struct {
@@ -28,6 +33,8 @@ type sessionRow struct {
 // the sessions shown (windowed); Total is the all-time session count for context.
 type sessionsData struct {
 	Filter      string         `json:"filter"`
+	Query       string         `json:"query,omitempty"`
+	Sort        string         `json:"sort"`
 	Active      int            `json:"active"`
 	Completed   int            `json:"completed"`
 	Total       int            `json:"total"`
@@ -49,6 +56,16 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	default:
 		filter = ""
 	}
+	sortKey := r.URL.Query().Get("sort")
+	if sortKey == "" {
+		sortKey = "recent"
+	}
+	if !slices.Contains(sessionSortKeys, sortKey) {
+		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(sessionSortKeys, ", ")))
+		return
+	}
+	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	q := strings.ToLower(query)
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
 
 	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, win.Since, 200)
@@ -65,6 +82,10 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	rows := make([]sessionRow, 0, len(sessions))
 	active, completed := 0, 0
 	for _, sess := range sessions {
+		plain := markdown.PlainText(sess.Findings)
+		if !sessionMatches(sess.Name, sess.ProjectSlug, plain, sess.ID, q) {
+			continue
+		}
 		if sess.Status == core.SessionActive {
 			active++
 		} else {
@@ -73,31 +94,59 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, sessionRow{
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
 			Status: string(sess.Status), Source: sess.Source, Ambient: sess.Ambient,
-			Findings: snippet(markdown.PlainText(sess.Findings), 120), Updated: sess.UpdatedAt,
+			Findings: snippet(plain, 120), Updated: sess.UpdatedAt,
+		})
+	}
+	if sortKey == "name" {
+		sort.SliceStable(rows, func(i, j int) bool {
+			return sessionSortName(rows[i]) < sessionSortName(rows[j])
 		})
 	}
 	s.render(w, r, "sessions", pageData{
 		Title:  "Sessions",
 		Active: "sessions",
 		Data: sessionsData{
-			Filter: filter, Active: active, Completed: completed, Total: counts.Sessions,
+			Filter: filter, Query: query, Sort: sortKey,
+			Active: active, Completed: completed, Total: counts.Sessions,
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			Sessions: rows,
 		},
 	})
 }
 
+// sessionMatches reports whether a session row satisfies the ?q text filter
+// (empty q matches all): a case-insensitive substring of name, project, findings,
+// or id.
+func sessionMatches(name, project, findings, id, q string) bool {
+	if q == "" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(name), q) ||
+		strings.Contains(strings.ToLower(project), q) ||
+		strings.Contains(strings.ToLower(findings), q) ||
+		strings.Contains(strings.ToLower(id), q)
+}
+
+// sessionSortName is the key for the "name" sort: the display name, or the id
+// when a session is unnamed, lowercased.
+func sessionSortName(row sessionRow) string {
+	if row.Name != "" {
+		return strings.ToLower(row.Name)
+	}
+	return strings.ToLower(row.ID)
+}
+
 // sessionDetail is the payload for a single session's page. Findings is the raw
 // markdown (JSON output); FindingsHTML is the rendered, sanitized version the
 // template shows.
 type sessionDetail struct {
-	Session      core.Session  `json:"session"`
-	Findings     string        `json:"findings"`
-	FindingsHTML template.HTML `json:"-"`
-	Timeline     []eventRow    `json:"timeline"`
-	ToolCalls    int           `json:"toolCalls"`
-	Reads        int           `json:"memoryReads"`
-	Writes       int           `json:"memoryWrites"`
+	Session      core.Session    `json:"session"`
+	Findings     string          `json:"findings"`
+	FindingsHTML template.HTML   `json:"-"`
+	Timeline     []eventRow      `json:"timeline"`
+	ToolCalls    int             `json:"toolCalls"`
+	Reads        int             `json:"memoryReads"`
+	Writes       int             `json:"memoryWrites"`
 	Injected     int             `json:"injectedItems"`
 	ReadBack     int             `json:"readAfterInject"`
 	ByKind       []kindCount     `json:"eventsByKind"`
