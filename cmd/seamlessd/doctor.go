@@ -90,17 +90,20 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
-	checks = append(checks, mcpToolsCheck(), hooksCheck(), gardenerCheck(cfg))
+	checks = append(checks, mcpToolsCheck(), hooksCheck(cfg), gardenerCheck(cfg))
 
 	return reportChecks(checks)
 }
 
-// hooksCheck reports whether the three Seamless hooks are installed. It looks in
+// hooksCheck reports whether the Seamless hooks are installed. It looks in
 // the global settings (~/.claude/settings.json) and the project-scoped dogfood
 // settings (./.claude/settings.json), reporting the first location that has all
-// three, or a warning when they are partial or absent.
-func hooksCheck() check {
+// of them, or a warning when they are partial or absent. Detection matches by
+// hook URL/command, not just the managed marker, because Claude Code strips
+// the marker when it rewrites settings.json.
+func hooksCheck(cfg config.Config) check {
 	want := len(hooks.InstalledEvents())
+	baseURL := hookBaseURL(cfg.Addr)
 	var candidates []string
 	if home, err := expandHome("~/.claude/settings.json"); err == nil {
 		candidates = append(candidates, home)
@@ -110,7 +113,7 @@ func hooksCheck() check {
 	var best check
 	found := false
 	for _, path := range candidates {
-		present, err := hooks.InstalledStatus(path)
+		present, err := hooks.InstalledStatus(path, baseURL)
 		if err != nil || len(present) == 0 {
 			continue
 		}

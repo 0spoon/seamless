@@ -148,9 +148,15 @@ func InstalledEvents() []string {
 }
 
 // InstalledStatus reports which Seamless-managed hook events are present in the
-// settings.json at path. A missing or empty file yields an empty slice and no
-// error. The result is a subset of InstalledEvents(), in install order.
-func InstalledStatus(path string) ([]string, error) {
+// settings.json at path, using the same ownership test as Install: the managed
+// marker, or an unmarked entry that targets the hook's URL under baseURL or
+// runs `... hook <event>` via the seam CLI. The marker alone cannot be
+// trusted: Claude Code re-serializes settings.json through its own schema when
+// the owner edits config or permissions, dropping the seamless_managed key
+// while keeping the functional entries -- those still-firing hooks must count
+// as installed. A missing or empty file yields an empty slice and no error.
+// The result is a subset of InstalledEvents(), in install order.
+func InstalledStatus(path, baseURL string) ([]string, error) {
 	settings, _, err := loadSettings(path)
 	if err != nil {
 		return nil, err
@@ -158,7 +164,8 @@ func InstalledStatus(path string) ([]string, error) {
 	hooksObj := nestedObject(settings, "hooks")
 	var present []string
 	for _, hs := range seamlessHooks {
-		if findManaged(entryArray(hooksObj, hs.Event)) >= 0 {
+		desiredURL := strings.TrimRight(baseURL, "/") + hs.Endpoint
+		if len(seamlessIndices(entryArray(hooksObj, hs.Event), desiredURL, hs.CLIArg)) > 0 {
 			present = append(present, hs.Event)
 		}
 	}
