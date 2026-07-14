@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -582,39 +583,103 @@ func TestMCPAuthRejectsBadKey(t *testing.T) {
 	require.Contains(t, resultText(t, res), "unauthorized")
 }
 
+// seedAmbientCWD inserts an active ambient (cc/*) session with a Claude session id
+// and cwd, as the session-start hook would, and returns its id.
+func seedAmbientCWD(t *testing.T, ctx context.Context, db *sql.DB, name, claudeID, cwd string, updated time.Time) string {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: name, ProjectSlug: "demo", Status: core.SessionActive,
+		Ambient: true, ClaudeSessionID: claudeID, CWD: cwd,
+		CreatedAt: updated, UpdatedAt: updated,
+	}))
+	return id
+}
+
 // TestSessionStart_LinksClaudeSessionID checks that session_start stamps a new
-// explicit session with the Claude session id of the sole active ambient sharing its
-// cwd, so a graceful SessionEnd closes it too. Two same-cwd ambients make the link
-// ambiguous, so it is skipped and the idle reaper handles that session instead.
+// NAMED explicit session with the Claude session id of the sole active ambient
+// sharing its cwd, so a graceful SessionEnd closes it too. (An unnamed start adopts
+// the ambient instead -- see TestSessionStart_AdoptsAmbient.) Two same-cwd ambients
+// make the link ambiguous, so it is skipped and the idle reaper handles that
+// session instead.
 func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	ctx := context.Background()
 	url, db := newServer(t)
 	now := time.Now().UTC()
 
-	seedAmbient := func(name, claudeID string) {
-		id, err := core.NewID()
-		require.NoError(t, err)
-		require.NoError(t, store.CreateSession(ctx, db, core.Session{
-			ID: id, Name: name, ProjectSlug: "demo", Status: core.SessionActive,
-			Ambient: true, ClaudeSessionID: claudeID, CWD: "/work/demo",
-			CreatedAt: now, UpdatedAt: now,
-		}))
-	}
-
-	// Sole same-cwd ambient -> the new explicit session links to it.
-	seedAmbient("cc/claude99", "claude99-full")
+	// Sole same-cwd ambient -> the new named explicit session links to it.
+	seedAmbientCWD(t, ctx, db, "cc/claude99", "claude99-full", "/work/demo", now)
 	cli := dialClient(t, ctx, url, testKey)
-	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{
+		"name": "agent-a", "cwd": "/work/demo", "source": "startup",
+	})
 	expl, ok, err := store.SessionByID(ctx, db, start["session_id"].(string))
 	require.NoError(t, err)
 	require.True(t, ok)
+	require.Equal(t, "agent-a", expl.Name, "a named start creates its own session")
 	require.Equal(t, "claude99-full", expl.ClaudeSessionID, "linked to the sole same-cwd ambient")
 
 	// A second same-cwd ambient makes the link ambiguous -> no link.
-	seedAmbient("cc/claudeaa", "claudeaa-full")
+	seedAmbientCWD(t, ctx, db, "cc/claudeaa", "claudeaa-full", "/work/demo", now)
 	cli2 := dialClient(t, ctx, url, testKey)
-	start2 := callJSON(t, ctx, cli2, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	start2 := callJSON(t, ctx, cli2, "session_start", map[string]any{
+		"name": "agent-b", "cwd": "/work/demo", "source": "startup",
+	})
 	expl2, _, err := store.SessionByID(ctx, db, start2["session_id"].(string))
 	require.NoError(t, err)
 	require.Empty(t, expl2.ClaudeSessionID, "ambiguous same-cwd ambients -> no link")
+}
+
+// TestSessionStart_AdoptsAmbient checks that an unnamed session_start with exactly
+// one active ambient (cc/*) session sharing its cwd resumes that session -- binding
+// the connection to it, bumping its recency, returning its id/name -- instead of
+// creating a second sess/* row (the double-session).
+func TestSessionStart_AdoptsAmbient(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	stale := time.Now().UTC().Add(-time.Hour)
+
+	amb := seedAmbientCWD(t, ctx, db, "cc/claude99", "claude99-full", "/work/demo", stale)
+
+	cli := dialClient(t, ctx, url, testKey)
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	require.Equal(t, amb, start["session_id"], "adopted the ambient, no new session")
+	require.Equal(t, "cc/claude99", start["name"], "the adopted session keeps its ambient name")
+	require.Equal(t, true, start["resumed"])
+
+	all, err := store.ListSessions(ctx, db, "", time.Time{}, 0)
+	require.NoError(t, err)
+	require.Len(t, all, 1, "adoption must not create a second session row")
+
+	sess, ok, err := store.SessionByID(ctx, db, amb)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, sess.Status)
+	require.True(t, sess.UpdatedAt.After(stale), "adoption bumps recency for the idle reaper")
+
+	// The connection is bound to the adopted session: session_end targets it.
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done"})
+	require.Equal(t, amb, end["session_id"], "the binding targets the adopted ambient")
+	require.Equal(t, "completed", end["status"])
+}
+
+// TestSessionStart_NoAmbientCreatesFresh pins the fallback: with no same-cwd
+// ambient (the hook never ran, or another cwd), an unnamed session_start still
+// creates a fresh sess/* session.
+func TestSessionStart_NoAmbientCreatesFresh(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	seedAmbientCWD(t, ctx, db, "cc/elsewher", "elsewhere-full", "/work/other", time.Now().UTC())
+
+	cli := dialClient(t, ctx, url, testKey)
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	name, _ := start["name"].(string)
+	require.True(t, strings.HasPrefix(name, "sess/"), "no same-cwd ambient -> fresh sess/* session, got %q", name)
+
+	sess, ok, err := store.SessionByID(ctx, db, start["session_id"].(string))
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.False(t, sess.Ambient)
+	require.Empty(t, sess.ClaudeSessionID, "different-cwd ambient must not link")
 }
