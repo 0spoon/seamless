@@ -94,9 +94,9 @@ func TestSessionsPage_LiveIdleExpired(t *testing.T) {
 			CreatedAt: now.Add(-updatedAgo), UpdatedAt: now.Add(-updatedAgo),
 		}))
 	}
-	mk("cc/live", 2*time.Minute, core.SessionActive)                  // heartbeated -> live
+	mk("cc/live", 2*time.Minute, core.SessionActive)                   // heartbeated -> live
 	mk("sess/idle", core.SessionIdleTTL+time.Hour, core.SessionActive) // quiet -> idle
-	mk("sess/reaped", 3*time.Hour, core.SessionExpired)              // reaped -> expired
+	mk("sess/reaped", 3*time.Hour, core.SessionExpired)                // reaped -> expired
 
 	var list sessionsData
 	getJSON(t, mux, "/console/sessions?format=json", &list)
