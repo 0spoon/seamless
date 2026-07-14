@@ -6,13 +6,32 @@ package store
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
 	"path/filepath"
 
-	_ "modernc.org/sqlite"
+	sqlite "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
+
+// isUniqueViolation reports whether err is a SQLite UNIQUE (or PRIMARY KEY)
+// constraint failure, via the driver's typed error code rather than matching on
+// the message text (string-matching a driver error is banned by AGENTS.md: the
+// text is not part of the driver's contract).
+//
+// It lives here rather than next to any one caller because a UNIQUE column is
+// not a projects concept -- CreateProject and CreateSession both need it to turn
+// a constraint failure into their own sentinel.
+func isUniqueViolation(err error) bool {
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	code := se.Code()
+	return code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY
+}
 
 // Open opens (creating if needed) the SQLite database at dbPath, applies PRAGMAs
 // via the DSN so every pooled connection inherits them, runs migrations, and

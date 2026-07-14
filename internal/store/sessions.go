@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -13,8 +14,19 @@ import (
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
 	cwd, source, ambient, metadata, created_at, updated_at`
 
-// CreateSession inserts a session. The caller mints the ULID id and ensures the
-// name is unique (sessions.name is UNIQUE); a duplicate name is an error.
+// ErrSessionNameExists is returned by CreateSession when the name is already
+// taken (sessions.name is UNIQUE). It mirrors ErrSlugExists so a caller racing
+// to create a named session can tell "someone beat me to this name" (resume it)
+// apart from a real database failure, instead of having to match on error text.
+//
+// It reads any uniqueness failure on the insert as a name collision. The table's
+// other unique constraint is the id primary key, and callers mint a fresh ULID
+// per call, so a PK collision cannot happen without an id-generation bug -- the
+// same assumption ErrSlugExists makes.
+var ErrSessionNameExists = errors.New("store: session name already exists")
+
+// CreateSession inserts a session. The caller mints the ULID id; a duplicate
+// name returns ErrSessionNameExists.
 func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	meta, err := marshalMetadata(s.Metadata)
 	if err != nil {
@@ -29,6 +41,9 @@ func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 		s.CWD, s.Source, boolToInt(s.Ambient), meta,
 		core.FormatTime(s.CreatedAt), core.FormatTime(s.UpdatedAt))
 	if err != nil {
+		if isUniqueViolation(err) {
+			return fmt.Errorf("store.CreateSession: %w: %q", ErrSessionNameExists, s.Name)
+		}
 		return fmt.Errorf("store.CreateSession: %w", err)
 	}
 	return nil
