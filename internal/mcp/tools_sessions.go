@@ -57,6 +57,33 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		}
 	}
 
+	// Adopt the connection's ambient session: with no explicit name and exactly
+	// one active ambient (cc/*) session sharing the cwd, the SessionStart hook
+	// already created this agent's session -- resume that row instead of minting
+	// a second sess/* one. Zero or many candidates (no hook ran, or two agents in
+	// one cwd) fall through to a fresh session, the same unambiguous-or-fallback
+	// guard as linkedClaudeID, so adoption can never bind a sibling's session.
+	if name == "" {
+		if ambient, ok := s.soleAmbientByCWD(ctx, cwd); ok {
+			if project == "" {
+				project = ambient.ProjectSlug
+			}
+			ambient.ProjectSlug = project
+			ambient.UpdatedAt = time.Now().UTC()
+			if err := store.UpdateSession(ctx, s.cfg.DB, ambient); err != nil {
+				return errResult("session_start", err)
+			}
+			s.setBinding(ctx, ambient.ID, project)
+			s.record(ctx, core.EventSessionStarted, ambient.ID, project, "",
+				map[string]any{"resumed": true, "adopted": true})
+			briefing, _, _ := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
+			return jsonResult(map[string]any{
+				"session_id": ambient.ID, "name": ambient.Name,
+				"project": project, "resumed": true, "briefing": briefing,
+			})
+		}
+	}
+
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("session_start", err)
@@ -82,21 +109,34 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 }
 
 // linkedClaudeID resolves the Claude session id to stamp on a freshly created
-// explicit session, so a graceful SessionEnd closes it alongside its ambient rather
-// than leaving it for the idle reaper. It returns the claude_session_id of the SOLE
-// active ambient session sharing cwd -- the unambiguous single-agent case. Zero or
-// many candidates (no ambient yet, or two agents in one cwd) yield "" so the session
-// falls back to the reaper instead of risking a link to the wrong agent. Best-effort.
+// NAMED explicit session, so a graceful SessionEnd closes it alongside its ambient
+// rather than leaving it for the idle reaper. (An unnamed session_start with a sole
+// same-cwd ambient adopts that session outright and never gets here.) Ambiguity
+// yields "" so the session falls back to the reaper instead of risking a link to
+// the wrong agent. Best-effort.
 func (s *Server) linkedClaudeID(ctx context.Context, cwd string) string {
+	ambient, ok := s.soleAmbientByCWD(ctx, cwd)
+	if !ok {
+		return ""
+	}
+	return ambient.ClaudeSessionID
+}
+
+// soleAmbientByCWD returns the single active ambient (cc/*) session sharing cwd --
+// the unambiguous this-agent case. Zero or many candidates (no ambient yet, or two
+// agents in one cwd) report ok=false so callers fall back to a fresh session rather
+// than risking a cross-agent match. Best-effort: a lookup error logs and reports no
+// match.
+func (s *Server) soleAmbientByCWD(ctx context.Context, cwd string) (core.Session, bool) {
 	ambients, err := store.ActiveAmbientByCWD(ctx, s.cfg.DB, cwd)
 	if err != nil {
-		s.logger.Warn("session_start: ambient link lookup", "error", err)
-		return ""
+		s.logger.Warn("session_start: ambient lookup", "error", err)
+		return core.Session{}, false
 	}
 	if len(ambients) != 1 {
-		return ""
+		return core.Session{}, false
 	}
-	return ambients[0].ClaudeSessionID
+	return ambients[0], true
 }
 
 func sessionUpdateTool() mcp.Tool {
