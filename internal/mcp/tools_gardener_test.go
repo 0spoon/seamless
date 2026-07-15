@@ -81,6 +81,70 @@ func TestGardenerRequest_NoChatIsToolError(t *testing.T) {
 	require.True(t, res.IsError, "a gardener with no chat client returns a tool error")
 }
 
+// TestGardenerRequestScopeGuards covers the last tool argument that reached a
+// service without passing the scope guards. Each rejection below was a SUCCESS
+// before this: an unresolvable scope matched no rows, and "no active memories in
+// scope" is indistinguishable from a genuinely empty project.
+//
+// The guards run before the interpretation, so the fixture's chat-less gardener
+// is enough to exercise them: a rejection here means the scope was refused, and
+// reaching the no-chat error means it was accepted.
+func TestGardenerRequestScopeGuards(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+
+	// A well-formed slug that is not a project. validate.Name only checks slug
+	// SHAPE, so "typoed" passes every shared guard -- which is why the existence
+	// check lives in this handler, and why the acceptance criterion needs it.
+	isErr, txt := callErr(t, ctx, cli, "gardener_request", map[string]any{
+		"request": "merge the duplicates", "project": "typoed",
+	})
+	require.True(t, isErr, "an unknown project must not report an empty scope as success")
+	require.Contains(t, txt, `unknown project "typoed"`)
+
+	// The traversal guard reaches this tool now too.
+	isErr, txt = callErr(t, ctx, cli, "gardener_request", map[string]any{
+		"request": "merge the duplicates", "project": "../notes/_global",
+	})
+	require.True(t, isErr, "an unsafe project slug must be rejected")
+	require.Contains(t, txt, "invalid project")
+
+	// Every accepted scope gets PAST the guards and fails on the missing chat
+	// client instead -- which is what proves it was accepted rather than refused.
+	//
+	// "_global" is the sharpest of these: it is not a registered project, so it
+	// can only clear the existence check if normalizeProject mapped it to the
+	// global scope first. Unnormalized, it used to reach ActiveMemories("_global"),
+	// match nothing, and report success. "demo" clears it because session_start
+	// registers the project it resolves from the cwd (RegisterProjectForCWD
+	// backfills EnsureProject), which is what keeps this check from ever
+	// rejecting a real, session-reachable project.
+	for _, project := range []string{"global", "_global", "all", "demo"} {
+		isErr, txt := callErr(t, ctx, cli, "gardener_request", map[string]any{
+			"request": "merge the duplicates", "project": project,
+		})
+		require.True(t, isErr, "the chat-less fixture always errors")
+		require.NotContains(t, txt, "unknown project", "project %q must be accepted as a scope", project)
+		require.NotContains(t, txt, "invalid project", "project %q must be accepted as a scope", project)
+	}
+}
+
+// TestProjectCreateRejectsAllToken pins the reservation the widening token needs:
+// without it a project could take the name "all" and then be permanently
+// unreachable through gardener_request, which reads the token before it resolves
+// anything as a slug.
+func TestProjectCreateRejectsAllToken(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	isErr, txt := callErr(t, ctx, cli, "project_create", map[string]any{"name": "All", "slug": "all"})
+	require.True(t, isErr, `slug "all" must be reserved`)
+	require.Contains(t, txt, "reserved")
+}
+
 // TestGardenerSplit_NoChatIsToolError exercises the project-split tool on a
 // server whose gardener has no chat client: it must surface a tool error rather
 // than create any projects or proposals.

@@ -47,6 +47,13 @@ const (
 	// an empty project (which is easy to hit by accident). "_global" -- the
 	// on-disk directory name -- is accepted as a synonym.
 	globalNamespace = "global"
+
+	// allProjectsToken is the reserved project token that widens a read to every
+	// project on the machine. Only gardener_request interprets it, and only
+	// because scanning everything is a real reorganization workflow -- but one
+	// that must be asked for. It exists so that capability could survive being
+	// taken off the empty project, where it was the silent default.
+	allProjectsToken = "all"
 )
 
 // errNoSession is returned when a session-scoped tool is called with neither a

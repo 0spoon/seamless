@@ -62,11 +62,32 @@ type RequestResult struct {
 	SplitSource string `json:"splitSource,omitempty"`
 }
 
+// RequestScope selects the active memories an interpretation may reference.
+//
+// It is a struct rather than a scope string because that string was overloaded:
+// "" used to mean "every project on the machine", the inverse of every other
+// scope in the codebase, where an empty project slug IS the global scope. That
+// inversion made the two callers unable to route their project argument through
+// the shared scope guards -- normalizeProject maps "global" to "", which would
+// have turned a globals-only request into a whole-machine scan. Splitting the
+// meanings apart is what lets the boundary own its tokens and this package own
+// none.
+type RequestScope struct {
+	// Project scopes to one project's memories plus the globals. The zero value
+	// -- "" -- is globals only, matching store.ActiveMemories.
+	Project string
+	// AllProjects widens to every project, ignoring Project. It is only ever set
+	// from an explicit caller intent (gardener_request's project="all", the
+	// console's "All projects" option), never as a default: an unscoped request
+	// that silently read every project is what the input-boundary work exists to
+	// remove.
+	AllProjects bool
+}
+
 // Request interprets a single natural-language maintenance request against the
 // active memories in scope and creates PENDING proposals for review. It never
-// mutates a memory. projectScope: "" => all projects; "global" => globals only;
-// any slug => that project plus globals.
-func (s *Service) Request(ctx context.Context, text, projectScope string) (RequestResult, error) {
+// mutates a memory.
+func (s *Service) Request(ctx context.Context, text string, scope RequestScope) (RequestResult, error) {
 	if s.chat == nil {
 		return RequestResult{}, ErrNoChat
 	}
@@ -75,7 +96,7 @@ func (s *Service) Request(ctx context.Context, text, projectScope string) (Reque
 		return RequestResult{}, ErrEmptyRequest
 	}
 
-	candidates, err := s.requestCandidates(ctx, projectScope)
+	candidates, err := s.requestCandidates(ctx, scope)
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
 	}
@@ -189,21 +210,20 @@ func (s *Service) routeSplit(ctx context.Context, text string, sp *reqSplit, kno
 }
 
 // requestCandidates loads the active memories the interpreter may reference,
-// scoped and capped. "" => every project; "global" => globals only; a slug =>
-// that project plus globals.
-func (s *Service) requestCandidates(ctx context.Context, projectScope string) ([]core.Memory, error) {
+// scoped and capped.
+//
+// The "global" special-case this used to carry is gone: the caller normalizes
+// its own tokens, so an empty Project means globals here exactly as it does in
+// store.ActiveMemories, and nothing in this package knows what "global" spells.
+func (s *Service) requestCandidates(ctx context.Context, scope RequestScope) ([]core.Memory, error) {
 	var (
 		mems []core.Memory
 		err  error
 	)
-	if projectScope == "" {
+	if scope.AllProjects {
 		mems, err = store.AllActiveMemories(ctx, s.db)
 	} else {
-		scope := projectScope
-		if scope == "global" {
-			scope = "" // ActiveMemories("") returns only global memories
-		}
-		mems, err = store.ActiveMemories(ctx, s.db, scope)
+		mems, err = store.ActiveMemories(ctx, s.db, scope.Project)
 	}
 	if err != nil {
 		return nil, err

@@ -51,6 +51,12 @@ theme memories together") and turns it into the same reviewable proposals. It ca
 also **reproject** a memory filed under the wrong project — moving it to a
 different project that already exists.
 
+Its `project` argument scopes the memories it may reference: a project slug (that
+project plus globals), `global` for globals only, or `all` for every project on
+the machine. Omit it and the scope resolves the way every other read does — from
+the session — rather than quietly widening to everything. A slug that is not a
+project is an error, not an empty result.
+
 ## Splits are a different thing
 
 Moving a memory into a project that does not exist yet is not a reproject — it is

@@ -54,6 +54,12 @@ func (s *Server) handleProjectCreate(ctx context.Context, req mcp.CallToolReques
 	if normalizeProject(slug) == "" {
 		return errResult("project_create", fmt.Errorf("slug %q is reserved for the global namespace", slug))
 	}
+	// Without this, a project could take the name of the widening token and then
+	// be permanently unreachable through it -- gardener_request reads "all" before
+	// it resolves anything as a slug.
+	if slug == allProjectsToken {
+		return errResult("project_create", fmt.Errorf("slug %q is reserved: gardener_request reads it as every project", slug))
+	}
 	// The slug becomes a directory under the memory/ and notes/ trees; reject
 	// separators and ".." so no later write can escape its tree.
 	if err := validate.Name(slug); err != nil {
