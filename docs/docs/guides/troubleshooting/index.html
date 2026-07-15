@@ -330,17 +330,19 @@ session rather than opening a second one.</p>
 <p>The binding is keyed by the transport's <code>Mcp-Session-Id</code>, held in the daemon's
 memory. Any daemon restart drops it - see below.</p>
 <h2 id="a-seam-flag-did-nothing">A <code>seam</code> flag did nothing</h2>
-<p><strong>What is happening.</strong> Go's <code>flag</code> package stops parsing at the first positional
-argument, and everything after it is left as an argument rather than a flag.
-<code>seam</code> inherits this, and <strong>its own usage text prints the broken order</strong>.</p>
+<p><strong>This no longer happens.</strong> A trailing flag was once dropped in silence - <code>seam task release 01K7ABCD --force</code> took the normal holder-checked path and the
+override never happened, with no error and no warning. Both halves of that are
+gone:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
-</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force is silently ignored</span>
-</span></span></code></pre><p>There is no error and no warning: the second form takes the normal
-holder-checked path and the override never happens.</p>
-<p><strong>Fix.</strong> Flags before positionals, always. The <a href="../../reference/cli-seam/">seam CLI
-reference</a> lists the commands where this bites, written the
-way that works. Two exceptions: <code>seam recall</code> parses its own arguments so flags
-can go anywhere, and <code>seam task done|start|drop|reopen</code> take no flags at all.</p>
+</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force applies here too</span>
+</span></span></code></pre><p>The agent-loop commands and the whole tasks group parse flags and positionals in
+any order. <code>seam plan check</code> and <code>seam sessions</code> have not been converted yet, and
+<strong>reject</strong> a trailing flag with an error naming the order that works - they never
+ignore one. A typo'd flag (<code>--projct</code>) is an error everywhere rather than being
+absorbed into the positionals.</p>
+<p><strong>If a flag still looks ignored</strong>, it is not a flag-order problem. Check that you
+are running the <code>seam</code> you think you are (<code>seam doctor</code>), and see the <a href="../../reference/cli-seam/">seam CLI
+reference</a> for what each command accepts.</p>
 <h2 id="a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</h2>
 <p><strong>What is happening.</strong> The <code>briefing:</code> block has a fourth precedence layer above
 file and environment: a <strong>runtime override stored in the database</strong>, written by the

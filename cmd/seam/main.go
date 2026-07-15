@@ -52,6 +52,15 @@ func dispatch(ctx context.Context, e *env, argv []string) int {
 
 	c, _, migrated := lookup(commands(), argv)
 	if !migrated {
+		// A family whose members are in the table is not a legacy command. "task"
+		// alone is not dispatchable, but legacyDispatch would call it unknown and
+		// dump the whole page; name its subcommands instead. B7 deletes the branch
+		// along with legacyDispatch, and parse's own unknownCommand takes over --
+		// this is the bridge, not the fix.
+		if len(familyOf(commands(), argv[0])) > 0 {
+			fmt.Fprintln(e.stderr, "error:", unknownCommand(commands(), argv))
+			return 2
+		}
 		return legacyDispatch(e, argv)
 	}
 	p, err := parse(commands(), argv)
@@ -84,10 +93,6 @@ func legacyDispatch(e *env, argv []string) int {
 		err = runSessions(args)
 	case "usage":
 		err = runUsage(args)
-	case "ready":
-		err = runReady(args)
-	case "task":
-		err = runTask(args)
 	case "plan":
 		err = runPlan(args)
 	case "hook":

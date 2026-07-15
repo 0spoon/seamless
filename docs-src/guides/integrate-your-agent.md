@@ -182,17 +182,18 @@ seam recall "why is the console theme split"
 seam remember --name lease-steal-window --kind gotcha \
   --description "..." --body "..."        # or pipe the body on stdin
 seam ready                                # the actionable queue
-seam task claim --lease 1800 01K7ABCD     # note: flags BEFORE the id
+seam task claim --lease 1800 01K7ABCD     # flags on either side of the id
 ```
 
 Two things to know before you script it.
 
-**Outside the agent loop, flags go before positionals.** `prime`, `remember`,
-`recall`, and `capture` take flags on either side. Everywhere else Go's `flag`
-package stops parsing at the first non-flag argument, so `seam task release
-01K7ABCD --force` cannot bind `--force` - rather than ignore it, `seam` rejects
-the line. See the [seam CLI reference](/reference/cli-seam/) for the commands
-where this bites.
+**Flags go on either side of a positional.** `prime`, `remember`, `recall`,
+`capture`, and every tasks command parse flags and positionals in any order, so
+`seam task claim 01K7ABCD --lease 1800` and `seam task claim --lease 1800
+01K7ABCD` are the same line. A typo'd flag is an error rather than a silently
+different command. Two commands have not been converted yet - `seam plan check`
+and `seam sessions` - and reject a trailing flag instead of ignoring it. See the
+[seam CLI reference](/reference/cli-seam/).
 
 **There is no `seam session-end`.** The CLI covers start, write, search, and the
 queue, but findings are harvested by the SessionEnd hook or the `session_end` MCP

@@ -8,45 +8,54 @@ import (
 	"fmt"
 )
 
-func runReady(args []string) error {
-	fs := flag.NewFlagSet("ready", flag.ContinueOnError)
-	project := fs.String("project", "", "project slug (defaults to server binding)")
-	showBlocked := fs.Bool("blocked", false, "also list blocked tasks and their blockers")
-	plan := fs.String("plan", "", "show a plan's ready/blocked step tasks instead of the default queue")
-	if err := fs.Parse(args); err != nil {
-		return err
+var readyCmd = spec("ready", groupTasks, "list the actionable (unblocked) tasks",
+	noArgs(), bindReady, runReady)
+
+type readyOpts struct {
+	project     *string
+	showBlocked *bool
+	plan        *string
+}
+
+func bindReady(fs *flag.FlagSet) *readyOpts {
+	return &readyOpts{
+		project:     fs.String("project", "", "project `SLUG` (defaults to the server binding)"),
+		showBlocked: fs.Bool("blocked", false, "also list blocked tasks and their blockers"),
+		plan:        fs.String("plan", "", "show the ready/blocked step tasks of plan `SLUG` instead of the default queue"),
 	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+}
+
+func runReady(ctx context.Context, e *env, o *readyOpts, _ []string) error {
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
 
-	out, err := callTool(ctx, cli, "tasks_ready", map[string]any{"project": *project, "plan": *plan})
+	out, err := callTool(ctx, cli, "tasks_ready", map[string]any{"project": *o.project, "plan": *o.plan})
 	if err != nil {
 		return err
 	}
 	ready, _ := out["ready"].([]any)
 	if len(ready) == 0 {
-		fmt.Println("ready: (nothing actionable)")
+		fmt.Fprintln(e.stdout, "ready: (nothing actionable)")
 	} else {
-		fmt.Printf("ready (%d):\n", len(ready))
+		fmt.Fprintf(e.stdout, "ready (%d):\n", len(ready))
 		for _, t := range ready {
 			m, _ := t.(map[string]any)
-			fmt.Printf("  %s  %s\n", shortID(str(m["id"])), str(m["title"]))
+			fmt.Fprintf(e.stdout, "  %s  %s\n", shortID(str(m["id"])), str(m["title"]))
 		}
 	}
-	if *showBlocked {
+	if *o.showBlocked {
 		blocked, _ := out["blocked"].([]any)
-		fmt.Printf("blocked (%d):\n", len(blocked))
+		fmt.Fprintf(e.stdout, "blocked (%d):\n", len(blocked))
 		for _, t := range blocked {
 			m, _ := t.(map[string]any)
-			fmt.Printf("  %s  %s\n", shortID(str(m["id"])), str(m["title"]))
+			fmt.Fprintf(e.stdout, "  %s  %s\n", shortID(str(m["id"])), str(m["title"]))
 			if bl, ok := m["blockers"].([]any); ok {
 				for _, b := range bl {
 					bm, _ := b.(map[string]any)
-					fmt.Printf("      blocked by %s (%s)\n", str(bm["title"]), str(bm["status"]))
+					fmt.Fprintf(e.stdout, "      blocked by %s (%s)\n", str(bm["title"]), str(bm["status"]))
 				}
 			}
 		}

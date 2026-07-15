@@ -53,7 +53,6 @@ func TestHelpText_MigratedCommandsAreNotAlsoLegacy(t *testing.T) {
 func TestHelpText_KeepsLegacySections(t *testing.T) {
 	help := helpText()
 	for _, want := range []string{
-		"seam task claim [--lease SECS] <id>",
 		"seam plan approve <slug>",
 		"seam status",
 		"seam hook session-start|user-prompt-submit|session-end",

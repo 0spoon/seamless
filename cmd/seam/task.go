@@ -4,170 +4,218 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"strconv"
 	"strings"
 
-	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 )
 
-func runTask(args []string) error {
-	if len(args) == 0 {
-		return runTaskList(nil)
-	}
-	sub, rest := args[0], args[1:]
-	switch sub {
-	case "list":
-		return runTaskList(rest)
-	case "add":
-		return runTaskAdd(rest)
-	case "done", "start", "drop", "reopen":
-		return runTaskTransition(sub, rest)
-	case "claim", "heartbeat":
-		return runTaskClaim(sub, rest)
-	case "release":
-		return runTaskRelease(rest)
-	default:
-		return fmt.Errorf("unknown task subcommand %q (use: list, add, done, start, drop, reopen, claim, heartbeat, release)", sub)
+// --- task list ---
+
+var taskListCmd = spec("task list", groupTasks, "list tasks, newest first",
+	// `seam task list <id>` is a natural thing to type, and it used to list EVERY
+	// task: --id was registered but the bare positional was never checked, so it
+	// was dropped. The hint is per-spec because "unexpected argument" is the right
+	// generic frame and no amount of arity arithmetic knows to suggest --id.
+	noArgs().withHint("to load one task by id, use --id"),
+	bindTaskList, runTaskList)
+
+type taskListOpts struct {
+	id      *string
+	project *string
+	status  *string
+	plan    *string
+}
+
+func bindTaskList(fs *flag.FlagSet) *taskListOpts {
+	return &taskListOpts{
+		id:      fs.String("id", "", "load a single task by its globally-unique `ID` (ignores project/status/plan)"),
+		project: fs.String("project", "", "project `SLUG`"),
+		// Derived from the canonical set, not transcribed. The server validates the
+		// same slice (internal/mcp/tools_tasks.go), so the client now agrees at
+		// parse time instead of round-tripping to find out.
+		status: enumFlag(fs, "status", "", "filter by `STATUS`", enumOf(core.TaskStatuses)),
+		plan:   fs.String("plan", "", "list the step tasks of plan `SLUG` instead of the default (non-plan) tasks"),
 	}
 }
 
-func runTaskList(args []string) error {
-	fs := flag.NewFlagSet("task list", flag.ContinueOnError)
-	id := fs.String("id", "", "load a single task by its globally-unique id (ignores project/status/plan)")
-	project := fs.String("project", "", "project slug")
-	status := fs.String("status", "", "filter: open|in_progress|done|dropped")
-	plan := fs.String("plan", "", "list a plan's step tasks instead of the default (non-plan) tasks")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+func runTaskList(ctx context.Context, e *env, o *taskListOpts, _ []string) error {
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "tasks_list", map[string]any{"id": *id, "project": *project, "status": *status, "plan": *plan})
+	out, err := callTool(ctx, cli, "tasks_list", map[string]any{
+		"id": *o.id, "project": *o.project, "status": *o.status, "plan": *o.plan,
+	})
 	if err != nil {
 		return err
 	}
 	tasks, _ := out["tasks"].([]any)
 	if len(tasks) == 0 {
-		fmt.Println("(no tasks)")
+		fmt.Fprintln(e.stdout, "(no tasks)")
 		return nil
 	}
 	for _, t := range tasks {
 		m, _ := t.(map[string]any)
-		fmt.Printf("  %s  [%-11s] %s\n", shortID(str(m["id"])), str(m["status"]), str(m["title"]))
+		fmt.Fprintf(e.stdout, "  %s  [%-11s] %s\n", shortID(str(m["id"])), str(m["status"]), str(m["title"]))
 	}
 	return nil
 }
 
-func runTaskAdd(args []string) error {
-	fs := flag.NewFlagSet("task add", flag.ContinueOnError)
-	title := fs.String("title", "", "task title (required)")
-	body := fs.String("body", "", "optional details")
-	project := fs.String("project", "", "project slug")
-	depends := fs.String("depends", "", "comma-separated blocker task ids")
-	plan := fs.String("plan", "", "plan slug: compose this task as a step of a plan (plan:<slug>)")
-	if err := fs.Parse(args); err != nil {
-		return err
+// --- task add ---
+
+var taskAddCmd = spec("task add", groupTasks, "add a task to the ready queue",
+	noArgs().withHint("the title is a flag, not a positional: seam task add --title \"...\""),
+	bindTaskAdd, runTaskAdd)
+
+type taskAddOpts struct {
+	title   *string
+	body    *string
+	project *string
+	depends *string
+	plan    *string
+}
+
+func bindTaskAdd(fs *flag.FlagSet) *taskAddOpts {
+	return &taskAddOpts{
+		title:   fs.String("title", "", "task `TITLE` (required)"),
+		body:    fs.String("body", "", "optional details: `TEXT`"),
+		project: fs.String("project", "", "project `SLUG`"),
+		depends: fs.String("depends", "", "comma-separated blocker task `IDS`"),
+		plan:    fs.String("plan", "", "plan `SLUG`: compose this task as a step of a plan (plan:<slug>)"),
 	}
-	if strings.TrimSpace(*title) == "" {
+}
+
+func runTaskAdd(ctx context.Context, e *env, o *taskAddOpts, _ []string) error {
+	if strings.TrimSpace(*o.title) == "" {
 		return fmt.Errorf("--title is required")
 	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
 	out, err := callTool(ctx, cli, "tasks_add", map[string]any{
-		"title": *title, "body": *body, "project": *project, "depends_on": *depends, "plan": *plan,
+		"title": *o.title, "body": *o.body, "project": *o.project,
+		"depends_on": *o.depends, "plan": *o.plan,
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("added task %s %q\n", shortID(str(out["id"])), str(out["title"]))
+	fmt.Fprintf(e.stdout, "added task %s %q\n", shortID(str(out["id"])), str(out["title"]))
 	return nil
 }
 
-func runTaskTransition(sub string, args []string) error {
-	statusFor := map[string]string{"done": "done", "start": "in_progress", "drop": "dropped", "reopen": "open"}
-	if len(args) == 0 {
-		return fmt.Errorf("usage: seam task %s <id>", sub)
-	}
-	id := args[0]
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+// --- task done / start / drop / reopen ---
+
+// taskTransitionSpec builds the four one-word status changes from one declaration.
+// They differ only in the status they send, so each stays a real command with its
+// own name in the help rather than a hidden alias -- and the status comes from the
+// spec, replacing a map lookup that yielded "" for anything unrecognized.
+func taskTransitionSpec(sub, status, summary string) cmd {
+	return spec("task "+sub, groupTasks, summary, exactly(1, "id"), bindNoOpts,
+		func(ctx context.Context, e *env, _ *noOpts, pos []string) error {
+			return runTaskTransition(ctx, e, sub, status, pos[0])
+		})
+}
+
+var (
+	taskDoneCmd   = taskTransitionSpec("done", "done", "mark a task done (unblocks its dependents)")
+	taskStartCmd  = taskTransitionSpec("start", "in_progress", "mark a task in_progress")
+	taskDropCmd   = taskTransitionSpec("drop", "dropped", "drop a task (unblocks its dependents)")
+	taskReopenCmd = taskTransitionSpec("reopen", "open", "reopen a closed task")
+)
+
+func runTaskTransition(ctx context.Context, e *env, sub, status, id string) error {
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "tasks_update", map[string]any{"id": id, "status": statusFor[sub]})
+	out, err := callTool(ctx, cli, "tasks_update", map[string]any{"id": id, "status": status})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("task %s -> %s\n", shortID(id), str(out["status"]))
+	fmt.Fprintf(e.stdout, "task %s %s -> %s\n", shortID(id), sub, str(out["status"]))
 	return nil
 }
 
-// runTaskClaim backs both `task claim` and `task heartbeat`: both call tasks_claim,
-// which claims a ready task or, when the caller already holds it, refreshes the lease.
-func runTaskClaim(sub string, args []string) error {
-	usageMsg := fmt.Sprintf("usage: seam task %s [--lease <seconds>] <id> (flags must precede the id)", sub)
-	fs := flag.NewFlagSet("task "+sub, flag.ContinueOnError)
-	lease := fs.Int("lease", 0, "lease seconds before the claim lapses (default: server default of 900)")
-	if err := fs.Parse(args); err != nil {
-		return err
+// --- task claim / heartbeat ---
+
+// taskClaimSpec builds `task claim` and `task heartbeat` from one declaration:
+// they are the same tasks_claim call -- it claims a ready task, or refreshes the
+// lease when the caller already holds it -- and each gets its own name in the help.
+func taskClaimSpec(sub, summary string) cmd {
+	return spec("task "+sub, groupTasks, summary, exactly(1, "id"), bindTaskClaim,
+		func(ctx context.Context, e *env, o *taskClaimOpts, pos []string) error {
+			return runTaskClaim(ctx, e, o, sub, pos[0])
+		})
+}
+
+var (
+	taskClaimCmd     = taskClaimSpec("claim", "claim a ready task, leasing it for this session")
+	taskHeartbeatCmd = taskClaimSpec("heartbeat", "refresh the lease on a task you already hold")
+)
+
+type taskClaimOpts struct {
+	lease *int
+}
+
+func bindTaskClaim(fs *flag.FlagSet) *taskClaimOpts {
+	// posIntFlag, so --lease 0 and --lease -5 are parse errors rather than a
+	// silent fall-through to the server's 900s default. That is what makes the 0
+	// default unambiguous below: 0 can now only mean absent.
+	return &taskClaimOpts{
+		lease: posIntFlag(fs, "lease", 0, "lease `SECONDS` before the claim lapses (default: the server's 900)"),
 	}
-	if fs.NArg() == 0 {
-		return errors.New(usageMsg)
-	}
-	if err := requireFlagsFirst(fs, usageMsg); err != nil {
-		return err
-	}
-	id := fs.Arg(0)
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+}
+
+func runTaskClaim(ctx context.Context, e *env, o *taskClaimOpts, sub, id string) error {
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
 	call := map[string]any{"id": id}
-	if *lease > 0 {
-		call["lease_seconds"] = strconv.Itoa(*lease)
+	if *o.lease > 0 {
+		call["lease_seconds"] = *o.lease
 	}
 	out, err := callTool(ctx, cli, "tasks_claim", call)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("task %s %s -> %s (lease until %s)\n", shortID(id), sub, str(out["status"]), str(out["lease_expires_at"]))
+	fmt.Fprintf(e.stdout, "task %s %s -> %s (lease until %s)\n",
+		shortID(id), sub, str(out["status"]), str(out["lease_expires_at"]))
 	return nil
 }
 
-func runTaskRelease(args []string) error {
-	const usageMsg = "usage: seam task release [--force] <id> (flags must precede the id)"
-	fs := flag.NewFlagSet("task release", flag.ContinueOnError)
-	force := fs.Bool("force", false, "owner override: release the lock even if you do not hold it (routes through the console owner surface, not the agent claim path)")
-	if err := fs.Parse(args); err != nil {
-		return err
+// --- task release ---
+
+var taskReleaseCmd = spec("task release", groupTasks,
+	"release a task you hold, reopening it for another agent",
+	exactly(1, "id"), bindTaskRelease, runTaskRelease)
+
+type taskReleaseOpts struct {
+	force *bool
+}
+
+func bindTaskRelease(fs *flag.FlagSet) *taskReleaseOpts {
+	return &taskReleaseOpts{
+		force: fs.Bool("force", false,
+			"owner override: release the lock even if you do not hold it (routes through the console owner surface, not the agent claim path)"),
 	}
-	if fs.NArg() == 0 {
-		return errors.New(usageMsg)
-	}
-	if err := requireFlagsFirst(fs, usageMsg); err != nil {
-		return err
-	}
-	id := fs.Arg(0)
+}
+
+func runTaskRelease(ctx context.Context, e *env, o *taskReleaseOpts, pos []string) error {
+	id := pos[0]
 
 	// --force is the owner override: it force-releases any holder's claim via the
 	// console POST route (bearer-authenticated), which agents cannot reach. The
 	// plain path is holder-checked: tasks_release only releases a claim you hold.
-	if *force {
-		cfg, err := config.Load()
+	if *o.force {
+		cfg, err := e.loadConfig()
 		if err != nil {
 			return err
 		}
@@ -178,12 +226,11 @@ func runTaskRelease(args []string) error {
 		if err := consolePOST(cfg, "/console/tasks/"+id+"/release?format=json", &out); err != nil {
 			return err
 		}
-		fmt.Printf("task %s force-released -> %s\n", shortID(id), out.Status)
+		fmt.Fprintf(e.stdout, "task %s force-released -> %s\n", shortID(id), out.Status)
 		return nil
 	}
 
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
@@ -192,6 +239,6 @@ func runTaskRelease(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("task %s released -> %s\n", shortID(id), str(out["status"]))
+	fmt.Fprintf(e.stdout, "task %s released -> %s\n", shortID(id), str(out["status"]))
 	return nil
 }

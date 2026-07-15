@@ -16,12 +16,18 @@ host (`0.0.0.0`, `::`, or empty) mapped to loopback.
 
 ## Flags and positionals
 
-The agent-loop commands - `prime`, `remember`, `recall`, `capture` - take flags
-on either side of their positionals. These two lines are the same line:
+The agent-loop commands - `prime`, `remember`, `recall`, `capture` - and the
+whole tasks group take flags on either side of their positionals. These two lines
+are the same line:
 
 ```bash
 seam capture --project myproj https://example.com/page
 seam capture https://example.com/page --project myproj
+```
+
+```bash
+seam task release --force 01K7ABCD    # --force applies
+seam task release 01K7ABCD --force    # --force applies here too
 ```
 
 An unknown flag is rejected rather than absorbed into the positionals, so a typo
@@ -29,27 +35,18 @@ is an error instead of a silently different command: `seam recall foo --projct p
 reports `flag provided but not defined: -projct`. A positional that starts with
 `-` needs the `--` terminator (`seam recall -- -foo`).
 
-Everywhere else, Go's `flag` package stops parsing at the first positional, so a
-trailing flag cannot bind. Rather than ignore it, `seam` rejects the line:
+Two commands have not been converted yet - `seam plan check` and `seam sessions`.
+Go's `flag` package stops parsing at the first positional, so a trailing flag
+cannot bind there. Rather than ignore it, `seam` rejects the line:
 
 ```bash
-seam task release --force 01K7ABCD    # --force applies
-seam task release 01K7ABCD --force    # error: flags must precede the positional argument
+seam plan check --cwd ~/repos/myproj my-plan-slug   # works
+seam plan check my-plan-slug --cwd ~/repos/myproj   # error: flags must precede the positional argument
 ```
 
-The commands where this still bites, written the way that works:
-
-```bash
-seam task claim --lease 1800 01K7ABCD
-seam task heartbeat --lease 1800 01K7ABCD
-seam task release --force 01K7ABCD
-seam plan check --cwd ~/repos/myproj my-plan-slug
-```
-
-`seam task done|start|drop|reopen` parse no flags at all; the id is taken as the
-first argument directly. Commands that take only flags and no positionals
-(`ready`, `task list`, `task add`, `plan list`, `status`, `usage`, `doctor`) are
-unaffected either way.
+`seam task done|start|drop|reopen` parse no flags at all. Commands that take only
+flags and no positionals (`ready`, `task list`, `task add`, `plan list`, `status`,
+`usage`, `doctor`) are unaffected either way.
 
 ## Agent loop
 
