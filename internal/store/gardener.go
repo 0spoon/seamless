@@ -28,6 +28,14 @@ const (
 	ProposalAbandonPlan = "abandon_plan" // retag a never-approved captured plan plan-status:abandoned
 )
 
+// ProposalKinds lists every valid proposal kind. This is the canonical set:
+// derive the MCP schema's enum from it rather than transcribing, so a new kind
+// cannot reach the store while staying invisible at the boundary.
+var ProposalKinds = []string{
+	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
+	ProposalReproject, ProposalSplit, ProposalAbandonPlan,
+}
+
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the
 // kind-specific detail; every payload includes a stable "key" string the
 // gardener uses to avoid re-proposing the same thing on a later pass.

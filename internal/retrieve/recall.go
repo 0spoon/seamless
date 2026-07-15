@@ -45,6 +45,12 @@ type Hit struct {
 	Snippet string `json:"snippet,omitempty"`
 }
 
+// RecallScopes lists every valid RecallInput.Scope value. An empty Scope is a
+// valid Go-API default meaning "all" (scopeKinds treats it that way, and Search
+// shares it), so this set is for boundaries that can distinguish an absent key
+// from an explicitly wrong one -- it is not a precondition of RecallInput.
+var RecallScopes = []string{"all", "memories", "notes"}
+
 // RecallInput parameterizes a recall. Project is the session's bound scope;
 // results are limited to that project plus global items.
 type RecallInput struct {
