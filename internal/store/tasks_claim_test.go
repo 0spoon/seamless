@@ -216,6 +216,11 @@ func TestClaimTask_LiveClaimStaysUnstealable(t *testing.T) {
 	require.Equal(t, *held.Task.LeaseExpiresAt, *got.LeaseExpiresAt, "a failed claim must not extend the lease")
 }
 
+// TestClaimTask_BlockedTaskNotClaimable also pins the refusal's identity: a
+// blocked task is nobody's claim conflict. ClaimTask used to funnel every CAS
+// miss into ErrTaskClaimConflict quoting prior.ClaimedBy -- for a blocked task
+// that read `held by ""`, sending agents to force-release a task that had no
+// holder when the actual fix was finishing the blocker.
 func TestClaimTask_BlockedTaskNotClaimable(t *testing.T) {
 	db := newTaskDB(t)
 	a := addTask(t, db, "demo", "A", 1)
@@ -223,12 +228,41 @@ func TestClaimTask_BlockedTaskNotClaimable(t *testing.T) {
 	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
 
 	_, err := ClaimTask(context.Background(), db, b, "sessA", time.Minute, now)
-	require.ErrorIs(t, err, ErrTaskClaimConflict, "a blocked task is not claimable")
+	require.ErrorIs(t, err, ErrTaskBlocked, "a blocked task is blocked, not claimed")
+	require.NotErrorIs(t, err, ErrTaskClaimConflict, "no holder exists, so no claim conflict")
+	require.ErrorContains(t, err, a, "the refusal must name the blocker")
+	require.ErrorContains(t, err, "open", "and the blocker's status")
+
+	// The live repro (C3/B7): the blocker in_progress instead of open. Same
+	// refusal, same blocker named -- and still not "already claimed".
+	setStatus(t, db, a, core.TaskInProgress)
+	_, err = ClaimTask(context.Background(), db, b, "sessA", time.Minute, now)
+	require.ErrorIs(t, err, ErrTaskBlocked, "an in_progress blocker still blocks")
+	require.NotErrorIs(t, err, ErrTaskClaimConflict)
+	require.ErrorContains(t, err, a)
 
 	// Close the blocker; now B is claimable.
 	setStatus(t, db, a, core.TaskDone)
 	_, err = ClaimTask(context.Background(), db, b, "sessA", time.Minute, now.Add(time.Minute))
 	require.NoError(t, err)
+}
+
+// TestClaimTask_ClosedTaskNotClaimable: claiming a done/dropped task is the
+// third refusal ClaimTask used to misreport as "already claimed" -- nothing
+// holds a closed task, there is just nothing left to claim.
+func TestClaimTask_ClosedTaskNotClaimable(t *testing.T) {
+	db := newTaskDB(t)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	for _, status := range []core.TaskStatus{core.TaskDone, core.TaskDropped} {
+		id := addTask(t, db, "demo", "task "+string(status), 1)
+		setStatus(t, db, id, status)
+
+		_, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now)
+		require.ErrorIs(t, err, ErrTaskClosed, "a %s task is closed, not claimed", status)
+		require.NotErrorIs(t, err, ErrTaskClaimConflict)
+		require.ErrorContains(t, err, string(status))
+	}
 }
 
 // TestClaimTask_StaleClaimOnOpenTaskSelfHeals is the regression for legacy rows
@@ -277,7 +311,8 @@ func TestClaimTask_StaleClaimDoesNotBypassReadiness(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = ClaimTask(context.Background(), db, b, "sessA", time.Minute, now)
-	require.ErrorIs(t, err, ErrTaskClaimConflict, "a blocked task is not claimable, stale claim or not")
+	require.ErrorIs(t, err, ErrTaskBlocked, "a blocked task is not claimable, stale claim or not")
+	require.NotErrorIs(t, err, ErrTaskClaimConflict, "stale residue on a blocked row is still not a holder")
 }
 
 // TestMigrationOpenClaimsRepair: migration 007 clears claim fields on legacy

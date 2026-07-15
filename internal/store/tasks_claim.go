@@ -8,14 +8,28 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
 
-// ErrTaskClaimConflict is returned when a claim loses the compare-and-set race:
-// the task is already held by another live lease, or is not in a claimable state.
+// ErrTaskClaimConflict is returned when a claim loses the compare-and-set race
+// to another live lease (or, from Release/Update paths, when the caller is not
+// the holder). A refused claim whose cause is not a holder reports ErrTaskBlocked
+// or ErrTaskClosed instead -- those need a different fix (finish the blocker;
+// nothing, respectively), and reporting them as "already claimed" used to send
+// agents chasing a holder that did not exist ("held by \"\"").
 var ErrTaskClaimConflict = errors.New("task already claimed")
+
+// ErrTaskBlocked is returned when a claim targets an open task with an
+// unfinished dependency; the message names the blockers. No one holds the task
+// -- it becomes claimable the moment its blockers close.
+var ErrTaskBlocked = errors.New("task blocked")
+
+// ErrTaskClosed is returned when a claim targets a done/dropped task. No one
+// holds it either; there is simply nothing left to claim.
+var ErrTaskClosed = errors.New("task closed")
 
 // ClaimResult reports the outcome of a successful ClaimTask. Reclaimed is true
 // when a different session's lapsed lease was stolen; PriorHolder then names that
@@ -36,8 +50,11 @@ type ClaimResult struct {
 //	(c) in_progress but carrying no live claim -- nobody holds it, so it is up for
 //	    grabs (a steal from a dead holder, or a row that was never claimed).
 //
-// Otherwise it returns ErrTaskClaimConflict. Lease expiry is enforced lazily
-// here -- there is no background sweeper. sessionID must be non-empty.
+// Otherwise it returns an error naming the actual refusal: ErrTaskClaimConflict
+// when another live lease holds the task, ErrTaskBlocked when the task is open
+// with an unfinished dependency (naming the blockers), ErrTaskClosed when it is
+// done/dropped. Lease expiry is enforced lazily here -- there is no background
+// sweeper. sessionID must be non-empty.
 //
 // core.Task.ClaimLive is the single authority on whether a task is held, and
 // branches (b)+(c) are exactly its negation for an in_progress row: an empty
@@ -96,8 +113,8 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 		return ClaimResult{}, fmt.Errorf("store.ClaimTask: rows affected: %w", err)
 	}
 	if n == 0 {
-		return ClaimResult{Task: prior}, fmt.Errorf("store.ClaimTask: %w: task %q held by %q",
-			ErrTaskClaimConflict, id, prior.ClaimedBy)
+		cur, err := claimRefusal(ctx, db, id, now)
+		return ClaimResult{Task: cur}, err
 	}
 	updated, err := TaskByID(ctx, db, id)
 	if err != nil {
@@ -115,6 +132,51 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 		holder = prior.ClaimedBy
 	}
 	return ClaimResult{Task: updated, Reclaimed: reclaimed, PriorHolder: holder}, nil
+}
+
+// claimRefusal diagnoses a claim whose compare-and-set missed. The WHERE can
+// miss for three unrelated reasons -- held by a live lease, open but blocked by
+// an unfinished dependency, or already closed -- and the caller's next move is
+// different for each (wait for or steal the lease; finish the blockers; walk
+// away). It re-reads the row rather than trusting the pre-CAS snapshot: on the
+// contended path the snapshot is exactly what a racing winner just invalidated.
+// The diagnosis is advisory, not part of the CAS -- the claim itself already
+// failed atomically, and core.Task.ClaimLive stays the single held/not-held
+// authority here too.
+func claimRefusal(ctx context.Context, db *sql.DB, id string, now time.Time) (core.Task, error) {
+	cur, ok, err := taskByIDTx(ctx, db, id)
+	if err != nil {
+		return core.Task{}, err
+	}
+	if !ok {
+		return core.Task{}, fmt.Errorf("store.ClaimTask: %w: %q", ErrTaskNotFound, id)
+	}
+	switch {
+	case cur.ClaimLive(now):
+		return cur, fmt.Errorf("store.ClaimTask: %w: task %q held by %q",
+			ErrTaskClaimConflict, id, cur.ClaimedBy)
+	case cur.Status.Closed():
+		return cur, fmt.Errorf("store.ClaimTask: %w: task %q is %s",
+			ErrTaskClosed, id, cur.Status)
+	case cur.Status == core.TaskOpen:
+		blockers, err := openBlockersForTasks(ctx, db, []string{id})
+		if err != nil {
+			return core.Task{}, err
+		}
+		if bs := blockers[id]; len(bs) > 0 {
+			parts := make([]string, len(bs))
+			for i, b := range bs {
+				parts[i] = fmt.Sprintf("%s (%s)", b.ID, b.Status)
+			}
+			return cur, fmt.Errorf("store.ClaimTask: %w: task %q waits on %s",
+				ErrTaskBlocked, id, strings.Join(parts, ", "))
+		}
+	}
+	// The re-read no longer explains the miss: the row changed between the CAS
+	// and this look (a racer claimed and released, a blocker closed, ...). Report
+	// the transient loss rather than inventing a cause; a retry will resolve it.
+	return cur, fmt.Errorf("store.ClaimTask: %w: task %q changed during the claim; retry",
+		ErrTaskClaimConflict, id)
 }
 
 // ReleaseTask releases a task held by sessionID, reopening it (status back to
