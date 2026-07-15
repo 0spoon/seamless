@@ -30,10 +30,25 @@ const SettingProjectFamilies = "project_families"
 // not exist.
 var ErrFamilyNotFound = errors.New("store: project family not found")
 
+// settingsExecutor is the read+write subset shared by *sql.DB and *sql.Tx (the
+// mirror of rowQuerier in tasks.go), so a settings read-decode-mutate-write runs
+// identically on the pool or inside one transaction. The family mutators need it
+// to keep their read and their write-back in the same transaction.
+type settingsExecutor interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+}
+
 // ProjectFamilies decodes the project_families setting into a map. An unset or
 // blank value yields an empty map (not an error).
 func ProjectFamilies(ctx context.Context, db *sql.DB) (map[string][]string, error) {
-	raw, found, err := GetSetting(ctx, db, SettingProjectFamilies)
+	return projectFamiliesTx(ctx, db)
+}
+
+// projectFamiliesTx decodes the project_families setting via any executor, so a
+// mutator can read the map inside its own transaction.
+func projectFamiliesTx(ctx context.Context, q settingsExecutor) (map[string][]string, error) {
+	raw, found, err := getSettingTx(ctx, q, SettingProjectFamilies)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +96,16 @@ func SiblingProjects(ctx context.Context, db *sql.DB, project string) ([]string,
 // deduped so the stored value stays canonical; passing an empty map clears the
 // setting to "{}". It is the single writer the family CLI and mutators funnel
 // through, so the setting never accumulates blanks or duplicates.
+//
+// It reads nothing, so unlike the read-modify-write mutators below it needs no
+// transaction: last-write-wins is inherent to its "set the whole map" contract.
 func SetProjectFamilies(ctx context.Context, db *sql.DB, families map[string][]string) error {
+	return setProjectFamiliesTx(ctx, db, families)
+}
+
+// setProjectFamiliesTx canonicalizes and persists families via any executor, so a
+// mutator can write back inside the transaction it read under.
+func setProjectFamiliesTx(ctx context.Context, q settingsExecutor, families map[string][]string) error {
 	clean := make(map[string][]string, len(families))
 	for name, members := range families {
 		name = strings.TrimSpace(name)
@@ -96,27 +120,44 @@ func SetProjectFamilies(ctx context.Context, db *sql.DB, families map[string][]s
 	if err != nil {
 		return fmt.Errorf("store.SetProjectFamilies: %w", err)
 	}
-	return SetSetting(ctx, db, SettingProjectFamilies, string(b))
+	return setSettingTx(ctx, q, SettingProjectFamilies, string(b))
 }
 
 // AddFamilyMembers adds slugs to the named family, creating the family when it is
 // new, and persists the result. Existing members keep their order and duplicates
 // are ignored, so callers may re-add the same slugs idempotently. Returns the
 // family's resulting members.
+//
+// The read-decode-mutate-write runs inside one transaction (the AddRepoMapping
+// recipe): the pool is capped at a single connection (see Open), so the whole
+// mutation is serialized against concurrent mutators and two callers growing
+// different families at once can no longer clobber each other's family. If the
+// pool ever grows past one connection this needs BEGIN IMMEDIATE, since two
+// deferred transactions could still interleave read-then-write.
 func AddFamilyMembers(ctx context.Context, db *sql.DB, family string, slugs []string) ([]string, error) {
 	family = strings.TrimSpace(family)
 	if family == "" {
 		return nil, fmt.Errorf("store.AddFamilyMembers: family name is empty")
 	}
-	families, err := ProjectFamilies(ctx, db)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("store.AddFamilyMembers: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	families, err := projectFamiliesTx(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
-	families[family] = dedupeSlugs(append(families[family], slugs...))
-	if err := SetProjectFamilies(ctx, db, families); err != nil {
+	members := dedupeSlugs(append(families[family], slugs...))
+	families[family] = members
+	if err := setProjectFamiliesTx(ctx, tx, families); err != nil {
 		return nil, err
 	}
-	return families[family], nil
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("store.AddFamilyMembers: commit: %w", err)
+	}
+	return members, nil
 }
 
 // RemoveFamilyMembers removes slugs from the named family and persists the
@@ -124,35 +165,50 @@ func AddFamilyMembers(ctx context.Context, db *sql.DB, family string, slugs []st
 // members after the removal is dropped as well. Returns the family's resulting
 // members, empty when the family was removed. It errors with ErrFamilyNotFound
 // when the named family does not exist.
+//
+// Like AddFamilyMembers the read-decode-mutate-write runs inside one transaction,
+// serialized by the single-connection pool (see Open), so a concurrent removal
+// from another family survives instead of being clobbered by this write-back.
+// If the pool ever grows past one connection this needs BEGIN IMMEDIATE.
 func RemoveFamilyMembers(ctx context.Context, db *sql.DB, family string, slugs []string) ([]string, error) {
 	family = strings.TrimSpace(family)
 	if family == "" {
 		return nil, fmt.Errorf("store.RemoveFamilyMembers: family name is empty")
 	}
-	families, err := ProjectFamilies(ctx, db)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("store.RemoveFamilyMembers: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	families, err := projectFamiliesTx(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
 	if _, ok := families[family]; !ok {
+		// Rollback of the read-only transaction is harmless.
 		return nil, fmt.Errorf("store.RemoveFamilyMembers: %q: %w", family, ErrFamilyNotFound)
 	}
-	if len(slugs) == 0 {
-		delete(families, family)
-		return nil, SetProjectFamilies(ctx, db, families)
-	}
-	drop := make(map[string]bool, len(slugs))
-	for _, s := range slugs {
-		drop[strings.TrimSpace(s)] = true
-	}
 	var kept []string
-	for _, m := range families[family] {
-		if !drop[m] {
-			kept = append(kept, m)
+	if len(slugs) == 0 {
+		delete(families, family) // no slugs named: the whole family goes
+	} else {
+		drop := make(map[string]bool, len(slugs))
+		for _, s := range slugs {
+			drop[strings.TrimSpace(s)] = true
 		}
+		for _, m := range families[family] {
+			if !drop[m] {
+				kept = append(kept, m)
+			}
+		}
+		families[family] = kept // setProjectFamiliesTx drops it when kept is empty
 	}
-	families[family] = kept // SetProjectFamilies drops it when kept is empty
-	if err := SetProjectFamilies(ctx, db, families); err != nil {
+	if err := setProjectFamiliesTx(ctx, tx, families); err != nil {
 		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("store.RemoveFamilyMembers: commit: %w", err)
 	}
 	return kept, nil
 }
@@ -218,8 +274,13 @@ func ClearBriefingConfig(ctx context.Context, db *sql.DB) error {
 
 // GetSetting returns the value for a settings key. found is false when unset.
 func GetSetting(ctx context.Context, db *sql.DB, key string) (string, bool, error) {
+	return getSettingTx(ctx, db, key)
+}
+
+// getSettingTx reads a settings key via any executor. found is false when unset.
+func getSettingTx(ctx context.Context, q settingsExecutor, key string) (string, bool, error) {
 	var v string
-	err := db.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
+	err := q.QueryRowContext(ctx, `SELECT value FROM settings WHERE key = ?`, key).Scan(&v)
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}
@@ -231,7 +292,12 @@ func GetSetting(ctx context.Context, db *sql.DB, key string) (string, bool, erro
 
 // SetSetting upserts a settings key/value.
 func SetSetting(ctx context.Context, db *sql.DB, key, value string) error {
-	_, err := db.ExecContext(ctx, `
+	return setSettingTx(ctx, db, key, value)
+}
+
+// setSettingTx upserts a settings key/value via any executor.
+func setSettingTx(ctx context.Context, q settingsExecutor, key, value string) error {
+	_, err := q.ExecContext(ctx, `
 		INSERT INTO settings (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
 	if err != nil {
