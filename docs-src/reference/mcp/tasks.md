@@ -24,8 +24,11 @@ will both try to take it, and exactly one wins:
    lease (default 900 seconds). The loser gets an error naming the holder.
 2. Re-claiming a task you already hold **refreshes** the lease — that is the
    heartbeat for long work.
-3. An **expired** lease is reclaimable: an agent that crashed mid-task does not
-   strand it forever.
+3. An **expired** lease is reclaimable *by id* — but the task stays
+   `in_progress`, so `tasks_ready` does not show it. Only releasing it (by hand,
+   or by the gardener's session reaper expiring the dead holder's session) sets
+   the status back to `open` and returns it to the queue. See [the two
+   clocks](/concepts/tasks-and-plans/).
 4. `tasks_release`, closing the task (`tasks_update` to `done`/`dropped`), or
    `session_end` frees the claim.
 

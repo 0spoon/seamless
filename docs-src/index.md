@@ -42,4 +42,9 @@ proposes. Nothing rewrites your knowledge behind your back.
 | If you want to | Read |
 |---|---|
 | Get it running in ten minutes | [Quickstart](/quickstart/) |
+| Wire it into Claude Code | [Claude Code setup](/claude-code/) |
+| Understand the model before trusting it | [How Seamless works](/concepts/how-it-works/) |
+| Point a non-Claude-Code agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
+| Make a fleet divide work without colliding | [Coordinate multiple agents](/guides/coordinate-agents/) |
 | Look up a tool, key, or command | [Reference](/reference/) |
+| Fix something that is silently not working | [Troubleshooting](/guides/troubleshooting/) |

@@ -46,11 +46,39 @@ Four rules carry the whole model:
    corrupted second claim.
 2. **Re-claiming refreshes the lease.** That is the heartbeat for long work — an
    agent still working keeps its claim by claiming again.
-3. **An expired lease is reclaimable.** An agent that crashed mid-task does not
-   strand it forever, which is the failure mode that makes naive locks unusable
-   for processes that die.
+3. **An expired lease is reclaimable — but it does not re-queue itself.** See
+   the two clocks below. This is the subtlety most likely to bite you.
 4. **Closing frees it.** `tasks_release`, `tasks_update` to `done`/`dropped`, or
    `session_end` (which releases all of a session's claims).
+
+### The two clocks
+
+When an agent dies holding a task, two different timers matter, and conflating
+them is how a fleet quietly stalls.
+
+| | Lease expiry | Session reaper |
+|---|---|---|
+| Controls | `lease_seconds` (default 900) | `gardener.session_idle_minutes` (default 45) |
+| Enforced | Lazily, inside `tasks_claim` | By the gardener's periodic pass |
+| Effect | The task becomes **stealable by id** | The task's status returns to `open` |
+| Visible in `tasks_ready`? | **No** | **Yes** |
+
+`tasks_ready` returns tasks whose status is `open`. A task with an expired lease
+is still `in_progress`, so it is **invisible to the queue** — an agent polling
+`tasks_ready` will never see it, even though a `tasks_claim` on that specific id
+would now succeed.
+
+What actually puts it back in the queue is the reaper: it expires the dead
+agent's idle session and releases its claims, flipping the task back to `open`.
+
+Two consequences worth internalizing:
+
+- The lease is not the recovery mechanism; the reaper is. The lease only decides
+  whether a claim *can* be taken.
+- **With `gardener.enabled: false`, that second clock never runs**, and a crashed
+  agent's claims stay `in_progress` indefinitely. Nothing will surface them. If
+  you turn the gardener off, you have also turned off task recovery — release
+  them yourself with `tasks_release`, or from the console.
 
 A lease is **not a lock on the files**. Nothing physically stops an agent from
 working on a task it did not claim. It is a coordination signal between

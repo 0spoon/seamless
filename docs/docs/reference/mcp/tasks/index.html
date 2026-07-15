@@ -53,6 +53,10 @@
         
         <li><a href="../../../quickstart/">Quickstart</a></li>
         
+        <li><a href="../../../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../../../claude-code/">Claude Code setup</a></li>
+        
       </ul>
     </div>
     
@@ -74,6 +78,28 @@
         <li><a href="../../../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../../../concepts/gardener/">The gardener</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../../guides/">Guides</a>
+      
+      <ul>
+        
+        <li><a href="../../../guides/integrate-your-agent/">Integrate your agent</a></li>
+        
+        <li><a href="../../../guides/write-good-memories/">Write memories that get recalled</a></li>
+        
+        <li><a href="../../../guides/coordinate-agents/">Coordinate multiple agents</a></li>
+        
+        <li><a href="../../../guides/plan-mode/">Capture Claude Code plans</a></li>
+        
+        <li><a href="../../../guides/research-trials/">Run research trials</a></li>
+        
+        <li><a href="../../../guides/data/">Import, back up &amp; restore</a></li>
+        
+        <li><a href="../../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
     </div>
@@ -101,7 +127,25 @@
         
         <li><a href="../../../reference/hooks/">Claude Code hooks</a></li>
         
+        <li><a href="../../../reference/console/">Console</a></li>
+        
         <li><a href="../../../reference/storage/">Storage and file formats</a></li>
+        
+        <li><a href="../../../reference/glossary/">Glossary</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../../internals/">Internals</a>
+      
+      <ul>
+        
+        <li><a href="../../../internals/architecture/">Architecture</a></li>
+        
+        <li><a href="../../../internals/contributing/">Contributing</a></li>
+        
+        <li><a href="../../../internals/invariants/">Domain invariants</a></li>
         
       </ul>
     </div>
@@ -124,8 +168,11 @@ will both try to take it, and exactly one wins:</p>
 lease (default 900 seconds). The loser gets an error naming the holder.</li>
 <li>Re-claiming a task you already hold <strong>refreshes</strong> the lease — that is the
 heartbeat for long work.</li>
-<li>An <strong>expired</strong> lease is reclaimable: an agent that crashed mid-task does not
-strand it forever.</li>
+<li>An <strong>expired</strong> lease is reclaimable <em>by id</em> — but the task stays
+<code>in_progress</code>, so <code>tasks_ready</code> does not show it. Only releasing it (by hand,
+or by the gardener's session reaper expiring the dead holder's session) sets
+the status back to <code>open</code> and returns it to the queue. See <a href="../../../concepts/tasks-and-plans/">the two
+clocks</a>.</li>
 <li><code>tasks_release</code>, closing the task (<code>tasks_update</code> to <code>done</code>/<code>dropped</code>), or
 <code>session_end</code> frees the claim.</li>
 </ol>

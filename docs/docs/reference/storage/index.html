@@ -53,6 +53,10 @@
         
         <li><a href="../../quickstart/">Quickstart</a></li>
         
+        <li><a href="../../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../../claude-code/">Claude Code setup</a></li>
+        
       </ul>
     </div>
     
@@ -74,6 +78,28 @@
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../guides/">Guides</a>
+      
+      <ul>
+        
+        <li><a href="../../guides/integrate-your-agent/">Integrate your agent</a></li>
+        
+        <li><a href="../../guides/write-good-memories/">Write memories that get recalled</a></li>
+        
+        <li><a href="../../guides/coordinate-agents/">Coordinate multiple agents</a></li>
+        
+        <li><a href="../../guides/plan-mode/">Capture Claude Code plans</a></li>
+        
+        <li><a href="../../guides/research-trials/">Run research trials</a></li>
+        
+        <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
+        
+        <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
     </div>
@@ -101,7 +127,25 @@
         
         <li><a href="../../reference/hooks/">Claude Code hooks</a></li>
         
+        <li><a href="../../reference/console/">Console</a></li>
+        
         <li><a href="../../reference/storage/" class="current" aria-current="page">Storage and file formats</a></li>
+        
+        <li><a href="../../reference/glossary/">Glossary</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../internals/">Internals</a>
+      
+      <ul>
+        
+        <li><a href="../../internals/architecture/">Architecture</a></li>
+        
+        <li><a href="../../internals/contributing/">Contributing</a></li>
+        
+        <li><a href="../../internals/invariants/">Domain invariants</a></li>
         
       </ul>
     </div>
@@ -176,7 +220,7 @@ the project-less home. A memory's filename is its <code>name</code>; a note's is
 <tr>
 <td><code>description</code></td>
 <td>author</td>
-<td>One line, ≤150 chars. <strong>The only text shown in indexes</strong> — write it for an agent deciding whether to read the body.</td>
+<td>One line, ≤150 chars. <strong>The only text shown in indexes</strong> — write it for an agent deciding whether to read the body. Longer text is <strong>silently truncated</strong> by <code>memory_write</code>, not rejected, so write to the limit deliberately.</td>
 </tr>
 <tr>
 <td><code>project</code></td>
@@ -380,8 +424,8 @@ including <code>memory_write</code>'s <code>supersedes</code>.</li>
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../../reference/hooks/"><span class="dir">Previous</span><span class="t">Claude Code hooks</span></a>
-      
+      <a class="prev" href="../../reference/console/"><span class="dir">Previous</span><span class="t">Console</span></a>
+      <a class="next" href="../../reference/glossary/"><span class="dir">Next</span><span class="t">Glossary</span></a>
     </nav>
     
   </main>
