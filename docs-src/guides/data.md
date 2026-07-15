@@ -12,7 +12,7 @@ that is the feature. This page is mostly about knowing which half of
 ```text
 ~/.seamless/
   memory/{project|_global}/{name}.md   PRECIOUS -- source of truth
-  notes/{project|inbox}/{slug}.md      PRECIOUS -- source of truth
+  notes/{project|_global}/{slug}.md    PRECIOUS -- source of truth
   seam.db                              MIXED (see below)
 ```
 

@@ -342,7 +342,7 @@ Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 </span></span></span></code></pre><p><code>id</code>, <code>title</code>, <code>created</code>, and <code>updated</code> are always emitted. <code>slug</code>,
 <code>description</code>, <code>project</code>, <code>source_url</code>, and <code>tags</code> are omitted when empty.
 <code>source_url</code> is set when the note came from <code>capture_url</code>. Empty <code>project</code> means
-<code>notes/inbox/</code>. Unknown keys round-trip losslessly, same as memories.</p>
+<code>notes/_global/</code>. Unknown keys round-trip losslessly, same as memories.</p>
 <h2 id="what-lives-only-in-sqlite">What lives only in SQLite</h2>
 <p><code>seam.db</code> holds two categories of data with very different recovery stories.</p>
 <p><strong>Rebuildable mirrors of the files.</strong> Delete these and they come back:</p>

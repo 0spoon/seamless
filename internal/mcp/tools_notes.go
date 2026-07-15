@@ -22,7 +22,7 @@ func notesCreateTool() mcp.Tool {
 		mcp.WithString("title", mcp.Required(), mcp.Description("note title")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global (inbox) note. With no session and no explicit project the create is rejected as ambiguous.")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global note. With no session and no explicit project the create is rejected as ambiguous.")),
 		mcp.WithString("tags", mcp.Description("comma-separated tags")),
 		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=<slug> steps. Use it whenever this note is a plan's narrative or supporting context.")),
 		mcp.WithString("source_url", mcp.Description("optional source URL")),
@@ -96,7 +96,7 @@ func notesUpdateTool() mcp.Tool {
 		mcp.WithString("title", mcp.Description("new title")),
 		mcp.WithString("description", mcp.Description("new description")),
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
-		mcp.WithString("project", mcp.Description("new project slug (\"\" or \"global\" = inbox)")),
+		mcp.WithString("project", mcp.Description("new project slug (\"\" or \"global\" = global scope)")),
 		mcp.WithString("tags", mcp.Description("comma-separated tags, replacing all")),
 	)
 }

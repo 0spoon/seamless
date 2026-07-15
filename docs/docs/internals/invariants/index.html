@@ -245,7 +245,7 @@ in-place update, so fixing the target and retrying is safe.</p>
 <code>validateProjectArg</code>.</p>
 <p><code>validateProjectArg</code> is the path-traversal defense, and the reason it cannot be
 skipped is specific: a project slug becomes a directory under <code>memory/</code> and
-<code>notes/</code>. The data-dir boundary check alone does not catch <code>../notes/inbox</code> —
+<code>notes/</code>. The data-dir boundary check alone does not catch <code>../notes/_global</code> —
 that slug cleans to a path <em>inside</em> the data dir, just in the wrong tree, where
 one item can clobber another's files.</p>
 <h3 id="a-durable-create-uses-resolvewritescope-because-it-fails-closed">A durable create uses <code>resolveWriteScope</code>, because it fails closed</h3>

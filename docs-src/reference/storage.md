@@ -121,7 +121,7 @@ body markdown
 `id`, `title`, `created`, and `updated` are always emitted. `slug`,
 `description`, `project`, `source_url`, and `tags` are omitted when empty.
 `source_url` is set when the note came from `capture_url`. Empty `project` means
-`notes/inbox/`. Unknown keys round-trip losslessly, same as memories.
+`notes/_global/`. Unknown keys round-trip losslessly, same as memories.
 
 ## What lives only in SQLite
 

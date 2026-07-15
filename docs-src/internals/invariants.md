@@ -100,7 +100,7 @@ Route it through `resolveReadScope` (nothing to infer → global) or
 
 `validateProjectArg` is the path-traversal defense, and the reason it cannot be
 skipped is specific: a project slug becomes a directory under `memory/` and
-`notes/`. The data-dir boundary check alone does not catch `../notes/inbox` —
+`notes/`. The data-dir boundary check alone does not catch `../notes/_global` —
 that slug cleans to a path *inside* the data dir, just in the wrong tree, where
 one item can clobber another's files.
 

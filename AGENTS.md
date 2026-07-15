@@ -133,7 +133,7 @@ the pointer is where to look, not a substitute for reading it.
   (nothing to infer -> `errNoScope`). They apply `validateProjectArg`, which is
   the path-traversal defense: a project slug becomes a directory under
   `memory/`/`notes/`, and the data-dir boundary check alone does not catch
-  `../notes/inbox`.
+  `../notes/_global`.
 - A durable create uses `resolveWriteScope` -- it fails closed. Reaching for
   `resolveReadScope` on a write silently lands it in global.
 - Precedence: explicit `project` -> the bound session's project -> the sole

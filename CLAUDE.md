@@ -99,7 +99,7 @@ is the single live/idle threshold shared by the session reaper and the console.
 ~/.seamless/
   seam.db                          SQLite: indexes, sessions, tasks, trials, events, embeddings, ...
   memory/{project|_global}/{name}.md   one memory per file (source of truth)
-  notes/{project|inbox}/{slug}.md      work artifacts (source of truth)
+  notes/{project|_global}/{slug}.md    work artifacts (source of truth)
 ```
 
 Files are the source of truth for durable knowledge; the DB is the record for

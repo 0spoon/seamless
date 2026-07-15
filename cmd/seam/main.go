@@ -76,8 +76,8 @@ func usage() {
 Flags go BEFORE positional arguments, as written below. Go's flag package stops
 parsing at the first positional, so a trailing flag cannot take effect; rather
 than ignore it, seam rejects it ("seam capture URL --project p" is an error, not
-a note filed to inbox). The one exception is recall, which parses its own
-arguments and takes flags either side of the query.
+a note filed to the default scope). The one exception is recall, which parses its
+own arguments and takes flags either side of the query.
 
 agent loop:
   seam prime [--cwd DIR] [--name NAME]         start/resume a session, print the briefing
@@ -445,7 +445,8 @@ func runHook(args []string) error {
 // requireFlagsFirst rejects leftover arguments that look like flags. Go's flag
 // package stops parsing at the first positional, so "seam capture URL --project p"
 // binds the URL and drops --project on the floor -- the command then succeeds
-// while silently ignoring what the caller asked for (the note lands in inbox).
+// while silently ignoring what the caller asked for (the note lands in the
+// default scope, not the project the dropped flag named).
 // No positional this CLI takes can start with "-": URLs are scheme-validated,
 // task ids are Crockford base32, and plan slugs carry a "cc-plan-" prefix.
 func requireFlagsFirst(fs *flag.FlagSet, usage string) error {

@@ -97,7 +97,7 @@ type Note struct {
 	Title       string    `json:"title"`
 	Slug        string    `json:"slug"`
 	Description string    `json:"description"`
-	Project     string    `json:"project"` // empty = inbox
+	Project     string    `json:"project"` // empty = global
 	Body        string    `json:"body"`
 	FilePath    string    `json:"filePath"`
 	Tags        []string  `json:"tags"`

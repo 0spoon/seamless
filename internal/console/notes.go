@@ -25,7 +25,7 @@ type noteRow struct {
 }
 
 // noteProjectGroup is one project's notes, for the grouped browser (project ""
-// is the inbox).
+// is global).
 type noteProjectGroup struct {
 	Project string    `json:"project"`
 	Count   int       `json:"count"`
@@ -95,7 +95,7 @@ func noteMatches(row noteRow, q string) bool {
 	return false
 }
 
-// buildNoteGroups orders the project->notes map: the inbox ("") first, then
+// buildNoteGroups orders the project->notes map: global ("") first, then
 // projects alphabetically. Within a group notes keep ListNotes' newest-first
 // order for sort=recent, or sort by title for sort=name.
 func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProjectGroup {
@@ -105,7 +105,7 @@ func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProje
 	}
 	sort.Slice(projects, func(i, j int) bool {
 		if (projects[i] == "") != (projects[j] == "") {
-			return projects[i] == "" // inbox first
+			return projects[i] == "" // global first
 		}
 		return projects[i] < projects[j]
 	})
