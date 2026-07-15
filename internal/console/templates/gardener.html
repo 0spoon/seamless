@@ -175,6 +175,7 @@
 
 {{define "scripts"}}
 <script>
+window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress form state a refresh must not clobber
 (function () {
   function busy(formID, btnID, label) {
     var form = document.getElementById(formID);

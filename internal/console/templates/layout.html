@@ -46,6 +46,7 @@
   </main>
 </div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
+<div id="live-toast" role="status" aria-live="polite" hidden></div>
 <div id="cmdk" class="cmdk-overlay" hidden>
   <div class="cmdk" role="dialog" aria-modal="true" aria-label="Search">
     <div class="cmdk-input-row">
@@ -69,26 +70,133 @@
 (function () {
   // Static "live" pills (Overview, Projects topbar). #ix-live is excluded --
   // the Interactions screen drives it from its own feed=interactions stream.
-  var livePills = document.querySelectorAll('.topbar .live:not(#ix-live)');
-  function setLive(on) { livePills.forEach(function (p) { p.classList.toggle('off', !on); }); }
+  // Re-queried each call (not cached): the topbar lives inside .main, so a morph
+  // can replace these nodes and a held reference would go stale.
+  var connected = false;
+  function setLive(on) { document.querySelectorAll('.topbar .live:not(#ix-live)').forEach(function (p) { p.classList.toggle('off', !on); }); }
   if (!window.EventSource) { setLive(false); return; }
   var pill = document.getElementById('live-pill');
+  var toast = document.getElementById('live-toast');
   var dot = document.querySelector('.brand .dot');
-  var n = 0;
+
+  var n = 0;            // qualifying events since the last applied refresh
+  var pending = false;  // a refresh is due but was deferred to a safe moment
+  var busy = false;     // a fetch is in flight
+  var again = false;    // events arrived mid-fetch -> refresh once more after
+  var debounce = null;
+  var toastTimer = null;
+
+  // ---- morph: patch the live DOM toward a freshly-fetched copy in place, so
+  // scroll, focus, open <details> and the detail pane survive. Nodes keep their
+  // identity (matched by id where present) -> event listeners on unchanged nodes
+  // are never lost. Wrapped in a try/catch fallback so a morph edge case degrades
+  // to a plain content swap rather than a broken page -- never a full reload.
+  function imp(node) { return document.importNode(node, true); }
+  function keyOf(node) { return node.nodeType === 1 && node.id ? node.nodeName + '#' + node.id : null; }
+  function syncAttrs(from, to) {
+    var ta = to.attributes, fa = from.attributes, i, a;
+    for (i = 0; i < ta.length; i++) { a = ta[i]; if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value); }
+    for (i = fa.length - 1; i >= 0; i--) {
+      a = fa[i];
+      if (to.hasAttribute(a.name)) continue;
+      if (a.name === 'open' && from.nodeName === 'DETAILS') continue; // keep user-toggled disclosure
+      from.removeAttribute(a.name);
+    }
+  }
+  function morphNode(from, to) {
+    if (from.nodeType !== to.nodeType || (from.nodeType === 1 && from.nodeName !== to.nodeName)) { from.replaceWith(imp(to)); return; }
+    if (from.nodeType !== 1) { if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue; return; }
+    if (from.hasAttribute('data-live-skip')) return; // JS-owned island: leave it alone
+    syncAttrs(from, to);
+    morphChildren(from, to);
+  }
+  function morphChildren(from, to) {
+    var keyed = {}, o;
+    for (o = from.firstChild; o; o = o.nextSibling) { var k = keyOf(o); if (k) keyed[k] = o; }
+    var oldChild = from.firstChild, newChild = to.firstChild;
+    while (newChild) {
+      var nextNew = newChild.nextSibling, nk = keyOf(newChild);
+      if (nk && keyed[nk]) {
+        var match = keyed[nk]; delete keyed[nk];
+        if (match === oldChild) { oldChild = oldChild.nextSibling; }
+        else { from.insertBefore(match, oldChild); }
+        morphNode(match, newChild);
+      } else if (oldChild) {
+        var ok = keyOf(oldChild);
+        if (ok && keyed[ok]) { from.insertBefore(imp(newChild), oldChild); } // old node needed later
+        else if (!ok && oldChild.nodeType === newChild.nodeType && (oldChild.nodeType !== 1 || oldChild.nodeName === newChild.nodeName)) {
+          morphNode(oldChild, newChild); oldChild = oldChild.nextSibling;
+        } else { from.insertBefore(imp(newChild), oldChild); }
+      } else { from.appendChild(imp(newChild)); }
+      newChild = nextNew;
+    }
+    while (oldChild) { var nx = oldChild.nextSibling; from.removeChild(oldChild); oldChild = nx; }
+    for (var kk in keyed) { if (keyed[kk].parentNode === from) from.removeChild(keyed[kk]); }
+  }
+  function swap(cur, fresh) {
+    try { morphNode(cur, fresh); }
+    catch (e) { cur.replaceChildren.apply(cur, Array.prototype.slice.call(imp(fresh).childNodes)); }
+  }
+
+  function fieldFocused() { var a = document.activeElement; return !!(a && a.matches && a.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')); }
+  function selecting() { var s = window.getSelection && window.getSelection(); return !!(s && s.type === 'Range' && String(s).trim()); }
+  function paneOpen() { return !!document.querySelector('.list-detail-split.detail-open'); }
+  function cmdkOpen() { var c = document.getElementById('cmdk'); return !!(c && !c.hidden); }
+  // Safe to swap content out from under the user right now?
+  function safe() { return !document.hidden && !fieldFocused() && !selecting() && !paneOpen() && !cmdkOpen(); }
+
+  function showPill() { if (!pill) return; pill.textContent = n + ' update' + (n > 1 ? 's' : '') + ' · tap to refresh'; pill.hidden = false; }
+  function hidePill() { if (pill) pill.hidden = true; }
+  function flashToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg; toast.hidden = false;
+    toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show'); // restart the enter transition
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.classList.remove('show'); setTimeout(function () { toast.hidden = true; }, 300); }, 2600);
+  }
+
+  function apply() {
+    if (busy) { again = true; return; }
+    busy = true;
+    fetch(location.href, { credentials: 'same-origin', headers: { 'X-Seam-Live': '1' } })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+      .then(function (html) {
+        var doc = new DOMParser().parseFromString(html, 'text/html');
+        if (!doc.querySelector('.sidebar')) { location.reload(); return; } // session expired -> show login
+        var fMain = doc.querySelector('.main'), cMain = document.querySelector('.main');
+        if (!fMain || !cMain) { location.reload(); return; }
+        swap(cMain, fMain);
+        try { if (window.IX && window.IX.enhance) window.IX.enhance(cMain); } catch (e) {}
+        var fc = doc.querySelectorAll('nav.nav .count'), cc = document.querySelectorAll('nav.nav .count');
+        if (fc.length === cc.length) { for (var i = 0; i < cc.length; i++) if (cc[i].textContent !== fc[i].textContent) cc[i].textContent = fc[i].textContent; }
+        setLive(connected); // the morph may have swapped the topbar's live indicator
+        n = 0; pending = false; hidePill();
+        flashToast('Updated');
+      })
+      .catch(function () { pending = true; showPill(); }) // transient failure: leave the manual affordance
+      .finally(function () { busy = false; if (again) { again = false; schedule(); } });
+  }
+  function trigger() { if (safe()) apply(); else { pending = true; showPill(); } }
+  function schedule() { if (debounce) clearTimeout(debounce); debounce = setTimeout(trigger, 700); } // coalesce write bursts
+
   var es = new EventSource('/console/events');
-  es.onopen = function () { if (dot) dot.classList.add('on'); setLive(true); };
+  es.onopen = function () { connected = true; if (dot) dot.classList.add('on'); setLive(true); };
   es.onmessage = function (ev) {
     // Ignore transport-level rows (tool.call / hook.prompt): those live on the
-    // Interactions screen and would spam the "refresh" pill on every tool call.
+    // Interactions screen and would fire a refresh on every tool call.
     try { var k = JSON.parse(ev.data).kind; if (k === 'tool.call' || k === 'hook.prompt') return; } catch (e) {}
-    n++;
-    if (pill) {
-      pill.textContent = n + ' new event' + (n > 1 ? 's' : '') + ' · refresh';
-      pill.hidden = false;
-    }
+    // Pages that own their liveness (live feeds, forms, JS-built islands) opt out
+    // via window.SEAM_NO_LIVE_REFRESH. Checked lazily so per-page scripts (which
+    // run after this one) have set the flag by the time the first event lands.
+    if (window.SEAM_NO_LIVE_REFRESH) return;
+    n++; schedule();
   };
-  es.onerror = function () { if (dot) dot.classList.remove('on'); setLive(false); };
-  if (pill) pill.onclick = function () { location.reload(); };
+  es.onerror = function () { connected = false; if (dot) dot.classList.remove('on'); setLive(false); };
+
+  // Flush a deferred refresh once the moment turns safe again (tab refocus, pane
+  // or palette close, selection cleared). Cheap poll, decoupled from those events.
+  setInterval(function () { if (pending && !busy && safe()) apply(); }, 1500);
+  if (pill) pill.onclick = function () { apply(); };
 })();
 (function () {
   /* Whole-row navigation on screens WITHOUT a detail pane (overview,
@@ -115,11 +223,13 @@
      Back deselect, while in-pane wiki-links/chips drill into the same pane (each a
      new history entry, so Back steps back through them). Inert unless the page has
      the split. Fragments are same-origin auto-escaped html/template output. */
-  var split = document.querySelector('.list-detail-split');
-  var pane = document.getElementById('detail-pane');
-  if (!split || !pane) return;
-  var pbody = pane.querySelector('.detail-pane-body');
-  var openLink = pane.querySelector('.detail-open');
+  // Nodes are re-queried lazily (not cached at load): the SSE live client can
+  // morph the list in place and replace these nodes, so the controls must always
+  // resolve the current DOM rather than hold a reference that goes stale.
+  if (!document.querySelector('.list-detail-split') || !document.getElementById('detail-pane')) return;
+  function split() { return document.querySelector('.list-detail-split'); }
+  function pane() { return document.getElementById('detail-pane'); }
+  function pbody() { var p = pane(); return p ? p.querySelector('.detail-pane-body') : null; }
   var lastTrigger = null; // element to restore focus to on deselect
   var pushed = false;     // true once we own a browser-history entry for the pane
 
@@ -130,28 +240,34 @@
     return h ? h.getAttribute('data-href') : null;
   }
   function mark(href) {
-    split.querySelectorAll('.row-link.selected').forEach(function (r) {
+    var s = split();
+    if (!s) return;
+    s.querySelectorAll('.row-link.selected').forEach(function (r) {
       r.classList.remove('selected'); r.removeAttribute('aria-current');
     });
     if (!href) return;
-    split.querySelectorAll('.row-link[data-href]').forEach(function (r) {
+    s.querySelectorAll('.row-link[data-href]').forEach(function (r) {
       if (r.getAttribute('data-href') === href) { r.classList.add('selected'); r.setAttribute('aria-current', 'true'); }
     });
   }
   function load(href) {
     return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
-      pbody.innerHTML = html;
-      if (window.IX) window.IX.enhance(pbody);
+      var b = pbody(), p = pane(), s = split();
+      if (!b || !p || !s) return;
+      b.innerHTML = html;
+      if (window.IX) window.IX.enhance(b);
+      var openLink = p.querySelector('.detail-open');
       if (openLink) openLink.setAttribute('href', href);
-      pane.hidden = false;
-      split.classList.add('detail-open');
-      pbody.scrollTop = 0;
+      p.hidden = false;
+      s.classList.add('detail-open');
+      b.scrollTop = 0;
     }).catch(function () {});
   }
   function teardown() {
-    pane.hidden = true;
-    split.classList.remove('detail-open');
-    pbody.innerHTML = '';
+    var p = pane(), s = split(), b = pbody();
+    if (p) p.hidden = true;
+    if (s) s.classList.remove('detail-open');
+    if (b) b.innerHTML = '';
     mark(null);
     pushed = false;
     if (lastTrigger && typeof lastTrigger.focus === 'function') { try { lastTrigger.focus(); } catch (e) {} }
@@ -162,7 +278,7 @@
   // always push, so Back returns to the previous item.
   function open(href, drill) {
     if (!href) return;
-    var wasHidden = pane.hidden;
+    var wasHidden = pane().hidden;
     load(href);
     mark(href);
     var hash = '#peek=' + encodeURIComponent(href);
@@ -199,19 +315,20 @@
       return;
     }
     var row = e.target.closest ? e.target.closest('.row-link[data-href]') : null;
-    if (!row || !split.contains(row)) return;
+    var s = split();
+    if (!row || !s || !s.contains(row)) return;
     if (e.target.closest('a, button')) return;
     var sel = window.getSelection && window.getSelection();
     if (sel && sel.type === 'Range' && sel.toString()) return;
     location.href = row.getAttribute('data-href');
   });
 
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !pane.hidden) requestClose(); });
+  document.addEventListener('keydown', function (e) { var p = pane(); if (e.key === 'Escape' && p && !p.hidden) requestClose(); });
   // Browser Back/Forward: reflect the URL's #peek= state in the pane.
   window.addEventListener('popstate', function () {
     var mm = location.hash.match(/^#peek=(.+)$/);
     if (mm) { var hp = decodeURIComponent(mm[1]); pushed = true; load(hp); mark(hp); }
-    else if (!pane.hidden) { teardown(); }
+    else { var p = pane(); if (p && !p.hidden) teardown(); }
   });
   // Deep-link on load: adopt the current #peek without pushing (Back leaves the
   // page rather than reopening), matching a shared/bookmarked detail URL.

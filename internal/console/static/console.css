@@ -519,6 +519,33 @@ details > summary { font-family: var(--font-display); }
 #live-pill:hover { background: var(--brand-strong); }
 #live-pill[hidden] { display: none; }
 
+/* Transient "Updated" toast shown after an in-place refresh applies (the SSE
+   client morphs new data into the page rather than doing a full reload). */
+#live-toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 71; /* above #live-pill; the two are mutually exclusive in practice */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
+}
+#live-toast::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+#live-toast.show { opacity: 1; transform: translateY(0); }
+#live-toast[hidden] { display: none; }
+
 .crumb { color: var(--muted); font-size: var(--text-sm); margin-bottom: 6px; }
 .crumb a { color: var(--muted); }
 
