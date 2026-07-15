@@ -147,21 +147,6 @@ func (r *Recorder) Record(ctx context.Context, e core.Event) (string, error) {
 	return e.ID, nil
 }
 
-// Recent returns the most recent events, newest first. A non-positive limit
-// defaults to 50.
-func (r *Recorder) Recent(ctx context.Context, limit int) ([]core.Event, error) {
-	if limit <= 0 {
-		limit = 50
-	}
-	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, ts, kind, session_id, project_slug, item_id, payload
-		 FROM events ORDER BY ts DESC, id DESC LIMIT ?`, limit)
-	if err != nil {
-		return nil, fmt.Errorf("events.Recent: %w", err)
-	}
-	return scanEvents(rows)
-}
-
 // ByID returns a single event by its id. ok is false (with a nil error) when no
 // event has that id.
 func (r *Recorder) ByID(ctx context.Context, id string) (core.Event, bool, error) {

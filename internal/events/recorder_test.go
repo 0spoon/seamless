@@ -35,7 +35,7 @@ func TestRecord_StampsIDAndTimeAndPayload(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, id, 26, "id should be a stamped ULID")
 
-	got, err := r.Recent(ctx, 10)
+	got, err := r.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 
@@ -57,7 +57,7 @@ func TestRecord_PreservesExplicitIDAndTS(t *testing.T) {
 	_, err := r.Record(ctx, core.Event{ID: "01EXPLICITID0000000000000A", TS: ts, Kind: core.EventSessionStarted})
 	require.NoError(t, err)
 
-	got, err := r.Recent(ctx, 10)
+	got, err := r.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, "01EXPLICITID0000000000000A", got[0].ID)
@@ -85,7 +85,7 @@ func TestRecent_NewestFirstAndLimit(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	got, err := r.Recent(ctx, 3)
+	got, err := r.RecentExcluding(ctx, 3)
 	require.NoError(t, err)
 	require.Len(t, got, 3)
 	// Newest first: minute 4, 3, 2.
@@ -200,7 +200,7 @@ func TestRecentExcluding_OmitsGivenKinds(t *testing.T) {
 	require.Equal(t, core.EventSessionStarted, got[0].Kind)
 	require.Equal(t, core.EventMemoryWritten, got[1].Kind)
 
-	// No exclusions behaves like Recent.
+	// No exclusions returns every kind.
 	all, err := r.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, all, 4)
@@ -220,7 +220,7 @@ func TestPruneKinds_OnlyGivenKindsBeforeCutoff(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(2), n)
 
-	got, err := r.Recent(ctx, 10)
+	got, err := r.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	kinds := map[core.EventKind]bool{}
