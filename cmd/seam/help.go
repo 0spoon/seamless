@@ -1,0 +1,167 @@
+package main
+
+// Generated help.
+//
+// Every line here is rendered from a spec: the flags from the FlagSet its bind
+// registers, the positionals from its arity. That is the whole point. The
+// heredoc this replaces advertised a flag order the parser had never accepted,
+// for months, because help and parsing were two hand-maintained descriptions of
+// one contract. A synopsis that is derived cannot drift from what runs.
+//
+// legacySections is the other half of the bridge: the not-yet-migrated commands'
+// lines, kept verbatim and rendered under the same group headings, so help stays
+// whole while the table fills up one task at a time. B7 deletes it.
+
+import (
+	"flag"
+	"fmt"
+	"io"
+	"strings"
+)
+
+// helpColumn is where a command's summary starts. A synopsis at or past it takes
+// its summary on the next line instead of pushing the column out for every other
+// command: remember binds five flags, and one long spec should not reflow the
+// page.
+const helpColumn = 46
+
+// legacySections holds the help lines for commands still dispatched by
+// legacyDispatch, keyed by the group they render under. Each entry disappears as
+// its task migrates the commands in it; when the map empties, B7 removes it and
+// this comment with it.
+//
+// Verbatim from the usage heredoc, minus the agent loop (now table-rendered) and
+// minus its preamble: that preamble told the reader "seam capture URL --project p
+// is an error", which the permuting parser has just made false for exactly the
+// commands migrated so far. Rather than qualify it into something only half-true,
+// it is gone. The commands still guarded by requireFlagsFirst reject a trailing
+// flag with a message that explains itself and prints their usage, so nothing is
+// stranded by its absence.
+var legacySections = map[string]string{
+	groupTasks: `  seam ready [--project P] [--blocked] [--plan S]   actionable queue (+ blocked tasks)
+  seam task list [--project P] [--status S] [--plan S]   list tasks (--plan lists a plan's steps)
+  seam task add --title T [--body B] [--project P] [--depends id,id] [--plan S]
+  seam task done|start|drop|reopen <id>        transition a task
+  seam task claim [--lease SECS] <id>          atomically claim a task (lease-based)
+  seam task heartbeat [--lease SECS] <id>      refresh the lease on a task you hold
+  seam task release [--force] <id>             release a task you hold (--force: owner override, any holder)`,
+
+	groupPlans: `  seam plan list [--project P] [--window W]    list captured plans with status/iteration
+  seam plan show <slug>                        one plan: body, attached notes, tasks
+  seam plan check [--cwd DIR] <slug>           FRESH/STALE per note vs the repo's git history
+  seam plan approve <slug>                     escape hatch: flip to approved + create the task`,
+
+	groupObservability: `  seam status                                  server health + project count
+  seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
+  seam usage                                   activity roll-up
+  seam doctor                                  reachability + key + tool-count check`,
+
+	groupHooks: `  seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
+  seam hook post-tool-use|subagent-stop|permission-request  plan-mode capture (post-tool-use pre-filters locally)`,
+}
+
+// bindTo returns the FlagSet a spec's bind registers on, silenced. Callers only
+// read the registrations back out (VisitAll, PrintDefaults); nothing is parsed,
+// so a fresh set each call costs nothing and avoids flag's duplicate-registration
+// panic.
+func bindTo(c cmd) *flag.FlagSet {
+	fs := flag.NewFlagSet("seam "+c.name, flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.Usage = func() {}
+	c.bind(fs)
+	return fs
+}
+
+// synopsis renders a command's usage line from its own spec:
+//
+//	seam capture [--project SLUG] <url>
+//
+// Placeholders come free from flag's backquote convention -- UnquoteUsage returns
+// "" for a bool, so [--force] needs no type switch here. VisitAll walks flags in
+// lexical order, which is what makes the output stable.
+func synopsis(c cmd) string {
+	parts := []string{"seam", c.name}
+	bindTo(c).VisitAll(func(f *flag.Flag) {
+		name, _ := flag.UnquoteUsage(f)
+		s := "--" + f.Name
+		if name != "" {
+			s += " " + name
+		}
+		parts = append(parts, "["+s+"]")
+	})
+	if a := c.args.render(); a != "" {
+		parts = append(parts, a)
+	}
+	return strings.Join(parts, " ")
+}
+
+// commandLine renders one entry in the command list: its synopsis, then its
+// summary at helpColumn.
+func commandLine(c cmd) string {
+	s := "  " + synopsis(c)
+	if c.summary == "" {
+		return s
+	}
+	if len(s) >= helpColumn {
+		return s + "\n" + strings.Repeat(" ", helpColumn) + c.summary
+	}
+	return s + strings.Repeat(" ", helpColumn-len(s)) + c.summary
+}
+
+// helpText renders the full command list: every group in groupOrder, its migrated
+// commands rendered from the table, then whatever legacySections still holds for
+// it. A group with neither renders nothing, which is what lets the table and the
+// shrinking heredoc coexist without either knowing about the other.
+//
+// It is named helpText, not usage: usage.go carried a comment apologizing for the
+// collision between runUsage (the command) and usage() (this). The apology goes
+// with the name.
+func helpText() string {
+	var b strings.Builder
+	b.WriteString("seam -- Seamless CLI (talks to a running seamlessd)\n")
+	table := commands()
+	for _, g := range groupOrder {
+		var lines []string
+		for _, c := range table {
+			if c.group == g {
+				lines = append(lines, commandLine(c))
+			}
+		}
+		legacy := legacySections[g]
+		if len(lines) == 0 && legacy == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "\n%s:\n", g)
+		for _, l := range lines {
+			b.WriteString(l + "\n")
+		}
+		if legacy != "" {
+			b.WriteString(legacy + "\n")
+		}
+	}
+	return b.String()
+}
+
+// commandHelp renders one command's help, the answer to "seam capture --help".
+func commandHelp(c cmd) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "usage: %s\n", synopsis(c))
+	if c.summary != "" {
+		fmt.Fprintf(&b, "\n%s\n", c.summary)
+	}
+	fs := bindTo(c)
+	var flags strings.Builder
+	fs.SetOutput(&flags)
+	fs.PrintDefaults()
+	if flags.Len() > 0 {
+		b.WriteString("\nflags:\n")
+		b.WriteString(flags.String())
+	}
+	if c.long != "" {
+		fmt.Fprintf(&b, "\n%s\n", c.long)
+	}
+	if c.args.hint != "" {
+		fmt.Fprintf(&b, "\n(%s)\n", c.args.hint)
+	}
+	return b.String()
+}

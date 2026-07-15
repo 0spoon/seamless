@@ -4,34 +4,33 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 )
 
-func runCapture(args []string) error {
-	const usage = "usage: seam capture [--project P] URL (flags must precede the URL)"
-	fs := flag.NewFlagSet("capture", flag.ContinueOnError)
-	project := fs.String("project", "", "project slug (empty = the session's project; \"global\" files it globally)")
-	if err := fs.Parse(args); err != nil {
-		return err
+var captureCmd = spec("capture", groupAgentLoop, "capture a web page as a note",
+	exactly(1, "url"), bindCapture, runCapture)
+
+type captureOpts struct {
+	project *string
+}
+
+func bindCapture(fs *flag.FlagSet) *captureOpts {
+	return &captureOpts{
+		project: fs.String("project", "", "project `SLUG` (empty = the session's project; \"global\" files it globally)"),
 	}
-	if fs.NArg() == 0 {
-		return errors.New(usage)
-	}
-	if err := requireFlagsFirst(fs, usage); err != nil {
-		return err
-	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
+}
+
+func runCapture(ctx context.Context, e *env, o *captureOpts, pos []string) error {
+	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "capture_url", map[string]any{"url": fs.Arg(0), "project": *project})
+	out, err := callTool(ctx, cli, "capture_url", map[string]any{"url": pos[0], "project": *o.project})
 	if err != nil {
 		return err
 	}
-	fmt.Printf("captured %q -> note %s (%s)\n", str(out["title"]), shortID(str(out["id"])), str(out["slug"]))
+	fmt.Fprintf(e.stdout, "captured %q -> note %s (%s)\n", str(out["title"]), shortID(str(out["id"])), str(out["slug"]))
 	return nil
 }

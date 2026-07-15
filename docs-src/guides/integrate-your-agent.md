@@ -187,10 +187,12 @@ seam task claim --lease 1800 01K7ABCD     # note: flags BEFORE the id
 
 Two things to know before you script it.
 
-**Flags go before positionals.** Go's `flag` package stops parsing at the first
-non-flag argument, and `seam`'s own usage text prints the broken order. `seam task
-release 01K7ABCD --force` silently ignores `--force`. There is no warning. See
-the [seam CLI reference](/reference/cli-seam/) for the commands where this bites.
+**Outside the agent loop, flags go before positionals.** `prime`, `remember`,
+`recall`, and `capture` take flags on either side. Everywhere else Go's `flag`
+package stops parsing at the first non-flag argument, so `seam task release
+01K7ABCD --force` cannot bind `--force` — rather than ignore it, `seam` rejects
+the line. See the [seam CLI reference](/reference/cli-seam/) for the commands
+where this bites.
 
 **There is no `seam session-end`.** The CLI covers start, write, search, and the
 queue, but findings are harvested by the SessionEnd hook or the `session_end` MCP
