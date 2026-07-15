@@ -108,7 +108,11 @@ func TestGetSessionCoverage_Windowed(t *testing.T) {
 func TestSessionCoverageBuckets(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
-	now := time.Now().UTC()
+	// Buckets floor to the local hour, so now is pinned mid-hour in local time:
+	// a wall-clock now in the first minutes of an hour puts the sessions below
+	// into the previous bucket. Local, not UTC -- zones offset by :30/:45 shift
+	// where the hour boundary falls.
+	now := time.Date(2026, 7, 14, 12, 30, 0, 0, time.Local).UTC()
 
 	mk := func(id string, created time.Time) core.Session {
 		return core.Session{ID: id, Name: "cc/" + id, Status: core.SessionCompleted, CreatedAt: created, UpdatedAt: created}
