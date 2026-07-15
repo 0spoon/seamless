@@ -87,16 +87,8 @@ func legacyDispatch(e *env, argv []string) int {
 	name, args := argv[0], argv[1:]
 	var err error
 	switch name {
-	case "status":
-		err = runStatus(args)
-	case "sessions":
-		err = runSessions(args)
-	case "usage":
-		err = runUsage(args)
 	case "hook":
 		err = runHook(args)
-	case "doctor":
-		err = runDoctor(args)
 	default:
 		fmt.Fprintf(e.stderr, "unknown command %q\n\n", name)
 		fmt.Fprint(e.stderr, helpText())
@@ -177,58 +169,6 @@ func firstText(res *mcp.CallToolResult) string {
 		}
 	}
 	return ""
-}
-
-func runStatus(args []string) error {
-	fs := flag.NewFlagSet("status", flag.ContinueOnError)
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	base := mcpBase(cfg)
-
-	// Health via the unauthenticated /healthz endpoint.
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(base + "/healthz")
-	if err != nil {
-		return fmt.Errorf("server unreachable at %s: %w", base, err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-	var hz map[string]any
-	if derr := json.NewDecoder(resp.Body).Decode(&hz); derr != nil {
-		// Degrade like the mcp branch below rather than printing a blank status.
-		fmt.Printf("server:   (unreadable health response: %v)\n", derr)
-	} else {
-		fmt.Printf("server:   %s (%s)\n", str(hz["status"]), base)
-		fmt.Printf("version:  %s\n", str(hz["version"]))
-	}
-	fmt.Printf("data dir: %s\n", cfg.DataDir)
-
-	// Project count via MCP (also proves the static key works).
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
-	if err != nil {
-		fmt.Printf("projects: (mcp unavailable: %v)\n", err)
-		return nil
-	}
-	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "project_list", nil)
-	if err != nil {
-		fmt.Printf("projects: (error: %v)\n", err)
-		return nil
-	}
-	ps, _ := out["projects"].([]any)
-	slugs := make([]string, 0, len(ps))
-	for _, p := range ps {
-		if m, ok := p.(map[string]any); ok {
-			slugs = append(slugs, str(m["slug"]))
-		}
-	}
-	fmt.Printf("projects: %d [%s]\n", len(slugs), strings.Join(slugs, " "))
-	return nil
 }
 
 // runHook forwards a Claude Code hook payload (read from stdin) to the matching

@@ -19,6 +19,21 @@ import (
 // sessionSortKeys are the accepted ?sort values on the sessions list.
 var sessionSortKeys = []string{"recent", "name"}
 
+// sessionStatusNames widens core.SessionStatuses for an error message.
+//
+// Derived, not transcribed: the canonical set is the authority, and this exact
+// set is where transcription already drifted. seam's --status help said
+// "active|completed" while this handler has always accepted "expired" too, so a
+// list copied from the help text would have silently rejected a status that
+// works.
+func sessionStatusNames() []string {
+	out := make([]string, len(core.SessionStatuses))
+	for i, st := range core.SessionStatuses {
+		out[i] = string(st)
+	}
+	return out
+}
+
 // sessionRow is a display projection of a session for the list page. Live is true
 // only for an active session whose last activity is within core.SessionIdleTTL;
 // an active-but-stale (idle) row has Live false and is awaiting the reaper.
@@ -55,17 +70,21 @@ type sessionsData struct {
 
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	// An ABSENT status is a legitimate default (no filter, list everything). A
+	// status that is present but uninterpretable is not: the `default: filter = ""`
+	// this replaces silently listed EVERY session for `?status=bogus`, and the
+	// caller cannot tell that from a filter that matched everything. Note the
+	// inconsistency it leaves behind: a bad ?sort has always been a loud 400 twenty
+	// lines down.
 	filter := r.URL.Query().Get("status") // "", active, completed, expired
 	var statusFilter core.SessionStatus
-	switch filter {
-	case string(core.SessionActive):
-		statusFilter = core.SessionActive
-	case string(core.SessionCompleted):
-		statusFilter = core.SessionCompleted
-	case string(core.SessionExpired):
-		statusFilter = core.SessionExpired
-	default:
-		filter = ""
+	if filter != "" {
+		statusFilter = core.SessionStatus(filter)
+		if !statusFilter.Valid() {
+			s.badRequest(w, r, fmt.Sprintf("invalid status %q: valid values are %s",
+				filter, strings.Join(sessionStatusNames(), ", ")))
+			return
+		}
 	}
 	sortKey := r.URL.Query().Get("sort")
 	if sortKey == "" {

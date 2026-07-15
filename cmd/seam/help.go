@@ -26,23 +26,15 @@ import (
 const helpColumn = 46
 
 // legacySections holds the help lines for commands still dispatched by
-// legacyDispatch, keyed by the group they render under. Each entry disappears as
-// its task migrates the commands in it; when the map empties, B7 removes it and
-// this comment with it.
+// legacyDispatch, keyed by the group they render under. Only hook is left; B6
+// migrates it and B7 removes this map and the comment with it.
 //
-// Verbatim from the usage heredoc, minus the agent loop (now table-rendered) and
-// minus its preamble: that preamble told the reader "seam capture URL --project p
-// is an error", which the permuting parser has just made false for exactly the
-// commands migrated so far. Rather than qualify it into something only half-true,
-// it is gone. The commands still guarded by requireFlagsFirst reject a trailing
-// flag with a message that explains itself and prints their usage, so nothing is
-// stranded by its absence.
+// Verbatim from the usage heredoc, minus its preamble: that preamble told the
+// reader "seam capture URL --project p is an error", which the permuting parser
+// made false. Every command that preamble described is now in the table, and
+// hook's two lines describe events rather than flag order, so nothing is stranded
+// by its absence.
 var legacySections = map[string]string{
-	groupObservability: `  seam status                                  server health + project count
-  seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
-  seam usage                                   activity roll-up
-  seam doctor                                  reachability + key + tool-count check`,
-
 	groupHooks: `  seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
   seam hook post-tool-use|subagent-stop|permission-request  plan-mode capture (post-tool-use pre-filters locally)`,
 }

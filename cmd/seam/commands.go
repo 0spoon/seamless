@@ -54,5 +54,10 @@ func commands() []cmd {
 		planShowCmd,
 		planCheckCmd,
 		planApproveCmd,
+
+		statusCmd,
+		sessionsCmd,
+		usageCmd,
+		doctorCmd,
 	}
 }

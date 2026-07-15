@@ -16,9 +16,8 @@ host (`0.0.0.0`, `::`, or empty) mapped to loopback.
 
 ## Flags and positionals
 
-The agent-loop commands - `prime`, `remember`, `recall`, `capture` - and the
-whole tasks group take flags on either side of their positionals. These two lines
-are the same line:
+Every `seam` command takes flags on either side of its positionals. These two
+lines are the same line:
 
 ```bash
 seam capture --project myproj https://example.com/page
@@ -34,15 +33,6 @@ An unknown flag is rejected rather than absorbed into the positionals, so a typo
 is an error instead of a silently different command: `seam recall foo --projct p`
 reports `flag provided but not defined: -projct`. A positional that starts with
 `-` needs the `--` terminator (`seam recall -- -foo`).
-
-One command has not been converted yet - `seam sessions`. Go's `flag` package
-stops parsing at the first positional, so a trailing flag cannot bind there.
-Rather than ignore it, `seam` rejects the line:
-
-```bash
-seam sessions --status active 01K7ABCD   # works
-seam sessions 01K7ABCD --status active   # error: flags must precede the positional argument
-```
 
 `seam task done|start|drop|reopen` and `seam plan show|approve` parse no flags at
 all. Commands that take only flags and no positionals (`ready`, `task list`,
@@ -276,15 +266,19 @@ seam status
 
 Server health from the unauthenticated `/healthz` endpoint (status and version),
 the configured data directory, then the project count and slugs via
-`project_list` - which doubles as proof the static key works. If MCP is
-unavailable it still prints health and says so on the projects line rather than
-failing.
+`project_list` - which doubles as proof the static key works.
+
+**`seam status` exits non-zero if any check failed**, so it works as a scripted
+health gate. A partial answer is still printed - if MCP is unavailable it reports
+health and names the failure on the projects line - but the command fails rather
+than reporting success. The printed lines are its output; the exit code is its
+result. Exit 1 means the server had a problem, not that the command line did
+(that is exit 2).
 
 ### seam sessions {#seam_sessions}
 
 ```bash
-seam sessions [--status active|completed]
-seam sessions <id>
+seam sessions [--status STATUS] [<id>]
 ```
 
 With no positional, lists sessions with name (or short id), project, status, age,
@@ -292,6 +286,10 @@ and an ambient marker, under a total/active count. With an id, prints that
 session's detail: status, project, tool calls, memory writes and reads, the
 read-after-inject ratio, and findings when present. Both read the console's JSON
 endpoint.
+
+`--status` is `active`, `completed`, or `expired`; anything else is a parse
+error. The console rejects an unrecognized `?status=` too, so a direct URL cannot
+silently list everything either.
 
 ### seam usage {#seam_usage}
 

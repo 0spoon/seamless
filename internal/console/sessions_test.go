@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -117,6 +118,45 @@ func TestSessionsPage_LiveIdleExpired(t *testing.T) {
 	getJSON(t, mux, "/console/sessions?status=expired&format=json", &expired)
 	require.Len(t, expired.Sessions, 1)
 	require.Equal(t, "sess/reaped", expired.Sessions[0].Name)
+}
+
+// `?status=bogus` used to hit `default: filter = ""` and list EVERY session --
+// indistinguishable, to the caller, from a filter that matched everything. It is
+// the worst case of seam's `--status` bug: the client-side enum stops a typo from
+// a seam user, but nothing stopped a direct URL or another client.
+//
+// The inconsistency this closes lived inside one handler: a bad ?sort has always
+// been a loud 400.
+func TestSessionsPage_BadStatusIsRejected(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: "cc/one", Status: core.SessionActive,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+	}))
+
+	req := httptest.NewRequest(http.MethodGet, "/console/sessions?status=bogus&format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set("Accept", "application/json")
+	rr := do(mux, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code,
+		"a session that exists must not come back as a plausible answer to a bogus filter")
+	// Decoded, not the raw body: the message quotes the offending value, and JSON
+	// escapes those quotes.
+	var e struct {
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &e))
+	// Derived from core.SessionStatuses, so it names every real value -- including
+	// "expired", which seam's old --status help text omitted.
+	require.Equal(t, `invalid status "bogus": valid values are active, completed, expired`, e.Error)
+
+	// An ABSENT status stays a legitimate default: no filter, list everything.
+	var all sessionsData
+	getJSON(t, mux, "/console/sessions?format=json", &all)
+	require.Len(t, all.Sessions, 1)
 }
 
 func TestSessionsPage_WindowFilter(t *testing.T) {
