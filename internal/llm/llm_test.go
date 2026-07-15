@@ -141,3 +141,73 @@ func TestNewEmbedderRejects(t *testing.T) {
 	require.Error(t, err)
 	require.False(t, errors.Is(err, ErrUnavailable)) // config error, not a runtime one
 }
+
+// A base_url that cannot address a provider must fail at construction. Caught
+// here, the owner gets one loud startup warning naming the offending key and a
+// doctor check that says so; missed, every request fails as an opaque transport
+// error that recall cannot tell from a provider outage, silently disabling
+// semantic search. The bare-host and misspelled-scheme cases are the realistic
+// typos: both build a perfectly valid *http.Request and only fail inside Do.
+func TestValidateBaseURL(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+		ok   bool
+	}{
+		{"empty uses the default", "", true},
+		{"https", "https://api.openai.com/v1", true},
+		{"http loopback", "http://127.0.0.1:11434", true},
+		{"bare host, no scheme", "api.openai.com/v1", false},
+		{"no scheme at all", "notaurl", false},
+		{"misspelled scheme", "htp://x", false},
+		{"non-http scheme", "ftp://files.example.com", false},
+		{"scheme but no host", "://nope", false},
+		{"unparseable", "http://[::1", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateBaseURL("llm.openai.base_url", tc.raw)
+			if tc.ok {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			require.ErrorIs(t, err, ErrConfig)
+			require.Contains(t, err.Error(), "llm.openai.base_url", "the error must name the offending config key")
+		})
+	}
+}
+
+// Both factories are the single construction point for every provider, so the
+// base_url check belongs there next to the existing api_key check.
+func TestFactoriesRejectBadBaseURL(t *testing.T) {
+	openai := config.LLM{Provider: config.ProviderOpenAI, OpenAI: config.OpenAI{APIKey: "sk-x", BaseURL: "notaurl"}}
+	_, err := NewEmbedder(openai)
+	require.ErrorIs(t, err, ErrConfig)
+	_, err = NewChatClient(openai)
+	require.ErrorIs(t, err, ErrConfig)
+
+	ollama := config.LLM{Provider: config.ProviderOllama, Ollama: config.Ollama{BaseURL: "htp://x"}}
+	_, err = NewEmbedder(ollama)
+	require.ErrorIs(t, err, ErrConfig)
+	_, err = NewChatClient(ollama)
+	require.ErrorIs(t, err, ErrConfig)
+
+	anthropic := config.LLM{Provider: config.ProviderAnthropic, Anthropic: config.Anthropic{APIKey: "sk-a", BaseURL: "://nope"}}
+	_, err = NewChatClient(anthropic)
+	require.ErrorIs(t, err, ErrConfig)
+}
+
+// A request that cannot be built contacted no provider and no retry can help, so
+// it must not inherit ErrUnavailable -- recall degrades on that sentinel and
+// would bury the defect. Regression for F15; the factories reject this base_url
+// now, so the client is built directly to reach the guard underneath.
+func TestEmbedRequestBuildFailureIsConfigNotUnavailable(t *testing.T) {
+	_, err := NewOpenAIEmbedder("k", "http://[::1", "m", 0).Embed(context.Background(), "x")
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrConfig)
+	require.False(t, errors.Is(err, ErrUnavailable), "a request that was never sent is not an outage")
+
+	_, err = NewOllamaEmbedder("http://[::1", "m").Embed(context.Background(), "x")
+	require.ErrorIs(t, err, ErrConfig)
+	require.False(t, errors.Is(err, ErrUnavailable))
+}

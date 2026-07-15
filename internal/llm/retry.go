@@ -2,6 +2,7 @@ package llm
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -60,7 +61,10 @@ func (rc retryClient) do(ctx context.Context, newReq func() (*http.Request, erro
 	for attempt := 1; ; attempt++ {
 		req, err := newReq()
 		if err != nil {
-			return nil, fmt.Errorf("new request: %w", err)
+			// No provider was contacted and no retry can help: this is a local
+			// defect, so it must not be mistaken for an outage. Tagging it here
+			// keeps do's two failure modes distinguishable to every caller.
+			return nil, fmt.Errorf("%w: new request: %w", ErrConfig, err)
 		}
 		resp, err := rc.hc.Do(req)
 		if err != nil {
@@ -84,6 +88,19 @@ func (rc retryClient) do(ctx context.Context, newReq func() (*http.Request, erro
 			return nil, fmt.Errorf("status %d; retry canceled: %w", status, serr)
 		}
 	}
+}
+
+// doErr contextualizes a failure from do for the operation op, preserving the
+// distinction do drew between a request that could not be built (ErrConfig) and
+// a provider that could not be reached (ErrUnavailable). Callers degrade on
+// ErrUnavailable -- recall drops to lexical-only -- so blanket-tagging every
+// failure that way would let a misconfigured client disable semantic search
+// silently for the life of the daemon.
+func doErr(op string, err error) error {
+	if errors.Is(err, ErrConfig) {
+		return fmt.Errorf("%s: %w", op, err)
+	}
+	return fmt.Errorf("%s: %w: %w", op, ErrUnavailable, err)
 }
 
 // retryableStatus reports whether a response status is worth replaying:
