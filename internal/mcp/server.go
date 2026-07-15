@@ -94,7 +94,7 @@ func normalizeProject(explicit string) string {
 // validateProjectArg normalizes an explicit project argument and rejects slugs
 // unsafe as a path segment (separators, "..", null bytes). The project becomes a
 // directory under the memory/ and notes/ trees, and validate.PathWithinDir only
-// guards the data-dir boundary: an unvalidated slug like "../notes/inbox" cleans
+// guards the data-dir boundary: an unvalidated slug like "../notes/_global" cleans
 // to a path INSIDE the data dir but outside its tree, letting one item clobber
 // another tree's files. Every tool taking a project/slug argument resolves it
 // through here (via resolveReadScope/resolveWriteScope or directly).

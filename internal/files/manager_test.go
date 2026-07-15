@@ -61,6 +61,76 @@ func TestReconcileIndexesDiskFiles(t *testing.T) {
 	require.Equal(t, 3, indexedCount(t, db, "fts"))
 }
 
+// legacyInboxNote writes a valid note file straight into the pre-rename
+// notes/inbox directory, bypassing WriteNote (which now targets notes/_global).
+func legacyInboxNote(t *testing.T, m *Manager, id, slug string) {
+	t.Helper()
+	content, err := RenderNote(core.Note{
+		ID: id, Title: slug, Slug: slug, Body: "legacy body\n",
+		Created: time.Now().UTC(), Updated: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	dir := filepath.Join(m.store.DataDir(), notesTree, notesLegacyGlobalDir)
+	require.NoError(t, os.MkdirAll(dir, 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, slug+".md"), []byte(content), 0o644))
+}
+
+// A project-less note left in the legacy notes/inbox directory is relocated to
+// notes/_global, and the following Reconcile indexes it at the new path -- no
+// orphan, because a note's project comes from frontmatter, not the directory.
+func TestMigrateNotesInboxToGlobal(t *testing.T) {
+	m, db := newManager(t)
+	legacyInboxNote(t, m, "01K0NOTE00000000000000000A", "stray")
+
+	require.NoError(t, m.migrateNotesInboxToGlobal())
+
+	oldPath := filepath.Join(m.store.DataDir(), notesTree, notesLegacyGlobalDir)
+	require.NoDirExists(t, oldPath, "legacy notes/inbox must be gone after a clean move")
+	require.True(t, m.store.Exists("notes/_global/stray.md"))
+
+	require.NoError(t, m.Reconcile(context.Background()))
+	require.Equal(t, 1, indexedCount(t, db, "notes_index"))
+	var path string
+	require.NoError(t, db.QueryRow(`SELECT file_path FROM notes_index`).Scan(&path))
+	require.Equal(t, "notes/_global/stray.md", path, "index must point at the new path")
+}
+
+// Idempotent: with nothing in notes/inbox (the state after a first run or on a
+// fresh data dir) the migration does nothing and does not error.
+func TestMigrateNotesInboxToGlobal_NoLegacyDir(t *testing.T) {
+	m, _ := newManager(t)
+	require.NoError(t, m.migrateNotesInboxToGlobal())
+	require.NoError(t, m.migrateNotesInboxToGlobal())
+}
+
+// Both directories exist and a slug is present in each: the migration merges the
+// non-conflicting file, refuses to clobber the conflicting one, and keeps the
+// legacy directory because it did not fully drain.
+func TestMigrateNotesInboxToGlobal_MergeWithConflict(t *testing.T) {
+	m, _ := newManager(t)
+	// _global already owns "dup"; inbox holds "dup" (conflict) and "solo" (clean).
+	_, err := m.store.WriteNote(core.Note{
+		ID: "01K0NOTE0000000000000GLOBL", Title: "dup", Slug: "dup",
+		Body: "global copy\n", Created: time.Now().UTC(), Updated: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+	globalDup := filepath.Join(m.store.DataDir(), notesTree, notesGlobalDir, "dup.md")
+	before, err := os.ReadFile(globalDup)
+	require.NoError(t, err)
+	legacyInboxNote(t, m, "01K0NOTE00000000000000DUPB", "dup")
+	legacyInboxNote(t, m, "01K0NOTE0000000000000SOLOA", "solo")
+
+	require.NoError(t, m.migrateNotesInboxToGlobal())
+
+	require.True(t, m.store.Exists("notes/_global/solo.md"), "the clean file moves")
+	after, err := os.ReadFile(globalDup)
+	require.NoError(t, err)
+	require.Equal(t, before, after, "the conflicting global note is not clobbered")
+	require.True(t, m.store.Exists("notes/inbox/dup.md"), "the conflicting legacy file is left in place")
+	require.DirExists(t, filepath.Join(m.store.DataDir(), notesTree, notesLegacyGlobalDir),
+		"a directory that did not fully drain is kept, not silently removed")
+}
+
 // A second Reconcile with no disk changes must be a no-op (content-hash skip).
 func TestReconcileIsIdempotent(t *testing.T) {
 	m, db := newManager(t)

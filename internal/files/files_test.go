@@ -19,7 +19,7 @@ func TestMemoryRelPath(t *testing.T) {
 
 func TestNoteRelPath(t *testing.T) {
 	require.Equal(t, "notes/seam/landscape-scan.md", NoteRelPath("seam", "landscape-scan"))
-	require.Equal(t, "notes/inbox/stray-thought.md", NoteRelPath("", "stray-thought"))
+	require.Equal(t, "notes/_global/stray-thought.md", NoteRelPath("", "stray-thought"))
 }
 
 func sampleMemory() core.Memory {
@@ -171,7 +171,7 @@ func TestNoteRoundTrip(t *testing.T) {
 
 // A file with no frontmatter parses as an all-body note (import normalizes it).
 func TestParseNoteNoFrontmatter(t *testing.T) {
-	got, err := ParseNote("just a plain body\nno frontmatter\n", "notes/inbox/plain.md")
+	got, err := ParseNote("just a plain body\nno frontmatter\n", "notes/_global/plain.md")
 	require.NoError(t, err)
 	require.Empty(t, got.ID)
 	require.Equal(t, "just a plain body\nno frontmatter\n", got.Body)
@@ -210,14 +210,14 @@ func TestStoreWriteNote(t *testing.T) {
 		ID:      "01K0NOTE00000000000000000A",
 		Title:   "Stray thought",
 		Slug:    "stray-thought",
-		Body:    "no project => inbox\n",
+		Body:    "no project => global\n",
 		Created: time.Date(2026, 7, 9, 2, 0, 0, 0, time.UTC),
 		Updated: time.Date(2026, 7, 9, 2, 0, 0, 0, time.UTC),
 	}
 	written, err := s.WriteNote(n)
 	require.NoError(t, err)
-	require.Equal(t, "notes/inbox/stray-thought.md", written.FilePath)
-	require.True(t, s.Exists("notes/inbox/stray-thought.md"))
+	require.Equal(t, "notes/_global/stray-thought.md", written.FilePath)
+	require.True(t, s.Exists("notes/_global/stray-thought.md"))
 }
 
 // Unsafe names must be rejected before any filesystem write.

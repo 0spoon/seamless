@@ -19,7 +19,7 @@ func captureURLTool() mcp.Tool {
 	return mcp.NewTool("capture_url",
 		mcp.WithDescription("Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and save its readable content as a note. Returns the new note's id."),
 		mcp.WithString("url", mcp.Required(), mcp.Description("http(s) URL to capture")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to file it in the inbox.")),
+		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to file it globally.")),
 	)
 }
 

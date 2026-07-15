@@ -26,7 +26,7 @@
   <nav class="mem-index">
     <span class="hd">Projects</span>
     {{range .Groups}}
-    <a href="#notes-{{if .Project}}{{.Project}}{{else}}inbox{{end}}">{{if .Project}}{{.Project}}{{else}}inbox{{end}} <span class="n">{{.Count}}</span></a>
+    <a href="#notes-{{if .Project}}{{.Project}}{{else}}global{{end}}">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="n">{{.Count}}</span></a>
     {{end}}
   </nav>
 
@@ -35,7 +35,7 @@
       <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Groups}}
-        <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}inbox{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}inbox{{end}} <span class="count">{{.Count}}</span></td></tr>
+        <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}global{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></td></tr>
         {{range .Notes}}
         <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
           <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{copyBtn .Title}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>

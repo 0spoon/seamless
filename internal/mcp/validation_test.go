@@ -14,7 +14,7 @@ import (
 // TestProjectArgRejectsUnsafeSlugs is the regression test for the project-slug
 // traversal hole: MemoryRelPath/NoteRelPath join the project into the file path,
 // and PathWithinDir only guards the data-dir boundary, so an unvalidated slug
-// like "../notes/inbox" cleaned to a path INSIDE the data dir but outside its
+// like "../notes/_global" cleaned to a path INSIDE the data dir but outside its
 // tree -- letting a memory_write clobber a note file (and vice versa). Every
 // tool that accepts a project (or project slug) argument must reject unsafe
 // values before any resolution or write.
@@ -35,7 +35,7 @@ func TestProjectArgRejectsUnsafeSlugs(t *testing.T) {
 	}{
 		{"memory_write", map[string]any{
 			"name": "x", "kind": "reference", "description": "d", "body": "b",
-			"project": "../notes/inbox",
+			"project": "../notes/_global",
 		}},
 		{"notes_create", map[string]any{
 			"title": "t", "body": "b", "project": "../memory/_global",

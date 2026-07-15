@@ -47,9 +47,17 @@ const (
 	memoryTree      = "memory"
 	notesTree       = "notes"
 	memoryGlobalDir = "_global" // memory/{_global} holds project-less memories
-	notesInboxDir   = "inbox"   // notes/{inbox} holds project-less notes
+	notesGlobalDir  = "_global" // notes/{_global} holds project-less notes
 	fileMode        = 0o644
 )
+
+// notesLegacyGlobalDir is what notesGlobalDir used to be called. Project-less
+// notes are "global" everywhere an agent can see -- notes_create project=global,
+// capture_url project=global, memory/_global -- but they landed in notes/inbox,
+// so the one name nobody said out loud was the one on disk. That drift is why
+// seam capture's own --project help claimed "empty = inbox" when empty actually
+// means the session's project. Kept only for the one-time move in Start.
+const notesLegacyGlobalDir = "inbox"
 
 // ContentHash returns the SHA-256 hex digest of a file's full content. It is the
 // change-detection key the reconciler compares against the index.
@@ -69,11 +77,11 @@ func MemoryRelPath(project, name string) string {
 }
 
 // NoteRelPath returns the data-dir-relative path of a note file:
-// notes/{project|inbox}/{slug}.md.
+// notes/{project|_global}/{slug}.md.
 func NoteRelPath(project, slug string) string {
 	dir := project
 	if dir == "" {
-		dir = notesInboxDir
+		dir = notesGlobalDir
 	}
 	return filepath.ToSlash(filepath.Join(notesTree, dir, slug+".md"))
 }

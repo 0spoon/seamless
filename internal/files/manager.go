@@ -96,6 +96,13 @@ func (m *Manager) Indexer() *Indexer { return m.indexer }
 // against disk, and launches the event loop in a background goroutine. The loop
 // stops when ctx is cancelled or Close is called.
 func (m *Manager) Start(ctx context.Context) error {
+	// Before anything watches or indexes: relocate legacy project-less notes.
+	// Runs ahead of watchTree so the moves raise no watcher events, and ahead of
+	// Reconcile so the walk sees the final layout and re-points each index row by
+	// note id (project comes from frontmatter, not the directory).
+	if err := m.migrateNotesInboxToGlobal(); err != nil {
+		return fmt.Errorf("files.Start: %w", err)
+	}
 	for _, tree := range []string{memoryTree, notesTree} {
 		dir := filepath.Join(m.store.DataDir(), tree)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -187,6 +194,63 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 			m.logger.Warn("files.Reconcile: delete orphan", "file_path", rel, "error", err)
 		}
 	}
+	return nil
+}
+
+// migrateNotesInboxToGlobal moves project-less notes from the legacy notes/inbox
+// directory to notes/_global, matching memory/_global. Idempotent and cheap: one
+// Lstat per start, and after the first run there is nothing to find.
+//
+// The index needs no repair -- a note's project lives in its frontmatter, so the
+// following Reconcile re-parses each moved file and IndexNote upserts by id,
+// repointing file_path. Nothing is orphaned, because the row that used to name
+// notes/inbox/x.md IS the row now naming notes/_global/x.md.
+func (m *Manager) migrateNotesInboxToGlobal() error {
+	notesRoot := filepath.Join(m.store.DataDir(), notesTree)
+	oldDir := filepath.Join(notesRoot, notesLegacyGlobalDir)
+	if _, err := os.Lstat(oldDir); err != nil {
+		return nil // the common case: already migrated, or a fresh data dir
+	}
+	newDir := filepath.Join(notesRoot, notesGlobalDir)
+
+	// No destination yet: one atomic rename, no window where a note is missing.
+	if _, err := os.Lstat(newDir); os.IsNotExist(err) {
+		if err := os.Rename(oldDir, newDir); err != nil {
+			return fmt.Errorf("move %s -> %s: %w", oldDir, newDir, err)
+		}
+		m.logger.Info("files: moved legacy notes/inbox to notes/_global")
+		return nil
+	}
+
+	// Both exist: merge file by file. A name owned by both trees is a real
+	// conflict, so refuse it rather than clobber a note -- same rule as
+	// notes_update's project move.
+	entries, err := os.ReadDir(oldDir)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", oldDir, err)
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		src, dst := filepath.Join(oldDir, e.Name()), filepath.Join(newDir, e.Name())
+		if _, err := os.Lstat(dst); err == nil {
+			m.logger.Warn("files: legacy inbox note left in place, target name taken",
+				"note", e.Name(), "target", dst)
+			continue
+		}
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("move %s -> %s: %w", src, dst, err)
+		}
+	}
+	// Succeeds only when everything moved; a conflict or stray file keeps the
+	// directory, which is the honest outcome -- do not report a partial move as
+	// complete.
+	if err := os.Remove(oldDir); err != nil {
+		m.logger.Warn("files: legacy notes/inbox not removed (not empty)", "dir", oldDir)
+		return nil
+	}
+	m.logger.Info("files: merged legacy notes/inbox into notes/_global")
 	return nil
 }
 

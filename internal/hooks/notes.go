@@ -10,7 +10,7 @@ import (
 )
 
 // resolveProject maps the hook payload cwd to a project slug (best-effort; ""
-// scopes to the inbox/global).
+// scopes globally).
 func (h *Handler) resolveProject(ctx context.Context, cwd string) string {
 	project, err := store.ResolveProjectForCWD(ctx, h.db, cwd)
 	if err != nil {
