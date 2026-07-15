@@ -802,6 +802,92 @@ func TestRecall_SemanticScopeNotStarved(t *testing.T) {
 	require.Equal(t, []string{"seam-vector", "global-vector"}, names) // best-first
 }
 
+// supersede invalidates an indexed memory the way lifecycle.Supersede does:
+// memories_index.invalid_at is stamped and nothing else moves. The fts row and
+// the embedding survive verbatim, which is precisely why validity has to be a
+// predicate on the candidate queries rather than a filter applied to whatever
+// they happened to return.
+func supersede(t *testing.T, db *sql.DB, id, replacementID string) {
+	t.Helper()
+	res, err := db.ExecContext(context.Background(),
+		`UPDATE memories_index SET invalid_at = ?, superseded_by = ? WHERE id = ?`,
+		core.FormatTime(time.Now().UTC()), replacementID, id)
+	require.NoError(t, err)
+	n, err := res.RowsAffected()
+	require.NoError(t, err)
+	require.Equal(t, int64(1), n, "fixture must invalidate exactly one memory")
+}
+
+// Validity, like scope (TestRecall_InScopeSurvivesOutOfScopeDominance), must be
+// enforced inside the candidate queries. The noise here is deliberately
+// IN-scope, so scope cannot rescue the result and the validity predicate is the
+// only thing under test: 30 superseded revisions outranking every live match
+// used to fill the whole candidate depth and get dropped after fusion, leaving
+// recall to answer "nothing" while the live memory that replaced them sat one
+// rank deeper. FTS-only path.
+func TestRecall_LiveMemorySurvivesSupersededDominance(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	// 30 (> recallSourceDepth) retired revisions, each matching every query term
+	// twice so they strictly outrank any single-term live match under bm25.
+	// A superseded revision resembling its replacement is the normal case: that
+	// is what superseding a memory produces.
+	for i := range 30 {
+		id := fmt.Sprintf("OLD%027d", i)
+		insMem(t, db, id, "gotcha", fmt.Sprintf("chroma-boot-race-v%02d", i),
+			"chroma health check chroma health check", "seam")
+		supersede(t, db, id, "01IN1")
+	}
+	// The live replacement, matching exactly one query term.
+	insMem(t, db, "01IN1", "gotcha", "chroma-boot-race", "chroma settings for this local project", "seam")
+
+	svc := New(db, nil, budgets(), nil) // nil embedder => FTS-only
+
+	hits, err := svc.Recall(ctx, RecallInput{Query: "chroma health check", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.Name
+	}
+	require.Equal(t, []string{"chroma-boot-race"}, names,
+		"the live memory must survive %d superseded revisions that outrank it", 30)
+}
+
+// The cosine leg has the same defect and the same fix: a retired revision sits
+// close to the replacement that superseded it, so perfectly-aligned superseded
+// vectors must not consume the candidate depth. The query shares no FTS terms
+// with the corpus, isolating the semantic path.
+func TestRecall_SemanticSupersededNotStarved(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	for i := range 30 {
+		id := fmt.Sprintf("OLD%027d", i)
+		insMem(t, db, id, "gotcha", fmt.Sprintf("vecold-%02d", i), "unrelated words entirely", "seam")
+		require.NoError(t, store.UpsertEmbedding(ctx, db, id, "memory", "test-embed", []float32{1, 0, 0}))
+		supersede(t, db, id, "01IN1")
+	}
+	// The live replacement: a weaker vector that only survives if the retired
+	// ones never enter the window.
+	insMem(t, db, "01IN1", "gotcha", "seam-vector", "different unrelated words", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01IN1", "memory", "test-embed", []float32{0.9, 0.435, 0}))
+
+	svc := New(db, fixedEmbedder{vec: []float32{1, 0, 0}}, budgets(), nil)
+
+	hits, err := svc.Recall(ctx, RecallInput{Query: "quantum flux capacitor", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.Name
+		require.Equal(t, "semantic", h.Source)
+	}
+	require.Equal(t, []string{"seam-vector"}, names,
+		"the live memory must survive superseded vectors that outrank it")
+}
+
 func TestRecallFTSFusionAndScope(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

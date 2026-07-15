@@ -96,6 +96,13 @@ func UpsertEmbedding(ctx context.Context, db *sql.DB, itemID, kind, model string
 // out of the top-limit window. Embedding rows carry no project, so the scope is
 // resolved by joining the index tables; an embedding orphaned from both indexes
 // matches no scope.
+//
+// Superseded and archived memories are excluded on the same grounds: a memory
+// keeps its vector after it is invalidated, and a retired revision sits close to
+// the replacement that superseded it, so filtering validity after the LIMIT let
+// dead revisions eat the candidate depth. An embedding with no memories_index
+// row (a note, or an orphan) has nothing to invalidate it and survives this
+// predicate -- the scope filter is what drops orphans.
 func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
 	if len(query) == 0 {
 		return nil, fmt.Errorf("store.CosineSearch: empty query vector")
@@ -104,27 +111,22 @@ func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string
 		limit = 10
 	}
 
-	var sqlStr string
+	// One query shape: the index joins resolve validity always and scope when a
+	// project filter is given, so there is no branch that can search the corpus
+	// without a validity predicate. Both are LEFT joins -- an embedding missing
+	// from an index must be dropped by an explicit predicate, not by the join.
+	sqlStr := `SELECT e.item_id, e.kind, e.vec FROM embeddings e
+		LEFT JOIN memories_index mi ON mi.id = e.item_id
+		LEFT JOIN notes_index ni ON ni.id = e.item_id
+		WHERE e.model = ? AND (mi.id IS NULL OR mi.invalid_at IS NULL)`
 	args := []any{model}
-	if len(projects) == 0 {
-		sqlStr = `SELECT item_id, kind, vec FROM embeddings WHERE model = ?`
-		if len(kinds) > 0 {
-			sqlStr += ` AND kind IN (` + placeholders(len(kinds)) + `)`
-			for _, k := range kinds {
-				args = append(args, k)
-			}
+	if len(kinds) > 0 {
+		sqlStr += ` AND e.kind IN (` + placeholders(len(kinds)) + `)`
+		for _, k := range kinds {
+			args = append(args, k)
 		}
-	} else {
-		sqlStr = `SELECT e.item_id, e.kind, e.vec FROM embeddings e
-			LEFT JOIN memories_index mi ON mi.id = e.item_id
-			LEFT JOIN notes_index ni ON ni.id = e.item_id
-			WHERE e.model = ?`
-		if len(kinds) > 0 {
-			sqlStr += ` AND e.kind IN (` + placeholders(len(kinds)) + `)`
-			for _, k := range kinds {
-				args = append(args, k)
-			}
-		}
+	}
+	if len(projects) > 0 {
 		sqlStr += ` AND COALESCE(mi.project, ni.project) IN (` + placeholders(len(projects)) + `)`
 		for _, p := range projects {
 			args = append(args, p)

@@ -19,6 +19,15 @@ import (
 // Filtering inside the candidate query keeps the whole candidate depth in scope,
 // so a corpus dominated by out-of-scope matches cannot starve in-scope results
 // out of the top-limit window.
+//
+// Superseded and archived memories are excluded for the same reason: the fts
+// table is self-contained and keeps a full row for a memory that is no longer
+// valid, so validity is resolved by joining memories_index. Filtering it after
+// the LIMIT (as callers used to) let retired revisions of a name -- which match
+// their replacement's queries almost as well, by construction -- eat the
+// candidate depth and starve the live memory that replaced them. An fts row
+// with no index row (notes, or an orphan) has nothing to invalidate it and is
+// kept.
 func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
 	if limit <= 0 {
 		limit = 10
@@ -28,16 +37,18 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 		return nil, nil
 	}
 
-	sqlStr := `SELECT item_id, kind, bm25(fts) AS rank FROM fts WHERE fts MATCH ?`
+	sqlStr := `SELECT fts.item_id, fts.kind, bm25(fts) AS rank FROM fts
+		LEFT JOIN memories_index mi ON mi.id = fts.item_id
+		WHERE fts MATCH ? AND (mi.id IS NULL OR mi.invalid_at IS NULL)`
 	args := []any{match}
 	if len(kinds) > 0 {
-		sqlStr += ` AND kind IN (` + placeholders(len(kinds)) + `)`
+		sqlStr += ` AND fts.kind IN (` + placeholders(len(kinds)) + `)`
 		for _, k := range kinds {
 			args = append(args, k)
 		}
 	}
 	if len(projects) > 0 {
-		sqlStr += ` AND project IN (` + placeholders(len(projects)) + `)`
+		sqlStr += ` AND fts.project IN (` + placeholders(len(projects)) + `)`
 		for _, p := range projects {
 			args = append(args, p)
 		}
@@ -45,7 +56,7 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 	// item_id is a deterministic tiebreak: equal-bm25 rows would otherwise come
 	// back in an undefined order that can flip between runs and destabilize
 	// downstream rank fusion.
-	sqlStr += ` ORDER BY rank, item_id LIMIT ?`
+	sqlStr += ` ORDER BY rank, fts.item_id LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)

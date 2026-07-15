@@ -45,6 +45,9 @@ func (s *Service) DedupHint(ctx context.Context, project, name, description stri
 		if err != nil {
 			return nil, err
 		}
+		// CosineSearch already excludes invalidated memories and out-of-scope
+		// ones; this is the residual guard for a memory superseded between that
+		// query and this read.
 		if !ok || m.InvalidAt != nil || !scopeVisible(m.Project, project) {
 			continue
 		}
