@@ -60,9 +60,9 @@ contains the fix*. The body never has to open.
 **Another gotcha, where the description is the whole answer.**
 
 ```text
-BAD   description: seam CLI gotcha
-GOOD  description: seam CLI flags must PRECEDE positional args (Go flag pkg):
-      `seam task release --force <id>`; usage strings show the broken order.
+BAD   description: seamlessd gotcha
+GOOD  description: pkill -f 'seamlessd serve' kills the user's launchd daemon
+      too, not just your dev instance; match the port or pid instead.
 ```
 
 **A constraint.**
