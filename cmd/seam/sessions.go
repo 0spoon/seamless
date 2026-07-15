@@ -12,9 +12,13 @@ import (
 )
 
 func runSessions(args []string) error {
+	const usageMsg = "usage: seam sessions [--status active|completed] (or: seam sessions <id>)"
 	fs := flag.NewFlagSet("sessions", flag.ContinueOnError)
 	status := fs.String("status", "", "filter: active|completed")
 	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if err := requireFlagsFirst(fs, usageMsg); err != nil {
 		return err
 	}
 	cfg, err := config.Load()

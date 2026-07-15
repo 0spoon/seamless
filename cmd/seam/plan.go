@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -172,13 +173,17 @@ func runPlanApprove(args []string) error {
 // stamped commit, FRESH otherwise, UNKNOWN when the stamp or commit cannot be
 // resolved. It reads note bodies via the console and runs git locally.
 func runPlanCheck(args []string) error {
+	const usageMsg = "usage: seam plan check [--cwd DIR] <slug> (flags must precede the slug)"
 	fs := flag.NewFlagSet("plan check", flag.ContinueOnError)
 	cwd := fs.String("cwd", "", "repo to check against (default: current directory)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam plan check [--cwd DIR] <slug> (flags must precede the slug)")
+		return errors.New(usageMsg)
+	}
+	if err := requireFlagsFirst(fs, usageMsg); err != nil {
+		return err
 	}
 	slug := fs.Arg(0)
 	if *cwd == "" {

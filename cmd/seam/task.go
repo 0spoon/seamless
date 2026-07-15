@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"strconv"
@@ -116,13 +117,17 @@ func runTaskTransition(sub string, args []string) error {
 // runTaskClaim backs both `task claim` and `task heartbeat`: both call tasks_claim,
 // which claims a ready task or, when the caller already holds it, refreshes the lease.
 func runTaskClaim(sub string, args []string) error {
+	usageMsg := fmt.Sprintf("usage: seam task %s [--lease <seconds>] <id> (flags must precede the id)", sub)
 	fs := flag.NewFlagSet("task "+sub, flag.ContinueOnError)
 	lease := fs.Int("lease", 0, "lease seconds before the claim lapses (default: server default of 900)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam task %s [--lease <seconds>] <id> (flags must precede the id)", sub)
+		return errors.New(usageMsg)
+	}
+	if err := requireFlagsFirst(fs, usageMsg); err != nil {
+		return err
 	}
 	id := fs.Arg(0)
 	ctx := context.Background()
@@ -144,13 +149,17 @@ func runTaskClaim(sub string, args []string) error {
 }
 
 func runTaskRelease(args []string) error {
+	const usageMsg = "usage: seam task release [--force] <id> (flags must precede the id)"
 	fs := flag.NewFlagSet("task release", flag.ContinueOnError)
 	force := fs.Bool("force", false, "owner override: release the lock even if you do not hold it (routes through the console owner surface, not the agent claim path)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam task release [--force] <id> (flags must precede the id)")
+		return errors.New(usageMsg)
+	}
+	if err := requireFlagsFirst(fs, usageMsg); err != nil {
+		return err
 	}
 	id := fs.Arg(0)
 
