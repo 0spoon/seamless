@@ -194,7 +194,8 @@ func runServe(args []string) error {
 	mcpSrv := mcp.New(mcp.Config{
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, Embedder: embedder,
 		APIKey: cfg.MCP.APIKey, Version: buildVersion(),
-		ToolEventMaxChars: cfg.Budgets.ToolEventMaxChars, Logger: logger,
+		ToolEventMaxChars:   cfg.Budgets.ToolEventMaxChars,
+		CaptureAllowedPorts: cfg.Capture.AllowedPorts, Logger: logger,
 	})
 	hooksH := hooks.NewHandler(hooks.Config{
 		DB: db, Retrieve: ret, Events: rec, Files: mgr,

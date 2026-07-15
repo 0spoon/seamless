@@ -141,6 +141,16 @@ gardener:
   # env: SEAMLESS_GARDENER_SESSION_IDLE_MINUTES
   session_idle_minutes: 45
 
+capture:
+  # Destination ports the capture_url tool may dial, enforced in the dialer on
+  # the initial URL and on every redirect hop (alongside the private-IP and
+  # scheme guards). This is an SSRF control: widen it only for a host you trust,
+  # and never to reach anything on your own network. An empty list or a missing
+  # key means the 80/443 default -- it does NOT mean "any port". Ports outside
+  # 1-65535 are rejected at startup.
+  # env: SEAMLESS_CAPTURE_ALLOWED_PORTS (comma-separated, e.g. "80,443,8080")
+  allowed_ports: [80, 443]
+
 plan_capture:
   # Capture Claude Code plan-mode activity via the PostToolUse/SubagentStop/
   # PermissionRequest hooks: plan-file saves upsert cc-plan notes, planning

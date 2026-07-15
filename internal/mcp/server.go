@@ -123,7 +123,11 @@ type Config struct {
 	// session findings) of a logged Interactions event at this many runes. 0 =
 	// unlimited (the default): content is logged in full.
 	ToolEventMaxChars int
-	Logger            *slog.Logger
+	// CaptureAllowedPorts are the destination ports capture_url may dial
+	// (config.Capture.AllowedPorts). Empty means the capture package's 80/443
+	// default, never "any port".
+	CaptureAllowedPorts []int
+	Logger              *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
@@ -170,7 +174,7 @@ func New(cfg Config) *Server {
 	s := &Server{
 		cfg:      cfg,
 		logger:   logger,
-		fetcher:  capture.NewURLFetcher(),
+		fetcher:  capture.NewURLFetcher(cfg.CaptureAllowedPorts),
 		bindings: make(map[string]binding),
 	}
 	s.mcp = mcpserver.NewMCPServer(

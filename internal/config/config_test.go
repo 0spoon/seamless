@@ -50,6 +50,7 @@ func TestDefaults(t *testing.T) {
 	require.True(t, d.PlanCapture.Enabled)
 	require.True(t, d.PlanCapture.AutoTask)
 	require.True(t, d.PlanCapture.InjectRelated)
+	require.Equal(t, []int{80, 443}, d.Capture.AllowedPorts)
 }
 
 func TestLoadFrom_FileOverridesDefaults(t *testing.T) {
@@ -203,6 +204,64 @@ gardener:
 	require.Equal(t, 20, cfg.Gardener.SessionIdleMinutes)
 }
 
+func TestLoadFrom_CaptureAllowedPorts(t *testing.T) {
+	path := writeConfig(t, `
+capture:
+  allowed_ports: [80, 443, 8080]
+`)
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, []int{80, 443, 8080}, cfg.Capture.AllowedPorts)
+
+	// Env replaces the file's list wholesale rather than merging into it.
+	t.Setenv("SEAMLESS_CAPTURE_ALLOWED_PORTS", "443, 8443")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, []int{443, 8443}, cfg.Capture.AllowedPorts, "env wins over file")
+}
+
+func TestLoadFrom_CaptureAllowedPortsEmptyMeansDefault(t *testing.T) {
+	// An emptied allowlist must fall back to 80/443, never to "any port": an
+	// empty set here would silently disable capture's SSRF port guard.
+	t.Run("explicit empty list in file", func(t *testing.T) {
+		path := writeConfig(t, "capture:\n  allowed_ports: []\n")
+		cfg, err := LoadFrom(path)
+		require.NoError(t, err)
+		require.Equal(t, []int{80, 443}, cfg.Capture.AllowedPorts)
+	})
+	t.Run("empty env override", func(t *testing.T) {
+		path := writeConfig(t, "capture:\n  allowed_ports: [8080]\n")
+		t.Setenv("SEAMLESS_CAPTURE_ALLOWED_PORTS", "")
+		cfg, err := LoadFrom(path)
+		require.NoError(t, err)
+		require.Equal(t, []int{80, 443}, cfg.Capture.AllowedPorts)
+	})
+	t.Run("key absent entirely", func(t *testing.T) {
+		cfg, err := LoadFrom("")
+		require.NoError(t, err)
+		require.Equal(t, []int{80, 443}, cfg.Capture.AllowedPorts)
+	})
+}
+
+func TestLoadFrom_CaptureAllowedPortsInvalid(t *testing.T) {
+	t.Run("out of range in file", func(t *testing.T) {
+		path := writeConfig(t, "capture:\n  allowed_ports: [80, 70000]\n")
+		_, err := LoadFrom(path)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "capture.allowed_ports")
+	})
+	t.Run("non-numeric env", func(t *testing.T) {
+		t.Setenv("SEAMLESS_CAPTURE_ALLOWED_PORTS", "80,https")
+		_, err := LoadFrom("")
+		require.Error(t, err)
+	})
+	t.Run("out of range env", func(t *testing.T) {
+		t.Setenv("SEAMLESS_CAPTURE_ALLOWED_PORTS", "0")
+		_, err := LoadFrom("")
+		require.Error(t, err)
+	})
+}
+
 func TestValidate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -227,6 +286,10 @@ func TestValidate(t *testing.T) {
 		{"negative-briefing-findings", func(c *Config) { c.Briefing.FindingsCount = -1 }, true},
 		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
 		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},
+		{"custom-capture-ports-ok", func(c *Config) { c.Capture.AllowedPorts = []int{8080, 65535} }, false},
+		{"zero-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{0} }, true},
+		{"negative-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{-1} }, true},
+		{"capture-port-above-range", func(c *Config) { c.Capture.AllowedPorts = []int{65536} }, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
