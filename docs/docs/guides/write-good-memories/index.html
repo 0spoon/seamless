@@ -221,9 +221,9 @@ one carries <code>gofmt</code>, <code>dot-dirs</code>, <code>worktrees</code> - 
 formatter touch files I didn't edit&quot; hits it, and the description <em>already
 contains the fix</em>. The body never has to open.</p>
 <p><strong>Another gotcha, where the description is the whole answer.</strong></p>
-<pre class="chroma"><code><span class="line"><span class="cl">BAD   description: seam CLI gotcha
-</span></span><span class="line"><span class="cl">GOOD  description: seam CLI flags must PRECEDE positional args (Go flag pkg):
-</span></span><span class="line"><span class="cl">      `seam task release --force &lt;id&gt;`; usage strings show the broken order.
+<pre class="chroma"><code><span class="line"><span class="cl">BAD   description: seamlessd gotcha
+</span></span><span class="line"><span class="cl">GOOD  description: pkill -f &#39;seamlessd serve&#39; kills the user&#39;s launchd daemon
+</span></span><span class="line"><span class="cl">      too, not just your dev instance; match the port or pid instead.
 </span></span></code></pre><p><strong>A constraint.</strong></p>
 <pre class="chroma"><code><span class="line"><span class="cl">BAD   description: rules for errcheck
 </span></span><span class="line"><span class="cl">GOOD  description: errcheck runs with check-blank: every `_`-discarded error is
