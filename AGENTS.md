@@ -97,6 +97,87 @@ cmd/seamlessd, cmd/seam
 - SSRF: URL capture must reject private IPs, localhost, and `file://`.
 - Every JSON/body handler starts with `http.MaxBytesReader`.
 
+## Domain invariants
+
+Rules that plausible-looking code breaks. Each is enforced somewhere specific;
+the pointer is where to look, not a substitute for reading it.
+
+### Supersession (`internal/lifecycle`)
+
+- `invalid_at` is the ONLY authoritative "has left the indexes" predicate
+  (`core.Memory.Active()` is `InvalidAt == nil`; SQL filters `WHERE invalid_at
+  IS NULL`). Never infer live-ness from an empty `superseded_by` -- an archived
+  memory has `invalid_at` set and `superseded_by` empty, and is equally gone.
+- `lifecycle.Supersede`/`Archive` are the only writers of
+  `invalid_at`/`superseded_by` in non-test code; MCP, gardener, and console all
+  route through them. Do not stamp those fields by hand.
+- `valid_from` is never touched by supersession: `[valid_from, invalid_at)` is
+  the memory's bi-temporal record.
+- Stamped exactly once, guarded on the way in: already-invalid `old` ->
+  `ErrAlreadyInvalid`, `old.ID == replacement.ID` -> `ErrSelfSupersede`,
+  invalid/empty replacement -> `ErrInvalidReplacement`. Acyclicity falls out of
+  those guards (every edge points invalid -> active, and nothing clears
+  `invalid_at`); there is no cycle traversal to lean on.
+- Pass the FULL body. Both functions append a tombstone to `old.Body` and
+  rewrite the whole file, so handing them an index row -- which carries no body
+  -- truncates the memory to just the tombstone. Re-read the file first.
+- A superseded name stays occupied: reviving it is `ErrPathOccupied`, never a
+  silent clobber. `memory_delete` is the only escape hatch, and it drops history.
+- A supersede that fails after the new memory is written is a tool ERROR naming
+  the still-active target, never a success payload with an error inside it (F9).
+
+### Session binding and scope (`internal/mcp`)
+
+- Never read `project` from tool args directly. Route it through
+  `resolveReadScope` (nothing to infer -> global) or `resolveWriteScope`
+  (nothing to infer -> `errNoScope`). They apply `validateProjectArg`, which is
+  the path-traversal defense: a project slug becomes a directory under
+  `memory/`/`notes/`, and the data-dir boundary check alone does not catch
+  `../notes/inbox`.
+- A durable create uses `resolveWriteScope` -- it fails closed. Reaching for
+  `resolveReadScope` on a write silently lands it in global.
+- Precedence: explicit `project` -> the bound session's project -> the sole
+  unambiguous ambient. Ambients spanning more than one project are
+  `errAmbiguousScope`, not a guess.
+- Only `session_start` binds a connection (keyed by the MCP client session id).
+  Bindings evict on `session_end` and via the opportunistic sweep.
+- A lost binding does NOT error -- the call degrades to the ambient fallback.
+  Never assume the binding you started with is still there.
+- Stamp provenance with `s.boundSession(ctx)`, not the raw binding.
+- A new tool must be registered in `registerTools` AND bump `ToolCount`, or
+  `doctor` fails its tool-count assertion.
+
+### FTS5 and LIKE escaping (`internal/store`)
+
+- User text reaching `MATCH` goes through `ftsQuery` (`fts.go`): it splits on
+  non-alphanumerics, drops single-rune tokens, quotes each term and ORs them, so
+  `chroma-boot-race` is three literal terms rather than a subtraction. Never
+  build a MATCH expression by concatenation.
+- `ftsQuery` returning `""` means "no usable token"; callers treat that as no
+  results, never as an unfiltered query.
+- User text in `LIKE` goes through `escapeLikePrefix` (`\`, `%`, `_`, in that
+  order, with `ESCAPE '\'`). Never LIKE-escape a value compared with `=`.
+
+### LLM degradation: remote vs local (`internal/llm`, `internal/retrieve`)
+
+- Remote -- `ErrUnavailable`, `ErrAuth`, `ErrRateLimited`: the provider answered
+  badly or not at all and may recover. DEGRADE; `recall` drops to lexical-only,
+  which is honest.
+- Local -- `ErrConfig`: the request never got built. No provider was contacted,
+  no retry helps, it will not clear. SURFACE it -- degrading trades one loud
+  failure for quietly worse recall for the life of the daemon.
+- Classify at the `do` call sites via `doErr(op, err)`. Never hand-wrap a
+  request-build failure as `ErrUnavailable`.
+- `base_url` is validated in `NewEmbedder`/`NewChatClient` (the single
+  construction points) because `url.Parse` accepts a bare host:
+  `"api.openai.com/v1"` builds a perfectly valid request and only fails inside
+  `Do` as an opaque transport error indistinguishable from an outage. That
+  validation is why `ErrConfig` should be unreachable at request time -- which
+  is exactly why it must not hide when reached.
+- `DedupHint` and `files.embedItem` swallow every embed error on purpose (dedup
+  is advisory and must never block `memory_write`; indexing is best-effort with
+  a hash-retry). Leave them.
+
 ## Common pitfalls (checklist before declaring done)
 
 ### Meta-rules
@@ -117,7 +198,7 @@ cmd/seamlessd, cmd/seam
 | `_, _ = time.Parse(...)` (discarded error) | Silently yields zero-value timestamps. | Capture the error, `slog.Warn`, do not emit zero times. |
 | `err == ErrXxx`, `err == sql.ErrNoRows` | Breaks when wrapped. | `errors.Is(err, ErrXxx)`. |
 | `_ = json.Marshal/Unmarshal(...)` | Marshal can fail; Unmarshal silently zeroes. | Check the error; warn and propagate. |
-| Unchecked `RowsAffected()` on UPDATE/DELETE | Not-found looks like success. | Check `n`; `if n == 0 { return ErrNotFound }`. |
+| Unchecked `RowsAffected()` on UPDATE/DELETE | Not-found looks like success, and a driver failure looks like not-found. | Check both: the error, then `if n == 0 { return ErrNotFound }`. (`errcheck`) |
 | `close(ch)` outside `sync.Once` in `Close()` | Double-close panics. | `closeOnce.Do(func(){ close(done) })`. |
 | `a + "/" + b` for filesystem paths | Breaks portability/traversal. | `filepath.Join`. |
 | `context.Background()` in a handler/goroutine | Leaks request scope, disconnects shutdown. | Derive from request ctx / `WithoutCancel`. |
@@ -143,11 +224,29 @@ cmd/seamlessd, cmd/seam
 
 ## Verification before declaring done
 
-1. `make build && make test` (with `*_test.go` updates if a signature changed).
-2. `make lint` (catches `ulid.MustNew`, `time.Sleep`, missing `rows.Err()`,
-   blank-discarded errors, `err ==` sentinel comparisons).
+1. **`make check`** -- build + vet + fmt-check + lint + test-race, in that order.
+   This is the gate; the individual targets exist for iterating.
+2. Update `*_test.go` in the same change if a signature changed.
 3. For any change touching a recurring pattern above, grep for siblings and fix
    them together.
+
+`make lint` catches `ulid.MustNew`, `time.Sleep`, missing `rows.Err()`,
+`err ==` sentinel comparisons, and -- via `errcheck` with `check-blank` --
+errors discarded into `_`. That last one is the guardrail for the meta-rule
+above: `n, _ := res.RowsAffected()` in front of an `if n == 0 { return
+ErrNotFound }` turns a driver failure into a confident "not found".
+
+Every surviving discard is either listed in `.golangci.yml`'s
+`exclude-functions` (structurally uninteresting: deferred `Tx.Rollback`, writes
+to an already-committed HTTP response) or carries a `//nolint:errcheck` with a
+reason at the site. There is no third category -- if you add a discard, say why
+in one of those two places rather than reaching for a blanket exclusion.
+
+Note for anyone touching gofmt: the go tool's `./...` skips dot-dirs, but gofmt
+walks the filesystem, so a bare `gofmt -l .` descends into `.claude/worktrees/`
+(other agents' checkouts) and reports their drift as yours -- and `gofmt -w .`
+rewrites their files mid-edit. `make fmt` and `make fmt-check` scope to tracked
+files; use them.
 
 ## Console (server-rendered)
 

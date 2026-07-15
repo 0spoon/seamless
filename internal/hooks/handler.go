@@ -163,7 +163,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p hookPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero
+	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -213,7 +213,7 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p endPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no session id -> no-op)
+	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no session id -> no-op)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -365,7 +365,7 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p promptPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no prompt -> empty response)
+	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no prompt -> empty response)
 	if p.UserPrompt == "" {
 		writeHookResponse(w, "UserPromptSubmit", "")
 		return
@@ -492,6 +492,8 @@ func (h *Handler) recordSession(ctx context.Context, kind core.EventKind, sess c
 
 func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
 	w.Header().Set("Content-Type", "application/json")
+	//nolint:errcheck // the 200 is already committed; a failed write means the
+	// agent hung up and there is no second channel to report it on.
 	_ = json.NewEncoder(w).Encode(hookResponse{
 		Continue:       true,
 		SuppressOutput: true,
@@ -506,6 +508,7 @@ func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
 // entirely, or Claude Code's schema validation rejects the whole response.
 func writeHookAck(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
+	//nolint:errcheck // see writeHookResponse: the response is already committed.
 	_ = json.NewEncoder(w).Encode(hookResponse{Continue: true, SuppressOutput: true})
 }
 

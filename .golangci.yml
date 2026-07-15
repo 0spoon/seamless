@@ -15,6 +15,26 @@ linters:
     - errorlint      # err == ErrXxx instead of errors.Is
 
 linters-settings:
+  errcheck:
+    # Check errors discarded into `_` as well as ignored returns. This is what
+    # catches the repo's real defect class: `n, _ := res.RowsAffected()` before
+    # an `if n == 0 { return ErrNotFound }`, where a driver failure reads as
+    # "not found" and the caller believes it (AGENTS.md > Meta-rules > "No fake
+    # results on error"). Every discard that survives below is either listed
+    # here as structurally uninteresting or carries a //nolint:errcheck with a
+    # reason at the site -- there is no third category.
+    check-blank: true
+    exclude-functions:
+      # Deferred rollback: a no-op returning sql.ErrTxDone once Commit has run,
+      # and on the failure path the error is already being returned. Nothing a
+      # caller could do with it.
+      - (*database/sql.Tx).Rollback
+      # Writes to an already-committed HTTP response: the status line is sent,
+      # so a failure cannot be reported to the client that just disappeared.
+      - (*bytes.Buffer).WriteTo
+      - (net/http.ResponseWriter).Write
+      # goldmark's writer buffers in memory; these writes cannot fail.
+      - (github.com/yuin/goldmark/util.BufWriter).WriteString
   forbidigo:
     # Patterns match against call-expression text (e.g. "ulid.MustNew").
     forbid:
@@ -31,6 +51,10 @@ linters-settings:
 
 issues:
   exclude-use-default: true
+  # Report every hit. The defaults (50 per linter, 3 of the same message) hide
+  # the tail, and a guardrail that shows 3 of 9 reads as "that was all of them".
+  max-issues-per-linter: 0
+  max-same-issues: 0
   exclude-rules:
     # Tests may use timing-sensitive patterns and construct fixtures with
     # patterns banned in production code.

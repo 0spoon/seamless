@@ -36,7 +36,7 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no tool name -> no capture)
+	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no tool name -> no capture)
 
 	// Heartbeat the ambient session on any tool activity, so a long turn that never
 	// calls a seamless MCP tool still keeps its cc/* session live for the reaper.
@@ -73,7 +73,7 @@ func (h *Handler) permissionRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) // tolerant: a decode error just leaves p zero (no tool name -> no capture)
+	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no tool name -> no capture)
 
 	if h.captureEnabled() && p.ToolName == "ExitPlanMode" {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
@@ -125,7 +125,7 @@ func (h *Handler) capturePlanApproval(ctx context.Context, p toolPayload) {
 		Plan     string `json:"plan"`
 		FilePath string `json:"filePath"`
 	}
-	_ = json.Unmarshal(p.ToolResponse, &resp) // tolerant: absent fields stay zero
+	_ = json.Unmarshal(p.ToolResponse, &resp) //nolint:errcheck // tolerant: absent fields stay zero
 
 	basename, content := "", ""
 	if resp.FilePath != "" {

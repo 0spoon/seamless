@@ -82,7 +82,7 @@ func (rc retryClient) do(ctx context.Context, newReq func() (*http.Request, erro
 		status := resp.StatusCode
 		hint := retryAfterHint(resp)
 		// Drain a bounded amount so the keep-alive connection stays reusable.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096)) //nolint:errcheck // drain is an optimization; a failure just costs the connection
 		_ = resp.Body.Close()
 		if serr := rc.sleep(ctx, attempt, hint); serr != nil {
 			return nil, fmt.Errorf("status %d; retry canceled: %w", status, serr)

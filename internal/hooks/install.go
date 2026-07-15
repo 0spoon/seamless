@@ -388,7 +388,9 @@ func canonicalEqual(a, b any) bool {
 // backup already exists (never overwriting the original with a modified copy) or
 // when the file does not exist yet.
 func backupOnce(path string, mode os.FileMode) (string, error) {
-	if matches, _ := filepath.Glob(path + ".seamless-bak-*"); len(matches) > 0 {
+	// Glob only fails on a malformed pattern; an unreadable dir yields no
+	// matches, which correctly reads as "no backup yet" and makes one.
+	if matches, _ := filepath.Glob(path + ".seamless-bak-*"); len(matches) > 0 { //nolint:errcheck
 		return "", nil
 	}
 	data, err := os.ReadFile(path)

@@ -223,7 +223,13 @@ func runRemember(args []string) error {
 	}
 	text := *body
 	if text == "" {
-		b, _ := io.ReadAll(os.Stdin)
+		// Report a read failure as itself; discarding it would surface as the
+		// "body is empty" guard below and send the user hunting for a pipe
+		// that was in fact there.
+		b, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("read body from stdin: %w", err)
+		}
 		text = string(b)
 	}
 	if strings.TrimSpace(text) == "" {
@@ -390,7 +396,13 @@ func runHook(args []string) error {
 	if !ok {
 		return fmt.Errorf("unknown hook event %q (want %s)", args[0], events)
 	}
-	payload, _ := io.ReadAll(os.Stdin)
+	// A stdin failure leaves nothing to forward. Report it and exit 0: a hook
+	// must never block the agent (same contract as the request failure below).
+	payload, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "seam hook: read stdin:", err)
+		return nil
+	}
 
 	// PostToolUse fires machine-wide on every Write/Edit; drop non-plan events
 	// here, before any config load or network round-trip.
@@ -418,7 +430,9 @@ func runHook(args []string) error {
 		return nil
 	}
 	defer func() { _ = resp.Body.Close() }()
-	_, _ = io.Copy(os.Stdout, resp.Body)
+	// Relay whatever arrived; a copy failure means stdout is gone, and a hook
+	// must never block the agent by failing here.
+	_, _ = io.Copy(os.Stdout, resp.Body) //nolint:errcheck
 	return nil
 }
 
