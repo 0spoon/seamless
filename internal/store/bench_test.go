@@ -132,7 +132,7 @@ func BenchmarkCosineSearch(b *testing.B) {
 			query := benchVector(999_999, benchDims)
 			b.ReportAllocs()
 			for b.Loop() {
-				hits, err := CosineSearch(ctx, db, query, benchModel, []string{"memory", "note"}, 24)
+				hits, err := CosineSearch(ctx, db, query, benchModel, []string{"memory", "note"}, nil, 24)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -152,7 +152,7 @@ func BenchmarkFTSSearch(b *testing.B) {
 	seedSearchCorpus(b, db, "bench", 5000, benchDims)
 	b.ReportAllocs()
 	for b.Loop() {
-		hits, err := FTSSearch(ctx, db, "chroma container health check race", []string{"memory", "note"}, 24)
+		hits, err := FTSSearch(ctx, db, "chroma container health check race", []string{"memory", "note"}, nil, 24)
 		if err != nil {
 			b.Fatal(err)
 		}

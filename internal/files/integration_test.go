@@ -66,7 +66,7 @@ func TestEmbedderSemanticSearch(t *testing.T) {
 	// A query about a container failing to start should rank the boot-race memory first.
 	qvec, err := embedder.Embed(ctx, "the database sidecar container fails to start up in time")
 	require.NoError(t, err)
-	hits, err := store.CosineSearch(ctx, db, qvec, embedder.Model(), nil, 3)
+	hits, err := store.CosineSearch(ctx, db, qvec, embedder.Model(), nil, nil, 3)
 	require.NoError(t, err)
 	require.NotEmpty(t, hits)
 
@@ -99,7 +99,7 @@ func TestQueryExistingDB(t *testing.T) {
 	query := os.Getenv("SEAMLESS_QUERY")
 	qvec, err := embedder.Embed(context.Background(), query)
 	require.NoError(t, err)
-	hits, err := store.CosineSearch(context.Background(), db, qvec, embedder.Model(), nil, 5)
+	hits, err := store.CosineSearch(context.Background(), db, qvec, embedder.Model(), nil, nil, 5)
 	require.NoError(t, err)
 
 	t.Logf("query: %q", query)

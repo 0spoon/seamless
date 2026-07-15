@@ -38,7 +38,7 @@ func TestFTSSearch_TieBreakDeterministic(t *testing.T) {
 	want := []string{"01TIE01", "01TIE02", "01TIE03", "01TIE04", "01TIE05"}
 
 	for run := range 10 {
-		hits, err := FTSSearch(ctx, db, "identical tiebreak", nil, 10)
+		hits, err := FTSSearch(ctx, db, "identical tiebreak", nil, nil, 10)
 		require.NoError(t, err)
 		require.Len(t, hits, 5, "run %d", run)
 		got := make([]string, len(hits))
@@ -52,7 +52,7 @@ func TestFTSSearch_TieBreakDeterministic(t *testing.T) {
 	}
 
 	// The tiebreak also pins which rows survive the LIMIT cut.
-	top, err := FTSSearch(ctx, db, "identical tiebreak", nil, 3)
+	top, err := FTSSearch(ctx, db, "identical tiebreak", nil, nil, 3)
 	require.NoError(t, err)
 	require.Len(t, top, 3)
 	for i, h := range top {
@@ -70,23 +70,23 @@ func TestFTSSearchScoped_ProjectAndGlobal(t *testing.T) {
 	insertMemory(t, db, "01C", "reference", "global-gamma", "shared topic gamma", "", "body", now, "")
 
 	// Scoped to seam + global: the other-project row is excluded at query time.
-	hits, err := FTSSearchScoped(ctx, db, "shared topic", nil, []string{"", "seam"}, 10)
+	hits, err := FTSSearch(ctx, db, "shared topic", nil, []string{"", "seam"}, 10)
 	require.NoError(t, err)
 	ids := hitIDs(hits)
 	require.ElementsMatch(t, []string{"01A", "01C"}, ids)
 
 	// Global-only scope sees only the global row.
-	hits, err = FTSSearchScoped(ctx, db, "shared topic", nil, []string{""}, 10)
+	hits, err = FTSSearch(ctx, db, "shared topic", nil, []string{""}, 10)
 	require.NoError(t, err)
 	require.Equal(t, []string{"01C"}, hitIDs(hits))
 
 	// An empty projects filter searches all projects (FTSSearch behavior).
-	hits, err = FTSSearchScoped(ctx, db, "shared topic", nil, nil, 10)
+	hits, err = FTSSearch(ctx, db, "shared topic", nil, nil, 10)
 	require.NoError(t, err)
 	require.ElementsMatch(t, []string{"01A", "01B", "01C"}, hitIDs(hits))
 
 	// Kind and project filters compose.
-	hits, err = FTSSearchScoped(ctx, db, "shared topic", []string{"note"}, []string{"", "seam"}, 10)
+	hits, err = FTSSearch(ctx, db, "shared topic", []string{"note"}, []string{"", "seam"}, 10)
 	require.NoError(t, err)
 	require.Empty(t, hits)
 }

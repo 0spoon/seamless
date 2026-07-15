@@ -92,13 +92,13 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	if s.embedder != nil {
 		if qvec, err := s.embedder.Embed(ctx, in.Query); err != nil {
 			s.logger.Warn("retrieve.Recall: embed failed, FTS only", "error", err)
-		} else if hits, err := store.CosineSearchScoped(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth); err != nil {
+		} else if hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth); err != nil {
 			return nil, err
 		} else {
 			add(hits, true)
 		}
 	}
-	ftsHits, err := store.FTSSearchScoped(ctx, s.db, in.Query, kinds, projects, recallSourceDepth)
+	ftsHits, err := store.FTSSearch(ctx, s.db, in.Query, kinds, projects, recallSourceDepth)
 	if err != nil {
 		return nil, err
 	}

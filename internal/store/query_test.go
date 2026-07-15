@@ -111,13 +111,13 @@ func TestFTSSearchHyphenSafe(t *testing.T) {
 		"use ulid identifiers everywhere instead of uuid", "seam", "sortable ids", now, "")
 
 	// A hyphenated query must not raise an FTS5 syntax error and should match.
-	hits, err := FTSSearch(ctx, db, "chroma-boot-race", nil, 5)
+	hits, err := FTSSearch(ctx, db, "chroma-boot-race", nil, nil, 5)
 	require.NoError(t, err)
 	require.NotEmpty(t, hits)
 	require.Equal(t, "01A", hits[0].ItemID)
 
 	// Punctuation-only input yields no hits, not an error.
-	none, err := FTSSearch(ctx, db, "!!! -", nil, 5)
+	none, err := FTSSearch(ctx, db, "!!! -", nil, nil, 5)
 	require.NoError(t, err)
 	require.Empty(t, none)
 }

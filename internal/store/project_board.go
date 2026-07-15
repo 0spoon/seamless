@@ -174,24 +174,6 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow,
 	return out, nil
 }
 
-// BlockedTaskCount returns how many of a project's open tasks are blocked by at
-// least one open/in_progress dependency (the scalar of BlockedTasks). It is the
-// standalone form of the Blocked column ProjectsWithCounts computes in bulk.
-func BlockedTaskCount(ctx context.Context, db *sql.DB, project string) (int, error) {
-	var n int
-	err := db.QueryRowContext(ctx, `
-		SELECT COUNT(*) FROM tasks t
-		WHERE t.status = 'open' AND t.project_slug = ?
-		  AND EXISTS (
-		      SELECT 1 FROM task_deps d
-		      JOIN tasks b ON b.id = d.depends_on
-		      WHERE d.task_id = t.id AND b.status IN ('open','in_progress'))`, project).Scan(&n)
-	if err != nil {
-		return 0, fmt.Errorf("store.BlockedTaskCount: %w", err)
-	}
-	return n, nil
-}
-
 // GetSessionCoverageForProject computes the session-coverage roll-up (see
 // GetSessionCoverage) restricted to one project's sessions (project_slug = ?).
 //

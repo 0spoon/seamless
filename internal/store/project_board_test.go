@@ -97,11 +97,6 @@ func TestProjectsWithCounts(t *testing.T) {
 	require.Equal(t, 1, seam.Surfaced)
 	require.Equal(t, 2, seam.Active)
 
-	// The Blocked column matches the standalone scalar.
-	bc, err := BlockedTaskCount(ctx, db, "seam")
-	require.NoError(t, err)
-	require.Equal(t, seam.Blocked, bc)
-
 	// The global "" scope is its own row with the global-scope counts, never
 	// folded into seam and never flagged Unregistered.
 	global := byProject[""]

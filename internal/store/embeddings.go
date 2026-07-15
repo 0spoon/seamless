@@ -84,34 +84,19 @@ func UpsertEmbedding(ctx context.Context, db *sql.DB, itemID, kind, model string
 	return nil
 }
 
-// DeleteEmbedding removes an item's vector. A missing row is not an error.
-func DeleteEmbedding(ctx context.Context, db *sql.DB, itemID string) error {
-	if _, err := db.ExecContext(ctx, `DELETE FROM embeddings WHERE item_id = ?`, itemID); err != nil {
-		return fmt.Errorf("store.DeleteEmbedding: %w", err)
-	}
-	return nil
-}
-
 // CosineSearch brute-force-scans stored vectors for the given model and returns
 // the top-limit most similar items, highest score first. An empty kinds filter
 // searches all kinds. At the corpus scale this system targets (thousands of
 // items) a full scan is milliseconds, which is why there is no vector index.
-func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds []string, limit int) ([]SearchHit, error) {
-	return cosineSearch(ctx, db, query, model, kinds, nil, limit)
-}
-
-// CosineSearchScoped is CosineSearch restricted to items whose project is in
-// projects (recall passes the bound project plus "" for global). An empty
-// projects filter searches all projects. Filtering inside the candidate query
-// keeps the whole candidate depth in scope, so a corpus dominated by
-// out-of-scope vectors cannot starve in-scope results out of the top-limit
-// window. Embedding rows carry no project, so the scope is resolved by joining
-// the index tables; an embedding orphaned from both indexes matches no scope.
-func CosineSearchScoped(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
-	return cosineSearch(ctx, db, query, model, kinds, projects, limit)
-}
-
-func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
+//
+// projects restricts hits to items whose project is in the list (recall passes
+// the bound project plus "" for global); an empty filter searches all projects.
+// Filtering inside the candidate query keeps the whole candidate depth in scope,
+// so a corpus dominated by out-of-scope vectors cannot starve in-scope results
+// out of the top-limit window. Embedding rows carry no project, so the scope is
+// resolved by joining the index tables; an embedding orphaned from both indexes
+// matches no scope.
+func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
 	if len(query) == 0 {
 		return nil, fmt.Errorf("store.CosineSearch: empty query vector")
 	}
