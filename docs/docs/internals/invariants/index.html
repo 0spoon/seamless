@@ -185,6 +185,7 @@ erase the first half and, with it, the ability to ask what the store believed at
 some past moment.</p>
 <h3 id="it-is-stamped-exactly-once-guarded-on-the-way-in">It is stamped exactly once, guarded on the way in</h3>
 <p>The guards are:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -207,6 +208,7 @@ some past moment.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p><strong>Acyclicity falls out of those guards</strong> rather than out of any traversal. Every
 edge points from an invalid memory to an active one, and nothing ever clears
 <code>invalid_at</code> — so no cycle can form. There is no cycle check to lean on, because
@@ -295,6 +297,7 @@ wildcards, so escaping only corrupts the literal being matched.</p>
 <p>Enforced in <code>internal/llm</code> and <code>internal/retrieve</code>.</p>
 <p>The single distinction that organizes this whole area: <strong>did a provider answer
 badly, or did we fail to ask?</strong></p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -326,6 +329,7 @@ badly, or did we fail to ask?</strong></p>
 </tr>
 </tbody>
 </table>
+</div>
 <h3 id="remote-errors-degrade">Remote errors degrade</h3>
 <p>The provider answered badly or not at all, nothing in this process is wrong, and
 the condition may clear on its own. <code>recall</code> drops to lexical-only, which is

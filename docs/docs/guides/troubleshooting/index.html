@@ -169,6 +169,7 @@ an agent — but it means you cannot wait for an error. You have to go ask.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># server side: config, database, credentials, embedder, hooks</span>
 </span></span><span class="line"><span class="cl">seam doctor        <span class="c1"># client side: reachable, key accepted, tool count matches</span>
 </span></span></code></pre><p>They answer different questions and neither subsumes the other.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -195,6 +196,7 @@ an agent — but it means you cannot wait for an error. You have to go ask.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p><strong>The <code>hooks</code> check exists only in <code>seamlessd doctor</code>.</strong> If your symptom is &quot;no
 briefing&quot;, <code>seam doctor</code> cannot tell you why — it will happily report a healthy
 server that no hook is calling. Run both.</p>
@@ -248,6 +250,7 @@ its job. A durable write with no resolvable scope is rejected rather than landin
 in the global scope, because a global memory is seen by every agent in every repo
 forever — and that must never be what happens when the system is <em>unsure</em>.</p>
 <p><strong>Fix.</strong> The message tells you which of two cases you are in:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -269,6 +272,7 @@ forever — and that must never be what happens when the system is <em>unsure</e
 </tr>
 </tbody>
 </table>
+</div>
 <p>If a call that worked all morning starts failing this way, suspect a <strong>lost
 binding</strong> — see the daemon-restart section below. <code>project: global</code> is always
 accepted; it is a token you pass on purpose.</p>

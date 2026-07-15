@@ -193,6 +193,7 @@ the project-less home. A memory's filename is its <code>name</code>; a note's is
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
 </span></span></span></code></pre><p>Field by field:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -264,10 +265,12 @@ the project-less home. A memory's filename is its <code>name</code>; a note's is
 </tr>
 </tbody>
 </table>
+</div>
 <p>Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
 verbatim through a parse/render round-trip (Obsidian plugin fields and the like
 survive), but is not mirrored to the index.</p>
 <h3 id="the-eight-kinds">The eight kinds</h3>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -310,6 +313,7 @@ survive), but is not mirrored to the index.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h3 id="validity">Validity</h3>
 <p><code>invalid_at</code> is the whole lifecycle in one field. <code>nil</code> means active. Anything
 else means the memory has left the briefing, prompt, and recall indexes — while

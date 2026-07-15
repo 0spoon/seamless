@@ -199,6 +199,7 @@ the two clocks below. This is the subtlety most likely to bite you.</li>
 <h3 id="the-two-clocks">The two clocks</h3>
 <p>When an agent dies holding a task, two different timers matter, and conflating
 them is how a fleet quietly stalls.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -230,6 +231,7 @@ them is how a fleet quietly stalls.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p><code>tasks_ready</code> returns tasks whose status is <code>open</code>. A task with an expired lease
 is still <code>in_progress</code>, so it is <strong>invisible to the queue</strong> — an agent polling
 <code>tasks_ready</code> will never see it, even though a <code>tasks_claim</code> on that specific id
@@ -252,6 +254,7 @@ that misbehaving ones cannot.</p>
 <h2 id="plans-are-a-composition-not-a-primitive">Plans are a composition, not a primitive</h2>
 <p>There is no <code>plan</code> object in Seamless. A plan is everything keyed by
 <code>plan:&lt;slug&gt;</code>:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -283,6 +286,7 @@ that misbehaving ones cannot.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>This composition is the reason a plan survives its author. The next agent
 inherits not just a checklist but <em>why</em> the checklist looks like that — which is
 the thing that usually evaporates between sessions.</p>

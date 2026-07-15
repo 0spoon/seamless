@@ -165,6 +165,7 @@ is not how Seamless is driven; it is how you watch it.</p>
 <p>The console is <strong>read-mostly</strong>. That is a design claim, so here is the whole list
 — every write it is capable of, taken from the <code>POST</code> routes in
 <code>internal/console/console.go</code>. There are no others.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -236,6 +237,7 @@ is not how Seamless is driven; it is how you watch it.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Read the shape of that list. There is no &quot;create memory&quot;, no &quot;edit note&quot;, no
 &quot;delete&quot;, no &quot;add task&quot;, no &quot;start session&quot;. The two direct writes to knowledge
 state are <strong>archive a memory</strong> and <strong>approve a captured plan</strong>; the rest either
@@ -348,6 +350,7 @@ The global (<code>&quot;&quot;</code>) scope appears as a row but is not a proje
 link.</p>
 <p>Selecting a project opens the <strong>project workspace</strong> — a seven-tab page over that
 project alone:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -386,6 +389,7 @@ project alone:</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>A retired project still renders, with its banner — kept for provenance. Only an
 unknown slug is a 404.</p>
 <h2 id="sessions">Sessions</h2>

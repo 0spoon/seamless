@@ -11,9 +11,12 @@ import (
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/extension"
+	east "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/renderer"
 	"github.com/yuin/goldmark/renderer/html"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // Heading is one entry in a page's "On this page" rail.
@@ -54,8 +57,43 @@ var docsMD = goldmark.New(
 		// for prose headings.
 		parser.WithHeadingAttribute(),
 	),
-	goldmark.WithRendererOptions(html.WithUnsafe()),
+	goldmark.WithRendererOptions(
+		html.WithUnsafe(),
+		// Priority 100 beats the GFM table renderer's 500, so tables render
+		// wrapped (see tableWrapRenderer).
+		renderer.WithNodeRenderers(util.Prioritized(&tableWrapRenderer{}, 100)),
+	),
 )
+
+// tableWrapRenderer renders a GFM table inside a .table-wrap scroll container,
+// overriding only the <table> tag itself; GFM still renders the rows and cells.
+//
+// The wrapper is what lets the table stay a real display:table. Scrolling a wide
+// parameter table on a phone needs an overflow-x box, and putting that box on the
+// table meant display:block -- which demotes the table to a block and hands the
+// actual column layout to an anonymous table inside it. That anonymous box takes
+// no CSS: width:100% styled the wrapper while the visible table shrink-wrapped to
+// its content, and auto layout was then free to squeeze a column below the width
+// of the flag it held. Wrapping outside the table keeps both: the columns size
+// against the full width, and narrow viewports scroll the container.
+type tableWrapRenderer struct{}
+
+func (r *tableWrapRenderer) RegisterFuncs(reg renderer.NodeRendererFuncRegisterer) {
+	reg.Register(east.KindTable, r.renderTable)
+}
+
+func (r *tableWrapRenderer) renderTable(w util.BufWriter, _ []byte, n ast.Node, entering bool) (ast.WalkStatus, error) {
+	if !entering {
+		_, _ = w.WriteString("</table>\n</div>\n")
+		return ast.WalkContinue, nil
+	}
+	_, _ = w.WriteString(`<div class="table-wrap">` + "\n<table")
+	if n.Attributes() != nil {
+		html.RenderAttributes(w, n, extension.TableAttributeFilter)
+	}
+	_, _ = w.WriteString(">\n")
+	return ast.WalkContinue, nil
+}
 
 // rendered is one page's markdown output.
 type rendered struct {

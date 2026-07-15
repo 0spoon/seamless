@@ -67,6 +67,34 @@
     pre.appendChild(btn);
   });
 
+  /* ----------------------------------------------------- scrollable tables */
+  /* A wide table scrolls inside its .table-wrap, and a box you can only scroll
+     with a pointer is unreachable by keyboard. Make the overflowing ones focusable
+     -- only those, or every table on the page becomes a tab stop for nothing. The
+     set changes with the viewport, so re-check on resize. */
+  var wraps = Array.prototype.slice.call(document.querySelectorAll(".table-wrap"));
+  if (wraps.length) {
+    var syncWraps = function () {
+      wraps.forEach(function (wrap) {
+        if (wrap.scrollWidth > wrap.clientWidth + 1) {
+          wrap.setAttribute("tabindex", "0");
+          wrap.setAttribute("role", "region");
+          wrap.setAttribute("aria-label", "Table, scrollable");
+        } else {
+          wrap.removeAttribute("tabindex");
+          wrap.removeAttribute("role");
+          wrap.removeAttribute("aria-label");
+        }
+      });
+    };
+    syncWraps();
+    var resizeTimer;
+    window.addEventListener("resize", function () {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(syncWraps, 150);
+    });
+  }
+
   /* ------------------------------------------------------------ scrollspy */
   var tocLinks = Array.prototype.slice.call(document.querySelectorAll(".docs-toc a"));
   if (tocLinks.length && "IntersectionObserver" in window) {
@@ -200,7 +228,10 @@
     } else if (ev.key === "Escape") { hide(); input.blur(); }
   });
   document.addEventListener("click", function (ev) {
-    if (!input.closest(".docs-search").contains(ev.target)) hide();
+    /* The box removes itself if the index will not load, and this listener
+       outlives it -- re-read the ancestor each time rather than assuming one. */
+    var box = input.closest(".docs-search");
+    if (box && !box.contains(ev.target)) hide();
   });
   /* "/" focuses search, the convention every docs site shares. */
   document.addEventListener("keydown", function (ev) {

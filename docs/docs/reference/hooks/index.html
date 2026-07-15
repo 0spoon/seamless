@@ -164,6 +164,7 @@ agent calling a single MCP tool.</p>
 <h2 id="the-installed-hooks">The installed hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
 install order:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -226,6 +227,7 @@ install order:</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Timeouts are in seconds, Claude Code's unit. Server-side the briefing and recall
 paths are additionally bounded at 2s and the capture paths at 8s, so a slow store
 cannot spend the whole hook budget.</p>
