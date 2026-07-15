@@ -326,3 +326,125 @@ func TestRecorder_ConcurrentPublishSubscribeUnsubscribe(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+// --- ByID / BySession / KindTimeline ---------------------------------------
+//
+// The three readers the console reaches on every event-detail, session-timeline
+// and interaction-volume render, and the only Recorder queries that had no
+// coverage at all.
+
+func TestByID_FoundMissingAndEmpty(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	mustRecord(t, r, core.Event{
+		ID: "01A", TS: base, Kind: core.EventMemoryWritten,
+		SessionID: "s1", ProjectSlug: "seam", ItemID: "m1",
+		Payload: map[string]any{"name": "chroma-boot-race"},
+	})
+
+	got, ok, err := r.ByID(ctx, "01A")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "01A", got.ID)
+	require.Equal(t, core.EventMemoryWritten, got.Kind)
+	require.Equal(t, "s1", got.SessionID)
+	require.Equal(t, "seam", got.ProjectSlug)
+	require.Equal(t, "m1", got.ItemID)
+	require.True(t, got.TS.Equal(base))
+	require.Equal(t, "chroma-boot-race", got.Payload["name"])
+
+	// A missing id is ok=false with a NIL error -- the console renders a 404 off
+	// the bool, so a not-found must never surface as a failure.
+	_, ok, err = r.ByID(ctx, "01NOPE")
+	require.NoError(t, err)
+	require.False(t, ok)
+
+	// An empty id short-circuits ahead of the query, same shape.
+	_, ok, err = r.ByID(ctx, "")
+	require.NoError(t, err)
+	require.False(t, ok)
+}
+
+func TestBySession_ChronologicalScopedAndLimited(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	// Recorded newest-first to prove the query orders rather than the insert.
+	mustRecord(t, r, core.Event{ID: "01C", TS: base.Add(2 * time.Minute), Kind: core.EventSessionEnded, SessionID: "s1"})
+	mustRecord(t, r, core.Event{ID: "01B", TS: base.Add(time.Minute), Kind: core.EventMemoryWritten, SessionID: "s1"})
+	mustRecord(t, r, core.Event{ID: "01A", TS: base, Kind: core.EventSessionStarted, SessionID: "s1"})
+	mustRecord(t, r, core.Event{ID: "01X", TS: base, Kind: core.EventSessionStarted, SessionID: "s2"})
+
+	// Oldest first (a timeline reads down the page), and s2 never bleeds in.
+	got, err := r.BySession(ctx, "s1", 0)
+	require.NoError(t, err)
+	require.Len(t, got, 3)
+	require.Equal(t, []string{"01A", "01B", "01C"}, []string{got[0].ID, got[1].ID, got[2].ID})
+
+	// The limit keeps the OLDEST rows, because the ASC order applies first.
+	head, err := r.BySession(ctx, "s1", 2)
+	require.NoError(t, err)
+	require.Len(t, head, 2)
+	require.Equal(t, []string{"01A", "01B"}, []string{head[0].ID, head[1].ID})
+
+	// An unknown session is empty, not an error; an empty id short-circuits.
+	none, err := r.BySession(ctx, "nobody", 0)
+	require.NoError(t, err)
+	require.Empty(t, none)
+
+	empty, err := r.BySession(ctx, "", 0)
+	require.NoError(t, err)
+	require.Nil(t, empty)
+}
+
+func TestKindTimeline_KindProjectAndSinceWindow(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	mustRecord(t, r, core.Event{ID: "01A", TS: base, Kind: core.EventToolCall, ProjectSlug: "seam"})
+	mustRecord(t, r, core.Event{ID: "01B", TS: base.Add(time.Hour), Kind: core.EventHookPrompt, ProjectSlug: "seam"})
+	mustRecord(t, r, core.Event{ID: "01C", TS: base.Add(2 * time.Hour), Kind: core.EventToolCall, ProjectSlug: "other"})
+	mustRecord(t, r, core.Event{ID: "01D", TS: base.Add(3 * time.Hour), Kind: core.EventMemoryWritten, ProjectSlug: "seam"})
+
+	// Newest first, only the interaction kinds -- memory.written (01D) is out.
+	all, err := r.KindTimeline(ctx, testInteractionKinds, "", "", 10)
+	require.NoError(t, err)
+	require.Len(t, all, 3)
+	require.True(t, all[0].TS.Equal(base.Add(2*time.Hour)), "newest first")
+	require.Equal(t, string(core.EventToolCall), all[0].Kind)
+	require.True(t, all[2].TS.Equal(base), "oldest last")
+
+	// project scopes to one slug.
+	seam, err := r.KindTimeline(ctx, testInteractionKinds, "seam", "", 10)
+	require.NoError(t, err)
+	require.Len(t, seam, 2)
+
+	// sinceTS is inclusive (>=), so an event exactly on the boundary is kept.
+	since, err := r.KindTimeline(ctx, testInteractionKinds, "", core.FormatTime(base.Add(time.Hour)), 10)
+	require.NoError(t, err)
+	require.Len(t, since, 2)
+
+	// The limit cuts from the newest end.
+	capped, err := r.KindTimeline(ctx, testInteractionKinds, "", "", 1)
+	require.NoError(t, err)
+	require.Len(t, capped, 1)
+	require.True(t, capped[0].TS.Equal(base.Add(2*time.Hour)))
+}
+
+func TestKindTimeline_EmptyKindsOrLimitReturnsNil(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	mustRecord(t, r, core.Event{ID: "01A", TS: base, Kind: core.EventToolCall})
+
+	// Both guards return (nil, nil) rather than querying: the console asks for a
+	// zero-width window while a page is still settling.
+	got, err := r.KindTimeline(ctx, nil, "", "", 10)
+	require.NoError(t, err)
+	require.Nil(t, got)
+
+	got, err = r.KindTimeline(ctx, testInteractionKinds, "", "", 0)
+	require.NoError(t, err)
+	require.Nil(t, got)
+}
