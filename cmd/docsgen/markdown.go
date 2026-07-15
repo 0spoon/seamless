@@ -57,17 +57,77 @@ var docsMD = goldmark.New(
 	goldmark.WithRendererOptions(html.WithUnsafe()),
 )
 
-// renderMarkdown converts an authored body to HTML and extracts its h2/h3
-// outline for the page's table of contents.
-func renderMarkdown(src string) (template.HTML, []Heading, error) {
+// rendered is one page's markdown output.
+type rendered struct {
+	HTML     template.HTML
+	Headings []Heading
+	// Links are the same-site absolute paths the body referenced, fragments
+	// stripped, in document order. checkLinks resolves them against the site.
+	Links []string
+}
+
+// renderMarkdown converts an authored body to HTML, extracts its h2/h3 outline
+// for the table of contents, and reports the internal links it made.
+//
+// docsRoot is the page's relative prefix to the docs root; see rewriteDocLinks.
+func renderMarkdown(src, docsRoot string) (rendered, error) {
 	source := []byte(src)
 	doc := docsMD.Parser().Parse(text.NewReader(source))
+	links, err := rewriteDocLinks(doc, docsRoot)
+	if err != nil {
+		return rendered{}, err
+	}
 
 	var buf bytes.Buffer
 	if err := docsMD.Renderer().Render(&buf, source, doc); err != nil {
-		return "", nil, fmt.Errorf("render markdown: %w", err)
+		return rendered{}, fmt.Errorf("render markdown: %w", err)
 	}
-	return template.HTML(buf.Bytes()), collectHeadings(doc, source), nil //nolint:gosec // docs-src is repo-authored; see docsMD
+	return rendered{
+		HTML:     template.HTML(buf.Bytes()), //nolint:gosec // docs-src is repo-authored; see docsMD
+		Headings: collectHeadings(doc, source),
+		Links:    links,
+	}, nil
+}
+
+// rewriteDocLinks turns root-absolute doc links into page-relative ones:
+// `[memory](/concepts/memory/)` becomes ../concepts/memory/, ../../concepts/...,
+// or concepts/... depending on how deep the linking page sits.
+//
+// The site publishes no base URL -- every href is relative, so it works at
+// thereisnospoon.org/docs/, at the project-pages fallback, and under
+// `make docs-serve`. Making authors hand-compute ../../ per link would be a
+// silent rot generator: the link still renders, it just goes nowhere, and only a
+// human clicking it would ever notice. So authors write one absolute path and
+// the depth arithmetic happens here, once.
+//
+// Only same-site paths are touched. Scheme-relative (//host), absolute URLs,
+// fragments, and already-relative links pass through untouched.
+// It also reports every same-site path it rewrote, so checkLinks can prove each
+// one resolves to a page that exists.
+func rewriteDocLinks(doc ast.Node, docsRoot string) ([]string, error) {
+	var links []string
+	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		var dest *[]byte
+		switch link := n.(type) {
+		case *ast.Link:
+			dest = &link.Destination
+		case *ast.Image:
+			dest = &link.Destination
+		default:
+			return ast.WalkContinue, nil
+		}
+		s := string(*dest)
+		if !strings.HasPrefix(s, "/") || strings.HasPrefix(s, "//") {
+			return ast.WalkContinue, nil
+		}
+		links = append(links, s)
+		*dest = []byte(docsRoot + strings.TrimPrefix(s, "/"))
+		return ast.WalkContinue, nil
+	})
+	return links, err
 }
 
 // collectHeadings walks the parsed document for h2/h3 headings, reading the ids

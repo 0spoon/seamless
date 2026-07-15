@@ -75,5 +75,5 @@ make console                                         # opens pre-authenticated
 
 - `make install-onboard-skill` installs a `/seam-onboard` Claude Code skill that
   walks an agent through this setup and verifies each step.
-- Look up any tool, key, or command in the [Reference](reference/).
+- Look up any tool, key, or command in the [Reference](/reference/).
 

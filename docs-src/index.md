@@ -41,5 +41,5 @@ proposes. Nothing rewrites your knowledge behind your back.
 
 | If you want to | Read |
 |---|---|
-| Get it running in ten minutes | [Quickstart](quickstart/) |
-| Look up a tool, key, or command | [Reference](reference/) |
+| Get it running in ten minutes | [Quickstart](/quickstart/) |
+| Look up a tool, key, or command | [Reference](/reference/) |
