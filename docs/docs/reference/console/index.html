@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Console — Seamless docs</title>
-<meta name="description" content="The read-mostly observability UI at /console — the complete list of what it can change, how sign-in works, and what each page shows.">
+<title>Console - Seamless docs</title>
+<meta name="description" content="The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,15 +156,17 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>Console</h1>
-  <p class="lede">The read-mostly observability UI at /console — the complete list of what it can change, how sign-in works, and what each page shows.</p>
+  <p class="lede">The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.</p>
   <p>The console is the owner's window onto a system whose actual clients are agents.
 It is <code>html/template</code> plus vanilla JS plus SSE, served by <code>internal/console</code> from
-the same binary as everything else — no node, no npm, no React, no build step. It
+the same binary as everything else - no node, no npm, no React, no build step. It
 is not how Seamless is driven; it is how you watch it.</p>
 <h2 id="what-the-console-can-change">What the console can change</h2>
-<p>The console is <strong>read-mostly</strong>. That is a design claim, so here is the whole list
-— every write it is capable of, taken from the <code>POST</code> routes in
-<code>internal/console/console.go</code>. There are no others.</p>
+<p>The console is <strong>read-mostly</strong>. That is a design claim, so here is the whole list</p>
+<ul>
+<li>every write it is capable of, taken from the <code>POST</code> routes in
+<code>internal/console/console.go</code>. There are no others.</li>
+</ul>
 <div class="table-wrap">
 <table>
 <thead>
@@ -241,8 +243,8 @@ is not how Seamless is driven; it is how you watch it.</p>
 <p>Read the shape of that list. There is no &quot;create memory&quot;, no &quot;edit note&quot;, no
 &quot;delete&quot;, no &quot;add task&quot;, no &quot;start session&quot;. The two direct writes to knowledge
 state are <strong>archive a memory</strong> and <strong>approve a captured plan</strong>; the rest either
-manage gardener proposals — which are themselves proposals, reviewed before they
-do anything — or free a lock, or set a display-time knob.</p>
+manage gardener proposals - which are themselves proposals, reviewed before they
+do anything - or free a lock, or set a display-time knob.</p>
 <p>This is deliberate, and it is the same principle as
 <a href="../../concepts/gardener/">the gardener's</a> propose-only contract. The store is written
 by agents doing work, with provenance attached. A console that could quietly edit
@@ -257,7 +259,7 @@ never repeats the action.</p>
 <p>Two ways to present it:</p>
 <ul>
 <li><strong>A browser</strong> trades the key for a cookie at <code>/console/login</code>. The cookie value
-is a SHA-256 hash of the key, not the key — so the raw credential never sits in
+is a SHA-256 hash of the key, not the key - so the raw credential never sits in
 the browser's cookie jar. It is <code>HttpOnly</code>, <code>SameSite=Lax</code>, and scoped to
 <code>/console</code>.</li>
 <li><strong>The <code>seam</code> CLI</strong> sends the key as a bearer token on the <code>Authorization</code>
@@ -273,7 +275,7 @@ validated against an open-redirect (an off-site or absolute candidate becomes
 </span></span><span class="line"><span class="cl">make console-chrome   <span class="c1"># same, but force Google Chrome</span>
 </span></span></code></pre><p>This builds, then runs <code>seamlessd console-open</code>, which renders a one-shot
 self-submitting login page to a <code>0600</code> temp file and opens it. The page POSTs the
-key to <code>/console/login</code>, which sets the cookie and 303s into the console — so you
+key to <code>/console/login</code>, which sets the cookie and 303s into the console - so you
 land on an authenticated page with nothing to paste. It refuses to run if
 <code>mcp.api_key</code> is empty or the server is not answering <code>/healthz</code>.</p>
 <p><code>make console-chrome</code> exists for agents: they drive Chrome, so this hands the auth
@@ -281,10 +283,10 @@ cookie to the browser they can actually see. (<code>--browser</code> is macOS-on
 <h2 id="three-ways-to-render-a-page">Three ways to render a page</h2>
 <p>Every route answers in the shape the caller asked for:</p>
 <ul>
-<li><strong>HTML</strong> by default — the full page, layout and all.</li>
+<li><strong>HTML</strong> by default - the full page, layout and all.</li>
 <li><strong>JSON</strong> when the caller sets <code>?format=json</code> or an <code>Accept</code> header that wants
 JSON and not HTML. This is how <code>seam</code> reads the console's data.</li>
-<li><strong>An HTML fragment</strong> for entity details when the caller passes <code>?peek=1</code> — the
+<li><strong>An HTML fragment</strong> for entity details when the caller passes <code>?peek=1</code> - the
 detail pane loads it without a page navigation.</li>
 </ul>
 <p>Memory, note, task, event, and plan pages compose their full page from the same
@@ -293,7 +295,7 @@ and project deliberately do not: their fragments are compact summaries of much
 richer bespoke pages.</p>
 <p>Strictly-validated query params (<code>?sort</code>, <code>?scope</code>, <code>?tab</code>, <code>?w</code>) return a 400
 naming the bad param and listing the valid values, rather than silently falling
-back to a default — so an agent driving the console by URL sees the fix.</p>
+back to a default - so an agent driving the console by URL sees the fix.</p>
 <p><code>GET /console/events</code> is the SSE stream: every recorded event as one JSON <code>data:</code>
 frame, with a ping every 25 seconds. <code>?feed=interactions</code> opts into the richer
 transport-level rows the Interactions screen consumes.</p>
@@ -301,19 +303,19 @@ transport-level rows the Interactions screen consumes.</p>
 <p><code>/console/</code></p>
 <p>The landing page and the health check. It carries:</p>
 <ul>
-<li><strong>Counts</strong> — active memories (broken down by kind), notes, sessions, and tasks
+<li><strong>Counts</strong> - active memories (broken down by kind), notes, sessions, and tasks
 by status.</li>
 <li><strong>Retrieval health</strong> over a selectable window (<code>?w=24h|7d|30d|all</code>): injection
 volume, a trend chart, the <strong>reach rate</strong> (distinct active memories that
 actually surfaced, over all active memories), sessions reached, and the
 most-injected memories.</li>
-<li><strong>Coverage</strong> — the share of in-window sessions that retained anything, with a
+<li><strong>Coverage</strong> - the share of in-window sessions that retained anything, with a
 per-channel breakdown (findings, memories, notes, trials) and a windowed trend.
 The channels overlap, so the shares need not sum to 100%.</li>
-<li><strong>Projects at a glance</strong> — the top projects by recent activity, drawn from the
+<li><strong>Projects at a glance</strong> - the top projects by recent activity, drawn from the
 same batched query the Projects board uses, so a row here reconciles with a row
 there exactly.</li>
-<li><strong>Recent activity</strong> — the last twelve events, each linking to its detail page.</li>
+<li><strong>Recent activity</strong> - the last twelve events, each linking to its detail page.</li>
 </ul>
 <p>Live sessions are counted TTL-aware (active <em>and</em> heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
@@ -322,8 +324,8 @@ threshold), so the headline matches the Sessions screen rather than the raw
 <p><code>/console/interactions</code></p>
 <p>The live feed of what agents are actually doing: MCP tool calls, hook injections,
 recall-miss prompts, session lifecycle, and the plan-mode capture stream. Rows
-carry the full request and response bodies — the tool's arguments and result, or
-the exact injected text — so you can read what an agent asked for and what it got
+carry the full request and response bodies - the tool's arguments and result, or
+the exact injected text - so you can read what an agent asked for and what it got
 without a second fetch.</p>
 <p>The feed streams over SSE and pages backwards through history. A recall via the
 MCP tool records both a <code>retrieval.injected</code> and a <code>tool.call</code>; the injected twin
@@ -336,7 +338,7 @@ through the same fused FTS + semantic retrieval that <a href="../../concepts/rec
 uses, with snippets; tasks, plans, projects, and sessions have no FTS mirror and
 match by <code>LIKE</code>.</p>
 <p>The command palette (⌘K, available on every page) fetches this same route with
-<code>?format=json&amp;fast=1</code>, which drops the semantic leg — a query per keystroke must
+<code>?format=json&amp;fast=1</code>, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.</p>
 <p>Coverage is deliberately partial. Trials are excluded because the console has no
 trial surface for a hit to link to; events are excluded because the telemetry
@@ -348,7 +350,7 @@ blocked tasks, memory count, inherited memories, reach rate, and last activity.
 Grouped by family (<code>?group=family|flat</code>) and sortable (<code>?sort=recent|coverage|name</code>).
 The global (<code>&quot;&quot;</code>) scope appears as a row but is not a project and has no detail
 link.</p>
-<p>Selecting a project opens the <strong>project workspace</strong> — a seven-tab page over that
+<p>Selecting a project opens the <strong>project workspace</strong> - a seven-tab page over that
 project alone:</p>
 <div class="table-wrap">
 <table>
@@ -373,7 +375,7 @@ project alone:</p>
 </tr>
 <tr>
 <td>Memories</td>
-<td>The project's memories with a lineage cell — provenance session, or a supersession pointer — plus the memories it <em>inherits</em> from a parent that a strict per-slug count excludes.</td>
+<td>The project's memories with a lineage cell - provenance session, or a supersession pointer - plus the memories it <em>inherits</em> from a parent that a strict per-slug count excludes.</td>
 </tr>
 <tr>
 <td>Notes</td>
@@ -390,7 +392,7 @@ project alone:</p>
 </tbody>
 </table>
 </div>
-<p>A retired project still renders, with its banner — kept for provenance. Only an
+<p>A retired project still renders, with its banner - kept for provenance. Only an
 unknown slug is a 404.</p>
 <h2 id="sessions">Sessions</h2>
 <p><code>/console/sessions</code>, <code>/console/sessions/{id}</code></p>
@@ -405,14 +407,14 @@ their lease countdowns, and the memories it produced.</p>
 <p><code>/console/memories</code>, <code>/console/memories/{id}</code></p>
 <p>The browser, grouped by project (global first) and then by kind in canonical
 order, with active and inactive memories separated. Each row shows the
-description — the only text an index ever shows — plus injection and read counts,
+description - the only text an index ever shows - plus injection and read counts,
 last-injected time, and a <code>vscode://</code> link straight to the file. Sortable by name,
 recency, or reach; filterable by a substring of name, description, kind, or tag.</p>
 <p>Inactive memories carry their status (<code>superseded</code> or <code>archived</code>) and, when
 superseded, a link to what replaced them.</p>
 <p>A memory's page renders the body (through the markdown layer, with raw HTML
-disabled and a sanitizer on the output), its metadata — kind, project, tags,
-timestamps, the session that produced it — its reach counts, and its supersession
+disabled and a sanitizer on the output), its metadata - kind, project, tags,
+timestamps, the session that produced it - its reach counts, and its supersession
 neighbors in <strong>both</strong> directions: what replaced it, and what it replaced.
 <strong>Archive</strong> is the one action here.</p>
 <h2 id="notes">Notes</h2>
@@ -422,18 +424,18 @@ sortable by recency or title, filterable by title, description, or tag. A note's
 page renders the body.</p>
 <h2 id="tasks">Tasks</h2>
 <p><code>/console/tasks</code>, <code>/console/tasks/{id}</code></p>
-<p>Four buckets: <strong>ready</strong> (no unfinished blocker), <strong>in progress</strong>, <strong>blocked</strong> —
-each blocked row naming the specific tasks blocking it — and <strong>closed</strong> (done and
+<p>Four buckets: <strong>ready</strong> (no unfinished blocker), <strong>in progress</strong>, <strong>blocked</strong> -
+each blocked row naming the specific tasks blocking it - and <strong>closed</strong> (done and
 dropped merged, newest first, capped at 25 with a count of the rest).</p>
 <p>A task's page carries its detail; <strong>force-release</strong> is the action, and it is the
-owner override — it takes the lock from whoever holds it.</p>
+owner override - it takes the lock from whoever holds it.</p>
 <h2 id="plans">Plans</h2>
 <p><code>/console/plans</code>, <code>/console/plans/{slug}</code></p>
 <p>Both kinds of plan in one list, grouped by phase (in progress, ready, done):</p>
 <ul>
-<li><strong>captures</strong> — Claude Code plan-mode captures (<code>cc-plan</code> notes), with their
+<li><strong>captures</strong> - Claude Code plan-mode captures (<code>cc-plan</code> notes), with their
 lifecycle status, iteration count, and cached subagent runs.</li>
-<li><strong>composed</strong> — plain <a href="../../concepts/tasks-and-plans/">plans-as-composition</a> plans (a
+<li><strong>composed</strong> - plain <a href="../../concepts/tasks-and-plans/">plans-as-composition</a> plans (a
 note tagged <code>plan:&lt;slug&gt;</code> plus its tasks), which have none of the capture-only
 columns.</li>
 </ul>
@@ -453,32 +455,34 @@ to one.</p>
 <p>The reach funnel in detail, over a selectable window: injections, memories
 surfaced, active memories, reach rate, sessions reached, reach broken down by kind
 and by project, the injection trend, and the most-injected memories.</p>
-<p>Plus <strong>stale memories</strong> — active memories not updated, injected, or read in 90
+<p>Plus <strong>stale memories</strong> - active memories not updated, injected, or read in 90
 days, mirroring the gardener's default staleness horizon. Unlike everything else
 on the page, this list is window-independent.</p>
 <p>Reachable from the Overview's retrieval-health card.</p>
 <h2 id="gardener">Gardener</h2>
 <p><code>/console/gardener</code></p>
 <p>The review queue. Each pending proposal renders as a card showing exactly what it
-would do — the memory to archive and why, the pair to merge with their similarity
+would do - the memory to archive and why, the pair to merge with their similarity
 score, the digest or consolidated memory with its body rendered, the reproject's
 source and destination, the split's children and shared parent.</p>
 <p>Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.</p>
 <p>The actions are <strong>apply</strong>, <strong>dismiss</strong>, <strong>retarget</strong> (reproject cards only), and
-<strong>apply plan</strong>. Above them sit the two request boxes — ask in words, or split a
-project — and both only ever produce more proposals for this same queue. A
+<strong>apply plan</strong>. Above them sit the two request boxes - ask in words, or split a
+project - and both only ever produce more proposals for this same queue. A
 recognized split typed into the general request box routes you to the split box
 rather than creating loose proposals, because splitting needs a structured source
 project.</p>
 <p>See <a href="../../concepts/gardener/">The gardener</a> for what each proposal type means.</p>
 <h2 id="settings">Settings</h2>
 <p><code>/console/settings</code></p>
-<p>A read-only view of the running configuration — data dir, budgets, gardener
-settings, the registered projects, the repo→project map, and the project families
-— with <strong>one editable block</strong>: briefing injection.</p>
+<p>A read-only view of the running configuration - data dir, budgets, gardener
+settings, the registered projects, the repo→project map, and the project families</p>
+<ul>
+<li>with <strong>one editable block</strong>: briefing injection.</li>
+</ul>
 <p>Saving writes a runtime override row in the DB. It layers over the file/env values
-and wins until reset, and it applies from the next session start — no daemon
+and wins until reset, and it applies from the next session start - no daemon
 restart. It never touches your config file, so <code>seamless.yaml</code> stays the thing you
 wrote. <strong>Reset</strong> clears the override and reverts to file/env.</p>
 <p>The form validates: a non-numeric knob or a value that fails <code>Briefing.Validate()</code>
@@ -487,7 +491,7 @@ comes back as an error flash, not a silently-dropped save.</p>
 <a href="../../concepts/sessions/">Sessions &amp; briefings</a> for what they tune.</p>
 <h2 id="event-detail">Event detail</h2>
 <p><code>/console/events/{id}</code></p>
-<p>What a Recent-activity or timeline row links to: one event-log entry in full — the
+<p>What a Recent-activity or timeline row links to: one event-log entry in full - the
 verbatim injected content, the memories it surfaced resolved to their live index
 entries (or flagged missing if the id no longer resolves), the remaining payload
 fields, and the raw JSON.</p>
@@ -495,7 +499,7 @@ fields, and the raw JSON.</p>
 <p>A bad or stale URL renders a styled, layout-wrapped error page with a way back,
 rather than dropping you on a bare <code>404 page not found</code>. A 404 names the missing
 entity and a 400 names the bad parameter and its valid values. A 500 stays
-generic in the browser — the detail is in the log, not the response. Fragment
+generic in the browser - the detail is in the log, not the response. Fragment
 fetches (<code>?peek=1</code>) get a fragment-shaped error, since a full page injected into
 the detail pane would nest the whole console inside itself.</p>
 
@@ -522,7 +526,7 @@ the detail pane would nest the whole console inside itself.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

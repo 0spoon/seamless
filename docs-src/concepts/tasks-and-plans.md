@@ -10,7 +10,7 @@ agent that wrote it.
 
 A task is **ready** when it has no unfinished blocker. `tasks_ready` returns
 exactly those, so an agent asking "what can I do now?" never reasons about the
-dependency graph itself — it asks, and gets an actionable list.
+dependency graph itself - it asks, and gets an actionable list.
 
 `depends_on` names the tasks that must finish first. Either `done` or `dropped`
 unblocks a dependent: work that was abandoned deliberately should not wedge the
@@ -44,9 +44,9 @@ Four rules carry the whole model:
 
 1. **Claiming is atomic.** The loser gets an error naming the holder, not a
    corrupted second claim.
-2. **Re-claiming refreshes the lease.** That is the heartbeat for long work — an
+2. **Re-claiming refreshes the lease.** That is the heartbeat for long work - an
    agent still working keeps its claim by claiming again.
-3. **An expired lease is reclaimable — but it does not re-queue itself.** See
+3. **An expired lease is reclaimable - but it does not re-queue itself.** See
    the two clocks below. This is the subtlety most likely to bite you.
 4. **Closing frees it.** `tasks_release`, `tasks_update` to `done`/`dropped`, or
    `session_end` (which releases all of a session's claims).
@@ -64,7 +64,7 @@ them is how a fleet quietly stalls.
 | Visible in `tasks_ready`? | **No** | **Yes** |
 
 `tasks_ready` returns tasks whose status is `open`. A task with an expired lease
-is still `in_progress`, so it is **invisible to the queue** — an agent polling
+is still `in_progress`, so it is **invisible to the queue** - an agent polling
 `tasks_ready` will never see it, even though a `tasks_claim` on that specific id
 would now succeed.
 
@@ -77,12 +77,12 @@ Two consequences worth internalizing:
   whether a claim *can* be taken.
 - **With `gardener.enabled: false`, that second clock never runs**, and a crashed
   agent's claims stay `in_progress` indefinitely. Nothing will surface them. If
-  you turn the gardener off, you have also turned off task recovery — release
+  you turn the gardener off, you have also turned off task recovery - release
   them yourself with `tasks_release`, or from the console.
 
 A lease is **not a lock on the files**. Nothing physically stops an agent from
 working on a task it did not claim. It is a coordination signal between
-cooperating agents — the point is that well-behaved agents do not collide, not
+cooperating agents - the point is that well-behaved agents do not collide, not
 that misbehaving ones cannot.
 
 ## Plans are a composition, not a primitive
@@ -98,7 +98,7 @@ There is no `plan` object in Seamless. A plan is everything keyed by
 | **Progress** | The steps' statuses | Rolled into the briefing automatically |
 
 This composition is the reason a plan survives its author. The next agent
-inherits not just a checklist but *why* the checklist looks like that — which is
+inherits not just a checklist but *why* the checklist looks like that - which is
 the thing that usually evaporates between sessions.
 
 **Plan steps are excluded from the default queue.** `tasks_ready` and

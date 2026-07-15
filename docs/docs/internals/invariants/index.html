@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Domain invariants — Seamless docs</title>
-<meta name="description" content="The rules plausible-looking code breaks — supersession, scope resolution, FTS and LIKE escaping, LLM degradation — and why each exists.">
+<title>Domain invariants - Seamless docs</title>
+<meta name="description" content="The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Internals</p>
   <h1>Domain invariants</h1>
-  <p class="lede">The rules plausible-looking code breaks — supersession, scope resolution, FTS and LIKE escaping, LLM degradation — and why each exists.</p>
+  <p class="lede">The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.</p>
   <p>These are the rules that reasonable code violates. Every one of them has a
 sensible-looking alternative that compiles, passes review, and is wrong; each is
 enforced somewhere specific, and the pointer here is where to look, not a
@@ -166,7 +166,7 @@ substitute for reading it.</p>
 <h3 id="invalid-at-is-the-only-authoritative-has-left-the-indexes-predicate"><code>invalid_at</code> is the only authoritative &quot;has left the indexes&quot; predicate</h3>
 <p><code>core.Memory.Active()</code> is <code>InvalidAt == nil</code>; SQL filters <code>WHERE invalid_at IS NULL</code>.</p>
 <p><strong>Never infer live-ness from an empty <code>superseded_by</code>.</strong> An archived memory has
-<code>invalid_at</code> set and <code>superseded_by</code> empty — it is equally gone, and it does not
+<code>invalid_at</code> set and <code>superseded_by</code> empty - it is equally gone, and it does not
 point anywhere because nothing replaced it. Code that reads &quot;no replacement,
 therefore still valid&quot; resurrects every archived memory into briefings and recall
 at once, which is exactly the class of thing nobody notices until an agent acts on
@@ -211,12 +211,12 @@ some past moment.</p>
 </div>
 <p><strong>Acyclicity falls out of those guards</strong> rather than out of any traversal. Every
 edge points from an invalid memory to an active one, and nothing ever clears
-<code>invalid_at</code> — so no cycle can form. There is no cycle check to lean on, because
+<code>invalid_at</code> - so no cycle can form. There is no cycle check to lean on, because
 there is nothing for one to find. Weaken a guard and you do not get a slow cycle
 check; you get cycles.</p>
 <h3 id="pass-the-full-body">Pass the FULL body</h3>
 <p>Both functions append a tombstone to <code>old.Body</code> and rewrite the whole file.
-Handing them an index row — which carries no body — truncates the memory to just
+Handing them an index row - which carries no body - truncates the memory to just
 the tombstone. Re-read the file first.</p>
 <p>This is the invariant most likely to be broken by code that looks correct: the
 index row has every field the signature wants, so it type-checks, writes
@@ -225,7 +225,7 @@ successfully, and destroys the memory's content.</p>
 <p>Reviving it is <code>ErrPathOccupied</code>, never a silent clobber. The superseded memory's
 tombstone file still sits at <code>memory/{project}/{name}.md</code>, and overwriting it
 would destroy the readable history that supersession exists to preserve.
-<code>memory_delete</code> is the only escape hatch, and it drops that history — which is
+<code>memory_delete</code> is the only escape hatch, and it drops that history - which is
 why it is the escape hatch and not the default.</p>
 <h3 id="a-failed-supersede-is-a-tool-error-not-a-payload">A failed supersede is a tool ERROR, not a payload</h3>
 <p>When <code>memory_write</code> writes the new memory but the supersession fails, the call
@@ -234,7 +234,7 @@ payload with an error nested inside it.</p>
 <p>The reason is what an agent does with each. An error field inside a success
 payload reads as success: the agent moves on, believing the old memory is retired,
 and the store now serves two contradictory answers to the same question. An
-explicit tool error makes the agent deal with it. The new memory is still kept —
+explicit tool error makes the agent deal with it. The new memory is still kept -
 its content is valid knowledge, and re-writing the same name is a lossless
 in-place update, so fixing the target and retrying is safe.</p>
 <h2 id="session-binding-and-scope">Session binding and scope</h2>
@@ -245,7 +245,7 @@ in-place update, so fixing the target and retrying is safe.</p>
 <code>validateProjectArg</code>.</p>
 <p><code>validateProjectArg</code> is the path-traversal defense, and the reason it cannot be
 skipped is specific: a project slug becomes a directory under <code>memory/</code> and
-<code>notes/</code>. The data-dir boundary check alone does not catch <code>../notes/_global</code> —
+<code>notes/</code>. The data-dir boundary check alone does not catch <code>../notes/_global</code> -
 that slug cleans to a path <em>inside</em> the data dir, just in the wrong tree, where
 one item can clobber another's files.</p>
 <h3 id="a-durable-create-uses-resolvewritescope-because-it-fails-closed">A durable create uses <code>resolveWriteScope</code>, because it fails closed</h3>
@@ -259,7 +259,7 @@ choose. <code>project: global</code> says it on purpose.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">explicit project  →  the bound session&#39;s project  →  the sole unambiguous ambient
 </span></span></code></pre><p>Ambient sessions spanning more than one project are <code>errAmbiguousScope</code>, not a
 guess. Inheriting the machine-latest ambient in that situation is exactly how a
-write bleeds into a concurrent agent's project — and the agent that wrote it will
+write bleeds into a concurrent agent's project - and the agent that wrote it will
 never see the mistake, because from its side the call succeeded.</p>
 <h3 id="only-session-start-binds-a-connection">Only <code>session_start</code> binds a connection</h3>
 <p>Bindings are keyed by the MCP client session id. They evict on <code>session_end</code> and
@@ -280,16 +280,16 @@ still there.</p>
 tokens, quotes each remaining term, and ORs them. <strong>Never build a MATCH
 expression by concatenation.</strong></p>
 <p>The concrete failure is small and total: FTS5 reads <code>-</code> as an operator, so a query
-for <code>chroma-boot-race</code> handed to MATCH raw is parsed as a <em>subtraction</em> — and
+for <code>chroma-boot-race</code> handed to MATCH raw is parsed as a <em>subtraction</em> - and
 finds nothing, or the wrong thing, without erroring. Quoting turns it into three
 literal terms, which is what the user meant.</p>
 <h3 id="ftsquery-returning--means-no-usable-token"><code>ftsQuery</code> returning <code>&quot;&quot;</code> means &quot;no usable token&quot;</h3>
-<p>Callers treat that as no results — never as an unfiltered query. The distinction
+<p>Callers treat that as no results - never as an unfiltered query. The distinction
 matters because the empty string is the natural input to &quot;no filter&quot;: a caller
 that forwards it returns the entire corpus in response to punctuation.</p>
 <h3 id="user-text-in-like-goes-through-escapelikeprefix">User text in <code>LIKE</code> goes through <code>escapeLikePrefix</code></h3>
 <p>It escapes <code>\</code>, <code>%</code>, and <code>_</code>, <strong>in that order</strong>, with <code>ESCAPE '\'</code>. The order is
-not cosmetic — escape the escape character last and you double-escape the escapes
+not cosmetic - escape the escape character last and you double-escape the escapes
 you just added.</p>
 <p><strong>Never LIKE-escape a value compared with <code>=</code>.</strong> An equality comparison has no
 wildcards, so escaping only corrupts the literal being matched.</p>
@@ -337,7 +337,7 @@ honest: fewer results, from a leg that still works.</p>
 <h3 id="errconfig-surfaces"><code>ErrConfig</code> surfaces</h3>
 <p>No provider was contacted. No retry helps. It will not clear.</p>
 <p>Degrading here would trade one loud failure for quietly worse recall <strong>for the
-life of the daemon</strong> — with nothing anywhere to tell the owner that semantic
+life of the daemon</strong> - with nothing anywhere to tell the owner that semantic
 search had stopped. A store that silently searches half as well is worse than one
 that says it is broken.</p>
 <h3 id="classify-at-the-do-call-sites">Classify at the <code>do</code> call sites</h3>
@@ -348,7 +348,7 @@ prevent.</p>
 <p><code>NewEmbedder</code> and <code>NewChatClient</code> are the single construction points, and both
 validate <code>base_url</code> there, because <code>url.Parse</code> accepts a bare host:
 <code>&quot;api.openai.com/v1&quot;</code> parses fine, builds a perfectly valid request, and only
-fails inside <code>Do</code> as an opaque transport error — indistinguishable from an
+fails inside <code>Do</code> as an opaque transport error - indistinguishable from an
 outage.</p>
 <p>So the configuration typo would arrive dressed as <code>ErrUnavailable</code>, degrade
 silently, and never be found.</p>
@@ -359,7 +359,7 @@ error that occurs is a defect, and defects should be loud.</p>
 <p>Leave them. Dedup is advisory and must never block a <code>memory_write</code>; indexing is
 best-effort with a hash-retry (a failed embed clears the recorded content hash so
 the next reconcile re-indexes and tries again). These are not oversights that
-survived review — they are the two places where the &quot;no fake results on error&quot;
+survived review - they are the two places where the &quot;no fake results on error&quot;
 rule is deliberately traded for &quot;never block the agent&quot;.</p>
 
 </article>
@@ -385,7 +385,7 @@ rule is deliberately traded for &quot;never block the agent&quot;.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

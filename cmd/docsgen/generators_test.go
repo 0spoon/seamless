@@ -104,7 +104,7 @@ func TestGenerateConfigCoversExample(t *testing.T) {
 	}
 
 	require.Contains(t, md, "| `addr` | string | `127.0.0.1:8081` |")
-	require.Contains(t, md, "| `mcp.api_key` | string | — |", "a key with no default says so")
+	require.Contains(t, md, "| `mcp.api_key` | string | - |", "a key with no default says so")
 	require.Contains(t, md, "| `capture.allowed_ports` | []int | `[80, 443]` |")
 	require.Contains(t, md, "```yaml", "the example file ships verbatim")
 	require.NotContains(t, md, "| `sourcePath` |", "unexported bookkeeping is not a config key")

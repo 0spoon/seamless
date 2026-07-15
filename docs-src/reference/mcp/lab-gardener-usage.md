@@ -1,6 +1,6 @@
 ---
 title: Lab, gardener & usage
-description: Research trials, the propose-only gardener, and the usage summary — the eight tools for keeping the store honest.
+description: Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.
 generate: mcp-tools
 tools:
   - lab_open
@@ -23,13 +23,13 @@ project. `trial_query` reads the trials back.
 The point is **parallel agents collaborating on one investigation**. Several
 agents chasing the same bug can open the same lab, record what they tried, and
 see each other's dead ends instead of re-walking them. When the investigation
-resolves, distill the finding into a memory — the lab is the working record, not
+resolves, distill the finding into a memory - the lab is the working record, not
 the conclusion.
 
 ## The gardener proposes; it never acts
 
 The gardener runs periodically over the store looking for drift. Every pass it
-makes ends in a **proposal row for you to review** — it never rewrites your
+makes ends in a **proposal row for you to review** - it never rewrites your
 knowledge behind your back. That is the whole contract, and it is why the tool
 surface has both `gardener_proposals` (read them) and `gardener_apply` (act on
 one) instead of a single "tidy up" button.
@@ -48,18 +48,18 @@ constraint does not become less true by sitting still.
 
 `gardener_request` takes a request in natural language ("fold the two console
 theme memories together") and turns it into the same reviewable proposals. It can
-also **reproject** a memory filed under the wrong project — moving it to a
+also **reproject** a memory filed under the wrong project - moving it to a
 different project that already exists.
 
 Its `project` argument scopes the memories it may reference: a project slug (that
 project plus globals), `global` for globals only, or `all` for every project on
-the machine. Omit it and the scope resolves the way every other read does — from
-the session — rather than quietly widening to everything. A slug that is not a
+the machine. Omit it and the scope resolves the way every other read does - from
+the session - rather than quietly widening to everything. A slug that is not a
 project is an error, not an empty result.
 
 ## Splits are a different thing
 
-Moving a memory into a project that does not exist yet is not a reproject — it is
+Moving a memory into a project that does not exist yet is not a reproject - it is
 a split, and `gardener_split` plans it. Splitting one project into new children
 creates those projects and a shared parent, so it is planned as a unit rather
 than as a pile of individual moves.
@@ -68,5 +68,5 @@ than as a pile of individual moves.
 
 `usage_summary` reports what the store actually contains and what retrieval has
 been doing: memory counts, retrieval statistics, events by kind. It answers "is
-this thing working, and on how much?" — the same question the console's Overview
+this thing working, and on how much?" - the same question the console's Overview
 answers, for an agent that cannot open a browser.

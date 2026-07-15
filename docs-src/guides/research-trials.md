@@ -1,6 +1,6 @@
 ---
 title: Run research trials
-description: The lab loop for systematic debugging — recording what was tried, letting parallel agents share dead ends, and distilling the result into memory.
+description: The lab loop for systematic debugging - recording what was tried, letting parallel agents share dead ends, and distilling the result into memory.
 ---
 
 Some problems are not solved by thinking harder; they are solved by trying twelve
@@ -35,7 +35,7 @@ project, so `trial_record` inherits it without you naming the lab every time.
 The field that earns its keep is **what you expected**. A trial that says "tried
 X, it failed" is worth little. One that says "expected the firmware to enumerate
 after DFU because the descriptor changed; it enumerated but with the old PID"
-tells the next agent which model of the system was wrong — and that is the actual
+tells the next agent which model of the system was wrong - and that is the actual
 product of debugging.
 
 Record trials that *succeeded* too. "This worked" is what stops the next agent
@@ -60,10 +60,10 @@ agents](/guides/coordinate-agents/).
 A lab is a working record, not a conclusion. When the investigation resolves,
 write **one memory** that captures what is now known:
 
-- The thing that was wrong, as a `gotcha` — with the symptom in the description,
+- The thing that was wrong, as a `gotcha` - with the symptom in the description,
   so the next agent recognizes it before diagnosing it.
-- The thing you decided, as a `decision` — with the alternatives you rejected.
-- The thing you believed that turned out false, as `refuted` — this is the kind
+- The thing you decided, as a `decision` - with the alternatives you rejected.
+- The thing you believed that turned out false, as `refuted` - this is the kind
   people skip, and it is what stops the fleet re-deriving the dead end.
 
 Do not copy the trial log into memory. The trials stay in the lab, queryable; the

@@ -1,6 +1,6 @@
 ---
 title: Write memories that get recalled
-description: The description is the retrieval surface, not a label — how to write one, how to pick a kind, and the four habits that fill a store with noise.
+description: The description is the retrieval surface, not a label - how to write one, how to pick a kind, and the four habits that fill a store with noise.
 ---
 
 A memory that is never retrieved is worse than one that was never written: it
@@ -18,11 +18,11 @@ where most bad memories die:
 |---|---|
 | Briefing, memory list, recall results | The `description`. Nothing else |
 | The `<seam-recall>` prompt injection | `name` + `description`, tokenized. **The body is never considered** |
-| A `recall` call — keyword leg | `name`, `description`, `body` (FTS5) |
-| A `recall` call — vector leg | `name` + `description` + `body`, embedded together |
+| A `recall` call - keyword leg | `name`, `description`, `body` (FTS5) |
+| A `recall` call - vector leg | `name` + `description` + `body`, embedded together |
 
 Read the second row again. The [UserPromptSubmit matcher](/reference/hooks/) is
-purely lexical — it has to be, it runs inside a five-second hook — and it scores
+purely lexical - it has to be, it runs inside a five-second hook - and it scores
 each memory on the tokens in its name and description alone. A memory whose
 description is vague is **invisible to ambient recall** no matter how good its
 body is. It can only be found by an agent that already decided to go looking.
@@ -53,7 +53,7 @@ GOOD  description: gofmt walks the filesystem while go's ./... skips dot-dirs:
 ```
 
 The bad one shares no rare token with any prompt an agent would write. The good
-one carries `gofmt`, `dot-dirs`, `worktrees` — an agent typing "why did my
+one carries `gofmt`, `dot-dirs`, `worktrees` - an agent typing "why did my
 formatter touch files I didn't edit" hits it, and the description *already
 contains the fix*. The body never has to open.
 
@@ -89,7 +89,7 @@ actually contain.
 
 ## Choosing a kind
 
-The kind is not filing paperwork — it changes what happens to the memory:
+The kind is not filing paperwork - it changes what happens to the memory:
 
 | Kind | Use it for | Consequence |
 |---|---|---|
@@ -103,16 +103,16 @@ The kind is not filing paperwork — it changes what happens to the memory:
 Two calls people get wrong.
 
 **`decision` vs `constraint`.** "We chose SQLite over ChromaDB, because a second
-service buys ANN we do not need" is a `decision` — it carries reasoning and a
+service buys ANN we do not need" is a `decision` - it carries reasoning and a
 rejected alternative, and it exists so the argument does not happen again. "No
-CGO" is a `constraint` — there is no reasoning to weigh at call time, only a rule
+CGO" is a `constraint` - there is no reasoning to weigh at call time, only a rule
 to not violate. Filing a preference as a constraint crowds out real constraints;
 filing a real constraint as a `reference` means agents violate it.
 
 **`refuted` is the one that gets skipped.** Nobody wants to write down what they
 were wrong about. But a store that only records what is true keeps paying for the
 same wrong turn forever: the fleet re-derives the dead end, tries it, finds it
-dead, and moves on — every time, for every agent. Recording the refutation makes
+dead, and moves on - every time, for every agent. Recording the refutation makes
 that cost one-time. It is the highest-leverage memory kind and the least written.
 
 ## Supersede, don't accrete
@@ -121,7 +121,7 @@ Four ways to change memory, and the wrong one rots the store:
 
 | You want to | Use |
 |---|---|
-| Correct or extend what *this* memory says | `memory_write`, same `name` — updated in place, id stable |
+| Correct or extend what *this* memory says | `memory_write`, same `name` - updated in place, id stable |
 | Add to the end without rereading it | `memory_append` |
 | Replace a **different**, now-outdated memory | `memory_write` with `supersedes` |
 | Remove something written by mistake | `memory_delete` |
@@ -131,7 +131,7 @@ being true.** Deleting the latter destroys the reasoning that explains the curre
 state, and the argument reopens in six weeks.
 
 The subtle one is `memory_append`. It grows the body and **does not touch the
-description** — which is correct, and also exactly how a memory rots. Append four
+description** - which is correct, and also exactly how a memory rots. Append four
 times and the description now summarizes the first paragraph of a memory that has
 moved on. The retrieval surface has silently decoupled from the content: recall
 still finds the memory for the old topic, and never finds it for what it now
@@ -147,7 +147,7 @@ note. The test: *would a future agent need this injected before it starts workin
 
 **Duplicating the codebase.** Seamless stores what agents *learned*, not what the
 code says. The code is already in the repo, and a memory mirroring it goes stale
-the moment someone edits the file — silently, because nothing links them. The same
+the moment someone edits the file - silently, because nothing links them. The same
 goes for anything `CLAUDE.md` already injects: restating it spends budget to say
 what the agent was told anyway.
 
@@ -158,7 +158,7 @@ it is a label. Labels do not retrieve.
 **Accreting near-duplicates.** Writing `console-theme-fix-2` beside
 `console-theme-fix` gives recall two answers and lets the agent pick. Seamless
 pushes back twice: `memory_write` on a new name reports a semantically similar
-existing memory as an advisory hint (the write still proceeds — it is a hint, not
+existing memory as an advisory hint (the write still proceeds - it is a hint, not
 a veto), and [the gardener](/concepts/gardener/) proposes a merge for pairs above
 its similarity threshold. Take the hint. If the new thing replaces the old thing,
 that is what `supersedes` is for.
@@ -166,7 +166,7 @@ that is what `supersedes` is for.
 ## The one-line test
 
 Before writing, say the memory out loud as its description alone. If a future
-agent — with none of your context, three weeks from now, mid-task — could not
+agent - with none of your context, three weeks from now, mid-task - could not
 decide from that line whether to read further, the line is not done yet. That is
 the description's entire job, and it is the only part of the memory most agents
 will ever see.

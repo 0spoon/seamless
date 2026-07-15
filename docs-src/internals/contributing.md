@@ -19,7 +19,7 @@ make fmt        # gofmt, over tracked files
 make fmt-check  # report gofmt drift instead of fixing it
 make docs       # regenerate docs-src/ -> docs/docs/ (committed)
 make docs-check # fail if the committed site is stale
-make check      # the gate — everything above, in order
+make check      # the gate - everything above, in order
 ```
 
 `make help` prints the full list, including the launchd dev-loop and prod-install
@@ -37,7 +37,7 @@ make check
 ```
 
 That is the one command that must be green before work is done. It runs six steps
-sequentially — as separate `$(MAKE)` invocations rather than prerequisites, so it
+sequentially - as separate `$(MAKE)` invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under `make -j`:
 
 | Order | Step | Catches |
@@ -55,7 +55,7 @@ exist for iterating; `check` is the thing you run before you claim to be done.
 
 `docs-check` regenerates into a temp dir and diffs, rather than rewriting your
 working tree and running `git diff`. That means it never mutates the file you are
-editing, and `diff -r` catches untracked drift that `git diff` cannot see — a page
+editing, and `diff -r` catches untracked drift that `git diff` cannot see - a page
 deleted from `docs-src/` but still committed under `docs/docs/`. Two docs pages
 are generated from the code (the MCP tool reference reads `mcp.Catalog()`, the
 configuration reference reflects `config.Defaults()`), so changing a tool or a
@@ -66,7 +66,7 @@ config key makes the committed output stale, and this is the step that says so.
 This one bites in a specific way, so it is worth stating plainly.
 
 The go tool's `./...` pattern skips dot-directories, so `build`, `vet`, `test`,
-and `lint` never see `.claude/worktrees/` — other agents' checkouts of this same
+and `lint` never see `.claude/worktrees/` - other agents' checkouts of this same
 repo. **gofmt takes paths, not packages, and walks the filesystem raw.** So:
 
 - `gofmt -l .` descends into those worktrees and reports *their* drift as yours.
@@ -84,7 +84,7 @@ Always go through them.
 - **Package layout is consistent** across `internal/`: `service.go` for the
   package's public API, `store.go` for SQLite access, `handler.go` for an HTTP
   surface, `{feature}.go` for pure functions, `*_test.go` alongside.
-- **Interfaces are role nouns** — `Store`, `Recorder`, `Embedder`, not `IStore`.
+- **Interfaces are role nouns** - `Store`, `Recorder`, `Embedder`, not `IStore`.
 - **Constructors are `New{Type}(deps) *Type`**, or `(*Type, error)` when they can
   fail.
 - **Domain errors are package-level sentinels** (`var Err{Condition} =
@@ -94,7 +94,7 @@ Always go through them.
   err)`. Reserve `fmt.Errorf` for wrapping; sentinels come from `errors.New`.
 - **Either log or return an error, never both.** Fatal to the operation → return
   it. Non-fatal (graceful degradation) → `slog.Warn`/`Debug` and continue.
-- **`log/slog`, and never log memory or note bodies** — IDs only.
+- **`log/slog`, and never log memory or note bodies** - IDs only.
 - **Every service and store method takes `context.Context` first.** Never
   `context.Background()` in a handler or in a goroutine spawned by one: derive
   from the request context, or use `context.WithoutCancel` for work that must
@@ -118,7 +118,7 @@ Always go through them.
 - **Embeddings are little-endian float32 BLOBs** in the `embeddings` table, and
   similarity is brute-force cosine in Go. Do not add a vector database.
 - **The unified FTS5 table (`fts`) spans memories and notes** and is managed from
-  the files layer with explicit INSERT/DELETE — not triggers, because it is not
+  the files layer with explicit INSERT/DELETE - not triggers, because it is not
   an external-content table.
 
 ## Testing rules
@@ -164,7 +164,7 @@ so errors discarded into `_` are reported too.
 
 That last one is the guardrail worth understanding. `n, _ := res.RowsAffected()`
 in front of `if n == 0 { return ErrNotFound }` turns a driver failure into a
-confident "not found" — the caller believes it, and there is no way to tell the
+confident "not found" - the caller believes it, and there is no way to tell the
 two apart afterwards. Every surviving discard is either listed in
 `.golangci.yml`'s `exclude-functions` (structurally uninteresting: a deferred
 `Tx.Rollback`, a write to an already-committed HTTP response) or carries a
@@ -180,7 +180,7 @@ blanket exclusion.
   transaction first, then performs the filesystem mutation in a post-commit step,
   and undoes partial filesystem state on rollback.
 - **`rows.Err()` after every `for rows.Next()`.**
-- **FTS5 MATCH sanitization** and **LIKE escaping** — see
+- **FTS5 MATCH sanitization** and **LIKE escaping** - see
   [Domain invariants](/internals/invariants/).
 - **`filepath.Join` everywhere**, tests included.
 
@@ -189,18 +189,18 @@ blanket exclusion.
 A tool has to be wired in **three** places inside `internal/mcp`, and each one is
 guarded so that missing it fails a check rather than shipping quietly:
 
-1. **`registerTools`** — the actual registration. Without it the server does not
+1. **`registerTools`** - the actual registration. Without it the server does not
    serve the tool.
-2. **`ToolCount`** (in `server.go`) — bump it. `Server.NumTools()` counts what was
+2. **`ToolCount`** (in `server.go`) - bump it. `Server.NumTools()` counts what was
    registered, and `seamlessd doctor` asserts the two are equal, so a tool written
    but never wired in fails the doctor check.
-3. **`Catalog()`** (in `catalog.go`) — add the tool's constructor, **in the same
+3. **`Catalog()`** (in `catalog.go`) - add the tool's constructor, **in the same
    order as `registerTools`**. `Catalog` exists so `cmd/docsgen` can render the
    tool reference without constructing a `Server`: the constructors are plain data
    (name, description, input schema) and need no DB, config, or listening port.
 
 `internal/mcp/catalog_test.go` enforces the parity, and it is a same-package test
-so it can read the server's private `toolNames` — the registration record itself,
+so it can read the server's private `toolNames` - the registration record itself,
 not a second hand-maintained list:
 
 ```go
@@ -231,5 +231,5 @@ Two places outside `internal/mcp` also track the surface:
 3. **Propagate every fix.** When you fix a buggy pattern, grep the repo for other
    instances and fix them all together.
 4. **No fake results on error.** Never swallow an error and return a plausible
-   dummy value — an agent cannot distinguish it from a real result. Return the
+   dummy value - an agent cannot distinguish it from a real result. Return the
    error.

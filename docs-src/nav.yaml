@@ -19,7 +19,7 @@ sections:
 
   - title: Concepts
     slug: concepts
-    description: How the pieces fit — memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.
+    description: How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.
     pages:
       - how-it-works.md
       - memory.md
@@ -31,7 +31,7 @@ sections:
 
   - title: Guides
     slug: guides
-    description: Task-shaped walkthroughs — wiring up an agent, writing memories worth recalling, running a fleet, and fixing what broke.
+    description: Task-shaped walkthroughs - wiring up an agent, writing memories worth recalling, running a fleet, and fixing what broke.
     pages:
       - integrate-your-agent.md
       - write-good-memories.md
@@ -43,7 +43,7 @@ sections:
 
   - title: Reference
     slug: reference
-    description: The complete surface — MCP tools, CLIs, configuration keys, hooks, and file formats.
+    description: The complete surface - MCP tools, CLIs, configuration keys, hooks, and file formats.
     pages:
       - mcp/index.md
       - mcp/sessions-memory-recall.md
@@ -60,7 +60,7 @@ sections:
 
   - title: Internals
     slug: internals
-    description: For contributors — the package layering, the check gate, and the invariants the code holds.
+    description: For contributors - the package layering, the check gate, and the invariants the code holds.
     pages:
       - architecture.md
       - contributing.md

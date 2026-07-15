@@ -4,7 +4,7 @@ description: What a memory is, the eight kinds, how supersession keeps the store
 ---
 
 A memory is a markdown file with frontmatter. That is not an implementation
-detail — it is the design. You can read it, `grep` it, edit it, and put it in
+detail - it is the design. You can read it, `grep` it, edit it, and put it in
 git, and no part of the system needs your permission to be inspected.
 
 ```yaml
@@ -28,12 +28,12 @@ body markdown
 ## The description is the product
 
 Everything above the body is bookkeeping except one field. **The `description` is
-the only text an index ever shows** — the briefing, the memory list, the recall
+the only text an index ever shows** - the briefing, the memory list, the recall
 result. An agent decides whether to read the body based on nothing but that line.
 
 A description that says "notes about the console" is invisible: no future agent
 can tell whether it matters. One that says "Console: a trailing note inside a
-`.card h2` must use `.h2-meta`, never `.count` — header is flex space-between"
+`.card h2` must use `.h2-meta`, never `.count` - header is flex space-between"
 does the whole job without the body being opened at all.
 
 Write the description for a future agent deciding whether to read further. That
@@ -60,7 +60,7 @@ it.
 
 `refuted` deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,
-finds it dead, and moves on — every time. Recording the refutation makes that
+finds it dead, and moves on - every time. Recording the refutation makes that
 cost one-time.
 
 ## Supersession: how the store stays honest
@@ -112,7 +112,7 @@ The single most common confusion:
 |---|---|---|
 | Answers | "What is true about this project?" | "What did we produce?" |
 | Size | One idea, led by a one-line description | However long the artifact needs |
-| Reaches a briefing | Yes | No — found via [recall](/concepts/recall/) |
+| Reaches a briefing | Yes | No - found via [recall](/concepts/recall/) |
 | Examples | A constraint, a gotcha, a decision | Research findings, a meeting summary, a design record |
 
 The test: **would a future agent need this injected before it starts working?**
@@ -126,7 +126,7 @@ specific to generalize, and it pushes real constraints out of the briefing.
 ## Global vs. project
 
 A memory with an empty `project` is global: every agent in every repo sees it.
-That is a strong claim, so writes **fail closed** — with no session and no
+That is a strong claim, so writes **fail closed** - with no session and no
 explicit project, a write is rejected as ambiguous rather than quietly landing in
 the global scope. Pass `project: global` to mean it on purpose. See
 [Projects & scope](/concepts/projects/).

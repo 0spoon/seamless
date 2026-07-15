@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Build Seamless, point Claude Code at it, and confirm the first briefing lands — one happy path, about ten commands.
+description: Build Seamless, point Claude Code at it, and confirm the first briefing lands - one happy path, about ten commands.
 ---
 
 This is the one happy path: build from source, run the daemon, register it with
@@ -33,7 +33,7 @@ claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/
 ```
 
 `--scope user` is required. Without it `claude mcp add` defaults to `local`,
-which ties the registration to whichever directory you happened to run it from —
+which ties the registration to whichever directory you happened to run it from -
 and the tools then vanish in every other repo.
 
 ## Install the hooks and map a repo

@@ -1,6 +1,6 @@
 ---
 title: The gardener
-description: The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.
+description: The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.
 ---
 
 Any store that agents write to accumulates cruft: two memories saying the same
@@ -15,7 +15,7 @@ The gardener finds those. Then it stops and asks.
 edits, merges, or archives on its own.
 
 This is not timidity. The entire premise of Seamless is that the knowledge is
-yours and legible — a store that quietly rewrites itself while you sleep is
+yours and legible - a store that quietly rewrites itself while you sleep is
 exactly the black box the project exists to avoid. If an automated pass can
 decide your constraint is stale and archive it, then you do not actually know
 what your agents will be told tomorrow.
@@ -34,9 +34,9 @@ found, `gardener_apply` to act on one.
 
 Two more proposal types come from requests rather than the timer:
 
-- **reproject** — a memory filed under the wrong project, moved to a project that
+- **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
-- **split** — one project divided into new child projects. This creates projects
+- **split** - one project divided into new child projects. This creates projects
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
@@ -47,7 +47,7 @@ Age-filtering and staleness-archiving never touch `constraint` or pinned `stage`
 memories.
 
 A constraint does not become less true by sitting still. "Never use CGO" is not
-stale at 90 days — it is *settled*, and the absence of recent edits is evidence
+stale at 90 days - it is *settled*, and the absence of recent edits is evidence
 it is working, not evidence it is rotting. Time-based archival encodes the
 opposite assumption, so the pass simply skips the kinds where that assumption is
 wrong.
@@ -60,13 +60,13 @@ gardener_request "fold the two console theme memories together"
 
 `gardener_request` takes natural language and turns it into the same reviewable
 proposals as the timed passes. It is a way to *aim* the gardener, not a way to
-bypass the review step — what comes back is still a proposal.
+bypass the review step - what comes back is still a proposal.
 
 ## Where you review
 
-- **The console** — `/console/gardener` lists proposals with what each would do.
-- **`gardener_proposals`** — the same, for an agent.
+- **The console** - `/console/gardener` lists proposals with what each would do.
+- **`gardener_proposals`** - the same, for an agent.
 
 The gardener runs every `gardener.interval_minutes` (60) when
-`gardener.enabled` is on. Everything in this page is tunable — see
+`gardener.enabled` is on. Everything in this page is tunable - see
 [Configuration](/reference/configuration/).

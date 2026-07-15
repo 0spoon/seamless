@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Integrate your agent — Seamless docs</title>
-<meta name="description" content="Wire a non-Claude-Code client into the agent loop — the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.">
+<title>Integrate your agent - Seamless docs</title>
+<meta name="description" content="Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Guides</p>
   <h1>Integrate your agent</h1>
-  <p class="lede">Wire a non-Claude-Code client into the agent loop — the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.</p>
+  <p class="lede">Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.</p>
   <p>Claude Code gets Seamless for free: <a href="../../reference/hooks/">hooks</a> open a session,
 inject a briefing, and harvest findings without the agent deciding to. Any other
 client has no hooks. It has to run the loop itself.</p>
@@ -173,7 +173,7 @@ client has no hooks. It has to run the loop itself.</p>
 without them. They are not optional in the sense that matters: <strong><code>session_start</code>
 is what makes every later call know its scope</strong>, and <code>session_end</code> is the only
 thing that turns this run into something the next agent is told about. An agent
-that skips both still works and leaves no trace — which is the same as not
+that skips both still works and leaves no trace - which is the same as not
 integrating at all.</p>
 <h2 id="connecting">Connecting</h2>
 <p>Seamless serves streamable-HTTP MCP at <code>/api/mcp</code> behind one static bearer key
@@ -191,8 +191,8 @@ the handshake is two calls.</p>
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;clientInfo&#34;:{&#34;name&#34;:&#34;my-agent&#34;,&#34;version&#34;:&#34;1&#34;}}}&#39;</span>
 </span></span></code></pre><p>The response body carries <code>serverInfo</code> (name and build version), but the part you
 must keep is a <strong>header</strong>: <code>Mcp-Session-Id: mcp-session-&lt;uuid&gt;</code>. Send it on every
-subsequent request. A <code>tools/call</code> without it — or with one the daemon does not
-know — is refused by the transport with <code>Invalid session ID</code> before any tool
+subsequent request. A <code>tools/call</code> without it - or with one the daemon does not
+know - is refused by the transport with <code>Invalid session ID</code> before any tool
 runs.</p>
 <p>Acknowledge the handshake, then call tools:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">SID</span><span class="o">=</span>&lt;the Mcp-Session-Id from above&gt;
@@ -218,8 +218,8 @@ and a rejected call comes back as a <strong>successful HTTP 200 carrying a tool 
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;jsonrpc&#34;</span><span class="p">:</span><span class="s2">&#34;2.0&#34;</span><span class="p">,</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">&#34;result&#34;</span><span class="p">:{</span><span class="nt">&#34;content&#34;</span><span class="p">:[{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span><span class="s2">&#34;text&#34;</span><span class="p">,</span><span class="nt">&#34;text&#34;</span><span class="p">:</span><span class="s2">&#34;unauthorized: valid bearer key required&#34;</span><span class="p">}],</span><span class="nt">&#34;isError&#34;</span><span class="p">:</span><span class="kc">true</span><span class="p">}}</span>
 </span></span></code></pre><p>A client that trusts HTTP status codes will read that as a working integration
 returning odd text. Check <code>isError</code> on every result. This is the same shape every
-other tool failure takes — errors are tool results with a <code>&lt;tool&gt;: &lt;reason&gt;</code>
-message, never transport failures — so handling <code>isError</code> once handles all of
+other tool failure takes - errors are tool results with a <code>&lt;tool&gt;: &lt;reason&gt;</code>
+message, never transport failures - so handling <code>isError</code> once handles all of
 them.</p>
 <h2 id="the-connection-is-the-session-binding">The connection is the session binding</h2>
 <p><code>session_start</code> binds the session to your connection, keyed by the transport's
@@ -229,7 +229,7 @@ scope off the connection.</p>
 <p>The binding lives in the daemon's memory, keyed by an id it minted. Two
 consequences you have to design around:</p>
 <ul>
-<li><strong>The id encodes nothing about you</strong> — no working directory, no client
+<li><strong>The id encodes nothing about you</strong> - no working directory, no client
 identity. It is an opaque UUID. The only way scope reaches the server is the
 <code>cwd</code> you passed to <code>session_start</code>, or an explicit <code>project</code> argument.</li>
 <li><strong>It does not reliably survive a daemon restart.</strong> Sometimes the client
@@ -240,7 +240,7 @@ sends the old id and the fresh process accepts it. Which one happens is a race.<
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.</p>
 <h2 id="scope-discipline">Scope discipline</h2>
-<p>Scope is the thing most integrations get wrong, and the failures are quiet —
+<p>Scope is the thing most integrations get wrong, and the failures are quiet -
 knowledge lands somewhere nobody looks. The full precedence chain is in
 <a href="../../concepts/projects/">Projects &amp; scope</a>; the operational summary is short.</p>
 <div class="table-wrap">
@@ -262,7 +262,7 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 </tr>
 <tr>
 <td><code>session_start</code> with a <code>cwd</code> that is not in a git repo</td>
-<td>Nothing — the session is global</td>
+<td>Nothing - the session is global</td>
 </tr>
 <tr>
 <td>No session, no <code>project</code> argument</td>
@@ -272,7 +272,7 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 </table>
 </div>
 <p>That third row is the one that surprises people. A session started outside a git
-repo has no project, and its writes go global — silently, because a bound session
+repo has no project, and its writes go global - silently, because a bound session
 always resolves, even to the global scope. If your agent does not run in a repo,
 pass <code>project</code> explicitly on every durable write.</p>
 <p>Writes <strong>fail closed</strong>. A <code>memory_write</code> with nothing to infer scope from is
@@ -280,9 +280,9 @@ rejected as ambiguous rather than landing globally, because a global memory is
 seen by every agent in every repo forever and that is not something the system
 should do when it is <em>unsure</em>. Two distinct errors say so:</p>
 <ul>
-<li><em>no bound or ambient session to infer the project from</em> — nothing to inherit.
+<li><em>no bound or ambient session to infer the project from</em> - nothing to inherit.
 Call <code>session_start</code>, or pass <code>project</code>.</li>
-<li><em>active ambient sessions span multiple projects</em> — you are unbound and other
+<li><em>active ambient sessions span multiple projects</em> - you are unbound and other
 agents are live in several repos, so inheriting would bleed your write into
 someone else's project. Pass <code>project</code>.</li>
 </ul>
@@ -292,9 +292,11 @@ never a default you fall into.</p>
 <p>The budget is real: constraints are never dropped, so everything else competes for
 what is left of a briefing. A memory that does not earn its line pushes out one
 that would have.</p>
-<p>Write one when the knowledge is <strong>durable, general, and not already discoverable</strong>
-— a constraint the project cannot violate, a trap and its symptom, a decision and
-the alternatives it rejected, a belief that turned out false.</p>
+<p>Write one when the knowledge is <strong>durable, general, and not already discoverable</strong></p>
+<ul>
+<li>a constraint the project cannot violate, a trap and its symptom, a decision and
+the alternatives it rejected, a belief that turned out false.</li>
+</ul>
 <p>Skip it when:</p>
 <div class="table-wrap">
 <table>
@@ -319,7 +321,7 @@ the alternatives it rejected, a belief that turned out false.</p>
 </tr>
 <tr>
 <td>A long artifact</td>
-<td>That is a note — found via <a href="../../concepts/recall/">recall</a>, not injected</td>
+<td>That is a note - found via <a href="../../concepts/recall/">recall</a>, not injected</td>
 </tr>
 </tbody>
 </table>
@@ -339,20 +341,20 @@ a headless client for the same daemon, authenticating with the same key:</p>
 </span></span></code></pre><p>Two things to know before you script it.</p>
 <p><strong>Outside the agent loop, flags go before positionals.</strong> <code>prime</code>, <code>remember</code>,
 <code>recall</code>, and <code>capture</code> take flags on either side. Everywhere else Go's <code>flag</code>
-package stops parsing at the first non-flag argument, so <code>seam task release 01K7ABCD --force</code> cannot bind <code>--force</code> — rather than ignore it, <code>seam</code> rejects
+package stops parsing at the first non-flag argument, so <code>seam task release 01K7ABCD --force</code> cannot bind <code>--force</code> - rather than ignore it, <code>seam</code> rejects
 the line. See the <a href="../../reference/cli-seam/">seam CLI reference</a> for the commands
 where this bites.</p>
 <p><strong>There is no <code>seam session-end</code>.</strong> The CLI covers start, write, search, and the
 queue, but findings are harvested by the SessionEnd hook or the <code>session_end</code> MCP
 tool. An agent driving Seamless purely through <code>seam</code> starts sessions that only
 the idle reaper closes, and contributes nothing to the next briefing. If findings
-matter — and they are the whole point of <code>session_end</code> — that agent needs the MCP
+matter - and they are the whole point of <code>session_end</code> - that agent needs the MCP
 surface.</p>
 <h2 id="verify-the-integration">Verify the integration</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seam doctor        <span class="c1"># /healthz, key acceptance, tools/list count, project_list</span>
 </span></span></code></pre><p>A green <code>mcp_tools</code> line proves the endpoint answers <em>and</em> your key works, which
 is most of what an integration can get wrong. <code>seamlessd doctor</code> covers the other
-half — config, database, embedder, hooks — on the server side. If something is
+half - config, database, embedder, hooks - on the server side. If something is
 wrong and nothing is complaining, start at
 <a href="../../guides/troubleshooting/">Troubleshooting</a>: the hooks fail open, so silence is
 the failure mode.</p>
@@ -380,7 +382,7 @@ the failure mode.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

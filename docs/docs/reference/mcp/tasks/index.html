@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tasks — Seamless docs</title>
-<meta name="description" content="The six task tools — the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.">
+<title>Tasks - Seamless docs</title>
+<meta name="description" content="The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>Tasks</h1>
-  <p class="lede">The six task tools — the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.</p>
+  <p class="lede">The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.</p>
   <p>Tasks are how agents hand work to each other. A task is <strong>ready</strong> when it has no
 unfinished blocker; <code>tasks_ready</code> returns exactly those, so an agent asking &quot;what
 can I do now?&quot; never has to reason about the dependency graph itself.</p>
@@ -166,9 +166,9 @@ will both try to take it, and exactly one wins:</p>
 <ol>
 <li><code>tasks_claim</code> atomically moves a ready task to <code>in_progress</code> and stamps a
 lease (default 900 seconds). The loser gets an error naming the holder.</li>
-<li>Re-claiming a task you already hold <strong>refreshes</strong> the lease — that is the
+<li>Re-claiming a task you already hold <strong>refreshes</strong> the lease - that is the
 heartbeat for long work.</li>
-<li>An <strong>expired</strong> lease is reclaimable <em>by id</em> — but the task stays
+<li>An <strong>expired</strong> lease is reclaimable <em>by id</em> - but the task stays
 <code>in_progress</code>, so <code>tasks_ready</code> does not show it. Only releasing it (by hand,
 or by the gardener's session reaper expiring the dead holder's session) sets
 the status back to <code>open</code> and returns it to the queue. See <a href="../../../concepts/tasks-and-plans/">the two
@@ -176,7 +176,7 @@ clocks</a>.</li>
 <li><code>tasks_release</code>, closing the task (<code>tasks_update</code> to <code>done</code>/<code>dropped</code>), or
 <code>session_end</code> frees the claim.</li>
 </ol>
-<p>A lease is not a lock on the files — it is a coordination signal between
+<p>A lease is not a lock on the files - it is a coordination signal between
 cooperating agents. Nothing stops a determined agent from working on a task it
 did not claim; the point is that well-behaved agents do not collide.</p>
 <h2 id="plan-steps-are-not-queue-items">Plan steps are not queue items</h2>
@@ -424,7 +424,7 @@ either tool to see that plan's steps instead.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../../static/docs.js"></script>

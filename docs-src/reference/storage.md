@@ -57,15 +57,15 @@ Field by field:
 |---|---|---|
 | `id` | system | ULID. Never a UUID. The identity every other reference points at. |
 | `kind` | author | One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly. |
-| `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories — a superseded memory coexists with a replacement that reuses its name. |
-| `description` | author | One line, ≤150 chars. **The only text shown in indexes** — write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
+| `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories - a superseded memory coexists with a replacement that reuses its name. |
+| `description` | author | One line, ≤150 chars. **The only text shown in indexes** - write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
 | `project` | author | Project slug. Empty means global, and the file lives under `memory/_global/`. Omitted from the frontmatter when empty. |
 | `created` | system | RFC3339. First write. |
 | `updated` | system | RFC3339. Last write. |
 | `valid_from` | system | RFC3339. Start of the validity window. |
 | `invalid_at` | **system only** | RFC3339 or `null`. `null` means active. Set on supersession or archive; a memory with it set leaves every active index. |
 | `superseded_by` | **system only** | ULID of the replacement, or `null`. |
-| `source_session` | system | Provenance — the session that wrote it, e.g. `cc/ab12cd34`. |
+| `source_session` | system | Provenance - the session that wrote it, e.g. `cc/ab12cd34`. |
 | `tags` | author | Flow-style list. Omitted when empty. Also the `plan:<slug>` composition key. |
 
 Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
@@ -88,7 +88,7 @@ survive), but is not mirrored to the index.
 ### Validity
 
 `invalid_at` is the whole lifecycle in one field. `nil` means active. Anything
-else means the memory has left the briefing, prompt, and recall indexes — while
+else means the memory has left the briefing, prompt, and recall indexes - while
 staying on disk and readable, as provenance.
 
 A superseded memory is never deleted. It is stamped `invalid_at` and
@@ -100,7 +100,7 @@ another.
 
 ## Note frontmatter
 
-A note is a work artifact — research finding, decision record, meeting summary.
+A note is a work artifact - research finding, decision record, meeting summary.
 Unlike a memory it has **no lifecycle and no validity window**:
 
 ```yaml
@@ -129,27 +129,27 @@ body markdown
 
 **Rebuildable mirrors of the files.** Delete these and they come back:
 
-- `memories_index` — frontmatter mirror, plus `content_hash` and `file_path`.
-- `notes_index` — the same for notes.
-- `fts` — the FTS5 virtual table over both, indexing title, name, description,
+- `memories_index` - frontmatter mirror, plus `content_hash` and `file_path`.
+- `notes_index` - the same for notes.
+- `fts` - the FTS5 virtual table over both, indexing title, name, description,
   and body. Self-contained, managed directly by the files layer.
-- `embeddings` — one float32 BLOB vector per item (little-endian), with its model
+- `embeddings` - one float32 BLOB vector per item (little-endian), with its model
   and dims. Brute-force cosine; there is no vector database.
 
 **DB-of-record state that exists nowhere else.** These have no file behind them,
 so losing `seam.db` loses them:
 
-- `sessions` — ambient and explicit sessions, findings, cwd, status.
-- `tasks` and `task_deps` — the ready-queue, plan slugs, claims, and leases.
-- `trials` — research lab records with queryable JSON metrics.
-- `events` — the append-only log behind telemetry, the console feed, and
+- `sessions` - ambient and explicit sessions, findings, cwd, status.
+- `tasks` and `task_deps` - the ready-queue, plan slugs, claims, and leases.
+- `trials` - research lab records with queryable JSON metrics.
+- `events` - the append-only log behind telemetry, the console feed, and
   retrieval stats.
-- `retrieval_stats` — inject/read counters maintained from events.
-- `projects` — slugs, parent topology, retirement.
-- `gardener_proposals` — pending merge/archive/digest proposals.
-- `settings` — `repo_project_map`, project families, and the runtime briefing
+- `retrieval_stats` - inject/read counters maintained from events.
+- `projects` - slugs, parent topology, retirement.
+- `gardener_proposals` - pending merge/archive/digest proposals.
+- `settings` - `repo_project_map`, project families, and the runtime briefing
   overrides the console writes.
-- `jobs` — the small queue for embeds and LLM digests.
+- `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and
 high-churn state that would be miserable as files stays in the database.
@@ -172,7 +172,7 @@ editor works without telling Seamless about it.
 
 Files are the source of truth, so **hand-editing is allowed and expected**. Open
 a memory in your editor, fix the body, save. The watcher picks it up and
-re-indexes it. Adding tags, tightening a description, correcting a fact — all
+re-indexes it. Adding tags, tightening a description, correcting a fact - all
 fine.
 
 Two fields are the exception.
@@ -188,7 +188,7 @@ cannot:
   inactive one can form a cycle or a dangling chain, and is rejected.
 - A memory cannot supersede itself.
 
-Use the supersede path instead — `memory_write` with `supersedes` — which stamps
+Use the supersede path instead - `memory_write` with `supersedes` - which stamps
 both fields on the old memory, writes the tombstone line, and points the edge at
 the replacement, atomically and with the invariants checked. Archival goes
 through the same path.
@@ -208,9 +208,9 @@ The rest of the rules are mechanical:
 
 ## Related
 
-- [Configuration](/reference/configuration/) — `data_dir` and the rest of the key
+- [Configuration](/reference/configuration/) - `data_dir` and the rest of the key
   set.
-- [MCP API overview](/reference/mcp/) — the tools that write these files,
+- [MCP API overview](/reference/mcp/) - the tools that write these files,
   including `memory_write`'s `supersedes`.
-- [MCP: tasks](/reference/mcp/tasks/) — the ready-queue whose state lives only in
+- [MCP: tasks](/reference/mcp/tasks/) - the ready-queue whose state lives only in
   `seam.db`.

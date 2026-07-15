@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Code hooks — Seamless docs</title>
+<title>Claude Code hooks - Seamless docs</title>
 <meta name="description" content="The six hooks Seamless installs, their transports and timeouts, the fail-open contract, and what install-hooks writes into settings.json.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -159,7 +159,7 @@
   <p class="lede">The six hooks Seamless installs, their transports and timeouts, the fail-open contract, and what install-hooks writes into settings.json.</p>
   <p>Seamless installs six Claude Code hooks. They are what makes sessions ambient:
 an agent gets a briefing, its prompts get matched against stored memories, its
-findings get harvested, and its plan-mode activity gets captured — without the
+findings get harvested, and its plan-mode activity gets captured - without the
 agent calling a single MCP tool.</p>
 <h2 id="the-installed-hooks">The installed hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
@@ -199,7 +199,7 @@ install order:</p>
 <td>command (<code>seam hook session-end</code>)</td>
 <td>10s</td>
 <td><code>/api/hooks/session-end</code></td>
-<td>Harvests findings and completes the agent's sessions. Bare ack — Claude Code's schema has no <code>hookSpecificOutput</code> for <code>SessionEnd</code>.</td>
+<td>Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no <code>hookSpecificOutput</code> for <code>SessionEnd</code>.</td>
 </tr>
 <tr>
 <td><code>PostToolUse</code></td>
@@ -239,13 +239,13 @@ own.</p>
 this: an internal error yields a 200 with empty <code>additionalContext</code> rather than a
 failure. Only a bad bearer key returns non-2xx (401).</p>
 <p>The same contract runs client-side. <code>seam hook &lt;event&gt;</code> reports a failure to
-stderr and exits 0 — a server that is down, a config that will not load, an
+stderr and exits 0 - a server that is down, a config that will not load, an
 unreadable stdin, all produce exit 0. Only a misconfigured event name (an install
 bug, not a runtime condition) is a hard error.</p>
 <p>Plan and subagent capture are best-effort under the same rule: a capture problem
 is logged and the hook still acks 200.</p>
 <p>The consequence is that <strong>hook failure is silent</strong>. A stopped daemon, a bad key,
-a <code>seam</code> binary that moved — none of these produce an error an agent or the user
+a <code>seam</code> binary that moved - none of these produce an error an agent or the user
 will see. Work simply proceeds without a briefing, and nothing announces it.</p>
 <p>So troubleshooting starts with the doctor checks, not with looking for an error:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># includes the hooks check: N/N installed in &lt;settings path&gt;</span>
@@ -273,7 +273,7 @@ so the hot path never touches the network.</li>
 </ul>
 <p>Command hooks work by having Claude Code pipe the event JSON to the command's
 stdin; <code>seam hook &lt;arg&gt;</code> forwards that to the matching endpoint and echoes the
-response back on stdout. Same server logic either way — only the transport
+response back on stdout. Same server logic either way - only the transport
 differs.</p>
 <p>One practical consequence: the bearer key is only written into settings.json for
 the <code>http</code> hook. Command hooks read it from the config file at hook time.</p>
@@ -327,7 +327,7 @@ everything Seamless does not own survives.</li>
 <li><strong>Backed up once.</strong> The first time Seamless changes the file it copies it to
 <code>settings.json.seamless-bak-&lt;timestamp&gt;</code>. Later installs skip the backup, so
 the true original is never overwritten with a modified copy.</li>
-<li><strong>Idempotent.</strong> An already-current file is left untouched — no rewrite, no
+<li><strong>Idempotent.</strong> An already-current file is left untouched - no rewrite, no
 backup. Per-hook actions are reported as <code>added</code>, <code>updated</code>, <code>adopted</code>,
 <code>deduped</code>, or <code>unchanged</code>.</li>
 <li><strong>Written atomically</strong>, sorted-key indented, preserving the file mode (0600 for
@@ -345,7 +345,7 @@ if any of these hold:</p>
 <li>It carries the <code>seamless_managed</code> marker; or</li>
 <li>it is an http entry whose <code>url</code> matches the hook's URL under the base URL
 (trailing slash ignored); or</li>
-<li>it is a command entry whose <code>command</code> ends in <code> hook &lt;event&gt;</code> — whatever
+<li>it is a command entry whose <code>command</code> ends in <code> hook &lt;event&gt;</code> - whatever
 binary path or env prefix it carries.</li>
 </ol>
 <p>Rules 2 and 3 are what make re-installs adopt an existing entry in place rather
@@ -358,11 +358,11 @@ pointing at a different URL is not matched by any of the three rules and is left
 untouched.</p>
 <h2 id="related">Related</h2>
 <ul>
-<li><a href="../../reference/configuration/">Configuration</a> — <code>mcp.api_key</code>, the bind address
+<li><a href="../../reference/configuration/">Configuration</a> - <code>mcp.api_key</code>, the bind address
 the hook URLs derive from, and the <code>briefing:</code> block that tunes what
 <code>SessionStart</code> injects.</li>
-<li><a href="../../reference/mcp/">MCP API overview</a> — the tool surface the same daemon serves.</li>
-<li><a href="../../quickstart/">Quickstart</a> — install order for a working setup.</li>
+<li><a href="../../reference/mcp/">MCP API overview</a> - the tool surface the same daemon serves.</li>
+<li><a href="../../quickstart/">Quickstart</a> - install order for a working setup.</li>
 </ul>
 
 </article>
@@ -388,7 +388,7 @@ the hook URLs derive from, and the <code>briefing:</code> block that tunes what
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

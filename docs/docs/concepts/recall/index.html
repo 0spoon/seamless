@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Recall — Seamless docs</title>
-<meta name="description" content="One search entry point fusing keyword and vector search — and the three different ways your knowledge actually reaches an agent.">
+<title>Recall - Seamless docs</title>
+<meta name="description" content="One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,14 +156,14 @@
     <article class="prose">
   <p class="eyebrow">Concepts</p>
   <h1>Recall</h1>
-  <p class="lede">One search entry point fusing keyword and vector search — and the three different ways your knowledge actually reaches an agent.</p>
+  <p class="lede">One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.</p>
   <p><code>recall</code> is the only search tool. There is no separate keyword search, no
 separate semantic search, no &quot;advanced&quot; variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.</p>
 <h2 id="how-it-works">How it works</h2>
 <p>Two retrievers run over the store and their rankings are fused:</p>
 <ul>
-<li><strong>FTS5 keyword search.</strong> Exact terms, names, error strings — the things vector
+<li><strong>FTS5 keyword search.</strong> Exact terms, names, error strings - the things vector
 search is worst at. If you know a memory is called <code>chroma-boot-race</code>, this is
 what finds it.</li>
 <li><strong>Vector similarity.</strong> Embeddings stored as float32 blobs in SQLite, compared
@@ -178,7 +178,7 @@ a veto, which matters because each is confidently wrong in a different way.</p>
 <p>Cosine similarity is computed by scanning every candidate vector. No ANN index,
 no approximate nearest neighbours, no vector database. For a personal knowledge
 store this is simply fast enough, and it buys exactness and one fewer moving
-part. It is a deliberate trade, not an oversight — and it is the kind of thing
+part. It is a deliberate trade, not an oversight - and it is the kind of thing
 worth saying out loud rather than hiding behind the word &quot;hybrid&quot;.</p>
 <h2 id="the-recall-triad">The recall triad</h2>
 <p>This is the part worth internalizing: <strong>searching is only one of three ways your
@@ -222,7 +222,7 @@ tool still starts with your constraints and still gets relevant memories surface
 when its prompt touches them.</p>
 <p>The third is what an agent does when it wants something specific. Before you go
 looking for something in your own knowledge base by hand, ask an agent to
-<code>recall</code> it — that is faster and more accurate than making you search.</p>
+<code>recall</code> it - that is faster and more accurate than making you search.</p>
 <p>Read what was already injected before searching again. The briefing is in
 context; re-recalling it just spends tokens to learn what the agent was told.</p>
 <h2 id="degradation-is-deliberate">Degradation is deliberate</h2>
@@ -242,7 +242,7 @@ three weeks because nobody noticed the embedding key expired.</p>
 <h2 id="writing-memories-that-get-recalled">Writing memories that get recalled</h2>
 <p>Recall can only find what was written to be findable. Since the <code>description</code> is
 the only text an index shows, and it is heavily weighted in matching, it is the
-retrieval surface — see <a href="../../concepts/memory/">Memory &amp; notes</a>.</p>
+retrieval surface - see <a href="../../concepts/memory/">Memory &amp; notes</a>.</p>
 
 </article>
 
@@ -267,7 +267,7 @@ retrieval surface — see <a href="../../concepts/memory/">Memory &amp; notes</a
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

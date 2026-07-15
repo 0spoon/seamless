@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Capture Claude Code plans — Seamless docs</title>
-<meta name="description" content="How plan mode is captured automatically — which hook does what, a plan&#39;s life from draft to approved, and the escape hatches.">
+<title>Capture Claude Code plans - Seamless docs</title>
+<meta name="description" content="How plan mode is captured automatically - which hook does what, a plan&#39;s life from draft to approved, and the escape hatches.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,12 +156,12 @@
     <article class="prose">
   <p class="eyebrow">Guides</p>
   <h1>Capture Claude Code plans</h1>
-  <p class="lede">How plan mode is captured automatically — which hook does what, a plan&#39;s life from draft to approved, and the escape hatches.</p>
+  <p class="lede">How plan mode is captured automatically - which hook does what, a plan&#39;s life from draft to approved, and the escape hatches.</p>
   <p>Claude Code's plan mode produces exactly the artifact that usually evaporates: a
 considered design, written down, immediately before the work starts and gone
 immediately after it. Seamless captures it without you doing anything.</p>
-<p>The result is a <a href="../../concepts/tasks-and-plans/">plan composition</a> — narrative,
-supporting context, and steps — built for you as you plan.</p>
+<p>The result is a <a href="../../concepts/tasks-and-plans/">plan composition</a> - narrative,
+supporting context, and steps - built for you as you plan.</p>
 <h2 id="which-hook-captures-what">Which hook captures what</h2>
 <div class="table-wrap">
 <table>
@@ -176,7 +176,7 @@ supporting context, and steps — built for you as you plan.</p>
 <tr>
 <td><code>PostToolUse</code> (<code>Write</code>/<code>Edit</code>/<code>MultiEdit</code>)</td>
 <td>A plan file is saved</td>
-<td>Upserts a <code>cc-plan-&lt;basename&gt;</code> note — one note per plan, updated on each iteration</td>
+<td>Upserts a <code>cc-plan-&lt;basename&gt;</code> note - one note per plan, updated on each iteration</td>
 </tr>
 <tr>
 <td><code>PostToolUse</code> (<code>ExitPlanMode</code>)</td>
@@ -218,7 +218,7 @@ the agent that executes it can read the research that justified it.</p>
 <p>A captured-but-unapproved plan appears in briefings as:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
 </span></span></code></pre><p>This is deliberate. A plan that was designed, presented, and then forgotten is
-the most expensive kind of lost work — the thinking already happened. Surfacing
+the most expensive kind of lost work - the thinking already happened. Surfacing
 it costs one briefing line and makes the decision explicit: pick it up, or
 abandon it on purpose.</p>
 <p>Unapproved captures are budget-participating, unlike the pinned lines above them:
@@ -232,19 +232,19 @@ a stale hint should lose to your actual memories, not crowd them out.</p>
 </span></span><span class="line"><span class="cl">seam plan approve &lt;slug&gt;        <span class="c1"># force approval + create the tracking task</span>
 </span></span></code></pre><p><code>seam plan check</code> compares the git stamp recorded at capture against the repo
 now. A plan written against a tree that has since moved on is not automatically
-wrong, but it is worth re-reading before executing — that is the question this
+wrong, but it is worth re-reading before executing - that is the question this
 answers.</p>
 <p>Remember that <code>seam</code> flags go <strong>before</strong> positionals:
 <code>seam plan check --cwd ~/repos/myproj my-plan-slug</code>. See the
 <a href="../../reference/cli-seam/">seam CLI</a>.</p>
 <p>You can also browse everything at <code>/console/plans</code>.</p>
 <h2 id="turning-it-off">Turning it off</h2>
-<p>Capture is controlled by the <code>plan_capture</code> block — see
+<p>Capture is controlled by the <code>plan_capture</code> block - see
 <a href="../../reference/configuration/">Configuration</a>:</p>
 <ul>
-<li><code>plan_capture.enabled</code> — capture at all.</li>
-<li><code>plan_capture.auto_task</code> — create the tracking task on approval.</li>
-<li><code>plan_capture.inject_related</code> — surface related captures in briefings.</li>
+<li><code>plan_capture.enabled</code> - capture at all.</li>
+<li><code>plan_capture.auto_task</code> - create the tracking task on approval.</li>
+<li><code>plan_capture.inject_related</code> - surface related captures in briefings.</li>
 </ul>
 <p>All default to on.</p>
 
@@ -271,7 +271,7 @@ answers.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

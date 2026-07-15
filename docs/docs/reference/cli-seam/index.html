@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>seam CLI — Seamless docs</title>
-<meta name="description" content="Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.">
+<title>seam CLI - Seamless docs</title>
+<meta name="description" content="Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,9 +156,9 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>seam CLI</h1>
-  <p class="lede">Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.</p>
+  <p class="lede">Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.</p>
   <p><code>seam</code> is the headless CLI. It does no work itself: it loads the same
-configuration the daemon does, then talks to a running <code>seamlessd</code> — over MCP at
+configuration the daemon does, then talks to a running <code>seamlessd</code> - over MCP at
 <code>/api/mcp</code> for most commands, and over the console's JSON endpoints for the
 owner-only actions that do not exist as MCP tools (force-releasing a task lock,
 approving a plan). Both paths authenticate with the static bearer key from
@@ -167,7 +167,7 @@ is down, every subcommand below fails at the connection.</p>
 <p>The target address is derived from the configured bind address, with a bind-all
 host (<code>0.0.0.0</code>, <code>::</code>, or empty) mapped to loopback.</p>
 <h2 id="flags-and-positionals">Flags and positionals</h2>
-<p>The agent-loop commands — <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> — take flags
+<p>The agent-loop commands - <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> - take flags
 on either side of their positionals. These two lines are the same line:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
 </span></span><span class="line"><span class="cl">seam capture https://example.com/page --project myproj
@@ -189,7 +189,7 @@ first argument directly. Commands that take only flags and no positionals
 (<code>ready</code>, <code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are
 unaffected either way.</p>
 <h2 id="agent-loop">Agent loop</h2>
-<p>The four commands an agent — or you, standing in for one — uses to start a
+<p>The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.</p>
 <h3 id="seam_prime">seam prime</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam prime <span class="o">[</span>--cwd DIR<span class="o">]</span> <span class="o">[</span>--name NAME<span class="o">]</span>
@@ -205,7 +205,7 @@ new one. When there is no briefing content yet, it says so on stderr.</p>
 <code>--kind</code> is one of <code>constraint</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>,
 <code>refuted</code>, <code>reference</code>, or <code>stage</code>. <code>--description</code> is the one-line summary
 (&lt;=150 chars) that indexes show.</p>
-<p>The body comes from <code>--body</code>, or from <strong>stdin</strong> when <code>--body</code> is omitted — an
+<p>The body comes from <code>--body</code>, or from <strong>stdin</strong> when <code>--body</code> is omitted - an
 empty body after either route is an error, not an empty memory. <code>--project</code>
 resolves the same way as it does for <a href="#seam_capture">capture</a>: empty inherits the
 session's project and is an error when nothing pins it, and <code>global</code> is the
@@ -226,7 +226,7 @@ for the literal text <code>foo --projct p</code>.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
 </span></span></code></pre><p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty <code>--project</code> does not mean global: the scope resolves to the
-session's project — the bound session's, or a single unambiguous ambient one.
+session's project - the bound session's, or a single unambiguous ambient one.
 The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass <code>--project global</code> to file the note globally
@@ -241,7 +241,7 @@ blocked, and claimed mean.</p>
 </span></span></code></pre><p>Calls <code>tasks_ready</code> and lists the actionable queue by short id and title.
 <code>--blocked</code> additionally lists blocked tasks, each followed by its blockers and
 their statuses. <code>--plan S</code> shows that plan's step tasks instead of the default
-queue — plan steps are excluded from the default view. Prints
+queue - plan steps are excluded from the default view. Prints
 <code>ready: (nothing actionable)</code> when the queue is empty.</p>
 <h3 id="seam_task_list">seam task list</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam task list <span class="o">[</span>--id ID<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--status S<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
@@ -300,11 +300,11 @@ directory and must be a git repo. For the plan body and each attached note, it
 reads the capture stamp (the <code>&gt; captured from ... | git &lt;head&gt; | ...</code> line) and
 compares it to the repo's current HEAD:</p>
 <ul>
-<li><strong>FRESH</strong> — stamped at the current HEAD, or nothing changed since the stamped
+<li><strong>FRESH</strong> - stamped at the current HEAD, or nothing changed since the stamped
 commit, or files changed but none the note mentions.</li>
-<li><strong>STALE</strong> — files the note mentions by path changed between the stamped commit
+<li><strong>STALE</strong> - files the note mentions by path changed between the stamped commit
 and HEAD. The changed paths are listed (truncated after five).</li>
-<li><strong>UNKNOWN</strong> — no git stamp, captured outside a git repo, the stamped commit no
+<li><strong>UNKNOWN</strong> - no git stamp, captured outside a git repo, the stamped commit no
 longer resolves (rebased away), or the note could not be read.</li>
 </ul>
 <p>Mentioned paths are extracted from the prose by pattern, and match whether the
@@ -320,7 +320,7 @@ one already exists.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam status
 </span></span></code></pre><p>Server health from the unauthenticated <code>/healthz</code> endpoint (status and version),
 the configured data directory, then the project count and slugs via
-<code>project_list</code> — which doubles as proof the static key works. If MCP is
+<code>project_list</code> - which doubles as proof the static key works. If MCP is
 unavailable it still prints health and says so on the projects line rather than
 failing.</p>
 <h3 id="seam_sessions">seam sessions</h3>
@@ -341,10 +341,10 @@ proposals.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam doctor
 </span></span></code></pre><p>Client-side checks, each reported <code>ok</code> or <code>FAIL</code>, exiting non-zero if any failed:</p>
 <ol>
-<li><strong>server</strong> — <code>/healthz</code> reachable and reporting <code>ok</code>.</li>
-<li><strong>mcp_tools</strong> — <code>tools/list</code> returns the tool count this CLI was built to
+<li><strong>server</strong> - <code>/healthz</code> reachable and reporting <code>ok</code>.</li>
+<li><strong>mcp_tools</strong> - <code>tools/list</code> returns the tool count this CLI was built to
 expect. A mismatch means the running daemon is a different build.</li>
-<li><strong>projects</strong> — <code>project_list</code> answers.</li>
+<li><strong>projects</strong> - <code>project_list</code> answers.</li>
 </ol>
 <p>This is the client-side view. <code>seamlessd doctor</code> checks config, database, and
 credentials on the server side; they are different commands answering different
@@ -354,7 +354,7 @@ questions.</p>
 </span></span><span class="line"><span class="cl">seam hook post-tool-use<span class="p">|</span>subagent-stop<span class="p">|</span>permission-request
 </span></span></code></pre><p>Invoked by Claude Code, not by hand. Each reads the hook payload from stdin,
 forwards it to the matching <code>/api/hooks/...</code> endpoint with the bearer key, and
-copies the JSON response to stdout — so a <code>command</code> hook drives the same server
+copies the JSON response to stdout - so a <code>command</code> hook drives the same server
 logic an <code>http</code> hook would. This exists because Claude Code only runs
 command-type hooks for SessionStart, which is how the briefing and the ambient
 session get injected at all.</p>
@@ -362,7 +362,7 @@ session get injected at all.</p>
 <ul>
 <li><strong>Failures do not block the session.</strong> A missing config, an unreachable
 daemon, or an unreadable stdin is reported on stderr and exits 0. Only an
-unknown event name — an install bug, not a runtime hiccup — is a hard error.</li>
+unknown event name - an install bug, not a runtime hiccup - is a hard error.</li>
 <li><strong><code>post-tool-use</code> pre-filters locally.</strong> It fires machine-wide on every
 <code>Write</code>/<code>Edit</code>, so the CLI drops everything that is not an <code>ExitPlanMode</code>
 approval or a write to a file directly under <code>~/.claude/plans</code> before loading
@@ -393,7 +393,7 @@ config or touching the network. The daemon re-validates the path anyway.</li>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Architecture — Seamless docs</title>
+<title>Architecture - Seamless docs</title>
 <meta name="description" content="The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -166,13 +166,13 @@ actually travel through them.</p>
 <h2 id="the-layering">The layering</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">cmd/seamlessd, cmd/seam, cmd/docsgen
 </span></span><span class="line"><span class="cl">  │
-</span></span><span class="line"><span class="cl">  ▼  API surfaces — speak HTTP, own no domain logic
+</span></span><span class="line"><span class="cl">  ▼  API surfaces - speak HTTP, own no domain logic
 </span></span><span class="line"><span class="cl">internal/{mcp, hooks, console}
 </span></span><span class="line"><span class="cl">  │
-</span></span><span class="line"><span class="cl">  ▼  domains — the business logic
+</span></span><span class="line"><span class="cl">  ▼  domains - the business logic
 </span></span><span class="line"><span class="cl">internal/{retrieve, lifecycle, gardener, files, plans, capture, importer}
 </span></span><span class="line"><span class="cl">  │
-</span></span><span class="line"><span class="cl">  ▼  foundations — leaves, or nearly so
+</span></span><span class="line"><span class="cl">  ▼  foundations - leaves, or nearly so
 </span></span><span class="line"><span class="cl">internal/{store, events, llm, markdown, core, config, validate}
 </span></span></code></pre><p>Two rules make this hold, and both are load-bearing:</p>
 <ul>
@@ -180,7 +180,7 @@ actually travel through them.</p>
 reached back into <code>cmd/</code> could not be tested without booting a daemon.</li>
 <li><strong>No domain package imports another's HTTP layer.</strong> <code>mcp</code>, <code>hooks</code>, and
 <code>console</code> all sit at the same altitude and never call each other. When two of
-them need the same behavior, the behavior moves down a layer — which is why
+them need the same behavior, the behavior moves down a layer - which is why
 <code>lifecycle.Supersede</code> exists as a function rather than as a method on the MCP
 server. All three surfaces call it, so none of them owns it.</li>
 </ul>
@@ -201,20 +201,20 @@ violation is visible in the import block.</p>
 <tr>
 <td><code>core</code></td>
 <td>foundation</td>
-<td>Domain types and enums — <code>Project</code>, <code>Memory</code>, <code>Session</code>, <code>Task</code>, <code>Trial</code>, <code>Event</code>, <code>NewID()</code>. Pure data, no I/O.</td>
-<td>—</td>
+<td>Domain types and enums - <code>Project</code>, <code>Memory</code>, <code>Session</code>, <code>Task</code>, <code>Trial</code>, <code>Event</code>, <code>NewID()</code>. Pure data, no I/O.</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>config</code></td>
 <td>foundation</td>
 <td>One YAML file plus <code>SEAMLESS_*</code> env overrides; env wins over file, file over defaults.</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>validate</code></td>
 <td>foundation</td>
-<td><code>Path</code>, <code>Name</code>, <code>Title</code> — the guards that stand between agent text and the filesystem.</td>
-<td>—</td>
+<td><code>Path</code>, <code>Name</code>, <code>Title</code> - the guards that stand between agent text and the filesystem.</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>store</code></td>
@@ -225,7 +225,7 @@ violation is visible in the import block.</p>
 <tr>
 <td><code>events</code></td>
 <td>foundation</td>
-<td>The append-only event log — the single write path for the record of what happened — plus SSE fan-out to subscribers.</td>
+<td>The append-only event log - the single write path for the record of what happened - plus SSE fan-out to subscribers.</td>
 <td><code>core</code></td>
 </tr>
 <tr>
@@ -274,7 +274,7 @@ violation is visible in the import block.</p>
 <td><code>capture</code></td>
 <td>domain</td>
 <td>SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap.</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>importer</code></td>
@@ -328,7 +328,7 @@ the layering.</p>
 </span></span></code></pre><p>Five things in that path are decisions, not mechanics:</p>
 <p><strong>Step 2 fails closed.</strong> <code>resolveWriteScope</code> returns <code>errNoScope</code> when there is
 no explicit project, no bound session, and no ambient session to inherit from.
-The alternative — defaulting to global — puts a project's private knowledge in
+The alternative - defaulting to global - puts a project's private knowledge in
 front of every agent on the machine, silently. See
 <a href="../../internals/invariants/">Domain invariants</a>.</p>
 <p><strong>Step 4 cannot fail the write.</strong> <code>DedupHint</code> swallows every embedding error on
@@ -339,7 +339,7 @@ tombstone file at <code>memory/{project}/{name}.md</code>, so that name stays oc
 write that landed on it would destroy readable supersession history.
 <code>memory_delete</code> is the only way to free the name.</p>
 <p><strong>Step 7 is the whole point.</strong> The file write is the durable act. Everything
-after it — the index row, the FTS row, the vector — is rebuildable from disk by
+after it - the index row, the FTS row, the vector - is rebuildable from disk by
 <code>files.Reconcile</code> at startup. This is why the ordering is file first, index
 second, and why the index is allowed to be best-effort while the file is not.</p>
 <p><strong>Step 11 is a tool error, not a field in a success payload.</strong> If the new memory
@@ -377,10 +377,10 @@ and 13 is logged and swallowed; the briefing degrades to empty and the agent
 proceeds. Only a bad bearer key returns non-2xx. A memory system that can block
 an agent from working is worse than no memory system, so the failure mode is
 chosen deliberately: silence, not obstruction. The cost is that hook failure is
-invisible, which is why <code>seamlessd doctor</code> and <code>seam doctor</code> exist — see
+invisible, which is why <code>seamlessd doctor</code> and <code>seam doctor</code> exist - see
 <a href="../../reference/hooks/">Claude Code hooks</a>.</p>
 <p>Two orderings inside it are also deliberate. Step 9 runs <em>after</em> step 8 so that
-<code>constraint</code> and <code>stage</code> memories are never age-filtered or dropped for budget —
+<code>constraint</code> and <code>stage</code> memories are never age-filtered or dropped for budget -
 they are partitioned out before the trim ever sees them. And step 14 runs after
 step 13 so the recorded event contains exactly the text the agent received,
 ambient line included, rather than the briefing as it looked one step earlier.</p>
@@ -389,7 +389,7 @@ ambient line included, rather than the briefing as it looked one step earlier.</
 <p><strong>No CGO.</strong> The database is <code>modernc.org/sqlite</code>, a pure-Go SQLite. <code>go build</code>
 produces a static binary that cross-compiles and needs no toolchain on the target
 machine. CGO would buy a faster driver at the price of a build that breaks
-differently on every machine — a bad trade for a tool whose main virtue is that
+differently on every machine - a bad trade for a tool whose main virtue is that
 it is one file you run locally.</p>
 <p><strong>No vector database.</strong> Embeddings are little-endian float32 BLOBs in the
 <code>embeddings</code> table, and similarity is brute-force cosine in Go. There is no ANN
@@ -400,7 +400,7 @@ ChromaDB would double the number of things that must be running for recall to
 work, in exchange for solving a scale problem nobody here has.</p>
 <p><strong>No JWT, no users, no registration.</strong> One static bearer key guards <code>/api/mcp</code>,
 the hook endpoints, and the console, and the daemon binds <code>127.0.0.1</code>. The
-security boundary is the loopback interface and the OS user account — the same
+security boundary is the loopback interface and the OS user account - the same
 boundary that already protects <code>~/.ssh</code>. Sessions, refresh, and revocation are
 the machinery of multi-user auth over a hostile network. There is no network here
 and there is one user, so that machinery would be pure ceremony: more code, more
@@ -409,7 +409,7 @@ failure modes, and no threat it actually removes.</p>
 vanilla JS, and SSE. It exists so that an agent can edit a console page with the
 Go toolchain it already has, and so <code>make build</code> produces the UI along with the
 binary. A frontend build step would mean a second dependency tree, a second
-lockfile, and a class of &quot;works in dev, stale in prod&quot; bugs — for a read-mostly
+lockfile, and a class of &quot;works in dev, stale in prod&quot; bugs - for a read-mostly
 observability surface with no client-side state worth a framework.</p>
 <p><strong>ULIDs, never UUIDs.</strong> Every identity is a ULID via <code>core.NewID()</code>. ULIDs sort
 lexicographically by creation time, so an id column is a timeline: <code>ORDER BY id</code>
@@ -419,11 +419,11 @@ the <em>last</em> 8 characters of an id, precisely because the leading character
 the timestamp and recent ids all share them.)</p>
 <h2 id="where-to-go-next">Where to go next</h2>
 <ul>
-<li><a href="../../internals/invariants/">Domain invariants</a> — the rules that plausible-looking
+<li><a href="../../internals/invariants/">Domain invariants</a> - the rules that plausible-looking
 code breaks.</li>
-<li><a href="../../internals/contributing/">Contributing</a> — the <code>make check</code> gate and how to add
+<li><a href="../../internals/contributing/">Contributing</a> - the <code>make check</code> gate and how to add
 a tool.</li>
-<li><a href="../../reference/storage/">Storage layout</a> — what is on disk and what is in SQLite.</li>
+<li><a href="../../reference/storage/">Storage layout</a> - what is on disk and what is in SQLite.</li>
 </ul>
 
 </article>
@@ -449,7 +449,7 @@ a tool.</li>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

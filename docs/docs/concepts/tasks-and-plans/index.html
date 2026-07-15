@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tasks &amp; plans — Seamless docs</title>
+<title>Tasks &amp; plans - Seamless docs</title>
 <meta name="description" content="The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -162,7 +162,7 @@ agent that wrote it.</p>
 <h2 id="the-ready-queue">The ready queue</h2>
 <p>A task is <strong>ready</strong> when it has no unfinished blocker. <code>tasks_ready</code> returns
 exactly those, so an agent asking &quot;what can I do now?&quot; never reasons about the
-dependency graph itself — it asks, and gets an actionable list.</p>
+dependency graph itself - it asks, and gets an actionable list.</p>
 <p><code>depends_on</code> names the tasks that must finish first. Either <code>done</code> or <code>dropped</code>
 unblocks a dependent: work that was abandoned deliberately should not wedge the
 queue forever. Cycles are rejected at creation, not discovered at scheduling
@@ -189,9 +189,9 @@ it. Exactly one wins:</p>
 <ol>
 <li><strong>Claiming is atomic.</strong> The loser gets an error naming the holder, not a
 corrupted second claim.</li>
-<li><strong>Re-claiming refreshes the lease.</strong> That is the heartbeat for long work — an
+<li><strong>Re-claiming refreshes the lease.</strong> That is the heartbeat for long work - an
 agent still working keeps its claim by claiming again.</li>
-<li><strong>An expired lease is reclaimable — but it does not re-queue itself.</strong> See
+<li><strong>An expired lease is reclaimable - but it does not re-queue itself.</strong> See
 the two clocks below. This is the subtlety most likely to bite you.</li>
 <li><strong>Closing frees it.</strong> <code>tasks_release</code>, <code>tasks_update</code> to <code>done</code>/<code>dropped</code>, or
 <code>session_end</code> (which releases all of a session's claims).</li>
@@ -233,7 +233,7 @@ them is how a fleet quietly stalls.</p>
 </table>
 </div>
 <p><code>tasks_ready</code> returns tasks whose status is <code>open</code>. A task with an expired lease
-is still <code>in_progress</code>, so it is <strong>invisible to the queue</strong> — an agent polling
+is still <code>in_progress</code>, so it is <strong>invisible to the queue</strong> - an agent polling
 <code>tasks_ready</code> will never see it, even though a <code>tasks_claim</code> on that specific id
 would now succeed.</p>
 <p>What actually puts it back in the queue is the reaper: it expires the dead
@@ -244,12 +244,12 @@ agent's idle session and releases its claims, flipping the task back to <code>op
 whether a claim <em>can</em> be taken.</li>
 <li><strong>With <code>gardener.enabled: false</code>, that second clock never runs</strong>, and a crashed
 agent's claims stay <code>in_progress</code> indefinitely. Nothing will surface them. If
-you turn the gardener off, you have also turned off task recovery — release
+you turn the gardener off, you have also turned off task recovery - release
 them yourself with <code>tasks_release</code>, or from the console.</li>
 </ul>
 <p>A lease is <strong>not a lock on the files</strong>. Nothing physically stops an agent from
 working on a task it did not claim. It is a coordination signal between
-cooperating agents — the point is that well-behaved agents do not collide, not
+cooperating agents - the point is that well-behaved agents do not collide, not
 that misbehaving ones cannot.</p>
 <h2 id="plans-are-a-composition-not-a-primitive">Plans are a composition, not a primitive</h2>
 <p>There is no <code>plan</code> object in Seamless. A plan is everything keyed by
@@ -288,7 +288,7 @@ that misbehaving ones cannot.</p>
 </table>
 </div>
 <p>This composition is the reason a plan survives its author. The next agent
-inherits not just a checklist but <em>why</em> the checklist looks like that — which is
+inherits not just a checklist but <em>why</em> the checklist looks like that - which is
 the thing that usually evaporates between sessions.</p>
 <p><strong>Plan steps are excluded from the default queue.</strong> <code>tasks_ready</code> and
 <code>tasks_list</code> skip them, so a twelve-step plan does not bury the handful of tasks
@@ -334,7 +334,7 @@ so a plan that was designed and then forgotten is visible rather than lost.</li>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

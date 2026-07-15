@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Storage and file formats — Seamless docs</title>
+<title>Storage and file formats - Seamless docs</title>
 <meta name="description" content="The ~/.seamless tree, memory and note frontmatter field by field, what lives only in SQLite, and the rules for hand-editing.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -216,12 +216,12 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <tr>
 <td><code>name</code></td>
 <td>author</td>
-<td>The filename stem, and how agents address the memory. Unique per project only among active memories — a superseded memory coexists with a replacement that reuses its name.</td>
+<td>The filename stem, and how agents address the memory. Unique per project only among active memories - a superseded memory coexists with a replacement that reuses its name.</td>
 </tr>
 <tr>
 <td><code>description</code></td>
 <td>author</td>
-<td>One line, ≤150 chars. <strong>The only text shown in indexes</strong> — write it for an agent deciding whether to read the body. Longer text is <strong>silently truncated</strong> by <code>memory_write</code>, not rejected, so write to the limit deliberately.</td>
+<td>One line, ≤150 chars. <strong>The only text shown in indexes</strong> - write it for an agent deciding whether to read the body. Longer text is <strong>silently truncated</strong> by <code>memory_write</code>, not rejected, so write to the limit deliberately.</td>
 </tr>
 <tr>
 <td><code>project</code></td>
@@ -256,7 +256,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <tr>
 <td><code>source_session</code></td>
 <td>system</td>
-<td>Provenance — the session that wrote it, e.g. <code>cc/ab12cd34</code>.</td>
+<td>Provenance - the session that wrote it, e.g. <code>cc/ab12cd34</code>.</td>
 </tr>
 <tr>
 <td><code>tags</code></td>
@@ -316,7 +316,7 @@ survive), but is not mirrored to the index.</p>
 </div>
 <h3 id="validity">Validity</h3>
 <p><code>invalid_at</code> is the whole lifecycle in one field. <code>nil</code> means active. Anything
-else means the memory has left the briefing, prompt, and recall indexes — while
+else means the memory has left the briefing, prompt, and recall indexes - while
 staying on disk and readable, as provenance.</p>
 <p>A superseded memory is never deleted. It is stamped <code>invalid_at</code> and
 <code>superseded_by</code>, and keeps a tombstone line in its file body, so the on-disk
@@ -325,7 +325,7 @@ truth stays honest about what replaced what. Its file keeps occupying
 would destroy readable supersession history) and must free the name or pick
 another.</p>
 <h2 id="note-frontmatter">Note frontmatter</h2>
-<p>A note is a work artifact — research finding, decision record, meeting summary.
+<p>A note is a work artifact - research finding, decision record, meeting summary.
 Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...</span><span class="w">
@@ -347,27 +347,27 @@ Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 <p><code>seam.db</code> holds two categories of data with very different recovery stories.</p>
 <p><strong>Rebuildable mirrors of the files.</strong> Delete these and they come back:</p>
 <ul>
-<li><code>memories_index</code> — frontmatter mirror, plus <code>content_hash</code> and <code>file_path</code>.</li>
-<li><code>notes_index</code> — the same for notes.</li>
-<li><code>fts</code> — the FTS5 virtual table over both, indexing title, name, description,
+<li><code>memories_index</code> - frontmatter mirror, plus <code>content_hash</code> and <code>file_path</code>.</li>
+<li><code>notes_index</code> - the same for notes.</li>
+<li><code>fts</code> - the FTS5 virtual table over both, indexing title, name, description,
 and body. Self-contained, managed directly by the files layer.</li>
-<li><code>embeddings</code> — one float32 BLOB vector per item (little-endian), with its model
+<li><code>embeddings</code> - one float32 BLOB vector per item (little-endian), with its model
 and dims. Brute-force cosine; there is no vector database.</li>
 </ul>
 <p><strong>DB-of-record state that exists nowhere else.</strong> These have no file behind them,
 so losing <code>seam.db</code> loses them:</p>
 <ul>
-<li><code>sessions</code> — ambient and explicit sessions, findings, cwd, status.</li>
-<li><code>tasks</code> and <code>task_deps</code> — the ready-queue, plan slugs, claims, and leases.</li>
-<li><code>trials</code> — research lab records with queryable JSON metrics.</li>
-<li><code>events</code> — the append-only log behind telemetry, the console feed, and
+<li><code>sessions</code> - ambient and explicit sessions, findings, cwd, status.</li>
+<li><code>tasks</code> and <code>task_deps</code> - the ready-queue, plan slugs, claims, and leases.</li>
+<li><code>trials</code> - research lab records with queryable JSON metrics.</li>
+<li><code>events</code> - the append-only log behind telemetry, the console feed, and
 retrieval stats.</li>
-<li><code>retrieval_stats</code> — inject/read counters maintained from events.</li>
-<li><code>projects</code> — slugs, parent topology, retirement.</li>
-<li><code>gardener_proposals</code> — pending merge/archive/digest proposals.</li>
-<li><code>settings</code> — <code>repo_project_map</code>, project families, and the runtime briefing
+<li><code>retrieval_stats</code> - inject/read counters maintained from events.</li>
+<li><code>projects</code> - slugs, parent topology, retirement.</li>
+<li><code>gardener_proposals</code> - pending merge/archive/digest proposals.</li>
+<li><code>settings</code> - <code>repo_project_map</code>, project families, and the runtime briefing
 overrides the console writes.</li>
-<li><code>jobs</code> — the small queue for embeds and LLM digests.</li>
+<li><code>jobs</code> - the small queue for embeds and LLM digests.</li>
 </ul>
 <p>The split is deliberate: durable knowledge is yours in plain markdown, and
 high-churn state that would be miserable as files stays in the database.</p>
@@ -384,7 +384,7 @@ editor works without telling Seamless about it.</p>
 <h2 id="hand-editing-rules">Hand-editing rules</h2>
 <p>Files are the source of truth, so <strong>hand-editing is allowed and expected</strong>. Open
 a memory in your editor, fix the body, save. The watcher picks it up and
-re-indexes it. Adding tags, tightening a description, correcting a fact — all
+re-indexes it. Adding tags, tightening a description, correcting a fact - all
 fine.</p>
 <p>Two fields are the exception.</p>
 <p><strong>Never hand-stamp <code>invalid_at</code> or <code>superseded_by</code>.</strong></p>
@@ -397,7 +397,7 @@ rewrites supersession history and is rejected.</li>
 inactive one can form a cycle or a dangling chain, and is rejected.</li>
 <li>A memory cannot supersede itself.</li>
 </ul>
-<p>Use the supersede path instead — <code>memory_write</code> with <code>supersedes</code> — which stamps
+<p>Use the supersede path instead - <code>memory_write</code> with <code>supersedes</code> - which stamps
 both fields on the old memory, writes the tombstone line, and points the edge at
 the replacement, atomically and with the invariants checked. Archival goes
 through the same path.</p>
@@ -415,11 +415,11 @@ the watcher will treat it as a delete plus an add.</li>
 </ul>
 <h2 id="related">Related</h2>
 <ul>
-<li><a href="../../reference/configuration/">Configuration</a> — <code>data_dir</code> and the rest of the key
+<li><a href="../../reference/configuration/">Configuration</a> - <code>data_dir</code> and the rest of the key
 set.</li>
-<li><a href="../../reference/mcp/">MCP API overview</a> — the tools that write these files,
+<li><a href="../../reference/mcp/">MCP API overview</a> - the tools that write these files,
 including <code>memory_write</code>'s <code>supersedes</code>.</li>
-<li><a href="../../reference/mcp/tasks/">MCP: tasks</a> — the ready-queue whose state lives only in
+<li><a href="../../reference/mcp/tasks/">MCP: tasks</a> - the ready-queue whose state lives only in
 <code>seam.db</code>.</li>
 </ul>
 
@@ -446,7 +446,7 @@ including <code>memory_write</code>'s <code>supersedes</code>.</li>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

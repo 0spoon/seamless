@@ -1,6 +1,6 @@
 ---
 title: Recall
-description: One search entry point fusing keyword and vector search — and the three different ways your knowledge actually reaches an agent.
+description: One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.
 ---
 
 `recall` is the only search tool. There is no separate keyword search, no
@@ -11,7 +11,7 @@ surface with three search tools is a surface where agents pick the wrong one.
 
 Two retrievers run over the store and their rankings are fused:
 
-- **FTS5 keyword search.** Exact terms, names, error strings — the things vector
+- **FTS5 keyword search.** Exact terms, names, error strings - the things vector
   search is worst at. If you know a memory is called `chroma-boot-race`, this is
   what finds it.
 - **Vector similarity.** Embeddings stored as float32 blobs in SQLite, compared
@@ -29,7 +29,7 @@ The result set is then packed into `budgets.recall_budget_tokens`.
 Cosine similarity is computed by scanning every candidate vector. No ANN index,
 no approximate nearest neighbours, no vector database. For a personal knowledge
 store this is simply fast enough, and it buys exactness and one fewer moving
-part. It is a deliberate trade, not an oversight — and it is the kind of thing
+part. It is a deliberate trade, not an oversight - and it is the kind of thing
 worth saying out loud rather than hiding behind the word "hybrid".
 
 ## The recall triad
@@ -51,7 +51,7 @@ when its prompt touches them.
 
 The third is what an agent does when it wants something specific. Before you go
 looking for something in your own knowledge base by hand, ask an agent to
-`recall` it — that is faster and more accurate than making you search.
+`recall` it - that is faster and more accurate than making you search.
 
 Read what was already injected before searching again. The briefing is in
 context; re-recalling it just spends tokens to learn what the agent was told.
@@ -76,4 +76,4 @@ three weeks because nobody noticed the embedding key expired.
 
 Recall can only find what was written to be findable. Since the `description` is
 the only text an index shows, and it is heavily weighted in matching, it is the
-retrieval surface — see [Memory & notes](/concepts/memory/).
+retrieval surface - see [Memory & notes](/concepts/memory/).

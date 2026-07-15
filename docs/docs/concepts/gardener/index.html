@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The gardener — Seamless docs</title>
-<meta name="description" content="The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.">
+<title>The gardener - Seamless docs</title>
+<meta name="description" content="The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Concepts</p>
   <h1>The gardener</h1>
-  <p class="lede">The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.</p>
+  <p class="lede">The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.</p>
   <p>Any store that agents write to accumulates cruft: two memories saying the same
 thing in different words, a runbook for a system that no longer exists, a plan
 abandoned three weeks ago with its steps still open.</p>
@@ -165,7 +165,7 @@ abandoned three weeks ago with its steps still open.</p>
 <p><strong>Every pass the gardener makes ends in a proposal for you to review.</strong> It never
 edits, merges, or archives on its own.</p>
 <p>This is not timidity. The entire premise of Seamless is that the knowledge is
-yours and legible — a store that quietly rewrites itself while you sleep is
+yours and legible - a store that quietly rewrites itself while you sleep is
 exactly the black box the project exists to avoid. If an automated pass can
 decide your constraint is stale and archive it, then you do not actually know
 what your agents will be told tomorrow.</p>
@@ -207,9 +207,9 @@ found, <code>gardener_apply</code> to act on one.</p>
 </div>
 <p>Two more proposal types come from requests rather than the timer:</p>
 <ul>
-<li><strong>reproject</strong> — a memory filed under the wrong project, moved to a project that
+<li><strong>reproject</strong> - a memory filed under the wrong project, moved to a project that
 <strong>already exists</strong>.</li>
-<li><strong>split</strong> — one project divided into new child projects. This creates projects
+<li><strong>split</strong> - one project divided into new child projects. This creates projects
 and a shared parent, so it is planned as a unit, not as a pile of moves. That
 is why it is a separate tool (<code>gardener_split</code>) and not just a reproject to a
 name that does not exist yet.</li>
@@ -218,7 +218,7 @@ name that does not exist yet.</li>
 <p>Age-filtering and staleness-archiving never touch <code>constraint</code> or pinned <code>stage</code>
 memories.</p>
 <p>A constraint does not become less true by sitting still. &quot;Never use CGO&quot; is not
-stale at 90 days — it is <em>settled</em>, and the absence of recent edits is evidence
+stale at 90 days - it is <em>settled</em>, and the absence of recent edits is evidence
 it is working, not evidence it is rotting. Time-based archival encodes the
 opposite assumption, so the pass simply skips the kinds where that assumption is
 wrong.</p>
@@ -226,14 +226,14 @@ wrong.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">gardener_request &#34;fold the two console theme memories together&#34;
 </span></span></code></pre><p><code>gardener_request</code> takes natural language and turns it into the same reviewable
 proposals as the timed passes. It is a way to <em>aim</em> the gardener, not a way to
-bypass the review step — what comes back is still a proposal.</p>
+bypass the review step - what comes back is still a proposal.</p>
 <h2 id="where-you-review">Where you review</h2>
 <ul>
-<li><strong>The console</strong> — <code>/console/gardener</code> lists proposals with what each would do.</li>
-<li><strong><code>gardener_proposals</code></strong> — the same, for an agent.</li>
+<li><strong>The console</strong> - <code>/console/gardener</code> lists proposals with what each would do.</li>
+<li><strong><code>gardener_proposals</code></strong> - the same, for an agent.</li>
 </ul>
 <p>The gardener runs every <code>gardener.interval_minutes</code> (60) when
-<code>gardener.enabled</code> is on. Everything in this page is tunable — see
+<code>gardener.enabled</code> is on. Everything in this page is tunable - see
 <a href="../../reference/configuration/">Configuration</a>.</p>
 
 </article>
@@ -259,7 +259,7 @@ bypass the review step — what comes back is still a proposal.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

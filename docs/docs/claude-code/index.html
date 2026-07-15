@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Code setup — Seamless docs</title>
+<title>Claude Code setup - Seamless docs</title>
 <meta name="description" content="Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -158,14 +158,14 @@
   <h1>Claude Code setup</h1>
   <p class="lede">Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.</p>
   <p>Claude Code is the client Seamless is built around. Wiring it up is two
-independent halves — <strong>the MCP endpoint</strong> (what an agent can call) and <strong>the
-hooks</strong> (what happens without an agent calling anything) — and you want both.</p>
+independent halves - <strong>the MCP endpoint</strong> (what an agent can call) and <strong>the
+hooks</strong> (what happens without an agent calling anything) - and you want both.</p>
 <h2 id="register-the-mcp-endpoint">Register the MCP endpoint</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp <span class="se">\
 </span></span></span><span class="line"><span class="cl">  --header <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span>
 </span></span></code></pre><p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
 which ties the registration to whichever directory you happened to run it from.
-The tools then work in that one directory and silently vanish everywhere else —
+The tools then work in that one directory and silently vanish everywhere else -
 which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;the
 registration is scoped wrong&quot;.</p>
 <p>The key is <code>mcp.api_key</code> from your config. Find it:</p>
@@ -176,7 +176,7 @@ registration is scoped wrong&quot;.</p>
 </span></span></code></pre><p>This merges six hook entries into your Claude Code <code>settings.json</code>, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.</p>
-<p>The hooks are what make sessions <strong>ambient</strong> — an agent gets a briefing at
+<p>The hooks are what make sessions <strong>ambient</strong> - an agent gets a briefing at
 startup, its prompts get matched against your memories, its findings get
 harvested at the end, and its plan-mode activity gets captured, all without the
 agent choosing to call anything. See <a href="../concepts/sessions/">Sessions &amp; briefings</a>
@@ -186,7 +186,7 @@ exact table.</p>
 <p>This looks inconsistent and is not:</p>
 <ul>
 <li><strong>SessionStart</strong> must be a command hook. Claude Code only runs <code>command</code> and
-<code>mcp_tool</code> hooks for SessionStart — an <code>http</code> one is <em>silently skipped</em>, and
+<code>mcp_tool</code> hooks for SessionStart - an <code>http</code> one is <em>silently skipped</em>, and
 the briefing and ambient session simply never fire.</li>
 <li><strong>SessionEnd</strong> does support http, but at process exit a fire-and-forget request
 races the teardown, so the harvest often never lands and sessions pile up as
@@ -200,7 +200,7 @@ that have nothing to do with plans.</li>
 <h2 id="map-your-repos">Map your repos</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd map-repo --path ~/code/myrepo --project myrepo
 </span></span></code></pre><p>This binds a working directory to a project. Afterwards, agents in that repo
-inherit project scope from their cwd — no <code>project</code> argument on any call. See
+inherit project scope from their cwd - no <code>project</code> argument on any call. See
 <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
 unmapped writes are rejected rather than defaulted to global.</p>
 <h2 id="tell-your-agents-it-exists">Tell your agents it exists</h2>
@@ -208,8 +208,8 @@ unmapped writes are rejected rather than defaulted to global.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># installs the /seam-onboard Claude Code skill</span>
 </span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above and verifies each step.</p>
 <p>Second, add a short block to your <code>CLAUDE.md</code> describing when to reach for
-Seamless — memory that should outlive the conversation, work that crosses
-agents — and when not to (trivial edits, things the codebase already records).
+Seamless - memory that should outlive the conversation, work that crosses
+agents - and when not to (trivial edits, things the codebase already records).
 The briefing tells an agent <em>what you know</em>; your <code>CLAUDE.md</code> tells it <em>when to
 write more down</em>.</p>
 <h2 id="verify">Verify</h2>
@@ -223,7 +223,7 @@ block:</p>
 </span></span></code></pre><p>If it is there, the whole loop is closed: the hook resolved your cwd to a
 project, the daemon assembled a briefing within its token budget, and the agent
 started already knowing what you know.</p>
-<p>If it is <strong>not</strong> there, note that hooks fail open by design — a broken hook never
+<p>If it is <strong>not</strong> there, note that hooks fail open by design - a broken hook never
 blocks your agent, which means <strong>silence is the failure mode</strong>. Start with
 <code>seamlessd doctor</code>; the <a href="../guides/troubleshooting/">Troubleshooting</a> guide is
 organized by symptom.</p>
@@ -251,7 +251,7 @@ organized by symptom.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../static/docs.js"></script>

@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Projects &amp; scope — Seamless docs</title>
-<meta name="description" content="How Seamless decides which project a call belongs to — the precedence chain, the fail-closed rule, and project families.">
+<title>Projects &amp; scope - Seamless docs</title>
+<meta name="description" content="How Seamless decides which project a call belongs to - the precedence chain, the fail-closed rule, and project families.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,14 +156,14 @@
     <article class="prose">
   <p class="eyebrow">Concepts</p>
   <h1>Projects &amp; scope</h1>
-  <p class="lede">How Seamless decides which project a call belongs to — the precedence chain, the fail-closed rule, and project families.</p>
+  <p class="lede">How Seamless decides which project a call belongs to - the precedence chain, the fail-closed rule, and project families.</p>
   <p>A <strong>project</strong> is the scope everything else inherits. Get scope right and agents
 never think about it again; get it wrong and knowledge lands where nobody will
 find it.</p>
 <p>The design goal is that agents almost never pass <code>project</code>. In a mapped repo,
 scope resolves from where the agent already is.</p>
 <h2 id="the-precedence-chain">The precedence chain</h2>
-<p>For a durable write, scope resolves in this order — first hit wins:</p>
+<p>For a durable write, scope resolves in this order - first hit wins:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">1. explicit project argument   ─┐
 </span></span><span class="line"><span class="cl">2. the bound session&#39;s project  ├─▶  a project slug
 </span></span><span class="line"><span class="cl">3. the ambient session&#39;s project┘
@@ -180,7 +180,7 @@ session the SessionStart hook opened for this working directory, resolved via th
 <code>repo_project_map</code> setting. This is the rung that makes mapped repos feel like
 magic: an agent that never calls a single session tool still writes to the right
 project, because its cwd said which one.</p>
-<p>If that lookup is <strong>ambiguous</strong> — more than one candidate session — the call is
+<p>If that lookup is <strong>ambiguous</strong> - more than one candidate session - the call is
 rejected rather than guessed.</p>
 <p><strong>4. Nothing.</strong> With no session and no explicit project, a durable write is
 <strong>rejected as ambiguous</strong>.</p>
@@ -193,7 +193,7 @@ strong claim, and the last thing you want is for it to be what happens when the
 system is <em>unsure</em>. Silence should not be consent to the broadest possible scope.</p>
 <p>So a write with no resolvable scope errors out and says so. <code>project: global</code> is
 a token you pass on purpose, never a default you fall into.</p>
-<p>Reads are more relaxed than writes — a search with no scope has an obvious safe
+<p>Reads are more relaxed than writes - a search with no scope has an obvious safe
 answer (search what you can see), while a write does not.</p>
 <h2 id="mapping-a-repo">Mapping a repo</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
@@ -205,26 +205,26 @@ related projects can share what is genuinely shared without merging into one
 undifferentiated pile.</p>
 <p>Two briefing knobs control the cross-over:</p>
 <ul>
-<li><code>briefing.include_parent_memories</code> — a child's briefing carries the parent's
+<li><code>briefing.include_parent_memories</code> - a child's briefing carries the parent's
 memories. On by default: a rule that holds for the parent usually holds for the
 child.</li>
-<li><code>briefing.sibling_findings_count</code> / <code>briefing.include_sibling_memories</code> — how
+<li><code>briefing.sibling_findings_count</code> / <code>briefing.include_sibling_memories</code> - how
 much a sibling's recent work bleeds into yours. Findings cross over by default
 (two per briefing); sibling <em>memories</em> do not, because what is true of one
 sibling often is not true of another.</li>
 </ul>
-<p>Splitting one project into children is planned as a unit — see
+<p>Splitting one project into children is planned as a unit - see
 <a href="../../concepts/gardener/">The gardener</a>, which handles it as a <code>split</code> rather than a
 pile of individual moves.</p>
 <h2 id="when-scope-goes-wrong">When scope goes wrong</h2>
 <p>The symptom is almost always &quot;the agent wrote it somewhere I can't find it&quot; or
 &quot;the write was rejected as ambiguous&quot;. Both are the chain above:</p>
 <ul>
-<li><strong>Rejected as ambiguous</strong> — no session bound and no mapped repo. Run
+<li><strong>Rejected as ambiguous</strong> - no session bound and no mapped repo. Run
 <code>session_start</code>, or map the repo.</li>
-<li><strong>Landed in the wrong project</strong> — the cwd mapped somewhere unexpected, or an
+<li><strong>Landed in the wrong project</strong> - the cwd mapped somewhere unexpected, or an
 explicit <code>project</code> overrode what you meant. Rung 1 beats everything.</li>
-<li><strong>A tool insists a task is claimed by your own session</strong> — the connection
+<li><strong>A tool insists a task is claimed by your own session</strong> - the connection
 binding was lost. Re-run <code>session_start</code> with the same name to rebind.</li>
 </ul>
 
@@ -251,7 +251,7 @@ binding was lost. Re-run <code>session_start</code> with the same name to rebind
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>
