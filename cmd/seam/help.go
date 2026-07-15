@@ -38,11 +38,6 @@ const helpColumn = 46
 // flag with a message that explains itself and prints their usage, so nothing is
 // stranded by its absence.
 var legacySections = map[string]string{
-	groupPlans: `  seam plan list [--project P] [--window W]    list captured plans with status/iteration
-  seam plan show <slug>                        one plan: body, attached notes, tasks
-  seam plan check [--cwd DIR] <slug>           FRESH/STALE per note vs the repo's git history
-  seam plan approve <slug>                     escape hatch: flip to approved + create the task`,
-
 	groupObservability: `  seam status                                  server health + project count
   seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
   seam usage                                   activity roll-up

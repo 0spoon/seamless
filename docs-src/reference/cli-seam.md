@@ -35,18 +35,18 @@ is an error instead of a silently different command: `seam recall foo --projct p
 reports `flag provided but not defined: -projct`. A positional that starts with
 `-` needs the `--` terminator (`seam recall -- -foo`).
 
-Two commands have not been converted yet - `seam plan check` and `seam sessions`.
-Go's `flag` package stops parsing at the first positional, so a trailing flag
-cannot bind there. Rather than ignore it, `seam` rejects the line:
+One command has not been converted yet - `seam sessions`. Go's `flag` package
+stops parsing at the first positional, so a trailing flag cannot bind there.
+Rather than ignore it, `seam` rejects the line:
 
 ```bash
-seam plan check --cwd ~/repos/myproj my-plan-slug   # works
-seam plan check my-plan-slug --cwd ~/repos/myproj   # error: flags must precede the positional argument
+seam sessions --status active 01K7ABCD   # works
+seam sessions 01K7ABCD --status active   # error: flags must precede the positional argument
 ```
 
-`seam task done|start|drop|reopen` parse no flags at all. Commands that take only
-flags and no positionals (`ready`, `task list`, `task add`, `plan list`, `status`,
-`usage`, `doctor`) are unaffected either way.
+`seam task done|start|drop|reopen` and `seam plan show|approve` parse no flags at
+all. Commands that take only flags and no positionals (`ready`, `task list`,
+`task add`, `plan list`, `status`, `usage`, `doctor`) are unaffected either way.
 
 ## Agent loop
 
@@ -206,18 +206,23 @@ any holder's claim. Agents on the MCP surface cannot reach that path.
 
 Owner surface over the plans Claude Code plan mode captures. `list`, `show`, and
 `approve` are backed by the console's JSON endpoints; `check` also runs `git`
-locally. Bare `seam plan` is the same as `seam plan list`.
+locally. Bare `seam plan` is not a command - it names its subcommands and exits
+2, the same as bare `seam task`.
 
 ### seam plan list {#seam_plan_list}
 
 ```bash
-seam plan list [--project P] [--window W]
+seam plan list [--project SLUG] [--window WINDOW]
 ```
 
 Lists captured plans with slug, status, title, project, iteration, agent count,
 task progress, and age. `--window` is `24h`, `7d`, `30d`, or `all` (default
-`all`) and is applied by the server; `--project` filters the returned rows
-client-side. Prints `(no captured plans)` when nothing matches.
+`all`) and is applied by the server; anything else is a parse error rather than a
+silent fall back to `all`. `--project` filters the returned rows client-side.
+Prints `(no captured plans)` when nothing matches.
+
+`plan list` takes no positional: `seam plan list <slug>` is an error pointing at
+`seam plan show`, not a listing of every plan.
 
 ### seam plan show {#seam_plan_show}
 

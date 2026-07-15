@@ -93,8 +93,6 @@ func legacyDispatch(e *env, argv []string) int {
 		err = runSessions(args)
 	case "usage":
 		err = runUsage(args)
-	case "plan":
-		err = runPlan(args)
 	case "hook":
 		err = runHook(args)
 	case "doctor":

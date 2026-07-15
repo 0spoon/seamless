@@ -188,11 +188,11 @@ seam task claim --lease 1800 01K7ABCD     # flags on either side of the id
 Two things to know before you script it.
 
 **Flags go on either side of a positional.** `prime`, `remember`, `recall`,
-`capture`, and every tasks command parse flags and positionals in any order, so
-`seam task claim 01K7ABCD --lease 1800` and `seam task claim --lease 1800
-01K7ABCD` are the same line. A typo'd flag is an error rather than a silently
-different command. Two commands have not been converted yet - `seam plan check`
-and `seam sessions` - and reject a trailing flag instead of ignoring it. See the
+`capture`, and every tasks and plans command parse flags and positionals in any
+order, so `seam task claim 01K7ABCD --lease 1800` and `seam task claim --lease
+1800 01K7ABCD` are the same line. A typo'd flag is an error rather than a silently
+different command. One command has not been converted yet - `seam sessions` - and
+rejects a trailing flag instead of ignoring it. See the
 [seam CLI reference](/reference/cli-seam/).
 
 **There is no `seam session-end`.** The CLI covers start, write, search, and the
