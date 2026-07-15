@@ -16,7 +16,7 @@ func recallTool() mcp.Tool {
 		mcp.WithString("query", mcp.Required(), mcp.Description("what you are looking for")),
 		mcp.WithString("scope", mcp.Enum("all", "memories", "notes"), mcp.Description("what to search (default all)")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
-		mcp.WithNumber("limit", mcp.Description("maximum results (default 10)")),
+		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("maximum results (default 10)")),
 	)
 }
 

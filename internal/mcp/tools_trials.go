@@ -2,9 +2,7 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -51,7 +49,7 @@ func trialRecordTool() mcp.Tool {
 		mcp.WithString("expected", mcp.Description("expected result")),
 		mcp.WithString("actual", mcp.Description("observed result")),
 		mcp.WithString("outcome", mcp.Description("pass|fail|partial|inconclusive (free-form)")),
-		mcp.WithString("metrics", mcp.Description(`optional JSON object of structured metrics, e.g. {"hz":497,"err_pct":0.2}`)),
+		mcp.WithObject("metrics", mcp.Description(`optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted)`)),
 	)
 }
 
@@ -67,10 +65,6 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 	if lab == "" {
 		return errResult("trial_record", errors.New("no lab: call lab_open first or pass lab"))
 	}
-	metrics, err := parseMetrics(argRaw(req, "metrics"))
-	if err != nil {
-		return errResult("trial_record", err)
-	}
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("trial_record", err)
@@ -85,7 +79,7 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 		Expected: argRaw(req, "expected"),
 		Actual:   argRaw(req, "actual"),
 		Outcome:  core.TrialOutcome(argString(req, "outcome")),
-		Metrics:  metrics, SessionID: s.boundSession(ctx), ProjectSlug: project,
+		Metrics:  argObject(req, "metrics"), SessionID: s.boundSession(ctx), ProjectSlug: project,
 		CreatedAt: time.Now().UTC(),
 	}
 	if err := store.CreateTrial(ctx, s.cfg.DB, tr); err != nil {
@@ -101,8 +95,8 @@ func trialQueryTool() mcp.Tool {
 		mcp.WithDescription("Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record)."),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
 		mcp.WithString("outcome", mcp.Description("filter by outcome (e.g. fail)")),
-		mcp.WithString("metrics_filter", mcp.Description(`optional JSON object; trials whose metrics equal every given key match, e.g. {"hz":497}`)),
-		mcp.WithNumber("limit", mcp.Description("max results (default 20)")),
+		mcp.WithObject("metrics_filter", mcp.Description(`optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted)`)),
+		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("max results (default 20)")),
 	)
 }
 
@@ -112,16 +106,11 @@ func (s *Server) handleTrialQuery(ctx context.Context, req mcp.CallToolRequest) 
 		lab = s.boundLab(ctx)
 	}
 	filter := store.TrialFilter{
-		Lab:     lab,
-		Outcome: argString(req, "outcome"),
-		Limit:   argInt(req, "limit", 20),
+		Lab:           lab,
+		Outcome:       argString(req, "outcome"),
+		Limit:         argInt(req, "limit", 20),
+		MetricsEquals: argObject(req, "metrics_filter"),
 	}
-	metricsFilter, err := parseMetrics(argRaw(req, "metrics_filter"))
-	if err != nil {
-		return errResult("trial_query", err)
-	}
-	filter.MetricsEquals = metricsFilter
-
 	trials, err := store.QueryTrials(ctx, s.cfg.DB, filter)
 	if err != nil {
 		return errResult("trial_query", err)
@@ -131,19 +120,6 @@ func (s *Server) handleTrialQuery(ctx context.Context, req mcp.CallToolRequest) 
 		out = append(out, trialJSON(tr))
 	}
 	return jsonResult(map[string]any{"lab": lab, "trials": out})
-}
-
-// parseMetrics decodes a JSON-object metrics argument, or returns nil for a
-// blank argument. A non-object (or malformed) value is a user error.
-func parseMetrics(raw string) (map[string]any, error) {
-	if raw == "" {
-		return nil, nil
-	}
-	var m map[string]any
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		return nil, fmt.Errorf("metrics must be a JSON object: %w", err)
-	}
-	return m, nil
 }
 
 // trialJSON renders a trial for a tool response, omitting empty fields.

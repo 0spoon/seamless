@@ -23,7 +23,7 @@ func notesCreateTool() mcp.Tool {
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global note. With no session and no explicit project the create is rejected as ambiguous.")),
-		mcp.WithString("tags", mcp.Description("comma-separated tags")),
+		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("tags (a comma-separated string is also accepted)")),
 		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=<slug> steps. Use it whenever this note is a plan's narrative or supporting context.")),
 		mcp.WithString("source_url", mcp.Description("optional source URL")),
 	)
@@ -31,7 +31,7 @@ func notesCreateTool() mcp.Tool {
 
 func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	title := argString(req, "title")
-	body := argBody(req)
+	body := argRaw(req, "body")
 	if title == "" || strings.TrimSpace(body) == "" {
 		return errResult("notes_create", errors.New("title and body are required"))
 	}
@@ -47,7 +47,7 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 		return errResult("notes_create", err)
 	}
 	now := time.Now().UTC()
-	tags := appendUnique(argTags(req, "tags"), "created-by:agent")
+	tags := appendUnique(argStrings(req, "tags"), "created-by:agent")
 	// A plan slug carries the note into the plan:<slug> composition -- the same
 	// key tasks_add plan= writes -- so agents attach a plan's narrative without
 	// having to hand-type the tag prefix.
@@ -97,7 +97,7 @@ func notesUpdateTool() mcp.Tool {
 		mcp.WithString("description", mcp.Description("new description")),
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("new project slug (\"\" or \"global\" = global scope)")),
-		mcp.WithString("tags", mcp.Description("comma-separated tags, replacing all")),
+		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched")),
 	)
 }
 
@@ -106,35 +106,34 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return errResult("notes_update", err)
 	}
-	args := req.GetArguments()
 	oldProject := note.Project
 	changed := false
-	if v, ok := args["title"].(string); ok {
-		title := strings.TrimSpace(v)
+	if argPresent(req, "title") {
+		title := argString(req, "title")
 		if err := validate.Title(title); err != nil {
 			return errResult("notes_update", err)
 		}
 		note.Title = title
 		changed = true
 	}
-	if v, ok := args["description"].(string); ok {
-		note.Description = strings.TrimSpace(v)
+	if argPresent(req, "description") {
+		note.Description = argString(req, "description")
 		changed = true
 	}
-	if v, ok := firstStringArg(args, "body", "content", "text"); ok {
-		note.Body = v
+	if argPresent(req, "body") {
+		note.Body = argRaw(req, "body")
 		changed = true
 	}
-	if v, ok := args["project"].(string); ok {
-		project, perr := validateProjectArg(strings.TrimSpace(v))
+	if argPresent(req, "project") {
+		project, perr := validateProjectArg(argString(req, "project"))
 		if perr != nil {
 			return errResult("notes_update", perr)
 		}
 		note.Project = project
 		changed = true
 	}
-	if v, ok := args["tags"].(string); ok {
-		note.Tags = parseCommaList(v)
+	if argPresent(req, "tags") {
+		note.Tags = argStrings(req, "tags")
 		changed = true
 	}
 	if !changed {
@@ -177,7 +176,7 @@ func notesAppendTool() mcp.Tool {
 }
 
 func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	text := argBody(req)
+	text := argRaw(req, "body")
 	if strings.TrimSpace(text) == "" {
 		return errResult("notes_append", errors.New("a non-empty body is required (aliases: content, text)"))
 	}

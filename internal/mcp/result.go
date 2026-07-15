@@ -39,44 +39,45 @@ func argRaw(r mcp.CallToolRequest, key string) string {
 	return r.GetString(key, "")
 }
 
-// bodyAliases are the interchangeable names for an item's markdown text. The
-// create tools advertise "body"; the append tools historically used
-// "content"/"text". Accepting all three means an agent primed on one tool's
-// param name still succeeds on another -- the single most common field-name
-// mistake in the field logs.
-var bodyAliases = []string{"body", "content", "text"}
-
-// argBody returns an item's markdown text, accepting body/content/text
-// interchangeably. Whitespace is preserved (markdown); the first non-blank wins.
-func argBody(r mcp.CallToolRequest) string {
-	for _, k := range bodyAliases {
-		if v := argRaw(r, k); strings.TrimSpace(v) != "" {
-			return v
-		}
-	}
-	return ""
-}
-
-// firstStringArg returns the first present string argument among keys (for
-// update tools that read the raw args map to detect which fields changed), and
-// whether any was present. Value is returned untrimmed.
-func firstStringArg(args map[string]any, keys ...string) (string, bool) {
-	for _, k := range keys {
-		if v, ok := args[k].(string); ok {
-			return v, true
-		}
-	}
-	return "", false
-}
-
 // argInt reads an integer argument, or def when absent/invalid.
 func argInt(r mcp.CallToolRequest, key string, def int) int {
 	return r.GetInt(key, def)
 }
 
-// argTags splits a comma-separated tags argument, trimming and dropping blanks.
-func argTags(r mcp.CallToolRequest, key string) []string {
-	return parseCommaList(argString(r, key))
+// argStrings reads a string-array argument, nil when absent.
+//
+// validateMiddleware is the only supported way in. It coerces every declared
+// array property to []string -- from an array or the legacy comma-separated
+// string alike -- before a handler runs, so that is the one shape this reads. A
+// handler called with a hand-built request bypasses that guarantee; an
+// unexpected shape then yields nil rather than panicking. Do not read that
+// fallback as a second accepted form: coerceStrings owns the parsing, and a
+// parser here would be one this package has to keep in step with that one.
+func argStrings(r mcp.CallToolRequest, key string) []string {
+	list, _ := r.GetArguments()[key].([]string)
+	return list
+}
+
+// argObject reads an object argument, nil when absent. Same contract as
+// argStrings: the validator has already coerced a declared object property --
+// from an object or a JSON-object string -- to map[string]any.
+func argObject(r mcp.CallToolRequest, key string) map[string]any {
+	m, _ := r.GetArguments()[key].(map[string]any)
+	return m
+}
+
+// argPresent reports whether a parameter was sent, under its canonical name
+// only: validateMiddleware has already collapsed the aliases onto it and dropped
+// the keys that mean absent (an empty array, and the empty string standing in
+// for an absent enum/array/number/object).
+//
+// It is what an update tool asks to tell "leave this field alone" from "set this
+// field to empty" -- the distinction GetString cannot make, since it answers ""
+// to both. A present key is always non-nil and of the declared type: coercion
+// rejects a null before any handler sees it.
+func argPresent(r mcp.CallToolRequest, key string) bool {
+	_, ok := r.GetArguments()[key]
+	return ok
 }
 
 // parseCommaList splits a comma-separated string, trimming and dropping blanks.

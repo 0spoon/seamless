@@ -211,9 +211,9 @@ either tool to see that plan's steps instead.</p>
 </tr>
 <tr>
 <td><code>depends_on</code></td>
-<td>string</td>
+<td>array</td>
 <td>no</td>
-<td>comma-separated task ids this task is blocked by</td>
+<td>task ids this task is blocked by (a comma-separated string is also accepted)</td>
 </tr>
 <tr>
 <td><code>plan</code></td>
@@ -251,9 +251,9 @@ either tool to see that plan's steps instead.</p>
 </tr>
 <tr>
 <td><code>add_depends_on</code></td>
-<td>string</td>
+<td>array</td>
 <td>no</td>
-<td>comma-separated task ids to add as blockers</td>
+<td>task ids to add as blockers (a comma-separated string is also accepted)</td>
 </tr>
 <tr>
 <td><code>body</code></td>
@@ -371,7 +371,7 @@ either tool to see that plan's steps instead.</p>
 </tr>
 <tr>
 <td><code>lease_seconds</code></td>
-<td>string</td>
+<td>number</td>
 <td>no</td>
 <td>lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900)</td>
 </tr>
