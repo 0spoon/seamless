@@ -96,7 +96,9 @@ func checkOpenAIStatus(resp *http.Response) error {
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil
 	}
-	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	// Best-effort detail only: the sentinel below comes from the status code,
+	// so a failed read costs the message a snippet, not its meaning.
+	snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512)) //nolint:errcheck
 	switch resp.StatusCode {
 	case http.StatusUnauthorized, http.StatusForbidden:
 		return fmt.Errorf("%w: status %d", ErrAuth, resp.StatusCode)

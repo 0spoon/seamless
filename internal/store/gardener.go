@@ -112,7 +112,10 @@ func ResolveProposal(ctx context.Context, db *sql.DB, id, status string, at time
 	if err != nil {
 		return fmt.Errorf("store.ResolveProposal: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.ResolveProposal: rows affected: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("store.ResolveProposal: no pending proposal with id %q", id)
 	}
@@ -133,7 +136,11 @@ func UpdateProposalPayload(ctx context.Context, db *sql.DB, id string, payload m
 	if err != nil {
 		return fmt.Errorf("store.UpdateProposalPayload: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.UpdateProposalPayload: rows affected: %w", err)
+	}
+	if n == 0 {
 		return fmt.Errorf("store.UpdateProposalPayload: no pending proposal with id %q", id)
 	}
 	return nil

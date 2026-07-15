@@ -260,7 +260,7 @@ func (w *watcher) fire(ctx context.Context, relPath string) {
 func (w *watcher) rescanDir(ctx context.Context, dir string) {
 	// The callback never returns an error, so the walk always reports success:
 	// an unreadable subtree is warned about and skipped, not fatal.
-	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error {
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, walkErr error) error { //nolint:errcheck
 		if walkErr != nil {
 			// Skipping here means files under path are not caught up until the
 			// next startup Reconcile; log it rather than walk on silently.

@@ -25,7 +25,14 @@ PREFIX        ?= $(HOME)/.local
 PREFIX_BIN    := $(PREFIX)/bin
 PROD_CONFIG   := $(HOME)/.config/seamless/seamless.yaml
 
-.PHONY: help build test test-race bench lint vet fmt tidy run doctor console console-chrome dev \
+# gofmt over TRACKED files only. The go tool's ./... pattern skips dot-dirs, so
+# build/vet/test/lint never see .claude/worktrees/ (other agents' checkouts of
+# this same repo). gofmt takes paths, not packages, and walks the filesystem
+# raw: `gofmt -l .` reports their drift as ours, and `gofmt -w .` rewrites
+# their files underneath them mid-edit. Always go through this list.
+GOFILES := git ls-files '*.go'
+
+.PHONY: help build test test-race bench lint vet fmt fmt-check check tidy run doctor console console-chrome dev \
 	install-service install-hooks install-prod uninstall-prod _reload-service \
 	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
@@ -36,9 +43,11 @@ help:
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
+	@echo "  check      the full gate: build + vet + fmt-check + lint + test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
-	@echo "  fmt        gofmt the tree"
+	@echo "  fmt        gofmt tracked files"
+	@echo "  fmt-check  fail if tracked files have gofmt drift"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server (127.0.0.1:8081)"
 	@echo "  doctor     build and run config + DB self-checks"
@@ -85,7 +94,25 @@ vet:
 	$(GO) vet $(PKG)
 
 fmt:
-	gofmt -w .
+	@$(GOFILES) | xargs gofmt -w
+
+# Report drift instead of fixing it, so `make check` can fail on it.
+fmt-check:
+	@drift=$$($(GOFILES) | xargs gofmt -l); \
+	    test -z "$$drift" || { echo "gofmt drift (run 'make fmt'):"; echo "$$drift"; exit 1; }
+
+# The full gate: everything that must be green before declaring work done
+# (AGENTS.md > "Verification before declaring done"). Sequential $(MAKE) calls
+# rather than prerequisites so it fails at the first red step and stays ordered
+# under `make -j`. Cheapest and most-likely-to-fail steps come first; test-race
+# is last because it is the slowest by far.
+check:
+	@$(MAKE) build
+	@$(MAKE) vet
+	@$(MAKE) fmt-check
+	@$(MAKE) lint
+	@$(MAKE) test-race
+	@echo "check: all green"
 
 tidy:
 	$(GO) mod tidy

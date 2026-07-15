@@ -65,7 +65,10 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	if err != nil {
 		return fmt.Errorf("store.UpdateSession: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.UpdateSession: rows affected: %w", err)
+	}
 	if n == 0 {
 		return fmt.Errorf("store.UpdateSession: no session with id %q", s.ID)
 	}
