@@ -1333,3 +1333,51 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .gard-card .body { font-size: var(--text-sm); }
 .gard-card .targets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
 .gard-card .acts { display: flex; gap: 8px; margin-top: 13px; }
+
+/* --- Global search: command palette + search-page highlights --- */
+
+/* Matched-term highlight. Shared by the palette and the search page; this is the
+   only <mark> the console renders, and it is server-generated (see
+   console/search.go highlightSnippet). */
+mark { background: var(--brand-soft); color: inherit; padding: 0 2px; border-radius: 3px; }
+
+/* Keyboard chips: the nav's Cmd-K hint and the palette footer's key legend. */
+kbd {
+  display: inline-block; padding: 1px 5px; font-family: var(--mono); font-size: 11px;
+  color: var(--muted); background: var(--surface-2); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: var(--radius-xs); line-height: 1.5;
+}
+.nav .kbd-hint { margin-left: auto; font-family: var(--mono); font-size: 10px; color: var(--faint); letter-spacing: 0.02em; }
+
+/* Overlay sits above #live-pill (z 70) so the palette is never occluded. */
+.cmdk-overlay { position: fixed; inset: 0; z-index: 80; background: var(--scrim); }
+.cmdk-overlay[hidden] { display: none; }
+.cmdk {
+  max-width: 640px; margin: 12vh auto 0; background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg); overflow: hidden;
+}
+.cmdk-input-row { display: flex; align-items: center; gap: 9px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.cmdk-input-row svg { color: var(--faint); flex: none; }
+.cmdk-input-row input {
+  flex: 1; min-width: 0; border: 0; background: none; color: var(--ink);
+  font: inherit; font-size: var(--text-md); outline: none;
+}
+.cmdk-input-row input::placeholder { color: var(--faint); }
+/* Loading cue: a quiet pulse on the row, never a layout shift. */
+.cmdk.loading .cmdk-input-row svg { animation: cmdk-pulse 1s ease-in-out infinite; }
+@keyframes cmdk-pulse { 50% { opacity: 0.35; } }
+
+.cmdk-list { list-style: none; margin: 0; padding: 6px; max-height: 52vh; overflow-y: auto; }
+.cmdk-group { padding: 8px 8px 4px; font-size: var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.cmdk-group .n { color: var(--faint); font-weight: 500; }
+.cmdk-opt { display: flex; align-items: baseline; gap: 8px; padding: 7px 9px; border-radius: var(--radius-sm); cursor: pointer; }
+.cmdk-opt .t { font-weight: 600; font-size: var(--text-sm); color: var(--ink); flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-opt .d { flex: 1; min-width: 0; font-size: var(--text-xs); color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cmdk-opt .meta { flex: none; font-size: var(--text-xs); color: var(--faint); }
+/* Selected option mirrors the split list's .row-link.selected: brand wash + bar. */
+.cmdk-opt.selected { background: var(--brand-soft); box-shadow: inset 2px 0 0 var(--brand); }
+.cmdk-empty, .cmdk-error { padding: 22px 14px; text-align: center; font-size: var(--text-sm); color: var(--muted); }
+.cmdk-error { color: var(--danger); }
+.cmdk-foot { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--surface-2); font-size: var(--text-xs); color: var(--faint); }
+.cmdk-foot .sp { margin-left: auto; }

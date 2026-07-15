@@ -215,7 +215,7 @@ func runServe(args []string) error {
 		PlanCapture: cfg.PlanCapture, Logger: logger,
 	})
 	consoleSrv, err := console.New(console.Config{
-		DB: db, Files: mgr, Gardener: garden, Events: rec,
+		DB: db, Files: mgr, Gardener: garden, Events: rec, Retrieve: ret,
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,
 		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,

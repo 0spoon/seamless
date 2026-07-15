@@ -1,0 +1,67 @@
+{{define "content"}}
+{{with .Data}}
+<div class="topbar">
+  <div>
+    <h1>Search</h1>
+    <div class="sub">
+      {{if .Query}}{{.Total}} result{{if ne .Total 1}}s{{end}} for &ldquo;{{.Query}}&rdquo;{{else}}Everything the console can link to, in one query{{end}}
+    </div>
+  </div>
+</div>
+
+<div class="proj-toolbar">
+  <form class="search" method="get" action="/console/search">
+    {{icon "search"}}
+    <input name="q" aria-label="Search memories, notes, tasks, plans, projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
+    <input type="hidden" name="scope" value="{{.Scope}}">
+  </form>
+  <div class="seg">
+    {{range .Scopes}}
+    <a class="{{if .Active}}on{{end}}" href="/console/search?scope={{.Key}}&amp;q={{$.Data.Query}}">{{.Label}}</a>
+    {{end}}
+  </div>
+</div>
+
+<div class="list-detail-split">
+  <div class="list-pane">
+{{if .Groups}}
+{{range .Groups}}
+<section class="card">
+  <h2>{{.Label}} <span class="h2-meta">{{.Count}}</span></h2>
+  <div class="table-wrap">
+    <table>
+      <tbody>
+        {{range .Rows}}
+        <tr class="row-link" data-href="{{.Href}}"{{if .Peek}} data-peek{{end}}>
+          <td class="mem-name">
+            <strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
+            {{if .SnippetHTML}}<div class="desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="desc">{{.Description}}</div>{{end}}
+          </td>
+          <td><span class="kind">{{.Kind}}</span></td>
+          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
+          <td class="muted">{{.Age}}</td>
+        </tr>
+        {{end}}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{end}}
+{{else}}
+{{if .Query}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo;.</div></div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, projects, and sessions &mdash; or press <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
+{{end}}
+{{end}}
+  </div><!-- .list-pane -->
+  <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Result detail">
+    <div class="detail-pane-chrome">
+      <a class="detail-open btn small" href="#">open full &nearr;</a>
+      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+    </div>
+    <div class="detail-pane-body"></div>
+  </section>
+</div><!-- .list-detail-split -->
+{{end}}
+{{end}}

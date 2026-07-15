@@ -8,6 +8,29 @@ import (
 	"unicode"
 )
 
+// Snippet marks wrap the matched terms inside a SnippetHit.Snippet. They are
+// control characters rather than "<mark>" because a snippet is raw item text:
+// handing HTML to the caller would make every consumer responsible for telling
+// our markup from the item's own. A control char cannot survive HTML escaping as
+// markup, so a consumer escapes first and substitutes second (see the console's
+// highlightSnippet), and a sentinel a writer embedded in their own body can only
+// ever produce a stray inert <mark>, never an injection.
+const (
+	SnippetStartMark = "\x01"
+	SnippetEndMark   = "\x02"
+)
+
+// snippetTokens is the target width, in tokens, of a generated snippet: wide
+// enough to read the match in context, short enough for a one-line result row.
+const snippetTokens = 12
+
+// SnippetHit is an FTS hit carrying the matched text in context. Snippet is the
+// raw item text with the matched terms wrapped in SnippetStartMark/SnippetEndMark.
+type SnippetHit struct {
+	SearchHit
+	Snippet string
+}
+
 // FTSSearch runs a full-text query over the unified fts table and returns hits
 // ordered best-first. Scores are the negated bm25 rank (higher = better) so they
 // share the "bigger is better" convention with CosineSearch. An empty kinds
@@ -29,6 +52,32 @@ import (
 // with no index row (notes, or an orphan) has nothing to invalidate it and is
 // kept.
 func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
+	hits, err := ftsSearch(ctx, db, query, kinds, projects, limit, false)
+	if err != nil {
+		return nil, err
+	}
+	if hits == nil {
+		return nil, nil
+	}
+	out := make([]SearchHit, len(hits))
+	for i, h := range hits {
+		out[i] = h.SearchHit
+	}
+	return out, nil
+}
+
+// FTSSearchSnippets is FTSSearch plus a generated snippet per hit: the same
+// query, filters, and ordering, with the matched terms marked in context. The
+// two share ftsSearch so the validity predicate, the scope filter, and the
+// ordering cannot drift between the snippet and no-snippet paths -- callers rely
+// on both returning identical hits for identical inputs.
+func FTSSearchSnippets(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SnippetHit, error) {
+	return ftsSearch(ctx, db, query, kinds, projects, limit, true)
+}
+
+// ftsSearch is the shared body of both FTS entry points. withSnippet adds the
+// snippet() projection; everything else about the query is identical.
+func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int, withSnippet bool) ([]SnippetHit, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -37,10 +86,18 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 		return nil, nil
 	}
 
-	sqlStr := `SELECT fts.item_id, fts.kind, bm25(fts) AS rank FROM fts
+	// Column -1 lets FTS5 pick the best-matching column for the snippet, so a
+	// body hit quotes the body and a name hit quotes the name.
+	sel := `fts.item_id, fts.kind, bm25(fts) AS rank`
+	var args []any
+	if withSnippet {
+		sel += `, snippet(fts, -1, ?, ?, ' ... ', ?)`
+		args = append(args, SnippetStartMark, SnippetEndMark, snippetTokens)
+	}
+	sqlStr := `SELECT ` + sel + ` FROM fts
 		LEFT JOIN memories_index mi ON mi.id = fts.item_id
 		WHERE fts MATCH ? AND (mi.id IS NULL OR mi.invalid_at IS NULL)`
-	args := []any{match}
+	args = append(args, match)
 	if len(kinds) > 0 {
 		sqlStr += ` AND fts.kind IN (` + placeholders(len(kinds)) + `)`
 		for _, k := range kinds {
@@ -61,25 +118,33 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.FTSSearch: %w", err)
+		return nil, fmt.Errorf("store.ftsSearch: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	var hits []SearchHit
+	var hits []SnippetHit
 	for rows.Next() {
 		var (
 			itemID, kind string
 			rank         float64
+			snippet      string
 		)
-		if err := rows.Scan(&itemID, &kind, &rank); err != nil {
-			return nil, fmt.Errorf("store.FTSSearch: scan: %w", err)
+		dest := []any{&itemID, &kind, &rank}
+		if withSnippet {
+			dest = append(dest, &snippet)
+		}
+		if err := rows.Scan(dest...); err != nil {
+			return nil, fmt.Errorf("store.ftsSearch: scan: %w", err)
 		}
 		// bm25 returns lower (more negative) for better matches; negate so
 		// higher is better, matching SearchHit's convention.
-		hits = append(hits, SearchHit{ItemID: itemID, Kind: kind, Score: -rank})
+		hits = append(hits, SnippetHit{
+			SearchHit: SearchHit{ItemID: itemID, Kind: kind, Score: -rank},
+			Snippet:   snippet,
+		})
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.FTSSearch: %w", err)
+		return nil, fmt.Errorf("store.ftsSearch: %w", err)
 	}
 	return hits, nil
 }
