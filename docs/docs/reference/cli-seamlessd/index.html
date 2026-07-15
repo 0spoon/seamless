@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>seamlessd CLI — Seamless docs</title>
-<meta name="description" content="The daemon and operator CLI — serve, doctor, import, install-hooks, map-repo, family, console-open, and version.">
+<title>seamlessd CLI - Seamless docs</title>
+<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, and version.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,11 +156,11 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>seamlessd CLI</h1>
-  <p class="lede">The daemon and operator CLI — serve, doctor, import, install-hooks, map-repo, family, console-open, and version.</p>
+  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, and version.</p>
   <p><code>seamlessd</code> is both the server and the operator CLI. <code>serve</code> runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
 directly, without going through a running server. That means most of them work
-whether or not the daemon is up — and that <code>map-repo</code> and <code>family</code> write state
+whether or not the daemon is up - and that <code>map-repo</code> and <code>family</code> write state
 the running daemon reads.</p>
 <p>Each subcommand parses its own flags. None of them take positional arguments
 except <code>family</code>, which takes only positionals.</p>
@@ -173,29 +173,29 @@ gracefully. <code>--addr</code> overrides the configured bind address (default
 <code>127.0.0.1:8081</code>).</p>
 <p>It wires up:</p>
 <ul>
-<li><code>/healthz</code> — liveness plus a database ping. Reports <code>degraded</code> with a 503 when
+<li><code>/healthz</code> - liveness plus a database ping. Reports <code>degraded</code> with a 503 when
 the ping fails.</li>
-<li><code>/api/mcp</code> — the MCP tool endpoint, bearer-authenticated.</li>
-<li><code>/api/hooks/...</code> — the session and plan-capture hooks.</li>
-<li><code>/console/...</code> — the observability console. The bare root <code>/</code> redirects here.</li>
+<li><code>/api/mcp</code> - the MCP tool endpoint, bearer-authenticated.</li>
+<li><code>/api/hooks/...</code> - the session and plan-capture hooks.</li>
+<li><code>/console/...</code> - the observability console. The bare root <code>/</code> redirects here.</li>
 </ul>
 <p>Startup is deliberately tolerant of a half-configured install, and the log is
 where you find out:</p>
 <ul>
-<li><strong>No embedder</strong> — recall degrades to FTS-only for the life of the process. A
+<li><strong>No embedder</strong> - recall degrades to FTS-only for the life of the process. A
 missing credential logs a warning; a <em>malformed</em> setting (a bad <code>base_url</code>)
 logs an error, because that one is a typo rather than a choice.</li>
-<li><strong>No chat client</strong> — gardener digest passes no-op.</li>
-<li><strong>Empty <code>mcp.api_key</code></strong> — logs a warning, and every MCP and hook request is
+<li><strong>No chat client</strong> - gardener digest passes no-op.</li>
+<li><strong>Empty <code>mcp.api_key</code></strong> - logs a warning, and every MCP and hook request is
 then rejected.</li>
-<li><strong>Gardener disabled</strong> — logged, and no maintenance passes run.</li>
+<li><strong>Gardener disabled</strong> - logged, and no maintenance passes run.</li>
 </ul>
 <p>The startup line carries the version, commit, and data directory, which is how
 you spot a daemon running older code than your working tree.</p>
 <h2 id="seamlessd_doctor">seamlessd doctor</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor
 </span></span></code></pre><p>Server-side self-checks. Each line reports <code>ok</code>, <code>warn</code>, or <code>fail</code>; <strong>only a
-<code>fail</code> exits non-zero</strong> — warnings are informational. Checks stop early if
+<code>fail</code> exits non-zero</strong> - warnings are informational. Checks stop early if
 config or the database cannot be loaded at all.</p>
 <div class="table-wrap">
 <table>
@@ -236,7 +236,7 @@ config or the database cannot be loaded at all.</p>
 </tr>
 <tr>
 <td><code>mcp_tools</code></td>
-<td>Fails if the number of registered tools disagrees with the expected count — catches a tool written but never wired in.</td>
+<td>Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in.</td>
 </tr>
 <tr>
 <td><code>hooks</code></td>
@@ -251,7 +251,7 @@ config or the database cannot be loaded at all.</p>
 </div>
 <p>The hooks check looks at <code>~/.claude/settings.json</code> and then
 <code>./.claude/settings.json</code>, matching by hook URL or command rather than by the
-managed marker — Claude Code strips that marker when it rewrites the file, and a
+managed marker - Claude Code strips that marker when it rewrites the file, and a
 hook that still fires must still count as installed.</p>
 <p>Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.</p>
@@ -288,7 +288,7 @@ events are inserted into the database.</p>
 </tbody>
 </table>
 </div>
-<p><strong>It is idempotent by id</strong>, so re-running imports only what is new — which makes
+<p><strong>It is idempotent by id</strong>, so re-running imports only what is new - which makes
 a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
 prints a report even when the import ends in an error. With <code>--embed</code> on and no
 usable embedder, it warns and imports without vectors rather than failing.</p>
@@ -336,13 +336,13 @@ is reported as added, updated, or unchanged.</p>
 <p>Six events are installed together: <code>SessionStart</code>, <code>UserPromptSubmit</code>,
 <code>SessionEnd</code>, <code>PostToolUse</code>, <code>SubagentStop</code>, and <code>PermissionRequest</code>. All are
 command hooks that shell out to <code>seam hook &lt;event&gt;</code> except <code>UserPromptSubmit</code>,
-which is an http hook — Claude Code will not run an http hook for SessionStart
+which is an http hook - Claude Code will not run an http hook for SessionStart
 at all, and at SessionEnd a fire-and-forget request races process teardown, so
 the findings harvest would often be lost.</p>
 <h2 id="seamlessd_map_repo">seamlessd map-repo</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
 </span></span></code></pre><p>Adds an entry to the <code>repo_project_map</code> setting, so an agent whose working
-directory is under that path resolves to that project — in the hooks and in
+directory is under that path resolves to that project - in the hooks and in
 <code>session_start</code>. This is what makes a briefing arrive scoped to the right
 project without the agent passing <code>project</code> anywhere.</p>
 <p><code>--project</code> is required. <code>--path</code> defaults to the current directory and is made
@@ -355,7 +355,7 @@ registers it. Writes straight to the database; no running daemon needed.</p>
 </span></span></code></pre><p>Manages the <code>project_families</code> setting: named groupings whose members surface
 each other's recent findings in briefings. Use it when two projects are really
 one body of work and an agent in either should see what happened in the other.</p>
-<p>Members are <strong>project slugs, not repo paths</strong> — resolve a repo to its slug with
+<p>Members are <strong>project slugs, not repo paths</strong> - resolve a repo to its slug with
 <code>map-repo</code> first. <code>remove</code> with no slugs removes the whole family; with slugs it
 removes just those members. <code>rm</code> is accepted as an alias for <code>remove</code>.</p>
 <p>Adding a slug that is not yet a registered project prints a warning but
@@ -366,21 +366,21 @@ registers it.</p>
 </span></span></code></pre><p>Opens the console in a browser, already authenticated. It renders a one-shot
 self-submitting login page to a <code>0600</code> temp file and opens it; the page POSTs
 the static key to the console's login endpoint, which sets the session cookie
-and redirects into the console — so you land on an authenticated page without
+and redirects into the console - so you land on an authenticated page without
 pasting a key.</p>
 <p><code>--browser</code> targets a specific browser application (for example
 <code>&quot;Google Chrome&quot;</code>, so an agent driving Chrome gets the auth cookie even when
 another browser is the default). It is <strong>macOS only</strong> and is rejected with an
 error on other platforms rather than silently opening the default browser.</p>
 <p>It refuses to run when <code>mcp.api_key</code> is empty, or when the server does not
-answer <code>/healthz</code> within two seconds — the page has nowhere to POST otherwise.
+answer <code>/healthz</code> within two seconds - the page has nowhere to POST otherwise.
 Any HTTP response counts as reachable, including a degraded 503.</p>
 <h2 id="seamlessd_version">seamlessd version</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
 </span></span></code></pre><p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
 <p>Commit and build date are link-time metadata set by the Makefile; a plain
 <code>go build</code> leaves them <code>unknown</code>. The same version string appears in <code>/healthz</code>,
-the MCP handshake, and the startup log — compare them when you suspect the
+the MCP handshake, and the startup log - compare them when you suspect the
 daemon is running older code than what you just built.</p>
 
 </article>
@@ -406,7 +406,7 @@ daemon is running older code than what you just built.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

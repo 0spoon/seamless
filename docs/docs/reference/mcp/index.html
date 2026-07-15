@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MCP API overview — Seamless docs</title>
+<title>MCP API overview - Seamless docs</title>
 <meta name="description" content="The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -161,14 +161,14 @@
 <code>/api/mcp</code>, guarded by a single static bearer key.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
 </span></span><span class="line"><span class="cl">Authorization: Bearer &lt;mcp.api_key&gt;
-</span></span></code></pre><p><code>GET /healthz</code> needs no auth and reports the running build — the fastest way to
+</span></span></code></pre><p><code>GET /healthz</code> needs no auth and reports the running build - the fastest way to
 tell whether a daemon is up and which version it is.</p>
 <h2 id="scope-resolution">Scope resolution</h2>
 <p>Almost no call passes <code>project</code>. Scope is resolved once, in this order, and
 inherited by everything after it:</p>
 <ol>
 <li>An explicit <code>project</code> argument on the call.</li>
-<li>The <strong>bound session's</strong> project — set by <code>session_start</code>, held per connection.</li>
+<li>The <strong>bound session's</strong> project - set by <code>session_start</code>, held per connection.</li>
 <li>The <strong>ambient session's</strong> project, resolved from the agent's cwd via the
 <code>repo_project_map</code> setting.</li>
 </ol>
@@ -178,7 +178,7 @@ Pass <code>project: global</code> to mean global deliberately.</p>
 <h2 id="conventions">Conventions</h2>
 <ul>
 <li><strong>Body aliases.</strong> Tools taking a markdown body accept <code>body</code>, <code>content</code>, or
-<code>text</code> interchangeably — agents disagree about the name, and the disagreement
+<code>text</code> interchangeably - agents disagree about the name, and the disagreement
 is not worth an error.</li>
 <li><strong>IDs are ULIDs</strong>, never UUIDs. They sort lexically by creation time.</li>
 <li><strong>Errors</strong> come back as tool errors with a <code>&lt;tool&gt;: &lt;reason&gt;</code> message, not as
@@ -240,7 +240,7 @@ own registration, so they cannot drift from what the daemon accepts.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

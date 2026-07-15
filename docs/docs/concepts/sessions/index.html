@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sessions &amp; briefings — Seamless docs</title>
-<meta name="description" content="How an agent gets your knowledge injected before it does anything — ambient sessions, the briefing&#39;s packing order, and what never gets dropped.">
+<title>Sessions &amp; briefings - Seamless docs</title>
+<meta name="description" content="How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing&#39;s packing order, and what never gets dropped.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Concepts</p>
   <h1>Sessions &amp; briefings</h1>
-  <p class="lede">How an agent gets your knowledge injected before it does anything — ambient sessions, the briefing&#39;s packing order, and what never gets dropped.</p>
+  <p class="lede">How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing&#39;s packing order, and what never gets dropped.</p>
   <p>A <strong>session</strong> is one agent's stretch of work. A <strong>briefing</strong> is what that agent
 gets handed at the start of it, before it has called a single tool.</p>
 <p>This is the mechanism that makes Seamless ambient rather than opt-in. An agent
@@ -194,7 +194,7 @@ your constraints.</p>
 </table>
 </div>
 <p>They are not two competing sessions. <code>session_start</code> <strong>adopts</strong> the sole ambient
-session for the same working directory rather than opening a second one — that
+session for the same working directory rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.</p>
 <p>Call <code>session_start</code> when the work is non-trivial: it returns the full briefing
 (the injected one is deliberately shorter), and it binds the connection so
@@ -229,7 +229,7 @@ fit a token budget would be worse than no briefing at all.</li>
 gated stage's status is load-bearing for the whole session.</li>
 <li><strong><code>PLAN:</code> rollups</strong> follow, also pinned. The counts (<code>2/3 done, 1 claimable</code>)
 tell the next agent what work it can pick up right now.</li>
-<li><strong>The memory index</strong> is <code>name: description</code> only — the description is the <em>only</em>
+<li><strong>The memory index</strong> is <code>name: description</code> only - the description is the <em>only</em>
 text an index ever shows, which is why writing a good one matters more than
 writing a good body.</li>
 <li><strong><code>(+34 older -- use recall)</code></strong> is the honest tail: the index was trimmed, and
@@ -241,8 +241,8 @@ the briefing says so instead of pretending it is complete.</li>
 the whole thing is hard-capped at <code>briefing.hard_cap_multiplier</code> times that
 (default 2x).</p>
 <p>The <strong>never-drop invariant</strong>: constraints, pinned stages, and active-plan rollups
-are counted first and are exempt from budget dropping. Everything else — the
-memory index, sibling findings, sibling memories, recent findings, ready tasks —
+are counted first and are exempt from budget dropping. Everything else - the
+memory index, sibling findings, sibling memories, recent findings, ready tasks -
 is packed in that order until the budget runs out. Later sections lose first.</p>
 <p>Every knob is tunable in <a href="../../reference/configuration/">Configuration</a>, and the
 <code>briefing:</code> block is also editable live in the console. Those runtime edits are
@@ -252,11 +252,11 @@ to be ignored, check the console before you check the YAML.</p>
 <h2 id="liveness">Liveness</h2>
 <p>Sessions heartbeat. A session that ends cleanly cascades immediately; one that is
 abandoned is caught by an idle reaper after <code>gardener.session_idle_minutes</code> and
-marked <code>expired</code>. The TTL only applies when there was no end signal at all — a
+marked <code>expired</code>. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit &quot;live&quot; forever, and a slow one is not
 reaped out from under itself.</p>
-<p><code>session_end</code> is where findings come from. Keep them tight — briefings show a
-short preview — but they are stored in full, not rejected, so a long finding is
+<p><code>session_end</code> is where findings come from. Keep them tight - briefings show a
+short preview - but they are stored in full, not rejected, so a long finding is
 fine when it earns it.</p>
 
 </article>
@@ -282,7 +282,7 @@ fine when it earns it.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

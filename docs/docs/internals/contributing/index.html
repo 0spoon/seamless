@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Contributing — Seamless docs</title>
+<title>Contributing - Seamless docs</title>
 <meta name="description" content="The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -170,7 +170,7 @@ handful of rules that are worth knowing before you write a line.</p>
 </span></span><span class="line"><span class="cl">make fmt-check  <span class="c1"># report gofmt drift instead of fixing it</span>
 </span></span><span class="line"><span class="cl">make docs       <span class="c1"># regenerate docs-src/ -&gt; docs/docs/ (committed)</span>
 </span></span><span class="line"><span class="cl">make docs-check <span class="c1"># fail if the committed site is stale</span>
-</span></span><span class="line"><span class="cl">make check      <span class="c1"># the gate — everything above, in order</span>
+</span></span><span class="line"><span class="cl">make check      <span class="c1"># the gate - everything above, in order</span>
 </span></span></code></pre><p><code>make help</code> prints the full list, including the launchd dev-loop and prod-install
 targets.</p>
 <p>Note that <code>make build</code> is not the same as <code>go build</code>: it stamps the commit and
@@ -180,7 +180,7 @@ which makes a stale running daemon invisible.</p>
 <h2 id="the-check-gate">The <code>check</code> gate</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">make check
 </span></span></code></pre><p>That is the one command that must be green before work is done. It runs six steps
-sequentially — as separate <code>$(MAKE)</code> invocations rather than prerequisites, so it
+sequentially - as separate <code>$(MAKE)</code> invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under <code>make -j</code>:</p>
 <div class="table-wrap">
 <table>
@@ -230,7 +230,7 @@ and <code>test-race</code> is last because it is by far the slowest. The individ
 exist for iterating; <code>check</code> is the thing you run before you claim to be done.</p>
 <p><code>docs-check</code> regenerates into a temp dir and diffs, rather than rewriting your
 working tree and running <code>git diff</code>. That means it never mutates the file you are
-editing, and <code>diff -r</code> catches untracked drift that <code>git diff</code> cannot see — a page
+editing, and <code>diff -r</code> catches untracked drift that <code>git diff</code> cannot see - a page
 deleted from <code>docs-src/</code> but still committed under <code>docs/docs/</code>. Two docs pages
 are generated from the code (the MCP tool reference reads <code>mcp.Catalog()</code>, the
 configuration reference reflects <code>config.Defaults()</code>), so changing a tool or a
@@ -238,7 +238,7 @@ config key makes the committed output stale, and this is the step that says so.<
 <h2 id="use-make-fmt-never-gofmt--w-">Use <code>make fmt</code>, never <code>gofmt -w .</code></h2>
 <p>This one bites in a specific way, so it is worth stating plainly.</p>
 <p>The go tool's <code>./...</code> pattern skips dot-directories, so <code>build</code>, <code>vet</code>, <code>test</code>,
-and <code>lint</code> never see <code>.claude/worktrees/</code> — other agents' checkouts of this same
+and <code>lint</code> never see <code>.claude/worktrees/</code> - other agents' checkouts of this same
 repo. <strong>gofmt takes paths, not packages, and walks the filesystem raw.</strong> So:</p>
 <ul>
 <li><code>gofmt -l .</code> descends into those worktrees and reports <em>their</em> drift as yours.</li>
@@ -255,7 +255,7 @@ code.</li>
 <li><strong>Package layout is consistent</strong> across <code>internal/</code>: <code>service.go</code> for the
 package's public API, <code>store.go</code> for SQLite access, <code>handler.go</code> for an HTTP
 surface, <code>{feature}.go</code> for pure functions, <code>*_test.go</code> alongside.</li>
-<li><strong>Interfaces are role nouns</strong> — <code>Store</code>, <code>Recorder</code>, <code>Embedder</code>, not <code>IStore</code>.</li>
+<li><strong>Interfaces are role nouns</strong> - <code>Store</code>, <code>Recorder</code>, <code>Embedder</code>, not <code>IStore</code>.</li>
 <li><strong>Constructors are <code>New{Type}(deps) *Type</code></strong>, or <code>(*Type, error)</code> when they can
 fail.</li>
 <li><strong>Domain errors are package-level sentinels</strong> (<code>var Err{Condition} = errors.New(...)</code>), checked with <code>errors.Is</code>.</li>
@@ -263,7 +263,7 @@ fail.</li>
 <li><strong>Wrap errors with context and <code>%w</code></strong>: <code>fmt.Errorf(&quot;pkg.Service.Method: %w&quot;, err)</code>. Reserve <code>fmt.Errorf</code> for wrapping; sentinels come from <code>errors.New</code>.</li>
 <li><strong>Either log or return an error, never both.</strong> Fatal to the operation → return
 it. Non-fatal (graceful degradation) → <code>slog.Warn</code>/<code>Debug</code> and continue.</li>
-<li><strong><code>log/slog</code>, and never log memory or note bodies</strong> — IDs only.</li>
+<li><strong><code>log/slog</code>, and never log memory or note bodies</strong> - IDs only.</li>
 <li><strong>Every service and store method takes <code>context.Context</code> first.</strong> Never
 <code>context.Background()</code> in a handler or in a goroutine spawned by one: derive
 from the request context, or use <code>context.WithoutCancel</code> for work that must
@@ -287,7 +287,7 @@ skipped.</li>
 <li><strong>Embeddings are little-endian float32 BLOBs</strong> in the <code>embeddings</code> table, and
 similarity is brute-force cosine in Go. Do not add a vector database.</li>
 <li><strong>The unified FTS5 table (<code>fts</code>) spans memories and notes</strong> and is managed from
-the files layer with explicit INSERT/DELETE — not triggers, because it is not
+the files layer with explicit INSERT/DELETE - not triggers, because it is not
 an external-content table.</li>
 </ul>
 <h2 id="testing-rules">Testing rules</h2>
@@ -396,7 +396,7 @@ catches <code>err ==</code> sentinel comparisons, and <code>errcheck</code> runs
 so errors discarded into <code>_</code> are reported too.</p>
 <p>That last one is the guardrail worth understanding. <code>n, _ := res.RowsAffected()</code>
 in front of <code>if n == 0 { return ErrNotFound }</code> turns a driver failure into a
-confident &quot;not found&quot; — the caller believes it, and there is no way to tell the
+confident &quot;not found&quot; - the caller believes it, and there is no way to tell the
 two apart afterwards. Every surviving discard is either listed in
 <code>.golangci.yml</code>'s <code>exclude-functions</code> (structurally uninteresting: a deferred
 <code>Tx.Rollback</code>, a write to an already-committed HTTP response) or carries a
@@ -411,7 +411,7 @@ atomic writer, including rollback paths.</li>
 transaction first, then performs the filesystem mutation in a post-commit step,
 and undoes partial filesystem state on rollback.</li>
 <li><strong><code>rows.Err()</code> after every <code>for rows.Next()</code>.</strong></li>
-<li><strong>FTS5 MATCH sanitization</strong> and <strong>LIKE escaping</strong> — see
+<li><strong>FTS5 MATCH sanitization</strong> and <strong>LIKE escaping</strong> - see
 <a href="../../internals/invariants/">Domain invariants</a>.</li>
 <li><strong><code>filepath.Join</code> everywhere</strong>, tests included.</li>
 </ul>
@@ -419,18 +419,18 @@ and undoes partial filesystem state on rollback.</li>
 <p>A tool has to be wired in <strong>three</strong> places inside <code>internal/mcp</code>, and each one is
 guarded so that missing it fails a check rather than shipping quietly:</p>
 <ol>
-<li><strong><code>registerTools</code></strong> — the actual registration. Without it the server does not
+<li><strong><code>registerTools</code></strong> - the actual registration. Without it the server does not
 serve the tool.</li>
-<li><strong><code>ToolCount</code></strong> (in <code>server.go</code>) — bump it. <code>Server.NumTools()</code> counts what was
+<li><strong><code>ToolCount</code></strong> (in <code>server.go</code>) - bump it. <code>Server.NumTools()</code> counts what was
 registered, and <code>seamlessd doctor</code> asserts the two are equal, so a tool written
 but never wired in fails the doctor check.</li>
-<li><strong><code>Catalog()</code></strong> (in <code>catalog.go</code>) — add the tool's constructor, <strong>in the same
+<li><strong><code>Catalog()</code></strong> (in <code>catalog.go</code>) - add the tool's constructor, <strong>in the same
 order as <code>registerTools</code></strong>. <code>Catalog</code> exists so <code>cmd/docsgen</code> can render the
 tool reference without constructing a <code>Server</code>: the constructors are plain data
 (name, description, input schema) and need no DB, config, or listening port.</li>
 </ol>
 <p><code>internal/mcp/catalog_test.go</code> enforces the parity, and it is a same-package test
-so it can read the server's private <code>toolNames</code> — the registration record itself,
+so it can read the server's private <code>toolNames</code> - the registration record itself,
 not a second hand-maintained list:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nx">require</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">toolNames</span><span class="p">,</span><span class="w"> </span><span class="nx">names</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;Catalog order/content must mirror registerTools&#34;</span><span class="p">)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nx">require</span><span class="p">.</span><span class="nf">Len</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">names</span><span class="p">,</span><span class="w"> </span><span class="nx">ToolCount</span><span class="p">)</span><span class="w">
@@ -456,7 +456,7 @@ and update mocks and fakes for changed signatures in that same change.</li>
 <li><strong>Propagate every fix.</strong> When you fix a buggy pattern, grep the repo for other
 instances and fix them all together.</li>
 <li><strong>No fake results on error.</strong> Never swallow an error and return a plausible
-dummy value — an agent cannot distinguish it from a real result. Return the
+dummy value - an agent cannot distinguish it from a real result. Return the
 error.</li>
 </ol>
 
@@ -483,7 +483,7 @@ error.</li>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sessions, memory &amp; recall — Seamless docs</title>
-<meta name="description" content="The eight tools an agent uses most — open a session, write and read memory, and search the store.">
+<title>Sessions, memory &amp; recall - Seamless docs</title>
+<meta name="description" content="The eight tools an agent uses most - open a session, write and read memory, and search the store.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>Sessions, memory &amp; recall</h1>
-  <p class="lede">The eight tools an agent uses most — open a session, write and read memory, and search the store.</p>
+  <p class="lede">The eight tools an agent uses most - open a session, write and read memory, and search the store.</p>
   <p>These eight tools are the agent loop. In a repo mapped to a project, most of them
 need no <code>project</code> argument at all: <code>session_start</code> binds the connection, and
 everything after it inherits that scope.</p>
@@ -164,7 +164,7 @@ everything after it inherits that scope.</p>
 <p><code>session_start</code> returns the project briefing and binds the session to the
 connection. <code>session_end</code> persists findings for the next agent's briefing. Both
 are optional in the sense that Claude Code's hooks already open an <em>ambient</em>
-session per agent — calling <code>session_start</code> explicitly adopts it and gets you the
+session per agent - calling <code>session_start</code> explicitly adopts it and gets you the
 full briefing rather than the short injected one.</p>
 <p>If <code>tasks_update</code> ever fails claiming a task is held by <em>your own</em> session id,
 the connection binding was lost. Re-run <code>session_start</code> with the same name to
@@ -207,8 +207,8 @@ rebind.</p>
 <p>The distinction that matters is <strong>supersede vs. delete</strong>. Superseding is how the
 store stays honest about its own history: the old memory leaves the briefing and
 recall, but an agent that follows an old reference still finds it, marked
-invalid, pointing at what replaced it. Delete is for mistakes — things that were
-never true — not for things that stopped being true.</p>
+invalid, pointing at what replaced it. Delete is for mistakes - things that were
+never true - not for things that stopped being true.</p>
 <p>A <code>supersedes</code> that fails is reported rather than swallowed: the new memory is
 still written and kept, and the call returns an error naming it. The target is
 then still active, so re-run the supersede.</p>
@@ -222,7 +222,7 @@ similarity with reciprocal rank fusion, scoped to the current project plus globa
 items, and packs results into a token budget.</p>
 <p>It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
-is surfaced instead of hidden — the two cases are deliberately not treated alike.</p>
+is surfaced instead of hidden - the two cases are deliberately not treated alike.</p>
 <h2 id="session_start">session_start</h2>
 <p>Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.</p>
 <div class="table-wrap">
@@ -531,7 +531,7 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../../static/docs.js"></script>

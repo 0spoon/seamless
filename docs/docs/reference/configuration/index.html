@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Configuration — Seamless docs</title>
+<title>Configuration - Seamless docs</title>
 <meta name="description" content="Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -169,16 +169,16 @@ override.</p>
 <h2 id="precedence">Precedence</h2>
 <p>Four layers resolve each key. Later layers win:</p>
 <ol>
-<li><strong>Defaults</strong> — the built-in values in the table below.</li>
-<li><strong>File</strong> — whatever the YAML sets.</li>
-<li><strong>Environment</strong> — <code>SEAMLESS_*</code> overrides the file.</li>
-<li><strong>Runtime override (DB)</strong> — the console's Settings form stores briefing knobs
+<li><strong>Defaults</strong> - the built-in values in the table below.</li>
+<li><strong>File</strong> - whatever the YAML sets.</li>
+<li><strong>Environment</strong> - <code>SEAMLESS_*</code> overrides the file.</li>
+<li><strong>Runtime override (DB)</strong> - the console's Settings form stores briefing knobs
 in the database. They win over file <em>and</em> env, apply from the next session
 start without a daemon restart, and stay until reset.</li>
 </ol>
 <p>That fourth layer only covers the <code>briefing:</code> block. It exists so you can tune
 what agents get injected while they are running, and it is the one place where
-the config file is not the last word — check the console before concluding a
+the config file is not the last word - check the console before concluding a
 briefing setting is being ignored.</p>
 <h2 id="generating-a-key">Generating a key</h2>
 <p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. It has no default; the daemon
@@ -208,7 +208,7 @@ will not serve without one.</p>
 <tr>
 <td><code>mcp.api_key</code></td>
 <td>string</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>budgets.max_briefing_tokens</code></td>
@@ -223,17 +223,17 @@ will not serve without one.</p>
 <tr>
 <td><code>budgets.tool_event_max_chars</code></td>
 <td>int</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>briefing.memory_max_age_days</code></td>
 <td>int</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>briefing.memory_max_items</code></td>
 <td>int</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>briefing.findings_count</code></td>
@@ -243,7 +243,7 @@ will not serve without one.</p>
 <tr>
 <td><code>briefing.findings_max_age_days</code></td>
 <td>int</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>briefing.ready_tasks_shown</code></td>
@@ -273,7 +273,7 @@ will not serve without one.</p>
 <tr>
 <td><code>briefing.include_sibling_memories</code></td>
 <td>bool</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>llm.provider</code></td>
@@ -283,7 +283,7 @@ will not serve without one.</p>
 <tr>
 <td><code>llm.openai.api_key</code></td>
 <td>string</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>llm.openai.base_url</code></td>
@@ -323,12 +323,12 @@ will not serve without one.</p>
 <tr>
 <td><code>llm.ollama.embedding_dims</code></td>
 <td>int</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>llm.anthropic.api_key</code></td>
 <td>string</td>
-<td>—</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>llm.anthropic.base_url</code></td>
@@ -595,7 +595,7 @@ will not serve without one.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

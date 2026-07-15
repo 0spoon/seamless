@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Coordinate multiple agents — Seamless docs</title>
+<title>Coordinate multiple agents - Seamless docs</title>
 <meta name="description" content="Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -158,7 +158,7 @@
   <h1>Coordinate multiple agents</h1>
   <p class="lede">Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.</p>
   <p>One agent with memory is a better agent. Several agents with <em>shared</em> memory and
-no coordination is a worse outcome than one — they duplicate work, contradict each
+no coordination is a worse outcome than one - they duplicate work, contradict each
 other's writes, and discover the same dead end in parallel.</p>
 <p>This page is the part of Seamless that exists for the fleet: how N agents divide
 work without colliding, and what happens when one of them dies holding something.</p>
@@ -185,25 +185,25 @@ session. That is not incidental strictness: the claim records <strong>who</stron
 task, and a claim by nobody could never be released, reclaimed, or attributed.</p>
 <h3 id="what-the-loser-of-a-race-sees">What the loser of a race sees</h3>
 <p><code>tasks_ready</code> orders oldest-created first, ties broken by id. That order is stable
-and identical for every worker — which means every worker tries the <em>same task
+and identical for every worker - which means every worker tries the <em>same task
 first</em>. Contention on the head of the queue is the designed behavior, not a
 thundering-herd bug, because losing is cheap and unambiguous:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">task already claimed: task &#34;01K7ABCD...&#34; held by &#34;01K7SESS...&#34;
 </span></span></code></pre><p>The holder is named as a <strong>session id</strong>, not an agent name. One claim landed; the
 loser got a clean error, not a corrupted second claim.</p>
 <p>What the loser does next matters more than the error. <strong>Do not retry the same
-id</strong> — someone is working it, and a retry loop is just a slower way to do nothing.
+id</strong> - someone is working it, and a retry loop is just a slower way to do nothing.
 <strong>Do not walk to the next id in the list you already have</strong> either: that list was
 read before the race and is now stale in exactly the way that caused the
 collision. Call <code>tasks_ready</code> again and claim from the fresh list. Two workers
 that both do this converge on disjoint tasks within one round trip.</p>
 <p>Claiming is a coordination signal, not a lock on the files. Nothing physically
 stops an agent from editing code for a task it did not claim. The model works
-because well-behaved agents do not collide — not because misbehaving ones cannot.</p>
+because well-behaved agents do not collide - not because misbehaving ones cannot.</p>
 <h2 id="planner-and-executor-split-by-plan-composition">Planner and executor, split by plan composition</h2>
 <p>Fan-out works when the work is a flat list. Real work has a design, and a design
 that lives only in the planner's context dies when that agent does.</p>
-<p>A <a href="../../concepts/tasks-and-plans/">plan</a> is not a primitive — it is everything keyed
+<p>A <a href="../../concepts/tasks-and-plans/">plan</a> is not a primitive - it is everything keyed
 by <code>plan:&lt;slug&gt;</code>. That is what makes the split possible:</p>
 <div class="table-wrap">
 <table>
@@ -215,11 +215,11 @@ by <code>plan:&lt;slug&gt;</code>. That is what makes the split possible:</p>
 </thead>
 <tbody>
 <tr>
-<td>The narrative — the design and why it looks like that</td>
+<td>The narrative - the design and why it looks like that</td>
 <td><code>notes_create plan=&lt;slug&gt;</code></td>
 </tr>
 <tr>
-<td>Supporting context — the research behind it</td>
+<td>Supporting context - the research behind it</td>
 <td>More notes, same <code>plan=&lt;slug&gt;</code></td>
 </tr>
 <tr>
@@ -242,7 +242,7 @@ list:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 </span></span></code></pre><p>That is enough for an arriving agent to decide whether to pick something up,
 without spending briefing budget on steps it will not touch.</p>
-<p>Claude Code's plan mode builds this composition automatically — plan-file saves
+<p>Claude Code's plan mode builds this composition automatically - plan-file saves
 become notes, approval creates the tracking task. See
 <a href="../../concepts/tasks-and-plans/">Tasks &amp; plans</a>.</p>
 <h2 id="shared-lab-investigation">Shared-lab investigation</h2>
@@ -263,20 +263,20 @@ populated. A trial that says what you thought would happen and what did is the
 only kind another agent can reason from. <code>metrics</code> is an exact-match structured
 filter, so &quot;every trial where the rate was 497&quot; is a query rather than a reading
 exercise.</p>
-<p>When the investigation resolves, <strong>distill it into a memory</strong> — a <code>gotcha</code> for the
+<p>When the investigation resolves, <strong>distill it into a memory</strong> - a <code>gotcha</code> for the
 trap, a <code>refuted</code> for the theory that looked right and wasn't. The lab is the
 working record; it is not the conclusion, and nothing reads it into a briefing.</p>
 <h2 id="leases-crashes-and-reclaiming">Leases, crashes, and reclaiming</h2>
-<p>A claim stamps a lease — 900 seconds by default, overridable with
+<p>A claim stamps a lease - 900 seconds by default, overridable with
 <code>lease_seconds</code>. Four rules cover the model:</p>
 <ol>
 <li><strong>Claiming is atomic.</strong> A compare-and-set: the write lands only if the task is
 claimable. The loser gets an error, never a second claim.</li>
 <li><strong>Re-claiming refreshes the lease.</strong> That is the heartbeat. An agent still
-working long work keeps its claim by claiming again — there is no separate
+working long work keeps its claim by claiming again - there is no separate
 heartbeat tool, and <code>seam task heartbeat</code> is this path under a clearer name.</li>
 <li><strong>An expired lease is reclaimable.</strong> Expiry is enforced <strong>lazily, inside the
-claim</strong> — there is no background sweeper watching leases.</li>
+claim</strong> - there is no background sweeper watching leases.</li>
 <li><strong>Closing frees it.</strong> <code>tasks_release</code>, <code>tasks_update</code> to <code>done</code>/<code>dropped</code>, or
 <code>session_end</code>, which releases every claim the session still holds.</li>
 </ol>
@@ -298,12 +298,12 @@ re-queues it, because nothing is scanning for it.</p>
 <tr>
 <td><strong>The lease</strong></td>
 <td><code>lease_seconds</code>, default 900s</td>
-<td>The task becomes stealable <strong>by id</strong> — a worker that knows the id can <code>tasks_claim</code> it and win. It is still not in the ready queue</td>
+<td>The task becomes stealable <strong>by id</strong> - a worker that knows the id can <code>tasks_claim</code> it and win. It is still not in the ready queue</td>
 </tr>
 <tr>
 <td><strong>The session idle reap</strong></td>
 <td><code>gardener.session_idle_minutes</code> (45), on the gardener's tick</td>
-<td>The reaper expires the dead session and <strong>releases its claims</strong> — status back to <code>open</code>, and the task is genuinely back in the queue</td>
+<td>The reaper expires the dead session and <strong>releases its claims</strong> - status back to <code>open</code>, and the task is genuinely back in the queue</td>
 </tr>
 </tbody>
 </table>
@@ -317,11 +317,11 @@ inside the gardener's pass</strong>. With <code>gardener.enabled</code> off, not
 sessions and nothing returns a dead agent's claims. See
 <a href="../../guides/troubleshooting/">Troubleshooting</a>.</p>
 <p>Nobody wants to wait 45 minutes for an obvious corpse, so there is an owner
-override — the console's <strong>release lock</strong> button, or <code>seam task release --force &lt;id&gt;</code>. It force-releases any holder's claim regardless of the lease, and it is
+override - the console's <strong>release lock</strong> button, or <code>seam task release --force &lt;id&gt;</code>. It force-releases any holder's claim regardless of the lease, and it is
 deliberately <strong>not on the MCP surface</strong>: agents get the cooperative protocol, you
 get the override.</p>
 <h2 id="what-you-see-while-it-runs">What you see while it runs</h2>
-<p>The console is read-mostly and live over SSE — it is how you watch a fleet without
+<p>The console is read-mostly and live over SSE - it is how you watch a fleet without
 being in its loop.</p>
 <div class="table-wrap">
 <table>
@@ -334,7 +334,7 @@ being in its loop.</p>
 <tbody>
 <tr>
 <td><code>/console/tasks</code></td>
-<td>Ready, In progress, Blocked (with each task's blockers), Closed — the queue at a glance</td>
+<td>Ready, In progress, Blocked (with each task's blockers), Closed - the queue at a glance</td>
 </tr>
 <tr>
 <td>A task's detail panel</td>
@@ -346,7 +346,7 @@ being in its loop.</p>
 </tr>
 <tr>
 <td>A project's detail</td>
-<td>The plan timeline — each step's status, holder, and lease</td>
+<td>The plan timeline - each step's status, holder, and lease</td>
 </tr>
 <tr>
 <td><code>/console/plans</code></td>
@@ -360,12 +360,12 @@ being in its loop.</p>
 </span></span><span class="line"><span class="cl">seam task list --status in_progress  <span class="c1"># what is claimed right now</span>
 </span></span><span class="line"><span class="cl">seam sessions --status active        <span class="c1"># who is alive</span>
 </span></span></code></pre><p>A task sitting in <strong>In progress</strong> with an <strong>expired</strong> lease is the signature of a
-crashed holder. If the gardener is running, leave it — the reaper will return it.
+crashed holder. If the gardener is running, leave it - the reaper will return it.
 If you need it now, release the lock.</p>
 <h2 id="one-more-collision-to-know-about">One more collision to know about</h2>
 <p>Coordination has a scope failure mode, not just a queue one. When several agents
 are live in <strong>different repos</strong> and one of them writes durable knowledge without a
-bound session, Seamless cannot tell which project the write belongs to — and
+bound session, Seamless cannot tell which project the write belongs to - and
 refuses it as ambiguous rather than inheriting from whichever ambient session was
 most recent. That refusal is the feature: the alternative is one agent's memory
 silently landing in another agent's project.</p>
@@ -395,7 +395,7 @@ silently landing in another agent's project.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

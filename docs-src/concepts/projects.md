@@ -1,6 +1,6 @@
 ---
 title: Projects & scope
-description: How Seamless decides which project a call belongs to — the precedence chain, the fail-closed rule, and project families.
+description: How Seamless decides which project a call belongs to - the precedence chain, the fail-closed rule, and project families.
 ---
 
 A **project** is the scope everything else inherits. Get scope right and agents
@@ -12,7 +12,7 @@ scope resolves from where the agent already is.
 
 ## The precedence chain
 
-For a durable write, scope resolves in this order — first hit wins:
+For a durable write, scope resolves in this order - first hit wins:
 
 ```text
 1. explicit project argument   ─┐
@@ -37,7 +37,7 @@ session the SessionStart hook opened for this working directory, resolved via th
 magic: an agent that never calls a single session tool still writes to the right
 project, because its cwd said which one.
 
-If that lookup is **ambiguous** — more than one candidate session — the call is
+If that lookup is **ambiguous** - more than one candidate session - the call is
 rejected rather than guessed.
 
 **4. Nothing.** With no session and no explicit project, a durable write is
@@ -56,7 +56,7 @@ system is *unsure*. Silence should not be consent to the broadest possible scope
 So a write with no resolvable scope errors out and says so. `project: global` is
 a token you pass on purpose, never a default you fall into.
 
-Reads are more relaxed than writes — a search with no scope has an obvious safe
+Reads are more relaxed than writes - a search with no scope has an obvious safe
 answer (search what you can see), while a write does not.
 
 ## Mapping a repo
@@ -76,15 +76,15 @@ undifferentiated pile.
 
 Two briefing knobs control the cross-over:
 
-- `briefing.include_parent_memories` — a child's briefing carries the parent's
+- `briefing.include_parent_memories` - a child's briefing carries the parent's
   memories. On by default: a rule that holds for the parent usually holds for the
   child.
-- `briefing.sibling_findings_count` / `briefing.include_sibling_memories` — how
+- `briefing.sibling_findings_count` / `briefing.include_sibling_memories` - how
   much a sibling's recent work bleeds into yours. Findings cross over by default
   (two per briefing); sibling *memories* do not, because what is true of one
   sibling often is not true of another.
 
-Splitting one project into children is planned as a unit — see
+Splitting one project into children is planned as a unit - see
 [The gardener](/concepts/gardener/), which handles it as a `split` rather than a
 pile of individual moves.
 
@@ -93,9 +93,9 @@ pile of individual moves.
 The symptom is almost always "the agent wrote it somewhere I can't find it" or
 "the write was rejected as ambiguous". Both are the chain above:
 
-- **Rejected as ambiguous** — no session bound and no mapped repo. Run
+- **Rejected as ambiguous** - no session bound and no mapped repo. Run
   `session_start`, or map the repo.
-- **Landed in the wrong project** — the cwd mapped somewhere unexpected, or an
+- **Landed in the wrong project** - the cwd mapped somewhere unexpected, or an
   explicit `project` overrode what you meant. Rung 1 beats everything.
-- **A tool insists a task is claimed by your own session** — the connection
+- **A tool insists a task is claimed by your own session** - the connection
   binding was lost. Re-run `session_start` with the same name to rebind.

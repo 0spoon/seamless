@@ -1,6 +1,6 @@
 ---
 title: Notes, projects & capture
-description: Work artifacts, project scope, and SSRF-safe URL capture — the eight tools around the edges of memory.
+description: Work artifacts, project scope, and SSRF-safe URL capture - the eight tools around the edges of memory.
 generate: mcp-tools
 tools:
   - notes_create
@@ -23,7 +23,7 @@ about it.
 | Answers | "What is true about this project?" | "What did we produce?" |
 | Length | One idea, one line of `description` | However long the artifact is |
 | Lifecycle | Superseded, archived, arbitrated | Written, occasionally updated |
-| Reaches a briefing | Yes — this is what agents get injected | No; found via `recall` |
+| Reaches a briefing | Yes - this is what agents get injected | No; found via `recall` |
 | Good examples | A constraint, a gotcha, a decision | Research findings, a meeting summary, a design record |
 
 The test: **would a future agent need this injected into its context before it
@@ -39,7 +39,7 @@ Agent-created notes are automatically tagged `created-by:agent`.
 
 ## Notes are how plans get their narrative
 
-A plan is not a primitive — it is a composition keyed by `plan:<slug>`. Tag a
+A plan is not a primitive - it is a composition keyed by `plan:<slug>`. Tag a
 note `plan:<slug>` and it joins that plan's supporting context, so the next agent
 inherits the design and the reasoning behind it, not just the step list. See
 [Tasks](/reference/mcp/tasks/) for the step half of the composition.
@@ -51,7 +51,7 @@ Most agents never call either: a repo mapped with `seamlessd map-repo` resolves
 its project from the agent's working directory, and `session_start` binds it.
 
 The `global` project slug is the deliberate cross-project scope. It is a token
-you pass on purpose, never a default you fall into — see the fail-closed rule in
+you pass on purpose, never a default you fall into - see the fail-closed rule in
 the [MCP API overview](/reference/mcp/).
 
 ## capture_url is SSRF-safe on purpose

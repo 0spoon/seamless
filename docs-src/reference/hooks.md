@@ -5,7 +5,7 @@ description: The six hooks Seamless installs, their transports and timeouts, the
 
 Seamless installs six Claude Code hooks. They are what makes sessions ambient:
 an agent gets a briefing, its prompts get matched against stored memories, its
-findings get harvested, and its plan-mode activity gets captured — without the
+findings get harvested, and its plan-mode activity gets captured - without the
 agent calling a single MCP tool.
 
 ## The installed hooks
@@ -17,7 +17,7 @@ install order:
 |---|---|---|---|---|---|
 | `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes the ambient `cc/{prefix}` session. |
 | `UserPromptSubmit` | none | http | 5s | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. A miss is logged as a `hook.prompt` event. |
-| `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack — Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
+| `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
 | `PostToolUse` | `Write\|Edit\|MultiEdit\|ExitPlanMode` | command (`seam hook post-tool-use`) | 10s | `/api/hooks/post-tool-use` | Heartbeats the ambient session. Captures plan-file iterations (`Write`/`Edit`/`MultiEdit` under the plans dir) and plan approvals (`ExitPlanMode`). |
 | `SubagentStop` | none | command (`seam hook subagent-stop`) | 10s | `/api/hooks/subagent-stop` | Caches a planning subagent's prompt and final report as a `cc-agent-<agent_id>` note in the plan composition. |
 | `PermissionRequest` | `ExitPlanMode` | command (`seam hook permission-request`) | 10s | `/api/hooks/permission-request` | Marks the session's draft plan as presented when the user is prompted to review an `ExitPlanMode` call. |
@@ -37,7 +37,7 @@ this: an internal error yields a 200 with empty `additionalContext` rather than 
 failure. Only a bad bearer key returns non-2xx (401).
 
 The same contract runs client-side. `seam hook <event>` reports a failure to
-stderr and exits 0 — a server that is down, a config that will not load, an
+stderr and exits 0 - a server that is down, a config that will not load, an
 unreadable stdin, all produce exit 0. Only a misconfigured event name (an install
 bug, not a runtime condition) is a hard error.
 
@@ -45,7 +45,7 @@ Plan and subagent capture are best-effort under the same rule: a capture problem
 is logged and the hook still acks 200.
 
 The consequence is that **hook failure is silent**. A stopped daemon, a bad key,
-a `seam` binary that moved — none of these produce an error an agent or the user
+a `seam` binary that moved - none of these produce an error an agent or the user
 will see. Work simply proceeds without a briefing, and nothing announces it.
 
 So troubleshooting starts with the doctor checks, not with looking for an error:
@@ -80,7 +80,7 @@ Five hooks are `command`, one is `http`. The split is not stylistic:
 
 Command hooks work by having Claude Code pipe the event JSON to the command's
 stdin; `seam hook <arg>` forwards that to the matching endpoint and echoes the
-response back on stdout. Same server logic either way — only the transport
+response back on stdout. Same server logic either way - only the transport
 differs.
 
 One practical consequence: the bearer key is only written into settings.json for
@@ -150,7 +150,7 @@ Install behavior:
 - **Backed up once.** The first time Seamless changes the file it copies it to
   `settings.json.seamless-bak-<timestamp>`. Later installs skip the backup, so
   the true original is never overwritten with a modified copy.
-- **Idempotent.** An already-current file is left untouched — no rewrite, no
+- **Idempotent.** An already-current file is left untouched - no rewrite, no
   backup. Per-hook actions are reported as `added`, `updated`, `adopted`,
   `deduped`, or `unchanged`.
 - **Written atomically**, sorted-key indented, preserving the file mode (0600 for
@@ -170,7 +170,7 @@ if any of these hold:
 1. It carries the `seamless_managed` marker; or
 2. it is an http entry whose `url` matches the hook's URL under the base URL
    (trailing slash ignored); or
-3. it is a command entry whose `command` ends in ` hook <event>` — whatever
+3. it is a command entry whose `command` ends in ` hook <event>` - whatever
    binary path or env prefix it carries.
 
 Rules 2 and 3 are what make re-installs adopt an existing entry in place rather
@@ -185,8 +185,8 @@ untouched.
 
 ## Related
 
-- [Configuration](/reference/configuration/) — `mcp.api_key`, the bind address
+- [Configuration](/reference/configuration/) - `mcp.api_key`, the bind address
   the hook URLs derive from, and the `briefing:` block that tunes what
   `SessionStart` injects.
-- [MCP API overview](/reference/mcp/) — the tool surface the same daemon serves.
-- [Quickstart](/quickstart/) — install order for a working setup.
+- [MCP API overview](/reference/mcp/) - the tool surface the same daemon serves.
+- [Quickstart](/quickstart/) - install order for a working setup.

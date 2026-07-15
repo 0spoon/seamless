@@ -1,10 +1,10 @@
 ---
 title: seam CLI
-description: Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.
+description: Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.
 ---
 
 `seam` is the headless CLI. It does no work itself: it loads the same
-configuration the daemon does, then talks to a running `seamlessd` — over MCP at
+configuration the daemon does, then talks to a running `seamlessd` - over MCP at
 `/api/mcp` for most commands, and over the console's JSON endpoints for the
 owner-only actions that do not exist as MCP tools (force-releasing a task lock,
 approving a plan). Both paths authenticate with the static bearer key from
@@ -16,7 +16,7 @@ host (`0.0.0.0`, `::`, or empty) mapped to loopback.
 
 ## Flags and positionals
 
-The agent-loop commands — `prime`, `remember`, `recall`, `capture` — take flags
+The agent-loop commands - `prime`, `remember`, `recall`, `capture` - take flags
 on either side of their positionals. These two lines are the same line:
 
 ```bash
@@ -53,7 +53,7 @@ unaffected either way.
 
 ## Agent loop
 
-The four commands an agent — or you, standing in for one — uses to start a
+The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.
 
 ### seam prime {#seam_prime}
@@ -81,7 +81,7 @@ Calls `memory_write`. `--name`, `--kind`, and `--description` are required.
 `refuted`, `reference`, or `stage`. `--description` is the one-line summary
 (<=150 chars) that indexes show.
 
-The body comes from `--body`, or from **stdin** when `--body` is omitted — an
+The body comes from `--body`, or from **stdin** when `--body` is omitted - an
 empty body after either route is an error, not an empty memory. `--project`
 resolves the same way as it does for [capture](#seam_capture): empty inherits the
 session's project and is an error when nothing pins it, and `global` is the
@@ -113,7 +113,7 @@ seam capture [--project P] URL
 
 Calls `capture_url` to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty `--project` does not mean global: the scope resolves to the
-session's project — the bound session's, or a single unambiguous ambient one.
+session's project - the bound session's, or a single unambiguous ambient one.
 The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass `--project global` to file the note globally
@@ -136,7 +136,7 @@ seam ready [--project P] [--blocked] [--plan S]
 Calls `tasks_ready` and lists the actionable queue by short id and title.
 `--blocked` additionally lists blocked tasks, each followed by its blockers and
 their statuses. `--plan S` shows that plan's step tasks instead of the default
-queue — plan steps are excluded from the default view. Prints
+queue - plan steps are excluded from the default view. Prints
 `ready: (nothing actionable)` when the queue is empty.
 
 ### seam task list {#seam_task_list}
@@ -243,11 +243,11 @@ directory and must be a git repo. For the plan body and each attached note, it
 reads the capture stamp (the `> captured from ... | git <head> | ...` line) and
 compares it to the repo's current HEAD:
 
-- **FRESH** — stamped at the current HEAD, or nothing changed since the stamped
+- **FRESH** - stamped at the current HEAD, or nothing changed since the stamped
   commit, or files changed but none the note mentions.
-- **STALE** — files the note mentions by path changed between the stamped commit
+- **STALE** - files the note mentions by path changed between the stamped commit
   and HEAD. The changed paths are listed (truncated after five).
-- **UNKNOWN** — no git stamp, captured outside a git repo, the stamped commit no
+- **UNKNOWN** - no git stamp, captured outside a git repo, the stamped commit no
   longer resolves (rebased away), or the note could not be read.
 
 Mentioned paths are extracted from the prose by pattern, and match whether the
@@ -274,7 +274,7 @@ seam status
 
 Server health from the unauthenticated `/healthz` endpoint (status and version),
 the configured data directory, then the project count and slugs via
-`project_list` — which doubles as proof the static key works. If MCP is
+`project_list` - which doubles as proof the static key works. If MCP is
 unavailable it still prints health and says so on the projects line rather than
 failing.
 
@@ -310,10 +310,10 @@ seam doctor
 
 Client-side checks, each reported `ok` or `FAIL`, exiting non-zero if any failed:
 
-1. **server** — `/healthz` reachable and reporting `ok`.
-2. **mcp_tools** — `tools/list` returns the tool count this CLI was built to
+1. **server** - `/healthz` reachable and reporting `ok`.
+2. **mcp_tools** - `tools/list` returns the tool count this CLI was built to
    expect. A mismatch means the running daemon is a different build.
-3. **projects** — `project_list` answers.
+3. **projects** - `project_list` answers.
 
 This is the client-side view. `seamlessd doctor` checks config, database, and
 credentials on the server side; they are different commands answering different
@@ -328,7 +328,7 @@ seam hook post-tool-use|subagent-stop|permission-request
 
 Invoked by Claude Code, not by hand. Each reads the hook payload from stdin,
 forwards it to the matching `/api/hooks/...` endpoint with the bearer key, and
-copies the JSON response to stdout — so a `command` hook drives the same server
+copies the JSON response to stdout - so a `command` hook drives the same server
 logic an `http` hook would. This exists because Claude Code only runs
 command-type hooks for SessionStart, which is how the briefing and the ambient
 session get injected at all.
@@ -337,7 +337,7 @@ Two behaviours matter if you are debugging a hook:
 
 - **Failures do not block the session.** A missing config, an unreachable
   daemon, or an unreadable stdin is reported on stderr and exits 0. Only an
-  unknown event name — an install bug, not a runtime hiccup — is a hard error.
+  unknown event name - an install bug, not a runtime hiccup - is a hard error.
 - **`post-tool-use` pre-filters locally.** It fires machine-wide on every
   `Write`/`Edit`, so the CLI drops everything that is not an `ExitPlanMode`
   approval or a write to a file directly under `~/.claude/plans` before loading

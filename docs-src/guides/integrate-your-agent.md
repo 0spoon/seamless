@@ -1,6 +1,6 @@
 ---
 title: Integrate your agent
-description: Wire a non-Claude-Code client into the agent loop — the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.
+description: Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.
 ---
 
 Claude Code gets Seamless for free: [hooks](/reference/hooks/) open a session,
@@ -25,7 +25,7 @@ Four of those five steps are optional in the narrow sense that the tools work
 without them. They are not optional in the sense that matters: **`session_start`
 is what makes every later call know its scope**, and `session_end` is the only
 thing that turns this run into something the next agent is told about. An agent
-that skips both still works and leaves no trace — which is the same as not
+that skips both still works and leaves no trace - which is the same as not
 integrating at all.
 
 ## Connecting
@@ -49,8 +49,8 @@ curl -sD - -X POST http://127.0.0.1:8081/api/mcp \
 
 The response body carries `serverInfo` (name and build version), but the part you
 must keep is a **header**: `Mcp-Session-Id: mcp-session-<uuid>`. Send it on every
-subsequent request. A `tools/call` without it — or with one the daemon does not
-know — is refused by the transport with `Invalid session ID` before any tool
+subsequent request. A `tools/call` without it - or with one the daemon does not
+know - is refused by the transport with `Invalid session ID` before any tool
 runs.
 
 Acknowledge the handshake, then call tools:
@@ -91,8 +91,8 @@ and a rejected call comes back as a **successful HTTP 200 carrying a tool error*
 
 A client that trusts HTTP status codes will read that as a working integration
 returning odd text. Check `isError` on every result. This is the same shape every
-other tool failure takes — errors are tool results with a `<tool>: <reason>`
-message, never transport failures — so handling `isError` once handles all of
+other tool failure takes - errors are tool results with a `<tool>: <reason>`
+message, never transport failures - so handling `isError` once handles all of
 them.
 
 ## The connection is the session binding
@@ -105,7 +105,7 @@ scope off the connection.
 The binding lives in the daemon's memory, keyed by an id it minted. Two
 consequences you have to design around:
 
-- **The id encodes nothing about you** — no working directory, no client
+- **The id encodes nothing about you** - no working directory, no client
   identity. It is an opaque UUID. The only way scope reaches the server is the
   `cwd` you passed to `session_start`, or an explicit `project` argument.
 - **It does not reliably survive a daemon restart.** Sometimes the client
@@ -118,7 +118,7 @@ ambiguous-scope errors as a lost binding, not as a bug in your arguments.
 
 ## Scope discipline
 
-Scope is the thing most integrations get wrong, and the failures are quiet —
+Scope is the thing most integrations get wrong, and the failures are quiet -
 knowledge lands somewhere nobody looks. The full precedence chain is in
 [Projects & scope](/concepts/projects/); the operational summary is short.
 
@@ -126,11 +126,11 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 |---|---|
 | `session_start` with a `cwd` inside a mapped repo | That repo's project |
 | `session_start` with a `cwd` inside an **unmapped git repo** | A project is registered automatically, named after the repository root directory |
-| `session_start` with a `cwd` that is not in a git repo | Nothing — the session is global |
+| `session_start` with a `cwd` that is not in a git repo | Nothing - the session is global |
 | No session, no `project` argument | The durable write is **rejected** |
 
 That third row is the one that surprises people. A session started outside a git
-repo has no project, and its writes go global — silently, because a bound session
+repo has no project, and its writes go global - silently, because a bound session
 always resolves, even to the global scope. If your agent does not run in a repo,
 pass `project` explicitly on every durable write.
 
@@ -139,9 +139,9 @@ rejected as ambiguous rather than landing globally, because a global memory is
 seen by every agent in every repo forever and that is not something the system
 should do when it is *unsure*. Two distinct errors say so:
 
-- *no bound or ambient session to infer the project from* — nothing to inherit.
+- *no bound or ambient session to infer the project from* - nothing to inherit.
   Call `session_start`, or pass `project`.
-- *active ambient sessions span multiple projects* — you are unbound and other
+- *active ambient sessions span multiple projects* - you are unbound and other
   agents are live in several repos, so inheriting would bleed your write into
   someone else's project. Pass `project`.
 
@@ -155,7 +155,7 @@ what is left of a briefing. A memory that does not earn its line pushes out one
 that would have.
 
 Write one when the knowledge is **durable, general, and not already discoverable**
-— a constraint the project cannot violate, a trap and its symptom, a decision and
+- a constraint the project cannot violate, a trap and its symptom, a decision and
 the alternatives it rejected, a belief that turned out false.
 
 Skip it when:
@@ -165,7 +165,7 @@ Skip it when:
 | Already in the code | The next agent can read the code. A store that mirrors the repo is a store that goes stale silently |
 | Already in `CLAUDE.md` or `AGENTS.md` | It is injected anyway; a memory saying it again just spends budget twice |
 | A narration of what you just did | That is `session_end` findings, or a note |
-| A long artifact | That is a note — found via [recall](/concepts/recall/), not injected |
+| A long artifact | That is a note - found via [recall](/concepts/recall/), not injected |
 
 If it is durable but you cannot compress it to one line, it is a note with a
 memory pointing at it. See [Write memories that get
@@ -190,7 +190,7 @@ Two things to know before you script it.
 **Outside the agent loop, flags go before positionals.** `prime`, `remember`,
 `recall`, and `capture` take flags on either side. Everywhere else Go's `flag`
 package stops parsing at the first non-flag argument, so `seam task release
-01K7ABCD --force` cannot bind `--force` — rather than ignore it, `seam` rejects
+01K7ABCD --force` cannot bind `--force` - rather than ignore it, `seam` rejects
 the line. See the [seam CLI reference](/reference/cli-seam/) for the commands
 where this bites.
 
@@ -198,7 +198,7 @@ where this bites.
 queue, but findings are harvested by the SessionEnd hook or the `session_end` MCP
 tool. An agent driving Seamless purely through `seam` starts sessions that only
 the idle reaper closes, and contributes nothing to the next briefing. If findings
-matter — and they are the whole point of `session_end` — that agent needs the MCP
+matter - and they are the whole point of `session_end` - that agent needs the MCP
 surface.
 
 ## Verify the integration
@@ -209,7 +209,7 @@ seam doctor        # /healthz, key acceptance, tools/list count, project_list
 
 A green `mcp_tools` line proves the endpoint answers *and* your key works, which
 is most of what an integration can get wrong. `seamlessd doctor` covers the other
-half — config, database, embedder, hooks — on the server side. If something is
+half - config, database, embedder, hooks - on the server side. If something is
 wrong and nothing is complaining, start at
 [Troubleshooting](/guides/troubleshooting/): the hooks fail open, so silence is
 the failure mode.

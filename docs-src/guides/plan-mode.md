@@ -1,20 +1,20 @@
 ---
 title: Capture Claude Code plans
-description: How plan mode is captured automatically — which hook does what, a plan's life from draft to approved, and the escape hatches.
+description: How plan mode is captured automatically - which hook does what, a plan's life from draft to approved, and the escape hatches.
 ---
 
 Claude Code's plan mode produces exactly the artifact that usually evaporates: a
 considered design, written down, immediately before the work starts and gone
 immediately after it. Seamless captures it without you doing anything.
 
-The result is a [plan composition](/concepts/tasks-and-plans/) — narrative,
-supporting context, and steps — built for you as you plan.
+The result is a [plan composition](/concepts/tasks-and-plans/) - narrative,
+supporting context, and steps - built for you as you plan.
 
 ## Which hook captures what
 
 | Hook | Fires when | Captures |
 |---|---|---|
-| `PostToolUse` (`Write`/`Edit`/`MultiEdit`) | A plan file is saved | Upserts a `cc-plan-<basename>` note — one note per plan, updated on each iteration |
+| `PostToolUse` (`Write`/`Edit`/`MultiEdit`) | A plan file is saved | Upserts a `cc-plan-<basename>` note - one note per plan, updated on each iteration |
 | `PostToolUse` (`ExitPlanMode`) | The plan is approved | Creates the tracking task |
 | `PermissionRequest` (`ExitPlanMode`) | You are asked to review the plan | Marks the plan `presented` |
 | `SubagentStop` | A planning subagent finishes | Caches its prompt and report as a `cc-agent-<id>` note in the same composition |
@@ -52,7 +52,7 @@ PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
 ```
 
 This is deliberate. A plan that was designed, presented, and then forgotten is
-the most expensive kind of lost work — the thinking already happened. Surfacing
+the most expensive kind of lost work - the thinking already happened. Surfacing
 it costs one briefing line and makes the decision explicit: pick it up, or
 abandon it on purpose.
 
@@ -73,7 +73,7 @@ seam plan approve <slug>        # force approval + create the tracking task
 
 `seam plan check` compares the git stamp recorded at capture against the repo
 now. A plan written against a tree that has since moved on is not automatically
-wrong, but it is worth re-reading before executing — that is the question this
+wrong, but it is worth re-reading before executing - that is the question this
 answers.
 
 Remember that `seam` flags go **before** positionals:
@@ -84,11 +84,11 @@ You can also browse everything at `/console/plans`.
 
 ## Turning it off
 
-Capture is controlled by the `plan_capture` block — see
+Capture is controlled by the `plan_capture` block - see
 [Configuration](/reference/configuration/):
 
-- `plan_capture.enabled` — capture at all.
-- `plan_capture.auto_task` — create the tracking task on approval.
-- `plan_capture.inject_related` — surface related captures in briefings.
+- `plan_capture.enabled` - capture at all.
+- `plan_capture.auto_task` - create the tracking task on approval.
+- `plan_capture.inject_related` - surface related captures in briefings.
 
 All default to on.

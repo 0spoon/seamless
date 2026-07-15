@@ -1,17 +1,17 @@
 ---
 title: Console
-description: The read-mostly observability UI at /console — the complete list of what it can change, how sign-in works, and what each page shows.
+description: The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.
 ---
 
 The console is the owner's window onto a system whose actual clients are agents.
 It is `html/template` plus vanilla JS plus SSE, served by `internal/console` from
-the same binary as everything else — no node, no npm, no React, no build step. It
+the same binary as everything else - no node, no npm, no React, no build step. It
 is not how Seamless is driven; it is how you watch it.
 
 ## What the console can change
 
 The console is **read-mostly**. That is a design claim, so here is the whole list
-— every write it is capable of, taken from the `POST` routes in
+- every write it is capable of, taken from the `POST` routes in
 `internal/console/console.go`. There are no others.
 
 | Action | Route | Effect |
@@ -32,8 +32,8 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 Read the shape of that list. There is no "create memory", no "edit note", no
 "delete", no "add task", no "start session". The two direct writes to knowledge
 state are **archive a memory** and **approve a captured plan**; the rest either
-manage gardener proposals — which are themselves proposals, reviewed before they
-do anything — or free a lock, or set a display-time knob.
+manage gardener proposals - which are themselves proposals, reviewed before they
+do anything - or free a lock, or set a display-time knob.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -53,7 +53,7 @@ There is one credential in the whole system: the static bearer key
 Two ways to present it:
 
 - **A browser** trades the key for a cookie at `/console/login`. The cookie value
-  is a SHA-256 hash of the key, not the key — so the raw credential never sits in
+  is a SHA-256 hash of the key, not the key - so the raw credential never sits in
   the browser's cookie jar. It is `HttpOnly`, `SameSite=Lax`, and scoped to
   `/console`.
 - **The `seam` CLI** sends the key as a bearer token on the `Authorization`
@@ -75,7 +75,7 @@ make console-chrome   # same, but force Google Chrome
 
 This builds, then runs `seamlessd console-open`, which renders a one-shot
 self-submitting login page to a `0600` temp file and opens it. The page POSTs the
-key to `/console/login`, which sets the cookie and 303s into the console — so you
+key to `/console/login`, which sets the cookie and 303s into the console - so you
 land on an authenticated page with nothing to paste. It refuses to run if
 `mcp.api_key` is empty or the server is not answering `/healthz`.
 
@@ -86,10 +86,10 @@ cookie to the browser they can actually see. (`--browser` is macOS-only.)
 
 Every route answers in the shape the caller asked for:
 
-- **HTML** by default — the full page, layout and all.
+- **HTML** by default - the full page, layout and all.
 - **JSON** when the caller sets `?format=json` or an `Accept` header that wants
   JSON and not HTML. This is how `seam` reads the console's data.
-- **An HTML fragment** for entity details when the caller passes `?peek=1` — the
+- **An HTML fragment** for entity details when the caller passes `?peek=1` - the
   detail pane loads it without a page navigation.
 
 Memory, note, task, event, and plan pages compose their full page from the same
@@ -99,7 +99,7 @@ richer bespoke pages.
 
 Strictly-validated query params (`?sort`, `?scope`, `?tab`, `?w`) return a 400
 naming the bad param and listing the valid values, rather than silently falling
-back to a default — so an agent driving the console by URL sees the fix.
+back to a default - so an agent driving the console by URL sees the fix.
 
 `GET /console/events` is the SSE stream: every recorded event as one JSON `data:`
 frame, with a ping every 25 seconds. `?feed=interactions` opts into the richer
@@ -111,19 +111,19 @@ transport-level rows the Interactions screen consumes.
 
 The landing page and the health check. It carries:
 
-- **Counts** — active memories (broken down by kind), notes, sessions, and tasks
+- **Counts** - active memories (broken down by kind), notes, sessions, and tasks
   by status.
 - **Retrieval health** over a selectable window (`?w=24h|7d|30d|all`): injection
   volume, a trend chart, the **reach rate** (distinct active memories that
   actually surfaced, over all active memories), sessions reached, and the
   most-injected memories.
-- **Coverage** — the share of in-window sessions that retained anything, with a
+- **Coverage** - the share of in-window sessions that retained anything, with a
   per-channel breakdown (findings, memories, notes, trials) and a windowed trend.
   The channels overlap, so the shares need not sum to 100%.
-- **Projects at a glance** — the top projects by recent activity, drawn from the
+- **Projects at a glance** - the top projects by recent activity, drawn from the
   same batched query the Projects board uses, so a row here reconciles with a row
   there exactly.
-- **Recent activity** — the last twelve events, each linking to its detail page.
+- **Recent activity** - the last twelve events, each linking to its detail page.
 
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
@@ -135,8 +135,8 @@ threshold), so the headline matches the Sessions screen rather than the raw
 
 The live feed of what agents are actually doing: MCP tool calls, hook injections,
 recall-miss prompts, session lifecycle, and the plan-mode capture stream. Rows
-carry the full request and response bodies — the tool's arguments and result, or
-the exact injected text — so you can read what an agent asked for and what it got
+carry the full request and response bodies - the tool's arguments and result, or
+the exact injected text - so you can read what an agent asked for and what it got
 without a second fetch.
 
 The feed streams over SSE and pages backwards through history. A recall via the
@@ -154,7 +154,7 @@ uses, with snippets; tasks, plans, projects, and sessions have no FTS mirror and
 match by `LIKE`.
 
 The command palette (⌘K, available on every page) fetches this same route with
-`?format=json&fast=1`, which drops the semantic leg — a query per keystroke must
+`?format=json&fast=1`, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.
 
 Coverage is deliberately partial. Trials are excluded because the console has no
@@ -171,7 +171,7 @@ Grouped by family (`?group=family|flat`) and sortable (`?sort=recent|coverage|na
 The global (`""`) scope appears as a row but is not a project and has no detail
 link.
 
-Selecting a project opens the **project workspace** — a seven-tab page over that
+Selecting a project opens the **project workspace** - a seven-tab page over that
 project alone:
 
 | Tab | Shows |
@@ -179,12 +179,12 @@ project alone:
 | Overview | The project's metrics, memory kinds, injection trend, recent events. |
 | Plans & tasks | Per-plan step timelines with each step's status, claiming session, lease countdown, and blocking dependency; plus the ready queue. |
 | Sessions | The project's sessions, with the tasks each currently holds. |
-| Memories | The project's memories with a lineage cell — provenance session, or a supersession pointer — plus the memories it *inherits* from a parent that a strict per-slug count excludes. |
+| Memories | The project's memories with a lineage cell - provenance session, or a supersession pointer - plus the memories it *inherits* from a parent that a strict per-slug count excludes. |
 | Notes | The project's notes. |
 | Interactions | The project-scoped slice of the feed. |
 | Relations | The project's plan → step → session → memory tree. |
 
-A retired project still renders, with its banner — kept for provenance. Only an
+A retired project still renders, with its banner - kept for provenance. Only an
 unknown slug is a 404.
 
 ## Sessions
@@ -206,7 +206,7 @@ their lease countdowns, and the memories it produced.
 
 The browser, grouped by project (global first) and then by kind in canonical
 order, with active and inactive memories separated. Each row shows the
-description — the only text an index ever shows — plus injection and read counts,
+description - the only text an index ever shows - plus injection and read counts,
 last-injected time, and a `vscode://` link straight to the file. Sortable by name,
 recency, or reach; filterable by a substring of name, description, kind, or tag.
 
@@ -214,8 +214,8 @@ Inactive memories carry their status (`superseded` or `archived`) and, when
 superseded, a link to what replaced them.
 
 A memory's page renders the body (through the markdown layer, with raw HTML
-disabled and a sanitizer on the output), its metadata — kind, project, tags,
-timestamps, the session that produced it — its reach counts, and its supersession
+disabled and a sanitizer on the output), its metadata - kind, project, tags,
+timestamps, the session that produced it - its reach counts, and its supersession
 neighbors in **both** directions: what replaced it, and what it replaced.
 **Archive** is the one action here.
 
@@ -231,12 +231,12 @@ page renders the body.
 
 `/console/tasks`, `/console/tasks/{id}`
 
-Four buckets: **ready** (no unfinished blocker), **in progress**, **blocked** —
-each blocked row naming the specific tasks blocking it — and **closed** (done and
+Four buckets: **ready** (no unfinished blocker), **in progress**, **blocked** -
+each blocked row naming the specific tasks blocking it - and **closed** (done and
 dropped merged, newest first, capped at 25 with a count of the rest).
 
 A task's page carries its detail; **force-release** is the action, and it is the
-owner override — it takes the lock from whoever holds it.
+owner override - it takes the lock from whoever holds it.
 
 ## Plans
 
@@ -244,9 +244,9 @@ owner override — it takes the lock from whoever holds it.
 
 Both kinds of plan in one list, grouped by phase (in progress, ready, done):
 
-- **captures** — Claude Code plan-mode captures (`cc-plan` notes), with their
+- **captures** - Claude Code plan-mode captures (`cc-plan` notes), with their
   lifecycle status, iteration count, and cached subagent runs.
-- **composed** — plain [plans-as-composition](/concepts/tasks-and-plans/) plans (a
+- **composed** - plain [plans-as-composition](/concepts/tasks-and-plans/) plans (a
   note tagged `plan:<slug>` plus its tasks), which have none of the capture-only
   columns.
 
@@ -274,7 +274,7 @@ The reach funnel in detail, over a selectable window: injections, memories
 surfaced, active memories, reach rate, sessions reached, reach broken down by kind
 and by project, the injection trend, and the most-injected memories.
 
-Plus **stale memories** — active memories not updated, injected, or read in 90
+Plus **stale memories** - active memories not updated, injected, or read in 90
 days, mirroring the gardener's default staleness horizon. Unlike everything else
 on the page, this list is window-independent.
 
@@ -285,7 +285,7 @@ Reachable from the Overview's retrieval-health card.
 `/console/gardener`
 
 The review queue. Each pending proposal renders as a card showing exactly what it
-would do — the memory to archive and why, the pair to merge with their similarity
+would do - the memory to archive and why, the pair to merge with their similarity
 score, the digest or consolidated memory with its body rendered, the reproject's
 source and destination, the split's children and shared parent.
 
@@ -293,8 +293,8 @@ Split batches are grouped by plan and reviewed together, setup card first, with 
 apply-the-whole-plan action.
 
 The actions are **apply**, **dismiss**, **retarget** (reproject cards only), and
-**apply plan**. Above them sit the two request boxes — ask in words, or split a
-project — and both only ever produce more proposals for this same queue. A
+**apply plan**. Above them sit the two request boxes - ask in words, or split a
+project - and both only ever produce more proposals for this same queue. A
 recognized split typed into the general request box routes you to the split box
 rather than creating loose proposals, because splitting needs a structured source
 project.
@@ -305,12 +305,12 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 
 `/console/settings`
 
-A read-only view of the running configuration — data dir, budgets, gardener
+A read-only view of the running configuration - data dir, budgets, gardener
 settings, the registered projects, the repo→project map, and the project families
-— with **one editable block**: briefing injection.
+- with **one editable block**: briefing injection.
 
 Saving writes a runtime override row in the DB. It layers over the file/env values
-and wins until reset, and it applies from the next session start — no daemon
+and wins until reset, and it applies from the next session start - no daemon
 restart. It never touches your config file, so `seamless.yaml` stays the thing you
 wrote. **Reset** clears the override and reverts to file/env.
 
@@ -324,7 +324,7 @@ See [Configuration](/reference/configuration/) for what each knob does, and
 
 `/console/events/{id}`
 
-What a Recent-activity or timeline row links to: one event-log entry in full — the
+What a Recent-activity or timeline row links to: one event-log entry in full - the
 verbatim injected content, the memories it surfaced resolved to their live index
 entries (or flagged missing if the id no longer resolves), the remaining payload
 fields, and the raw JSON.
@@ -334,6 +334,6 @@ fields, and the raw JSON.
 A bad or stale URL renders a styled, layout-wrapped error page with a way back,
 rather than dropping you on a bare `404 page not found`. A 404 names the missing
 entity and a 400 names the bad parameter and its valid values. A 500 stays
-generic in the browser — the detail is in the log, not the response. Fragment
+generic in the browser - the detail is in the log, not the response. Fragment
 fetches (`?peek=1`) get a fragment-shaped error, since a full page injected into
 the detail pane would nest the whole console inside itself.

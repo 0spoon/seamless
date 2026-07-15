@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Import, back up &amp; restore — Seamless docs</title>
+<title>Import, back up &amp; restore - Seamless docs</title>
 <meta name="description" content="Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -157,7 +157,7 @@
   <p class="eyebrow">Guides</p>
   <h1>Import, back up &amp; restore</h1>
   <p class="lede">Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.</p>
-  <p>Because durable knowledge is markdown files, backup and restore are boring — and
+  <p>Because durable knowledge is markdown files, backup and restore are boring - and
 that is the feature. This page is mostly about knowing which half of
 <code>~/.seamless</code> is precious and which half regenerates.</p>
 <h2 id="what-is-precious-and-what-is-not">What is precious, and what is not</h2>
@@ -182,7 +182,7 @@ people either over-protect it or under-protect it:</p>
 </tr>
 <tr>
 <td>Sessions, tasks, trials, events, telemetry, briefing overrides</td>
-<td><strong>Gone</strong> — there is no file to rebuild them from</td>
+<td><strong>Gone</strong> - there is no file to rebuild them from</td>
 </tr>
 </tbody>
 </table>
@@ -198,7 +198,7 @@ of what is true.</strong> Every memory and note survives, because they are files
 </span></span></code></pre><p>Ignoring the database is deliberate. It is a binary that changes constantly, it
 does not diff usefully, and its contents are either rebuildable or high-churn
 state that a nightly commit would capture uselessly. What you want in git is the
-knowledge — and that diffs beautifully, because it is markdown.</p>
+knowledge - and that diffs beautifully, because it is markdown.</p>
 <p>Commit periodically (a cron job or a <code>launchd</code> timer is plenty). The payoff is
 that <code>git log</code> over your memory directory is a real history of what your agents
 learned and when they changed their minds.</p>
@@ -224,7 +224,7 @@ You lose sessions, tasks, trials, and events; you lose no knowledge.</p>
 <code>seam.db</code>. It is <strong>idempotent</strong>: running it twice does not double anything, so a
 partial import is safe to re-run.</p>
 <h2 id="hand-editing">Hand-editing</h2>
-<p>Files are the source of truth, so editing them by hand is allowed and expected —
+<p>Files are the source of truth, so editing them by hand is allowed and expected -
 the watcher picks up your change and reindexes it.</p>
 <p>Two rules:</p>
 <ol>
@@ -233,11 +233,11 @@ supersede path, which also updates the indexes and the pointer between the two
 memories. Writing them by hand produces a file that says one thing and a
 database that believes another, and the lifecycle invariants (stamp once,
 point only at an active memory, never self-supersede) stop being true. Use
-<code>memory_write</code> with <code>supersedes</code> — see <a href="../../concepts/memory/">Memory &amp; notes</a>.</li>
+<code>memory_write</code> with <code>supersedes</code> - see <a href="../../concepts/memory/">Memory &amp; notes</a>.</li>
 <li><strong>Do not hand-edit <code>id</code>.</strong> It is a ULID assigned once and referenced by
 <code>superseded_by</code> pointers elsewhere.</li>
 </ol>
-<p>Everything else — the body, the description, tags, the kind — is yours to edit in
+<p>Everything else - the body, the description, tags, the kind - is yours to edit in
 any text editor.</p>
 <h2 id="moving-machines">Moving machines</h2>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># on the old machine</span>
@@ -277,7 +277,7 @@ migration is a good moment not to spread it around. See
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

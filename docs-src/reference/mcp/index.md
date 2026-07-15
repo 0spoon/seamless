@@ -11,7 +11,7 @@ POST http://127.0.0.1:8081/api/mcp
 Authorization: Bearer <mcp.api_key>
 ```
 
-`GET /healthz` needs no auth and reports the running build — the fastest way to
+`GET /healthz` needs no auth and reports the running build - the fastest way to
 tell whether a daemon is up and which version it is.
 
 ## Scope resolution
@@ -20,7 +20,7 @@ Almost no call passes `project`. Scope is resolved once, in this order, and
 inherited by everything after it:
 
 1. An explicit `project` argument on the call.
-2. The **bound session's** project — set by `session_start`, held per connection.
+2. The **bound session's** project - set by `session_start`, held per connection.
 3. The **ambient session's** project, resolved from the agent's cwd via the
    `repo_project_map` setting.
 
@@ -31,7 +31,7 @@ Pass `project: global` to mean global deliberately.
 ## Conventions
 
 - **Body aliases.** Tools taking a markdown body accept `body`, `content`, or
-  `text` interchangeably — agents disagree about the name, and the disagreement
+  `text` interchangeably - agents disagree about the name, and the disagreement
   is not worth an error.
 - **IDs are ULIDs**, never UUIDs. They sort lexically by creation time.
 - **Errors** come back as tool errors with a `<tool>: <reason>` message, not as

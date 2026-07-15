@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Memory &amp; notes — Seamless docs</title>
+<title>Memory &amp; notes - Seamless docs</title>
 <meta name="description" content="What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
@@ -158,7 +158,7 @@
   <h1>Memory &amp; notes</h1>
   <p class="lede">What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.</p>
   <p>A memory is a markdown file with frontmatter. That is not an implementation
-detail — it is the design. You can read it, <code>grep</code> it, edit it, and put it in
+detail - it is the design. You can read it, <code>grep</code> it, edit it, and put it in
 git, and no part of the system needs your permission to be inspected.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...                </span><span class="w"> </span><span class="c"># ULID, assigned once, stable forever</span><span class="w">
@@ -177,11 +177,11 @@ git, and no part of the system needs your permission to be inspected.</p>
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
 </span></span></span></code></pre><h2 id="the-description-is-the-product">The description is the product</h2>
 <p>Everything above the body is bookkeeping except one field. <strong>The <code>description</code> is
-the only text an index ever shows</strong> — the briefing, the memory list, the recall
+the only text an index ever shows</strong> - the briefing, the memory list, the recall
 result. An agent decides whether to read the body based on nothing but that line.</p>
 <p>A description that says &quot;notes about the console&quot; is invisible: no future agent
 can tell whether it matters. One that says &quot;Console: a trailing note inside a
-<code>.card h2</code> must use <code>.h2-meta</code>, never <code>.count</code> — header is flex space-between&quot;
+<code>.card h2</code> must use <code>.h2-meta</code>, never <code>.count</code> - header is flex space-between&quot;
 does the whole job without the body being opened at all.</p>
 <p>Write the description for a future agent deciding whether to read further. That
 is its entire purpose.</p>
@@ -246,7 +246,7 @@ constraints; filing a real constraint as a <code>reference</code> means agents w
 it.</p>
 <p><code>refuted</code> deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,
-finds it dead, and moves on — every time. Recording the refutation makes that
+finds it dead, and moves on - every time. Recording the refutation makes that
 cost one-time.</p>
 <h2 id="supersession-how-the-store-stays-honest">Supersession: how the store stays honest</h2>
 <p>Memories are not appended forever, and they are not silently overwritten. When
@@ -325,7 +325,7 @@ database disagreeing with the disk.</p>
 <tr>
 <td>Reaches a briefing</td>
 <td>Yes</td>
-<td>No — found via <a href="../../concepts/recall/">recall</a></td>
+<td>No - found via <a href="../../concepts/recall/">recall</a></td>
 </tr>
 <tr>
 <td>Examples</td>
@@ -343,7 +343,7 @@ is a note.</p>
 specific to generalize, and it pushes real constraints out of the briefing.</p>
 <h2 id="global-vs-project">Global vs. project</h2>
 <p>A memory with an empty <code>project</code> is global: every agent in every repo sees it.
-That is a strong claim, so writes <strong>fail closed</strong> — with no session and no
+That is a strong claim, so writes <strong>fail closed</strong> - with no session and no
 explicit project, a write is rejected as ambiguous rather than quietly landing in
 the global scope. Pass <code>project: global</code> to mean it on purpose. See
 <a href="../../concepts/projects/">Projects &amp; scope</a>.</p>
@@ -371,7 +371,7 @@ the global scope. Pass <code>project: global</code> to mean it on purpose. See
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

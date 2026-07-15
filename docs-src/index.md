@@ -1,6 +1,6 @@
 ---
 title: What is Seamless?
-description: A local-first memory and coordination substrate for the fleet of coding agents you run — markdown files you own, indexed by one Go binary.
+description: A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
 ---
 
 Seamless gives the coding agents you run a **shared, persistent brain**: memory
@@ -9,7 +9,7 @@ and plans they can execute together. It stores all of it as markdown files in a
 directory you own, indexes it in one SQLite database, and serves it to agents
 over MCP from a single Go binary on your machine.
 
-Its clients are agents. You are the observer and editor — there is a console, but
+Its clients are agents. You are the observer and editor - there is a console, but
 nothing in Seamless requires you to be in the loop for agents to use it.
 
 ## What it gives a fleet
@@ -34,7 +34,7 @@ them, plus the record for high-churn state (sessions, tasks, events).
 **Local-first.** One binary, one SQLite file, bound to loopback. No external
 database, no cloud dependency, no telemetry.
 
-**Propose, don't act.** The gardener finds duplicates, staleness, and drift — and
+**Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
 
 ## Where to go next

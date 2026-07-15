@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Troubleshooting — Seamless docs</title>
-<meta name="description" content="Symptom-first fixes for a system whose hooks fail open — where silence, not an error, is what a broken install looks like.">
+<title>Troubleshooting - Seamless docs</title>
+<meta name="description" content="Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,15 +156,15 @@
     <article class="prose">
   <p class="eyebrow">Guides</p>
   <h1>Troubleshooting</h1>
-  <p class="lede">Symptom-first fixes for a system whose hooks fail open — where silence, not an error, is what a broken install looks like.</p>
+  <p class="lede">Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.</p>
   <p>Seamless has one property that makes troubleshooting unlike most software:
-<strong>hooks fail open</strong>. A stopped daemon, a wrong key, a <code>seam</code> binary that moved —
+<strong>hooks fail open</strong>. A stopped daemon, a wrong key, a <code>seam</code> binary that moved -
 none of these produce an error you or your agent will see. The handler returns
 200 with empty context, <code>seam hook</code> reports to stderr and exits 0, and work
 proceeds as if Seamless were not installed.</p>
 <p>So the failure mode is <em>silence</em>. Nothing is broken-looking; you just quietly stop
-getting briefings. That is a deliberate trade — a memory system must never block
-an agent — but it means you cannot wait for an error. You have to go ask.</p>
+getting briefings. That is a deliberate trade - a memory system must never block
+an agent - but it means you cannot wait for an error. You have to go ask.</p>
 <h2 id="start-here-always">Start here, always</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># server side: config, database, credentials, embedder, hooks</span>
 </span></span><span class="line"><span class="cl">seam doctor        <span class="c1"># client side: reachable, key accepted, tool count matches</span>
@@ -181,7 +181,7 @@ an agent — but it means you cannot wait for an error. You have to go ask.</p>
 <tbody>
 <tr>
 <td>Runs</td>
-<td>Against config and the database directly — no daemon needed</td>
+<td>Against config and the database directly - no daemon needed</td>
 <td>Against a running daemon over HTTP and MCP</td>
 </tr>
 <tr>
@@ -191,26 +191,26 @@ an agent — but it means you cannot wait for an error. You have to go ask.</p>
 </tr>
 <tr>
 <td>Fails on</td>
-<td>Only a <code>fail</code> — warnings are informational</td>
+<td>Only a <code>fail</code> - warnings are informational</td>
 <td>Any failed check</td>
 </tr>
 </tbody>
 </table>
 </div>
 <p><strong>The <code>hooks</code> check exists only in <code>seamlessd doctor</code>.</strong> If your symptom is &quot;no
-briefing&quot;, <code>seam doctor</code> cannot tell you why — it will happily report a healthy
+briefing&quot;, <code>seam doctor</code> cannot tell you why - it will happily report a healthy
 server that no hook is calling. Run both.</p>
 <p><code>seamlessd doctor</code>'s <code>embedder</code> check makes a <strong>real embed call</strong>, which is the
 one way to learn that recall has quietly gone keyword-only.</p>
 <hr>
 <h2 id="no-seam-briefing-appears-at-session-start">No <code>&lt;seam-briefing&gt;</code> appears at session start</h2>
-<p><strong>What is happening.</strong> Something in the chain — hook installed, <code>seam</code> on disk,
-daemon up, key valid — is broken, and every link in it fails silently by design.</p>
+<p><strong>What is happening.</strong> Something in the chain - hook installed, <code>seam</code> on disk,
+daemon up, key valid - is broken, and every link in it fails silently by design.</p>
 <p><strong>Fix.</strong> Walk the chain in order:</p>
 <ol>
 <li><code>seamlessd doctor</code> → the <code>hooks</code> line. It reports <code>N/N installed in &lt;path&gt;</code>,
 looking at <code>~/.claude/settings.json</code> and then <code>./.claude/settings.json</code>. Not
-installed, or partial, is a warning — which does <strong>not</strong> fail the run, so read
+installed, or partial, is a warning - which does <strong>not</strong> fail the run, so read
 it rather than trusting the exit code. Fix with <code>seamlessd install-hooks</code>.</li>
 <li><code>seam doctor</code> → is the daemon actually up and is the key accepted? An empty
 <code>mcp.api_key</code> makes the daemon reject every MCP and hook request while looking
@@ -220,7 +220,7 @@ rebuild is fine; moving or cleaning the repo is not. Re-run
 <code>install-hooks</code>, or install the release layout so the hooks point at stable
 copies rather than your working tree.</li>
 <li>Check the hook's <strong>type</strong> if you hand-edited settings.json. Claude Code
-silently ignores an <code>http</code> hook for <code>SessionStart</code> — it must be a <code>command</code>
+silently ignores an <code>http</code> hook for <code>SessionStart</code> - it must be a <code>command</code>
 hook. This is why <code>install-hooks</code> writes it that way.</li>
 </ol>
 <p>Detection matches by hook URL or command, <strong>not</strong> by the <code>seamless_managed</code>
@@ -228,17 +228,17 @@ marker, because Claude Code strips unknown keys when it rewrites settings.json.
 So a hook that lost its marker still counts as installed, and a re-install adopts
 it in place rather than appending a duplicate.</p>
 <h2 id="a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</h2>
-<p><strong>What is happening.</strong> The hook fired and the daemon answered — this is not a
+<p><strong>What is happening.</strong> The hook fired and the daemon answered - this is not a
 plumbing problem. The cwd resolved to a project you did not expect, or to none.</p>
 <p><strong>Fix.</strong> The <a href="../../concepts/projects/">precedence chain</a> resolves scope from the
 working directory via the repo map. Three outcomes:</p>
 <ul>
-<li><strong>Wrong project</strong> — the cwd matched a mapping you forgot about. Check
+<li><strong>Wrong project</strong> - the cwd matched a mapping you forgot about. Check
 <code>/console/projects</code>, and re-map with <code>seamlessd map-repo --path &lt;dir&gt; --project &lt;slug&gt;</code>.</li>
-<li><strong>A project named after your directory</strong> — an unmapped <em>git</em> repo
+<li><strong>A project named after your directory</strong> - an unmapped <em>git</em> repo
 auto-registers a project named after the repository root. It is real, it is
 just new and therefore empty.</li>
-<li><strong>No project at all</strong> — the cwd is not inside a git repo, so nothing resolved
+<li><strong>No project at all</strong> - the cwd is not inside a git repo, so nothing resolved
 and the session is global.</li>
 </ul>
 <p>An empty briefing for a project that genuinely has no constraints and no memories
@@ -248,7 +248,7 @@ the store is telling the truth.</p>
 <p><strong>What is happening.</strong> This is the <a href="../../concepts/projects/">fail-closed rule</a> doing
 its job. A durable write with no resolvable scope is rejected rather than landing
 in the global scope, because a global memory is seen by every agent in every repo
-forever — and that must never be what happens when the system is <em>unsure</em>.</p>
+forever - and that must never be what happens when the system is <em>unsure</em>.</p>
 <p><strong>Fix.</strong> The message tells you which of two cases you are in:</p>
 <div class="table-wrap">
 <table>
@@ -274,25 +274,25 @@ forever — and that must never be what happens when the system is <em>unsure</e
 </table>
 </div>
 <p>If a call that worked all morning starts failing this way, suspect a <strong>lost
-binding</strong> — see the daemon-restart section below. <code>project: global</code> is always
+binding</strong> - see the daemon-restart section below. <code>project: global</code> is always
 accepted; it is a token you pass on purpose.</p>
 <h2 id="recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</h2>
 <p><strong>What is happening.</strong> Three unrelated causes wear the same symptom.</p>
 <p><strong>Recall has degraded to keyword-only.</strong> If the embedding provider is unreachable,
-rate-limited, or rejecting the key, recall <strong>degrades rather than errors</strong> — you
+rate-limited, or rejecting the key, recall <strong>degrades rather than errors</strong> - you
 get worse ranking, not a failure, because a partial answer beats no answer during
 a network incident. That is correct in the moment and terrible for three weeks.
 Run <code>seamlessd doctor</code> and read the <code>embedder</code> line: it probes with a real call.
 Note that provider <code>anthropic</code> has no embeddings API at all, so selecting it means
 permanently lexical recall.</p>
 <p><strong>The memory is not written to be findable.</strong> The <code>description</code> is the retrieval
-surface — the only text indexes show, and the <em>only</em> text the prompt-injection
+surface - the only text indexes show, and the <em>only</em> text the prompt-injection
 matcher scores (name and description; never the body). A description like &quot;notes
 about the console&quot; cannot be retrieved by anything. See <a href="../../guides/write-good-memories/">Write memories that get
 recalled</a>.</p>
 <p><strong>You wrote it seconds ago.</strong> The prompt matcher's corpus is rebuilt on a 30-second
 interval, and an expired lookup serves the <em>stale</em> corpus while the rebuild runs
-behind the hook — so the hook never pays for a cold rebuild, and a brand-new
+behind the hook - so the hook never pays for a cold rebuild, and a brand-new
 memory can miss the next prompt's injection by a little more than the interval
 suggests. An explicit <code>recall</code> call does not use that corpus and sees the write
 immediately.</p>
@@ -300,7 +300,7 @@ immediately.</p>
 context. Re-recalling it spends tokens to learn what the agent was already told.</p>
 <h2 id="a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck <code>in_progress</code> and nobody is working it</h2>
 <p><strong>What is happening.</strong> Its holder died, and you are between two clocks. An expired
-lease makes a task <strong>stealable by id</strong> — but it does <em>not</em> re-queue it. The task
+lease makes a task <strong>stealable by id</strong> - but it does <em>not</em> re-queue it. The task
 is still <code>in_progress</code>, and <code>tasks_ready</code> returns only <code>open</code> tasks, so nothing
 surfaces it. Lease expiry is enforced lazily inside <code>tasks_claim</code>; there is no
 sweeper watching leases.</p>
@@ -310,25 +310,25 @@ sweeper watching leases.</p>
 <p><strong>Fix.</strong></p>
 <ol>
 <li>Confirm the diagnosis: <code>seam task list --status in_progress</code>, or
-<code>/console/tasks</code> — a task's detail panel shows its holder and whether the lease
+<code>/console/tasks</code> - a task's detail panel shows its holder and whether the lease
 is <strong>live</strong> or <strong>expired</strong>.</li>
 <li><strong>Check <code>gardener.enabled</code>.</strong> The reaper runs inside the gardener's pass. With
 the gardener off, nothing reaps idle sessions and nothing ever returns a dead
-agent's claims — they stay stuck forever. <code>seamlessd doctor</code> warns when the
+agent's claims - they stay stuck forever. <code>seamlessd doctor</code> warns when the
 gardener is disabled.</li>
 <li>Do not wait if you do not want to: <code>seam task release --force &lt;id&gt;</code>, or the
 <strong>release lock</strong> button in the console. Both force-release any holder
-regardless of the lease. Neither is on the MCP surface — agents get the
+regardless of the lease. Neither is on the MCP surface - agents get the
 cooperative protocol, you get the override.</li>
 </ol>
-<h2 id="tasks-update-says-the-task-is-already-claimed--by-my-own-session"><code>tasks_update</code> says the task is already claimed — by my own session</h2>
+<h2 id="tasks-update-says-the-task-is-already-claimed---by-my-own-session"><code>tasks_update</code> says the task is already claimed - by my own session</h2>
 <p><strong>What is happening.</strong> The connection binding was lost. The task is genuinely held
 by your session id; your <em>connection</em> no longer knows that, so the holder check
 sees a stranger.</p>
 <p><strong>Fix.</strong> Re-run <code>session_start</code> with the <strong>same name</strong> to rebind. It resumes the
 session rather than opening a second one.</p>
 <p>The binding is keyed by the transport's <code>Mcp-Session-Id</code>, held in the daemon's
-memory. Any daemon restart drops it — see below.</p>
+memory. Any daemon restart drops it - see below.</p>
 <h2 id="a-seam-flag-did-nothing">A <code>seam</code> flag did nothing</h2>
 <p><strong>What is happening.</strong> Go's <code>flag</code> package stops parsing at the first positional
 argument, and everything after it is left as an argument rather than a flag.
@@ -363,12 +363,12 @@ handshake, and the startup log line. <code>seam status</code> prints health and 
 If it disagrees with what you just built, the daemon is running older code.</li>
 <li><strong>A rebuild does not restart anything.</strong> <code>make build</code> and <code>make check</code> rewrite
 <code>bin/seamlessd</code>, but a running process keeps its in-memory image. The new binary
-takes effect on the next restart — which also means an <em>accidental</em> restart
+takes effect on the next restart - which also means an <em>accidental</em> restart
 silently upgrades the running daemon to whatever is in your working tree.</li>
 <li><strong>Never <code>pkill -f &quot;seamlessd serve&quot;</code>.</strong> Running a throwaway daemon on a spare
 port is the right way to test in isolation, but that pattern matches the real
 service's command line too and kills it. Under launchd it comes back in about a
-second with a new pid and no data loss — but <strong>every agent's MCP connection
+second with a new pid and no data loss - but <strong>every agent's MCP connection
 drops and their session bindings are lost mid-task</strong>, which resurfaces as the
 ambiguous-scope and self-claimed-task symptoms above. Kill the throwaway by its
 own pid, or by its port.</li>
@@ -378,7 +378,7 @@ from. Register with <code>--scope user</code>.</li>
 </ul>
 <h2 id="memory-write-says-the-name-is-held-by-a-superseded-memory"><code>memory_write</code> says the name is held by a superseded memory</h2>
 <p><strong>What is happening.</strong> A superseded or archived memory leaves every index but
-stays on disk as provenance — and it still owns its filename. The name is taken by
+stays on disk as provenance - and it still owns its filename. The name is taken by
 something you cannot see in any index.</p>
 <p><strong>Fix.</strong> Pick a different name, or free the old one with <code>memory_delete</code>. Prefer a
 different name: the old file is the record of what you used to believe, and
@@ -387,7 +387,7 @@ notes</a>.</p>
 <h2 id="a-supersedes-failed-but-the-memory-was-written">A <code>supersedes</code> failed but the memory was written</h2>
 <p><strong>What is happening.</strong> This is a deliberate partial failure, reported rather than
 swallowed. The new memory's content is valid knowledge, so it is <strong>written and
-kept</strong> — but the supersession did not happen, which means <strong>the old memory is
+kept</strong> - but the supersession did not happen, which means <strong>the old memory is
 still active</strong>, live in briefings and recall alongside its replacement. That is
 exactly the contradictory-store state the lifecycle exists to prevent, so it comes
 back as a tool error rather than an error field inside a success payload.</p>
@@ -409,7 +409,7 @@ name is a lossless in-place update, so retrying is safe.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed--by-my-own-session">tasks_update says the task is already claimed — by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </aside>
   
@@ -417,7 +417,7 @@ name is a lossless in-place update, so retrying is safe.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

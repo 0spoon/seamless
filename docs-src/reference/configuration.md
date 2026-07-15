@@ -19,16 +19,16 @@ The file is looked up in this order, first hit wins:
 
 Four layers resolve each key. Later layers win:
 
-1. **Defaults** — the built-in values in the table below.
-2. **File** — whatever the YAML sets.
-3. **Environment** — `SEAMLESS_*` overrides the file.
-4. **Runtime override (DB)** — the console's Settings form stores briefing knobs
+1. **Defaults** - the built-in values in the table below.
+2. **File** - whatever the YAML sets.
+3. **Environment** - `SEAMLESS_*` overrides the file.
+4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
    in the database. They win over file *and* env, apply from the next session
    start without a daemon restart, and stay until reset.
 
 That fourth layer only covers the `briefing:` block. It exists so you can tune
 what agents get injected while they are running, and it is the one place where
-the config file is not the last word — check the console before concluding a
+the config file is not the last word - check the console before concluding a
 briefing setting is being ignored.
 
 ## Generating a key

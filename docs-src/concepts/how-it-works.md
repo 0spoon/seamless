@@ -41,13 +41,13 @@ This is the load-bearing decision in the whole design.
 | FTS index, embeddings | **SQLite** | Derived data, rebuildable from the files |
 
 So: **what would you lose if `seam.db` were deleted?** The sessions, the task
-queue, the trials, and the event log — the record of what *happened*. You would
+queue, the trials, and the event log - the record of what *happened*. You would
 not lose a single memory or note, because those are files, and startup
 reconciliation rebuilds their index from the disk.
 
 That asymmetry is the point. The knowledge is yours in the strongest sense: it
 survives this program. If Seamless disappeared tomorrow, you would still have a
-folder of markdown files that a human — or any other tool — can read.
+folder of markdown files that a human - or any other tool - can read.
 
 ## The write path
 

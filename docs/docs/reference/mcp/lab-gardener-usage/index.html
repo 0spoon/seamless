@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Lab, gardener &amp; usage — Seamless docs</title>
-<meta name="description" content="Research trials, the propose-only gardener, and the usage summary — the eight tools for keeping the store honest.">
+<title>Lab, gardener &amp; usage - Seamless docs</title>
+<meta name="description" content="Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>Lab, gardener &amp; usage</h1>
-  <p class="lede">Research trials, the propose-only gardener, and the usage summary — the eight tools for keeping the store honest.</p>
+  <p class="lede">Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.</p>
   <h2 id="the-research-lab">The research lab</h2>
 <p>A lab is a shared workspace for a systematic investigation: a hypothesis, a
 series of trials, and what each one actually did. <code>lab_open</code> binds a lab to the
@@ -165,11 +165,11 @@ project. <code>trial_query</code> reads the trials back.</p>
 <p>The point is <strong>parallel agents collaborating on one investigation</strong>. Several
 agents chasing the same bug can open the same lab, record what they tried, and
 see each other's dead ends instead of re-walking them. When the investigation
-resolves, distill the finding into a memory — the lab is the working record, not
+resolves, distill the finding into a memory - the lab is the working record, not
 the conclusion.</p>
 <h2 id="the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</h2>
 <p>The gardener runs periodically over the store looking for drift. Every pass it
-makes ends in a <strong>proposal row for you to review</strong> — it never rewrites your
+makes ends in a <strong>proposal row for you to review</strong> - it never rewrites your
 knowledge behind your back. That is the whole contract, and it is why the tool
 surface has both <code>gardener_proposals</code> (read them) and <code>gardener_apply</code> (act on
 one) instead of a single &quot;tidy up&quot; button.</p>
@@ -206,22 +206,22 @@ one) instead of a single &quot;tidy up&quot; button.</p>
 constraint does not become less true by sitting still.</p>
 <p><code>gardener_request</code> takes a request in natural language (&quot;fold the two console
 theme memories together&quot;) and turns it into the same reviewable proposals. It can
-also <strong>reproject</strong> a memory filed under the wrong project — moving it to a
+also <strong>reproject</strong> a memory filed under the wrong project - moving it to a
 different project that already exists.</p>
 <p>Its <code>project</code> argument scopes the memories it may reference: a project slug (that
 project plus globals), <code>global</code> for globals only, or <code>all</code> for every project on
-the machine. Omit it and the scope resolves the way every other read does — from
-the session — rather than quietly widening to everything. A slug that is not a
+the machine. Omit it and the scope resolves the way every other read does - from
+the session - rather than quietly widening to everything. A slug that is not a
 project is an error, not an empty result.</p>
 <h2 id="splits-are-a-different-thing">Splits are a different thing</h2>
-<p>Moving a memory into a project that does not exist yet is not a reproject — it is
+<p>Moving a memory into a project that does not exist yet is not a reproject - it is
 a split, and <code>gardener_split</code> plans it. Splitting one project into new children
 creates those projects and a shared parent, so it is planned as a unit rather
 than as a pile of individual moves.</p>
 <h2 id="usage-summary">usage_summary</h2>
 <p><code>usage_summary</code> reports what the store actually contains and what retrieval has
 been doing: memory counts, retrieval statistics, events by kind. It answers &quot;is
-this thing working, and on how much?&quot; — the same question the console's Overview
+this thing working, and on how much?&quot; - the same question the console's Overview
 answers, for an agent that cannot open a browser.</p>
 <h2 id="lab_open">lab_open</h2>
 <p>Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.</p>
@@ -488,7 +488,7 @@ answers, for an agent that cannot open a browser.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../../static/docs.js"></script>

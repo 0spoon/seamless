@@ -1,6 +1,6 @@
 ---
 title: Sessions & briefings
-description: How an agent gets your knowledge injected before it does anything — ambient sessions, the briefing's packing order, and what never gets dropped.
+description: How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.
 ---
 
 A **session** is one agent's stretch of work. A **briefing** is what that agent
@@ -21,7 +21,7 @@ your constraints.
 | Gets | The short injected briefing | The full briefing, returned by the call |
 
 They are not two competing sessions. `session_start` **adopts** the sole ambient
-session for the same working directory rather than opening a second one — that
+session for the same working directory rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.
 
 Call `session_start` when the work is non-trivial: it returns the full briefing
@@ -63,7 +63,7 @@ Line by line:
   gated stage's status is load-bearing for the whole session.
 - **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
   tell the next agent what work it can pick up right now.
-- **The memory index** is `name: description` only — the description is the *only*
+- **The memory index** is `name: description` only - the description is the *only*
   text an index ever shows, which is why writing a good one matters more than
   writing a good body.
 - **`(+34 older -- use recall)`** is the honest tail: the index was trimmed, and
@@ -77,8 +77,8 @@ the whole thing is hard-capped at `briefing.hard_cap_multiplier` times that
 (default 2x).
 
 The **never-drop invariant**: constraints, pinned stages, and active-plan rollups
-are counted first and are exempt from budget dropping. Everything else — the
-memory index, sibling findings, sibling memories, recent findings, ready tasks —
+are counted first and are exempt from budget dropping. Everything else - the
+memory index, sibling findings, sibling memories, recent findings, ready tasks -
 is packed in that order until the budget runs out. Later sections lose first.
 
 Every knob is tunable in [Configuration](/reference/configuration/), and the
@@ -91,10 +91,10 @@ to be ignored, check the console before you check the YAML.
 
 Sessions heartbeat. A session that ends cleanly cascades immediately; one that is
 abandoned is caught by an idle reaper after `gardener.session_idle_minutes` and
-marked `expired`. The TTL only applies when there was no end signal at all — a
+marked `expired`. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit "live" forever, and a slow one is not
 reaped out from under itself.
 
-`session_end` is where findings come from. Keep them tight — briefings show a
-short preview — but they are stored in full, not rejected, so a long finding is
+`session_end` is where findings come from. Keep them tight - briefings show a
+short preview - but they are stored in full, not rejected, so a long finding is
 fine when it earns it.

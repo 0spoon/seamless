@@ -300,7 +300,7 @@ func configRows(v reflect.Value, prefix string) ([]string, error) {
 // empty-looking code span reads like a typo.
 func formatDefault(v reflect.Value) string {
 	if v.IsZero() {
-		return "—"
+		return "-"
 	}
 	switch v.Kind() {
 	case reflect.String:

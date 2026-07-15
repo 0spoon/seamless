@@ -3,7 +3,7 @@ title: Import, back up & restore
 description: Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.
 ---
 
-Because durable knowledge is markdown files, backup and restore are boring — and
+Because durable knowledge is markdown files, backup and restore are boring - and
 that is the feature. This page is mostly about knowing which half of
 `~/.seamless` is precious and which half regenerates.
 
@@ -22,7 +22,7 @@ people either over-protect it or under-protect it:
 | In `seam.db` | If it were lost |
 |---|---|
 | FTS index, embeddings | **Rebuilt automatically** from the files |
-| Sessions, tasks, trials, events, telemetry, briefing overrides | **Gone** — there is no file to rebuild them from |
+| Sessions, tasks, trials, events, telemetry, briefing overrides | **Gone** - there is no file to rebuild them from |
 
 So: **deleting `seam.db` costs you the record of what happened, not the knowledge
 of what is true.** Every memory and note survives, because they are files.
@@ -41,7 +41,7 @@ git add . && git commit -m "seamless: initial"
 Ignoring the database is deliberate. It is a binary that changes constantly, it
 does not diff usefully, and its contents are either rebuildable or high-churn
 state that a nightly commit would capture uselessly. What you want in git is the
-knowledge — and that diffs beautifully, because it is markdown.
+knowledge - and that diffs beautifully, because it is markdown.
 
 Commit periodically (a cron job or a `launchd` timer is plenty). The payoff is
 that `git log` over your memory directory is a real history of what your agents
@@ -87,7 +87,7 @@ partial import is safe to re-run.
 
 ## Hand-editing
 
-Files are the source of truth, so editing them by hand is allowed and expected —
+Files are the source of truth, so editing them by hand is allowed and expected -
 the watcher picks up your change and reindexes it.
 
 Two rules:
@@ -97,11 +97,11 @@ Two rules:
    memories. Writing them by hand produces a file that says one thing and a
    database that believes another, and the lifecycle invariants (stamp once,
    point only at an active memory, never self-supersede) stop being true. Use
-   `memory_write` with `supersedes` — see [Memory & notes](/concepts/memory/).
+   `memory_write` with `supersedes` - see [Memory & notes](/concepts/memory/).
 2. **Do not hand-edit `id`.** It is a ULID assigned once and referenced by
    `superseded_by` pointers elsewhere.
 
-Everything else — the body, the description, tags, the kind — is yours to edit in
+Everything else - the body, the description, tags, the kind - is yours to edit in
 any text editor.
 
 ## Moving machines

@@ -9,7 +9,7 @@ page is what you do once you want it running for real.
 ## One instance per machine
 
 Both install layouts drive **the same single instance**: port `8081`, data dir
-`~/.seamless`. Only one is active at a time — installing prod replaces dev, and
+`~/.seamless`. Only one is active at a time - installing prod replaces dev, and
 vice versa.
 
 This is the single most common source of confusion, so it is worth stating
@@ -30,7 +30,7 @@ make dev               # rebuild + restart in place
 
 Fast to iterate. The catch: `make build`, a branch switch, or moving the repo
 changes what the live service and the global SessionStart hook actually execute.
-That is fine while you are working on Seamless itself and a trap otherwise —
+That is fine while you are working on Seamless itself and a trap otherwise -
 every agent on the machine is running the hook from your working tree.
 
 ## Release layout
@@ -74,12 +74,12 @@ make install-prod      # or: make dev, for the dev layout
 make doctor            # confirm config + DB after the swap
 ```
 
-Migrations apply automatically at startup — there is no separate migrate step.
+Migrations apply automatically at startup - there is no separate migrate step.
 Run `make doctor` afterwards anyway: it is the cheapest way to learn that the new
 build disagrees with your config before an agent does.
 
 `/healthz` reports the running build. If a change seems not to have taken effect,
-check it before you debug anything else — a stale daemon still serving the old
+check it before you debug anything else - a stale daemon still serving the old
 binary looks exactly like a bug in the new one.
 
 ## Uninstalling
@@ -90,7 +90,7 @@ make uninstall-prod          # or: make uninstall-service
 
 Neither touches `~/.seamless`. Your memories and notes are markdown files; the
 uninstall of a program should not delete your knowledge. Remove the directory by
-hand if you actually mean it — and see [Storage](/reference/storage/) first for
+hand if you actually mean it - and see [Storage](/reference/storage/) first for
 what is in there.
 
 ## Security posture
@@ -104,13 +104,13 @@ What you are accepting when you run this:
   reach it.
 - **SSRF guards on capture.** `capture_url` is the one tool that makes an
   outbound request on an agent's behalf, and its destination ports are restricted
-  to `capture.allowed_ports` (80 and 443 by default) — never "any port".
+  to `capture.allowed_ports` (80 and 443 by default) - never "any port".
 - **No telemetry.** Nothing phones home.
 
 The key and loopback are a matched pair. A static bearer key is adequate
 *because* the listener is on loopback; it would not be adequate on a public
 interface. If you widen `addr` to a routable address, the key becomes the only
-thing between the internet and your entire knowledge store — so don't. Put it
+thing between the internet and your entire knowledge store - so don't. Put it
 behind a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) and leave the bind
 on loopback.
 

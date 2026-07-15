@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Write memories that get recalled — Seamless docs</title>
-<meta name="description" content="The description is the retrieval surface, not a label — how to write one, how to pick a kind, and the four habits that fill a store with noise.">
+<title>Write memories that get recalled - Seamless docs</title>
+<meta name="description" content="The description is the retrieval surface, not a label - how to write one, how to pick a kind, and the four habits that fill a store with noise.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Guides</p>
   <h1>Write memories that get recalled</h1>
-  <p class="lede">The description is the retrieval surface, not a label — how to write one, how to pick a kind, and the four habits that fill a store with noise.</p>
+  <p class="lede">The description is the retrieval surface, not a label - how to write one, how to pick a kind, and the four habits that fill a store with noise.</p>
   <p>A memory that is never retrieved is worse than one that was never written: it
 cost budget, it cost a write, and it is now something the gardener has to reason
 about. Getting recalled is not luck. It is almost entirely a property of the
@@ -183,18 +183,18 @@ where most bad memories die:</p>
 <td><code>name</code> + <code>description</code>, tokenized. <strong>The body is never considered</strong></td>
 </tr>
 <tr>
-<td>A <code>recall</code> call — keyword leg</td>
+<td>A <code>recall</code> call - keyword leg</td>
 <td><code>name</code>, <code>description</code>, <code>body</code> (FTS5)</td>
 </tr>
 <tr>
-<td>A <code>recall</code> call — vector leg</td>
+<td>A <code>recall</code> call - vector leg</td>
 <td><code>name</code> + <code>description</code> + <code>body</code>, embedded together</td>
 </tr>
 </tbody>
 </table>
 </div>
 <p>Read the second row again. The <a href="../../reference/hooks/">UserPromptSubmit matcher</a> is
-purely lexical — it has to be, it runs inside a five-second hook — and it scores
+purely lexical - it has to be, it runs inside a five-second hook - and it scores
 each memory on the tokens in its name and description alone. A memory whose
 description is vague is <strong>invisible to ambient recall</strong> no matter how good its
 body is. It can only be found by an agent that already decided to go looking.</p>
@@ -217,7 +217,7 @@ version each could have been.</p>
 </span></span><span class="line"><span class="cl">GOOD  description: gofmt walks the filesystem while go&#39;s ./... skips dot-dirs:
 </span></span><span class="line"><span class="cl">      `gofmt -w .` rewrites other agents&#39; .claude/worktrees mid-edit. Use make fmt.
 </span></span></code></pre><p>The bad one shares no rare token with any prompt an agent would write. The good
-one carries <code>gofmt</code>, <code>dot-dirs</code>, <code>worktrees</code> — an agent typing &quot;why did my
+one carries <code>gofmt</code>, <code>dot-dirs</code>, <code>worktrees</code> - an agent typing &quot;why did my
 formatter touch files I didn't edit&quot; hits it, and the description <em>already
 contains the fix</em>. The body never has to open.</p>
 <p><strong>Another gotcha, where the description is the whole answer.</strong></p>
@@ -239,7 +239,7 @@ not just a filename. <code>chroma-boot-race</code> earns its tokens; <code>note-
 Kebab-case, unique within the project, and made of the words a future prompt will
 actually contain.</p>
 <h2 id="choosing-a-kind">Choosing a kind</h2>
-<p>The kind is not filing paperwork — it changes what happens to the memory:</p>
+<p>The kind is not filing paperwork - it changes what happens to the memory:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -285,15 +285,15 @@ actually contain.</p>
 </div>
 <p>Two calls people get wrong.</p>
 <p><strong><code>decision</code> vs <code>constraint</code>.</strong> &quot;We chose SQLite over ChromaDB, because a second
-service buys ANN we do not need&quot; is a <code>decision</code> — it carries reasoning and a
+service buys ANN we do not need&quot; is a <code>decision</code> - it carries reasoning and a
 rejected alternative, and it exists so the argument does not happen again. &quot;No
-CGO&quot; is a <code>constraint</code> — there is no reasoning to weigh at call time, only a rule
+CGO&quot; is a <code>constraint</code> - there is no reasoning to weigh at call time, only a rule
 to not violate. Filing a preference as a constraint crowds out real constraints;
 filing a real constraint as a <code>reference</code> means agents violate it.</p>
 <p><strong><code>refuted</code> is the one that gets skipped.</strong> Nobody wants to write down what they
 were wrong about. But a store that only records what is true keeps paying for the
 same wrong turn forever: the fleet re-derives the dead end, tries it, finds it
-dead, and moves on — every time, for every agent. Recording the refutation makes
+dead, and moves on - every time, for every agent. Recording the refutation makes
 that cost one-time. It is the highest-leverage memory kind and the least written.</p>
 <h2 id="supersede-dont-accrete">Supersede, don't accrete</h2>
 <p>Four ways to change memory, and the wrong one rots the store:</p>
@@ -308,7 +308,7 @@ that cost one-time. It is the highest-leverage memory kind and the least written
 <tbody>
 <tr>
 <td>Correct or extend what <em>this</em> memory says</td>
-<td><code>memory_write</code>, same <code>name</code> — updated in place, id stable</td>
+<td><code>memory_write</code>, same <code>name</code> - updated in place, id stable</td>
 </tr>
 <tr>
 <td>Add to the end without rereading it</td>
@@ -329,7 +329,7 @@ that cost one-time. It is the highest-leverage memory kind and the least written
 being true.</strong> Deleting the latter destroys the reasoning that explains the current
 state, and the argument reopens in six weeks.</p>
 <p>The subtle one is <code>memory_append</code>. It grows the body and <strong>does not touch the
-description</strong> — which is correct, and also exactly how a memory rots. Append four
+description</strong> - which is correct, and also exactly how a memory rots. Append four
 times and the description now summarizes the first paragraph of a memory that has
 moved on. The retrieval surface has silently decoupled from the content: recall
 still finds the memory for the old topic, and never finds it for what it now
@@ -342,7 +342,7 @@ generalize, and it displaces a constraint. That is <code>session_end</code> find
 note. The test: <em>would a future agent need this injected before it starts working?</em></p>
 <p><strong>Duplicating the codebase.</strong> Seamless stores what agents <em>learned</em>, not what the
 code says. The code is already in the repo, and a memory mirroring it goes stale
-the moment someone edits the file — silently, because nothing links them. The same
+the moment someone edits the file - silently, because nothing links them. The same
 goes for anything <code>CLAUDE.md</code> already injects: restating it spends budget to say
 what the agent was told anyway.</p>
 <p><strong>&quot;Notes about X&quot; descriptions.</strong> Covered above, and worth naming as a habit
@@ -351,13 +351,13 @@ it is a label. Labels do not retrieve.</p>
 <p><strong>Accreting near-duplicates.</strong> Writing <code>console-theme-fix-2</code> beside
 <code>console-theme-fix</code> gives recall two answers and lets the agent pick. Seamless
 pushes back twice: <code>memory_write</code> on a new name reports a semantically similar
-existing memory as an advisory hint (the write still proceeds — it is a hint, not
+existing memory as an advisory hint (the write still proceeds - it is a hint, not
 a veto), and <a href="../../concepts/gardener/">the gardener</a> proposes a merge for pairs above
 its similarity threshold. Take the hint. If the new thing replaces the old thing,
 that is what <code>supersedes</code> is for.</p>
 <h2 id="the-one-line-test">The one-line test</h2>
 <p>Before writing, say the memory out loud as its description alone. If a future
-agent — with none of your context, three weeks from now, mid-task — could not
+agent - with none of your context, three weeks from now, mid-task - could not
 decide from that line whether to read further, the line is not done yet. That is
 the description's entire job, and it is the only part of the memory most agents
 will ever see.</p>
@@ -385,7 +385,7 @@ will ever see.</p>
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless — local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="../../static/docs.js"></script>

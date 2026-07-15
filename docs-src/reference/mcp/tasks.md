@@ -1,6 +1,6 @@
 ---
 title: Tasks
-description: The six task tools — the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.
+description: The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.
 generate: mcp-tools
 tools:
   - tasks_add
@@ -22,9 +22,9 @@ will both try to take it, and exactly one wins:
 
 1. `tasks_claim` atomically moves a ready task to `in_progress` and stamps a
    lease (default 900 seconds). The loser gets an error naming the holder.
-2. Re-claiming a task you already hold **refreshes** the lease — that is the
+2. Re-claiming a task you already hold **refreshes** the lease - that is the
    heartbeat for long work.
-3. An **expired** lease is reclaimable *by id* — but the task stays
+3. An **expired** lease is reclaimable *by id* - but the task stays
    `in_progress`, so `tasks_ready` does not show it. Only releasing it (by hand,
    or by the gardener's session reaper expiring the dead holder's session) sets
    the status back to `open` and returns it to the queue. See [the two
@@ -32,7 +32,7 @@ will both try to take it, and exactly one wins:
 4. `tasks_release`, closing the task (`tasks_update` to `done`/`dropped`), or
    `session_end` frees the claim.
 
-A lease is not a lock on the files — it is a coordination signal between
+A lease is not a lock on the files - it is a coordination signal between
 cooperating agents. Nothing stops a determined agent from working on a task it
 did not claim; the point is that well-behaved agents do not collide.
 
