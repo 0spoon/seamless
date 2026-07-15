@@ -77,19 +77,7 @@ func AllBlockedTasks(ctx context.Context, db *sql.DB) ([]BlockedTask, error) {
 	if err != nil {
 		return nil, fmt.Errorf("store.AllBlockedTasks: %w", err)
 	}
-	tasks, err := scanTasksWithDeps(ctx, db, rows)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]BlockedTask, 0, len(tasks))
-	for _, t := range tasks {
-		blockers, err := openBlockers(ctx, db, t.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, BlockedTask{Task: t, Blockers: blockers})
-	}
-	return out, nil
+	return attachBlockers(ctx, db, rows)
 }
 
 // AllTasksByStatus returns every task with the given status across all projects,
@@ -175,40 +163,67 @@ func blockedTasks(ctx context.Context, db *sql.DB, project string, byPlan bool, 
 	if err != nil {
 		return nil, fmt.Errorf("store.BlockedTasks: %w", err)
 	}
+	return attachBlockers(ctx, db, rows)
+}
+
+// attachBlockers drains blocked-task rows and pairs each with its still-open
+// blockers, fetched in one batched query (not one per task).
+func attachBlockers(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]BlockedTask, error) {
 	tasks, err := scanTasksWithDeps(ctx, db, rows)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(tasks))
+	for i := range tasks {
+		ids[i] = tasks[i].ID
+	}
+	blockers, err := openBlockersForTasks(ctx, db, ids)
 	if err != nil {
 		return nil, err
 	}
 	out := make([]BlockedTask, 0, len(tasks))
 	for _, t := range tasks {
-		blockers, err := openBlockers(ctx, db, t.ID)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, BlockedTask{Task: t, Blockers: blockers})
+		out = append(out, BlockedTask{Task: t, Blockers: blockers[t.ID]})
 	}
 	return out, nil
 }
 
-// openBlockers returns the open/in_progress dependencies of a task.
-func openBlockers(ctx context.Context, db *sql.DB, taskID string) ([]core.Task, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+prefixCols("b", taskCols)+`
-		FROM task_deps d JOIN tasks b ON b.id = d.depends_on
-		WHERE d.task_id = ? AND b.status IN ('open','in_progress')
-		ORDER BY b.created_at ASC, b.id ASC`, taskID)
-	if err != nil {
-		return nil, fmt.Errorf("store.openBlockers: %w", err)
-	}
-	defer func() { _ = rows.Close() }()
-	var out []core.Task
-	for rows.Next() {
-		t, err := scanTask(rows)
-		if err != nil {
-			return nil, fmt.Errorf("store.openBlockers: %w", err)
+// openBlockersForTasks returns the open/in_progress dependencies (blockers) of
+// many tasks in a handful of batched IN queries instead of one query per task,
+// keyed by task id and ordered by created_at then id within each task. Tasks with
+// no open blockers are absent from the map.
+func openBlockersForTasks(ctx context.Context, db *sql.DB, taskIDs []string) (map[string][]core.Task, error) {
+	out := make(map[string][]core.Task, len(taskIDs))
+	for start := 0; start < len(taskIDs); start += depsBatchSize {
+		batch := taskIDs[start:min(start+depsBatchSize, len(taskIDs))]
+		args := make([]any, len(batch))
+		for i, id := range batch {
+			args[i] = id
 		}
-		out = append(out, t)
+		rows, err := db.QueryContext(ctx, `SELECT d.task_id, `+prefixCols("b", taskCols)+`
+			FROM task_deps d JOIN tasks b ON b.id = d.depends_on
+			WHERE d.task_id IN (`+placeholders(len(batch))+`) AND b.status IN ('open','in_progress')
+			ORDER BY d.task_id ASC, b.created_at ASC, b.id ASC`, args...)
+		if err != nil {
+			return nil, fmt.Errorf("store.openBlockersForTasks: %w", err)
+		}
+		err = func() error {
+			defer func() { _ = rows.Close() }()
+			for rows.Next() {
+				var taskID string
+				t, err := scanTask(rows, &taskID)
+				if err != nil {
+					return fmt.Errorf("store.openBlockersForTasks: %w", err)
+				}
+				out[taskID] = append(out[taskID], t)
+			}
+			return rows.Err()
+		}()
+		if err != nil {
+			return nil, err
+		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // TasksBlockedBy returns the tasks that depend on id -- the inverse of a task's

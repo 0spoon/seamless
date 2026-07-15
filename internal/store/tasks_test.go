@@ -110,6 +110,39 @@ func TestBlockedTasksListsOpenBlockers(t *testing.T) {
 	require.Equal(t, a, blocked[0].Blockers[0].ID)
 }
 
+// TestAllBlockedTasksBatchedBlockers exercises the batched blocker fetch: several
+// blocked tasks with differing blocker counts, each paired with its own blockers
+// in created_at order.
+func TestAllBlockedTasksBatchedBlockers(t *testing.T) {
+	db := newTaskDB(t)
+	a := addTask(t, db, "demo", "A", 1)
+	b := addTask(t, db, "demo", "B", 2)
+	c := addTask(t, db, "demo", "C", 3, a, b) // blocked by A and B
+	d := addTask(t, db, "demo", "D", 4, a)    // blocked by A
+
+	blocked, err := AllBlockedTasks(context.Background(), db)
+	require.NoError(t, err)
+	byID := make(map[string]BlockedTask, len(blocked))
+	for _, bt := range blocked {
+		byID[bt.Task.ID] = bt
+	}
+	require.Len(t, blocked, 2, "only C and D are blocked; A and B are ready")
+
+	require.Contains(t, byID, c)
+	require.Equal(t, []string{a, b}, blockerIDs(byID[c]), "C's blockers in created_at order")
+
+	require.Contains(t, byID, d)
+	require.Equal(t, []string{a}, blockerIDs(byID[d]))
+}
+
+func blockerIDs(bt BlockedTask) []string {
+	ids := make([]string, len(bt.Blockers))
+	for i, blk := range bt.Blockers {
+		ids[i] = blk.ID
+	}
+	return ids
+}
+
 func TestCreateTaskRejectsDanglingDependency(t *testing.T) {
 	db := newTaskDB(t)
 	id, err := core.NewID()
