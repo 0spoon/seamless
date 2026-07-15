@@ -50,5 +50,10 @@ then open http://127.0.0.1:8899/.
 - Real console screenshots / demo GIF to replace or accompany the CSS console
   sketch (needs a sanitized demo instance; see memory
   `throwaway-console-only-on-request`).
-- Verify rendering on a real phone (responsive CSS uses standard breakpoints
-  but was only exercised at desktop widths).
+- Spot-check on a real phone. Narrow widths are no longer unexercised: the page
+  was swept at 320/360/390/414/600/768/900/1024/1280/1440 under Chrome device
+  emulation and has no horizontal overflow at any of them. That sweep caught a
+  real bug (the hero and quickstart grids each declared a bare `1fr`, whose
+  min-content floor is the nowrap `go install` command -- 157px of overflow on a
+  390px phone); both now use `minmax(0, 1fr)`. A real handset would still add
+  touch-target and font-rendering confidence that emulation can't.

@@ -143,6 +143,14 @@ func TestServeCSS(t *testing.T) {
 	require.Contains(t, rr.Body.String(), ".sidebar")
 }
 
+func TestServeFavicon(t *testing.T) {
+	mux := newTestMux(t)
+	rr := do(mux, httptest.NewRequest(http.MethodGet, "/console/static/favicon.svg", nil))
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Header().Get("Content-Type"), "image/svg+xml")
+	require.Contains(t, rr.Body.String(), "<svg")
+}
+
 func TestSafeNext(t *testing.T) {
 	cases := map[string]string{
 		"/console/memories":   "/console/memories",

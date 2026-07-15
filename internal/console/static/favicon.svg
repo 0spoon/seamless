@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- the seam mark: two panels joined by a running stitch that never stops sewing.
+       Firefox animates SVG favicons; other browsers show the static first frame. -->
+  <defs>
+    <clipPath id="tile"><rect width="32" height="32" rx="7"/></clipPath>
+  </defs>
+  <style>
+    .stitch { animation: sew 2.8s linear infinite; }
+    @keyframes sew { to { stroke-dashoffset: -8.2; } }
+    @media (prefers-reduced-motion: reduce) { .stitch { animation: none; } }
+  </style>
+  <g clip-path="url(#tile)">
+    <rect width="32" height="32" fill="#3f56e8"/>
+    <path d="M20.5 -1 C20.5 12 11.5 20 11.5 33 L33 33 L33 -1 Z" fill="#2c3ec6"/>
+    <path class="stitch" d="M20.5 -1 C20.5 12 11.5 20 11.5 33" fill="none" stroke="#f7f6f2" stroke-width="2.6" stroke-linecap="round" stroke-dasharray="3.6 4.6"/>
+  </g>
+</svg>

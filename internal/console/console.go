@@ -79,6 +79,7 @@ func New(cfg Config) (*Service, error) {
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
 	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
+	mux.HandleFunc("GET /console/static/favicon.svg", s.serveFavicon)
 	mux.HandleFunc("GET /console/login", s.loginForm)
 	mux.HandleFunc("POST /console/login", s.loginSubmit)
 	mux.HandleFunc("POST /console/logout", s.logout)
@@ -244,6 +245,12 @@ func (s *Service) serveJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(interactionsJS)
+}
+
+func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(faviconSVG)
 }
 
 // ---------------------------------------------------------------------------
