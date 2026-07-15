@@ -3,6 +3,7 @@ package gardener
 import (
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -259,6 +260,69 @@ func TestRunOnce_ProducesAllThreeProposalKinds(t *testing.T) {
 	res2, err := g.RunOnce(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 0, res2.Total(), "already-proposed items are not raised again")
+}
+
+// A memory's [[links]] are what protect OTHER memories from staleness
+// archiving, so an unreadable body does not just lose its own links -- it makes
+// every absence from the protection set unprovable. Archiving on that basis
+// would propose retiring a live, referenced memory. The pass must refuse and
+// report itself failed instead. Regression for F17: before, the unreadable body
+// was warned and skipped, and "referenced-old" was proposed for archive.
+func TestRunOnce_UnreadableBodyBlocksArchivesRatherThanFalselyProposing(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "seam.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mgr, err := files.NewManager(dir, db, slog.Default())
+	require.NoError(t, err)
+	defer func() { _ = mgr.Close() }()
+
+	now := time.Now().UTC()
+	// referenced-old is stale but protected: linker's body points at it.
+	writeMem(t, mgr, "referenced-old", "", "6", core.KindGotcha, now.Add(-200*24*time.Hour), "keep me")
+	writeMem(t, mgr, "linker", "", "7", core.KindReference, now, "see [[referenced-old]] for context")
+
+	// The index still lists linker as active, but its body is gone -- so the
+	// protection it provides is now invisible to the scan.
+	require.NoError(t, os.Remove(filepath.Join(dir, "memory", "_global", "linker.md")))
+
+	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{StalenessDays: 90, DigestDays: 30}, slog.Default())
+
+	res, err := g.RunOnce(ctx)
+	require.NoError(t, err, "one failing pass must not abort the run")
+
+	archives, err := store.PendingProposals(ctx, db, store.ProposalArchive)
+	require.NoError(t, err)
+	require.Empty(t, archives, "must not propose archiving a memory whose protection could not be read")
+
+	// The zero must not read as "nothing was stale".
+	require.Equal(t, 0, res.Archives)
+	require.False(t, res.OK(), "a refused pass is not a clean pass")
+	require.Contains(t, res.Failed, "staleness")
+}
+
+// The counts are only trustworthy when every pass ran; a healthy run says so.
+func TestRunOnce_OKWhenEveryPassRuns(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "seam.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	mgr, err := files.NewManager(dir, db, slog.Default())
+	require.NoError(t, err)
+	defer func() { _ = mgr.Close() }()
+
+	writeMem(t, mgr, "readable", "", "1", core.KindGotcha, time.Now().UTC(), "nothing stale here")
+
+	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{StalenessDays: 90, DigestDays: 30}, slog.Default())
+
+	res, err := g.RunOnce(context.Background())
+	require.NoError(t, err)
+	require.True(t, res.OK())
+	require.Empty(t, res.Failed)
+	require.Equal(t, 0, res.Total(), "a genuine nothing-to-propose zero")
 }
 
 func TestRunOnce_DegradesWithoutEmbedderOrChat(t *testing.T) {

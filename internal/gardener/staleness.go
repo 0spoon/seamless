@@ -2,6 +2,7 @@ package gardener
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -26,9 +27,18 @@ func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{})
 	if len(stale) == 0 {
 		return 0, nil
 	}
-	referenced, err := s.referencedNames(ctx)
+	referenced, complete, err := s.referencedNames(ctx)
 	if err != nil {
 		return 0, err
+	}
+	if !complete {
+		// Archiving keys off a name being ABSENT from the protection set, so an
+		// incomplete scan cannot tell "nothing links here" from "the body that
+		// links here was unreadable" -- and proposing on that basis is how a
+		// live, referenced memory gets archived. Fail the pass instead: the
+		// unreadable bodies are logged above, and RunOnce reports staleness as
+		// failed rather than as a clean zero.
+		return 0, errors.New("protection set incomplete: some memory bodies were unreadable, so a name's absence no longer proves it is unreferenced")
 	}
 
 	created := 0

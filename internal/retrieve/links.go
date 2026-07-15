@@ -41,7 +41,15 @@ func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[str
 		for _, name := range core.WikiLinks(full.Body) {
 			nb, ok, err := s.resolveLinkedMemory(ctx, project, name)
 			if err != nil {
-				return nil, err
+				// Link expansion is a bonus over results already fused from FTS
+				// and cosine, and a failed neighbor lookup does not make those
+				// wrong. Abandon the bonus and keep the recall: the contract is
+				// already that no body reader means no links and no error, so a
+				// lookup blip must not be the one path that fails the caller.
+				// Stop rather than continue -- if the store is unhappy, the next
+				// lookup is unlikely to differ and would only repeat the log.
+				s.logger.Warn("retrieve.expandLinks: resolve link; skipping link expansion", "name", name, "error", err)
+				return neighbors, nil
 			}
 			if !ok {
 				continue
