@@ -886,14 +886,17 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .req-scope:hover { border-color: var(--border-strong); }
 .req-scope:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .req-card.is-busy .field, .req-card.is-busy .btn, .req-card.is-busy .req-scope { opacity: .6; pointer-events: none; }
+.req-note { color: var(--muted); font-size: var(--text-sm); }
+@media (max-width: 900px) { .req-note { display: none; } }
 .notice { background: var(--brand-soft); color: var(--brand); padding: 9px 12px; border-radius: var(--radius-sm); font-size: var(--text-sm); margin-bottom: 16px; }
 
-/* --- Gardener: split request + plan-grouped review ------------------------- */
-/* Two side-by-side request cards (ask + split); stacks on narrow viewports. */
-.req-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.req-grid .req-card { margin-bottom: 0; }
-@media (max-width: 900px) { .req-grid { grid-template-columns: 1fr; } }
+/* The split follow-up: shown when a request read like a split but no source
+   project was matched, so the owner picks one instead of retyping. */
+.req-followup { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 12px; border-top: 1px dashed var(--border); }
+.followup-lbl { color: var(--ink); font-size: var(--text-sm); margin-right: auto; }
+.req-followup .req-scope { margin-right: 0; }
 
+/* --- Gardener: plan-grouped review ------------------------------------------ */
 /* A plan batch (a split's setup + its reproject cards) reviewed as a unit. */
 .plan-group { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 14px; margin-bottom: 20px; background: var(--surface-2); }
 .plan-group .plan-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }

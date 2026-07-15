@@ -165,6 +165,7 @@ func TestRequest_RecognizesSplitAndRoutes(t *testing.T) {
 	res, err := g.Request(ctx, "split arctop-app into arctop-ios and arctop-android", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, "arctop-app", res.SplitSource, "the source project is recognized and returned")
+	require.True(t, res.SplitIntent, "a recognized split is flagged structurally")
 	require.NotEmpty(t, res.Guidance)
 	require.Contains(t, res.Guidance, "gardener_split", "guidance routes to the split tool")
 	require.Equal(t, 0, res.Total, "routing a split creates no proposals itself")
@@ -181,6 +182,7 @@ func TestRequest_SplitUnknownSourceGivesGuidance(t *testing.T) {
 	res, err := g.Request(ctx, "split the ghost project apart", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Empty(t, res.SplitSource, "an unknown source is not routed")
+	require.True(t, res.SplitIntent, "split intent is flagged even without a known source")
 	require.Contains(t, res.Guidance, "not a known project")
 }
 

@@ -121,9 +121,10 @@ type gardenerData struct {
 	CanAct     bool           `json:"-"`
 	CanRequest bool           `json:"canRequest"` // an LLM chat client is configured
 	Projects   []projectOpt   `json:"projects,omitempty"`
-	Scope      string         `json:"scope,omitempty"`  // selected request scope (project slug)
-	Notice     string         `json:"notice,omitempty"` // positive flash
-	Error      string         `json:"error,omitempty"`  // failure flash
+	Scope      string         `json:"scope,omitempty"`    // selected request scope (project slug)
+	SplitReq   string         `json:"splitReq,omitempty"` // split request awaiting a source project (renders the picker follow-up)
+	Notice     string         `json:"notice,omitempty"`   // positive flash
+	Error      string         `json:"error,omitempty"`    // failure flash
 }
 
 func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
@@ -148,6 +149,7 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 			CanRequest: s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
 			Projects:   s.projectOptions(ctx),
 			Scope:      r.URL.Query().Get("project"),
+			SplitReq:   r.URL.Query().Get("split"),
 			Notice:     r.URL.Query().Get("notice"),
 			Error:      r.URL.Query().Get("error"),
 		},
@@ -384,19 +386,30 @@ func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, err.Error())
 		return
 	}
-	// A recognized split routes the owner to the "Split a project" box rather than
-	// creating loose proposals -- splitting needs a structured source project.
+	// A recognized split of a known project chains straight into split planning:
+	// both steps only ever create reviewable proposals, so there is nothing to
+	// confirm in between and no reason to make the owner retype the request.
 	if res.SplitSource != "" {
-		redirectNotice(w, r, fmt.Sprintf("Recognized a split of %q -- use the \"Split a project\" box below (choose %s) to plan it.", res.SplitSource, res.SplitSource))
+		sres, err := s.cfg.Gardener.Split(r.Context(), res.SplitSource, text)
+		if err != nil {
+			s.logger.Warn("console: gardener request split", "source", res.SplitSource, "error", err)
+			redirectFlash(w, r, err.Error())
+			return
+		}
+		if sres.Total == 0 {
+			redirectNotice(w, r, fmt.Sprintf("Recognized a split of %s, but no proposals matched -- try naming the child projects.", res.SplitSource))
+			return
+		}
+		redirectNotice(w, r, fmt.Sprintf("Recognized a split of %s: %d proposal(s) below.", res.SplitSource, sres.Total))
+		return
+	}
+	// Split intent without a known source: bounce the request text back so the
+	// page renders the inline project picker follow-up under the ask box.
+	if res.SplitIntent {
+		http.Redirect(w, r, "/console/gardener?split="+url.QueryEscape(text), http.StatusSeeOther)
 		return
 	}
 	if res.Total == 0 {
-		// Guidance (e.g. a split intent whose source could not be matched) is more
-		// useful than a generic "nothing matched".
-		if res.Guidance != "" {
-			redirectNotice(w, r, res.Guidance)
-			return
-		}
 		redirectNotice(w, r, "No proposals matched that request -- try rephrasing.")
 		return
 	}
