@@ -126,6 +126,96 @@ func TestClaimTask_ExpiredLeaseReclaimable(t *testing.T) {
 	require.Equal(t, "sessB", res.Task.ClaimedBy)
 }
 
+// TestClaimTask_ExactLeaseBoundaryIsNotLive pins the expiry boundary to
+// core.Task.ClaimLive, which uses LeaseExpiresAt.After(now): a lease expiring at
+// exactly now is already dead, so the task is claimable at that instant (and
+// UpdateTask's holder-lock lets a non-holder in at the same instant, so ClaimTask
+// must not disagree).
+func TestClaimTask_ExactLeaseBoundaryIsNotLive(t *testing.T) {
+	db := newTaskDB(t)
+	id := addTask(t, db, "demo", "A", 1)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	first, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now)
+	require.NoError(t, err)
+	expiry := *first.Task.LeaseExpiresAt
+
+	// One nanosecond before expiry the claim is still live and unstealable.
+	require.True(t, first.Task.ClaimLive(expiry.Add(-time.Nanosecond)))
+	_, err = ClaimTask(context.Background(), db, id, "sessB", time.Minute, expiry.Add(-time.Nanosecond))
+	require.ErrorIs(t, err, ErrTaskClaimConflict, "a lease is live right up to its expiry instant")
+
+	// At exactly the expiry instant the claim is dead, so sessB takes over.
+	require.False(t, first.Task.ClaimLive(expiry), "ClaimLive uses After: an equal lease is not live")
+	res, err := ClaimTask(context.Background(), db, id, "sessB", time.Minute, expiry)
+	require.NoError(t, err, "a lease expiring exactly at now must be claimable, matching ClaimLive")
+	require.True(t, res.Reclaimed)
+	require.Equal(t, "sessA", res.PriorHolder)
+	require.Equal(t, "sessB", res.Task.ClaimedBy)
+}
+
+// TestClaimTask_ClaimlessInProgressIsClaimable is the regression for a task
+// pushed straight to in_progress with no claim (`seam task start <id>`, MCP
+// tasks_update status=in_progress): UpdateTask patches the status without
+// stamping claimed_by/lease_expires_at. Before the fix no branch of ClaimTask
+// matched such a row -- not open, not held by the claimer, no expired lease -- so
+// it was permanently unclaimable by anyone until someone reopened it, even though
+// core.Task.ClaimLive (and therefore UpdateTask's holder-lock) already treated it
+// as unheld.
+func TestClaimTask_ClaimlessInProgressIsClaimable(t *testing.T) {
+	db := newTaskDB(t)
+	id := addTask(t, db, "demo", "A", 1)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	// The owner starts the task with no session identity, exactly as `seam task
+	// start` does: status moves to in_progress, claim fields stay empty.
+	started, err := UpdateTask(context.Background(), db, id,
+		TaskPatch{Status: statusPtr(core.TaskInProgress)}, "", now)
+	require.NoError(t, err)
+	require.Equal(t, core.TaskInProgress, started.Status)
+	require.Empty(t, started.ClaimedBy, "the owner start path stamps no claim")
+	require.Nil(t, started.LeaseExpiresAt)
+	require.False(t, started.ClaimLive(now), "nobody holds a claimless in_progress task")
+
+	res, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now.Add(time.Second))
+	require.NoError(t, err, "a claimless in_progress task must be claimable")
+	require.Equal(t, "sessA", res.Task.ClaimedBy)
+	require.Equal(t, core.TaskInProgress, res.Task.Status)
+	require.NotNil(t, res.Task.LeaseExpiresAt)
+	require.True(t, res.Task.ClaimLive(now.Add(time.Second)), "the claimer ends up the live holder")
+	require.False(t, res.Reclaimed, "taking a task nobody held is not a lease steal")
+	require.Empty(t, res.PriorHolder)
+
+	// The fresh claim is an ordinary live claim: nobody else can take it.
+	_, err = ClaimTask(context.Background(), db, id, "sessB", time.Minute, now.Add(2*time.Second))
+	require.ErrorIs(t, err, ErrTaskClaimConflict)
+}
+
+// TestClaimTask_LiveClaimStaysUnstealable is the invariant the claimless-row fix
+// must not weaken: relaxing branch (c) to "no live claim" must still refuse a row
+// another session genuinely holds, whatever the claimer does.
+func TestClaimTask_LiveClaimStaysUnstealable(t *testing.T) {
+	db := newTaskDB(t)
+	id := addTask(t, db, "demo", "A", 1)
+	now := time.Date(2026, 7, 11, 9, 0, 0, 0, time.UTC)
+
+	held, err := ClaimTask(context.Background(), db, id, "sessA", time.Minute, now)
+	require.NoError(t, err)
+	require.True(t, held.Task.ClaimLive(now))
+
+	// A non-holder cannot claim it, and a repeated attempt does not wear it down.
+	for _, at := range []time.Time{now, now.Add(time.Second), now.Add(59 * time.Second)} {
+		_, err = ClaimTask(context.Background(), db, id, "sessB", time.Minute, at)
+		require.ErrorIs(t, err, ErrTaskClaimConflict, "a live claim is never stealable")
+	}
+
+	// The holder's claim is untouched: same session, same lease.
+	got, err := TaskByID(context.Background(), db, id)
+	require.NoError(t, err)
+	require.Equal(t, "sessA", got.ClaimedBy)
+	require.Equal(t, *held.Task.LeaseExpiresAt, *got.LeaseExpiresAt, "a failed claim must not extend the lease")
+}
+
 func TestClaimTask_BlockedTaskNotClaimable(t *testing.T) {
 	db := newTaskDB(t)
 	a := addTask(t, db, "demo", "A", 1)
