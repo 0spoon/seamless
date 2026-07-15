@@ -116,10 +116,18 @@ type PassResult struct {
 	Archives   int `json:"archives"`
 	Digests    int `json:"digests"`
 	StalePlans int `json:"stalePlans"`
+	// Failed names the passes that errored, in run order. A failing pass leaves
+	// its count at 0, which is shaped exactly like "nothing to propose"; this is
+	// the only thing that tells the two apart. Read it before trusting a zero.
+	Failed []string `json:"failed,omitempty"`
 }
 
 // Total is the number of proposals created across all passes.
 func (r PassResult) Total() int { return r.Merges + r.Archives + r.Digests + r.StalePlans }
+
+// OK reports whether every pass ran to completion. A zero Total means "nothing
+// to propose" only when OK is true.
+func (r PassResult) OK() bool { return len(r.Failed) == 0 }
 
 // RunOnce refreshes retrieval stats, then runs all three propose-only passes and
 // returns what each created. A pass that fails is logged and skipped; a single
@@ -147,28 +155,29 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	}
 
 	var res PassResult
-	if n, err := s.proposeMerges(ctx, existing); err != nil {
-		s.logger.Warn("gardener: dedup pass", "error", err)
-	} else {
-		res.Merges = n
+	// run records a failing pass by name instead of letting its zero count pass
+	// for "nothing to propose".
+	run := func(name string, pass func(context.Context, map[string]struct{}) (int, error)) int {
+		n, err := pass(ctx, existing)
+		if err != nil {
+			s.logger.Warn("gardener: "+name+" pass", "error", err)
+			res.Failed = append(res.Failed, name)
+			return 0
+		}
+		return n
 	}
-	if n, err := s.proposeArchives(ctx, existing); err != nil {
-		s.logger.Warn("gardener: staleness pass", "error", err)
-	} else {
-		res.Archives = n
-	}
-	if n, err := s.proposeDigests(ctx, existing); err != nil {
-		s.logger.Warn("gardener: digest pass", "error", err)
-	} else {
-		res.Digests = n
-	}
-	if n, err := s.proposeStalePlans(ctx, existing); err != nil {
-		s.logger.Warn("gardener: stale-plan pass", "error", err)
-	} else {
-		res.StalePlans = n
-	}
+	res.Merges = run("dedup", s.proposeMerges)
+	res.Archives = run("staleness", s.proposeArchives)
+	res.Digests = run("digest", s.proposeDigests)
+	res.StalePlans = run("stale-plan", s.proposeStalePlans)
 
-	if res.Total() > 0 {
+	switch {
+	case !res.OK():
+		// Every failure was warned above with its cause; this says how much of
+		// the run's output to trust, which no single pass warning can convey.
+		s.logger.Warn("gardener pass incomplete", "failed", res.Failed, "merges", res.Merges,
+			"archives", res.Archives, "digests", res.Digests, "stale_plans", res.StalePlans)
+	case res.Total() > 0:
 		s.logger.Info("gardener pass complete", "merges", res.Merges, "archives", res.Archives,
 			"digests", res.Digests, "stale_plans", res.StalePlans)
 	}
