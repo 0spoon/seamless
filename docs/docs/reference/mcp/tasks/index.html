@@ -351,7 +351,7 @@ either tool to see that plan's steps instead.</p>
 </table>
 </div>
 <h2 id="tasks_claim">tasks_claim</h2>
-<p>Atomically claim a task for the current session, moving it to in_progress with a lease. Fails if another live claim already holds it. Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims.</p>
+<p>Atomically claim a task for the current session, moving it to in_progress with a lease. A refused claim names its cause: held by another live claim ('task already claimed'), waiting on unfinished dependencies ('task blocked', naming the blockers -- finish those first), or already done/dropped ('task closed'). Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims.</p>
 <div class="table-wrap">
 <table>
 <thead>

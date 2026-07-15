@@ -219,7 +219,7 @@ func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (
 
 func tasksClaimTool() mcp.Tool {
 	return mcp.NewTool("tasks_claim",
-		mcp.WithDescription("Atomically claim a task for the current session, moving it to in_progress with a lease. Fails if another live claim already holds it. Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims."),
+		mcp.WithDescription("Atomically claim a task for the current session, moving it to in_progress with a lease. A refused claim names its cause: held by another live claim ('task already claimed'), waiting on unfinished dependencies ('task blocked', naming the blockers -- finish those first), or already done/dropped ('task closed'). Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id to claim")),
 		// No Min/Max: the handler owns this parameter's range, because its upper
 		// bound is an int64-overflow hazard in the seconds->Duration conversion
