@@ -33,7 +33,7 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	name := argString(req, "name")
 	kindStr := argString(req, "kind")
 	desc := argString(req, "description")
-	body := argBody(req)
+	body := argRaw(req, "body")
 
 	if name == "" || kindStr == "" || desc == "" || strings.TrimSpace(body) == "" {
 		return errResult("memory_write", errors.New("name, kind, description, and body are required"))
@@ -177,7 +177,7 @@ func memoryAppendTool() mcp.Tool {
 
 func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	name := argString(req, "name")
-	content := argBody(req)
+	content := argRaw(req, "body")
 	if name == "" || strings.TrimSpace(content) == "" {
 		return errResult("memory_append", errors.New("name and a non-empty body are required (body aliases: content, text)"))
 	}

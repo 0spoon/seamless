@@ -296,9 +296,9 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 <tr>
 <td><code>metrics</code></td>
-<td>string</td>
+<td>object</td>
 <td>no</td>
-<td>optional JSON object of structured metrics, e.g. {&quot;hz&quot;:497,&quot;err_pct&quot;:0.2}</td>
+<td>optional object of structured metrics, e.g. {&quot;hz&quot;:497,&quot;err_pct&quot;:0.2} (a JSON-object string is also accepted)</td>
 </tr>
 <tr>
 <td><code>outcome</code></td>
@@ -342,9 +342,9 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 <tr>
 <td><code>metrics_filter</code></td>
-<td>string</td>
+<td>object</td>
 <td>no</td>
-<td>optional JSON object; trials whose metrics equal every given key match, e.g. {&quot;hz&quot;:497}</td>
+<td>optional object; trials whose metrics equal every given key match, e.g. {&quot;hz&quot;:497} (a JSON-object string is also accepted)</td>
 </tr>
 <tr>
 <td><code>outcome</code></td>
