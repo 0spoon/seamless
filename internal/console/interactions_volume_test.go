@@ -1,6 +1,9 @@
 package console
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -19,6 +22,34 @@ func TestVolCategory(t *testing.T) {
 	require.Equal(t, "plan", volCategory("plan.approved"))
 	require.Equal(t, "plan", volCategory("subagent.captured"))
 	require.Equal(t, "", volCategory("memory.written"))
+}
+
+// An unparseable ?volume= used to fall back to 0, which is not a default but a
+// distinct, wider query -- the client asked for a bounded window and silently got
+// all of history back, labelled Window: 0. Only a value that cannot mean a window
+// is rejected; 0 itself is the legitimate "all time" option the UI offers.
+func TestInteractionsVolumeWindowParsing(t *testing.T) {
+	mux := newTestMux(t)
+
+	get := func(vs string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/console/interactions?volume="+vs, nil)
+		req.Header.Set("Authorization", "Bearer "+testKey)
+		req.Header.Set("Accept", "application/json")
+		return do(mux, req)
+	}
+
+	for _, bad := range []string{"abc", "3600x", "1.5", "-60"} {
+		rr := get(bad)
+		require.Equal(t, http.StatusBadRequest, rr.Code, "volume=%s must not be read as a window", bad)
+	}
+
+	// 0 = all time, and a normal window: both still answered.
+	for _, ok := range []string{"0", "3600"} {
+		rr := get(ok)
+		require.Equal(t, http.StatusOK, rr.Code, "volume=%s is a valid window", ok)
+		var data interactionsData
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &data))
+	}
 }
 
 func TestBuildVolume(t *testing.T) {

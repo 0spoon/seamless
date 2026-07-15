@@ -284,7 +284,15 @@ func (s *Service) interactions(w http.ResponseWriter, r *http.Request) {
 	// window changes, so skip the heavier row query. Always JSON (a browser
 	// hitting this URL falls through to the full page).
 	if vs := q.Get("volume"); vs != "" && wantsJSON(r) {
-		secs, _ := strconv.Atoi(vs)
+		// 0 is the legitimate "all time" window, so only an unparseable or
+		// negative value is rejected. Falling back to 0 would answer a request
+		// the client never made -- the widest possible query -- and echo back
+		// Window: 0 as though that had been asked for.
+		secs, err := strconv.Atoi(vs)
+		if err != nil || secs < 0 {
+			s.badRequest(w, r, "volume must be a non-negative number of seconds (0 = all time)")
+			return
+		}
 		vol, err := s.interactionVolume(ctx, "", secs)
 		if err != nil {
 			s.serverError(w, r, err)
