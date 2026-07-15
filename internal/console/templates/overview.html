@@ -51,7 +51,7 @@
           <thead><tr><th>Project</th><th>Reach</th><th class="num">Sessions</th><th class="num">Open</th><th class="num">Memories</th><th>Active</th></tr></thead>
           <tbody>
             {{range .Projects}}
-            <tr class="row-link" data-href="/console/projects/{{.Slug}}">
+            <tr id="p-{{.Slug}}" class="row-link" data-href="/console/projects/{{.Slug}}">
               <td><a class="mono" href="/console/projects/{{.Slug}}">{{.Slug}}</a>{{if .Live}} <span class="work-dot"><span class="live-dot"></span>{{.Live}}</span>{{end}}</td>
               <td>{{if .HasReach}}<span style="color:var(--brand);font-weight:700">{{.ReachRate}}%</span>{{else}}<span class="faint">&mdash;</span>{{end}}</td>
               <td class="num">{{.Sessions}}</td>
@@ -74,7 +74,7 @@
           <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
           <tbody>
             {{range .Recent}}
-            <tr class="row-link" data-href="/console/events/{{.ID}}">
+            <tr id="{{.ID}}" class="row-link" data-href="/console/events/{{.ID}}">
               <td class="muted" title="{{ts .When}}">{{ago .When}}</td>
               <td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
               <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}">{{.Project}}</a>{{else}}&mdash;{{end}}</td>

@@ -37,7 +37,7 @@
         {{range .Groups}}
         <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}global{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></td></tr>
         {{range .Notes}}
-        <tr class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
           <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{copyBtn .Title}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
           <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
           <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>

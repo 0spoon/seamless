@@ -24,7 +24,7 @@
       <thead><tr><th>Task</th><th>Project</th><th>Deps</th><th>Age</th></tr></thead>
       <tbody>
         {{range .Ready}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted">{{if .Deps}}{{.Deps}}{{else}}&mdash;{{end}}</td>
@@ -45,7 +45,7 @@
       <thead><tr><th>Task</th><th>Project</th><th>Age</th></tr></thead>
       <tbody>
         {{range .InProgress}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="badge accent">active</span> <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td class="muted" title="{{ts .Created}}">{{ago .Created}}</td>
@@ -65,7 +65,7 @@
       <thead><tr><th>Task</th><th>Project</th><th>Blocked by</th></tr></thead>
       <tbody>
         {{range .Blocked}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
           <td><span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}} <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
           <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
           <td>
@@ -88,7 +88,7 @@
         <thead><tr><th>Task</th><th>Project</th><th>Status</th><th>Closed</th></tr></thead>
         <tbody>
           {{range .Closed}}
-          <tr class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
+          <tr id="{{.ID}}" class="row-link" data-href="/console/tasks/{{.ID}}" data-peek>
             <td class="muted"><a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a></td>
             <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</td>
             <td>{{if eq .Status "done"}}<span class="badge ok">done</span>{{else}}<span class="badge">dropped</span>{{end}}</td>

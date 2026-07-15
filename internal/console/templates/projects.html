@@ -43,7 +43,7 @@
 {{end}}
 
 {{define "projrow"}}
-<div class="prow{{if not .Global}} row-link{{end}}{{if .Child}} child{{end}}{{if .Retired}} retired{{end}}"{{if not .Global}} data-href="/console/projects/{{.Slug}}"{{end}}>
+<div{{if not .Global}} id="p-{{.Slug}}"{{end}} class="prow{{if not .Global}} row-link{{end}}{{if .Child}} child{{end}}{{if .Retired}} retired{{end}}"{{if not .Global}} data-href="/console/projects/{{.Slug}}"{{end}}>
   <div class="pname">
     <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
     <div class="txt">

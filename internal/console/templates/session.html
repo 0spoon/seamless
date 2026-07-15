@@ -19,7 +19,11 @@
       {{if .Findings}}<div class="prose">{{.FindingsHTML}}</div>{{else}}<div class="empty">No findings recorded yet</div>{{end}}
     </div>
 
-    <div class="card">
+    <!-- data-live-skip: the volume histogram is JS-drawn, and the kind filter +
+         row expand/clamp state are client-owned -- a live morph would clobber
+         all three. This card stays a page-load snapshot; the rest of the page
+         (findings, activity counts, claims) refreshes live. -->
+    <div class="card" data-live-skip>
       <h2>Timeline <span class="h2-meta">{{len .Interactions}} interaction{{if ne (len .Interactions) 1}}s{{end}}</span></h2>
       {{if .Interactions}}
       <div class="ix-volume empty" id="ix-svol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
@@ -87,7 +91,7 @@
       {{if .ClaimedTasks}}
       <div style="display:flex;flex-direction:column;gap:12px">
         {{range .ClaimedTasks}}
-        <div>
+        <div id="{{.ID}}">
           <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a>
           <div class="muted" style="font-size:var(--text-2xs);margin-top:3px">{{if .PlanSlug}}plan:{{.PlanSlug}}{{end}}{{if and .PlanSlug .LeaseLeft}} &middot; {{end}}{{if .LeaseLeft}}<span class="claim-sm">{{icon "timer"}}{{.LeaseLeft}} left</span>{{end}}</div>
         </div>
@@ -100,7 +104,7 @@
       <h2>Memories written <span class="h2-meta">{{len .Memories}}</span></h2>
       {{if .Memories}}
       <div class="rail-list">
-        {{range .Memories}}<div class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="kind">{{.Kind}}</span></div>{{end}}
+        {{range .Memories}}<div id="{{.ID}}" class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="kind">{{.Kind}}</span></div>{{end}}
       </div>
       {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">Nothing durable yet &mdash; findings are harvested on session end.</div>{{end}}
     </div>
@@ -111,7 +115,6 @@
 
 {{define "scripts"}}
 <script>
-window.SEAM_NO_LIVE_REFRESH = true; // JS-built volume/feed islands; a morph would fight them
 (function () {
   /* The shared IX module auto-formats the server-rendered request/response bodies
      (enhance) on load; here we draw the session's volume histogram and wire the

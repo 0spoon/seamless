@@ -57,7 +57,7 @@
     <thead><tr><th>Plan</th><th>Status</th><th>Project</th><th>Tasks</th><th>Iter</th><th>Agents</th><th>Updated</th></tr></thead>
     <tbody>
       {{range .}}
-      <tr class="row-link" data-href="/console/plans/{{.Slug}}" data-peek>
+      <tr id="plan-{{.Slug}}" class="row-link" data-href="/console/plans/{{.Slug}}" data-peek>
         <td class="mem-name"><strong><a href="/console/plans/{{.Slug}}" data-peek>{{.Title}}</a></strong><div class="desc mono">plan:{{.Slug}} &middot; {{if eq .Source "capture"}}{{.Basename}}.md{{else}}composed{{end}}</div></td>
         <td>{{if .Status}}<span class="badge {{planTone .Status}}">{{.Status}}</span>{{else}}<span class="muted">&mdash;</span>{{end}}</td>
         <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<span class="muted">&mdash;</span>{{end}}</td>

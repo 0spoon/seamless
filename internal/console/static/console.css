@@ -499,6 +499,17 @@ details > summary { font-family: var(--font-display); }
 /* The wordmark dot pulses while the SSE stream is connected. */
 .brand .dot.on { animation: seam-pulse 2s var(--ease-in-out) infinite; }
 
+/* Enter animation for elements the live in-place refresh inserts (the SSE
+   morph in layout.html tags them .live-in and strips the class after play).
+   Compositor-only (opacity + transform), so a burst of rows cannot thrash
+   layout; prefers-reduced-motion zeroes it via the global rule above. */
+.live-in { animation: live-in var(--dur-med) var(--ease-out); }
+@keyframes live-in { from { opacity: 0; transform: translateY(-3px); } }
+
+/* Sidebar count pulse when a live refresh changes a number. */
+.nav .count.bump { animation: live-bump 450ms var(--ease-out); }
+@keyframes live-bump { 30% { transform: scale(1.2); color: var(--pop-strong); } }
+
 /* Live-activity pill (revealed by the SSE client when new events arrive). */
 #live-pill {
   position: fixed;
