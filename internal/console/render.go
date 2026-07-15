@@ -20,6 +20,9 @@ var consoleCSS []byte
 //go:embed static/interactions.js
 var interactionsJS []byte
 
+//go:embed static/favicon.svg
+var faviconSVG []byte
+
 // pageNames are the page templates; each is parsed together with the shared
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.

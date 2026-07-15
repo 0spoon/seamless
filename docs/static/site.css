@@ -389,7 +389,9 @@ body::before {
 
 @media (max-width: 900px) {
   .hero { padding: 56px 0 48px; }
-  .hero .wrap { grid-template-columns: 1fr; gap: 40px; }
+  /* minmax(0, 1fr), not 1fr: a bare 1fr floors at min-content, which the
+     nowrap install command pins wider than a phone viewport. */
+  .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 40px; }
 }
 
 /* ==========================================================================
@@ -662,7 +664,7 @@ body::before {
    ========================================================================== */
 .qs-steps { display: flex; flex-direction: column; gap: 18px; max-width: 760px; }
 .qs {
-  display: grid; grid-template-columns: 44px 1fr; gap: 18px;
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 18px;
   align-items: start;
 }
 .qs .n {
