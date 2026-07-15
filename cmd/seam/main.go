@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strings"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -144,22 +143,6 @@ func firstText(res *mcp.CallToolResult) string {
 		}
 	}
 	return ""
-}
-
-// requireFlagsFirst rejects leftover arguments that look like flags. Go's flag
-// package stops parsing at the first positional, so "seam capture URL --project p"
-// binds the URL and drops --project on the floor -- the command then succeeds
-// while silently ignoring what the caller asked for (the note lands in the
-// default scope, not the project the dropped flag named).
-// No positional this CLI takes can start with "-": URLs are scheme-validated,
-// task ids are Crockford base32, and plan slugs carry a "cc-plan-" prefix.
-func requireFlagsFirst(fs *flag.FlagSet, usage string) error {
-	for _, a := range fs.Args() {
-		if strings.HasPrefix(a, "-") {
-			return fmt.Errorf("%s: flags must precede the positional argument\n%s", a, usage)
-		}
-	}
-	return nil
 }
 
 func str(v any) string {
