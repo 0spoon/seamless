@@ -111,6 +111,7 @@
 
 {{define "scripts"}}
 <script>
+window.SEAM_NO_LIVE_REFRESH = true; // JS-built volume/feed islands; a morph would fight them
 (function () {
   /* The shared IX module auto-formats the server-rendered request/response bodies
      (enhance) on load; here we draw the session's volume histogram and wire the

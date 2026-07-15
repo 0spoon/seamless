@@ -208,6 +208,7 @@
 
 {{define "scripts"}}
 <script>
+window.SEAM_NO_LIVE_REFRESH = true; // client-driven tabs + JS-built volume/feed islands
 (function () {
   /* Project-detail tabs: server renders every panel (the active one via ?tab=),
      JS switches them client-side without a reload and syncs ?tab= for deep-links.

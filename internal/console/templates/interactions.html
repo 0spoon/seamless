@@ -53,6 +53,7 @@
 
 {{define "scripts"}}
 <script>
+window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns its own updates
 (function () {
   var feed = document.getElementById('ix-feed');
   var tabsEl = document.getElementById('ix-tabs');
