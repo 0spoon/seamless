@@ -13,8 +13,8 @@ import (
 
 func gardenerProposalsTool() mcp.Tool {
 	return mcp.NewTool("gardener_proposals",
-		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, or set up a project split). Review, then apply or dismiss each with gardener_apply. Read-only."),
-		mcp.WithString("kind", mcp.Enum("merge", "archive", "digest", "consolidate", "reproject", "split"), mcp.Description("filter by proposal kind (default: all pending)")),
+		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, set up a project split, or abandon a never-approved captured plan). Review, then apply or dismiss each with gardener_apply. Read-only."),
+		mcp.WithString("kind", enumOf(store.ProposalKinds), mcp.Description("filter by proposal kind (default: all pending)")),
 	)
 }
 

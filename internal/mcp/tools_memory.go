@@ -21,7 +21,7 @@ func memoryWriteTool() mcp.Tool {
 	return mcp.NewTool("memory_write",
 		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
-		mcp.WithString("kind", mcp.Required(), mcp.Enum("constraint", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage"), mcp.Description("memory kind")),
+		mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds), mcp.Description("memory kind")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to deliberately create a global (cross-project) memory. With no session and no explicit project the write is rejected as ambiguous.")),

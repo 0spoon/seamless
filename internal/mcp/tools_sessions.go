@@ -19,7 +19,7 @@ func sessionStartTool() mcp.Tool {
 		mcp.WithDescription("Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again."),
 		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
 		mcp.WithString("cwd", mcp.Description("Absolute working directory; resolved to a project via the repo map")),
-		mcp.WithString("source", mcp.Description("startup|resume|clear|compact|explicit")),
+		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default startup)")),
 	)
 }
 

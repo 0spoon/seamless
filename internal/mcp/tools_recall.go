@@ -14,7 +14,7 @@ func recallTool() mcp.Tool {
 	return mcp.NewTool("recall",
 		mcp.WithDescription("Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("what you are looking for")),
-		mcp.WithString("scope", mcp.Enum("all", "memories", "notes"), mcp.Description("what to search (default all)")),
+		mcp.WithString("scope", enumOf(retrieve.RecallScopes), mcp.Description("what to search (default all)")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("maximum results (default 10)")),
 	)
