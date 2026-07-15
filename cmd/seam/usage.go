@@ -1,7 +1,6 @@
 package main
 
-// seam usage -- roll-up from the usage_summary MCP tool. (Not to be confused
-// with usage() in main.go, which prints the CLI help text.)
+// seam usage -- roll-up from the usage_summary MCP tool.
 
 import (
 	"context"

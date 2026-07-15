@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seam CLI — Seamless docs</title>
-<meta name="description" content="Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flags-before-positionals rule that governs all of them.">
+<meta name="description" content="Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>seam CLI</h1>
-  <p class="lede">Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flags-before-positionals rule that governs all of them.</p>
+  <p class="lede">Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.</p>
   <p><code>seam</code> is the headless CLI. It does no work itself: it loads the same
 configuration the daemon does, then talks to a running <code>seamlessd</code> — over MCP at
 <code>/api/mcp</code> for most commands, and over the console's JSON endpoints for the
@@ -166,32 +166,28 @@ approving a plan). Both paths authenticate with the static bearer key from
 is down, every subcommand below fails at the connection.</p>
 <p>The target address is derived from the configured bind address, with a bind-all
 host (<code>0.0.0.0</code>, <code>::</code>, or empty) mapped to loopback.</p>
-<h2 id="flags-go-before-positionals">Flags go before positionals</h2>
-<p>Go's <code>flag</code> package stops parsing at the first positional argument. Everything
-after it is left as an argument, not a flag. <code>seam</code> inherits this, so:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
-</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force is ignored, silently</span>
-</span></span></code></pre><p>There is no error and no warning — the second form releases the task through the
-normal holder-checked path and the override never happens.</p>
-<p><code>seam help</code> prints the working order and says so up front, so the help is a
-reliable guide. It was not always: the usage text used to print the
-trailing-flag form for exactly the commands where it does not work, which is
-worth knowing if you are reading an older build's <code>--help</code>.</p>
-<p>The commands where this bites, written the way that actually works:</p>
+<h2 id="flags-and-positionals">Flags and positionals</h2>
+<p>The agent-loop commands — <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> — take flags
+on either side of their positionals. These two lines are the same line:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
-</span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD
+</span></span><span class="line"><span class="cl">seam capture https://example.com/page --project myproj
+</span></span></code></pre><p>An unknown flag is rejected rather than absorbed into the positionals, so a typo
+is an error instead of a silently different command: <code>seam recall foo --projct p</code>
+reports <code>flag provided but not defined: -projct</code>. A positional that starts with
+<code>-</code> needs the <code>--</code> terminator (<code>seam recall -- -foo</code>).</p>
+<p>Everywhere else, Go's <code>flag</code> package stops parsing at the first positional, so a
+trailing flag cannot bind. Rather than ignore it, <code>seam</code> rejects the line:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
+</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># error: flags must precede the positional argument</span>
+</span></span></code></pre><p>The commands where this still bites, written the way that works:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD
 </span></span><span class="line"><span class="cl">seam task heartbeat --lease <span class="m">1800</span> 01K7ABCD
 </span></span><span class="line"><span class="cl">seam task release --force 01K7ABCD
 </span></span><span class="line"><span class="cl">seam plan check --cwd ~/repos/myproj my-plan-slug
-</span></span></code></pre><p>Two exceptions:</p>
-<ul>
-<li><strong><code>seam recall</code> parses its own arguments</strong>, so flags may appear before or
-after the query words. <code>seam recall chroma boot race --project myproj</code> works.</li>
-<li><strong><code>seam task done|start|drop|reopen</code></strong> parse no flags at all; the id is taken
-as the first argument directly.</li>
-</ul>
-<p>Commands that take only flags and no positionals (<code>prime</code>, <code>remember</code>, <code>ready</code>,
-<code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are unaffected.</p>
+</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> parse no flags at all; the id is taken as the
+first argument directly. Commands that take only flags and no positionals
+(<code>ready</code>, <code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are
+unaffected either way.</p>
 <h2 id="agent-loop">Agent loop</h2>
 <p>The four commands an agent — or you, standing in for one — uses to start a
 session, write knowledge, and search it back.</p>
@@ -218,9 +214,14 @@ memory, and names a similar existing memory when the server flags one.</p>
 <h3 id="seam_recall">seam recall</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam recall QUERY <span class="o">[</span>--scope all<span class="p">|</span>memories<span class="p">|</span>notes<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--limit N<span class="o">]</span>
 </span></span></code></pre><p>Calls <code>recall</code>, the single RRF-fused search entry point. Scope defaults to <code>all</code>
-and limit to <code>10</code>. Query words are joined with spaces, and — unlike every other
-subcommand — flags may sit anywhere in the line. Each hit prints its kind, name,
-age, source, score, and description; no matches prints <code>no results</code>.</p>
+and limit to <code>10</code>. Query words are joined with spaces, and flags may sit on
+either side of them. A query word that starts with <code>-</code> needs the <code>--</code> terminator
+(<code>seam recall -- -foo</code>), which is the only reason to reach for it. Each hit
+prints its kind, name, age, source, score, and description; no matches prints
+<code>no results</code>.</p>
+<p>An unknown flag is an error, not a search word: <code>seam recall foo --projct p</code>
+reports <code>flag provided but not defined: -projct</code> rather than quietly searching
+for the literal text <code>foo --projct p</code>.</p>
 <h3 id="seam_capture">seam capture</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
 </span></span></code></pre><p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
@@ -230,9 +231,8 @@ The server refuses to guess rather than pick a default, so a capture with
 nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass <code>--project global</code> to file the note globally
 (<code>notes/_global/</code>), or <code>--project &lt;slug&gt;</code> to name a project outright.</p>
-<p>Flags must precede the URL. Go's flag package stops parsing at the first
-positional, so the <code>--project</code> in <code>seam capture URL --project p</code> cannot bind;
-rather than ignore it, <code>seam</code> rejects the line with an error.</p>
+<p><code>--project</code> binds on either side of the URL: <code>seam capture --project p URL</code> and
+<code>seam capture URL --project p</code> are the same line.</p>
 <h2 id="tasks">Tasks</h2>
 <p>The queue side of the CLI. See <a href="../../reference/mcp/tasks/">Tasks</a> for what ready,
 blocked, and claimed mean.</p>
@@ -385,7 +385,7 @@ config or touching the network. The daemon re-validates the path anyway.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#flags-go-before-positionals">Flags go before positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
+      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
     </ul>
   </aside>
   

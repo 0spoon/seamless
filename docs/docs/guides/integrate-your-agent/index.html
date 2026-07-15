@@ -337,9 +337,11 @@ a headless client for the same daemon, authenticating with the same key:</p>
 </span></span><span class="line"><span class="cl">seam ready                                <span class="c1"># the actionable queue</span>
 </span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD     <span class="c1"># note: flags BEFORE the id</span>
 </span></span></code></pre><p>Two things to know before you script it.</p>
-<p><strong>Flags go before positionals.</strong> Go's <code>flag</code> package stops parsing at the first
-non-flag argument, and <code>seam</code>'s own usage text prints the broken order. <code>seam task release 01K7ABCD --force</code> silently ignores <code>--force</code>. There is no warning. See
-the <a href="../../reference/cli-seam/">seam CLI reference</a> for the commands where this bites.</p>
+<p><strong>Outside the agent loop, flags go before positionals.</strong> <code>prime</code>, <code>remember</code>,
+<code>recall</code>, and <code>capture</code> take flags on either side. Everywhere else Go's <code>flag</code>
+package stops parsing at the first non-flag argument, so <code>seam task release 01K7ABCD --force</code> cannot bind <code>--force</code> — rather than ignore it, <code>seam</code> rejects
+the line. See the <a href="../../reference/cli-seam/">seam CLI reference</a> for the commands
+where this bites.</p>
 <p><strong>There is no <code>seam session-end</code>.</strong> The CLI covers start, write, search, and the
 queue, but findings are harvested by the SessionEnd hook or the <code>session_end</code> MCP
 tool. An agent driving Seamless purely through <code>seam</code> starts sessions that only

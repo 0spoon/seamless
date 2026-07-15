@@ -1,6 +1,6 @@
 ---
 title: seam CLI
-description: Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flags-before-positionals rule that governs all of them.
+description: Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flag-order rules and what each one rejects.
 ---
 
 `seam` is the headless CLI. It does no work itself: it loads the same
@@ -14,43 +14,42 @@ is down, every subcommand below fails at the connection.
 The target address is derived from the configured bind address, with a bind-all
 host (`0.0.0.0`, `::`, or empty) mapped to loopback.
 
-## Flags go before positionals
+## Flags and positionals
 
-Go's `flag` package stops parsing at the first positional argument. Everything
-after it is left as an argument, not a flag. `seam` inherits this, so:
-
-```bash
-seam task release --force 01K7ABCD    # --force applies
-seam task release 01K7ABCD --force    # --force is ignored, silently
-```
-
-There is no error and no warning — the second form releases the task through the
-normal holder-checked path and the override never happens.
-
-`seam help` prints the working order and says so up front, so the help is a
-reliable guide. It was not always: the usage text used to print the
-trailing-flag form for exactly the commands where it does not work, which is
-worth knowing if you are reading an older build's `--help`.
-
-The commands where this bites, written the way that actually works:
+The agent-loop commands — `prime`, `remember`, `recall`, `capture` — take flags
+on either side of their positionals. These two lines are the same line:
 
 ```bash
 seam capture --project myproj https://example.com/page
+seam capture https://example.com/page --project myproj
+```
+
+An unknown flag is rejected rather than absorbed into the positionals, so a typo
+is an error instead of a silently different command: `seam recall foo --projct p`
+reports `flag provided but not defined: -projct`. A positional that starts with
+`-` needs the `--` terminator (`seam recall -- -foo`).
+
+Everywhere else, Go's `flag` package stops parsing at the first positional, so a
+trailing flag cannot bind. Rather than ignore it, `seam` rejects the line:
+
+```bash
+seam task release --force 01K7ABCD    # --force applies
+seam task release 01K7ABCD --force    # error: flags must precede the positional argument
+```
+
+The commands where this still bites, written the way that works:
+
+```bash
 seam task claim --lease 1800 01K7ABCD
 seam task heartbeat --lease 1800 01K7ABCD
 seam task release --force 01K7ABCD
 seam plan check --cwd ~/repos/myproj my-plan-slug
 ```
 
-Two exceptions:
-
-- **`seam recall` parses its own arguments**, so flags may appear before or
-  after the query words. `seam recall chroma boot race --project myproj` works.
-- **`seam task done|start|drop|reopen`** parse no flags at all; the id is taken
-  as the first argument directly.
-
-Commands that take only flags and no positionals (`prime`, `remember`, `ready`,
-`task list`, `task add`, `plan list`, `status`, `usage`, `doctor`) are unaffected.
+`seam task done|start|drop|reopen` parse no flags at all; the id is taken as the
+first argument directly. Commands that take only flags and no positionals
+(`ready`, `task list`, `task add`, `plan list`, `status`, `usage`, `doctor`) are
+unaffected either way.
 
 ## Agent loop
 
@@ -96,9 +95,15 @@ seam recall QUERY [--scope all|memories|notes] [--project P] [--limit N]
 ```
 
 Calls `recall`, the single RRF-fused search entry point. Scope defaults to `all`
-and limit to `10`. Query words are joined with spaces, and — unlike every other
-subcommand — flags may sit anywhere in the line. Each hit prints its kind, name,
-age, source, score, and description; no matches prints `no results`.
+and limit to `10`. Query words are joined with spaces, and flags may sit on
+either side of them. A query word that starts with `-` needs the `--` terminator
+(`seam recall -- -foo`), which is the only reason to reach for it. Each hit
+prints its kind, name, age, source, score, and description; no matches prints
+`no results`.
+
+An unknown flag is an error, not a search word: `seam recall foo --projct p`
+reports `flag provided but not defined: -projct` rather than quietly searching
+for the literal text `foo --projct p`.
 
 ### seam capture {#seam_capture}
 
@@ -114,9 +119,8 @@ nothing to infer from, or one made while ambient sessions span several projects,
 is an error naming the fix. Pass `--project global` to file the note globally
 (`notes/_global/`), or `--project <slug>` to name a project outright.
 
-Flags must precede the URL. Go's flag package stops parsing at the first
-positional, so the `--project` in `seam capture URL --project p` cannot bind;
-rather than ignore it, `seam` rejects the line with an error.
+`--project` binds on either side of the URL: `seam capture --project p URL` and
+`seam capture URL --project p` are the same line.
 
 ## Tasks
 

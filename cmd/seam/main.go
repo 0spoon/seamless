@@ -8,13 +8,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -26,19 +26,58 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		usage()
-		os.Exit(2)
+	os.Exit(dispatch(context.Background(), newEnv(), os.Args[1:]))
+}
+
+// dispatch resolves argv and returns the process exit code.
+//
+// A command in the table is parsed by it; everything else still goes to
+// legacyDispatch. The invariant that keeps the two honest while both exist: a
+// command enters the table exactly when its handler converts, so it is never
+// declared in both, and there is no window in which they can disagree.
+//
+// Exit codes are unchanged here except for --help, which was exiting 1 with
+// "error: flag: help requested" because flag.ErrHelp fell through the same funnel
+// as a real failure. B6 splits parse (2) from execute (1); today both are 1.
+func dispatch(ctx context.Context, e *env, argv []string) int {
+	if len(argv) == 0 {
+		fmt.Fprint(e.stderr, helpText())
+		return 2
 	}
-	cmd, args := os.Args[1], os.Args[2:]
+	switch argv[0] {
+	case "help", "-h", "--help":
+		fmt.Fprint(e.stdout, helpText())
+		return 0
+	}
+
+	c, _, migrated := lookup(commands(), argv)
+	if !migrated {
+		return legacyDispatch(e, argv)
+	}
+	p, err := parse(commands(), argv)
+	switch {
+	case errors.Is(err, flag.ErrHelp):
+		fmt.Fprint(e.stdout, commandHelp(*c))
+		return 0
+	case err != nil:
+		fmt.Fprintln(e.stderr, "error:", err)
+		fmt.Fprintf(e.stderr, "usage: %s\n", synopsis(*c))
+		return 1
+	}
+	if err := p.cmd.run(ctx, e, p.opts, p.pos); err != nil {
+		fmt.Fprintln(e.stderr, "error:", err)
+		return 1
+	}
+	return 0
+}
+
+// legacyDispatch runs the commands not yet in the table, preserving exactly the
+// switch main used before it. It is scaffolding: each B-track task moves a group
+// out of it, and B7 deletes what is left along with the last of the heredoc.
+func legacyDispatch(e *env, argv []string) int {
+	name, args := argv[0], argv[1:]
 	var err error
-	switch cmd {
-	case "prime":
-		err = runPrime(args)
-	case "remember":
-		err = runRemember(args)
-	case "recall":
-		err = runRecall(args)
+	switch name {
 	case "status":
 		err = runStatus(args)
 	case "sessions":
@@ -51,65 +90,20 @@ func main() {
 		err = runTask(args)
 	case "plan":
 		err = runPlan(args)
-	case "capture":
-		err = runCapture(args)
 	case "hook":
 		err = runHook(args)
 	case "doctor":
 		err = runDoctor(args)
-	case "help", "-h", "--help":
-		usage()
 	default:
-		fmt.Fprintf(os.Stderr, "unknown command %q\n\n", cmd)
-		usage()
-		os.Exit(2)
+		fmt.Fprintf(e.stderr, "unknown command %q\n\n", name)
+		fmt.Fprint(e.stderr, helpText())
+		return 2
 	}
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		os.Exit(1)
+		fmt.Fprintln(e.stderr, "error:", err)
+		return 1
 	}
-}
-
-func usage() {
-	fmt.Fprint(os.Stderr, `seam -- Seamless CLI (talks to a running seamlessd)
-
-Flags go BEFORE positional arguments, as written below. Go's flag package stops
-parsing at the first positional, so a trailing flag cannot take effect; rather
-than ignore it, seam rejects it ("seam capture URL --project p" is an error, not
-a note filed to the default scope). The one exception is recall, which parses its
-own arguments and takes flags either side of the query.
-
-agent loop:
-  seam prime [--cwd DIR] [--name NAME]         start/resume a session, print the briefing
-  seam remember --name N --kind K --description D [--body TEXT] [--project P]
-  seam recall QUERY [--scope all|memories|notes] [--project P] [--limit N]
-  seam capture [--project P] URL               capture a web page as a note
-
-tasks:
-  seam ready [--project P] [--blocked] [--plan S]   actionable queue (+ blocked tasks)
-  seam task list [--project P] [--status S] [--plan S]   list tasks (--plan lists a plan's steps)
-  seam task add --title T [--body B] [--project P] [--depends id,id] [--plan S]
-  seam task done|start|drop|reopen <id>        transition a task
-  seam task claim [--lease SECS] <id>          atomically claim a task (lease-based)
-  seam task heartbeat [--lease SECS] <id>      refresh the lease on a task you hold
-  seam task release [--force] <id>             release a task you hold (--force: owner override, any holder)
-
-captured plans (Claude Code plan mode):
-  seam plan list [--project P] [--window W]    list captured plans with status/iteration
-  seam plan show <slug>                        one plan: body, attached notes, tasks
-  seam plan check [--cwd DIR] <slug>           FRESH/STALE per note vs the repo's git history
-  seam plan approve <slug>                     escape hatch: flip to approved + create the task
-
-observability:
-  seam status                                  server health + project count
-  seam sessions [--status active|completed]    list sessions (or: seam sessions <id>)
-  seam usage                                   activity roll-up
-  seam doctor                                  reachability + key + tool-count check
-
-hooks (invoked by Claude Code, not by hand):
-  seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
-  seam hook post-tool-use|subagent-stop|permission-request  plan-mode capture (post-tool-use pre-filters locally)
-`)
+	return 0
 }
 
 // mcpBase returns the base URL (scheme://host:port) of the configured server,
@@ -180,150 +174,6 @@ func firstText(res *mcp.CallToolResult) string {
 		}
 	}
 	return ""
-}
-
-func runPrime(args []string) error {
-	fs := flag.NewFlagSet("prime", flag.ContinueOnError)
-	cwd := fs.String("cwd", "", "working directory (default: current)")
-	name := fs.String("name", "", "session name (reuse to resume)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *cwd == "" {
-		if wd, err := os.Getwd(); err == nil {
-			*cwd = wd
-		}
-	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = cli.Close() }()
-
-	out, err := callTool(ctx, cli, "session_start", map[string]any{"cwd": *cwd, "name": *name, "source": "explicit"})
-	if err != nil {
-		return err
-	}
-	fmt.Fprintf(os.Stderr, "session %v (project %q)\n", out["session_id"], str(out["project"]))
-	if b := str(out["briefing"]); b != "" {
-		fmt.Println(b)
-	} else {
-		fmt.Fprintln(os.Stderr, "(no briefing content yet)")
-	}
-	return nil
-}
-
-func runRemember(args []string) error {
-	fs := flag.NewFlagSet("remember", flag.ContinueOnError)
-	name := fs.String("name", "", "memory name (kebab-case)")
-	kind := fs.String("kind", "", "constraint|runbook|protocol|gotcha|decision|refuted|reference|stage")
-	desc := fs.String("description", "", "one-line description (<=150 chars)")
-	body := fs.String("body", "", "markdown body (default: read stdin)")
-	project := fs.String("project", "", "project slug (default: server's binding/global)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *name == "" || *kind == "" || *desc == "" {
-		return fmt.Errorf("--name, --kind, and --description are required")
-	}
-	text := *body
-	if text == "" {
-		// Report a read failure as itself; discarding it would surface as the
-		// "body is empty" guard below and send the user hunting for a pipe
-		// that was in fact there.
-		b, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("read body from stdin: %w", err)
-		}
-		text = string(b)
-	}
-	if strings.TrimSpace(text) == "" {
-		return fmt.Errorf("body is empty (pass --body or pipe stdin)")
-	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = cli.Close() }()
-
-	out, err := callTool(ctx, cli, "memory_write", map[string]any{
-		"name": *name, "kind": *kind, "description": *desc, "body": text, "project": *project,
-	})
-	if err != nil {
-		return err
-	}
-	verb := "created"
-	if b, _ := out["updated"].(bool); b {
-		verb = "updated"
-	}
-	fmt.Printf("%s memory %q (id %v)\n", verb, *name, out["id"])
-	if sim, ok := out["similar"].(map[string]any); ok {
-		fmt.Printf("  note: similar to %q (%.2f)\n", str(sim["name"]), num(sim["score"]))
-	}
-	return nil
-}
-
-func runRecall(args []string) error {
-	// Parsed manually so flags may appear before or after the query words --
-	// agents and owners naturally write "recall <words> --project p".
-	scope, project, limit, query := "all", "", 10, ""
-	var words []string
-	for i := 0; i < len(args); i++ {
-		a := args[i]
-		val := func() string { // value for "--flag value" (empties on "--flag=x" handled below)
-			if i+1 < len(args) {
-				i++
-				return args[i]
-			}
-			return ""
-		}
-		switch {
-		case a == "--scope":
-			scope = val()
-		case strings.HasPrefix(a, "--scope="):
-			scope = strings.TrimPrefix(a, "--scope=")
-		case a == "--project":
-			project = val()
-		case strings.HasPrefix(a, "--project="):
-			project = strings.TrimPrefix(a, "--project=")
-		case a == "--limit":
-			limit = atoiOr(val(), 10)
-		case strings.HasPrefix(a, "--limit="):
-			limit = atoiOr(strings.TrimPrefix(a, "--limit="), 10)
-		default:
-			words = append(words, a)
-		}
-	}
-	query = strings.TrimSpace(strings.Join(words, " "))
-	if query == "" {
-		return fmt.Errorf("usage: seam recall QUERY [--scope all|memories|notes] [--project P] [--limit N]")
-	}
-	ctx := context.Background()
-	cli, _, err := dial(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = cli.Close() }()
-
-	out, err := callTool(ctx, cli, "recall", map[string]any{
-		"query": query, "scope": scope, "project": project, "limit": limit,
-	})
-	if err != nil {
-		return err
-	}
-	hits, _ := out["hits"].([]any)
-	if len(hits) == 0 {
-		fmt.Println("no results")
-		return nil
-	}
-	for _, h := range hits {
-		m, _ := h.(map[string]any)
-		fmt.Printf("[%s] %s (%s, %s %.3f)\n    %s\n",
-			str(m["kind"]), str(m["name"]), str(m["age"]), str(m["source"]), num(m["score"]), str(m["description"]))
-	}
-	return nil
 }
 
 func runStatus(args []string) error {
@@ -456,13 +306,6 @@ func requireFlagsFirst(fs *flag.FlagSet, usage string) error {
 		}
 	}
 	return nil
-}
-
-func atoiOr(s string, def int) int {
-	if n, err := strconv.Atoi(strings.TrimSpace(s)); err == nil {
-		return n
-	}
-	return def
 }
 
 func str(v any) string {
