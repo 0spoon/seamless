@@ -72,7 +72,7 @@ func (c *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 		return req, nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("llm.OpenAI.Embed: %w: %w", ErrUnavailable, err)
+		return nil, doErr("llm.OpenAI.Embed", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 

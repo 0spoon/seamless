@@ -43,12 +43,21 @@ func NewChatClient(cfg config.LLM) (Chat, error) {
 		if cfg.OpenAI.APIKey == "" {
 			return nil, fmt.Errorf("llm.NewChatClient: openai selected but api_key is empty")
 		}
+		if err := validateBaseURL("llm.openai.base_url", cfg.OpenAI.BaseURL); err != nil {
+			return nil, fmt.Errorf("llm.NewChatClient: %w", err)
+		}
 		return newOpenAIChat(cfg.OpenAI.APIKey, cfg.OpenAI.BaseURL, cfg.OpenAI.ChatModel), nil
 	case config.ProviderOllama:
+		if err := validateBaseURL("llm.ollama.base_url", cfg.Ollama.BaseURL); err != nil {
+			return nil, fmt.Errorf("llm.NewChatClient: %w", err)
+		}
 		return newOllamaChat(cfg.Ollama.BaseURL, cfg.Ollama.ChatModel), nil
 	case config.ProviderAnthropic:
 		if cfg.Anthropic.APIKey == "" {
 			return nil, fmt.Errorf("llm.NewChatClient: anthropic selected but api_key is empty")
+		}
+		if err := validateBaseURL("llm.anthropic.base_url", cfg.Anthropic.BaseURL); err != nil {
+			return nil, fmt.Errorf("llm.NewChatClient: %w", err)
 		}
 		return newAnthropicChat(cfg.Anthropic.APIKey, cfg.Anthropic.BaseURL, cfg.Anthropic.ChatModel), nil
 	default:
@@ -119,7 +128,7 @@ func (c *openAIChat) Complete(ctx context.Context, system, user string) (string,
 		return req, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("llm.OpenAI.Complete: %w: %w", ErrUnavailable, err)
+		return "", doErr("llm.OpenAI.Complete", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if err := checkOpenAIStatus(resp); err != nil {
@@ -192,7 +201,7 @@ func (c *ollamaChat) Complete(ctx context.Context, system, user string) (string,
 		return req, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("llm.Ollama.Complete: %w: %w", ErrUnavailable, err)
+		return "", doErr("llm.Ollama.Complete", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
@@ -267,7 +276,7 @@ func (c *anthropicChat) Complete(ctx context.Context, system, user string) (stri
 		return req, nil
 	})
 	if err != nil {
-		return "", fmt.Errorf("llm.Anthropic.Complete: %w: %w", ErrUnavailable, err)
+		return "", doErr("llm.Anthropic.Complete", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if err := checkOpenAIStatus(resp); err != nil { // status-code mapping is provider-agnostic

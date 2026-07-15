@@ -2,9 +2,12 @@ package retrieve
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -90,11 +93,28 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	}
 
 	if s.embedder != nil {
-		if qvec, err := s.embedder.Embed(ctx, in.Query); err != nil {
+		qvec, err := s.embedder.Embed(ctx, in.Query)
+		switch {
+		case errors.Is(err, llm.ErrConfig):
+			// A client that cannot build its own request is a local defect, not
+			// a provider outage. Degrading here would trade a loud failure for
+			// quietly worse results on every recall for the life of the daemon,
+			// with nothing to tell the owner semantic search had stopped. The
+			// llm factories reject a bad base_url at construction, so this is
+			// unreachable in a correctly built client -- which is why reaching
+			// it must surface rather than hide.
+			return nil, fmt.Errorf("retrieve.Recall: %w", err)
+		case err != nil:
+			// The provider is unreachable, throttling, or rejecting the key:
+			// nothing here is wrong and it may clear on its own, so lexical-only
+			// results are honest and better than none. seamlessd doctor's
+			// embedderCheck is where the owner sees this standing condition.
 			s.logger.Warn("retrieve.Recall: embed failed, FTS only", "error", err)
-		} else if hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth); err != nil {
-			return nil, err
-		} else {
+		default:
+			hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth)
+			if err != nil {
+				return nil, err
+			}
 			add(hits, true)
 		}
 	}

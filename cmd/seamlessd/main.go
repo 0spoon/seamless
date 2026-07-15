@@ -162,7 +162,15 @@ func runServe(args []string) error {
 
 	var embedder llm.Embedder
 	if e, eerr := llm.NewEmbedder(cfg.LLM); eerr != nil {
-		slog.Warn("embeddings disabled; recall degrades to FTS", "err", eerr)
+		// Separate a deliberate opt-out (no credential) from a mistake (a
+		// malformed base_url). Both leave recall lexical-only for the life of
+		// the process, and that is the only other symptom the owner ever sees,
+		// so a typo says so at Error rather than blending into the warnings.
+		if errors.Is(eerr, llm.ErrConfig) {
+			slog.Error("embeddings disabled by a misconfiguration; recall stays FTS-only until it is fixed", "err", eerr)
+		} else {
+			slog.Warn("embeddings disabled; recall degrades to FTS", "err", eerr)
+		}
 	} else {
 		embedder = e
 		mgr.SetEmbedder(embedder)
@@ -182,7 +190,11 @@ func runServe(args []string) error {
 	// it the digest pass simply no-ops.
 	var chat llm.Chat
 	if c, cerr := llm.NewChatClient(cfg.LLM); cerr != nil {
-		slog.Warn("gardener digests disabled; chat client unavailable", "err", cerr)
+		if errors.Is(cerr, llm.ErrConfig) {
+			slog.Error("gardener digests disabled by a misconfiguration", "err", cerr)
+		} else {
+			slog.Warn("gardener digests disabled; chat client unavailable", "err", cerr)
+		}
 	} else {
 		chat = c
 	}

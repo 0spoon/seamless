@@ -3,6 +3,7 @@ package retrieve
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -708,6 +710,57 @@ func TestRecall_InScopeSurvivesOutOfScopeDominance(t *testing.T) {
 		require.NotEqual(t, "other", h.Project, "out-of-scope hit %q leaked into recall", h.Name)
 	}
 	require.ElementsMatch(t, []string{"seam-config", "seam-probes", "global-invariants"}, names)
+}
+
+// erroringEmbedder fails every Embed with a fixed error, letting a test pin how
+// recall classifies an embedding failure.
+type erroringEmbedder struct{ err error }
+
+func (e erroringEmbedder) Model() string { return "test-embed" }
+
+func (e erroringEmbedder) Embed(context.Context, string) ([]float32, error) { return nil, e.err }
+
+// A provider that is unreachable, throttling, or rejecting the key says nothing
+// about this process and may recover on its own, so recall degrades to
+// lexical-only rather than failing the caller.
+func TestRecall_ProviderFailureDegradesToFTS(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+	}{
+		{"unavailable", fmt.Errorf("llm.OpenAI.Embed: %w: dial tcp: connection refused", llm.ErrUnavailable)},
+		{"auth", fmt.Errorf("llm.OpenAI.Embed: %w: status 401", llm.ErrAuth)},
+		{"rate limited", fmt.Errorf("llm.OpenAI.Embed: %w: status 429", llm.ErrRateLimited)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupDB(t)
+			insMem(t, db, "01A", "gotcha", "chroma-boot-race", "chroma container health check", "seam")
+
+			svc := New(db, erroringEmbedder{err: tc.err}, budgets(), slog.New(slog.DiscardHandler))
+
+			hits, err := svc.Recall(context.Background(), RecallInput{Query: "chroma health check", Project: "seam", Limit: 5})
+			require.NoError(t, err)
+			require.NotEmpty(t, hits, "lexical results must survive a provider failure")
+			require.Equal(t, "fts", hits[0].Source)
+		})
+	}
+}
+
+// A client that cannot build its own request is a local defect. Degrading would
+// hide it behind quietly worse results on every recall for the life of the
+// daemon, so it must surface instead. Regression for the F15 misclassification:
+// this error used to arrive tagged ErrUnavailable and take the degrade path.
+func TestRecall_ConfigErrorSurfaces(t *testing.T) {
+	db := setupDB(t)
+	insMem(t, db, "01A", "gotcha", "chroma-boot-race", "chroma container health check", "seam")
+
+	badReq := fmt.Errorf("llm.OpenAI.Embed: %w: new request: parse %q: missing protocol scheme", llm.ErrConfig, "://x")
+	svc := New(db, erroringEmbedder{err: badReq}, budgets(), slog.New(slog.DiscardHandler))
+
+	_, err := svc.Recall(context.Background(), RecallInput{Query: "chroma health check", Project: "seam", Limit: 5})
+	require.Error(t, err)
+	require.ErrorIs(t, err, llm.ErrConfig)
+	require.False(t, errors.Is(err, llm.ErrUnavailable), "a config error must not masquerade as an outage")
 }
 
 // fixedEmbedder returns the same vector for every text, letting a test steer the
