@@ -44,15 +44,21 @@ func scanTasksWithDeps(ctx context.Context, db *sql.DB, rows *sql.Rows) ([]core.
 	return tasks, nil
 }
 
-func scanTask(rows *sql.Rows) (core.Task, error) {
+// scanTask scans one taskCols row. lead holds destinations for any columns
+// selected before taskCols (e.g. a grouping key in a batched join); callers that
+// select only taskCols pass none.
+func scanTask(rows *sql.Rows, lead ...any) (core.Task, error) {
 	var (
 		t                core.Task
 		status           string
 		created, updated string
 		lease, closed    sql.NullString
 	)
-	if err := rows.Scan(&t.ID, &t.ProjectSlug, &t.Title, &t.Body, &status,
-		&t.CreatedBy, &t.PlanSlug, &t.ClaimedBy, &lease, &created, &updated, &closed); err != nil {
+	dest := make([]any, 0, len(lead)+12)
+	dest = append(dest, lead...)
+	dest = append(dest, &t.ID, &t.ProjectSlug, &t.Title, &t.Body, &status,
+		&t.CreatedBy, &t.PlanSlug, &t.ClaimedBy, &lease, &created, &updated, &closed)
+	if err := rows.Scan(dest...); err != nil {
 		return core.Task{}, err
 	}
 	t.Status = core.TaskStatus(status)
