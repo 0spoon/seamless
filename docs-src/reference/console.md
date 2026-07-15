@@ -223,7 +223,7 @@ neighbors in **both** directions: what replaced it, and what it replaced.
 
 `/console/notes`, `/console/notes/{id}`
 
-The same browser shape for notes: grouped by project with the inbox (`""`) first,
+The same browser shape for notes: grouped by project with global (`""`) first,
 sortable by recency or title, filterable by title, description, or tag. A note's
 page renders the body.
 

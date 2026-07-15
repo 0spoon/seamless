@@ -170,11 +170,11 @@ it by hand, and what happens if you delete it.</p>
 </span></span><span class="line"><span class="cl">    _global/{name}.md                  project-less memories
 </span></span><span class="line"><span class="cl">    {project}/{name}.md                one memory per file
 </span></span><span class="line"><span class="cl">  notes/
-</span></span><span class="line"><span class="cl">    inbox/{slug}.md                    project-less notes
+</span></span><span class="line"><span class="cl">    _global/{slug}.md                  project-less notes
 </span></span><span class="line"><span class="cl">    {project}/{slug}.md                one note per file
 </span></span></code></pre><p>A memory's project is its directory. An empty <code>project</code> field means global, and
-the file lands in <code>memory/_global/</code>. Notes work the same way, with <code>inbox/</code> as
-the project-less home. A memory's filename is its <code>name</code>; a note's is its <code>slug</code>.</p>
+the file lands in <code>memory/_global/</code>. Notes work the same way, under
+<code>notes/_global/</code>. A memory's filename is its <code>name</code>; a note's is its <code>slug</code>.</p>
 <h2 id="memory-frontmatter">Memory frontmatter</h2>
 <p>One memory per file, YAML frontmatter plus a markdown body:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
