@@ -288,7 +288,10 @@ func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, pro
 		}
 		out = append(out, KindTick{TS: ts, Kind: kind})
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("events.KindTimeline: %w", err)
+	}
+	return out, nil
 }
 
 // RecentExcluding returns the most recent events, newest first, omitting the
