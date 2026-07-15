@@ -440,7 +440,7 @@ func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string,
 func gitRepoRoot(dir string) string {
 	dir = filepath.Clean(dir)
 	for {
-		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+		if _, err := os.Lstat(filepath.Join(dir, ".git")); err == nil {
 			return dir
 		}
 		parent := filepath.Dir(dir)
