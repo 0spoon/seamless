@@ -26,17 +26,31 @@ func TestWikiLinks(t *testing.T) {
 	}
 }
 
-func TestReplaceWikiLinks(t *testing.T) {
-	// repl uppercases the resolved name and records the tokens it saw.
-	upper := func(token, name string) string { return "<" + name + ">" }
-
-	require.Equal(t, "see <chroma-boot-race> here",
-		ReplaceWikiLinks("see [[chroma-boot-race]] here", upper))
-	// project-qualified + alias normalize to the bare name for repl.
-	require.Equal(t, "<backup-strategy> and <name>",
-		ReplaceWikiLinks("[[seam/backup-strategy]] and [[name|Display]]", upper))
-	// No links -> unchanged.
-	require.Equal(t, "plain text", ReplaceWikiLinks("plain text", upper))
-	// An empty inner reference is left as its literal token.
-	require.Equal(t, "[[]] stays", ReplaceWikiLinks("[[]] stays", upper))
+// WikiLinkName is the shared normalization for both wiki-link consumers:
+// WikiLinks above, and the markdown renderer's goldmark extension, which parses
+// [[...]] itself and passes the inner reference straight in. These cases pin the
+// contract directly, independent of WikiLinks' regex.
+func TestWikiLinkName(t *testing.T) {
+	cases := []struct {
+		name string
+		ref  string
+		want string
+	}{
+		{"bare", "chroma-boot-race", "chroma-boot-race"},
+		{"project-qualified", "seam/backup-strategy", "backup-strategy"},
+		{"nested-path-keeps-last", "seam/sub/name", "name"},
+		{"alias-dropped", "name|Display", "name"},
+		{"anchor-dropped", "other#section", "other"},
+		{"project-and-alias", "seam/name|Display", "name"},
+		{"alias-before-slash-wins", "name|a/b", "name"},
+		{"trimmed", "  spaced-name  ", "spaced-name"},
+		{"empty", "", ""},
+		{"whitespace-only", "   ", ""},
+		{"anchor-only", "#section", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, WikiLinkName(tc.ref))
+		})
+	}
 }

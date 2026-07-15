@@ -34,28 +34,12 @@ func WikiLinks(body string) []string {
 	return out
 }
 
-// ReplaceWikiLinks rewrites every [[...]] reference in s using repl, which
-// receives the full matched token (e.g. "[[project/name|alias]]") and its
-// normalized bare name and returns the replacement text. A reference whose inner
-// text normalizes to an empty name is left untouched. Text outside links passes
-// through unchanged. It shares wikiLinkRe with WikiLinks so the two stay in
-// lockstep, and is safe to run over already-HTML-escaped text: HTML escaping does
-// not alter the [[ ]] | / # delimiters the regex keys on.
-func ReplaceWikiLinks(s string, repl func(token, name string) string) string {
-	return wikiLinkRe.ReplaceAllStringFunc(s, func(tok string) string {
-		m := wikiLinkRe.FindStringSubmatch(tok)
-		name := WikiLinkName(m[1])
-		if name == "" {
-			return tok
-		}
-		return repl(tok, name)
-	})
-}
-
 // WikiLinkName normalizes a [[...]] inner reference to a bare memory name: a
 // "project/name" reference keeps the last segment, and a trailing "|alias" or
 // "#anchor" is dropped. It is the shared normalization for every wiki-link
-// consumer (WikiLinks, ReplaceWikiLinks, and the console markdown renderer).
+// consumer: WikiLinks here, and the markdown renderer's goldmark extension
+// (internal/markdown), which does its own [[...]] parsing but defers to this for
+// the name.
 func WikiLinkName(ref string) string {
 	ref = strings.TrimSpace(ref)
 	if i := strings.IndexAny(ref, "|#"); i >= 0 {
