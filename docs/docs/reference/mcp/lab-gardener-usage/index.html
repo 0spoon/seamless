@@ -208,6 +208,11 @@ constraint does not become less true by sitting still.</p>
 theme memories together&quot;) and turns it into the same reviewable proposals. It can
 also <strong>reproject</strong> a memory filed under the wrong project — moving it to a
 different project that already exists.</p>
+<p>Its <code>project</code> argument scopes the memories it may reference: a project slug (that
+project plus globals), <code>global</code> for globals only, or <code>all</code> for every project on
+the machine. Omit it and the scope resolves the way every other read does — from
+the session — rather than quietly widening to everything. A slug that is not a
+project is an error, not an empty result.</p>
 <h2 id="splits-are-a-different-thing">Splits are a different thing</h2>
 <p>Moving a memory into a project that does not exist yet is not a reproject — it is
 a split, and <code>gardener_split</code> plans it. Splitting one project into new children
@@ -395,7 +400,7 @@ answers, for an agent that cannot open a browser.</p>
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>scope candidate memories: a project slug (its memories + globals), &quot;global&quot; for globals only, or omit for all projects</td>
+<td>scope candidate memories: a project slug (its memories + globals), &quot;global&quot; for globals only, or &quot;all&quot; for every project on the machine. Omit to use the session's project.</td>
 </tr>
 </tbody>
 </table>

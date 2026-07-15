@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"log/slog"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -70,6 +71,53 @@ func newReorgGardener(t *testing.T, chatOut string) (context.Context, *sql.DB, *
 	return ctx, db, mgr, g
 }
 
+// TestRequestCandidates_Scope pins the scope contract after the empty-string
+// inversion was removed.
+//
+// This package used to read "" as "every project on the machine" -- the inverse
+// of store.ActiveMemories, where an empty slug IS the global scope. That is why
+// gardener_request could not simply be routed through the shared scope guards:
+// normalizeProject maps "global" to "", so a globals-only request would have
+// become a whole-machine scan. Scanning everything is now reachable only by
+// asking for it.
+func TestRequestCandidates_Scope(t *testing.T) {
+	ctx, _, mgr, g := newReorgGardener(t, "")
+	now := time.Now().UTC()
+	writeMem(t, mgr, "a-global", "", "1", core.KindReference, now, "global body")
+	writeMem(t, mgr, "in-alpha", "alpha", "1", core.KindReference, now, "alpha body")
+	writeMem(t, mgr, "in-beta", "beta", "1", core.KindReference, now, "beta body")
+
+	names := func(mems []core.Memory) []string {
+		out := make([]string, 0, len(mems))
+		for _, m := range mems {
+			out = append(out, m.Name)
+		}
+		slices.Sort(out)
+		return out
+	}
+
+	for _, tc := range []struct {
+		name  string
+		scope RequestScope
+		want  []string
+	}{
+		{"the zero value is globals only", RequestScope{}, []string{"a-global"}},
+		{"a slug is that project plus globals", RequestScope{Project: "alpha"}, []string{"a-global", "in-alpha"}},
+		{"AllProjects is every project", RequestScope{AllProjects: true}, []string{"a-global", "in-alpha", "in-beta"}},
+		{
+			"AllProjects wins over Project",
+			RequestScope{Project: "alpha", AllProjects: true},
+			[]string{"a-global", "in-alpha", "in-beta"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			mems, err := g.requestCandidates(ctx, tc.scope)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, names(mems))
+		})
+	}
+}
+
 func TestRequest_ReprojectMovesToExistingProject(t *testing.T) {
 	ctx, db, mgr, g := newReorgGardener(t,
 		`{"ops":[{"op":"reproject","target":1,"to":"arctop-ios","reason":"iOS-specific"}]}`)
@@ -78,7 +126,7 @@ func TestRequest_ReprojectMovesToExistingProject(t *testing.T) {
 	_, err := store.EnsureProject(ctx, db, "arctop-ios", "Arctop iOS")
 	require.NoError(t, err)
 
-	res, err := g.Request(ctx, "the ios-dfu memory belongs in arctop-ios", "")
+	res, err := g.Request(ctx, "the ios-dfu memory belongs in arctop-ios", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, res.Total)
 	require.Equal(t, 1, res.ByKind[store.ProposalReproject])
@@ -98,7 +146,7 @@ func TestRequest_ReprojectToUnknownProjectIsSkipped(t *testing.T) {
 		`{"ops":[{"op":"reproject","target":1,"to":"brand-new","reason":"x"}]}`)
 	writeMem(t, mgr, "thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "x")
 
-	res, err := g.Request(ctx, "move thing into a project that does not exist", "")
+	res, err := g.Request(ctx, "move thing into a project that does not exist", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.Total, "moving into a non-existent project is a split, not a reproject")
 	require.Len(t, res.Skipped, 1)
@@ -114,7 +162,7 @@ func TestRequest_RecognizesSplitAndRoutes(t *testing.T) {
 		`{"split":{"source":"arctop-app","instruction":"ios and android"}}`)
 	writeMem(t, mgr, "ios-thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "iOS only")
 
-	res, err := g.Request(ctx, "split arctop-app into arctop-ios and arctop-android", "")
+	res, err := g.Request(ctx, "split arctop-app into arctop-ios and arctop-android", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, "arctop-app", res.SplitSource, "the source project is recognized and returned")
 	require.NotEmpty(t, res.Guidance)
@@ -130,7 +178,7 @@ func TestRequest_SplitUnknownSourceGivesGuidance(t *testing.T) {
 	ctx, _, mgr, g := newReorgGardener(t, `{"split":{"source":"ghost-project"}}`)
 	writeMem(t, mgr, "thing", "arctop-app", "1", core.KindGotcha, time.Now().UTC(), "x")
 
-	res, err := g.Request(ctx, "split the ghost project apart", "")
+	res, err := g.Request(ctx, "split the ghost project apart", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Empty(t, res.SplitSource, "an unknown source is not routed")
 	require.Contains(t, res.Guidance, "not a known project")
@@ -140,7 +188,7 @@ func TestRequest_CreatesMergeAndArchive(t *testing.T) {
 	ctx, db, g := newRequestGardener(t,
 		`{"ops":[{"op":"merge","keep":1,"drop":2},{"op":"archive","target":3,"reason":"obsolete"}]}`)
 
-	res, err := g.Request(ctx, "keep-me and drop-me are duplicates; retire stale-thing", "")
+	res, err := g.Request(ctx, "keep-me and drop-me are duplicates; retire stale-thing", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, 2, res.Total)
 	require.Equal(t, 1, res.ByKind[store.ProposalMerge])
@@ -168,7 +216,7 @@ func TestRequest_CreatesConsolidate(t *testing.T) {
 	ctx, db, g := newRequestGardener(t,
 		`{"ops":[{"op":"consolidate","name":"unified","kind":"runbook","description":"one flow","body":"# Unified\ncombined","sources":[1,2,3]}]}`)
 
-	res, err := g.Request(ctx, "the three memories are really one -- consolidate them", "")
+	res, err := g.Request(ctx, "the three memories are really one -- consolidate them", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, 1, res.Total)
 	require.Equal(t, 1, res.ByKind[store.ProposalConsolidate])
@@ -188,7 +236,7 @@ func TestRequest_SkipsInvalidOps(t *testing.T) {
 	ctx, db, g := newRequestGardener(t,
 		`{"ops":[{"op":"merge","keep":1,"drop":1},{"op":"archive","target":99,"reason":"x"},{"op":"delete","target":2}]}`)
 
-	res, err := g.Request(ctx, "do some questionable things", "")
+	res, err := g.Request(ctx, "do some questionable things", RequestScope{AllProjects: true})
 	require.NoError(t, err)
 	require.Equal(t, 0, res.Total, "every op is invalid")
 	require.Len(t, res.Skipped, 3, "keep==drop, out-of-range, and unknown op are each skipped")
@@ -201,7 +249,7 @@ func TestRequest_SkipsInvalidOps(t *testing.T) {
 func TestRequest_NoChatIsAnError(t *testing.T) {
 	ctx, db, g := newRequestGardener(t, "") // no chat client
 
-	_, err := g.Request(ctx, "merge the duplicates", "")
+	_, err := g.Request(ctx, "merge the duplicates", RequestScope{AllProjects: true})
 	require.ErrorIs(t, err, ErrNoChat)
 
 	all, err := store.PendingProposals(ctx, db, "")
@@ -212,14 +260,14 @@ func TestRequest_NoChatIsAnError(t *testing.T) {
 func TestRequest_EmptyRequestIsAnError(t *testing.T) {
 	ctx, _, g := newRequestGardener(t, `{"ops":[]}`)
 
-	_, err := g.Request(ctx, "   ", "")
+	_, err := g.Request(ctx, "   ", RequestScope{AllProjects: true})
 	require.ErrorIs(t, err, ErrEmptyRequest)
 }
 
 func TestRequest_GarbageOutputCreatesNothing(t *testing.T) {
 	ctx, db, g := newRequestGardener(t, "I'm sorry, I cannot help with that request.")
 
-	_, err := g.Request(ctx, "merge the duplicates", "")
+	_, err := g.Request(ctx, "merge the duplicates", RequestScope{AllProjects: true})
 	require.ErrorIs(t, err, ErrUnparseable)
 
 	all, err := store.PendingProposals(ctx, db, "")
@@ -230,7 +278,7 @@ func TestRequest_GarbageOutputCreatesNothing(t *testing.T) {
 func TestRequest_EmptyOpsIsCleanNoResult(t *testing.T) {
 	ctx, db, g := newRequestGardener(t, "```json\n{\"ops\":[]}\n```")
 
-	res, err := g.Request(ctx, "nothing needs changing", "")
+	res, err := g.Request(ctx, "nothing needs changing", RequestScope{AllProjects: true})
 	require.NoError(t, err, "an empty op list is a clean outcome, not an error")
 	require.Equal(t, 0, res.Total)
 	require.Equal(t, "no proposals matched", res.Summary)

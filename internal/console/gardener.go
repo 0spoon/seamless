@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -368,7 +369,16 @@ func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
 		redirectFlash(w, r, "enter a request")
 		return
 	}
-	res, err := s.cfg.Gardener.Request(r.Context(), text, r.PostFormValue("project"))
+	// The scope select offers "All projects" as its empty option, so an empty
+	// project here is a choice the owner made from a closed list, not an absent
+	// argument -- the console has no session to infer from and nothing to be
+	// ambiguous about. Saying so explicitly is what lets the gardener stop reading
+	// "" as "everything", which on the agent surface was a silent whole-machine
+	// scan rather than a deliberate one.
+	scope := gardener.RequestScope{Project: r.PostFormValue("project")}
+	scope.AllProjects = scope.Project == ""
+
+	res, err := s.cfg.Gardener.Request(r.Context(), text, scope)
 	if err != nil {
 		s.logger.Warn("console: gardener request", "error", err)
 		redirectFlash(w, r, err.Error())
