@@ -167,9 +167,8 @@ is down, every subcommand below fails at the connection.</p>
 <p>The target address is derived from the configured bind address, with a bind-all
 host (<code>0.0.0.0</code>, <code>::</code>, or empty) mapped to loopback.</p>
 <h2 id="flags-and-positionals">Flags and positionals</h2>
-<p>The agent-loop commands - <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> - and the
-whole tasks group take flags on either side of their positionals. These two lines
-are the same line:</p>
+<p>Every <code>seam</code> command takes flags on either side of its positionals. These two
+lines are the same line:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
 </span></span><span class="line"><span class="cl">seam capture https://example.com/page --project myproj
 </span></span></code></pre><pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
@@ -178,12 +177,7 @@ are the same line:</p>
 is an error instead of a silently different command: <code>seam recall foo --projct p</code>
 reports <code>flag provided but not defined: -projct</code>. A positional that starts with
 <code>-</code> needs the <code>--</code> terminator (<code>seam recall -- -foo</code>).</p>
-<p>One command has not been converted yet - <code>seam sessions</code>. Go's <code>flag</code> package
-stops parsing at the first positional, so a trailing flag cannot bind there.
-Rather than ignore it, <code>seam</code> rejects the line:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam sessions --status active 01K7ABCD   <span class="c1"># works</span>
-</span></span><span class="line"><span class="cl">seam sessions 01K7ABCD --status active   <span class="c1"># error: flags must precede the positional argument</span>
-</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> and <code>seam plan show|approve</code> parse no flags at
+<p><code>seam task done|start|drop|reopen</code> and <code>seam plan show|approve</code> parse no flags at
 all. Commands that take only flags and no positionals (<code>ready</code>, <code>task list</code>,
 <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are unaffected either way.</p>
 <h2 id="agent-loop">Agent loop</h2>
@@ -322,17 +316,23 @@ one already exists.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam status
 </span></span></code></pre><p>Server health from the unauthenticated <code>/healthz</code> endpoint (status and version),
 the configured data directory, then the project count and slugs via
-<code>project_list</code> - which doubles as proof the static key works. If MCP is
-unavailable it still prints health and says so on the projects line rather than
-failing.</p>
+<code>project_list</code> - which doubles as proof the static key works.</p>
+<p><strong><code>seam status</code> exits non-zero if any check failed</strong>, so it works as a scripted
+health gate. A partial answer is still printed - if MCP is unavailable it reports
+health and names the failure on the projects line - but the command fails rather
+than reporting success. The printed lines are its output; the exit code is its
+result. Exit 1 means the server had a problem, not that the command line did
+(that is exit 2).</p>
 <h3 id="seam_sessions">seam sessions</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam sessions <span class="o">[</span>--status active<span class="p">|</span>completed<span class="o">]</span>
-</span></span><span class="line"><span class="cl">seam sessions &lt;id&gt;
+<pre class="chroma"><code><span class="line"><span class="cl">seam sessions <span class="o">[</span>--status STATUS<span class="o">]</span> <span class="o">[</span>&lt;id&gt;<span class="o">]</span>
 </span></span></code></pre><p>With no positional, lists sessions with name (or short id), project, status, age,
 and an ambient marker, under a total/active count. With an id, prints that
 session's detail: status, project, tool calls, memory writes and reads, the
 read-after-inject ratio, and findings when present. Both read the console's JSON
 endpoint.</p>
+<p><code>--status</code> is <code>active</code>, <code>completed</code>, or <code>expired</code>; anything else is a parse
+error. The console rejects an unrecognized <code>?status=</code> too, so a direct URL cannot
+silently list everything either.</p>
 <h3 id="seam_usage">seam usage</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam usage
 </span></span></code></pre><p>Activity roll-up from <code>usage_summary</code>: active memories broken down by kind, note

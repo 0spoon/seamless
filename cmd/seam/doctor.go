@@ -5,14 +5,11 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
-
-	"github.com/0spoon/seamless/internal/config"
 )
 
 // expectedTools mirrors mcp.ToolCount without importing the mcp server package
@@ -20,12 +17,11 @@ import (
 // running server exposes this many tools via tools/list.
 const expectedTools = 30
 
-func runDoctor(args []string) error {
-	fs := flag.NewFlagSet("doctor", flag.ContinueOnError)
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	cfg, err := config.Load()
+var doctorCmd = spec("doctor", groupObservability, "reachability + key + tool-count check",
+	noArgs(), bindNoOpts, runDoctor)
+
+func runDoctor(ctx context.Context, e *env, _ *noOpts, _ []string) error {
+	cfg, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -38,7 +34,7 @@ func runDoctor(args []string) error {
 			label = "FAIL"
 			failed++
 		}
-		fmt.Printf("  [%-4s] %s: %s\n", label, name, detail)
+		fmt.Fprintf(e.stdout, "  [%-4s] %s: %s\n", label, name, detail)
 	}
 
 	// Health.
@@ -62,8 +58,7 @@ func runDoctor(args []string) error {
 	}
 
 	// Key + tool count via MCP tools/list.
-	ctx := context.Background()
-	cli, _, derr := dial(ctx)
+	cli, _, derr := e.dial(ctx)
 	if derr != nil {
 		report(false, "mcp", "connect failed: "+derr.Error())
 		return fmt.Errorf("doctor: %d check(s) failed", failed)

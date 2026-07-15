@@ -181,11 +181,10 @@ seam task release --force 01K7ABCD    # --force applies
 seam task release 01K7ABCD --force    # --force applies here too
 ```
 
-The agent-loop commands and the whole tasks and plans groups parse flags and
-positionals in any order. `seam sessions` has not been converted yet, and
-**rejects** a trailing flag with an error naming the order that works - it never
-ignores one. A typo'd flag (`--projct`) is an error everywhere rather than being
-absorbed into the positionals.
+Every `seam` command parses flags and positionals in any order. A typo'd flag
+(`--projct`) is an error everywhere rather than being absorbed into the
+positionals, and an unrecognized enum value (`--status bogus`) is rejected at
+parse time rather than quietly widening the filter.
 
 **If a flag still looks ignored**, it is not a flag-order problem. Check that you
 are running the `seam` you think you are (`seam doctor`), and see the [seam CLI

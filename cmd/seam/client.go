@@ -31,12 +31,31 @@ func consoleJSON(cfg config.Config, path string, v any) error {
 		return fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("console returned %s", resp.Status)
+		// Surface the handler's message when it sent one, exactly as consolePOST
+		// does. Without this the console's 400 body is thrown away: it takes the
+		// trouble to write `invalid status "bogus": valid values are ...` and the
+		// caller reads `console returned 400 Bad Request`, which names neither the
+		// parameter nor the values -- a loud server answer degraded into a useless
+		// client one.
+		return fmt.Errorf("%s", consoleError(resp))
 	}
 	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return fmt.Errorf("unreadable console response from %s: %w", path, err)
 	}
 	return nil
+}
+
+// consoleError renders a non-OK response: the handler's JSON error message when
+// there is one, else the bare status. Shared by consoleJSON and consolePOST so
+// the two cannot drift apart again.
+func consoleError(resp *http.Response) string {
+	var e struct {
+		Error string `json:"error"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&e) == nil && e.Error != "" {
+		return e.Error
+	}
+	return "console returned " + resp.Status
 }
 
 // consolePOST performs an authenticated POST to a console action endpoint and
@@ -60,15 +79,9 @@ func consolePOST(cfg config.Config, path string, v any) error {
 		return fmt.Errorf("not found")
 	}
 	if resp.StatusCode != http.StatusOK {
-		// Surface the handler's error message when it sent one (e.g. the task is
-		// not claimed), falling back to the bare status.
-		var e struct {
-			Error string `json:"error"`
-		}
-		if json.NewDecoder(resp.Body).Decode(&e) == nil && e.Error != "" {
-			return fmt.Errorf("%s", e.Error)
-		}
-		return fmt.Errorf("console returned %s", resp.Status)
+		// The handler's own message when it sent one (e.g. the task is not claimed),
+		// else the bare status.
+		return fmt.Errorf("%s", consoleError(resp))
 	}
 	if v == nil {
 		return nil
