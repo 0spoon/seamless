@@ -4,18 +4,23 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 )
 
 func runCapture(args []string) error {
+	const usage = "usage: seam capture [--project P] URL (flags must precede the URL)"
 	fs := flag.NewFlagSet("capture", flag.ContinueOnError)
-	project := fs.String("project", "", "project slug (empty = inbox)")
+	project := fs.String("project", "", "project slug (empty = the session's project; \"global\" files it globally)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam capture [--project P] URL (flags must precede the URL)")
+		return errors.New(usage)
+	}
+	if err := requireFlagsFirst(fs, usage); err != nil {
+		return err
 	}
 	ctx := context.Background()
 	cli, _, err := dial(ctx)
