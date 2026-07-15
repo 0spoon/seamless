@@ -65,7 +65,7 @@ func tasksUpdateTool() mcp.Tool {
 	return mcp.NewTool("tasks_update",
 		mcp.WithDescription("Update a task: change status (open|in_progress|done|dropped), edit title/body, or add dependencies. Moving to done/dropped closes it and unblocks its dependents. A task another session holds via a live claim is locked to its holder: updating it fails with 'already claimed' until the lease lapses or the holder releases it."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id")),
-		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("new status")),
+		mcp.WithString("status", enumOf(core.TaskStatuses), mcp.Description("new status")),
 		mcp.WithString("title", mcp.Description("new title")),
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("reassign the task to another project slug (used when a split moves a project's open work to a child)")),
@@ -172,7 +172,7 @@ func tasksListTool() mcp.Tool {
 		mcp.WithDescription("List a project's tasks, optionally filtered by status, newest first. By default plan-step tasks are excluded; pass plan=<slug> to list that plan's steps instead. Pass id=<task id> to load a single task by its globally-unique id (a direct lookup that ignores project/status/plan and needs no session scope)."),
 		mcp.WithString("id", mcp.Description("load exactly one task by its globally-unique id; when set, project/status/plan are ignored and the response's tasks array holds just that task")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
-		mcp.WithString("status", mcp.Enum("open", "in_progress", "done", "dropped"), mcp.Description("optional status filter")),
+		mcp.WithString("status", enumOf(core.TaskStatuses), mcp.Description("optional status filter")),
 		mcp.WithString("plan", mcp.Description("optional plan slug: list that plan's step tasks instead of the default (non-plan) tasks")),
 	)
 }
