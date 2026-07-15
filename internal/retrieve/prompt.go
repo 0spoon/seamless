@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -16,12 +17,31 @@ import (
 
 // Prompt-matcher tunables. The matcher is pure lexical (no embedder) so it fits
 // the user-prompt-submit hook's tight latency budget.
+//
+// promptCorpusTTL is a rebuild interval, NOT a staleness bound. Once a project
+// has a corpus, a lapsed TTL is served from the stale copy while the rebuild
+// runs behind the hook (see promptCorpusFor), so the worst case a prompt can see
+// is TTL + rebuild time -- or TTL + promptCorpusRetryBackoff + rebuild time when
+// a background rebuild fails. That unbounded-by-TTL staleness is the price of a
+// hook that never pays for a cold rebuild; a memory written now may miss the
+// next prompt's recall by a few seconds more than the TTL suggests.
 const (
 	promptMinOverlap  = 2                // distinct shared tokens required
 	promptMinScore    = 1.5              // IDF-weighted score floor
 	promptCorpusTTL   = 30 * time.Second // corpus rebuild interval per project
 	promptMinTokenLen = 3
 	promptMaxHits     = 3
+
+	// promptCorpusRefreshTimeout bounds a background rebuild. It is generous
+	// (the pass is one indexed read plus tokenization) and exists only so a
+	// wedged store cannot hold the single-flight claim forever.
+	promptCorpusRefreshTimeout = 10 * time.Second
+	// promptCorpusRetryBackoff keeps a failing rebuild off the hot path: after a
+	// failure the project is not retried until it elapses, instead of re-arming on
+	// the very next prompt and hammering a store that is already unhappy. Flat, not
+	// exponential -- the failure mode this guards (store down) is not worth the
+	// per-project attempt bookkeeping an exponential curve would need.
+	promptCorpusRetryBackoff = time.Minute
 )
 
 // promptStopwords are ignored during tokenization; they carry little signal and
@@ -38,13 +58,31 @@ var promptStopwords = map[string]struct{}{
 }
 
 // corpusCache holds one IDF corpus per project scope, rebuilt after the TTL.
+// Every field is guarded by mu except builds, which is atomic so a test can read
+// it without reaching for the cache's lock.
 type corpusCache struct {
 	mu      sync.Mutex
 	entries map[string]*promptCorpus
+	// refreshing holds the projects with a background rebuild already in flight.
+	// It is the single-flight claim: a burst of expired prompts spawns one
+	// rebuild goroutine, not one per prompt.
+	refreshing map[string]struct{}
+	// retryAfter holds, per project, the earliest time a failed background rebuild
+	// may be attempted again. Without it a store that stays down would re-arm a
+	// doomed rebuild on every single prompt.
+	retryAfter map[string]time.Time
+	// builds counts corpus build attempts, cold and background alike. Nothing in
+	// production reads it; it exists because the single-flight invariant is
+	// otherwise unobservable from outside buildPromptCorpus.
+	builds atomic.Int64
 }
 
 func newCorpusCache() *corpusCache {
-	return &corpusCache{entries: make(map[string]*promptCorpus)}
+	return &corpusCache{
+		entries:    make(map[string]*promptCorpus),
+		refreshing: make(map[string]struct{}),
+		retryAfter: make(map[string]time.Time),
+	}
 }
 
 type promptCorpus struct {
@@ -104,17 +142,43 @@ func promptHitIDs(hits []promptHit) []string {
 	return ids
 }
 
-// promptCorpusFor returns a cached corpus for the project scope, rebuilding it
-// when missing or older than the TTL. The store read happens without the lock
-// held so a prompt never serializes behind an in-flight rebuild.
+// promptCorpusFor returns the project's corpus, keeping the user-prompt-submit
+// hook off the rebuild path wherever it can:
+//
+//   - cold (nothing cached): build synchronously. There is nothing to serve, and
+//     an empty corpus would be a fake result dressed up as a real one. The first
+//     prompt for a project pays for the build; that is the correct bill.
+//   - warm and fresh (within the TTL): serve the cached corpus untouched.
+//   - warm and expired: serve the STALE corpus immediately and rebuild behind the
+//     hook. A lapsed TTL never lands on a user's prompt as a latency spike; see
+//     the promptCorpusTTL comment for what that costs in freshness.
+//
+// The store read always runs with the lock released, so a prompt never
+// serializes behind an in-flight rebuild.
 func (s *Service) promptCorpusFor(ctx context.Context, project string) (*promptCorpus, error) {
 	s.corpus.mu.Lock()
-	if c, ok := s.corpus.entries[project]; ok && time.Since(c.builtAt) < promptCorpusTTL {
+	if c, ok := s.corpus.entries[project]; ok {
+		refresh := false
+		if time.Since(c.builtAt) >= promptCorpusTTL {
+			// Claim the rebuild under the same lock that publishes it, so two
+			// expired prompts cannot both conclude that nobody is rebuilding.
+			_, inFlight := s.corpus.refreshing[project]
+			refresh = !inFlight && !time.Now().Before(s.corpus.retryAfter[project])
+			if refresh {
+				s.corpus.refreshing[project] = struct{}{}
+			}
+		}
 		s.corpus.mu.Unlock()
+		if refresh {
+			s.refreshPromptCorpus(ctx, project)
+		}
 		return c, nil
 	}
 	s.corpus.mu.Unlock()
 
+	// Cold. Concurrent cold prompts for the same project may each build -- that is
+	// bounded by in-flight hook requests, needs no goroutine, and is not worth
+	// serializing prompts behind a lock to avoid.
 	c, err := s.buildPromptCorpus(ctx, project)
 	if err != nil {
 		return nil, err
@@ -125,7 +189,55 @@ func (s *Service) promptCorpusFor(ctx context.Context, project string) (*promptC
 	return c, nil
 }
 
+// refreshPromptCorpus rebuilds the project's corpus behind the hook. The caller
+// must already hold the project's single-flight claim (corpus.refreshing), which
+// this releases on every path the build can return through: a stuck claim would
+// freeze the corpus at its stale value for the life of the process, which is a
+// worse bug than the latency spike this whole path exists to avoid.
+//
+// ctx is the hook's request context. It is cancelled the moment the hook
+// responds (and, since the daemon hands the signal context to the HTTP server as
+// its BaseContext, again at shutdown), so capturing it would cancel the rebuild
+// on essentially every prompt -- a refresh that reports success and does nothing.
+// WithoutCancel keeps its values and drops the cancellation; the timeout below
+// is what bounds the work instead.
+//
+// The goroutine is deliberately not drained at shutdown. The Service has no
+// lifecycle to hang a drain on, and there is nothing worth draining: the
+// goroutine writes only to the in-memory cache the exiting process is about to
+// drop, and *sql.DB is safe against a concurrent Close (a started query finishes
+// and Close waits for it; a later one fails and lands in the Warn below).
+func (s *Service) refreshPromptCorpus(ctx context.Context, project string) {
+	ctx = context.WithoutCancel(ctx)
+	go func() {
+		ctx, cancel := context.WithTimeout(ctx, promptCorpusRefreshTimeout)
+		defer cancel()
+		c, err := s.buildPromptCorpus(ctx, project)
+
+		s.corpus.mu.Lock()
+		// Releasing the claim and publishing the result in one critical section is
+		// what makes single-flight hold: no prompt can ever observe "nobody is
+		// rebuilding" beside the stale corpus this build has already replaced.
+		delete(s.corpus.refreshing, project)
+		if err == nil {
+			s.corpus.entries[project] = c
+			delete(s.corpus.retryAfter, project)
+		} else {
+			s.corpus.retryAfter[project] = time.Now().Add(promptCorpusRetryBackoff)
+		}
+		s.corpus.mu.Unlock()
+
+		if err != nil {
+			// Non-fatal, so log rather than return: the prompt was already served a
+			// usable stale corpus, and there is no caller left to hand an error to.
+			s.logger.Warn("retrieve: prompt corpus refresh failed, serving the stale corpus",
+				"project", project, "error", err)
+		}
+	}()
+}
+
 func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promptCorpus, error) {
+	s.corpus.builds.Add(1)
 	mems, err := store.ActiveMemories(ctx, s.db, project)
 	if err != nil {
 		return nil, err

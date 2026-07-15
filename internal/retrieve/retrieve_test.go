@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"unicode/utf8"
@@ -455,6 +457,210 @@ func TestPromptRecall(t *testing.T) {
 	require.NoError(t, err)
 	require.Empty(t, none)
 	require.Empty(t, noneIDs)
+}
+
+// --- prompt corpus refresh -------------------------------------------------
+//
+// The corpus tests drive promptCorpusFor directly rather than PromptRecall:
+// PromptRecall resolves the project from the cwd first, which is a second store
+// read and would muddy both the build count and the connection-jamming below.
+
+// promptCorpusSvc returns a service over a store holding one memory in project
+// "p", plus the db so a test can add to it. The logger discards, because the
+// failure test deliberately provokes a Warn.
+func promptCorpusSvc(t *testing.T) (*Service, *sql.DB) {
+	t.Helper()
+	db := setupDB(t)
+	insMem(t, db, "01A", "gotcha", "chroma-boot-race", "chroma container health check startup race", "p")
+	return New(db, nil, budgets(), slog.New(slog.DiscardHandler)), db
+}
+
+// expirePromptCorpus backdates the cached corpus so the next lookup takes the
+// expired path; backdating beats waiting the TTL out. Under the cache lock,
+// because promptCorpusFor reads builtAt under it.
+func expirePromptCorpus(t *testing.T, svc *Service, project string) {
+	t.Helper()
+	svc.corpus.mu.Lock()
+	defer svc.corpus.mu.Unlock()
+	c, ok := svc.corpus.entries[project]
+	require.True(t, ok, "expirePromptCorpus: no corpus cached for %q", project)
+	c.builtAt = time.Now().Add(-2 * promptCorpusTTL)
+}
+
+// requireCorpusEventually waits for the cached corpus to reach want candidates,
+// i.e. for a background rebuild to have published.
+func requireCorpusEventually(t *testing.T, svc *Service, project string, want int) {
+	t.Helper()
+	require.Eventually(t, func() bool {
+		svc.corpus.mu.Lock()
+		defer svc.corpus.mu.Unlock()
+		c, ok := svc.corpus.entries[project]
+		return ok && len(c.candidates) == want
+	}, 3*time.Second, 5*time.Millisecond, "background rebuild should publish a corpus of %d", want)
+}
+
+// A cold lookup has nothing to serve, so it must build before returning: the
+// corpus is populated on return, with nothing left to poll for.
+func TestPromptCorpus_ColdMissBuildsSynchronously(t *testing.T) {
+	svc, _ := promptCorpusSvc(t)
+
+	c, err := svc.promptCorpusFor(context.Background(), "p")
+	require.NoError(t, err)
+	require.Len(t, c.candidates, 1)
+	require.NotEmpty(t, c.idf)
+	require.Equal(t, int64(1), svc.corpus.builds.Load())
+}
+
+// Inside the TTL the cache is served as-is: same corpus, no second store read.
+func TestPromptCorpus_WarmFreshDoesNotRebuild(t *testing.T) {
+	svc, db := promptCorpusSvc(t)
+	ctx := context.Background()
+
+	first, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+
+	// A write the fresh corpus must not pick up: seeing it would mean a rebuild.
+	insMem(t, db, "01B", "constraint", "no-force-push", "never force push to the main branch", "p")
+	for range 5 {
+		got, err := svc.promptCorpusFor(ctx, "p")
+		require.NoError(t, err)
+		require.Same(t, first, got)
+		require.Len(t, got.candidates, 1)
+	}
+	require.Equal(t, int64(1), svc.corpus.builds.Load(), "a fresh corpus must not hit the store")
+}
+
+// An expired lookup serves the stale corpus without waiting for the rebuild, and
+// the rebuild lands behind it. The store is made unreachable for the duration of
+// the stale read -- store.Open caps the pool at one connection, so holding it
+// means any lookup that touched the store would block instead of returning.
+func TestPromptCorpus_ExpiredServesStaleThenRefreshes(t *testing.T) {
+	svc, db := promptCorpusSvc(t)
+	ctx := context.Background()
+
+	stale, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+	require.Len(t, stale.candidates, 1)
+
+	insMem(t, db, "01B", "constraint", "no-force-push", "never force push to the main branch", "p")
+	expirePromptCorpus(t, svc, "p")
+
+	conn, err := db.Conn(ctx) // the pool's only connection is ours until we hand it back
+	require.NoError(t, err)
+
+	got, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+	require.Same(t, stale, got, "an expired lookup must serve the stale corpus, not wait on the rebuild")
+	require.Len(t, got.candidates, 1, "the stale corpus must not have the new memory yet")
+
+	require.NoError(t, conn.Close()) // release the store; the queued rebuild proceeds
+
+	requireCorpusEventually(t, svc, "p", 2)
+	require.Equal(t, int64(2), svc.corpus.builds.Load(), "the cold build plus one refresh")
+}
+
+// The rebuild outlives the prompt that triggered it. A hook's request context is
+// cancelled the moment the hook responds, so a rebuild that captured it would be
+// cancelled on essentially every prompt: a refresh that reports success, does
+// nothing, and leaves the corpus frozen. The cancel below stands in for the hook
+// responding, and the jammed store guarantees the rebuild is still in flight
+// when it fires -- otherwise the rebuild could finish first and the test would
+// pass against a captured context too.
+func TestPromptCorpus_RefreshSurvivesRequestCancellation(t *testing.T) {
+	svc, db := promptCorpusSvc(t)
+
+	stale, err := svc.promptCorpusFor(context.Background(), "p")
+	require.NoError(t, err)
+	require.Len(t, stale.candidates, 1)
+
+	insMem(t, db, "01B", "constraint", "no-force-push", "never force push to the main branch", "p")
+	expirePromptCorpus(t, svc, "p")
+
+	conn, err := db.Conn(context.Background())
+	require.NoError(t, err)
+
+	reqCtx, cancelReq := context.WithCancel(context.Background())
+	got, err := svc.promptCorpusFor(reqCtx, "p")
+	require.NoError(t, err)
+	require.Same(t, stale, got)
+	cancelReq() // the hook has responded; its context dies here
+
+	require.NoError(t, conn.Close())
+	requireCorpusEventually(t, svc, "p", 2)
+}
+
+// A burst of expired lookups may spawn exactly one rebuild. The store is jammed
+// across the whole burst so every lookup lands inside the refresh window (no
+// rebuild can finish early and re-arm the TTL mid-burst), which is precisely the
+// pileup case: without the single-flight claim this would be one goroutine and
+// one store read per prompt.
+func TestPromptCorpus_ExpiredRefreshIsSingleFlight(t *testing.T) {
+	svc, db := promptCorpusSvc(t)
+	ctx := context.Background()
+
+	stale, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+	require.Equal(t, int64(1), svc.corpus.builds.Load())
+
+	insMem(t, db, "01B", "constraint", "no-force-push", "never force push to the main branch", "p")
+	expirePromptCorpus(t, svc, "p")
+
+	conn, err := db.Conn(ctx)
+	require.NoError(t, err)
+
+	const burst = 32
+	got := make([]*promptCorpus, burst)
+	errs := make([]error, burst)
+	var wg sync.WaitGroup
+	for i := range burst {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			got[i], errs[i] = svc.promptCorpusFor(ctx, "p")
+		}()
+	}
+	wg.Wait() // every lookup returned despite the jammed store: none waited on a rebuild
+	for i := range burst {
+		require.NoError(t, errs[i])
+		require.Same(t, stale, got[i])
+	}
+
+	require.NoError(t, conn.Close())
+
+	requireCorpusEventually(t, svc, "p", 2)
+	require.Equal(t, int64(2), svc.corpus.builds.Load(), "the burst must produce exactly one rebuild")
+}
+
+// A rebuild that fails must not strand its single-flight claim: a stuck claim
+// would freeze the project's corpus at its stale value for the life of the
+// process. The backoff it arms instead keeps the doomed rebuild off the next
+// prompt.
+func TestPromptCorpus_FailedRefreshReleasesClaimAndBacksOff(t *testing.T) {
+	svc, db := promptCorpusSvc(t)
+	ctx := context.Background()
+
+	stale, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+
+	expirePromptCorpus(t, svc, "p")
+	require.NoError(t, db.Close()) // every rebuild from here on fails
+
+	got, err := svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+	require.Same(t, stale, got, "a failing rebuild must not cost the prompt its stale corpus")
+
+	require.Eventually(t, func() bool {
+		svc.corpus.mu.Lock()
+		defer svc.corpus.mu.Unlock()
+		_, inFlight := svc.corpus.refreshing["p"]
+		return !inFlight && svc.corpus.retryAfter["p"].After(time.Now())
+	}, 3*time.Second, 5*time.Millisecond, "a failed rebuild must release its claim and arm the backoff")
+
+	builds := svc.corpus.builds.Load()
+	got, err = svc.promptCorpusFor(ctx, "p")
+	require.NoError(t, err)
+	require.Same(t, stale, got)
+	require.Equal(t, builds, svc.corpus.builds.Load(), "backoff must keep a failing rebuild off the next prompt")
 }
 
 func TestHardTruncatePreservesUTF8AndClosingTag(t *testing.T) {
