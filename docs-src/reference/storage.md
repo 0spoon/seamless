@@ -58,7 +58,7 @@ Field by field:
 | `id` | system | ULID. Never a UUID. The identity every other reference points at. |
 | `kind` | author | One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly. |
 | `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories — a superseded memory coexists with a replacement that reuses its name. |
-| `description` | author | One line, ≤150 chars. **The only text shown in indexes** — write it for an agent deciding whether to read the body. |
+| `description` | author | One line, ≤150 chars. **The only text shown in indexes** — write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
 | `project` | author | Project slug. Empty means global, and the file lives under `memory/_global/`. Omitted from the frontmatter when empty. |
 | `created` | system | RFC3339. First write. |
 | `updated` | system | RFC3339. Last write. |

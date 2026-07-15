@@ -50,7 +50,7 @@ help:
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
-	@echo "  check      the full gate: build + vet + fmt-check + lint + test-race"
+	@echo "  check      the full gate: build + vet + fmt-check + docs-check + lint + test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
 	@echo "  fmt        gofmt tracked files"

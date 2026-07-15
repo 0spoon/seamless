@@ -53,6 +53,10 @@
         
         <li><a href="../../quickstart/">Quickstart</a></li>
         
+        <li><a href="../../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../../claude-code/">Claude Code setup</a></li>
+        
       </ul>
     </div>
     
@@ -74,6 +78,28 @@
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../guides/">Guides</a>
+      
+      <ul>
+        
+        <li><a href="../../guides/integrate-your-agent/">Integrate your agent</a></li>
+        
+        <li><a href="../../guides/write-good-memories/">Write memories that get recalled</a></li>
+        
+        <li><a href="../../guides/coordinate-agents/">Coordinate multiple agents</a></li>
+        
+        <li><a href="../../guides/plan-mode/">Capture Claude Code plans</a></li>
+        
+        <li><a href="../../guides/research-trials/">Run research trials</a></li>
+        
+        <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
+        
+        <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
     </div>
@@ -101,7 +127,25 @@
         
         <li><a href="../../reference/hooks/">Claude Code hooks</a></li>
         
+        <li><a href="../../reference/console/">Console</a></li>
+        
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
+        
+        <li><a href="../../reference/glossary/">Glossary</a></li>
+        
+      </ul>
+    </div>
+    
+    <div class="nav-group">
+      <a class="nav-head" href="../../internals/">Internals</a>
+      
+      <ul>
+        
+        <li><a href="../../internals/architecture/">Architecture</a></li>
+        
+        <li><a href="../../internals/contributing/">Contributing</a></li>
+        
+        <li><a href="../../internals/invariants/">Domain invariants</a></li>
         
       </ul>
     </div>
@@ -147,12 +191,60 @@ it. Exactly one wins:</p>
 corrupted second claim.</li>
 <li><strong>Re-claiming refreshes the lease.</strong> That is the heartbeat for long work — an
 agent still working keeps its claim by claiming again.</li>
-<li><strong>An expired lease is reclaimable.</strong> An agent that crashed mid-task does not
-strand it forever, which is the failure mode that makes naive locks unusable
-for processes that die.</li>
+<li><strong>An expired lease is reclaimable — but it does not re-queue itself.</strong> See
+the two clocks below. This is the subtlety most likely to bite you.</li>
 <li><strong>Closing frees it.</strong> <code>tasks_release</code>, <code>tasks_update</code> to <code>done</code>/<code>dropped</code>, or
 <code>session_end</code> (which releases all of a session's claims).</li>
 </ol>
+<h3 id="the-two-clocks">The two clocks</h3>
+<p>When an agent dies holding a task, two different timers matter, and conflating
+them is how a fleet quietly stalls.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Lease expiry</th>
+<th>Session reaper</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Controls</td>
+<td><code>lease_seconds</code> (default 900)</td>
+<td><code>gardener.session_idle_minutes</code> (default 45)</td>
+</tr>
+<tr>
+<td>Enforced</td>
+<td>Lazily, inside <code>tasks_claim</code></td>
+<td>By the gardener's periodic pass</td>
+</tr>
+<tr>
+<td>Effect</td>
+<td>The task becomes <strong>stealable by id</strong></td>
+<td>The task's status returns to <code>open</code></td>
+</tr>
+<tr>
+<td>Visible in <code>tasks_ready</code>?</td>
+<td><strong>No</strong></td>
+<td><strong>Yes</strong></td>
+</tr>
+</tbody>
+</table>
+<p><code>tasks_ready</code> returns tasks whose status is <code>open</code>. A task with an expired lease
+is still <code>in_progress</code>, so it is <strong>invisible to the queue</strong> — an agent polling
+<code>tasks_ready</code> will never see it, even though a <code>tasks_claim</code> on that specific id
+would now succeed.</p>
+<p>What actually puts it back in the queue is the reaper: it expires the dead
+agent's idle session and releases its claims, flipping the task back to <code>open</code>.</p>
+<p>Two consequences worth internalizing:</p>
+<ul>
+<li>The lease is not the recovery mechanism; the reaper is. The lease only decides
+whether a claim <em>can</em> be taken.</li>
+<li><strong>With <code>gardener.enabled: false</code>, that second clock never runs</strong>, and a crashed
+agent's claims stay <code>in_progress</code> indefinitely. Nothing will surface them. If
+you turn the gardener off, you have also turned off task recovery — release
+them yourself with <code>tasks_release</code>, or from the console.</li>
+</ul>
 <p>A lease is <strong>not a lock on the files</strong>. Nothing physically stops an agent from
 working on a task it did not claim. It is a coordination signal between
 cooperating agents — the point is that well-behaved agents do not collide, not
@@ -230,7 +322,7 @@ so a plan that was designed and then forgotten is visible rather than lost.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-ready-queue">The ready queue</a></li><li class="lvl-2"><a href="#claiming-the-part-that-makes-parallelism-safe">Claiming: the part that makes parallelism safe</a></li><li class="lvl-2"><a href="#plans-are-a-composition-not-a-primitive">Plans are a composition, not a primitive</a></li><li class="lvl-2"><a href="#claude-code-plan-mode-feeds-this-automatically">Claude Code plan mode feeds this automatically</a></li>
+      <li class="lvl-2"><a href="#the-ready-queue">The ready queue</a></li><li class="lvl-2"><a href="#claiming-the-part-that-makes-parallelism-safe">Claiming: the part that makes parallelism safe</a></li><li class="lvl-3"><a href="#the-two-clocks">The two clocks</a></li><li class="lvl-2"><a href="#plans-are-a-composition-not-a-primitive">Plans are a composition, not a primitive</a></li><li class="lvl-2"><a href="#claude-code-plan-mode-feeds-this-automatically">Claude Code plan mode feeds this automatically</a></li>
     </ul>
   </aside>
   

@@ -34,7 +34,8 @@ internal/files/    markdown layer: frontmatter, atomic writes, watcher     [P1]
 internal/llm/      OpenAI (default), Ollama, Anthropic chat + embeddings   [P1]
 internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF) [P2/P4]
 internal/lifecycle/ supersession, arbitration, provenance                  [P3]
-internal/tasks/    dependency-aware ready-queue                            [P3]
+# (the dependency-aware ready-queue + lease-based claiming live in
+#  internal/store/tasks*.go -- there is no internal/tasks package)
 internal/gardener/ dedup / staleness / digest / stale-plan proposals      [P4]
 internal/plans/    captured CC plan vocabulary: tags, statuses, tracking task
 internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount [P2+]

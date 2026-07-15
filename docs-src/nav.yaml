@@ -14,6 +14,8 @@ sections:
     pages:
       - index.md
       - quickstart.md
+      - install.md
+      - claude-code.md
 
   - title: Concepts
     slug: concepts
@@ -26,6 +28,18 @@ sections:
       - tasks-and-plans.md
       - projects.md
       - gardener.md
+
+  - title: Guides
+    slug: guides
+    description: Task-shaped walkthroughs — wiring up an agent, writing memories worth recalling, running a fleet, and fixing what broke.
+    pages:
+      - integrate-your-agent.md
+      - write-good-memories.md
+      - coordinate-agents.md
+      - plan-mode.md
+      - research-trials.md
+      - data.md
+      - troubleshooting.md
 
   - title: Reference
     slug: reference
@@ -40,4 +54,14 @@ sections:
       - cli-seamlessd.md
       - configuration.md
       - hooks.md
+      - console.md
       - storage.md
+      - glossary.md
+
+  - title: Internals
+    slug: internals
+    description: For contributors — the package layering, the check gate, and the invariants the code holds.
+    pages:
+      - architecture.md
+      - contributing.md
+      - invariants.md
