@@ -122,7 +122,7 @@ func runTaskClaim(sub string, args []string) error {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam task %s <id> [--lease <seconds>]", sub)
+		return fmt.Errorf("usage: seam task %s [--lease <seconds>] <id> (flags must precede the id)", sub)
 	}
 	id := fs.Arg(0)
 	ctx := context.Background()
@@ -150,7 +150,7 @@ func runTaskRelease(args []string) error {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam task release <id> [--force]")
+		return fmt.Errorf("usage: seam task release [--force] <id> (flags must precede the id)")
 	}
 	id := fs.Arg(0)
 

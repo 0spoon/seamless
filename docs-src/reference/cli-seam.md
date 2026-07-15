@@ -25,9 +25,12 @@ seam task release 01K7ABCD --force    # --force is ignored, silently
 ```
 
 There is no error and no warning — the second form releases the task through the
-normal holder-checked path and the override never happens. The usage text prints
-the trailing-flag form (`seam task release <id> [--force]`), so the help is not
-a reliable guide here.
+normal holder-checked path and the override never happens.
+
+`seam help` prints the working order and says so up front, so the help is a
+reliable guide. It was not always: the usage text used to print the
+trailing-flag form for exactly the commands where it does not work, which is
+worth knowing if you are reading an older build's `--help`.
 
 The commands where this bites, written the way that actually works:
 
@@ -103,9 +106,9 @@ seam capture [--project P] URL
 ```
 
 Calls `capture_url` to fetch a page through the SSRF-safe fetcher and store it
-as a note. An empty `--project` files the note under `inbox`. Remember the flag
-order — the usage text shows `seam capture URL [--project P]`, which parses the
-flag as a positional and drops it.
+as a note. An empty `--project` files the note under `inbox`. Mind the flag
+order: `seam capture URL --project p` parses `--project` as a positional and
+drops it, filing the note to `inbox` without saying so.
 
 ## Tasks
 

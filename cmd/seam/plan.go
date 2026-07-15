@@ -178,7 +178,7 @@ func runPlanCheck(args []string) error {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam plan check <slug> [--cwd DIR]")
+		return fmt.Errorf("usage: seam plan check [--cwd DIR] <slug> (flags must precede the slug)")
 	}
 	slug := fs.Arg(0)
 	if *cwd == "" {

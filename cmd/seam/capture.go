@@ -15,7 +15,7 @@ func runCapture(args []string) error {
 		return err
 	}
 	if fs.NArg() == 0 {
-		return fmt.Errorf("usage: seam capture URL [--project P]")
+		return fmt.Errorf("usage: seam capture [--project P] URL (flags must precede the URL)")
 	}
 	ctx := context.Background()
 	cli, _, err := dial(ctx)

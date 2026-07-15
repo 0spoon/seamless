@@ -73,25 +73,31 @@ func main() {
 func usage() {
 	fmt.Fprint(os.Stderr, `seam -- Seamless CLI (talks to a running seamlessd)
 
+Flags go BEFORE positional arguments, as written below. Go's flag package stops
+parsing at the first positional, so a trailing flag is silently ignored rather
+than rejected: "seam capture URL --project p" files the note to inbox. The one
+exception is recall, which parses its own arguments and takes flags either side
+of the query.
+
 agent loop:
   seam prime [--cwd DIR] [--name NAME]         start/resume a session, print the briefing
   seam remember --name N --kind K --description D [--body TEXT] [--project P]
   seam recall QUERY [--scope all|memories|notes] [--project P] [--limit N]
-  seam capture URL [--project P]               capture a web page as a note
+  seam capture [--project P] URL               capture a web page as a note
 
 tasks:
   seam ready [--project P] [--blocked] [--plan S]   actionable queue (+ blocked tasks)
   seam task list [--project P] [--status S] [--plan S]   list tasks (--plan lists a plan's steps)
   seam task add --title T [--body B] [--project P] [--depends id,id] [--plan S]
   seam task done|start|drop|reopen <id>        transition a task
-  seam task claim <id> [--lease SECS]          atomically claim a task (lease-based)
-  seam task heartbeat <id> [--lease SECS]      refresh the lease on a task you hold
-  seam task release <id> [--force]             release a task you hold (--force: owner override, any holder)
+  seam task claim [--lease SECS] <id>          atomically claim a task (lease-based)
+  seam task heartbeat [--lease SECS] <id>      refresh the lease on a task you hold
+  seam task release [--force] <id>             release a task you hold (--force: owner override, any holder)
 
 captured plans (Claude Code plan mode):
   seam plan list [--project P] [--window W]    list captured plans with status/iteration
   seam plan show <slug>                        one plan: body, attached notes, tasks
-  seam plan check <slug> [--cwd DIR]           FRESH/STALE per note vs the repo's git history
+  seam plan check [--cwd DIR] <slug>           FRESH/STALE per note vs the repo's git history
   seam plan approve <slug>                     escape hatch: flip to approved + create the task
 
 observability:
