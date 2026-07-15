@@ -1,26 +1,65 @@
-# thereisnospoon.org -- landing page
+# thereisnospoon.org -- landing page + docs site
 
-This directory is the Seamless marketing site, served by GitHub Pages.
+This directory is the Seamless public site, served by GitHub Pages: a
+hand-written landing page at `/`, and the generated documentation site at
+`/docs/`.
 
 ## Contents
 
 ```
-index.html              the page (single file, no build step)
+index.html              the landing page (single file, no build step)
 CNAME                   custom domain: thereisnospoon.org
+.nojekyll               disable Jekyll (it would skip our _-prefixed paths)
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
 static/favicon.svg      the 0spoon mark (an empty set)
 static/og.png           1200x630 social preview card
 static/og-source.html   source for og.png (see below)
 static/fonts/           self-hosted variable woff2 (OFL, see OFL-NOTICE.txt)
+docs/                   GENERATED docs site -- do not edit (see below)
 ```
 
 Fully self-contained: no CDNs, no webfont requests, no analytics, no cookies.
-Light + dark themes (follows the OS; the toggle stores an override).
+Light + dark themes (follows the OS; the toggle stores an override). The docs
+share this design system and the same `localStorage("theme")` key, so a theme
+chosen on either surface holds across both.
+
+## The docs site is generated
+
+**Never edit `docs/docs/` by hand.** It is build output, committed so GitHub
+Pages can serve it without a CI build step:
+
+```
+docs-src/           markdown sources + nav.yaml (the information architecture)
+cmd/docsgen/        the generator: templates, assets, and the two code generators
+docs/docs/          generated HTML (committed; every file carries a marker)
+```
+
+```bash
+make docs           # regenerate docs/docs/ from docs-src/
+make docs-serve     # regenerate and serve at 127.0.0.1:8899/docs/
+make docs-check     # fail if the committed output is stale (part of `make check`)
+```
+
+**The drift rule:** because the output is committed and `make check` runs
+`docs-check`, any change to `docs-src/` must be followed by `make docs` and the
+result committed in the same change, or the build goes red. That applies to
+changes in the *code* too: the MCP tool reference is generated from
+`mcp.Catalog()` and the configuration reference from `config.Defaults()`, so
+adding a tool or a config key makes the committed docs stale by design -- that is
+the mechanism that stops the reference from quietly lying.
+
+Upgrading chroma, goldmark, or Go can shift the generated HTML for the same
+reason. Regenerate in the same PR as the upgrade. Never auto-regenerate in CI:
+the point of committing the output is that a human saw it.
 
 ## Preview locally
 
-Any static file server pointed at this directory works, e.g.:
+```
+make docs-serve     # landing page at /, docs at /docs/
+```
+
+Or any static file server pointed at this directory:
 
 ```
 cd docs && python3 -m http.server 8899

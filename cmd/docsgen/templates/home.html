@@ -1,0 +1,18 @@
+{{define "content" -}}
+<article class="prose home-intro">
+  <h1>{{.Title}}</h1>
+  {{with .Description}}<p class="lede">{{.}}</p>{{end}}
+  {{.Body}}
+</article>
+
+<h2 class="grid-head">Browse the docs</h2>
+<div class="card-grid">
+  {{$docsRoot := .DocsRoot}}
+  {{range .Site.Sections}}{{if .Index}}
+  <a class="doc-card" href="{{$docsRoot}}{{.Index.URL}}">
+    <h2>{{.Title}}</h2>
+    {{with .Description}}<p>{{.}}</p>{{end}}
+  </a>
+  {{end}}{{end}}
+</div>
+{{end}}

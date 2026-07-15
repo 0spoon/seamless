@@ -1,0 +1,24 @@
+# The documentation site's information architecture: section order, page order,
+# and nothing else. docsgen cross-validates this against docs-src/ in both
+# directions -- a page listed here but missing on disk, or present on disk but
+# unlisted, is a build error -- so the nav and the tree cannot drift apart.
+#
+# `pages` are markdown paths relative to the section's `slug`, in nav order.
+# A section with a slug gets a generated card-grid index at /docs/<slug>/ unless
+# it lists its own <slug>/index.md. Underscore-prefixed paths (_tools/) are
+# generator partials, not pages, and are not listed here.
+sections:
+  - title: Getting started
+    slug: ""
+    description: Install Seamless, wire it to Claude Code, and watch the first briefing land.
+    pages:
+      - index.md
+      - quickstart.md
+
+  - title: Reference
+    slug: reference
+    description: The complete surface -- MCP tools, CLIs, configuration keys, hooks, and file formats.
+    pages:
+      - mcp/index.md
+      - mcp/tasks.md
+      - configuration.md
