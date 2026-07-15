@@ -52,7 +52,7 @@ func TestUpsertAndCosineSearch(t *testing.T) {
 	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m1", []float32{0.9, 0.1, 0}))
 	require.NoError(t, UpsertEmbedding(ctx, db, "c", "note", "m1", []float32{0, 1, 0}))
 
-	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 10)
+	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 3)
 	require.Equal(t, "a", hits[0].ItemID) // identical
@@ -62,12 +62,12 @@ func TestUpsertAndCosineSearch(t *testing.T) {
 	require.InDelta(t, 0.0, hits[2].Score, 1e-6)
 
 	// limit caps the result set.
-	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 2)
+	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, nil, 2)
 	require.NoError(t, err)
 	require.Len(t, hits, 2)
 
 	// kind filter restricts the search space.
-	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", []string{"note"}, 10)
+	hits, err = CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", []string{"note"}, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "c", hits[0].ItemID)
@@ -80,7 +80,7 @@ func TestCosineSearchModelScope(t *testing.T) {
 	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0}))
 	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m2", []float32{1, 0}))
 
-	hits, err := CosineSearch(ctx, db, []float32{1, 0}, "m1", nil, 10)
+	hits, err := CosineSearch(ctx, db, []float32{1, 0}, "m1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "a", hits[0].ItemID)
@@ -94,7 +94,7 @@ func TestCosineSearchSkipsDimMismatch(t *testing.T) {
 	require.NoError(t, UpsertEmbedding(ctx, db, "a", "memory", "m1", []float32{1, 0, 0}))
 	require.NoError(t, UpsertEmbedding(ctx, db, "b", "memory", "m1", []float32{1, 0})) // 2-dim
 
-	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, 10)
+	hits, err := CosineSearch(ctx, db, []float32{1, 0, 0}, "m1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "a", hits[0].ItemID)
@@ -122,28 +122,28 @@ func TestCosineSearchScoped_ProjectAndGlobal(t *testing.T) {
 	q := []float32{1, 0, 0}
 
 	// seam + global: the other-project row and the orphan are excluded.
-	hits, err := CosineSearchScoped(ctx, db, q, "m1", nil, []string{"", "seam"}, 10)
+	hits, err := CosineSearch(ctx, db, q, "m1", nil, []string{"", "seam"}, 10)
 	require.NoError(t, err)
 	require.Equal(t, []string{"a", "c", "n"}, hitIDs(hits)) // best-first
 
 	// Global-only scope sees only the global memory.
-	hits, err = CosineSearchScoped(ctx, db, q, "m1", nil, []string{""}, 10)
+	hits, err = CosineSearch(ctx, db, q, "m1", nil, []string{""}, 10)
 	require.NoError(t, err)
 	require.Equal(t, []string{"c"}, hitIDs(hits))
 
 	// Kind and project filters compose: notes in scope only.
-	hits, err = CosineSearchScoped(ctx, db, q, "m1", []string{"note"}, []string{"", "seam"}, 10)
+	hits, err = CosineSearch(ctx, db, q, "m1", []string{"note"}, []string{"", "seam"}, 10)
 	require.NoError(t, err)
 	require.Equal(t, []string{"n"}, hitIDs(hits))
 
 	// An empty projects filter keeps the unscoped full-scan behavior, orphan
 	// included.
-	hits, err = CosineSearchScoped(ctx, db, q, "m1", nil, nil, 10)
+	hits, err = CosineSearch(ctx, db, q, "m1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 5)
 }
 
-func TestUpsertReplacesAndDelete(t *testing.T) {
+func TestUpsertReplaces(t *testing.T) {
 	db := newEmbedDB(t)
 	ctx := context.Background()
 
@@ -156,11 +156,6 @@ func TestUpsertReplacesAndDelete(t *testing.T) {
 	var count int
 	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embeddings`).Scan(&count))
 	require.Equal(t, 1, count)
-
-	require.NoError(t, DeleteEmbedding(ctx, db, "a"))
-	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM embeddings`).Scan(&count))
-	require.Zero(t, count)
-	require.NoError(t, DeleteEmbedding(ctx, db, "a")) // idempotent
 }
 
 func TestUpsertRejectsEmpty(t *testing.T) {
@@ -250,7 +245,7 @@ func TestCosineSearchMatchesNaiveReference(t *testing.T) {
 		{"no-matches", []string{"nope"}, 10},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := CosineSearch(ctx, db, query, "m1", tc.kinds, tc.limit)
+			got, err := CosineSearch(ctx, db, query, "m1", tc.kinds, nil, tc.limit)
 			require.NoError(t, err)
 			want := naive(tc.kinds, tc.limit)
 			require.Equal(t, want, got)

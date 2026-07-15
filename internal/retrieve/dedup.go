@@ -33,7 +33,7 @@ func (s *Service) DedupHint(ctx context.Context, project, name, description stri
 	if project != "" {
 		scope = append(scope, project)
 	}
-	hits, err := store.CosineSearchScoped(ctx, s.db, qvec, s.embedder.Model(), []string{"memory"}, scope, 3)
+	hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), []string{"memory"}, scope, 3)
 	if err != nil {
 		return nil, err
 	}

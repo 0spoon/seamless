@@ -56,7 +56,7 @@ func TestEmbedOnWrite(t *testing.T) {
 	require.Equal(t, len(keywordVocab), dims)
 
 	// Cosine search finds it for a semantically-matching query.
-	hits, err := store.CosineSearch(ctx, db, keywordVec("chroma boot race"), "fake-v1", nil, 10)
+	hits, err := store.CosineSearch(ctx, db, keywordVec("chroma boot race"), "fake-v1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, written.ID, hits[0].ItemID)
@@ -80,7 +80,7 @@ func TestEmbedRanking(t *testing.T) {
 	otherW, err := m.WriteMemory(ctx, other)
 	require.NoError(t, err)
 
-	hits, err := store.CosineSearch(ctx, db, keywordVec("chroma boot race"), "fake-v1", nil, 10)
+	hits, err := store.CosineSearch(ctx, db, keywordVec("chroma boot race"), "fake-v1", nil, nil, 10)
 	require.NoError(t, err)
 	require.Len(t, hits, 2)
 	require.Equal(t, bootW.ID, hits[0].ItemID, "the chroma/boot/race memory ranks first")
