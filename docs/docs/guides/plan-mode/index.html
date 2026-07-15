@@ -234,8 +234,9 @@ a stale hint should lose to your actual memories, not crowd them out.</p>
 now. A plan written against a tree that has since moved on is not automatically
 wrong, but it is worth re-reading before executing - that is the question this
 answers.</p>
-<p>Remember that <code>seam</code> flags go <strong>before</strong> positionals:
-<code>seam plan check --cwd ~/repos/myproj my-plan-slug</code>. See the
+<p><code>--cwd</code> picks the repo to check against and defaults to the current directory. It
+goes on either side of the slug: <code>seam plan check --cwd ~/repos/myproj my-slug</code>
+and <code>seam plan check my-slug --cwd ~/repos/myproj</code> are the same line. See the
 <a href="../../reference/cli-seam/">seam CLI</a>.</p>
 <p>You can also browse everything at <code>/console/plans</code>.</p>
 <h2 id="turning-it-off">Turning it off</h2>

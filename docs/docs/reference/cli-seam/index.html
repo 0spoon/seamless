@@ -178,14 +178,14 @@ are the same line:</p>
 is an error instead of a silently different command: <code>seam recall foo --projct p</code>
 reports <code>flag provided but not defined: -projct</code>. A positional that starts with
 <code>-</code> needs the <code>--</code> terminator (<code>seam recall -- -foo</code>).</p>
-<p>Two commands have not been converted yet - <code>seam plan check</code> and <code>seam sessions</code>.
-Go's <code>flag</code> package stops parsing at the first positional, so a trailing flag
-cannot bind there. Rather than ignore it, <code>seam</code> rejects the line:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan check --cwd ~/repos/myproj my-plan-slug   <span class="c1"># works</span>
-</span></span><span class="line"><span class="cl">seam plan check my-plan-slug --cwd ~/repos/myproj   <span class="c1"># error: flags must precede the positional argument</span>
-</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> parse no flags at all. Commands that take only
-flags and no positionals (<code>ready</code>, <code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>,
-<code>usage</code>, <code>doctor</code>) are unaffected either way.</p>
+<p>One command has not been converted yet - <code>seam sessions</code>. Go's <code>flag</code> package
+stops parsing at the first positional, so a trailing flag cannot bind there.
+Rather than ignore it, <code>seam</code> rejects the line:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seam sessions --status active 01K7ABCD   <span class="c1"># works</span>
+</span></span><span class="line"><span class="cl">seam sessions 01K7ABCD --status active   <span class="c1"># error: flags must precede the positional argument</span>
+</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> and <code>seam plan show|approve</code> parse no flags at
+all. Commands that take only flags and no positionals (<code>ready</code>, <code>task list</code>,
+<code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are unaffected either way.</p>
 <h2 id="agent-loop">Agent loop</h2>
 <p>The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.</p>
@@ -279,13 +279,17 @@ any holder's claim. Agents on the MCP surface cannot reach that path.</p>
 <h2 id="captured-plans">Captured plans</h2>
 <p>Owner surface over the plans Claude Code plan mode captures. <code>list</code>, <code>show</code>, and
 <code>approve</code> are backed by the console's JSON endpoints; <code>check</code> also runs <code>git</code>
-locally. Bare <code>seam plan</code> is the same as <code>seam plan list</code>.</p>
+locally. Bare <code>seam plan</code> is not a command - it names its subcommands and exits
+2, the same as bare <code>seam task</code>.</p>
 <h3 id="seam_plan_list">seam plan list</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan list <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--window W<span class="o">]</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seam plan list <span class="o">[</span>--project SLUG<span class="o">]</span> <span class="o">[</span>--window WINDOW<span class="o">]</span>
 </span></span></code></pre><p>Lists captured plans with slug, status, title, project, iteration, agent count,
 task progress, and age. <code>--window</code> is <code>24h</code>, <code>7d</code>, <code>30d</code>, or <code>all</code> (default
-<code>all</code>) and is applied by the server; <code>--project</code> filters the returned rows
-client-side. Prints <code>(no captured plans)</code> when nothing matches.</p>
+<code>all</code>) and is applied by the server; anything else is a parse error rather than a
+silent fall back to <code>all</code>. <code>--project</code> filters the returned rows client-side.
+Prints <code>(no captured plans)</code> when nothing matches.</p>
+<p><code>plan list</code> takes no positional: <code>seam plan list &lt;slug&gt;</code> is an error pointing at
+<code>seam plan show</code>, not a listing of every plan.</p>
 <h3 id="seam_plan_show">seam plan show</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam plan show &lt;slug&gt;
 </span></span></code></pre><p>Prints one plan: its status, project, title, source file and iteration, the

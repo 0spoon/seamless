@@ -49,5 +49,10 @@ func commands() []cmd {
 		taskClaimCmd,
 		taskHeartbeatCmd,
 		taskReleaseCmd,
+
+		planListCmd,
+		planShowCmd,
+		planCheckCmd,
+		planApproveCmd,
 	}
 }

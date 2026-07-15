@@ -76,8 +76,9 @@ now. A plan written against a tree that has since moved on is not automatically
 wrong, but it is worth re-reading before executing - that is the question this
 answers.
 
-Remember that `seam` flags go **before** positionals:
-`seam plan check --cwd ~/repos/myproj my-plan-slug`. See the
+`--cwd` picks the repo to check against and defaults to the current directory. It
+goes on either side of the slug: `seam plan check --cwd ~/repos/myproj my-slug`
+and `seam plan check my-slug --cwd ~/repos/myproj` are the same line. See the
 [seam CLI](/reference/cli-seam/).
 
 You can also browse everything at `/console/plans`.

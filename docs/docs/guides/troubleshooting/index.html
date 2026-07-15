@@ -335,10 +335,10 @@ override never happened, with no error and no warning. Both halves of that are
 gone:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
 </span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force applies here too</span>
-</span></span></code></pre><p>The agent-loop commands and the whole tasks group parse flags and positionals in
-any order. <code>seam plan check</code> and <code>seam sessions</code> have not been converted yet, and
-<strong>reject</strong> a trailing flag with an error naming the order that works - they never
-ignore one. A typo'd flag (<code>--projct</code>) is an error everywhere rather than being
+</span></span></code></pre><p>The agent-loop commands and the whole tasks and plans groups parse flags and
+positionals in any order. <code>seam sessions</code> has not been converted yet, and
+<strong>rejects</strong> a trailing flag with an error naming the order that works - it never
+ignores one. A typo'd flag (<code>--projct</code>) is an error everywhere rather than being
 absorbed into the positionals.</p>
 <p><strong>If a flag still looks ignored</strong>, it is not a flag-order problem. Check that you
 are running the <code>seam</code> you think you are (<code>seam doctor</code>), and see the <a href="../../reference/cli-seam/">seam CLI

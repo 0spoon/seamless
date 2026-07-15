@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -15,28 +14,7 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/0spoon/seamless/internal/config"
 )
-
-func runPlan(args []string) error {
-	if len(args) == 0 {
-		return runPlanList(nil)
-	}
-	sub, rest := args[0], args[1:]
-	switch sub {
-	case "list":
-		return runPlanList(rest)
-	case "show":
-		return runPlanShow(rest)
-	case "check":
-		return runPlanCheck(rest)
-	case "approve":
-		return runPlanApprove(rest)
-	default:
-		return fmt.Errorf("unknown plan subcommand %q (use: list, show, check, approve)", sub)
-	}
-}
 
 // cliPlanRow mirrors the console's planRow JSON.
 type cliPlanRow struct {
@@ -72,81 +50,116 @@ type cliPlanDetail struct {
 	CanApprove bool `json:"canApprove"`
 }
 
-func runPlanList(args []string) error {
-	fs := flag.NewFlagSet("plan list", flag.ContinueOnError)
-	project := fs.String("project", "", "filter by project slug")
-	window := fs.String("window", "all", "time window: 24h|7d|30d|all")
-	if err := fs.Parse(args); err != nil {
-		return err
+// --- plan list ---
+
+var planListCmd = spec("plan list", groupPlans, "list captured plans with status/iteration",
+	// `seam plan list <slug>` listed EVERY plan: fs.NArg() was never checked, so the
+	// slug went on the floor and the caller read a full listing as a filtered one.
+	// The hint names the command that does take a slug, which no arity arithmetic
+	// could guess.
+	noArgs().withHint("to show one plan, use: seam plan show <slug>"),
+	bindPlanList, runPlanList)
+
+// planWindows is the selector set store.ResolveRetrievalWindow accepts
+// (internal/store/retrieval_report.go).
+//
+// It is transcribed rather than imported because seam must not import
+// internal/store: that pulls the ~30 modernc.org/sqlite packages into a binary
+// that currently has none of them (doctor.go documents the same reasoning for not
+// importing internal/mcp). A package-local slice of accepted values at the surface
+// is house style here, not a compromise -- console/search.go, console/sessions.go,
+// console/notes.go and console/relations.go each keep their own.
+var planWindows = []string{"24h", "7d", "30d", "all"}
+
+type planListOpts struct {
+	project *string
+	window  *string
+}
+
+func bindPlanList(fs *flag.FlagSet) *planListOpts {
+	return &planListOpts{
+		project: fs.String("project", "", "filter by project `SLUG`"),
+		// --window bogus reached ResolveRetrievalWindow's `default:` and came back as
+		// "all time". Nothing in the output says which window it answered, so the
+		// caller reads a full-history list as the 24h one they asked for.
+		window: enumFlag(fs, "window", "all", "time `WINDOW`", planWindows),
 	}
-	cfg, err := config.Load()
+}
+
+func runPlanList(_ context.Context, e *env, o *planListOpts, _ []string) error {
+	cfg, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
 	var data struct {
 		Rows []cliPlanRow `json:"rows"`
 	}
-	if err := consoleJSON(cfg, "/console/plans?format=json&w="+url.QueryEscape(*window), &data); err != nil {
+	if err := consoleJSON(cfg, "/console/plans?format=json&w="+url.QueryEscape(*o.window), &data); err != nil {
 		return err
 	}
 	shown := 0
 	for _, r := range data.Rows {
-		if *project != "" && r.Project != *project {
+		if *o.project != "" && r.Project != *o.project {
 			continue
 		}
-		fmt.Printf("  %-24s [%-9s] %s  (%s, iter %d, %d agents, tasks %d/%d, %s)\n",
+		fmt.Fprintf(e.stdout, "  %-24s [%-9s] %s  (%s, iter %d, %d agents, tasks %d/%d, %s)\n",
 			r.Slug, r.Status, r.Title, orDash(r.Project), r.Iteration, r.Agents,
 			r.TasksDone, r.TasksTotal, agoShort(r.Updated))
 		shown++
 	}
 	if shown == 0 {
-		fmt.Println("(no captured plans)")
+		fmt.Fprintln(e.stdout, "(no captured plans)")
 	}
 	return nil
 }
 
-func runPlanShow(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: seam plan show <slug>")
-	}
-	cfg, err := config.Load()
+// --- plan show ---
+
+var planShowCmd = spec("plan show", groupPlans, "one plan: body, attached notes, tasks",
+	exactly(1, "slug"), bindNoOpts, runPlanShow)
+
+func runPlanShow(_ context.Context, e *env, _ *noOpts, pos []string) error {
+	cfg, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
 	var d cliPlanDetail
-	if err := consoleJSON(cfg, "/console/plans/"+url.PathEscape(args[0])+"?format=json", &d); err != nil {
+	if err := consoleJSON(cfg, "/console/plans/"+url.PathEscape(pos[0])+"?format=json", &d); err != nil {
 		return err
 	}
-	fmt.Printf("%s  [%s]  %s\n", d.Plan.Slug, d.Plan.Status, orDash(d.Plan.Project))
-	fmt.Printf("title:    %s\n", d.Plan.Title)
-	fmt.Printf("file:     %s.md (iteration %d)\n", d.Plan.Basename, d.Plan.Iteration)
+	fmt.Fprintf(e.stdout, "%s  [%s]  %s\n", d.Plan.Slug, d.Plan.Status, orDash(d.Plan.Project))
+	fmt.Fprintf(e.stdout, "title:    %s\n", d.Plan.Title)
+	fmt.Fprintf(e.stdout, "file:     %s.md (iteration %d)\n", d.Plan.Basename, d.Plan.Iteration)
 	if len(d.Attached) > 0 {
-		fmt.Printf("attached: %d note(s)\n", len(d.Attached))
+		fmt.Fprintf(e.stdout, "attached: %d note(s)\n", len(d.Attached))
 		for _, a := range d.Attached {
 			kind := "note"
 			if a.IsAgent {
 				kind = "agent"
 			}
-			fmt.Printf("  [%-5s] %s  %s (%s)\n", kind, shortID(a.ID), a.Title, agoShort(a.Updated))
+			fmt.Fprintf(e.stdout, "  [%-5s] %s  %s (%s)\n", kind, shortID(a.ID), a.Title, agoShort(a.Updated))
 		}
 	}
 	if len(d.Tasks) > 0 {
-		fmt.Printf("tasks:    %d\n", len(d.Tasks))
+		fmt.Fprintf(e.stdout, "tasks:    %d\n", len(d.Tasks))
 		for _, tk := range d.Tasks {
-			fmt.Printf("  %s  [%-11s] %s\n", shortID(tk.ID), tk.Status, tk.Title)
+			fmt.Fprintf(e.stdout, "  %s  [%-11s] %s\n", shortID(tk.ID), tk.Status, tk.Title)
 		}
 	}
 	if strings.TrimSpace(d.Body) != "" {
-		fmt.Printf("\n%s\n", d.Body)
+		fmt.Fprintf(e.stdout, "\n%s\n", d.Body)
 	}
 	return nil
 }
 
-func runPlanApprove(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: seam plan approve <slug>")
-	}
-	cfg, err := config.Load()
+// --- plan approve ---
+
+var planApproveCmd = spec("plan approve", groupPlans,
+	"escape hatch: flip to approved + create the task",
+	exactly(1, "slug"), bindNoOpts, runPlanApprove)
+
+func runPlanApprove(_ context.Context, e *env, _ *noOpts, pos []string) error {
+	cfg, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -156,44 +169,49 @@ func runPlanApprove(args []string) error {
 		TaskCreated bool   `json:"taskCreated"`
 		TaskID      string `json:"taskId"`
 	}
-	if err := consolePOST(cfg, "/console/plans/"+url.PathEscape(args[0])+"/approve?format=json", &out); err != nil {
+	if err := consolePOST(cfg, "/console/plans/"+url.PathEscape(pos[0])+"/approve?format=json", &out); err != nil {
 		return err
 	}
-	fmt.Printf("plan %s -> %s\n", out.Slug, out.Status)
+	fmt.Fprintf(e.stdout, "plan %s -> %s\n", out.Slug, out.Status)
 	if out.TaskCreated {
-		fmt.Printf("created task %s\n", shortID(out.TaskID))
+		fmt.Fprintf(e.stdout, "created task %s\n", shortID(out.TaskID))
 	} else {
-		fmt.Println("(tracking task already exists)")
+		fmt.Fprintln(e.stdout, "(tracking task already exists)")
 	}
 	return nil
+}
+
+// --- plan check ---
+
+var planCheckCmd = spec("plan check", groupPlans,
+	"FRESH/STALE per note vs the repo's git history",
+	exactly(1, "slug"), bindPlanCheck, runPlanCheck)
+
+type planCheckOpts struct {
+	cwd *string
+}
+
+func bindPlanCheck(fs *flag.FlagSet) *planCheckOpts {
+	return &planCheckOpts{
+		cwd: fs.String("cwd", "", "repo `DIR` to check against (default: current)"),
+	}
 }
 
 // runPlanCheck compares each captured note's git stamp against the current
 // HEAD of --cwd: a note is STALE when files it mentions changed since its
 // stamped commit, FRESH otherwise, UNKNOWN when the stamp or commit cannot be
 // resolved. It reads note bodies via the console and runs git locally.
-func runPlanCheck(args []string) error {
-	const usageMsg = "usage: seam plan check [--cwd DIR] <slug> (flags must precede the slug)"
-	fs := flag.NewFlagSet("plan check", flag.ContinueOnError)
-	cwd := fs.String("cwd", "", "repo to check against (default: current directory)")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if fs.NArg() == 0 {
-		return errors.New(usageMsg)
-	}
-	if err := requireFlagsFirst(fs, usageMsg); err != nil {
-		return err
-	}
-	slug := fs.Arg(0)
-	if *cwd == "" {
+func runPlanCheck(_ context.Context, e *env, o *planCheckOpts, pos []string) error {
+	slug := pos[0]
+	cwd := *o.cwd
+	if cwd == "" {
 		wd, err := os.Getwd()
 		if err != nil {
 			return err
 		}
-		*cwd = wd
+		cwd = wd
 	}
-	cfg, err := config.Load()
+	cfg, err := e.loadConfig()
 	if err != nil {
 		return err
 	}
@@ -202,11 +220,11 @@ func runPlanCheck(args []string) error {
 		return err
 	}
 
-	head, err := gitOut(*cwd, "rev-parse", "HEAD")
+	head, err := gitOut(cwd, "rev-parse", "HEAD")
 	if err != nil {
-		return fmt.Errorf("%s is not a git repo (or git failed): %w", *cwd, err)
+		return fmt.Errorf("%s is not a git repo (or git failed): %w", cwd, err)
 	}
-	fmt.Printf("plan %s vs %s @ %.12s\n", slug, *cwd, head)
+	fmt.Fprintf(e.stdout, "plan %s vs %s @ %.12s\n", slug, cwd, head)
 
 	type entry struct{ label, body string }
 	entries := []entry{{"plan " + d.Plan.Basename + ".md", d.Body}}
@@ -215,19 +233,19 @@ func runPlanCheck(args []string) error {
 			Body string `json:"body"`
 		}
 		if err := consoleJSON(cfg, "/console/notes/"+url.PathEscape(a.ID)+"?format=json", &n); err != nil {
-			fmt.Printf("  [UNKNOWN] %-40s note unreadable: %v\n", a.Slug, err)
+			fmt.Fprintf(e.stdout, "  [UNKNOWN] %-40s note unreadable: %v\n", a.Slug, err)
 			continue
 		}
 		entries = append(entries, entry{a.Slug, n.Body})
 	}
 
 	stale := 0
-	for _, e := range entries {
-		verdict, detail := checkEntry(*cwd, head, e.body)
+	for _, en := range entries {
+		verdict, detail := checkEntry(cwd, head, en.body)
 		if verdict == "STALE" {
 			stale++
 		}
-		fmt.Printf("  [%-7s] %-40s %s\n", verdict, e.label, detail)
+		fmt.Fprintf(e.stdout, "  [%-7s] %-40s %s\n", verdict, en.label, detail)
 	}
 	if stale > 0 {
 		return fmt.Errorf("%d note(s) stale -- re-verify before trusting them", stale)
