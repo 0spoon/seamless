@@ -161,8 +161,16 @@ func ssrfSafeDialer(lookup lookupIPFunc, dial dialContextFunc, allowedPorts map[
 // space (100.64.0.0/10, also used by tailnets), IETF protocol assignments
 // (192.0.0.0/24), benchmarking (198.18.0.0/15), and reserved-plus-broadcast
 // (240.0.0.0/4).
+//
+// The two IPv6 transition ranges are blocked outright rather than unwrapped the
+// way NAT64 is: both embed an IPv4 address that could name a private target, but
+// their layouts differ from RFC 6052 (6to4 carries it at bytes 2:6; Teredo's
+// client address sits in the last four bytes XOR-inverted), so unwrapping is
+// error-prone for no gain -- 6to4 is deprecated (RFC 7526) and Teredo is dead,
+// so blocking their legitimate public use costs nothing.
 var reservedNets = mustCIDRs(
 	"0.0.0.0/8", "100.64.0.0/10", "192.0.0.0/24", "198.18.0.0/15", "240.0.0.0/4",
+	"2002::/16", "2001::/32",
 )
 
 // nat64Prefix is the RFC 6052 well-known NAT64 prefix; an address inside it

@@ -380,6 +380,11 @@ func TestIsPrivateIP(t *testing.T) {
 		"64:ff9b::7f00:1":  true,  // embeds 127.0.0.1
 		"64:ff9b::808:808": false, // embeds 8.8.8.8
 		"2607:f8b0::1":     false, // public IPv6
+		// IPv6 transition ranges are blocked wholesale, not unwrapped: both can
+		// carry an embedded IPv4 naming a private target.
+		"2002:7f00:1::1":       true, // 6to4 embedding 127.0.0.1
+		"2002:0808:0808::1":    true, // 6to4 embedding 8.8.8.8: blocked anyway
+		"2001:0:53aa:64c:0::1": true, // Teredo
 	}
 	for s, want := range cases {
 		require.Equal(t, want, isPrivateIP(net.ParseIP(s)), s)
