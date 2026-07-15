@@ -21,9 +21,9 @@ jobs:
       # test-race needs real history for nothing, but `make build` stamps the
       # binary with `git rev-parse --short HEAD` and `make fmt-check` lists
       # tracked files with `git ls-files`; both need the checkout's .git.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
           cache: true
