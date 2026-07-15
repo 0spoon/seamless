@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# One run per ref: a new push supersedes the in-flight check for the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # test-race needs real history for nothing, but `make build` stamps the
+      # binary with `git rev-parse --short HEAD` and `make fmt-check` lists
+      # tracked files with `git ls-files`; both need the checkout's .git.
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      # Pinned to the version developers run locally. The v1 line is load-bearing,
+      # not just reproducibility: .golangci.yml is v1-format (run:/linters-settings:)
+      # and golangci-lint v2 refuses to parse it. `go install pkg@version` resolves
+      # outside the current module, so this cannot touch go.mod/go.sum.
+      - name: Install golangci-lint
+        run: |
+          go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      # build + vet + fmt-check + lint + test-race. CGO stays enabled (the default
+      # on this runner) because -race requires it; the no-CGO rule is about the
+      # shipped binary's deps, not the test toolchain.
+      - name: make check
+        run: make check
