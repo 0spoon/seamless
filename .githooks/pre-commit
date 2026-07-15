@@ -1,0 +1,29 @@
+#!/bin/sh
+# Pre-commit gate: `make check-fast` -- the fast half of `make check`.
+#
+# test-race is deliberately excluded: it is ~37s against ~3s for this subset,
+# which is too much to charge every commit. CI runs the full `make check` on
+# every push and pull request, and that remains the authority.
+#
+# SCOPE CAVEAT: git runs hooks against the WORKING TREE, not the index. Under
+# partial staging this reports on the tree you are sitting in, not the commit
+# you are making -- it can pass on a broken commit, or fail on a clean one
+# because of a change you did not stage. That makes it a lint gate, not a
+# correctness gate. The usual fix (stash the unstaged half, check, restore) is
+# not safe here: other agents have this repo checked out concurrently, and a
+# stash race loses their work. Cheap-and-approximate beats clever-and-lossy.
+#
+# Bypass a single commit with `git commit --no-verify`.
+
+if make check-fast; then
+	exit 0
+fi
+
+cat >&2 <<'EOF'
+
+pre-commit: check-fast failed -- commit aborted.
+  gofmt drift?  make fmt
+  docs drift?   make docs   (then stage docs/docs/)
+  bypass?       git commit --no-verify
+EOF
+exit 1
