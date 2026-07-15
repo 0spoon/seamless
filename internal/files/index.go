@@ -38,18 +38,6 @@ func tagsJSON(tags []string) (string, error) {
 	return string(b), nil
 }
 
-// parseTags decodes a JSON tags array; a blank or invalid value yields nil.
-func parseTags(s string) []string {
-	if s == "" || s == "[]" {
-		return nil
-	}
-	var tags []string
-	if err := json.Unmarshal([]byte(s), &tags); err != nil {
-		return nil
-	}
-	return tags
-}
-
 // IndexMemory upserts a memory into memories_index and refreshes its FTS row.
 func (ix *Indexer) IndexMemory(ctx context.Context, m core.Memory) error {
 	if m.ID == "" {
