@@ -79,6 +79,28 @@ func TestRegisterProjectForCWD(t *testing.T) {
 	require.Empty(t, slug4)
 }
 
+// An empty slug means "the global scope", so a store failure must stay
+// distinguishable from a legitimately unmapped cwd -- both return an empty slug,
+// and only the error tells them apart. A caller that drops it binds the agent to
+// global memory for the whole session over a transient hiccup. Regression for
+// F16, where a retrieve wrapper swallowed the error and returned "" for both.
+func TestRegisterProjectForCWDFailureIsNotGlobal(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	nonGit := t.TempDir()
+
+	// Legitimately unmapped: empty slug, no error.
+	slug, err := RegisterProjectForCWD(ctx, db, nonGit)
+	require.NoError(t, err)
+	require.Empty(t, slug)
+
+	// Same empty slug, but now carrying an error the caller must not discard.
+	require.NoError(t, db.Close())
+	slug, err = RegisterProjectForCWD(ctx, db, nonGit)
+	require.Error(t, err, "a store failure must not be reported as an unmapped cwd")
+	require.Empty(t, slug)
+}
+
 func TestRegisterProjectForCWDSlugCollision(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

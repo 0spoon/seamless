@@ -275,20 +275,6 @@ func (s *Service) siblingMemories(ctx context.Context, project string, already [
 	return out, nil
 }
 
-// RegisterProjectForCWD resolves cwd to a project slug and, for a not-yet-mapped
-// repo, grows the repo->project map (see store.RegisterProjectForCWD). The
-// session-start hook calls it before assembling the briefing so an agent working
-// in a new repo is bound to a freshly registered project. It is failure-soft:
-// resolution errors degrade to the global scope rather than blocking the agent.
-func (s *Service) RegisterProjectForCWD(ctx context.Context, cwd string) string {
-	slug, err := store.RegisterProjectForCWD(ctx, s.db, cwd)
-	if err != nil {
-		s.logger.Warn("retrieve: register project for cwd", "cwd", cwd, "error", err)
-		return ""
-	}
-	return slug
-}
-
 func projectLabel(project string) string {
 	if project == "" {
 		return "(global)"

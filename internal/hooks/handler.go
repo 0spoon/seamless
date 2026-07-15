@@ -170,8 +170,15 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 
 	// Grow the repo->project map when this agent is working in a not-yet-mapped
 	// repo, so the briefing below (and later tool calls) resolve to a real
-	// project. Best-effort: a failure just leaves the cwd on the global scope.
-	h.retrieve.RegisterProjectForCWD(ctx, p.CWD)
+	// project. Best-effort by the package's never-block-the-agent contract: on a
+	// failure the mapping is simply not written, and every later cwd resolution
+	// falls back to the global scope. That fallback is not desirable, only
+	// preferable to failing session start, so it is logged rather than hidden --
+	// the explicit session_start tool resolves the same cwd and does surface the
+	// error, and that is the path where a wrong binding actually sticks.
+	if _, err := store.RegisterProjectForCWD(ctx, h.db, p.CWD); err != nil {
+		h.logger.Warn("hooks: register project for cwd; scope falls back to global", "cwd", p.CWD, "error", err)
+	}
 
 	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
 		CWD: p.CWD, Source: p.Source, AgentType: p.AgentType,
