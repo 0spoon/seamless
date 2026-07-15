@@ -31,17 +31,30 @@ type ClaimResult struct {
 // ResolveProposal): the write lands only when the task is claimable --
 //
 //	(a) open and ready (no open/in_progress blocker), or
-//	(b) already held by sessionID (a re-claim / heartbeat that refreshes the lease), or
-//	(c) in_progress with an expired lease (a steal from a dead holder).
+//	(b) in_progress and held by sessionID (a re-claim / heartbeat that refreshes
+//	    the lease), or
+//	(c) in_progress but carrying no live claim -- nobody holds it, so it is up for
+//	    grabs (a steal from a dead holder, or a row that was never claimed).
 //
 // Otherwise it returns ErrTaskClaimConflict. Lease expiry is enforced lazily
 // here -- there is no background sweeper. sessionID must be non-empty.
 //
+// core.Task.ClaimLive is the single authority on whether a task is held, and
+// branches (b)+(c) are exactly its negation for an in_progress row: an empty
+// claimed_by (no holder), a NULL lease_expires_at (no lease stamped), or a
+// lapsed lease (lease_expires_at <= now -- ClaimLive uses After, so a lease
+// expiring exactly at now is already dead). Branch (c) must tolerate a claimless
+// in_progress row because UpdateTask can produce one: `seam task start <id>` and
+// MCP tasks_update status=in_progress patch the status without stamping a claim,
+// which is a legitimate owner action. Such a row is already freely editable by
+// anyone (UpdateTask's holder-lock also defers to ClaimLive), so refusing to
+// claim it would strand it as permanently unclaimable until someone reopened it.
+//
 // Branch (a) deliberately ignores claimed_by: a live claim exists only on an
-// in_progress task with an unexpired lease (core.Task.ClaimLive), and every
-// path that writes status='open' clears the claim fields, so a claim value on
-// an open row can only be stale residue (rows written before reopen released
-// claims). Claiming such a row overwrites the residue, self-healing it.
+// in_progress task with an unexpired lease, and every path that writes
+// status='open' clears the claim fields, so a claim value on an open row can
+// only be stale residue (rows written before reopen released claims). Claiming
+// such a row overwrites the residue, self-healing it.
 func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time.Duration, now time.Time) (ClaimResult, error) {
 	if sessionID == "" {
 		return ClaimResult{}, errors.New("store.ClaimTask: empty session id")
@@ -67,7 +80,9 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 		             WHERE d.task_id = tasks.id AND b.status IN ('open','in_progress')))
 		      OR (status = 'in_progress' AND (
 		             claimed_by = ?
-		          OR (lease_expires_at IS NOT NULL AND lease_expires_at < ?)))
+		          OR claimed_by = ''
+		          OR lease_expires_at IS NULL
+		          OR lease_expires_at <= ?))
 		   )`,
 		sessionID, expStr, nowStr, id, sessionID, nowStr)
 	if err != nil {
@@ -82,9 +97,11 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 	if err != nil {
 		return ClaimResult{}, err
 	}
-	// Only a steal from an in_progress holder counts as a reclaim; overwriting a
-	// stale claim left on an open row (branch (a)) is an ordinary claim of a
-	// ready task, not a lease steal.
+	// Only a steal from a real prior holder counts as a reclaim. Overwriting a
+	// stale claim left on an open row (branch (a)), or picking up a claimless
+	// in_progress row left by `seam task start` (branch (c)), takes the task from
+	// nobody -- an ordinary claim, not a lease steal -- and the empty prior
+	// ClaimedBy excludes both, leaving PriorHolder blank.
 	reclaimed := prior.Status == core.TaskInProgress &&
 		prior.ClaimedBy != "" && prior.ClaimedBy != sessionID
 	holder := ""
