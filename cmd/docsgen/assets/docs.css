@@ -328,17 +328,40 @@ a.nav-head.current { color: var(--brand); }
   transition: opacity var(--dur-fast) var(--ease-out);
 }
 .prose pre:hover .copy-code, .copy-code:focus-visible { opacity: 1; }
+/* A hover-revealed control never reveals on a touch screen, where there is no
+   hover to give: on those, the button is simply always there. */
+@media (hover: none) {
+  .copy-code { opacity: 1; }
+}
 .copy-code:hover { color: var(--term-ink); border-color: var(--term-muted); }
 .copy-code.ok { color: var(--term-green); border-color: var(--term-green); opacity: 1; }
 
-/* tables */
+/* tables: the scroll box is the wrapper, never the table (see tableWrapRenderer) */
+.table-wrap {
+  margin: 0 0 20px;
+  overflow-x: auto; /* parameter tables are wide on phones */
+  /* Edge shadows that mark the scrollable sides, so a table whose last column is
+     off-box (the six-column hooks table, and most tables on a phone) does not
+     read as one that simply ends there. The cover gradients are attachment:local
+     and slide away with the content; the shadows under them are attachment:scroll
+     and stay put, so each side only shows while that side has more to reach.
+     Each cover must stay FULLY opaque across the whole 16px shadow it hides --
+     hence the 60% stop on a 28px box (16.8px solid) -- or a table that does not
+     scroll at all still shows a ghost of the shadow through the fade. */
+  background:
+    linear-gradient(to right, var(--paper) 60%, transparent) 0 0 / 28px 100% no-repeat local,
+    linear-gradient(to left, var(--paper) 60%, transparent) 100% 0 / 28px 100% no-repeat local,
+    linear-gradient(to right, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 0 0 / 16px 100% no-repeat scroll,
+    linear-gradient(to left, color-mix(in srgb, var(--ink) 26%, transparent), transparent) 100% 0 / 16px 100% no-repeat scroll;
+}
+/* A scrollable box must be reachable by keyboard; docs.js adds the tabindex only
+   to the wrappers that actually overflow, so the other 60-odd are not tab stops. */
+.table-wrap[tabindex]:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
 .prose table {
   width: 100%;
   border-collapse: collapse;
-  margin: 0 0 20px;
+  margin: 0;
   font-size: 14px;
-  display: block;
-  overflow-x: auto; /* parameter tables are wide on phones */
 }
 .prose thead th {
   text-align: left;
@@ -349,14 +372,25 @@ a.nav-head.current { color: var(--brand); }
   color: var(--faint);
   font-weight: 600;
   border-bottom: 1px solid var(--border-strong);
-  padding: 8px 12px 8px 0;
+  padding: 8px 16px 8px 0;
   white-space: nowrap;
 }
 .prose tbody td {
   border-bottom: 1px solid var(--border);
-  padding: 9px 12px 9px 0;
+  padding: 9px 16px 9px 0;
   color: var(--ink-2);
   vertical-align: top;
+}
+.prose :is(th, td):last-child { padding-right: 0; }
+/* A flag or a path is one atom. The global `overflow-wrap: anywhere` on inline
+   code drops a cell's min-content to a single character, which lets auto layout
+   size the flag column narrower than the flag in it and hyphen-break `--settings`
+   down three lines. Keeping code unbreakable in cells makes each column's
+   min-content honest; anything still too wide scrolls in .table-wrap. */
+.prose :is(th, td) > code,
+.prose :is(th, td) :not(pre) > code {
+  white-space: nowrap;
+  overflow-wrap: normal;
 }
 .prose tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
 

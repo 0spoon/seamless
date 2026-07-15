@@ -186,6 +186,7 @@ burying the handful of tasks that are actually loose work. Pass <code>plan=&lt;s
 either tool to see that plan's steps instead.</p>
 <h2 id="tasks_add">tasks_add</h2>
 <p>Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -228,8 +229,10 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="tasks_update">tasks_update</h2>
 <p>Update a task: change status (open|in_progress|done|dropped), edit title/body, or add dependencies. Moving to done/dropped closes it and unblocks its dependents. A task another session holds via a live claim is locked to its holder: updating it fails with 'already claimed' until the lease lapses or the holder releases it.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -278,8 +281,10 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="tasks_ready">tasks_ready</h2>
 <p>List the actionable (ready) tasks for a project -- open tasks with no unfinished blocker -- oldest first, plus the blocked tasks with their still-open blockers. By default plan-step tasks are excluded; pass plan=&lt;slug&gt; to list that plan's steps instead.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -304,8 +309,10 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="tasks_list">tasks_list</h2>
 <p>List a project's tasks, optionally filtered by status, newest first. By default plan-step tasks are excluded; pass plan=&lt;slug&gt; to list that plan's steps instead. Pass id=&lt;task id&gt; to load a single task by its globally-unique id (a direct lookup that ignores project/status/plan and needs no session scope).</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -342,8 +349,10 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="tasks_claim">tasks_claim</h2>
 <p>Atomically claim a task for the current session, moving it to in_progress with a lease. Fails if another live claim already holds it. Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -368,8 +377,10 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="tasks_release">tasks_release</h2>
 <p>Release a task the current session holds, reopening it (status back to open, claim cleared) so another agent can claim it. Only the current holder may release.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -388,6 +399,7 @@ either tool to see that plan's steps instead.</p>
 </tr>
 </tbody>
 </table>
+</div>
 
 </article>
 

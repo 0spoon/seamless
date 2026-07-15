@@ -205,6 +205,7 @@ because well-behaved agents do not collide — not because misbehaving ones cann
 that lives only in the planner's context dies when that agent does.</p>
 <p>A <a href="../../concepts/tasks-and-plans/">plan</a> is not a primitive — it is everything keyed
 by <code>plan:&lt;slug&gt;</code>. That is what makes the split possible:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -227,6 +228,7 @@ by <code>plan:&lt;slug&gt;</code>. That is what makes the split possible:</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The executors never need the planner. They read the narrative note, then work the
 plan's queue:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">tasks_ready plan=&lt;slug&gt;   ─▶ that plan&#39;s claimable steps
@@ -283,6 +285,7 @@ over-read: <strong>an expired lease does not put the task back in <code>tasks_re
 task is still <code>in_progress</code>, and <code>tasks_ready</code> returns only <code>open</code> tasks. Nothing
 re-queues it, because nothing is scanning for it.</p>
 <p>So when an agent dies holding a task, two different clocks are running:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -304,6 +307,7 @@ re-queues it, because nothing is scanning for it.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The reaper is the backstop that makes crashes self-healing, and it is the only one
 that re-queues. A clean <code>session_end</code> does the same thing immediately, which is
 the real reason a fleet worker should always end its session rather than just
@@ -319,6 +323,7 @@ get the override.</p>
 <h2 id="what-you-see-while-it-runs">What you see while it runs</h2>
 <p>The console is read-mostly and live over SSE — it is how you watch a fleet without
 being in its loop.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -349,6 +354,7 @@ being in its loop.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The same view without a browser:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam ready --blocked                 <span class="c1"># the queue plus what is blocking what</span>
 </span></span><span class="line"><span class="cl">seam task list --status in_progress  <span class="c1"># what is claimed right now</span>

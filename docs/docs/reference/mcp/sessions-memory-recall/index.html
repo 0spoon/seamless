@@ -171,6 +171,7 @@ the connection binding was lost. Re-run <code>session_start</code> with the same
 rebind.</p>
 <h2 id="update-append-supersede-or-delete">Update, append, supersede, or delete?</h2>
 <p>Four ways to change memory, and picking the wrong one is how a store rots:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -202,6 +203,7 @@ rebind.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The distinction that matters is <strong>supersede vs. delete</strong>. Superseding is how the
 store stays honest about its own history: the old memory leaves the briefing and
 recall, but an agent that follows an old reference still finds it, marked
@@ -223,6 +225,7 @@ falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden — the two cases are deliberately not treated alike.</p>
 <h2 id="session_start">session_start</h2>
 <p>Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -253,8 +256,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="session_update">session_update</h2>
 <p>Record interim progress on the current session (working findings so far). Uses the bound session unless you pass one.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -285,8 +290,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="session_end">session_end</h2>
 <p>Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -317,8 +324,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="memory_write">memory_write</h2>
 <p>Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -367,8 +376,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="memory_append">memory_append</h2>
 <p>Append markdown to an existing memory's body. The memory keeps its id. To create a new memory, use memory_write.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -399,8 +410,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="memory_read">memory_read</h2>
 <p>Read a memory by name within the current project, falling back to a global memory of the same name.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -425,8 +438,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="memory_delete">memory_delete</h2>
 <p>Delete a memory by name (removes the file and its index).</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -451,8 +466,10 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="recall">recall</h2>
 <p>Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -489,6 +506,7 @@ is surfaced instead of hidden — the two cases are deliberately not treated ali
 </tr>
 </tbody>
 </table>
+</div>
 
 </article>
 

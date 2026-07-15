@@ -181,6 +181,7 @@ the system is driven.</li>
 by choice.</p>
 <h2 id="files-are-truth-the-database-is-an-index">Files are truth; the database is an index</h2>
 <p>This is the load-bearing decision in the whole design.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -207,6 +208,7 @@ by choice.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>So: <strong>what would you lose if <code>seam.db</code> were deleted?</strong> The sessions, the task
 queue, the trials, and the event log — the record of what <em>happened</em>. You would
 not lose a single memory or note, because those are files, and startup

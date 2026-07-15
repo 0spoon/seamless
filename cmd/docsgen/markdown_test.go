@@ -65,7 +65,26 @@ func TestRenderMarkdownChromaClasses(t *testing.T) {
 func TestRenderMarkdownGFMTable(t *testing.T) {
 	out, err := renderMarkdown("| A | B |\n|---|---|\n| 1 | 2 |\n", "")
 	require.NoError(t, err)
-	require.Contains(t, string(out.HTML), "<table>")
+	html := string(out.HTML)
+	require.Contains(t, html, "<table>")
+	require.Contains(t, html, "<td>1</td>", "GFM still renders the rows and cells")
+}
+
+// TestRenderMarkdownTableIsWrapped pins the .table-wrap container. docs.css puts
+// the horizontal scroll on it precisely so the table need not be display:block --
+// which demotes it to a block box whose width:100% styles a wrapper while the real
+// (anonymous) table inside shrink-wraps, letting a column end up narrower than the
+// flag in it. Lose the wrapper and that layout bug comes back silently, so assert
+// the tag order rather than mere presence.
+func TestRenderMarkdownTableIsWrapped(t *testing.T) {
+	out, err := renderMarkdown("| Flag | Meaning |\n|---|---|\n| `--url` | base URL |\n", "")
+	require.NoError(t, err)
+	html := string(out.HTML)
+	require.Contains(t, html, `<div class="table-wrap">`)
+	require.Less(t, strings.Index(html, `<div class="table-wrap">`), strings.Index(html, "<table>"),
+		"the wrapper opens outside the table, never inside it")
+	require.Contains(t, html, "</table>\n</div>", "and closes after it")
+	require.Equal(t, 1, strings.Count(html, "table-wrap"), "one wrapper per table")
 }
 
 // TestRenderMarkdownAllowsRawHTML documents the trust boundary: docs-src is

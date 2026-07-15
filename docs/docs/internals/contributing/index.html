@@ -182,6 +182,7 @@ which makes a stale running daemon invisible.</p>
 </span></span></code></pre><p>That is the one command that must be green before work is done. It runs six steps
 sequentially — as separate <code>$(MAKE)</code> invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under <code>make -j</code>:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -223,6 +224,7 @@ stops at the first red step and stays ordered under <code>make -j</code>:</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The order is cost-ascending: the cheapest and most-likely-to-fail steps run first,
 and <code>test-race</code> is last because it is by far the slowest. The individual targets
 exist for iterating; <code>check</code> is the thing you run before you claim to be done.</p>
@@ -305,6 +307,7 @@ with a deadline. This one is enforced by lint.</li>
 </ul>
 <h2 id="forbidden-apis">Forbidden APIs</h2>
 <p>Each row is a pattern that compiles, looks fine in review, and is wrong.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -386,6 +389,7 @@ with a deadline. This one is enforced by lint.</li>
 </tr>
 </tbody>
 </table>
+</div>
 <p><code>make lint</code> catches the grep-detectable subset: <code>forbidigo</code> bans <code>ulid.MustNew</code>
 and <code>time.Sleep</code>, <code>rowserrcheck</code> catches a missing <code>rows.Err()</code>, <code>errorlint</code>
 catches <code>err ==</code> sentinel comparisons, and <code>errcheck</code> runs with <code>check-blank: true</code>

@@ -160,6 +160,7 @@
   <h2 id="a-note-is-not-a-memory">A note is not a memory</h2>
 <p>This is the most common confusion in the whole system, so it is worth being blunt
 about it.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -196,6 +197,7 @@ about it.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>The test: <strong>would a future agent need this injected into its context before it
 starts working?</strong> If yes, it is a memory, and it needs to fit in a <code>description</code>.
 If it is something you'd want to <em>find</em> and read in full when the topic comes up,
@@ -224,6 +226,7 @@ default, never &quot;any port&quot;), and the fetcher refuses to be talked into 
 things it should not. See <a href="../../../reference/configuration/">Configuration</a>.</p>
 <h2 id="notes_create">notes_create</h2>
 <p>Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -278,8 +281,10 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="notes_read">notes_read</h2>
 <p>Read a note by id.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -298,8 +303,10 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="notes_update">notes_update</h2>
 <p>Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; tags replace all. The slug and id stay stable.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -348,8 +355,10 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="notes_append">notes_append</h2>
 <p>Append a timestamped line to a note's body.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -374,8 +383,10 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="notes_delete">notes_delete</h2>
 <p>Delete a note by id (removes the file and its index).</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -394,11 +405,13 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="project_list">project_list</h2>
 <p>List all projects (slug, name, description).</p>
 <p>Takes no parameters.</p>
 <h2 id="project_create">project_create</h2>
 <p>Create a project. The slug defaults to a slugified name.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -429,8 +442,10 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="capture_url">capture_url</h2>
 <p>Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and save its readable content as a note. Returns the new note's id.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -455,6 +470,7 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 </tr>
 </tbody>
 </table>
+</div>
 
 </article>
 

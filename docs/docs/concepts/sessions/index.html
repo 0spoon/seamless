@@ -165,6 +165,7 @@ resolves the working directory to a project, assembles a briefing inside a token
 budget, and injects it into the agent's context. The agent begins already knowing
 your constraints.</p>
 <h2 id="ambient-vs-explicit-sessions">Ambient vs. explicit sessions</h2>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -191,6 +192,7 @@ your constraints.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>They are not two competing sessions. <code>session_start</code> <strong>adopts</strong> the sole ambient
 session for the same working directory rather than opening a second one — that
 adoption rule exists because the alternative was double-counting every agent.</p>

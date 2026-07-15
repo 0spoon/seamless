@@ -243,6 +243,7 @@ ambiguous-scope errors as a lost binding, not as a bug in your arguments.</p>
 <p>Scope is the thing most integrations get wrong, and the failures are quiet —
 knowledge lands somewhere nobody looks. The full precedence chain is in
 <a href="../../concepts/projects/">Projects &amp; scope</a>; the operational summary is short.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -269,6 +270,7 @@ knowledge lands somewhere nobody looks. The full precedence chain is in
 </tr>
 </tbody>
 </table>
+</div>
 <p>That third row is the one that surprises people. A session started outside a git
 repo has no project, and its writes go global — silently, because a bound session
 always resolves, even to the global scope. If your agent does not run in a repo,
@@ -294,6 +296,7 @@ that would have.</p>
 — a constraint the project cannot violate, a trap and its symptom, a decision and
 the alternatives it rejected, a belief that turned out false.</p>
 <p>Skip it when:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -320,6 +323,7 @@ the alternatives it rejected, a belief that turned out false.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>If it is durable but you cannot compress it to one line, it is a note with a
 memory pointing at it. See <a href="../../guides/write-good-memories/">Write memories that get
 recalled</a>.</p>

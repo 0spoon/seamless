@@ -174,6 +174,7 @@ knowledge behind your back. That is the whole contract, and it is why the tool
 surface has both <code>gardener_proposals</code> (read them) and <code>gardener_apply</code> (act on
 one) instead of a single &quot;tidy up&quot; button.</p>
 <p>Its passes:</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -200,6 +201,7 @@ one) instead of a single &quot;tidy up&quot; button.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <p>Constraints and pinned stages are never age-filtered or staleness-archived. A
 constraint does not become less true by sitting still.</p>
 <p><code>gardener_request</code> takes a request in natural language (&quot;fold the two console
@@ -218,6 +220,7 @@ this thing working, and on how much?&quot; — the same question the console's O
 answers, for an agent that cannot open a browser.</p>
 <h2 id="lab_open">lab_open</h2>
 <p>Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -242,8 +245,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="trial_record">trial_record</h2>
 <p>Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -304,8 +309,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="trial_query">trial_query</h2>
 <p>Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record).</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -342,8 +349,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="gardener_proposals">gardener_proposals</h2>
 <p>List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, or set up a project split). Review, then apply or dismiss each with gardener_apply. Read-only.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -362,8 +371,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="gardener_request">gardener_request</h2>
 <p>The natural-language entry point for REORGANIZING memory. Describe the change in plain language and it returns reviewable pending proposals -- fold duplicates together (&quot;these two memories are duplicates -- keep the newer&quot;), retire stale memories (&quot;archive anything about the old port 8080&quot;), synthesize several into one (&quot;combine the three auth-flow notes&quot;), or move a mis-filed memory to another EXISTING project (&quot;the iOS DFU memory belongs in arctop-ios&quot;). Use this whenever the user describes how they want their knowledge organized; if the intended change is ambiguous, ask them a clarifying question first. It NEVER mutates memories: it only creates pending proposals -- review with gardener_proposals, resolve with gardener_apply. If the request is to split one project into NEW child projects, it recognizes that and returns guidance (splitSource) pointing you at gardener_split instead. Needs an LLM chat client.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -388,8 +399,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="gardener_split">gardener_split</h2>
 <p>Plan a project SPLIT: divide one existing project into two or more NEW child projects, keeping cross-platform memories in a shared parent (e.g. split arctop-app into arctop-ios + arctop-android with shared arctop-mobile-apps). Use this when the user wants to break one project into several -- gardener_request points you here (via splitSource) when it detects that intent. It NEVER creates a project or moves a memory: it only creates reviewable pending proposals -- one 'split' setup proposal plus one 'reproject' per memory, all under plan 'split-&lt;source&gt;'. Review with gardener_proposals, then apply each with gardener_apply (or retarget a memory first in the console). Needs an LLM chat client and a known source project slug (see project_list).</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -414,8 +427,10 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="gardener_apply">gardener_apply</h2>
 <p>Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source); action=dismiss discards it. A dismissed proposal is never re-raised.</p>
+<div class="table-wrap">
 <table>
 <thead>
 <tr>
@@ -440,6 +455,7 @@ answers, for an agent that cannot open a browser.</p>
 </tr>
 </tbody>
 </table>
+</div>
 <h2 id="usage_summary">usage_summary</h2>
 <p>Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.</p>
 <p>Takes no parameters.</p>
