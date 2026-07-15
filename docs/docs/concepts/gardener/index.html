@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>MCP API overview — Seamless docs</title>
-<meta name="description" content="The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.">
+<title>The gardener — Seamless docs</title>
+<meta name="description" content="The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -73,7 +73,7 @@
         
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
         
-        <li><a href="../../concepts/gardener/">The gardener</a></li>
+        <li><a href="../../concepts/gardener/" class="current" aria-current="page">The gardener</a></li>
         
       </ul>
     </div>
@@ -83,7 +83,7 @@
       
       <ul>
         
-        <li><a href="../../reference/mcp/" class="current" aria-current="page">MCP API overview</a></li>
+        <li><a href="../../reference/mcp/">MCP API overview</a></li>
         
         <li><a href="../../reference/mcp/sessions-memory-recall/">Sessions, memory &amp; recall</a></li>
         
@@ -110,74 +110,93 @@
 
   <main class="docs-main" id="content">
     <article class="prose">
-  <p class="eyebrow">Reference</p>
-  <h1>MCP API overview</h1>
-  <p class="lede">The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.</p>
-  <p>Seamless serves its tool surface over <strong>streamable HTTP MCP</strong> at
-<code>/api/mcp</code>, guarded by a single static bearer key.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
-</span></span><span class="line"><span class="cl">Authorization: Bearer &lt;mcp.api_key&gt;
-</span></span></code></pre><p><code>GET /healthz</code> needs no auth and reports the running build — the fastest way to
-tell whether a daemon is up and which version it is.</p>
-<h2 id="scope-resolution">Scope resolution</h2>
-<p>Almost no call passes <code>project</code>. Scope is resolved once, in this order, and
-inherited by everything after it:</p>
-<ol>
-<li>An explicit <code>project</code> argument on the call.</li>
-<li>The <strong>bound session's</strong> project — set by <code>session_start</code>, held per connection.</li>
-<li>The <strong>ambient session's</strong> project, resolved from the agent's cwd via the
-<code>repo_project_map</code> setting.</li>
-</ol>
-<p>Writes <strong>fail closed</strong>: with no session and no explicit <code>project</code>, a durable
-write is rejected as ambiguous rather than silently landing in the global scope.
-Pass <code>project: global</code> to mean global deliberately.</p>
-<h2 id="conventions">Conventions</h2>
-<ul>
-<li><strong>Body aliases.</strong> Tools taking a markdown body accept <code>body</code>, <code>content</code>, or
-<code>text</code> interchangeably — agents disagree about the name, and the disagreement
-is not worth an error.</li>
-<li><strong>IDs are ULIDs</strong>, never UUIDs. They sort lexically by creation time.</li>
-<li><strong>Errors</strong> come back as tool errors with a <code>&lt;tool&gt;: &lt;reason&gt;</code> message, not as
-transport failures.</li>
-</ul>
-<h2 id="the-tool-surface">The tool surface</h2>
-<p>Seamless registers <strong>30 tools</strong>. They are documented in groups:</p>
+  <p class="eyebrow">Concepts</p>
+  <h1>The gardener</h1>
+  <p class="lede">The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.</p>
+  <p>Any store that agents write to accumulates cruft: two memories saying the same
+thing in different words, a runbook for a system that no longer exists, a plan
+abandoned three weeks ago with its steps still open.</p>
+<p>The gardener finds those. Then it stops and asks.</p>
+<h2 id="propose-only-is-the-whole-contract">Propose-only is the whole contract</h2>
+<p><strong>Every pass the gardener makes ends in a proposal for you to review.</strong> It never
+edits, merges, or archives on its own.</p>
+<p>This is not timidity. The entire premise of Seamless is that the knowledge is
+yours and legible — a store that quietly rewrites itself while you sleep is
+exactly the black box the project exists to avoid. If an automated pass can
+decide your constraint is stale and archive it, then you do not actually know
+what your agents will be told tomorrow.</p>
+<p>So the surface is two tools, not one button: <code>gardener_proposals</code> to read what it
+found, <code>gardener_apply</code> to act on one.</p>
+<h2 id="what-it-looks-for">What it looks for</h2>
 <table>
 <thead>
 <tr>
-<th>Group</th>
-<th>Tools</th>
+<th>Pass</th>
+<th>Trigger</th>
+<th>Proposes</th>
 </tr>
 </thead>
 <tbody>
 <tr>
-<td>Sessions, memory, and recall</td>
-<td><code>session_start</code>, <code>session_update</code>, <code>session_end</code>, <code>memory_write</code>, <code>memory_append</code>, <code>memory_read</code>, <code>memory_delete</code>, <code>recall</code></td>
+<td><strong>dedup</strong></td>
+<td>Two memories more similar than <code>gardener.dedup_threshold</code> (0.88)</td>
+<td><strong>merge</strong>: one is kept as-is, the other superseded and pointed at it</td>
 </tr>
 <tr>
-<td>Notes, projects, and capture</td>
-<td><code>notes_create</code>, <code>notes_read</code>, <code>notes_update</code>, <code>notes_append</code>, <code>notes_delete</code>, <code>project_list</code>, <code>project_create</code>, <code>capture_url</code></td>
+<td><strong>staleness</strong></td>
+<td>A memory untouched for <code>gardener.staleness_days</code> (90)</td>
+<td><strong>archive</strong>: marked invalid, still readable</td>
 </tr>
 <tr>
-<td><a href="../../reference/mcp/tasks/">Tasks</a></td>
-<td><code>tasks_add</code>, <code>tasks_update</code>, <code>tasks_ready</code>, <code>tasks_list</code>, <code>tasks_claim</code>, <code>tasks_release</code></td>
+<td><strong>digest</strong></td>
+<td>Enough recent activity over <code>gardener.digest_days</code> (30)</td>
+<td>a <strong>digest</strong> note summarizing it</td>
 </tr>
 <tr>
-<td>Lab, gardener, and usage</td>
-<td><code>lab_open</code>, <code>trial_record</code>, <code>trial_query</code>, <code>gardener_proposals</code>, <code>gardener_request</code>, <code>gardener_split</code>, <code>gardener_apply</code>, <code>usage_summary</code></td>
+<td><strong>stale-plan</strong></td>
+<td>A plan idle for <code>gardener.stale_plan_days</code> (14) with steps still open</td>
+<td>surfacing it, so it is abandoned deliberately rather than by neglect</td>
 </tr>
 </tbody>
 </table>
-<p>Every tool's parameters on these pages are generated from the running server's
-own registration, so they cannot drift from what the daemon accepts.</p>
+<p>Two more proposal types come from requests rather than the timer:</p>
+<ul>
+<li><strong>reproject</strong> — a memory filed under the wrong project, moved to a project that
+<strong>already exists</strong>.</li>
+<li><strong>split</strong> — one project divided into new child projects. This creates projects
+and a shared parent, so it is planned as a unit, not as a pile of moves. That
+is why it is a separate tool (<code>gardener_split</code>) and not just a reproject to a
+name that does not exist yet.</li>
+</ul>
+<h2 id="constraints-and-stages-are-exempt">Constraints and stages are exempt</h2>
+<p>Age-filtering and staleness-archiving never touch <code>constraint</code> or pinned <code>stage</code>
+memories.</p>
+<p>A constraint does not become less true by sitting still. &quot;Never use CGO&quot; is not
+stale at 90 days — it is <em>settled</em>, and the absence of recent edits is evidence
+it is working, not evidence it is rotting. Time-based archival encodes the
+opposite assumption, so the pass simply skips the kinds where that assumption is
+wrong.</p>
+<h2 id="asking-for-it-in-words">Asking for it in words</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">gardener_request &#34;fold the two console theme memories together&#34;
+</span></span></code></pre><p><code>gardener_request</code> takes natural language and turns it into the same reviewable
+proposals as the timed passes. It is a way to <em>aim</em> the gardener, not a way to
+bypass the review step — what comes back is still a proposal.</p>
+<h2 id="where-you-review">Where you review</h2>
+<ul>
+<li><strong>The console</strong> — <code>/console/gardener</code> lists proposals with what each would do.</li>
+<li><strong><code>gardener_proposals</code></strong> — the same, for an agent.</li>
+</ul>
+<p>The gardener runs every <code>gardener.interval_minutes</code> (60) when
+<code>gardener.enabled</code> is on. Everything in this page is tunable — see
+<a href="../../reference/configuration/">Configuration</a>.</p>
 
 </article>
 
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../../reference/"><span class="dir">Previous</span><span class="t">Reference</span></a>
-      <a class="next" href="../../reference/mcp/sessions-memory-recall/"><span class="dir">Next</span><span class="t">Sessions, memory &amp; recall</span></a>
+      <a class="prev" href="../../concepts/projects/"><span class="dir">Previous</span><span class="t">Projects &amp; scope</span></a>
+      <a class="next" href="../../reference/"><span class="dir">Next</span><span class="t">Reference</span></a>
     </nav>
     
   </main>
@@ -186,7 +205,7 @@ own registration, so they cannot drift from what the daemon accepts.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#scope-resolution">Scope resolution</a></li><li class="lvl-2"><a href="#conventions">Conventions</a></li><li class="lvl-2"><a href="#the-tool-surface">The tool surface</a></li>
+      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt">Constraints and stages are exempt</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li>
     </ul>
   </aside>
   

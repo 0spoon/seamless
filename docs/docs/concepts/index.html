@@ -4,8 +4,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Reference — Seamless docs</title>
-<meta name="description" content="The complete surface — MCP tools, CLIs, configuration keys, hooks, and file formats.">
+<title>Concepts — Seamless docs</title>
+<meta name="description" content="How the pieces fit — memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -57,7 +57,7 @@
     </div>
     
     <div class="nav-group">
-      <a class="nav-head" href="../concepts/">Concepts</a>
+      <a class="nav-head current" href="../concepts/" aria-current="page">Concepts</a>
       
       <ul>
         
@@ -79,7 +79,7 @@
     </div>
     
     <div class="nav-group">
-      <a class="nav-head current" href="../reference/" aria-current="page">Reference</a>
+      <a class="nav-head" href="../reference/">Reference</a>
       
       <ul>
         
@@ -110,61 +110,46 @@
 
   <main class="docs-main" id="content">
     <article class="prose">
-  <h1>Reference</h1>
-  <p class="lede">The complete surface — MCP tools, CLIs, configuration keys, hooks, and file formats.</p>
+  <h1>Concepts</h1>
+  <p class="lede">How the pieces fit — memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.</p>
 </article>
 
 <div class="card-grid">
   
   
-  <a class="doc-card" href="../reference/mcp/">
-    <h2>MCP API overview</h2>
-    <p>The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.</p>
+  <a class="doc-card" href="../concepts/how-it-works/">
+    <h2>How Seamless works</h2>
+    <p>One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.</p>
   </a>
   
-  <a class="doc-card" href="../reference/mcp/sessions-memory-recall/">
-    <h2>Sessions, memory &amp; recall</h2>
-    <p>The eight tools an agent uses most — open a session, write and read memory, and search the store.</p>
+  <a class="doc-card" href="../concepts/memory/">
+    <h2>Memory &amp; notes</h2>
+    <p>What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.</p>
   </a>
   
-  <a class="doc-card" href="../reference/mcp/notes-projects-capture/">
-    <h2>Notes, projects &amp; capture</h2>
-    <p>Work artifacts, project scope, and SSRF-safe URL capture — the eight tools around the edges of memory.</p>
+  <a class="doc-card" href="../concepts/sessions/">
+    <h2>Sessions &amp; briefings</h2>
+    <p>How an agent gets your knowledge injected before it does anything — ambient sessions, the briefing&#39;s packing order, and what never gets dropped.</p>
   </a>
   
-  <a class="doc-card" href="../reference/mcp/tasks/">
-    <h2>Tasks</h2>
-    <p>The six task tools — the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.</p>
+  <a class="doc-card" href="../concepts/recall/">
+    <h2>Recall</h2>
+    <p>One search entry point fusing keyword and vector search — and the three different ways your knowledge actually reaches an agent.</p>
   </a>
   
-  <a class="doc-card" href="../reference/mcp/lab-gardener-usage/">
-    <h2>Lab, gardener &amp; usage</h2>
-    <p>Research trials, the propose-only gardener, and the usage summary — the eight tools for keeping the store honest.</p>
+  <a class="doc-card" href="../concepts/tasks-and-plans/">
+    <h2>Tasks &amp; plans</h2>
+    <p>The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.</p>
   </a>
   
-  <a class="doc-card" href="../reference/cli-seam/">
-    <h2>seam CLI</h2>
-    <p>Every seam subcommand — agent loop, tasks, plans, observability, hooks — plus the flags-before-positionals rule that governs all of them.</p>
+  <a class="doc-card" href="../concepts/projects/">
+    <h2>Projects &amp; scope</h2>
+    <p>How Seamless decides which project a call belongs to — the precedence chain, the fail-closed rule, and project families.</p>
   </a>
   
-  <a class="doc-card" href="../reference/cli-seamlessd/">
-    <h2>seamlessd CLI</h2>
-    <p>The daemon and operator CLI — serve, doctor, import, install-hooks, map-repo, family, console-open, and version.</p>
-  </a>
-  
-  <a class="doc-card" href="../reference/configuration/">
-    <h2>Configuration</h2>
-    <p>Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.</p>
-  </a>
-  
-  <a class="doc-card" href="../reference/hooks/">
-    <h2>Claude Code hooks</h2>
-    <p>The six hooks Seamless installs, their transports and timeouts, the fail-open contract, and what install-hooks writes into settings.json.</p>
-  </a>
-  
-  <a class="doc-card" href="../reference/storage/">
-    <h2>Storage and file formats</h2>
-    <p>The ~/.seamless tree, memory and note frontmatter field by field, what lives only in SQLite, and the rules for hand-editing.</p>
+  <a class="doc-card" href="../concepts/gardener/">
+    <h2>The gardener</h2>
+    <p>The background pass that finds duplicates, staleness, and drift — and proposes, because nothing rewrites your knowledge behind your back.</p>
   </a>
   
 </div>
@@ -172,8 +157,8 @@
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../concepts/gardener/"><span class="dir">Previous</span><span class="t">The gardener</span></a>
-      <a class="next" href="../reference/mcp/"><span class="dir">Next</span><span class="t">MCP API overview</span></a>
+      <a class="prev" href="../quickstart/"><span class="dir">Previous</span><span class="t">Quickstart</span></a>
+      <a class="next" href="../concepts/how-it-works/"><span class="dir">Next</span><span class="t">How Seamless works</span></a>
     </nav>
     
   </main>

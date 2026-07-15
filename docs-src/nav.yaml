@@ -15,10 +15,29 @@ sections:
       - index.md
       - quickstart.md
 
+  - title: Concepts
+    slug: concepts
+    description: How the pieces fit — memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.
+    pages:
+      - how-it-works.md
+      - memory.md
+      - sessions.md
+      - recall.md
+      - tasks-and-plans.md
+      - projects.md
+      - gardener.md
+
   - title: Reference
     slug: reference
-    description: The complete surface -- MCP tools, CLIs, configuration keys, hooks, and file formats.
+    description: The complete surface — MCP tools, CLIs, configuration keys, hooks, and file formats.
     pages:
       - mcp/index.md
+      - mcp/sessions-memory-recall.md
+      - mcp/notes-projects-capture.md
       - mcp/tasks.md
+      - mcp/lab-gardener-usage.md
+      - cli-seam.md
+      - cli-seamlessd.md
       - configuration.md
+      - hooks.md
+      - storage.md

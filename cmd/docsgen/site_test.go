@@ -58,10 +58,10 @@ sections:
     description: The surface.
     pages: [mcp/index.md, mcp/tasks.md]
 `,
-		"index.md":                page("Home", "hi"),
-		"quickstart.md":           page("Quickstart", "go"),
-		"reference/mcp/index.md":  page("MCP", "overview"),
-		"reference/mcp/tasks.md":  page("Tasks", "tasks"),
+		"index.md":               page("Home", "hi"),
+		"quickstart.md":          page("Quickstart", "go"),
+		"reference/mcp/index.md": page("MCP", "overview"),
+		"reference/mcp/tasks.md": page("Tasks", "tasks"),
 	})
 
 	site, err := loadSite(dir)
@@ -122,8 +122,8 @@ sections:
 		{
 			name: "unlisted file",
 			files: map[string]string{
-				"nav.yaml": minimalNav,
-				"index.md": page("Home", "hi"),
+				"nav.yaml":  minimalNav,
+				"index.md":  page("Home", "hi"),
 				"orphan.md": page("Orphan", "invisible"),
 			},
 			msg: "does not list: orphan.md",
@@ -163,7 +163,7 @@ sections:
 		{
 			name: "no home page",
 			files: map[string]string{
-				"nav.yaml": "sections:\n  - title: A\n    slug: guides\n    pages: [start.md]\n",
+				"nav.yaml":        "sections:\n  - title: A\n    slug: guides\n    pages: [start.md]\n",
 				"guides/start.md": page("Start", "hi"),
 			},
 			msg: "no page resolves to the docs root",
@@ -173,10 +173,10 @@ sections:
 			// reference/mcp/index.md both want /reference/mcp/.
 			name: "colliding urls",
 			files: map[string]string{
-				"nav.yaml": "sections:\n  - title: A\n    slug: \"\"\n    pages: [index.md, ref/mcp.md, ref/mcp/index.md]\n",
-				"index.md":           page("Home", "hi"),
-				"ref/mcp.md":         page("MCP", "a"),
-				"ref/mcp/index.md":   page("MCP again", "b"),
+				"nav.yaml":         "sections:\n  - title: A\n    slug: \"\"\n    pages: [index.md, ref/mcp.md, ref/mcp/index.md]\n",
+				"index.md":         page("Home", "hi"),
+				"ref/mcp.md":       page("MCP", "a"),
+				"ref/mcp/index.md": page("MCP again", "b"),
 			},
 			msg: "both resolve to",
 		},
@@ -195,9 +195,9 @@ sections:
 // trip the every-file-is-in-the-nav rule.
 func TestLoadSiteIgnoresPartials(t *testing.T) {
 	dir := writeSrc(t, map[string]string{
-		"nav.yaml":                       "sections:\n  - title: A\n    slug: \"\"\n    pages: [index.md]\n",
-		"index.md":                       page("Home", "hi"),
-		"reference/_tools/tasks_add.md":  "### Example\n\nnot a page\n",
+		"nav.yaml":                      "sections:\n  - title: A\n    slug: \"\"\n    pages: [index.md]\n",
+		"index.md":                      page("Home", "hi"),
+		"reference/_tools/tasks_add.md": "### Example\n\nnot a page\n",
 	})
 	site, err := loadSite(dir)
 	require.NoError(t, err)

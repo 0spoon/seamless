@@ -1,0 +1,132 @@
+---
+title: Memory & notes
+description: What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.
+---
+
+A memory is a markdown file with frontmatter. That is not an implementation
+detail — it is the design. You can read it, `grep` it, edit it, and put it in
+git, and no part of the system needs your permission to be inspected.
+
+```yaml
+---
+id: 01K...                 # ULID, assigned once, stable forever
+kind: gotcha               # what sort of knowledge this is (see below)
+name: chroma-boot-race     # kebab-case, unique within the project
+description: one line, <=150 chars -- the ONLY text shown in indexes
+project: seamless          # empty = global
+created: 2026-07-10T18:00:00Z
+updated: 2026-07-10T18:00:00Z
+valid_from: 2026-07-10T18:00:00Z
+invalid_at: null           # set on supersession/archive; invalid memories leave indexes
+superseded_by: null        # ULID of the replacement
+source_session: cc/ab12cd34
+tags: [x, y]
+---
+body markdown
+```
+
+## The description is the product
+
+Everything above the body is bookkeeping except one field. **The `description` is
+the only text an index ever shows** — the briefing, the memory list, the recall
+result. An agent decides whether to read the body based on nothing but that line.
+
+A description that says "notes about the console" is invisible: no future agent
+can tell whether it matters. One that says "Console: a trailing note inside a
+`.card h2` must use `.h2-meta`, never `.count` — header is flex space-between"
+does the whole job without the body being opened at all.
+
+Write the description for a future agent deciding whether to read further. That
+is its entire purpose.
+
+## The eight kinds
+
+| Kind | What it holds | Never forget |
+|---|---|---|
+| `constraint` | A rule the project cannot violate | Pinned into every briefing, never dropped for budget, never staleness-archived |
+| `runbook` | A procedure that works | The steps, in order, that actually ran |
+| `protocol` | An agreed way of doing something | Why the agreement exists |
+| `gotcha` | A trap and how to avoid it | The symptom, so it is recognizable next time |
+| `decision` | A choice and its reasoning | The alternatives rejected, or it will be relitigated |
+| `refuted` | Something believed that turned out false | Keeping this is what stops the fleet re-deriving it |
+| `reference` | A pointer to something external | The URL and what is at it |
+| `stage` | Where a piece of multi-session work stands | Pinned into briefings like a constraint |
+
+Choosing the kind is not filing paperwork. `constraint` and `stage` are
+**pinned**: they survive budget pressure and are never age-filtered or
+staleness-archived. Marking a preference as a constraint crowds out real
+constraints; filing a real constraint as a `reference` means agents will violate
+it.
+
+`refuted` deserves special mention. A store that only records what is true keeps
+paying for the same wrong turn: the fleet re-derives the dead end, tries it,
+finds it dead, and moves on — every time. Recording the refutation makes that
+cost one-time.
+
+## Supersession: how the store stays honest
+
+Memories are not appended forever, and they are not silently overwritten. When
+something stops being true, the replacement **supersedes** it:
+
+```text
+memory_write name=new-truth supersedes=old-truth
+   |
+   +-- old-truth: invalid_at = now, superseded_by = <new id>
+   |              leaves the briefing; leaves recall
+   |              STILL on disk, still readable, pointing at its replacement
+   |
+   +-- new-truth: active, indexed, in the next briefing
+```
+
+The old memory leaves every index but stays readable. An agent following an old
+reference lands on it, sees that it is invalid, and finds the pointer to what
+replaced it. That is provenance: the store can tell you not just what it believes
+but what it used to believe and what changed its mind.
+
+Contrast the two failure modes this avoids. **Append-only** means recall returns
+three contradictory answers and the agent picks one. **Destructive overwrite**
+means the reasoning is gone and the same argument happens again in six weeks.
+
+## Update, append, supersede, or delete
+
+| You want to | Use |
+|---|---|
+| Correct or extend what *this* memory says | `memory_write`, same `name` (updated in place, id stable) |
+| Add to the end without rereading it | `memory_append` |
+| Replace a **different**, now-outdated memory | `memory_write` with `supersedes` |
+| Remove something written by mistake | `memory_delete` |
+
+The line that matters: **delete is for things that were never true; supersede is
+for things that stopped being true.** Deleting the latter destroys the history
+that explains the current state.
+
+Never hand-stamp `invalid_at` or `superseded_by` in a file. They are set by the
+supersede path, which also updates the indexes; editing them by hand leaves the
+database disagreeing with the disk.
+
+## Memory or note?
+
+The single most common confusion:
+
+| | Memory | Note |
+|---|---|---|
+| Answers | "What is true about this project?" | "What did we produce?" |
+| Size | One idea, led by a one-line description | However long the artifact needs |
+| Reaches a briefing | Yes | No — found via [recall](/concepts/recall/) |
+| Examples | A constraint, a gotcha, a decision | Research findings, a meeting summary, a design record |
+
+The test: **would a future agent need this injected before it starts working?**
+If yes, it is a memory, and it has to earn its line in the budget. If it is
+something you would want to *find* and read in full when the topic comes up, it
+is a note.
+
+Journaling into memory is the classic mistake. It is too long to inject, too
+specific to generalize, and it pushes real constraints out of the briefing.
+
+## Global vs. project
+
+A memory with an empty `project` is global: every agent in every repo sees it.
+That is a strong claim, so writes **fail closed** — with no session and no
+explicit project, a write is rejected as ambiguous rather than quietly landing in
+the global scope. Pass `project: global` to mean it on purpose. See
+[Projects & scope](/concepts/projects/).

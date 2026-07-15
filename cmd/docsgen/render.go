@@ -52,11 +52,36 @@ func renderPages(site *Site) error {
 			}
 			md = strings.TrimRight(md, "\n") + "\n\n" + extra
 		}
-		body, headings, err := renderMarkdown(md)
+		out, err := renderMarkdown(md, p.DocsRoot)
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Src, err)
 		}
-		p.Body, p.Headings, p.Text = body, headings, plainText(md)
+		p.Body, p.Headings, p.Links, p.Text = out.HTML, out.Headings, out.Links, plainText(md)
+	}
+	return checkLinks(site)
+}
+
+// checkLinks resolves every internal link against the site. A cross-reference to
+// a page that does not exist (or whose URL changed) still renders as a link --
+// it just goes nowhere -- so nothing but a build error catches it before a
+// reader does.
+func checkLinks(site *Site) error {
+	pages := make(map[string]bool, len(site.Pages))
+	for _, p := range site.Pages {
+		pages["/"+p.URL] = true
+	}
+	var broken []string
+	for _, p := range site.Pages {
+		for _, link := range p.Links {
+			target, _, _ := strings.Cut(link, "#")
+			if target == "" || pages[target] || strings.HasPrefix(target, "/static/") {
+				continue
+			}
+			broken = append(broken, fmt.Sprintf("%s -> %s", p.Src, link))
+		}
+	}
+	if len(broken) > 0 {
+		return fmt.Errorf("links to pages that do not exist:\n  %s", strings.Join(broken, "\n  "))
 	}
 	return nil
 }

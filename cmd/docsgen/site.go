@@ -79,6 +79,9 @@ type Page struct {
 	Markdown string
 	Body     template.HTML
 	Headings []Heading
+	// Links are the same-site paths this page's body references; checkLinks
+	// resolves them.
+	Links []string
 	// Text is the body as plain text, for the search index.
 	Text string
 
