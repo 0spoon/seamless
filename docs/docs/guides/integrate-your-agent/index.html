@@ -337,13 +337,14 @@ a headless client for the same daemon, authenticating with the same key:</p>
 </span></span><span class="line"><span class="cl">seam remember --name lease-steal-window --kind gotcha <span class="se">\
 </span></span></span><span class="line"><span class="cl">  --description <span class="s2">&#34;...&#34;</span> --body <span class="s2">&#34;...&#34;</span>        <span class="c1"># or pipe the body on stdin</span>
 </span></span><span class="line"><span class="cl">seam ready                                <span class="c1"># the actionable queue</span>
-</span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD     <span class="c1"># note: flags BEFORE the id</span>
+</span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD     <span class="c1"># flags on either side of the id</span>
 </span></span></code></pre><p>Two things to know before you script it.</p>
-<p><strong>Outside the agent loop, flags go before positionals.</strong> <code>prime</code>, <code>remember</code>,
-<code>recall</code>, and <code>capture</code> take flags on either side. Everywhere else Go's <code>flag</code>
-package stops parsing at the first non-flag argument, so <code>seam task release 01K7ABCD --force</code> cannot bind <code>--force</code> - rather than ignore it, <code>seam</code> rejects
-the line. See the <a href="../../reference/cli-seam/">seam CLI reference</a> for the commands
-where this bites.</p>
+<p><strong>Flags go on either side of a positional.</strong> <code>prime</code>, <code>remember</code>, <code>recall</code>,
+<code>capture</code>, and every tasks command parse flags and positionals in any order, so
+<code>seam task claim 01K7ABCD --lease 1800</code> and <code>seam task claim --lease 1800 01K7ABCD</code> are the same line. A typo'd flag is an error rather than a silently
+different command. Two commands have not been converted yet - <code>seam plan check</code>
+and <code>seam sessions</code> - and reject a trailing flag instead of ignoring it. See the
+<a href="../../reference/cli-seam/">seam CLI reference</a>.</p>
 <p><strong>There is no <code>seam session-end</code>.</strong> The CLI covers start, write, search, and the
 queue, but findings are harvested by the SessionEnd hook or the <code>session_end</code> MCP
 tool. An agent driving Seamless purely through <code>seam</code> starts sessions that only

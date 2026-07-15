@@ -38,5 +38,16 @@ func commands() []cmd {
 		rememberCmd,
 		recallCmd,
 		captureCmd,
+
+		readyCmd,
+		taskListCmd,
+		taskAddCmd,
+		taskDoneCmd,
+		taskStartCmd,
+		taskDropCmd,
+		taskReopenCmd,
+		taskClaimCmd,
+		taskHeartbeatCmd,
+		taskReleaseCmd,
 	}
 }

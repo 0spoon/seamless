@@ -38,14 +38,6 @@ const helpColumn = 46
 // flag with a message that explains itself and prints their usage, so nothing is
 // stranded by its absence.
 var legacySections = map[string]string{
-	groupTasks: `  seam ready [--project P] [--blocked] [--plan S]   actionable queue (+ blocked tasks)
-  seam task list [--project P] [--status S] [--plan S]   list tasks (--plan lists a plan's steps)
-  seam task add --title T [--body B] [--project P] [--depends id,id] [--plan S]
-  seam task done|start|drop|reopen <id>        transition a task
-  seam task claim [--lease SECS] <id>          atomically claim a task (lease-based)
-  seam task heartbeat [--lease SECS] <id>      refresh the lease on a task you hold
-  seam task release [--force] <id>             release a task you hold (--force: owner override, any holder)`,
-
 	groupPlans: `  seam plan list [--project P] [--window W]    list captured plans with status/iteration
   seam plan show <slug>                        one plan: body, attached notes, tasks
   seam plan check [--cwd DIR] <slug>           FRESH/STALE per note vs the repo's git history

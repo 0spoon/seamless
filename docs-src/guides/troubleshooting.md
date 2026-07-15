@@ -171,22 +171,25 @@ memory. Any daemon restart drops it - see below.
 
 ## A `seam` flag did nothing
 
-**What is happening.** Go's `flag` package stops parsing at the first positional
-argument, and everything after it is left as an argument rather than a flag.
-`seam` inherits this, and **its own usage text prints the broken order**.
+**This no longer happens.** A trailing flag was once dropped in silence - `seam
+task release 01K7ABCD --force` took the normal holder-checked path and the
+override never happened, with no error and no warning. Both halves of that are
+gone:
 
 ```bash
 seam task release --force 01K7ABCD    # --force applies
-seam task release 01K7ABCD --force    # --force is silently ignored
+seam task release 01K7ABCD --force    # --force applies here too
 ```
 
-There is no error and no warning: the second form takes the normal
-holder-checked path and the override never happens.
+The agent-loop commands and the whole tasks group parse flags and positionals in
+any order. `seam plan check` and `seam sessions` have not been converted yet, and
+**reject** a trailing flag with an error naming the order that works - they never
+ignore one. A typo'd flag (`--projct`) is an error everywhere rather than being
+absorbed into the positionals.
 
-**Fix.** Flags before positionals, always. The [seam CLI
-reference](/reference/cli-seam/) lists the commands where this bites, written the
-way that works. Two exceptions: `seam recall` parses its own arguments so flags
-can go anywhere, and `seam task done|start|drop|reopen` take no flags at all.
+**If a flag still looks ignored**, it is not a flag-order problem. Check that you
+are running the `seam` you think you are (`seam doctor`), and see the [seam CLI
+reference](/reference/cli-seam/) for what each command accepts.
 
 ## A briefing setting in the YAML is ignored
 

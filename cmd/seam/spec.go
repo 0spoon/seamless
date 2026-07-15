@@ -68,6 +68,14 @@ func spec[O any](name, group, summary string, a arity,
 	}
 }
 
+// noOpts is the options type for a command that takes no flags. spec pairs bind
+// and run through a type parameter, so bind must still return a pointer; this is
+// what it points at. (`task done <id>` and friends are pure positionals.)
+type noOpts struct{}
+
+// bindNoOpts registers no flags.
+func bindNoOpts(*flag.FlagSet) *noOpts { return &noOpts{} }
+
 // arity is a command's positional-argument contract. A max below zero means
 // unbounded.
 type arity struct {
@@ -365,25 +373,42 @@ func parse(table []cmd, argv []string) (*parsed, error) {
 	return &parsed{cmd: c, opts: opts, pos: pos}, nil
 }
 
-// unknownCommand names the failure as precisely as the table allows: a bad
-// subcommand of a real family lists that family's members rather than reporting
-// the whole family unknown. Members are listed in table order, which is curated
-// and deterministic.
+// unknownCommand names the failure as precisely as the table allows: anything to
+// do with a real family lists that family's members rather than reporting the
+// family unknown. Members are listed in table order, which is curated and
+// deterministic.
+//
+// That covers a bad subcommand ("task bogus") and a bare family name ("task"),
+// which is not a command but is not a typo either -- the caller knows what they
+// want and needs to be told the word for it, not that "task" does not exist.
 func unknownCommand(table []cmd, argv []string) error {
 	if len(argv) == 0 {
 		return errUnknownCommand
 	}
-	if len(argv) > 1 {
-		var family []string
-		for _, c := range table {
-			if strings.HasPrefix(c.name, argv[0]+" ") {
-				family = append(family, c.name)
-			}
-		}
-		if len(family) > 0 {
-			return fmt.Errorf("%w %q: valid values are %s",
-				errUnknownCommand, argv[0]+" "+argv[1], strings.Join(family, ", "))
-		}
+	if family := familyOf(table, argv[0]); len(family) > 0 {
+		return fmt.Errorf("%w %q: valid values are %s",
+			errUnknownCommand, subcommandOf(argv), strings.Join(family, ", "))
 	}
 	return fmt.Errorf("%w %q", errUnknownCommand, argv[0])
+}
+
+// familyOf returns the table's commands whose names begin with "<name> ".
+func familyOf(table []cmd, name string) []string {
+	var family []string
+	for _, c := range table {
+		if strings.HasPrefix(c.name, name+" ") {
+			family = append(family, c.name)
+		}
+	}
+	return family
+}
+
+// subcommandOf renders what the caller asked a family for. A flag is not a
+// subcommand attempt ("seam task --project p" is a bare family name with a flag
+// after it), so quoting it back as one would misname the mistake.
+func subcommandOf(argv []string) string {
+	if len(argv) > 1 && !strings.HasPrefix(argv[1], "-") {
+		return argv[0] + " " + argv[1]
+	}
+	return argv[0]
 }

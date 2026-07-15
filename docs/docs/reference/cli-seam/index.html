@@ -167,27 +167,25 @@ is down, every subcommand below fails at the connection.</p>
 <p>The target address is derived from the configured bind address, with a bind-all
 host (<code>0.0.0.0</code>, <code>::</code>, or empty) mapped to loopback.</p>
 <h2 id="flags-and-positionals">Flags and positionals</h2>
-<p>The agent-loop commands - <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> - take flags
-on either side of their positionals. These two lines are the same line:</p>
+<p>The agent-loop commands - <code>prime</code>, <code>remember</code>, <code>recall</code>, <code>capture</code> - and the
+whole tasks group take flags on either side of their positionals. These two lines
+are the same line:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
 </span></span><span class="line"><span class="cl">seam capture https://example.com/page --project myproj
+</span></span></code></pre><pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
+</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force applies here too</span>
 </span></span></code></pre><p>An unknown flag is rejected rather than absorbed into the positionals, so a typo
 is an error instead of a silently different command: <code>seam recall foo --projct p</code>
 reports <code>flag provided but not defined: -projct</code>. A positional that starts with
 <code>-</code> needs the <code>--</code> terminator (<code>seam recall -- -foo</code>).</p>
-<p>Everywhere else, Go's <code>flag</code> package stops parsing at the first positional, so a
-trailing flag cannot bind. Rather than ignore it, <code>seam</code> rejects the line:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
-</span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># error: flags must precede the positional argument</span>
-</span></span></code></pre><p>The commands where this still bites, written the way that works:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD
-</span></span><span class="line"><span class="cl">seam task heartbeat --lease <span class="m">1800</span> 01K7ABCD
-</span></span><span class="line"><span class="cl">seam task release --force 01K7ABCD
-</span></span><span class="line"><span class="cl">seam plan check --cwd ~/repos/myproj my-plan-slug
-</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> parse no flags at all; the id is taken as the
-first argument directly. Commands that take only flags and no positionals
-(<code>ready</code>, <code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>, <code>usage</code>, <code>doctor</code>) are
-unaffected either way.</p>
+<p>Two commands have not been converted yet - <code>seam plan check</code> and <code>seam sessions</code>.
+Go's <code>flag</code> package stops parsing at the first positional, so a trailing flag
+cannot bind there. Rather than ignore it, <code>seam</code> rejects the line:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seam plan check --cwd ~/repos/myproj my-plan-slug   <span class="c1"># works</span>
+</span></span><span class="line"><span class="cl">seam plan check my-plan-slug --cwd ~/repos/myproj   <span class="c1"># error: flags must precede the positional argument</span>
+</span></span></code></pre><p><code>seam task done|start|drop|reopen</code> parse no flags at all. Commands that take only
+flags and no positionals (<code>ready</code>, <code>task list</code>, <code>task add</code>, <code>plan list</code>, <code>status</code>,
+<code>usage</code>, <code>doctor</code>) are unaffected either way.</p>
 <h2 id="agent-loop">Agent loop</h2>
 <p>The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.</p>
