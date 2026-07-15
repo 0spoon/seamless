@@ -145,6 +145,11 @@ type Server struct {
 	fetcher   *capture.URLFetcher // SSRF-safe URL fetch backing capture_url
 	toolNames []string            // registered tool names, in registration order
 
+	// toolSchemas is validateMiddleware's lookup: tool name -> declared input
+	// schema. Written only by addTool during New (before the server serves) and
+	// read-only thereafter, so it needs no lock.
+	toolSchemas map[string]mcp.ToolInputSchema
+
 	mu        sync.Mutex
 	bindings  map[string]binding // mcp client-session id -> binding
 	lastSweep time.Time          // last opportunistic bindings sweep (guarded by mu)
@@ -154,10 +159,22 @@ type Server struct {
 // ToolCount, catching a tool that was written but never wired into registerTools.
 func (s *Server) NumTools() int { return len(s.toolNames) }
 
-// addTool registers one tool and records its name so NumTools stays accurate.
+// addTool registers one tool and records its name (so NumTools stays accurate)
+// and its input schema (so validateMiddleware can enforce it).
+//
+// Recording the schema HERE, in the same statement that creates the tool, is what
+// makes validation impossible to forget: a tool cannot exist without its schema
+// being recorded, because there is no other way to register one.
 func (s *Server) addTool(t mcp.Tool, h mcpserver.ToolHandlerFunc) {
 	s.toolNames = append(s.toolNames, t.Name)
+	s.toolSchemas[t.Name] = t.InputSchema
 	s.mcp.AddTool(t, h)
+}
+
+// toolSchema returns a registered tool's declared input schema.
+func (s *Server) toolSchema(name string) (mcp.ToolInputSchema, bool) {
+	schema, ok := s.toolSchemas[name]
+	return schema, ok
 }
 
 // binding is the session context inherited by later tool calls on a connection.
@@ -179,19 +196,28 @@ func New(cfg Config) *Server {
 		version = serverVersion
 	}
 	s := &Server{
-		cfg:      cfg,
-		logger:   logger,
-		fetcher:  capture.NewURLFetcher(cfg.CaptureAllowedPorts),
-		bindings: make(map[string]binding),
+		cfg:         cfg,
+		logger:      logger,
+		fetcher:     capture.NewURLFetcher(cfg.CaptureAllowedPorts),
+		bindings:    make(map[string]binding),
+		toolSchemas: make(map[string]mcp.ToolInputSchema),
 	}
 	s.mcp = mcpserver.NewMCPServer(
 		serverName, version,
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),
-		// mcp-go applies middlewares in reverse registration order, so auth stays
-		// outermost (unauthorized calls never reach the logger) with logging inner.
+		// mcp-go applies middlewares in reverse registration order, so the runtime
+		// nesting is auth(log(validate(handler))):
+		//
+		//   - auth outermost: an unauthorized caller reaches neither the logger nor
+		//     the validator, so a bad key never earns schema feedback.
+		//   - validate inside log: a rejected call IS recorded. A silent rejection
+		//     is the same observability hole as a silent coercion -- the operator
+		//     would see "the agent stopped calling tasks_add" rather than "the agent
+		//     is misspelling depends_on".
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.logMiddleware),
+		mcpserver.WithToolHandlerMiddleware(s.validateMiddleware),
 	)
 	s.registerTools()
 	return s
