@@ -38,8 +38,8 @@ DOCS_SRC  := docs-src
 DOCS_OUT  := docs/docs
 DOCS_ADDR ?= 127.0.0.1:8899
 
-.PHONY: help build test test-race bench lint vet fmt fmt-check check tidy run doctor console console-chrome dev \
-	docs docs-check docs-serve \
+.PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome dev \
+	docs docs-check docs-serve install-git-hooks uninstall-git-hooks \
 	install-service install-hooks install-prod uninstall-prod _reload-service \
 	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
@@ -51,6 +51,7 @@ help:
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
 	@echo "  check      the full gate: build + vet + fmt-check + docs-check + lint + test-race"
+	@echo "  check-fast the pre-commit subset: fmt-check + vet + docs-check + lint (no test-race)"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
 	@echo "  fmt        gofmt tracked files"
@@ -76,6 +77,8 @@ help:
 	@echo "  Release/prod (snapshot to stable paths, independent of this repo):"
 	@echo "    install-prod       copy bin+config to stable paths; point service+hook there"
 	@echo "    uninstall-prod     remove prod service + copied binaries (config left in place)"
+	@echo "  install-git-hooks        enable .githooks/ (pre-commit runs check-fast)"
+	@echo "  uninstall-git-hooks      disable .githooks/"
 	@echo "  install-onboard-skill    install the /seam-onboard Claude Code skill"
 	@echo "  uninstall-onboard-skill  remove the /seam-onboard skill"
 	@echo "  clean      remove build artifacts"
@@ -147,6 +150,32 @@ check:
 	@$(MAKE) lint
 	@$(MAKE) test-race
 	@echo "check: all green"
+
+# The fast half of `check`: everything except test-race, which is ~37s against
+# ~3s for these four combined. This is what .githooks/pre-commit runs, and it is
+# the quick iterate loop by hand. `build` is omitted as redundant -- vet
+# type-checks, so it already fails on anything that would not compile.
+# Cheapest-first, same as `check`. NOT a substitute for the full gate.
+check-fast:
+	@$(MAKE) fmt-check
+	@$(MAKE) vet
+	@$(MAKE) docs-check
+	@$(MAKE) lint
+	@echo "check-fast: all green (test-race not run -- 'make check' is the full gate)"
+
+# Git hooks. Committed under .githooks/ because .git/hooks is neither committed
+# nor shared between worktrees. core.hooksPath is repo-local config, so enabling
+# them is a per-clone opt-in rather than something a checkout imposes on you.
+# The path stays relative: git resolves it against each worktree's top level, so
+# linked worktrees under .claude/worktrees/ run their own checkout's copy.
+# (Distinct from `install-hooks`, which installs the Claude Code hooks.)
+install-git-hooks:
+	@git config core.hooksPath .githooks
+	@echo "git hooks enabled: pre-commit runs 'make check-fast' (bypass: git commit --no-verify)"
+
+uninstall-git-hooks:
+	@git config --unset core.hooksPath 2>/dev/null || true
+	@echo "git hooks disabled"
 
 tidy:
 	$(GO) mod tidy

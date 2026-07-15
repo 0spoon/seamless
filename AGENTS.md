@@ -224,11 +224,18 @@ the pointer is where to look, not a substitute for reading it.
 
 ## Verification before declaring done
 
-1. **`make check`** -- build + vet + fmt-check + lint + test-race, in that order.
-   This is the gate; the individual targets exist for iterating.
+1. **`make check`** -- build + vet + fmt-check + docs-check + lint + test-race,
+   in that order. This is the gate; the individual targets exist for iterating.
 2. Update `*_test.go` in the same change if a signature changed.
 3. For any change touching a recurring pattern above, grep for siblings and fix
    them together.
+
+`make install-git-hooks` (once per clone) enables `.githooks/pre-commit`, which
+runs **`make check-fast`** -- `check` minus test-race, ~3s against ~39s. It is a
+convenience, not the gate: git runs hooks against the working tree rather than
+the index, so under partial staging it describes the tree you are in and not the
+commit you are making. It catches gofmt/docs/lint drift early; `make check` and
+CI still decide whether the work is done. Bypass with `git commit --no-verify`.
 
 `make lint` catches `ulid.MustNew`, `time.Sleep`, missing `rows.Err()`,
 `err ==` sentinel comparisons, and -- via `errcheck` with `check-blank` --
