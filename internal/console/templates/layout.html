@@ -91,7 +91,11 @@
   // identity (matched by id where present) -> event listeners on unchanged nodes
   // are never lost. Wrapped in a try/catch fallback so a morph edge case degrades
   // to a plain content swap rather than a broken page -- never a full reload.
+  // Elements the morph INSERTS (vs merely patches) are tagged .live-in so CSS
+  // can play a brief enter animation; apply() strips the tag once it has played,
+  // so a later reveal (e.g. switching to a hidden tab) does not replay it.
   function imp(node) { return document.importNode(node, true); }
+  function ins(node) { var n = imp(node); if (n.nodeType === 1) n.classList.add('live-in'); return n; }
   function keyOf(node) { return node.nodeType === 1 && node.id ? node.nodeName + '#' + node.id : null; }
   function syncAttrs(from, to) {
     var ta = to.attributes, fa = from.attributes, i, a;
@@ -123,11 +127,11 @@
         morphNode(match, newChild);
       } else if (oldChild) {
         var ok = keyOf(oldChild);
-        if (ok && keyed[ok]) { from.insertBefore(imp(newChild), oldChild); } // old node needed later
+        if (ok && keyed[ok]) { from.insertBefore(ins(newChild), oldChild); } // old node needed later
         else if (!ok && oldChild.nodeType === newChild.nodeType && (oldChild.nodeType !== 1 || oldChild.nodeName === newChild.nodeName)) {
           morphNode(oldChild, newChild); oldChild = oldChild.nextSibling;
-        } else { from.insertBefore(imp(newChild), oldChild); }
-      } else { from.appendChild(imp(newChild)); }
+        } else { from.insertBefore(ins(newChild), oldChild); }
+      } else { from.appendChild(ins(newChild)); }
       newChild = nextNew;
     }
     while (oldChild) { var nx = oldChild.nextSibling; from.removeChild(oldChild); oldChild = nx; }
@@ -168,10 +172,21 @@
         swap(cMain, fMain);
         try { if (window.IX && window.IX.enhance) window.IX.enhance(cMain); } catch (e) {}
         var fc = doc.querySelectorAll('nav.nav .count'), cc = document.querySelectorAll('nav.nav .count');
-        if (fc.length === cc.length) { for (var i = 0; i < cc.length; i++) if (cc[i].textContent !== fc[i].textContent) cc[i].textContent = fc[i].textContent; }
+        if (fc.length === cc.length) {
+          for (var i = 0; i < cc.length; i++) if (cc[i].textContent !== fc[i].textContent) {
+            cc[i].textContent = fc[i].textContent;
+            // restart the pulse even when the class is still on from a prior update
+            cc[i].classList.remove('bump'); void cc[i].offsetWidth; cc[i].classList.add('bump');
+          }
+        }
         setLive(connected); // the morph may have swapped the topbar's live indicator
         n = 0; pending = false; hidePill();
         flashToast('Updated');
+        // strip enter/pulse markers once their animations have played (longest
+        // is the count pulse at 450ms) so nothing replays on a later reveal
+        setTimeout(function () {
+          document.querySelectorAll('.live-in, nav.nav .count.bump').forEach(function (el) { el.classList.remove('live-in', 'bump'); });
+        }, 600);
       })
       .catch(function () { pending = true; showPill(); }) // transient failure: leave the manual affordance
       .finally(function () { busy = false; if (again) { again = false; schedule(); } });

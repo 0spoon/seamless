@@ -40,7 +40,7 @@
   <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span>{{if .Idle}} <span class="h2-meta faint">+{{.Idle}} idle</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "active"}}
-    <div class="sess-row row-link{{if not .Live}} idle{{end}}" data-href="/console/sessions/{{.ID}}" data-peek>
+    <div id="{{.ID}}" class="sess-row row-link{{if not .Live}} idle{{end}}" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
         <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
         {{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}
@@ -60,7 +60,7 @@
   <h2>Completed{{if eq .Filter ""}} <span class="count">{{.Completed}}</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "completed"}}
-    <div class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
+    <div id="{{.ID}}" class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
         <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
@@ -81,7 +81,7 @@
   <h2>Expired{{if eq .Filter ""}} <span class="count">{{.Expired}}</span>{{end}}</h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "expired"}}
-    <div class="sess-row row-link expired" data-href="/console/sessions/{{.ID}}" data-peek>
+    <div id="{{.ID}}" class="sess-row row-link expired" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
         <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>

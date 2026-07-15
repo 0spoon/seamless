@@ -51,7 +51,7 @@
         <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
         <tbody>
           {{range .Recent}}
-          <tr class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
+          <tr id="{{.ID}}" class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
           {{end}}
         </tbody>
       </table>
@@ -68,7 +68,7 @@
     <div class="plan-head">{{icon "git-merge"}}<span class="nm">plan:{{.Slug}}</span><span class="prog">{{.Done}} done &middot; {{.InFlight}} in progress &middot; {{.Open}} open &middot; {{.Total}} steps</span></div>
     <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
     {{range .Steps}}
-    <div class="step {{.State}}">
+    <div id="{{.ID}}" class="step {{.State}}">
       <div class="marker"><span class="dot"></span><span class="rail"></span></div>
       <div class="body"><div class="t">{{.Title}}</div><div class="meta"><span class="mono">{{shortID .ID}}</span>{{if .ClaimedBy}}<span class="claim">{{icon "lock"}}claimed by {{.ClaimedBy}}</span>{{if .LeaseLeft}}<span>{{icon "timer"}} lease {{.LeaseLeft}}</span>{{end}}{{end}}{{if .BlockedBy}}<span class="edge">{{icon "link"}}blocked by {{.BlockedBy}}</span>{{end}}</div></div>
       <span class="kind {{taskTone .Status}}" style="align-self:start">{{.Status}}</span>
@@ -85,7 +85,7 @@
       <thead><tr><th>Task</th><th>Status</th><th>Depends on</th><th>Created</th></tr></thead>
       <tbody>
         {{range .Ready}}
-        <tr class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> <a href="/console/tasks/{{.ID}}">{{.Title}}</a></td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/tasks/{{.ID}}"><td><span class="mono-id">{{shortID .ID}}</span> <a href="/console/tasks/{{.ID}}">{{.Title}}</a></td><td><span class="kind {{taskTone .Status}}">{{.Status}}</span></td><td class="muted">{{if .Deps}}{{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{else}}&mdash;{{end}}</td><td class="muted">{{ago .Created}}</td></tr>
         {{end}}
       </tbody>
     </table>
@@ -101,7 +101,7 @@
     {{if .Sessions}}
     <div class="sess">
       {{range .Sessions}}
-      <div class="r"><div><div class="id"><a href="/console/sessions/{{.ID}}">{{.Name}}</a>{{if .Active}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">{{.Source}}</span>{{end}}{{if .Ambient}}<span class="kind">ambient</span>{{end}}{{range .Holds}}<span class="claim">{{icon "lock"}}holds {{.}}</span>{{end}}</div>{{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}</div><span class="when">{{ago .Updated}}</span></div>
+      <div id="{{.ID}}" class="r"><div><div class="id"><a href="/console/sessions/{{.ID}}">{{.Name}}</a>{{if .Active}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">{{.Source}}</span>{{end}}{{if .Ambient}}<span class="kind">ambient</span>{{end}}{{range .Holds}}<span class="claim">{{icon "lock"}}holds {{.}}</span>{{end}}</div>{{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}</div><span class="when">{{ago .Updated}}</span></div>
       {{end}}
     </div>
     {{else}}<div class="empty">No sessions in {{.Slug}}</div>{{end}}
@@ -115,12 +115,12 @@
       <thead><tr><th>Name</th><th>Kind</th><th>Lineage</th><th class="num">Inj</th><th class="num">Read</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Memories}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="6"><div class="empty">No memories in {{.Slug}}</div></td></tr>{{end}}
         {{if .Inherited}}
         <tr class="subhead-row"><td colspan="6">Inherited &mdash; counted in parent/global scope, not {{.Slug}}</td></tr>
         {{range .Inherited}}
-        <tr class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/memories/{{.ID}}"><td class="mem-name"><a href="/console/memories/{{.ID}}"><strong>{{.Name}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><span class="kind">{{.Kind}}</span></td><td>{{.Lineage}}</td><td class="num">{{.Injects}}</td><td class="num">{{.Reads}}</td><td class="muted">{{ago .Updated}}</td></tr>
         {{end}}
         {{end}}
       </tbody>
@@ -135,7 +135,7 @@
       <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
       <tbody>
         {{range .Notes}}
-        <tr class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><a href="/console/notes/{{.ID}}"><strong>{{.Title}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
+        <tr id="{{.ID}}" class="row-link" data-href="/console/notes/{{.ID}}"><td class="mem-name"><a href="/console/notes/{{.ID}}"><strong>{{.Title}}</strong></a>{{if .Desc}}<div class="desc">{{.Desc}}</div>{{end}}</td><td><div style="display:flex;gap:6px;flex-wrap:wrap">{{range .Tags}}<span class="badge">{{.}}</span>{{end}}</div></td><td class="muted">{{ago .Updated}}</td></tr>
         {{else}}<tr><td colspan="3"><div class="empty">No notes in {{.Slug}}</div></td></tr>
         {{end}}
       </tbody>
@@ -143,8 +143,11 @@
   </div>
 </div>
 
-<!-- TAB: interactions -->
-<div class="tabpanel{{if eq .ActiveTab "interactions"}} on{{end}}" data-panel="interactions">
+<!-- TAB: interactions. data-live-skip: the volume histogram is JS-drawn, and the
+     kind filter + row expand/clamp state are client-owned -- a live morph would
+     clobber all three. The dedicated /console/interactions screen is the live
+     surface; this panel stays a page-load snapshot. -->
+<div class="tabpanel{{if eq .ActiveTab "interactions"}} on{{end}}" data-panel="interactions" data-live-skip>
   {{if .Interactions}}
   <div class="ix-volume empty" id="ix-pvol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
   <div class="ix-controls">
@@ -208,7 +211,6 @@
 
 {{define "scripts"}}
 <script>
-window.SEAM_NO_LIVE_REFRESH = true; // client-driven tabs + JS-built volume/feed islands
 (function () {
   /* Project-detail tabs: server renders every panel (the active one via ?tab=),
      JS switches them client-side without a reload and syncs ?tab= for deep-links.
