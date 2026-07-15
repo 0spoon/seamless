@@ -172,9 +172,11 @@ after it is left as an argument, not a flag. <code>seam</code> inherits this, so
 <pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
 </span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force is ignored, silently</span>
 </span></span></code></pre><p>There is no error and no warning — the second form releases the task through the
-normal holder-checked path and the override never happens. The usage text prints
-the trailing-flag form (<code>seam task release &lt;id&gt; [--force]</code>), so the help is not
-a reliable guide here.</p>
+normal holder-checked path and the override never happens.</p>
+<p><code>seam help</code> prints the working order and says so up front, so the help is a
+reliable guide. It was not always: the usage text used to print the
+trailing-flag form for exactly the commands where it does not work, which is
+worth knowing if you are reading an older build's <code>--help</code>.</p>
 <p>The commands where this bites, written the way that actually works:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
 </span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD
@@ -221,9 +223,9 @@ age, source, score, and description; no matches prints <code>no results</code>.<
 <h3 id="seam_capture">seam capture</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
 </span></span></code></pre><p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
-as a note. An empty <code>--project</code> files the note under <code>inbox</code>. Remember the flag
-order — the usage text shows <code>seam capture URL [--project P]</code>, which parses the
-flag as a positional and drops it.</p>
+as a note. An empty <code>--project</code> files the note under <code>inbox</code>. Mind the flag
+order: <code>seam capture URL --project p</code> parses <code>--project</code> as a positional and
+drops it, filing the note to <code>inbox</code> without saying so.</p>
 <h2 id="tasks">Tasks</h2>
 <p>The queue side of the CLI. See <a href="../../reference/mcp/tasks/">Tasks</a> for what ready,
 blocked, and claimed mean.</p>
