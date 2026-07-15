@@ -56,9 +56,10 @@ type fusedItem struct {
 }
 
 // Recall fuses semantic (cosine) and FTS results with RRF, hydrates the winners
-// from the index, and packs them into the recall token budget. The project+
-// global scope is enforced inside the candidate queries, so the fused depth is
-// entirely in-scope. With no embedder configured it degrades to FTS only.
+// from the index, and packs them into the recall token budget. Scope and
+// validity are both enforced inside the candidate queries, so the fused depth is
+// entirely in-scope and entirely live. With no embedder configured it degrades
+// to FTS only.
 func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	kinds := scopeKinds(in.Scope)
 	limit := in.Limit
@@ -174,9 +175,10 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 			if !ok {
 				continue
 			}
-			// A superseded/archived memory keeps its FTS + embedding rows (only
-			// the index row is stamped invalid_at), so filter it out here rather
-			// than surface stale knowledge as a live hit.
+			// The candidate queries already drop invalidated memories, and link
+			// expansion resolves through MemoryByName, which only returns active
+			// ones; this is the residual guard for a memory superseded between
+			// the candidate query and this hydration.
 			if !m.Active() {
 				continue
 			}

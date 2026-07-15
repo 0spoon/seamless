@@ -162,6 +162,68 @@ func BenchmarkFTSSearch(b *testing.B) {
 	}
 }
 
+// supersedeFraction invalidates the first frac of an n-item seeded corpus the
+// way lifecycle.Supersede does -- stamping memories_index.invalid_at and leaving
+// the fts and embedding rows untouched -- so the fixture holds the retired
+// revisions a long-lived corpus actually accumulates.
+func supersedeFraction(b *testing.B, db *sql.DB, n int, frac float64) int {
+	b.Helper()
+	dead := int(float64(n) * frac)
+	res, err := db.ExecContext(context.Background(), `
+		UPDATE memories_index SET invalid_at = ?
+		WHERE id <= ?`, core.FormatTime(time.Now().UTC()), fmt.Sprintf("M%025d", dead-1))
+	require.NoError(b, err)
+	got, err := res.RowsAffected()
+	require.NoError(b, err)
+	require.Equal(b, int64(dead), got, "fixture must invalidate exactly the intended rows")
+	return dead
+}
+
+// BenchmarkSearchSupersededCorpus measures both candidate queries against the
+// corpus shape they actually run on: one where a fifth of the memories have been
+// superseded but keep their fts and embedding rows. seedSearchCorpus stamps
+// every row valid, so the plain benchmarks above measure the one case where the
+// validity predicate is pure overhead and can never pay for itself. Here the
+// predicate also removes a fifth of the rows from the scan, which is the
+// trade the production DB makes.
+func BenchmarkSearchSupersededCorpus(b *testing.B) {
+	ctx := context.Background()
+	const n = 5000
+
+	b.Run("cosine", func(b *testing.B) {
+		db := openBenchStore(b)
+		seedSearchCorpus(b, db, "bench", n, benchDims)
+		supersedeFraction(b, db, n, 0.2)
+		query := benchVector(999_999, benchDims)
+		b.ReportAllocs()
+		for b.Loop() {
+			hits, err := CosineSearch(ctx, db, query, benchModel, []string{"memory", "note"}, []string{"bench"}, 24)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if len(hits) == 0 {
+				b.Fatal("expected hits")
+			}
+		}
+	})
+
+	b.Run("fts", func(b *testing.B) {
+		db := openBenchStore(b)
+		seedSearchCorpus(b, db, "bench", n, benchDims)
+		supersedeFraction(b, db, n, 0.2)
+		b.ReportAllocs()
+		for b.Loop() {
+			hits, err := FTSSearch(ctx, db, "chroma container health check race", []string{"memory", "note"}, []string{"bench"}, 24)
+			if err != nil {
+				b.Fatal(err)
+			}
+			if len(hits) == 0 {
+				b.Fatal("expected hits")
+			}
+		}
+	})
+}
+
 // BenchmarkCosine isolates the pure vector math (one similarity computation at
 // production dimensionality), the inner loop of the brute-force scan.
 func BenchmarkCosine(b *testing.B) {
