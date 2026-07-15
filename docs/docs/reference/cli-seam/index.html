@@ -211,9 +211,10 @@ new one. When there is no briefing content yet, it says so on stderr.</p>
 (&lt;=150 chars) that indexes show.</p>
 <p>The body comes from <code>--body</code>, or from <strong>stdin</strong> when <code>--body</code> is omitted — an
 empty body after either route is an error, not an empty memory. <code>--project</code>
-defaults to the server's own binding or global. Output reports whether the write
-created or updated the memory, and names a similar existing memory when the
-server flags one.</p>
+resolves the same way as it does for <a href="#seam_capture">capture</a>: empty inherits the
+session's project and is an error when nothing pins it, and <code>global</code> is the
+explicit escape hatch. Output reports whether the write created or updated the
+memory, and names a similar existing memory when the server flags one.</p>
 <h3 id="seam_recall">seam recall</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam recall QUERY <span class="o">[</span>--scope all<span class="p">|</span>memories<span class="p">|</span>notes<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--limit N<span class="o">]</span>
 </span></span></code></pre><p>Calls <code>recall</code>, the single RRF-fused search entry point. Scope defaults to <code>all</code>
@@ -223,9 +224,15 @@ age, source, score, and description; no matches prints <code>no results</code>.<
 <h3 id="seam_capture">seam capture</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
 </span></span></code></pre><p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
-as a note. An empty <code>--project</code> files the note under <code>inbox</code>. Mind the flag
-order: <code>seam capture URL --project p</code> parses <code>--project</code> as a positional and
-drops it, filing the note to <code>inbox</code> without saying so.</p>
+as a note. An empty <code>--project</code> does not mean global: the scope resolves to the
+session's project — the bound session's, or a single unambiguous ambient one.
+The server refuses to guess rather than pick a default, so a capture with
+nothing to infer from, or one made while ambient sessions span several projects,
+is an error naming the fix. Pass <code>--project global</code> to file the note globally
+(<code>notes/_global/</code>), or <code>--project &lt;slug&gt;</code> to name a project outright.</p>
+<p>Flags must precede the URL. Go's flag package stops parsing at the first
+positional, so the <code>--project</code> in <code>seam capture URL --project p</code> cannot bind;
+rather than ignore it, <code>seam</code> rejects the line with an error.</p>
 <h2 id="tasks">Tasks</h2>
 <p>The queue side of the CLI. See <a href="../../reference/mcp/tasks/">Tasks</a> for what ready,
 blocked, and claimed mean.</p>

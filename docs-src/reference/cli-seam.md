@@ -84,9 +84,10 @@ Calls `memory_write`. `--name`, `--kind`, and `--description` are required.
 
 The body comes from `--body`, or from **stdin** when `--body` is omitted — an
 empty body after either route is an error, not an empty memory. `--project`
-defaults to the server's own binding or global. Output reports whether the write
-created or updated the memory, and names a similar existing memory when the
-server flags one.
+resolves the same way as it does for [capture](#seam_capture): empty inherits the
+session's project and is an error when nothing pins it, and `global` is the
+explicit escape hatch. Output reports whether the write created or updated the
+memory, and names a similar existing memory when the server flags one.
 
 ### seam recall {#seam_recall}
 
@@ -106,9 +107,16 @@ seam capture [--project P] URL
 ```
 
 Calls `capture_url` to fetch a page through the SSRF-safe fetcher and store it
-as a note. An empty `--project` files the note under `inbox`. Mind the flag
-order: `seam capture URL --project p` parses `--project` as a positional and
-drops it, filing the note to `inbox` without saying so.
+as a note. An empty `--project` does not mean global: the scope resolves to the
+session's project — the bound session's, or a single unambiguous ambient one.
+The server refuses to guess rather than pick a default, so a capture with
+nothing to infer from, or one made while ambient sessions span several projects,
+is an error naming the fix. Pass `--project global` to file the note globally
+(`notes/_global/`), or `--project <slug>` to name a project outright.
+
+Flags must precede the URL. Go's flag package stops parsing at the first
+positional, so the `--project` in `seam capture URL --project p` cannot bind;
+rather than ignore it, `seam` rejects the line with an error.
 
 ## Tasks
 

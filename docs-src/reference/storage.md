@@ -21,13 +21,13 @@ it by hand, and what happens if you delete it.
     _global/{name}.md                  project-less memories
     {project}/{name}.md                one memory per file
   notes/
-    inbox/{slug}.md                    project-less notes
+    _global/{slug}.md                  project-less notes
     {project}/{slug}.md                one note per file
 ```
 
 A memory's project is its directory. An empty `project` field means global, and
-the file lands in `memory/_global/`. Notes work the same way, with `inbox/` as
-the project-less home. A memory's filename is its `name`; a note's is its `slug`.
+the file lands in `memory/_global/`. Notes work the same way, under
+`notes/_global/`. A memory's filename is its `name`; a note's is its `slug`.
 
 ## Memory frontmatter
 
