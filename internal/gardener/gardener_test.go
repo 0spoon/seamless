@@ -87,7 +87,7 @@ func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
 	g.now = func() time.Time { return now }
 	g.pruneToolEvents(ctx)
 
-	got, err := rec.Recent(ctx, 10)
+	got, err := rec.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	kinds := map[core.EventKind]bool{}
@@ -102,7 +102,7 @@ func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
 	g0 := New(db, nil, nil, nil, rec, Config{ToolEventRetentionDays: 0}, slog.Default())
 	g0.now = func() time.Time { return now }
 	g0.pruneToolEvents(ctx)
-	got2, err := rec.Recent(ctx, 10)
+	got2, err := rec.RecentExcluding(ctx, 10)
 	require.NoError(t, err)
 	require.Len(t, got2, 2)
 }
@@ -155,7 +155,7 @@ func TestReapStaleSessions(t *testing.T) {
 	require.Empty(t, task.ClaimedBy)
 
 	// A session.ended event stamped reason=expired was recorded for the reap.
-	evs, err := rec.Recent(ctx, 20)
+	evs, err := rec.RecentExcluding(ctx, 20)
 	require.NoError(t, err)
 	var reaped bool
 	for _, e := range evs {
