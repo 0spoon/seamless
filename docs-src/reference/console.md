@@ -293,11 +293,11 @@ Split batches are grouped by plan and reviewed together, setup card first, with 
 apply-the-whole-plan action.
 
 The actions are **apply**, **dismiss**, **retarget** (reproject cards only), and
-**apply plan**. Above them sit the two request boxes - ask in words, or split a
-project - and both only ever produce more proposals for this same queue. A
-recognized split typed into the general request box routes you to the split box
-rather than creating loose proposals, because splitting needs a structured source
-project.
+**apply plan**. Above them sits a single ask-in-words box, and it only ever
+produces more proposals for this same queue. A request recognized as a project
+split is planned as a split directly - the plan batch appears below like any
+other. When the split's source project cannot be matched, an inline follow-up
+asks you to pick the project and plans the split from there; nothing is retyped.
 
 See [The gardener](/concepts/gardener/) for what each proposal type means.
 

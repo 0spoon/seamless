@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -18,6 +19,7 @@ import (
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gardener"
+	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -27,6 +29,21 @@ type stubChat struct{ out string }
 
 func (c stubChat) Model() string                                            { return "stub-chat" }
 func (c stubChat) Complete(context.Context, string, string) (string, error) { return c.out, nil }
+
+// seqChat is an llm.Chat returning one canned completion per call in order (the
+// last one repeats), so a flow chaining two interpretations -- a request that
+// routes into a split plan -- can stub both.
+type seqChat struct {
+	outs []string
+	n    int
+}
+
+func (c *seqChat) Model() string { return "stub-chat-seq" }
+func (c *seqChat) Complete(context.Context, string, string) (string, error) {
+	out := c.outs[min(c.n, len(c.outs)-1)]
+	c.n++
+	return out, nil
+}
 
 // newConsoleWithGardener wires a real gardener (no embedder/chat) so apply/dismiss
 // round-trip through the proposal store and files.
@@ -181,7 +198,7 @@ func TestGardenerRequest_UnavailableWithoutChat(t *testing.T) {
 // newConsoleForSplit wires a chat-backed console and seeds two active memories in
 // project "arctop-app" ([1] ios-thing, [2] shared-thing), so the split path has
 // something to classify.
-func newConsoleForSplit(t *testing.T, chatOut string) (context.Context, *sql.DB, *http.ServeMux) {
+func newConsoleForSplit(t *testing.T, chat llm.Chat) (context.Context, *sql.DB, *http.ServeMux) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -200,7 +217,7 @@ func newConsoleForSplit(t *testing.T, chatOut string) (context.Context, *sql.DB,
 	require.NoError(t, err)
 
 	rec := events.NewRecorder(db)
-	garden := gardener.New(db, mgr, nil, stubChat{out: chatOut}, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
+	garden := gardener.New(db, mgr, nil, chat, rec, gardener.FromConfig(config.Gardener{}), slog.Default())
 	svc, err := New(Config{DB: db, Files: mgr, Gardener: garden, Events: rec, DataDir: dataDir, APIKey: testKey})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
@@ -224,7 +241,7 @@ const splitConsoleJSON = `{"children":[{"slug":"arctop-ios","label":"Arctop iOS"
 	`"assignments":[{"memory":1,"to":"arctop-ios"},{"memory":2,"to":"arctop-mobile-apps"}]}`
 
 func TestGardenerSplit_CreatesPlanGroup(t *testing.T) {
-	ctx, db, mux := newConsoleForSplit(t, splitConsoleJSON)
+	ctx, db, mux := newConsoleForSplit(t, stubChat{out: splitConsoleJSON})
 
 	rr := postForm(mux, "/console/gardener/split", "source=arctop-app&instruction=split+into+ios+and+android")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
@@ -249,8 +266,50 @@ func TestGardenerSplit_CreatesPlanGroup(t *testing.T) {
 	require.Empty(t, data.Cards, "plan proposals do not pollute the loose grid")
 }
 
+// A request recognized as a split of a known project chains straight into split
+// planning: one POST, the plan batch lands, no second form.
+func TestGardenerRequest_SplitRecognized_PlansInline(t *testing.T) {
+	ctx, db, mux := newConsoleForSplit(t, &seqChat{outs: []string{
+		`{"split":{"source":"arctop-app","instruction":"split into ios and android"}}`,
+		splitConsoleJSON,
+	}})
+
+	rr := postForm(mux, "/console/gardener/request", "request=split+arctop-app+into+ios+and+android&project=")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/gardener?notice="),
+		"a chained split redirects with a positive notice, got %q", rr.Header().Get("Location"))
+
+	splits, err := store.PendingProposals(ctx, db, store.ProposalSplit)
+	require.NoError(t, err)
+	require.Len(t, splits, 1, "the split setup was planned from the general request")
+	reps, err := store.PendingProposals(ctx, db, store.ProposalReproject)
+	require.NoError(t, err)
+	require.Len(t, reps, 2)
+}
+
+// Split intent without a known source bounces the request text back so the page
+// renders the inline project picker follow-up.
+func TestGardenerRequest_SplitIntentNoSource_ShowsPicker(t *testing.T) {
+	_, _, mux := newConsoleForSplit(t, stubChat{out: `{"split":{"source":""}}`})
+
+	rr := postForm(mux, "/console/gardener/request", "request=split+my+app+into+ios+and+android&project=")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	loc := rr.Header().Get("Location")
+	require.Equal(t, "/console/gardener?split="+url.QueryEscape("split my app into ios and android"), loc)
+
+	var data gardenerData
+	getJSON(t, mux, loc+"&format=json", &data)
+	require.Equal(t, "split my app into ios and android", data.SplitReq)
+
+	req := httptest.NewRequest(http.MethodGet, loc, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	body := do(mux, req).Body.String()
+	require.Contains(t, body, `id="split-form"`, "the picker follow-up form renders")
+	require.Contains(t, body, "which project should be split")
+}
+
 func TestGardenerRetarget_ChangesTarget(t *testing.T) {
-	ctx, db, mux := newConsoleForSplit(t, splitConsoleJSON)
+	ctx, db, mux := newConsoleForSplit(t, stubChat{out: splitConsoleJSON})
 	require.Equal(t, http.StatusSeeOther, postForm(mux, "/console/gardener/split", "source=arctop-app").Code)
 
 	reps, err := store.PendingProposals(ctx, db, store.ProposalReproject)
@@ -268,7 +327,7 @@ func TestGardenerRetarget_ChangesTarget(t *testing.T) {
 }
 
 func TestGardenerApplyPlan_AppliesSetupThenMoves(t *testing.T) {
-	ctx, db, mux := newConsoleForSplit(t, splitConsoleJSON)
+	ctx, db, mux := newConsoleForSplit(t, stubChat{out: splitConsoleJSON})
 	require.Equal(t, http.StatusSeeOther, postForm(mux, "/console/gardener/split", "source=arctop-app").Code)
 
 	rr := postForm(mux, "/console/gardener/plan/split-arctop-app/apply", "")

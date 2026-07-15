@@ -55,6 +55,10 @@ type RequestResult struct {
 	// project split and points the caller at gardener_split. Empty when the
 	// request was handled inline.
 	Guidance string `json:"guidance,omitempty"`
+	// SplitIntent is true when the request was recognized as a project split,
+	// whether or not a source project was identified. It lets a caller offer its
+	// own follow-up (the console shows a project picker) without parsing Guidance.
+	SplitIntent bool `json:"splitIntent,omitempty"`
 	// SplitSource is set to the source project slug when the request was
 	// recognized as a project split that should be planned with gardener_split.
 	// The general request never plans a split itself (it needs a whole-project
@@ -190,7 +194,7 @@ func knownProjects(projects []core.Project, candidates []core.Memory) map[string
 // classification and a structured source, so the general request only recognizes
 // the intent and hands the caller the exact way to run it.
 func (s *Service) routeSplit(ctx context.Context, text string, sp *reqSplit, known map[string]bool) RequestResult {
-	res := RequestResult{ByKind: map[string]int{}}
+	res := RequestResult{ByKind: map[string]int{}, SplitIntent: true}
 	src := core.Slugify(strings.TrimSpace(sp.Source))
 	switch {
 	case src == "":

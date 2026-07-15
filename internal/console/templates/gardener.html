@@ -8,36 +8,32 @@
 </div>
 
 {{if .CanRequest}}
-<div class="req-grid">
-  <form class="card req-card" method="post" action="/console/gardener/request" id="req-form">
-    <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
+<div class="card req-card">
+  <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
+  <form method="post" action="/console/gardener/request" id="req-form">
     <textarea class="field" name="request" id="req-text" rows="3" aria-label="Describe what the gardener should propose"
-      placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; and archive anything about the old port 8080"></textarea>
+      placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; archive anything about the old port 8080; or split arctop-app into ios and android">{{.SplitReq}}</textarea>
     <div class="req-row">
       {{$scope := .Scope}}
       <select class="req-scope" name="project" aria-label="Request scope">
         <option value="">All projects</option>
         {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
       </select>
+      <span class="req-note">Creates reviewable proposals &mdash; nothing changes until you apply.</span>
       <button class="btn primary" type="submit" id="req-go">Generate proposals</button>
     </div>
   </form>
-
-  <form class="card req-card" method="post" action="/console/gardener/split" id="split-form">
-    <h2>Split a project <span class="h2-meta">one project &rarr; two</span></h2>
-    <div class="req-row" style="margin: 0 0 10px;">
-      <select class="req-scope" name="source" aria-label="Project to split" id="split-source" required>
-        <option value="">Choose a project&hellip;</option>
-        {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
-      </select>
-    </div>
-    <textarea class="field" name="instruction" id="split-text" rows="2" aria-label="How to split the project"
-      placeholder="e.g. split into arctop-ios and arctop-android; keep cross-platform memories in a shared arctop-mobile-apps"></textarea>
-    <div class="req-row">
-      <span class="prop-note" style="margin-right:auto;">Creates reviewable move proposals &mdash; nothing changes until you apply.</span>
-      <button class="btn primary" type="submit" id="split-go">Plan split</button>
-    </div>
+  {{if .SplitReq}}
+  <form class="req-followup" method="post" action="/console/gardener/split" id="split-form">
+    <span class="followup-lbl">This reads like a project split &mdash; which project should be split?</span>
+    <input type="hidden" name="instruction" id="split-instruction" value="{{.SplitReq}}">
+    <select class="req-scope" name="source" aria-label="Project to split" required>
+      <option value="">Choose a project&hellip;</option>
+      {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
+    </select>
+    <button class="btn primary" type="submit" id="split-go">Plan split</button>
   </form>
+  {{end}}
 </div>
 {{else}}
 <div class="card req-card">
@@ -181,7 +177,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress form state a refresh mu
     var form = document.getElementById(formID);
     if (!form) return;
     form.addEventListener('submit', function () {
-      form.classList.add('is-busy');
+      (form.closest('.req-card') || form).classList.add('is-busy');
       var btn = document.getElementById(btnID);
       if (btn) { btn.textContent = label; }
     });
@@ -194,6 +190,17 @@ window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress form state a refresh mu
     ta.addEventListener('keydown', function (e) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
         document.getElementById('req-form').requestSubmit();
+      }
+    });
+  }
+
+  // The split follow-up plans whatever is in the ask box, so edits made after
+  // the round-trip still count; the hidden input is the no-JS fallback.
+  var split = document.getElementById('split-form');
+  if (split && ta) {
+    split.addEventListener('submit', function () {
+      if (ta.value.trim() !== '') {
+        document.getElementById('split-instruction').value = ta.value;
       }
     });
   }
