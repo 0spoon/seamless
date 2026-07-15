@@ -48,6 +48,25 @@ func (c cmd) withLong(s string) cmd {
 	return c
 }
 
+// usageExit reports the exit code for a command line seam could not parse. It is
+// 2 everywhere except hook: Claude Code reads exit 2 from a hook as a BLOCKING
+// error and feeds stderr back to the model, so a misconfigured hook would wedge
+// the very session it exists to serve. hook fails open at 1 instead, which is
+// what it did before the table, and why its event name is validated in runHook
+// rather than declared as a spec enum.
+//
+// 2 for the rest is a small, deliberate extension of what the CLI did before,
+// where a parse failure and a handler failure both exited 1: flag.ExitOnError
+// itself exits 2 on a parse failure, and the split makes seam scriptable -- 2
+// means the caller typed it wrong, 1 means it went wrong. It costs nothing
+// because the parse/execute boundary already computes it.
+func (c *cmd) usageExit() int {
+	if c != nil && c.name == "hook" {
+		return 1
+	}
+	return 2
+}
+
 // spec builds a cmd from a statically-typed bind/run pair. The table stays
 // homogeneous while O remains matched across the two halves, so the o.(*O)
 // assertion cannot fail: the only value ever handed to run is the one this bind

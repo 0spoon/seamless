@@ -8,9 +8,8 @@ package main
 // for months, because help and parsing were two hand-maintained descriptions of
 // one contract. A synopsis that is derived cannot drift from what runs.
 //
-// legacySections is the other half of the bridge: the not-yet-migrated commands'
-// lines, kept verbatim and rendered under the same group headings, so help stays
-// whole while the table fills up one task at a time. B7 deletes it.
+// The heredoc and the legacySections bridge that outlived it are both gone: with
+// hook migrated, every line on the page comes from a spec.
 
 import (
 	"flag"
@@ -24,20 +23,6 @@ import (
 // command: remember binds five flags, and one long spec should not reflow the
 // page.
 const helpColumn = 46
-
-// legacySections holds the help lines for commands still dispatched by
-// legacyDispatch, keyed by the group they render under. Only hook is left; B6
-// migrates it and B7 removes this map and the comment with it.
-//
-// Verbatim from the usage heredoc, minus its preamble: that preamble told the
-// reader "seam capture URL --project p is an error", which the permuting parser
-// made false. Every command that preamble described is now in the table, and
-// hook's two lines describe events rather than flag order, so nothing is stranded
-// by its absence.
-var legacySections = map[string]string{
-	groupHooks: `  seam hook session-start|user-prompt-submit|session-end   forward the stdin hook payload to seamlessd
-  seam hook post-tool-use|subagent-stop|permission-request  plan-mode capture (post-tool-use pre-filters locally)`,
-}
 
 // bindTo returns the FlagSet a spec's bind registers on, silenced. Callers only
 // read the registrations back out (VisitAll, PrintDefaults); nothing is parsed,
@@ -87,10 +72,8 @@ func commandLine(c cmd) string {
 	return s + strings.Repeat(" ", helpColumn-len(s)) + c.summary
 }
 
-// helpText renders the full command list: every group in groupOrder, its migrated
-// commands rendered from the table, then whatever legacySections still holds for
-// it. A group with neither renders nothing, which is what lets the table and the
-// shrinking heredoc coexist without either knowing about the other.
+// helpText renders the full command list: every group in groupOrder, with its
+// commands rendered from the table. A group no command names renders nothing.
 //
 // It is named helpText, not usage: usage.go carried a comment apologizing for the
 // collision between runUsage (the command) and usage() (this). The apology goes
@@ -106,16 +89,12 @@ func helpText() string {
 				lines = append(lines, commandLine(c))
 			}
 		}
-		legacy := legacySections[g]
-		if len(lines) == 0 && legacy == "" {
+		if len(lines) == 0 {
 			continue
 		}
 		fmt.Fprintf(&b, "\n%s:\n", g)
 		for _, l := range lines {
 			b.WriteString(l + "\n")
-		}
-		if legacy != "" {
-			b.WriteString(legacy + "\n")
 		}
 	}
 	return b.String()

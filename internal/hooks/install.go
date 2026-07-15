@@ -147,6 +147,26 @@ func InstalledEvents() []string {
 	return out
 }
 
+// CommandHookEndpoints returns the `seam hook <arg>` events the installer wires
+// as command hooks, each mapped to the endpoint that hook must forward to.
+//
+// It exists for the seam CLI's test. The CLI keeps its own copy of this mapping
+// -- it cannot import this package without dragging the store, the retriever, and
+// SQLite into a binary whose job is one HTTP POST -- and a hook fails open by
+// contract, so drift between the two copies is a silent no-op rather than an
+// error: install-hooks would write a command line the CLI rejects, or forward to
+// a route that is not there, and the only symptom would be a briefing that
+// stopped arriving.
+func CommandHookEndpoints() map[string]string {
+	out := make(map[string]string)
+	for _, hs := range seamlessHooks {
+		if hs.CLIArg != "" {
+			out[hs.CLIArg] = hs.Endpoint
+		}
+	}
+	return out
+}
+
 // InstalledStatus reports which Seamless-managed hook events are present in the
 // settings.json at path, using the same ownership test as Install: the managed
 // marker, or an unmarked entry that targets the hook's URL under baseURL or
