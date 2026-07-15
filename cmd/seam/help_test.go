@@ -36,26 +36,14 @@ func TestHelpText_RendersEveryMigratedCommand(t *testing.T) {
 	}
 }
 
-// The bridge invariant: a command is declared in the table or in the heredoc,
-// never both. Two declarations of one contract is what let help advertise a flag
-// order the parser had never accepted.
-func TestHelpText_MigratedCommandsAreNotAlsoLegacy(t *testing.T) {
-	for _, c := range commands() {
-		for group, section := range legacySections {
-			require.NotContains(t, section, "seam "+c.name,
-				"%s is migrated but still hand-written under %q", c.name, group)
-		}
-	}
-}
-
-// The not-yet-migrated groups keep their lines until their own task converts
-// them, so help stays whole through the migration.
-func TestHelpText_KeepsLegacySections(t *testing.T) {
+// Nothing on the page is hand-written any more: with hook migrated there is no
+// second source for a line to come from, so the whole set is here.
+func TestHelpText_CoversTheWholeCommandSet(t *testing.T) {
 	help := helpText()
 	for _, want := range []string{
 		"seam plan approve <slug>",
 		"seam status",
-		"seam hook session-start|user-prompt-submit|session-end",
+		"seam hook",
 	} {
 		require.Contains(t, help, want)
 	}
@@ -112,9 +100,13 @@ func TestDispatch_UnknownCommand(t *testing.T) {
 	require.Contains(t, errb.String(), `unknown command "bogus"`)
 }
 
-// A parse failure reports the error and the command's own synopsis, and never
-// reaches the handler -- e.dial is nil here, so a dispatch that got that far
+// A parse failure reports the error and the command's own synopsis, exits 2, and
+// never reaches the handler -- e.dial is nil here, so a dispatch that got that far
 // would panic rather than pass.
+//
+// 2 is the parse/execute split: the caller typed it wrong (2) rather than it went
+// wrong (1), which is flag's own convention and makes seam scriptable. hook is
+// the one exemption, pinned in hook_test.go.
 func TestDispatch_ParseErrorNeverReachesTheHandler(t *testing.T) {
 	tests := []struct {
 		name string
@@ -132,7 +124,7 @@ func TestDispatch_ParseErrorNeverReachesTheHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e, _, errb := stubEnv()
-			require.Equal(t, 1, dispatch(context.Background(), e, tt.argv))
+			require.Equal(t, 2, dispatch(context.Background(), e, tt.argv))
 			require.Contains(t, errb.String(), tt.want)
 			require.Contains(t, errb.String(), "usage: seam "+tt.argv[0])
 		})

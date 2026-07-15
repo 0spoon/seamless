@@ -7,10 +7,9 @@ package main
 // where its code does. This file decides only what order the reader meets them
 // in, which is also the order help renders.
 //
-// The invariant that keeps the migration honest while legacyDispatch still
-// exists: a command enters this table exactly when its handler converts. It is
-// never declared in two places, so there is no window in which the table and the
-// heredoc can disagree.
+// This is now the whole command set: hook was the last migration, so there is no
+// second place a command can be declared and nothing left for help and the parser
+// to disagree about.
 
 // Group headings, in help order. Declared as constants rather than written at
 // each spec so a typo cannot silently open a second section.
@@ -22,9 +21,10 @@ const (
 	groupHooks         = "hooks (invoked by Claude Code, not by hand)"
 )
 
-// groupOrder is the order help renders the sections in. A group with no migrated
-// commands renders nothing, which is what lets the table and the shrinking
-// heredoc coexist without either knowing about the other.
+// groupOrder is the order help renders the sections in. A group naming no
+// command renders nothing; help_test pins the converse, that every group a
+// command names is listed here, since a spec in an unlisted group renders
+// nowhere at all.
 var groupOrder = []string{groupAgentLoop, groupTasks, groupPlans, groupObservability, groupHooks}
 
 // commands returns the migrated command table, in help order.
@@ -59,5 +59,7 @@ func commands() []cmd {
 		sessionsCmd,
 		usageCmd,
 		doctorCmd,
+
+		hookCmd,
 	}
 }
