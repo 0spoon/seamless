@@ -41,6 +41,32 @@ func TestOpen_FreshDB_PragmasAndMigration(t *testing.T) {
 	require.Equal(t, "fts", ftsName)
 }
 
+// TestTasksClaimedByIndex pins migration 008. Asserting the index row exists
+// would pass even if the planner ignored it, so this checks the plan instead --
+// which is what caught the partial-index form silently degrading to a scan.
+func TestTasksClaimedByIndex(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "seam.db")
+	db, err := Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	rows, err := db.Query(`EXPLAIN QUERY PLAN SELECT `+taskCols+` FROM tasks
+		WHERE claimed_by = ? ORDER BY created_at ASC, id ASC`, "01KXKE2XZNQEA9R0EQEXMGP9C9")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rows.Close() })
+
+	var plan strings.Builder
+	for rows.Next() {
+		var id, parent, notused int
+		var detail string
+		require.NoError(t, rows.Scan(&id, &parent, &notused, &detail))
+		plan.WriteString(detail + "\n")
+	}
+	require.NoError(t, rows.Err())
+	require.Contains(t, plan.String(), "idx_tasks_claimed_by",
+		"the claim lookup must use the index, not scan the table")
+}
+
 func TestOpen_Idempotent(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "seam.db")
 

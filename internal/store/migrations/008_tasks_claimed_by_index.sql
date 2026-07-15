@@ -1,0 +1,17 @@
+-- Index the claim lookups. TasksClaimedBy (relations.go) and
+-- ReleaseClaimsForSession (tasks_claim.go) both filter on claimed_by with no
+-- index behind them, so each one scanned the whole table; the console's session
+-- tabs call TasksClaimedBy once per listed session, turning a page render into a
+-- scan per session.
+--
+-- Deliberately NOT partial. `WHERE claimed_by <> ''` looks right -- the column
+-- defaults to '' and most rows sit unclaimed, so a partial index would stay
+-- proportional to the tasks actually in flight -- but SQLite only uses a partial
+-- index when it can prove the query's WHERE implies the index's, using facts
+-- known at plan time. Both call sites bind claimed_by = ?, and a parameter could
+-- be '', so the proof fails and the planner falls back to a full scan. The
+-- partial form would have to be paid for with a redundant `AND claimed_by <> ''`
+-- at every call site. The table is small; index every row and keep the callers
+-- honest. TestTasksClaimedByIndex asserts the plan, not the index's existence,
+-- so this cannot silently regress to a scan.
+CREATE INDEX IF NOT EXISTS idx_tasks_claimed_by ON tasks(claimed_by);
