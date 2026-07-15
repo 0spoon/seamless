@@ -20,6 +20,7 @@
       <div class="nav-sec">Observe</div>
       <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
       <a href="/console/interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
+      <a href="/console/search" class="{{if eq .Active "search"}}active{{end}}">{{icon "search"}}<span class="nav-label">Search</span><span class="kbd-hint">&#8984;K</span></a>
       <div class="nav-sec">Browse</div>
       <a href="/console/projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
       <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
@@ -45,7 +46,25 @@
   </main>
 </div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
+<div id="cmdk" class="cmdk-overlay" hidden>
+  <div class="cmdk" role="dialog" aria-modal="true" aria-label="Search">
+    <div class="cmdk-input-row">
+      {{icon "search"}}
+      <input id="cmdk-input" type="text" role="combobox" aria-expanded="true" aria-controls="cmdk-list"
+             aria-autocomplete="list" autocomplete="off" spellcheck="false"
+             placeholder="Search memories, notes, tasks, plans&hellip;">
+    </div>
+    <ul id="cmdk-list" class="cmdk-list" role="listbox" aria-label="Search results"></ul>
+    <div class="cmdk-foot">
+      <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> navigate</span>
+      <span><kbd>&crarr;</kbd> open</span>
+      <span><kbd>esc</kbd> close</span>
+      <a class="sp" id="cmdk-all" href="/console/search">See all results</a>
+    </div>
+  </div>
+</div>
 <script src="/console/static/interactions.js"></script>
+<script src="/console/static/search.js"></script>
 <script>
 (function () {
   // Static "live" pills (Overview, Projects topbar). #ix-live is excluded --

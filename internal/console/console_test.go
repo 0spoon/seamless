@@ -14,8 +14,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -29,7 +31,11 @@ func newConsole(t *testing.T) (*sql.DB, *http.ServeMux) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	svc, err := New(Config{DB: db, Events: events.NewRecorder(db), APIKey: testKey})
+	svc, err := New(Config{
+		DB: db, Events: events.NewRecorder(db), APIKey: testKey,
+		// A nil embedder keeps search lexical-only: no test needs a provider.
+		Retrieve: retrieve.New(db, nil, config.Defaults().Budgets, nil),
+	})
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)

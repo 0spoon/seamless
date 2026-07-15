@@ -2,6 +2,7 @@
 /bin/
 /seamlessd
 /seam
+/docsgen
 *.exe
 *.dll
 *.so

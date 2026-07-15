@@ -20,6 +20,9 @@ var consoleCSS []byte
 //go:embed static/interactions.js
 var interactionsJS []byte
 
+//go:embed static/search.js
+var searchJS []byte
+
 //go:embed static/favicon.svg
 var faviconSVG []byte
 
@@ -27,7 +30,7 @@ var faviconSVG []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
+	"login", "overview", "search", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
 	"memories", "memory", "notes", "note", "retrieval", "tasks", "task", "plans", "plan", "gardener", "settings", "event", "error",
 }
 

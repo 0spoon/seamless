@@ -25,6 +25,7 @@ import (
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gardener"
+	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -35,10 +36,14 @@ const cookieName = "seamless_console"
 // Config wires the console's dependencies. Files/Gardener/Events are used by the
 // write actions (archive, apply/dismiss) and the live feed; DB backs every read.
 type Config struct {
-	DB          *sql.DB
-	Files       *files.Manager
-	Gardener    *gardener.Service
-	Events      *events.Recorder
+	DB       *sql.DB
+	Files    *files.Manager
+	Gardener *gardener.Service
+	Events   *events.Recorder
+	// Retrieve backs the search page and command palette: the same fused
+	// FTS+semantic engine recall uses, through its human-facing Search entry
+	// point. A nil Retrieve degrades search to the structured entities only.
+	Retrieve    *retrieve.Service
 	APIKey      string
 	DataDir     string // for resolving memory/note file paths to absolute editor links
 	Budgets     config.Budgets
@@ -79,12 +84,14 @@ func New(cfg Config) (*Service, error) {
 func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
 	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
+	mux.HandleFunc("GET /console/static/search.js", s.serveSearchJS)
 	mux.HandleFunc("GET /console/static/favicon.svg", s.serveFavicon)
 	mux.HandleFunc("GET /console/login", s.loginForm)
 	mux.HandleFunc("POST /console/login", s.loginSubmit)
 	mux.HandleFunc("POST /console/logout", s.logout)
 
 	mux.HandleFunc("GET /console/{$}", s.auth(s.overview))
+	mux.HandleFunc("GET /console/search", s.auth(s.searchPage))
 	mux.HandleFunc("GET /console/interactions", s.auth(s.interactions))
 	mux.HandleFunc("GET /console/sessions", s.auth(s.sessionsList))
 	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
@@ -245,6 +252,13 @@ func (s *Service) serveJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(interactionsJS)
+}
+
+// serveSearchJS serves the command-palette client, loaded on every page.
+func (s *Service) serveSearchJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(searchJS)
 }
 
 func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {

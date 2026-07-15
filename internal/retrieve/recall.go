@@ -36,6 +36,13 @@ type Hit struct {
 	Age         string  `json:"age"`
 	Source      string  `json:"source"` // semantic | fts | fused
 	Score       float64 `json:"score"`
+	// Snippet is the matched text in context, with the matched terms wrapped in
+	// store.SnippetStartMark/SnippetEndMark. Only Search sets it, and only for
+	// hits an FTS leg found -- Recall always leaves it empty, so omitempty keeps
+	// the MCP recall payload byte-identical to what it was before Search existed.
+	// It is RAW item text: a renderer must HTML-escape before substituting the
+	// sentinels for markup.
+	Snippet string `json:"snippet,omitempty"`
 }
 
 // RecallInput parameterizes a recall. Project is the session's bound scope;
@@ -53,6 +60,100 @@ type fusedItem struct {
 	semantic bool
 	fts      bool
 	linked   bool // pulled in via a [[name]] link from a top hit
+	snippet  string
+}
+
+// candidates runs both retrieval legs and fuses them with RRF, returning the
+// accumulator keyed by item id. It is the shared heart of Recall and Search:
+// the semantic/FTS legs, the RRF weighting, and -- critically -- the embedder
+// degradation contract (a local ErrConfig surfaces; a remote failure warns and
+// falls back to lexical-only) live here once, so the two entry points cannot
+// drift on the behavior that matters most when the provider misbehaves.
+//
+// semantic requests the cosine leg; it is skipped when no embedder is
+// configured. projects/kinds are applied inside the candidate queries (never
+// after fusion) so the whole depth stays in scope.
+//
+// The FTS leg always asks for snippets: the snippet projection cannot perturb
+// which rows return or in what order (pinned by
+// store.TestFTSSearch_SnippetVariantMatchesPlainOrdering), so Recall paying for
+// a snippet it discards is cheaper than two divergent query paths.
+func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
+	acc := make(map[string]*fusedItem)
+	add := func(itemID, kind string, rank int, isSemantic bool, snippet string) {
+		f := acc[itemID]
+		if f == nil {
+			f = &fusedItem{kind: kind}
+			acc[itemID] = f
+		}
+		f.score += 1.0 / float64(rrfK+rank+1)
+		if isSemantic {
+			f.semantic = true
+		} else {
+			f.fts = true
+			if snippet != "" && f.snippet == "" {
+				f.snippet = snippet
+			}
+		}
+	}
+
+	if semantic && s.embedder != nil {
+		qvec, err := s.embedder.Embed(ctx, query)
+		switch {
+		case errors.Is(err, llm.ErrConfig):
+			// A client that cannot build its own request is a local defect, not
+			// a provider outage. Degrading here would trade a loud failure for
+			// quietly worse results on every recall for the life of the daemon,
+			// with nothing to tell the owner semantic search had stopped. The
+			// llm factories reject a bad base_url at construction, so this is
+			// unreachable in a correctly built client -- which is why reaching
+			// it must surface rather than hide.
+			return nil, fmt.Errorf("%s: %w", who, err)
+		case err != nil:
+			// The provider is unreachable, throttling, or rejecting the key:
+			// nothing here is wrong and it may clear on its own, so lexical-only
+			// results are honest and better than none. seamlessd doctor's
+			// embedderCheck is where the owner sees this standing condition.
+			s.logger.Warn(who+": embed failed, FTS only", "error", err)
+		default:
+			hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, depth)
+			if err != nil {
+				return nil, err
+			}
+			for rank, h := range hits {
+				add(h.ItemID, h.Kind, rank, true, "")
+			}
+		}
+	}
+	ftsHits, err := store.FTSSearchSnippets(ctx, s.db, query, kinds, projects, depth)
+	if err != nil {
+		return nil, err
+	}
+	for rank, h := range ftsHits {
+		add(h.ItemID, h.Kind, rank, false, h.Snippet)
+	}
+	return acc, nil
+}
+
+// hydrate loads the index rows behind a fused accumulator, split by kind.
+func (s *Service) hydrate(ctx context.Context, ordered []string, acc map[string]*fusedItem) (map[string]core.Memory, map[string]core.Note, error) {
+	var memIDs, noteIDs []string
+	for _, id := range ordered {
+		if acc[id].kind == "note" {
+			noteIDs = append(noteIDs, id)
+		} else {
+			memIDs = append(memIDs, id)
+		}
+	}
+	mems, err := store.MemoriesByIDs(ctx, s.db, memIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	notes, err := store.NotesByIDs(ctx, s.db, noteIDs)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mems, notes, nil
 }
 
 // Recall fuses semantic (cosine) and FTS results with RRF, hydrates the winners
@@ -76,70 +177,13 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		projects = append(projects, in.Project)
 	}
 
-	acc := make(map[string]*fusedItem)
-	add := func(hits []store.SearchHit, semantic bool) {
-		for rank, h := range hits {
-			f := acc[h.ItemID]
-			if f == nil {
-				f = &fusedItem{kind: h.Kind}
-				acc[h.ItemID] = f
-			}
-			f.score += 1.0 / float64(rrfK+rank+1)
-			if semantic {
-				f.semantic = true
-			} else {
-				f.fts = true
-			}
-		}
-	}
-
-	if s.embedder != nil {
-		qvec, err := s.embedder.Embed(ctx, in.Query)
-		switch {
-		case errors.Is(err, llm.ErrConfig):
-			// A client that cannot build its own request is a local defect, not
-			// a provider outage. Degrading here would trade a loud failure for
-			// quietly worse results on every recall for the life of the daemon,
-			// with nothing to tell the owner semantic search had stopped. The
-			// llm factories reject a bad base_url at construction, so this is
-			// unreachable in a correctly built client -- which is why reaching
-			// it must surface rather than hide.
-			return nil, fmt.Errorf("retrieve.Recall: %w", err)
-		case err != nil:
-			// The provider is unreachable, throttling, or rejecting the key:
-			// nothing here is wrong and it may clear on its own, so lexical-only
-			// results are honest and better than none. seamlessd doctor's
-			// embedderCheck is where the owner sees this standing condition.
-			s.logger.Warn("retrieve.Recall: embed failed, FTS only", "error", err)
-		default:
-			hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, recallSourceDepth)
-			if err != nil {
-				return nil, err
-			}
-			add(hits, true)
-		}
-	}
-	ftsHits, err := store.FTSSearch(ctx, s.db, in.Query, kinds, projects, recallSourceDepth)
+	acc, err := s.candidates(ctx, in.Query, kinds, projects, recallSourceDepth, true, "retrieve.Recall")
 	if err != nil {
 		return nil, err
 	}
-	add(ftsHits, false)
-
 	ordered := rankFused(acc)
 
-	var memIDs, noteIDs []string
-	for _, id := range ordered {
-		if acc[id].kind == "note" {
-			noteIDs = append(noteIDs, id)
-		} else {
-			memIDs = append(memIDs, id)
-		}
-	}
-	mems, err := store.MemoriesByIDs(ctx, s.db, memIDs)
-	if err != nil {
-		return nil, err
-	}
-	notes, err := store.NotesByIDs(ctx, s.db, noteIDs)
+	mems, notes, err := s.hydrate(ctx, ordered, acc)
 	if err != nil {
 		return nil, err
 	}

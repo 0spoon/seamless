@@ -98,3 +98,82 @@ func hitIDs(hits []SearchHit) []string {
 	}
 	return ids
 }
+
+func TestFTSSearchSnippets_MarksMatchedTerms(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	insertMemory(t, db, "01SNIP", "gotcha", "boot-race", "the description",
+		"seam", "the daemon hits a chroma boot race on cold start", now, "")
+
+	hits, err := FTSSearchSnippets(ctx, db, "chroma", nil, nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "01SNIP", hits[0].ItemID)
+	require.Contains(t, hits[0].Snippet, SnippetStartMark+"chroma"+SnippetEndMark,
+		"the matched term must come back wrapped in the sentinels")
+}
+
+// A snippet is raw item text: the store must NOT escape it. Escaping is the
+// rendering consumer's job (it has to escape first, then substitute the
+// sentinels, or the substituted markup would itself be escaped).
+func TestFTSSearchSnippets_ReturnsRawUnescapedText(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	insertMemory(t, db, "01XSS", "gotcha", "xss-fixture", "d", "seam",
+		"payload <script>alert(1)</script> danger", now, "")
+
+	hits, err := FTSSearchSnippets(ctx, db, "payload", nil, nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Contains(t, hits[0].Snippet, "<script>alert(1)</script>")
+}
+
+// The snippet variant must inherit the validity predicate (F20): a superseded
+// memory leaves the candidate set on both paths, or a retired revision could eat
+// the depth its replacement needs.
+func TestFTSSearchSnippets_ExcludesSuperseded(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	insertMemory(t, db, "01LIVE", "gotcha", "live-one", "shared topic", "seam", "body", now, "")
+	insertMemory(t, db, "01DEAD", "gotcha", "dead-one", "shared topic", "seam", "body", now, now)
+
+	hits, err := FTSSearchSnippets(ctx, db, "shared topic", nil, nil, 10)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "01LIVE", hits[0].ItemID)
+}
+
+// Recall fuses on rank, so the two variants must agree hit-for-hit: FTSSearch
+// discarding snippets is only safe if adding the snippet projection cannot
+// perturb which rows come back or in what order.
+func TestFTSSearch_SnippetVariantMatchesPlainOrdering(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	for _, m := range []struct{ id, name, body string }{
+		{"01ORD1", "alpha", "shared topic and more shared words here"},
+		{"01ORD2", "beta", "shared topic"},
+		{"01ORD3", "gamma", "shared"},
+		{"01ORD4", "delta", "topic shared topic shared topic"},
+	} {
+		insertMemory(t, db, m.id, "gotcha", m.name, "desc", "seam", m.body, now, "")
+	}
+
+	plain, err := FTSSearch(ctx, db, "shared topic", nil, nil, 10)
+	require.NoError(t, err)
+	snips, err := FTSSearchSnippets(ctx, db, "shared topic", nil, nil, 10)
+	require.NoError(t, err)
+
+	require.Len(t, snips, len(plain))
+	for i := range plain {
+		require.Equal(t, plain[i].ItemID, snips[i].ItemID, "hit %d: id must match", i)
+		require.Equal(t, plain[i].Score, snips[i].Score, "hit %d: score must match", i)
+	}
+}
