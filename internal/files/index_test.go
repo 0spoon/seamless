@@ -61,7 +61,7 @@ func TestIndexMemory(t *testing.T) {
 	require.Equal(t, "chroma-boot-race", name)
 	require.Equal(t, "seam", project)
 	require.Equal(t, "memory/seam/chroma-boot-race.md", fp)
-	require.Equal(t, []string{"chroma", "boot"}, parseTags(tags))
+	require.JSONEq(t, `["chroma","boot"]`, tags)
 	require.False(t, invalidAt.Valid, "active memory has NULL invalid_at")
 	require.False(t, supersededBy.Valid)
 	require.Equal(t, "hash1", hash)
@@ -192,13 +192,16 @@ func TestIndexMemoryRequiresID(t *testing.T) {
 	require.Error(t, ix.IndexMemory(context.Background(), m))
 }
 
-func TestTagsJSONRoundTrip(t *testing.T) {
+// tagsJSON writes the tags column that internal/store decodes on the way back
+// out, so these pin the stored encoding itself rather than a round-trip through
+// a decoder this package no longer owns.
+func TestTagsJSON(t *testing.T) {
 	s, err := tagsJSON([]string{"a", "b"})
 	require.NoError(t, err)
-	require.Equal(t, []string{"a", "b"}, parseTags(s))
+	require.Equal(t, `["a","b"]`, s)
 
+	// No tags is an empty array, never NULL or "" -- the column is NOT NULL.
 	empty, err := tagsJSON(nil)
 	require.NoError(t, err)
 	require.Equal(t, "[]", empty)
-	require.Nil(t, parseTags(empty))
 }
