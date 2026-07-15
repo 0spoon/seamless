@@ -8,11 +8,16 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// jsonResult marshals v and returns it as a tool text result.
+// jsonResult marshals v and returns it as a tool text result. A marshal failure
+// keeps the error's own text: it names the offending Go type, which is the only
+// clue to a defect that is otherwise invisible from the agent's side. The tool
+// name is not added -- unlike errResult, this is only reachable from a tool the
+// caller just named in its own request. Like those errors, a marshal failure
+// describes local types, never stored content.
 func jsonResult(v any) (*mcp.CallToolResult, error) {
 	b, err := json.Marshal(v)
 	if err != nil {
-		return mcp.NewToolResultError("internal error: marshal result"), nil
+		return mcp.NewToolResultError("internal error: marshal result: " + err.Error()), nil
 	}
 	return mcp.NewToolResultText(string(b)), nil
 }

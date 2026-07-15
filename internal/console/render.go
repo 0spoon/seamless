@@ -246,12 +246,22 @@ func wantsJSON(r *http.Request) bool {
 	return strings.Contains(accept, "application/json") && !strings.Contains(accept, "text/html")
 }
 
+// writeJSON renders v as the entire response. It encodes into a buffer first,
+// like renderPage: encoding straight into w would commit the status line and
+// then discover a failure mid-body, leaving the client a truncated document that
+// is neither valid JSON nor an error it can detect. Buffering means the status
+// is only chosen once the body is known to exist.
 func writeJSON(w http.ResponseWriter, code int, v any) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(v); err != nil {
+		http.Error(w, "internal error: encode response", http.StatusInternalServerError)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(code)
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	_ = enc.Encode(v)
+	_, _ = buf.WriteTo(w)
 }
 
 // errorData is the payload for the styled in-console error page.

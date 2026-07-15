@@ -88,7 +88,13 @@ func ClaimTask(ctx context.Context, db *sql.DB, id, sessionID string, lease time
 	if err != nil {
 		return ClaimResult{}, fmt.Errorf("store.ClaimTask: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	// A zero here is the CAS losing, which is a conflict -- so a driver failure
+	// must not reach that branch and be reported as another agent holding the
+	// task, an answer the caller would believe and act on.
+	n, err := res.RowsAffected()
+	if err != nil {
+		return ClaimResult{}, fmt.Errorf("store.ClaimTask: rows affected: %w", err)
+	}
 	if n == 0 {
 		return ClaimResult{Task: prior}, fmt.Errorf("store.ClaimTask: %w: task %q held by %q",
 			ErrTaskClaimConflict, id, prior.ClaimedBy)
@@ -123,7 +129,11 @@ func ReleaseTask(ctx context.Context, db *sql.DB, id, sessionID string, now time
 	if err != nil {
 		return core.Task{}, fmt.Errorf("store.ReleaseTask: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return core.Task{}, fmt.Errorf("store.ReleaseTask: rows affected: %w", err)
+	}
+	if n == 0 {
 		if _, ok, err := taskByIDTx(ctx, db, id); err != nil {
 			return core.Task{}, err
 		} else if !ok {
@@ -150,7 +160,11 @@ func ForceReleaseTask(ctx context.Context, db *sql.DB, id string, now time.Time)
 	if err != nil {
 		return core.Task{}, fmt.Errorf("store.ForceReleaseTask: %w", err)
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
+	n, err := res.RowsAffected()
+	if err != nil {
+		return core.Task{}, fmt.Errorf("store.ForceReleaseTask: rows affected: %w", err)
+	}
+	if n == 0 {
 		if _, ok, err := taskByIDTx(ctx, db, id); err != nil {
 			return core.Task{}, err
 		} else if !ok {
@@ -176,6 +190,12 @@ func ReleaseClaimsForSession(ctx context.Context, db *sql.DB, sessionID string, 
 	if err != nil {
 		return 0, fmt.Errorf("store.ReleaseClaimsForSession: %w", err)
 	}
-	n, _ := res.RowsAffected()
+	// The count is the whole answer here, and 0 is a perfectly ordinary one, so a
+	// driver failure would report "released nothing" for an UPDATE that may well
+	// have freed several of a departing agent's tasks.
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("store.ReleaseClaimsForSession: rows affected: %w", err)
+	}
 	return int(n), nil
 }
