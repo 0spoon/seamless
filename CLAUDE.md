@@ -23,6 +23,8 @@ preserved read-only as a fallback archive.
 ```
 cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
+cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see docs/README-site.md)
+docs-src/          docs site markdown + nav.yaml (source; docs/docs/ is output)
 internal/core/     domain types: Project, Memory, Session, Task, Trial, Event
 internal/config/   single YAML + env config (static key, budgets, briefing tunables, llm)
 internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations
@@ -35,7 +37,7 @@ internal/lifecycle/ supersession, arbitration, provenance                  [P3]
 internal/tasks/    dependency-aware ready-queue                            [P3]
 internal/gardener/ dedup / staleness / digest / stale-plan proposals      [P4]
 internal/plans/    captured CC plan vocabulary: tags, statuses, tracking task
-internal/mcp/      26 MCP tools (streamable HTTP, static bearer key)       [P2+]
+internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount [P2+]
 internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
@@ -56,6 +58,10 @@ make fmt        # gofmt -w .
 make run        # build + serve on 127.0.0.1:8081
 make doctor     # build + config/DB self-checks
 make clean      # remove bin/ and coverage files
+
+make docs       # regenerate the docs site (docs-src/ -> docs/docs/, committed)
+make docs-check # fail if the committed docs site is stale (runs inside `check`)
+make docs-serve # regenerate + serve the site at 127.0.0.1:8899/docs/
 
 # single test
 go test ./internal/validate -run TestTitle -v
@@ -119,7 +125,12 @@ tags: [x, y]
 body markdown
 ```
 
-## MCP surface (target: 28 tools)
+## MCP surface
+
+The authoritative count is `internal/mcp.ToolCount` (asserted by doctor and by
+`catalog_test`); `mcp.Catalog()` is the same list as data, and the docs site
+renders its reference from it. Do not transcribe a number here -- three different
+stale counts is exactly how this section drifted before.
 
 sessions (`session_start/update/end`), memory (`memory_write/append/read/delete`,
 write carries `supersedes`), discovery (`recall` -- the only search tool, RRF-fused),

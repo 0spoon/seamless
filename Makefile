@@ -32,7 +32,14 @@ PROD_CONFIG   := $(HOME)/.config/seamless/seamless.yaml
 # their files underneath them mid-edit. Always go through this list.
 GOFILES := git ls-files '*.go'
 
+# Documentation site (cmd/docsgen). DOCS_OUT is committed; `make check` fails if
+# it drifts from DOCS_SRC.
+DOCS_SRC  := docs-src
+DOCS_OUT  := docs/docs
+DOCS_ADDR ?= 127.0.0.1:8899
+
 .PHONY: help build test test-race bench lint vet fmt fmt-check check tidy run doctor console console-chrome dev \
+	docs docs-check docs-serve \
 	install-service install-hooks install-prod uninstall-prod _reload-service \
 	uninstall-service start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
@@ -48,6 +55,9 @@ help:
 	@echo "  vet        run go vet"
 	@echo "  fmt        gofmt tracked files"
 	@echo "  fmt-check  fail if tracked files have gofmt drift"
+	@echo "  docs       regenerate the docs site (docs-src/ -> docs/docs/, committed)"
+	@echo "  docs-check fail if the committed docs site is stale (part of check)"
+	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server (127.0.0.1:8081)"
 	@echo "  doctor     build and run config + DB self-checks"
@@ -101,6 +111,29 @@ fmt-check:
 	@drift=$$($(GOFILES) | xargs gofmt -l); \
 	    test -z "$$drift" || { echo "gofmt drift (run 'make fmt'):"; echo "$$drift"; exit 1; }
 
+# The documentation site: markdown in docs-src/ -> static HTML in docs/docs/,
+# committed and served by the same GitHub Pages config as the landing page.
+# Two pages are generated from the code (the MCP tool reference reads
+# mcp.Catalog(), the config reference reflects config.Defaults()), so a tool or
+# key that changes makes the committed output stale -- which docs-check catches.
+docs:
+	$(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out $(DOCS_OUT)
+
+# Staleness gate. Regenerates into a temp dir and diffs, rather than rewriting
+# the working tree and running `git diff`: this never mutates what you are
+# editing, and -r catches untracked files that git diff cannot see (a page
+# deleted from docs-src/ still committed under docs/docs/).
+docs-check:
+	@tmp=$$(mktemp -d) || exit 1; \
+	    trap 'rm -rf "$$tmp"' EXIT; \
+	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" >/dev/null || exit 1; \
+	    diff -r "$$tmp/docs" $(DOCS_OUT) > "$$tmp/diff" 2>&1 \
+	        || { echo "docs drift: $(DOCS_OUT) does not match $(DOCS_SRC) (run 'make docs' and commit)"; \
+	             head -40 "$$tmp/diff"; exit 1; }
+
+docs-serve: docs
+	$(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out $(DOCS_OUT) -serve $(DOCS_ADDR)
+
 # The full gate: everything that must be green before declaring work done
 # (AGENTS.md > "Verification before declaring done"). Sequential $(MAKE) calls
 # rather than prerequisites so it fails at the first red step and stays ordered
@@ -110,6 +143,7 @@ check:
 	@$(MAKE) build
 	@$(MAKE) vet
 	@$(MAKE) fmt-check
+	@$(MAKE) docs-check
 	@$(MAKE) lint
 	@$(MAKE) test-race
 	@echo "check: all green"
