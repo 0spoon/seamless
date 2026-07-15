@@ -207,9 +207,20 @@ the pointer is where to look, not a substitute for reading it.
 | Returning `(nil, nil)` when a row is missing | Callers forget the nil check. | Return `(nil, ErrNotFound)`. |
 | New `migrations/NNN_*.sql` without a `Migrations()` entry | Silently never runs. | Add the `go:embed` + `Migrations()` entry; verify on a fresh DB. |
 | `time.Sleep` for synchronization | Flaky tests, masks ordering bugs. | Channels / `WaitGroup` / deadline poll. |
+| Bare `default:` in a switch over caller-supplied input | The unrecognized value silently becomes the default -- a plausible dummy the caller cannot tell from a real result (meta-rule 3). `recall{scope:"memoires"}` searched everything and reported success. | Validate at the boundary and name the accepted values: `invalid %q: valid values are %s`. A *library* may keep a permissive default where the zero value legitimately means "unset" -- only the boundary can tell absent from wrong. |
+| `mcp.Enum(...)` / `mcp.Required()` as the only guard | Advertisement, not enforcement: mcp-go's `handleToolCall` looks the tool up and dispatches with no schema pass. The declaration reads like a check and is not. | Declare via `enumOf(canonicalSet)`; `validateMiddleware` (`internal/mcp/argspec.go`) is what enforces it. |
+| Hand-transcribing a canonical set into a schema, help string, or prompt | Drifts in silence. `tools_gardener.go` listed 6 of `store.ProposalKinds`' 7 kinds, so `abandon_plan` was undiscoverable for months while working fine everywhere else. | Derive from the canonical slice (`core.MemoryKinds`, `core.TaskStatuses`, `core.SessionSources`, `store.ProposalKinds`, `retrieve.RecallScopes`) + a same-package test asserting schema == set (`catalog_test.go`'s `TestArgsEnumsDeriveFromCanonicalSets`). |
 
 ### Required patterns
 
+- **A default is only legitimate when a parameter is ABSENT, never when it is
+  present-but-uninterpretable.** Absent -> default; present but uninterpretable ->
+  error. One sentence covering every finding in the input-boundary sweep: a typo'd
+  enum, a wrong JSON type, a misspelled parameter name, and `limit:0` are all
+  *present*, so none of them may quietly become the default. This is the owner's
+  standing "no automatic fallbacks for ambiguous requests" directive applied to
+  arguments, and it is why `resolveWriteScope` refuses to guess a project rather
+  than picking one.
 - **Atomic markdown writes**: every `.md` write goes through the files layer's
   atomic writer (temp + fsync + rename), including rollback paths.
 - **DB-then-file ordering**: operations touching both commit the DB transaction
