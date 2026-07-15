@@ -52,7 +52,7 @@ func TestFetchURL_OGTitleFallback(t *testing.T) {
 }
 
 func TestFetchURL_RejectsBadSchemeAndHost(t *testing.T) {
-	f := NewURLFetcher()
+	f := NewURLFetcher(nil)
 	_, err := f.FetchURL(context.Background(), "file:///etc/passwd")
 	require.ErrorIs(t, err, ErrUnsafeScheme)
 	_, err = f.FetchURL(context.Background(), "http://")
@@ -63,7 +63,7 @@ func TestFetchURL_RejectsLoopback(t *testing.T) {
 	// A real fetcher must refuse to connect to a loopback address (SSRF guard).
 	// Port 80 passes the port allowlist, so the private-IP check is what fires;
 	// the dialer rejects before any connection attempt, so no network is touched.
-	_, err := NewURLFetcher().FetchURL(context.Background(), "http://127.0.0.1/")
+	_, err := NewURLFetcher(nil).FetchURL(context.Background(), "http://127.0.0.1/")
 	require.ErrorIs(t, err, ErrPrivateIP)
 }
 
@@ -122,7 +122,7 @@ func TestSSRFSafeDialer_PrivateAmongPublicRejected(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var dialed []string
 			var mu sync.Mutex
-			d := ssrfSafeDialer(staticLookup(tt.ips...), recordingDialer(&dialed, &mu, refuseDial))
+			d := ssrfSafeDialer(staticLookup(tt.ips...), recordingDialer(&dialed, &mu, refuseDial), portSet(nil))
 			_, err := d(context.Background(), "tcp", "rebind.test:80")
 			require.ErrorIs(t, err, ErrPrivateIP)
 			require.Empty(t, dialed, "no address may be dialed when any resolved IP is private")
@@ -143,7 +143,7 @@ func TestSSRFSafeDialer_DialsOnlyValidatedPinnedIPs(t *testing.T) {
 		}
 		return client, nil
 	})
-	d := ssrfSafeDialer(staticLookup("8.8.8.8", "1.1.1.1"), dial)
+	d := ssrfSafeDialer(staticLookup("8.8.8.8", "1.1.1.1"), dial, portSet(nil))
 	conn, err := d(context.Background(), "tcp", "multi.test:443")
 	require.NoError(t, err)
 	require.Same(t, net.Conn(client), conn)
@@ -153,35 +153,81 @@ func TestSSRFSafeDialer_DialsOnlyValidatedPinnedIPs(t *testing.T) {
 func TestSSRFSafeDialer_AllDialsFail(t *testing.T) {
 	var dialed []string
 	var mu sync.Mutex
-	d := ssrfSafeDialer(staticLookup("8.8.8.8", "1.1.1.1"), recordingDialer(&dialed, &mu, refuseDial))
+	d := ssrfSafeDialer(staticLookup("8.8.8.8", "1.1.1.1"), recordingDialer(&dialed, &mu, refuseDial), portSet(nil))
 	_, err := d(context.Background(), "tcp", "multi.test:80")
 	require.Error(t, err)
 	require.NotErrorIs(t, err, ErrPrivateIP)
 	require.Equal(t, []string{"8.8.8.8:80", "1.1.1.1:80"}, dialed, "every validated IP tried in order")
 }
 
+// requireRejectsPort asserts the dialer refuses port before it resolves anything.
+func requireRejectsPort(t *testing.T, allowed map[int]bool, port string) {
+	t.Helper()
+	lookupCalled := false
+	lookup := func(_ context.Context, _ string) ([]net.IPAddr, error) {
+		lookupCalled = true
+		return nil, errors.New("must not resolve")
+	}
+	d := ssrfSafeDialer(lookup, refuseDial, allowed)
+	_, err := d(context.Background(), "tcp", net.JoinHostPort("example.test", port))
+	require.ErrorIs(t, err, ErrDisallowedPort)
+	require.False(t, lookupCalled, "port policy must fail before any DNS lookup")
+}
+
+// requireAdmitsPort asserts the dialer lets port past the port check, proven by
+// reaching the (failing) resolver rather than by connecting anywhere.
+func requireAdmitsPort(t *testing.T, allowed map[int]bool, port string) {
+	t.Helper()
+	sentinel := errors.New("reached lookup")
+	lookup := func(_ context.Context, _ string) ([]net.IPAddr, error) { return nil, sentinel }
+	d := ssrfSafeDialer(lookup, refuseDial, allowed)
+	_, err := d(context.Background(), "tcp", net.JoinHostPort("example.test", port))
+	require.ErrorIs(t, err, sentinel)
+}
+
 func TestSSRFSafeDialer_DisallowedPort(t *testing.T) {
-	for _, port := range []string{"22", "6379", "8080", "8443", "0", ""} {
+	for _, port := range []string{"22", "25", "6379", "8080", "8443", "0", ""} {
 		t.Run("port "+port, func(t *testing.T) {
-			lookupCalled := false
-			lookup := func(_ context.Context, _ string) ([]net.IPAddr, error) {
-				lookupCalled = true
-				return nil, errors.New("must not resolve")
-			}
-			d := ssrfSafeDialer(lookup, refuseDial)
-			_, err := d(context.Background(), "tcp", net.JoinHostPort("example.test", port))
-			require.ErrorIs(t, err, ErrDisallowedPort)
-			require.False(t, lookupCalled, "port policy must fail before any DNS lookup")
+			requireRejectsPort(t, portSet(nil), port)
 		})
 	}
 	// Allowed ports proceed past the port check to resolution.
 	for _, port := range []string{"80", "443"} {
 		t.Run("port "+port+" allowed", func(t *testing.T) {
-			sentinel := errors.New("reached lookup")
-			lookup := func(_ context.Context, _ string) ([]net.IPAddr, error) { return nil, sentinel }
-			d := ssrfSafeDialer(lookup, refuseDial)
-			_, err := d(context.Background(), "tcp", net.JoinHostPort("example.test", port))
-			require.ErrorIs(t, err, sentinel)
+			requireAdmitsPort(t, portSet(nil), port)
+		})
+	}
+}
+
+func TestSSRFSafeDialer_CustomAllowedPorts(t *testing.T) {
+	// A configured allowlist replaces the default wholesale: it admits its own
+	// ports and keeps rejecting everything else, including a default port it
+	// does not list.
+	allowed := portSet([]int{443, 8080})
+	for _, port := range []string{"443", "8080"} {
+		t.Run("allowed port "+port, func(t *testing.T) {
+			requireAdmitsPort(t, allowed, port)
+		})
+	}
+	for _, port := range []string{"80", "22", "9090"} {
+		t.Run("rejected port "+port, func(t *testing.T) {
+			requireRejectsPort(t, allowed, port)
+		})
+	}
+}
+
+func TestPortSet_EmptyMeansDefaultNotOpen(t *testing.T) {
+	// The empty allowlist must never read as "every port allowed": both nil and
+	// an explicit empty slice fall back to the 80/443 default.
+	for _, tt := range []struct {
+		name  string
+		ports []int
+	}{
+		{"nil", nil},
+		{"empty slice", []int{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, map[int]bool{80: true, 443: true}, portSet(tt.ports))
 		})
 	}
 }
@@ -189,7 +235,15 @@ func TestSSRFSafeDialer_DisallowedPort(t *testing.T) {
 func TestFetchURL_DisallowedPort(t *testing.T) {
 	// End-to-end through the real fetcher: the port check fires inside the
 	// dialer before DNS resolution, so no network I/O happens.
-	_, err := NewURLFetcher().FetchURL(context.Background(), "http://192.0.2.1:8080/")
+	_, err := NewURLFetcher(nil).FetchURL(context.Background(), "http://192.0.2.1:8080/")
+	require.ErrorIs(t, err, ErrDisallowedPort)
+
+	// A custom allowlist admits its port through the same fetcher-level path:
+	// 8080 now passes the port check and fails later, on the private-IP guard.
+	_, err = NewURLFetcher([]int{8080}).FetchURL(context.Background(), "http://127.0.0.1:8080/")
+	require.ErrorIs(t, err, ErrPrivateIP)
+	// ...and the default ports it omits are now rejected.
+	_, err = NewURLFetcher([]int{8080}).FetchURL(context.Background(), "http://192.0.2.1:80/")
 	require.ErrorIs(t, err, ErrDisallowedPort)
 }
 
@@ -266,7 +320,7 @@ func routedFetcher(t *testing.T, srv *httptest.Server, hosts map[string]string, 
 	dial := recordingDialer(dialed, mu, func(_ context.Context, _, _ string) (net.Conn, error) {
 		return net.Dial("tcp", srv.Listener.Addr().String())
 	})
-	transport := &http.Transport{DialContext: ssrfSafeDialer(lookup, dial)}
+	transport := &http.Transport{DialContext: ssrfSafeDialer(lookup, dial, portSet(nil))}
 	t.Cleanup(transport.CloseIdleConnections)
 	return &URLFetcher{client: &http.Client{Transport: transport, CheckRedirect: checkRedirect}}
 }

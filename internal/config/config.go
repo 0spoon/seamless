@@ -34,6 +34,7 @@ type Config struct {
 	Briefing    Briefing    `yaml:"briefing"`
 	LLM         LLM         `yaml:"llm"`
 	Gardener    Gardener    `yaml:"gardener"`
+	Capture     Capture     `yaml:"capture"`
 	PlanCapture PlanCapture `yaml:"plan_capture"`
 
 	// sourcePath records which config file was loaded (empty = defaults only).
@@ -154,6 +155,22 @@ type Anthropic struct {
 	ChatModel string `yaml:"chat_model"`
 }
 
+// Capture configures the SSRF-guarded URL fetch behind the capture_url tool.
+// Unrelated to PlanCapture, which is about Claude Code plan mode.
+type Capture struct {
+	// AllowedPorts are the only destination ports capture_url may dial, enforced
+	// on the initial URL and on every redirect hop. Empty is deliberately NOT
+	// "any port": an unset key, an explicit `allowed_ports: []`, or an empty env
+	// override all fall back to the 80/443 default, so the SSRF port guard cannot
+	// be switched off by omission. Ports outside 1-65535 are rejected by Validate.
+	AllowedPorts []int `yaml:"allowed_ports"`
+}
+
+// defaultAllowedPorts returns the built-in capture.allowed_ports value, freshly
+// allocated so no caller can mutate a shared default. The capture package keeps
+// the same list as its own last-resort fallback (it cannot import config).
+func defaultAllowedPorts() []int { return []int{80, 443} }
+
 // PlanCapture configures capturing Claude Code plan-mode iterations and
 // planning subagents into notes via the PostToolUse/SubagentStop hooks.
 type PlanCapture struct {
@@ -241,6 +258,7 @@ func Defaults() Config {
 			StalePlanDays:          14,
 			SessionIdleMinutes:     45,
 		},
+		Capture:     Capture{AllowedPorts: defaultAllowedPorts()},
 		PlanCapture: PlanCapture{Enabled: true, AutoTask: true, InjectRelated: true},
 	}
 }
@@ -275,6 +293,12 @@ func LoadFrom(path string) (Config, error) {
 
 	if err := cfg.applyEnv(); err != nil {
 		return Config{}, err
+	}
+
+	// An allowlist emptied by the file (`allowed_ports: []`) or by an empty env
+	// override means the default, never "every port": see Capture.AllowedPorts.
+	if len(cfg.Capture.AllowedPorts) == 0 {
+		cfg.Capture.AllowedPorts = defaultAllowedPorts()
 	}
 
 	expanded, err := expandHome(cfg.DataDir)
@@ -320,6 +344,11 @@ func (c Config) Validate() error {
 	}
 	if c.Gardener.SessionIdleMinutes < 0 {
 		return fmt.Errorf("config: gardener.session_idle_minutes must be >= 0")
+	}
+	for _, p := range c.Capture.AllowedPorts {
+		if p < 1 || p > 65535 {
+			return fmt.Errorf("config: capture.allowed_ports: %d is not a valid port (1-65535)", p)
+		}
 	}
 	if err := c.Briefing.Validate(); err != nil {
 		return err
@@ -421,6 +450,9 @@ func (c *Config) applyEnv() error {
 	if err := envFloat("SEAMLESS_GARDENER_DEDUP_THRESHOLD", &c.Gardener.DedupThreshold); err != nil {
 		return err
 	}
+	if err := envIntSlice("SEAMLESS_CAPTURE_ALLOWED_PORTS", &c.Capture.AllowedPorts); err != nil {
+		return err
+	}
 	if err := envBool("SEAMLESS_PLAN_CAPTURE_ENABLED", &c.PlanCapture.Enabled); err != nil {
 		return err
 	}
@@ -471,6 +503,32 @@ func envInt(key string, dst *int) error {
 		return fmt.Errorf("config: env %s: %w", key, err)
 	}
 	*dst = n
+	return nil
+}
+
+// envIntSlice parses a comma-separated list of ints ("80,443,8080"), replacing
+// dst wholesale rather than appending, so env stays a full override of the file
+// value. Blank entries are skipped, so trailing commas and a set-but-empty value
+// are tolerated; the latter yields an empty slice, which each list's own
+// empty-means-default rule then resolves (it never means "unrestricted").
+func envIntSlice(key string, dst *[]int) error {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return nil
+	}
+	var out []int
+	for field := range strings.SplitSeq(v, ",") {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		n, err := strconv.Atoi(field)
+		if err != nil {
+			return fmt.Errorf("config: env %s: %q: %w", key, field, err)
+		}
+		out = append(out, n)
+	}
+	*dst = out
 	return nil
 }
 

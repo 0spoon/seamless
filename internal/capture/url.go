@@ -41,21 +41,38 @@ type URLFetcher struct {
 // allowedRedirectSchemes are the only URL schemes allowed in redirect targets.
 var allowedRedirectSchemes = map[string]bool{"http": true, "https": true}
 
-// allowedPorts are the only destination ports capture may dial (initial URL and
-// every redirect hop -- the check lives in the dialer, the single choke point).
-// Hardcoded to the standard web ports; if a tunable is ever warranted it belongs
-// in internal/config alongside the other capture knobs (follow-up, not done here).
-var allowedPorts = map[int]bool{80: true, 443: true}
+// defaultAllowedPorts are the destination ports capture dials when the caller
+// supplies no allowlist. The same list is config's capture.allowed_ports default;
+// it is spelled out in both places because capture may import config but not the
+// reverse, and a two-element literal is not worth an import for.
+var defaultAllowedPorts = []int{80, 443}
+
+// portSet turns an allowlist into the set the dialer checks. An empty or nil
+// list is NOT "every port allowed": it falls back to defaultAllowedPorts, so an
+// omitted or blanked-out config can never silently switch the port guard off.
+// Range sanity (1-65535) is config.Validate's job, which rejects a bad port at
+// load rather than letting it reach here.
+func portSet(ports []int) map[int]bool {
+	if len(ports) == 0 {
+		ports = defaultAllowedPorts
+	}
+	set := make(map[int]bool, len(ports))
+	for _, p := range ports {
+		set[p] = true
+	}
+	return set
+}
 
 // NewURLFetcher creates a URLFetcher whose transport rejects private/loopback
-// addresses and non-web ports (connecting only to a validated IP, so DNS
-// rebinding cannot slip past the check) and caps redirects at 10, each hop
+// addresses and ports outside allowedPorts (connecting only to a validated IP,
+// so DNS rebinding cannot slip past the check) and caps redirects at 10, each hop
 // re-validated for an HTTP(S) scheme, no https->http downgrade, and -- because
 // every hop dials through the same transport -- a public IP on an allowed port.
-func NewURLFetcher() *URLFetcher {
+// An empty allowedPorts means the 80/443 default, never "any port".
+func NewURLFetcher(allowedPorts []int) *URLFetcher {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
 	transport := &http.Transport{
-		DialContext: ssrfSafeDialer(net.DefaultResolver.LookupIPAddr, dialer.DialContext),
+		DialContext: ssrfSafeDialer(net.DefaultResolver.LookupIPAddr, dialer.DialContext, portSet(allowedPorts)),
 	}
 	return &URLFetcher{
 		client: &http.Client{
@@ -94,14 +111,18 @@ type dialContextFunc func(ctx context.Context, network, addr string) (net.Conn, 
 
 // ssrfSafeDialer returns a DialContext that enforces the SSRF policy at the
 // single point every connection (initial request and each redirect hop) passes
-// through: the destination port must be allowed, and the host must resolve to
-// exclusively non-private addresses -- one private record among public ones
-// rejects the whole lookup (fail closed; public hostnames have no business
-// mixing in private records). It then dials the validated IP literals
+// through: the destination port must be in allowedPorts, and the host must
+// resolve to exclusively non-private addresses -- one private record among
+// public ones rejects the whole lookup (fail closed; public hostnames have no
+// business mixing in private records). It then dials the validated IP literals
 // themselves, in resolution order until one connects, so the connection is
 // pinned to an address that passed validation and a racing resolver (DNS
 // rebinding) cannot swap in a different one between check and dial.
-func ssrfSafeDialer(lookup lookupIPFunc, dial dialContextFunc) dialContextFunc {
+//
+// allowedPorts is passed in rather than read from a package var so the policy is
+// per-fetcher and configurable; keep the check here, since a port check anywhere
+// above the dialer (say in FetchURL) is bypassable by a redirect hop.
+func ssrfSafeDialer(lookup lookupIPFunc, dial dialContextFunc, allowedPorts map[int]bool) dialContextFunc {
 	return func(ctx context.Context, network, addr string) (net.Conn, error) {
 		host, portStr, err := net.SplitHostPort(addr)
 		if err != nil {
