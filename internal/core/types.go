@@ -126,6 +126,20 @@ const (
 	SessionExpired SessionStatus = "expired"
 )
 
+// SessionStatuses lists every valid session status.
+var SessionStatuses = []SessionStatus{SessionActive, SessionCompleted, SessionExpired}
+
+// Valid reports whether s is a recognized session status.
+func (s SessionStatus) Valid() bool { return slices.Contains(SessionStatuses, s) }
+
+// SessionSources lists every valid Session.Source. Callers must not invent
+// values: retrieve/briefing.go branches on "compact" and "resume", so a
+// near-miss like "compacted" silently yields the wrong briefing shape.
+var SessionSources = []string{"startup", "resume", "clear", "compact", "explicit"}
+
+// ValidSessionSource reports whether s is a recognized session source.
+func ValidSessionSource(s string) bool { return slices.Contains(SessionSources, s) }
+
 // SessionIdleTTL is the default no-activity age beyond which an active session
 // is considered dead: heartbeats (MCP tool calls for bound sessions, the ambient
 // hooks for cc/* sessions) bump updated_at, and anything quiet past this is
