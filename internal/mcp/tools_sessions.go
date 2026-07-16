@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ func sessionStartTool() mcp.Tool {
 	return mcp.NewTool("session_start",
 		mcp.WithDescription("Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again."),
 		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
-		mcp.WithString("cwd", mcp.Description("Absolute working directory; resolved to a project via the repo map")),
+		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
 		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default startup)")),
 	)
 }
@@ -60,7 +61,8 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
 			return jsonResult(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
-				"project": project, "resumed": true, "briefing": s.briefing(ctx, cwd, source),
+				"project": project, "resumed": true, "scope": scopeNote(project),
+				"briefing": s.briefing(ctx, cwd, source),
 			})
 		}
 	}
@@ -86,7 +88,8 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 				map[string]any{"resumed": true, "adopted": true})
 			return jsonResult(map[string]any{
 				"session_id": ambient.ID, "name": ambient.Name,
-				"project": project, "resumed": true, "briefing": s.briefing(ctx, cwd, source),
+				"project": project, "resumed": true, "scope": scopeNote(project),
+				"briefing": s.briefing(ctx, cwd, source),
 			})
 		}
 	}
@@ -110,8 +113,24 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
 	return jsonResult(map[string]any{
-		"session_id": id, "name": name, "project": project, "briefing": s.briefing(ctx, cwd, source),
+		"session_id": id, "name": name, "project": project, "scope": scopeNote(project),
+		"briefing": s.briefing(ctx, cwd, source),
 	})
+}
+
+// scopeNote explains, in the session_start result, how project scope was
+// resolved -- so an agent sees that the repo->project mapping is automatic and
+// never mistakes `seamlessd map-repo` for a required setup step. The map grows
+// itself on a repo's first session (see store.RegisterProjectForCWD); map-repo
+// only overrides the derived slug.
+func scopeNote(project string) string {
+	if project == "" {
+		return "global scope: this cwd is not inside a git repo, so nothing auto-mapped. " +
+			"Pass project=<slug> on durable writes to target a project."
+	}
+	return fmt.Sprintf("project %q. Repo->project mapping is automatic -- a repo maps itself to a "+
+		"project on its first session, so there is no setup step. `seamlessd map-repo` only "+
+		"overrides a repo's derived slug.", project)
 }
 
 // briefing assembles the session_start briefing, degrading to "" on error. The
