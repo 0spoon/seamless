@@ -82,10 +82,12 @@ func (s *seeder) sceneSession(name string, end time.Time, findings string) sessR
 	return sessRec{id: sess.ID, name: name, project: sceneProject, start: start, end: end}
 }
 
-// sceneMemories seeds the myapp memory set: two constraints (always pinned in the
-// briefing), plus the four hero-terminal files (edge-cache-gotcha carries the
-// scene-2 landmine verbatim). Kinds and filenames match the hero term on
-// docs/index.html so the closing `ls memory/myapp/` beat mirrors it.
+// sceneMemories seeds the myapp memory set: three constraints (always pinned in
+// the briefing -- auth-cookies-samesite-lax is scene 2's briefing-catch landmine),
+// the four hero-terminal files, and two recall-beat gotchas (rate-limit and
+// persist-token) engineered to fire the mid-session <seam-recall> injection.
+// Kinds and filenames match the hero term on docs/index.html so the closing
+// `ls memory/myapp/` beat mirrors it.
 func (s *seeder) sceneMemories(source string) {
 	mems := []struct {
 		kind, name, desc, body string
@@ -97,6 +99,14 @@ func (s *seeder) sceneMemories(source string) {
 		{"constraint", "auth-cookies-httponly-secure",
 			"Access and refresh tokens ride in HttpOnly, Secure, SameSite=Lax cookies -- never in localStorage or a JSON body (XSS reads both).",
 			"Set the session and refresh cookies with HttpOnly, Secure, and SameSite=Lax. Do not return the tokens in the response body and do not let any client script read them: an XSS bug then can't exfiltrate a session. The browser attaches them automatically.", 14},
+		// Scene 2's briefing-catch landmine. The danger is NON-derivable from the
+		// repo: nothing in myapp shows an external-link / OAuth-callback entry flow,
+		// so an agent reasoning only from the code cannot know Strict breaks login.
+		// It lives in a pinned constraint so the briefing surfaces it verbatim and
+		// the with-side can cite it in one line. See [[scene-demo-repo-must-be-seamless-free]].
+		{"constraint", "auth-cookies-samesite-lax",
+			"Auth cookies must stay SameSite=Lax, not Strict: Strict logs out users arriving from an external link. Harden elsewhere (__Host-, TTL).",
+			"Keep the session and refresh cookies on SameSite=Lax; do not move them to Strict. We shipped Strict once on a scanner's \"harden the cookies\" finding and it broke login for everyone arriving from an external link: Strict withholds the cookie on the first cross-site top-level navigation, so a user clicking in from an email, a partner site, or an OAuth callback lands logged out, re-auths, and files a bug. Lax already blocks the CSRF vector that matters here. If a scanner flags Lax, suppress that rule or harden elsewhere -- add the __Host- prefix, keep HttpOnly and Secure, shorten the token TTL -- but never set these cookies to Strict.", 13},
 		{"gotcha", "edge-cache-gotcha",
 			"CDN strips Vary on 304s; never cache HTML",
 			edgeCacheBody, 4},
@@ -108,6 +118,18 @@ func (s *seeder) sceneMemories(source string) {
 		{"gotcha", "rate-limit-not-in-memory",
 			"In-memory rate limit on the refresh endpoint resets per instance; use shared storage.",
 			"A rate limiter kept in a process map only sees one instance's traffic. myapp runs several instances behind the load balancer, so an attacker's requests fan out across them and each instance sees a fraction of the limit -- the endpoint is effectively unthrottled. Keep the counter in shared storage (Redis) keyed by IP and token family, with a short sliding window.", 7},
+		// The recall-beat memory. A non-constraint gotcha whose description is a
+		// generic pointer (topic + "one hard rule", NOT the fix) so the session-start
+		// briefing index line does NOT give the answer away; the punchline lives in
+		// the body. name+description share persist/refresh/tokens/database -- exact
+		// word-forms of the natural prompt "persist the refresh tokens to the
+		// database ..." -- so the mid-session <seam-recall> injection clears the
+		// overlap>=2 / score>=1.5 floors and surfaces it at the moment of action,
+		// prompting a memory_read the briefing alone would not. See
+		// [[promptrecall-lexical-name-desc-only]].
+		{"gotcha", "persist-refresh-tokens",
+			"Persist refresh tokens to the database the safe way: one hard rule about what the token column may store.",
+			"When you persist refresh tokens, store only a SHA-256 hash of each token, never the raw value; on rotate, hash the presented token and look it up by hash. A database snapshot, backup, or read-replica leak of a raw-token column is instant account takeover for every live session -- refresh tokens are bearer credentials. Hashing makes a stolen snapshot useless. The in-memory store keeps raw tokens today, which is fine for process memory but not for anything that reaches disk or a backup.", 8},
 		{"gotcha", "chroma-boot-race",
 			"Chroma isn't ready when the API boots; retry the first query with backoff instead of crashing the process.",
 			"On a cold start the API comes up before Chroma finishes loading its collections, and the first embedding query fails. Retry it with exponential backoff (a few hundred ms, up to ~10s) rather than exiting -- the readiness probe should gate traffic, not the process.", 9},
@@ -217,7 +239,7 @@ func (s *seeder) sceneSummary(repoPath string, race bool) {
 	fmt.Printf(`demoseed: scenes fixture seeded
   project    myapp
   plan       auth-refresh -- 4/6 done, %s claimable
-  memories   7 (2 constraints + 4 hero files + rate-limit recall gotcha)
+  memories   9 (3 constraints + 4 hero files + rate-limit & persist-token recall gotchas)
   finding    1 (~18h old: "%s...")
   trial      1 failed (lab refresh-500s)
   repo map   %s
