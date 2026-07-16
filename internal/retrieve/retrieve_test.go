@@ -360,6 +360,40 @@ func TestBriefingTunables_MemoryIndexTrims(t *testing.T) {
 	})
 }
 
+// Findings reserve their budget before the memory index packs: a fat index must
+// not evict them, the header must count what actually rendered, and render
+// order (index before findings) stays unchanged. Regression: before the
+// reservation, findings packed last, so every one of them was silently dropped
+// while the header still claimed they were present.
+func TestBriefingReservesFindingsBudget(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/w":"p"}`))
+
+	pad := strings.Repeat("waffle ", 15) // ~105 chars, so each index line costs real budget
+	for i := range 25 {
+		insMem(t, db, fmt.Sprintf("M%02d", i), "gotcha", fmt.Sprintf("mem-%02d", i), pad, "p")
+	}
+	for i, text := range []string{"alpha finding text", "beta finding text"} {
+		ts := time.Now().Add(-time.Duration(i+1) * time.Minute)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: fmt.Sprintf("01F%d", i), Name: fmt.Sprintf("cc/f%d", i), ProjectSlug: "p",
+			Status: core.SessionCompleted, Findings: text, CreatedAt: ts, UpdatedAt: ts,
+		}))
+	}
+
+	svc := New(db, nil, config.Budgets{MaxBriefingTokens: 150, RecallBudgetTokens: 1000}, nil)
+	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
+	require.NoError(t, err)
+
+	require.Contains(t, b, "2 recent findings.", "header counts the findings that rendered")
+	require.Contains(t, b, "alpha finding text")
+	require.Contains(t, b, "beta finding text")
+	require.Contains(t, b, "older -- use recall", "the index, not the findings, absorbs the squeeze")
+	require.Less(t, strings.Index(b, "Memories (p):"), strings.Index(b, "Recent findings:"),
+		"reservation must not change the render order")
+}
+
 func TestBriefingTunables_FamilyCrossOver(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

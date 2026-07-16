@@ -68,15 +68,16 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	// Save: stores the override row and redirects back with a notice.
 	// include_parent_memories is deliberately absent = unchecked = false.
 	rr := postForm(mux, "/console/settings/briefing", url.Values{
-		"memory_max_age_days":      {"30"},
-		"memory_max_items":         {"20"},
-		"findings_count":           {"5"},
-		"findings_max_age_days":    {"0"},
-		"ready_tasks_shown":        {"1"},
-		"pending_plan_max_days":    {"14"},
-		"hard_cap_multiplier":      {"2"},
-		"sibling_findings_count":   {"0"},
-		"include_sibling_memories": {"1"},
+		"memory_max_age_days":        {"30"},
+		"memory_max_items":           {"20"},
+		"findings_count":             {"5"},
+		"findings_max_age_days":      {"0"},
+		"ready_tasks_shown":          {"1"},
+		"pending_plan_max_days":      {"14"},
+		"stage_unknown_max_age_days": {"10"},
+		"hard_cap_multiplier":        {"2"},
+		"sibling_findings_count":     {"0"},
+		"include_sibling_memories":   {"1"},
 	}.Encode())
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "notice=")
@@ -89,6 +90,7 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	require.Equal(t, 5, data.Briefing.FindingsCount)
 	require.Equal(t, 1, data.Briefing.ReadyTasksShown)
 	require.Equal(t, 14, data.Briefing.PendingPlanMaxDays)
+	require.Equal(t, 10, data.Briefing.StageUnknownMaxAgeDays)
 	require.False(t, data.Briefing.IncludeParentMemories)
 	require.True(t, data.Briefing.IncludeSiblingMemories)
 

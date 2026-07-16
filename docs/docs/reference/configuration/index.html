@@ -262,6 +262,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td><code>7</code></td>
 </tr>
 <tr>
+<td><code>briefing.stage_unknown_max_age_days</code></td>
+<td>int</td>
+<td><code>7</code></td>
+</tr>
+<tr>
 <td><code>briefing.hard_cap_multiplier</code></td>
 <td>int</td>
 <td><code>2</code></td>
@@ -382,6 +387,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td><code>14</code></td>
 </tr>
 <tr>
+<td><code>gardener.stale_stage_days</code></td>
+<td>int</td>
+<td><code>14</code></td>
+</tr>
+<tr>
 <td><code>gardener.session_idle_minutes</code></td>
 <td>int</td>
 <td><code>45</code></td>
@@ -461,8 +471,9 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="c"># Briefing injection tunables: what the SessionStart &lt;seam-briefing&gt; auto-injects.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># Defaults reproduce the built-in behavior; every knob is also editable live in</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># the console (Settings -&gt; Briefing injection), which stores a runtime override</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># in the database that WINS over this file and env until reset. Constraints,</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># pinned stages, and active-plan rollups are never filtered by these knobs.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># in the database that WINS over this file and env until reset. Constraints and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># active-plan rollups are never filtered by these knobs; a pinned stage is</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># exempt too while its Status header marks a live gate.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">briefing</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Drop memory-index lines not updated within this many days. 0 = no filter.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS</span><span class="w">
@@ -483,6 +494,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># line. 0 = no age cutoff.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">pending_plan_max_days</span><span class="p">:</span><span class="w"> </span><span class="m">7</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Grace window (days since last update) a stage memory stays pinned when its</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Status header is missing or not a live gate (open|in_progress|blocked).</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># 0 = pin forever.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">stage_unknown_max_age_days</span><span class="p">:</span><span class="w"> </span><span class="m">7</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Times budgets.max_briefing_tokens = the absolute truncation ceiling. 0 = 2.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">hard_cap_multiplier</span><span class="p">:</span><span class="w"> </span><span class="m">2</span><span class="w">
@@ -541,7 +557,8 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_GARDENER_DEDUP_THRESHOLD</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">dedup_threshold</span><span class="p">:</span><span class="w"> </span><span class="m">0.88</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Days of no activity (no update, injection, or read) before a memory is</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># proposed for archiving. Constraints and stages are never archived this way.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># proposed for archiving. Constraints and stages are never archived this way</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (dead stages are handled by stale_stage_days below).</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_GARDENER_STALENESS_DAYS</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">staleness_days</span><span class="p">:</span><span class="w"> </span><span class="m">90</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Trailing window of completed sessions rolled into a monthly digest proposal.</span><span class="w">
@@ -555,6 +572,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># proposed for abandonment (retag plan-status:abandoned). 0 disables the pass.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_GARDENER_STALE_PLAN_DAYS</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">stale_plan_days</span><span class="p">:</span><span class="w"> </span><span class="m">14</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Days without an update after which a stage memory that is not a live gate</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (Status done, missing, or unrecognized) is proposed for archiving.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># 0 disables the pass.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_GARDENER_STALE_STAGE_DAYS</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">stale_stage_days</span><span class="p">:</span><span class="w"> </span><span class="m">14</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Minutes of no activity before an active session counts as dead: the reaper</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># expires it and the console stops showing it as live. One knob drives both,</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># so they never drift. Must comfortably exceed a long single agent turn.</span><span class="w">

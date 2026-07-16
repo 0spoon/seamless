@@ -48,8 +48,9 @@ budgets:
 # Briefing injection tunables: what the SessionStart <seam-briefing> auto-injects.
 # Defaults reproduce the built-in behavior; every knob is also editable live in
 # the console (Settings -> Briefing injection), which stores a runtime override
-# in the database that WINS over this file and env until reset. Constraints,
-# pinned stages, and active-plan rollups are never filtered by these knobs.
+# in the database that WINS over this file and env until reset. Constraints and
+# active-plan rollups are never filtered by these knobs; a pinned stage is
+# exempt too while its Status header marks a live gate.
 briefing:
   # Drop memory-index lines not updated within this many days. 0 = no filter.
   # env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS
@@ -70,6 +71,11 @@ briefing:
   # line. 0 = no age cutoff.
   # env: SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS
   pending_plan_max_days: 7
+  # Grace window (days since last update) a stage memory stays pinned when its
+  # Status header is missing or not a live gate (open|in_progress|blocked).
+  # 0 = pin forever.
+  # env: SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS
+  stage_unknown_max_age_days: 7
   # Times budgets.max_briefing_tokens = the absolute truncation ceiling. 0 = 2.
   # env: SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER
   hard_cap_multiplier: 2
@@ -128,7 +134,8 @@ gardener:
   # env: SEAMLESS_GARDENER_DEDUP_THRESHOLD
   dedup_threshold: 0.88
   # Days of no activity (no update, injection, or read) before a memory is
-  # proposed for archiving. Constraints and stages are never archived this way.
+  # proposed for archiving. Constraints and stages are never archived this way
+  # (dead stages are handled by stale_stage_days below).
   # env: SEAMLESS_GARDENER_STALENESS_DAYS
   staleness_days: 90
   # Trailing window of completed sessions rolled into a monthly digest proposal.
@@ -142,6 +149,11 @@ gardener:
   # proposed for abandonment (retag plan-status:abandoned). 0 disables the pass.
   # env: SEAMLESS_GARDENER_STALE_PLAN_DAYS
   stale_plan_days: 14
+  # Days without an update after which a stage memory that is not a live gate
+  # (Status done, missing, or unrecognized) is proposed for archiving.
+  # 0 disables the pass.
+  # env: SEAMLESS_GARDENER_STALE_STAGE_DAYS
+  stale_stage_days: 14
   # Minutes of no activity before an active session counts as dead: the reaper
   # expires it and the console stops showing it as live. One knob drives both,
   # so they never drift. Must comfortably exceed a long single agent turn.

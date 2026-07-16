@@ -60,7 +60,11 @@ Line by line:
   constraint is a rule the project cannot violate; a briefing that omitted one to
   fit a token budget would be worse than no briefing at all.
 - **`STAGE:` lines** are pinned right after constraints, for the same reason: a
-  gated stage's status is load-bearing for the whole session.
+  gated stage's status is load-bearing for the whole session. The pin belongs to
+  the *gate*: a stage whose body does not open with a live
+  `Status: open|in_progress|blocked` header only renders (as `status unknown`)
+  for the `briefing.stage_unknown_max_age_days` grace window (default 7) after
+  its last update, then leaves the briefing rather than squatting in it forever.
 - **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
   tell the next agent what work it can pick up right now.
 - **The memory index** is `name: description` only - the description is the *only*
@@ -77,9 +81,13 @@ the whole thing is hard-capped at `briefing.hard_cap_multiplier` times that
 (default 2x).
 
 The **never-drop invariant**: constraints, pinned stages, and active-plan rollups
-are counted first and are exempt from budget dropping. Everything else - the
-memory index, sibling findings, sibling memories, recent findings, ready tasks -
-is packed in that order until the budget runs out. Later sections lose first.
+are counted first and are exempt from budget dropping. Recent findings reserve
+their (small, `findings_count`-capped) share of the budget next - they are the
+"what just happened here" section, and without the reservation a fat memory
+index would silently evict all of them while the header still claimed they were
+present. Everything else - the memory index, sibling findings, sibling memories,
+ready tasks - then packs in render order until the budget runs out; the header
+counts only the findings that actually rendered.
 
 Every knob is tunable in [Configuration](/reference/configuration/), and the
 `briefing:` block is also editable live in the console. Those runtime edits are
