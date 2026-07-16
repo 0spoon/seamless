@@ -204,7 +204,11 @@ func areaChart(points []store.TrendBucket) template.HTML {
 		fmt.Fprintf(&b, `<line x1="%g" x2="%g" y1="%.1f" y2="%.1f" stroke="var(--border)" stroke-width="1" stroke-dasharray="2 5" vector-effect="non-scaling-stroke"/>`, padL, padL+pw, yy, yy)
 	}
 	fmt.Fprintf(&b, `<path class="area-fill" d="%s" fill="url(#areaGrad)"/>`, area)
-	fmt.Fprintf(&b, `<path class="area-line" d="%s" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" pathLength="1" vector-effect="non-scaling-stroke"/>`, line.String())
+	// No vector-effect here, unlike the gridlines/peak: non-scaling-stroke moves the
+	// dash pattern into screen space, which defeats the pathLength="1" normalization
+	// the .area-line draw-on animation rides on. The dash then covers 1/scale of the
+	// path, silently clipping the line's tail at any width past the 560-unit viewBox.
+	fmt.Fprintf(&b, `<path class="area-line" d="%s" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round" pathLength="1"/>`, line.String())
 	if n == 1 {
 		// A single point has no line/area to draw, and "peak" is meaningless, so
 		// render the datum itself as a visible dot in the series color.
