@@ -235,8 +235,10 @@ pile of individual moves.</p>
 <p>The symptom is almost always &quot;the agent wrote it somewhere I can't find it&quot; or
 &quot;the write was rejected as ambiguous&quot;. Both are the chain above:</p>
 <ul>
-<li><strong>Rejected as ambiguous</strong> - no session bound and no mapped repo. Run
-<code>session_start</code>, or map the repo.</li>
+<li><strong>Rejected as ambiguous</strong> - no session bound, and nothing to infer scope from.
+Run <code>session_start</code> with your <code>cwd</code> (inside a git repo that also maps the repo
+automatically), or pass <code>project=&lt;slug&gt;</code>. <code>map-repo</code> is not the fix here - it
+only overrides an already-derived slug, and is never a setup step.</li>
 <li><strong>Landed in the wrong project</strong> - the cwd mapped somewhere unexpected, or an
 explicit <code>project</code> overrode what you meant. Rung 1 beats everything.</li>
 <li><strong>A tool insists a task is claimed by your own session</strong> - the connection

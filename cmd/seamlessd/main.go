@@ -6,7 +6,7 @@
 //	seamlessd doctor        run configuration + database self-checks
 //	seamlessd import        import a Seam v1 data directory
 //	seamlessd install-hooks install the Claude Code hooks + register MCP
-//	seamlessd map-repo      map a repo path to a project slug
+//	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
 //	seamlessd family        manage project families
 //	seamlessd console-open  open the console in a browser, pre-authenticated
 //	seamlessd version       print the version
@@ -114,7 +114,8 @@ usage:
   seamlessd doctor         run configuration + database self-checks
   seamlessd import         import a Seam v1 data directory (--from ~/.seam)
   seamlessd install-hooks  install the Claude Code hooks + register the MCP server
-  seamlessd map-repo       map a repo path to a project slug (repo_project_map)
+  seamlessd map-repo       override a repo's auto-derived project slug (rarely needed;
+                           repos self-map on first session -- repo_project_map)
   seamlessd family         manage project families (list|add|remove)
   seamlessd console-open   open the console in a browser, pre-authenticated
                            (--browser "Google Chrome" targets a specific browser; macOS only)
