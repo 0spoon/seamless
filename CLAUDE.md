@@ -60,8 +60,9 @@ make install    # build + snapshot binaries/config to ~/.local/bin +
                 # ~/.config/seamless, repoint the service and hooks, restart
 make test       # unit tests
 make test-race  # unit tests with the race detector
-make check      # the full gate: build + vet + fmt-check + docs-check + lint + test-race
-make check-fast # the pre-commit subset (no test-race); .githooks/pre-commit runs it
+make check      # the full gate: build + vet + fmt-check + docs-check +
+                # installer-check + site-check + lint + test-race
+make check-fast # the pre-commit subset (no build/test-race); .githooks/pre-commit runs it
 make lint       # golangci-lint
 make vet        # go vet
 make fmt        # gofmt tracked files -- NOT `gofmt -w .`, which rewrites other
@@ -74,6 +75,8 @@ make clean      # remove bin/ and coverage files
 make docs       # regenerate the docs site (docs-src/ -> docs/docs/, committed)
 make docs-check # fail if the committed docs site is stale (runs inside `check`)
 make docs-serve # regenerate + serve the site at 127.0.0.1:8899/docs/
+make site-check # fail if the hand-written landing page (docs/index.html) drifts
+                # from the installer or the CLI -- docs-check cannot see it
 
 # single test
 go test ./internal/validate -run TestTitle -v
