@@ -70,12 +70,21 @@ answer (search what you can see), while a write does not.
 
 ## Mapping a repo
 
+Rung 3 reads the `repo_project_map`, but you rarely write an entry into it. The
+map grows itself: on session start in an unmapped cwd, Seamless finds the
+enclosing git repository, derives a slug from the repo root's directory name,
+registers the project, and records `repoRoot -> slug`. No recompile, no setup
+step. A cwd outside any git repo registers nothing and stays global.
+
+Map by hand only to override the derived slug - an `ios` directory that should be
+the `arctop-ios` project:
+
 ```bash
-seamlessd map-repo --path ~/code/myrepo --project myrepo
+seamlessd map-repo --path ~/code/ios --project arctop-ios
 ```
 
-This binds a working directory to a project. Afterwards, agents in that repo
-inherit its scope through rung 3 without any tool call at all.
+Either way, agents in that repo inherit its scope through rung 3 without any tool
+call at all.
 
 ## Families: parents and siblings
 

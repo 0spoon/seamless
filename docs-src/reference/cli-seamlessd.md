@@ -156,6 +156,10 @@ directory is under that path resolves to that project - in the hooks and in
 `session_start`. This is what makes a briefing arrive scoped to the right
 project without the agent passing `project` anywhere.
 
+Mostly you will not need it: a git repo maps itself on its first session, taking
+the slug from the repo root's directory name. Run `map-repo` to override that
+derived slug, or to map a directory that is not a git repo.
+
 `--project` is required. `--path` defaults to the current directory and is made
 absolute. The command also ensures the project exists, so mapping a new slug
 registers it. Writes straight to the database; no running daemon needed.

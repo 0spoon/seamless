@@ -71,13 +71,19 @@ grep api_key ./seamless.yaml                    # dev layout
 
 ## Map your repos
 
+Usually you do not have to. The first session inside a git repo maps itself: the
+SessionStart hook resolves the agent's cwd to its git root, derives a project
+slug from that directory's name, and records the mapping. Agents then inherit
+project scope from their cwd - no `project` argument on any call.
+
+Map by hand to override the derived slug - an `ios` directory that should be the
+`arctop-ios` project:
+
 ```bash
-seamlessd map-repo --path ~/code/myrepo --project myrepo
+seamlessd map-repo --path ~/code/ios --project arctop-ios
 ```
 
-This binds a working directory to a project. Afterwards, agents in that repo
-inherit project scope from their cwd - no `project` argument on any call. See
-[Projects & scope](/concepts/projects/) for the full precedence chain and why
+See [Projects & scope](/concepts/projects/) for the full precedence chain and why
 unmapped writes are rejected rather than defaulted to global.
 
 ## Tell your agents it exists
