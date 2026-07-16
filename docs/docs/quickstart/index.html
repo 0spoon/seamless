@@ -160,40 +160,45 @@
   <p>This is the one happy path: install, serve, wire your agents, and watch a
 session open with a briefing. Every fork in the road is a link, not a branch in
 these steps.</p>
-<p>No CGO toolchain, no external database, no Node. Building from source needs
-<strong>Go 1.25+</strong>; the prebuilt binaries need nothing.</p>
-<h2 id="install-and-run">Install and run</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">go install github.com/0spoon/seamless/cmd/...@latest   <span class="c1"># seamlessd + seam</span>
-</span></span><span class="line"><span class="cl">seamlessd serve                                        <span class="c1"># 127.0.0.1:8081, data in ~/.seamless</span>
-</span></span></code></pre><p>No Go toolchain? Every tagged release ships prebuilt archives for macOS and
-Linux (amd64 and arm64) with both binaries inside - grab one from
-<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a> and put
-<code>seamlessd</code> and <code>seam</code> on your PATH.</p>
-<p>On a true first run - no config file anywhere - <code>serve</code> generates the bearer
-key and writes it to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy,
-nothing to paste.</p>
+<p>No CGO toolchain, no external database, no Node. The installer needs <code>curl</code> and
+<code>tar</code>; building from source needs <strong>Go 1.25+</strong>.</p>
+<h2 id="install">Install</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+</span></span></code></pre><p>One command does the lot: it fetches the checksum-verified release archive for
+your platform (macOS and Linux, amd64 and arm64), installs <code>seamlessd</code> and
+<code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires Claude Code, and
+starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in
+<code>~/.seamless</code>. Re-run it to upgrade. <a href="../install/">Install &amp; deploy</a> has the
+overrides, the service details, and how to remove it.</p>
+<p>Piping a stranger's script into a shell deserves a read first - it is
+<a href="https://thereisnospoon.org/install">one file</a>, and every other route to the
+same place is on that page: prebuilt archives from
+<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a>,
+<code>go install github.com/0spoon/seamless/cmd/...@latest</code>, or <code>make install</code> from
+a clone.</p>
+<p>On a true first run - no config file anywhere - the bearer key is generated and
+written to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy, nothing to
+paste.</p>
 <p>No LLM key is required either: without one, recall degrades to plain full-text
 search. Add OpenAI or Ollama in the <a href="../reference/configuration/">configuration</a>
 when you want semantic recall.</p>
-<p>Working from a clone instead? <code>make build &amp;&amp; make run</code> does the same with
-<code>./bin/</code> binaries, and <code>make install</code> sets the daemon up as a service - see
-<a href="../install/">Install &amp; deploy</a>.</p>
 <p><code>seamlessd doctor</code> is the checkpoint: it validates the config, opens the
 database, applies migrations, and asserts the tool count. If it is green, the
 daemon will start.</p>
 <h2 id="wire-your-agents">Wire your agents</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks
-</span></span><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
+<p>The installer already ran <code>install-hooks</code> for you, so one step is left:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
 </span></span></code></pre><p><code>install-hooks</code> does both halves of the Claude Code wiring: it installs the
 hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
 SessionEnd) and registers the MCP server via <code>claude mcp add --scope user</code>. If
 the <code>claude</code> CLI is not on your PATH it prints the command to run yourself -
 see <a href="../claude-code/">Claude Code setup</a> for the by-hand version and why
-<code>--scope user</code> matters.</p>
+<code>--scope user</code> matters. Installed by hand? Run <code>seamlessd install-hooks</code>
+yourself before the <code>map-repo</code> above.</p>
 <p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
 calling a tool. <code>map-repo</code> binds a working directory to a project, so agents
 working in that repo inherit project scope without passing <code>project</code> on every
-call.</p>
+call. Restart Claude Code afterwards so it loads the hooks and the MCP server.</p>
 <h2 id="confirm-it-works">Confirm it works</h2>
 <p>Start a Claude Code session in the mapped repo. Its context now opens with an
 injected briefing:</p>
@@ -231,7 +236,7 @@ Code skill that walks an agent through this setup and verifies each step.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-and-run">Install and run</a></li><li class="lvl-2"><a href="#wire-your-agents">Wire your agents</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
+      <li class="lvl-2"><a href="#install">Install</a></li><li class="lvl-2"><a href="#wire-your-agents">Wire your agents</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
     </ul>
   </aside>
   

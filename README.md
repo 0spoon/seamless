@@ -29,23 +29,35 @@ MCP, and renders a web console for inspection.
 
 ## Quick start
 
-Requires Go 1.25+. No CGO toolchain, no external database, no Node.
-
 ```bash
-go install github.com/0spoon/seamless/cmd/...@latest   # seamlessd + seam
-seamlessd serve                   # 127.0.0.1:8081; first run generates the API key
-seamlessd install-hooks           # Claude Code hooks + MCP registration
+curl -fsSL https://thereisnospoon.org/install | sh
 seamlessd map-repo --path ~/code/myrepo --project myrepo
 ```
 
-On a true first run `serve` writes a generated bearer key to
-`~/.config/seamless/seamless.yaml`. `install-hooks` installs the Claude Code
-hooks and registers the MCP server (`claude mcp add --scope user`); other MCP
-clients register `http://127.0.0.1:8081/api/mcp` with
-`Authorization: Bearer <mcp.api_key>`. `map-repo` binds a working directory to
-a project, so agents in that repo inherit project scope without passing it on
-every call. From a clone, `make build && make run` is the same daemon out of
-`./bin/`, and `make install` sets it up as a service.
+The installer needs `curl` and `tar` and nothing else -- no Go, no CGO
+toolchain, no database, no Node. It fetches the checksum-verified release
+archive for your platform (macOS and Linux, amd64 and arm64), installs
+`seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
+the Claude Code hooks, registers the MCP server, and runs the daemon as a
+per-user service -- launchd on macOS, systemd `--user` on Linux. Re-run it to
+upgrade: your config and `~/.seamless` are never touched. `map-repo` binds a
+working directory to a project, so agents in that repo inherit project scope
+without passing it on every call.
+
+It is [one shell script](docs/install) and piping a stranger's script into a
+shell deserves a read first. Prefer a toolchain, or want the pieces one at a
+time?
+
+```bash
+go install github.com/0spoon/seamless/cmd/...@latest   # Go 1.25+; seamlessd + seam
+seamlessd serve                   # 127.0.0.1:8081; first run generates the API key
+seamlessd install-hooks           # Claude Code hooks + MCP registration
+```
+
+`install-hooks` registers the MCP server with `claude mcp add --scope user`;
+other MCP clients register `http://127.0.0.1:8081/api/mcp` with
+`Authorization: Bearer <mcp.api_key>`. From a clone, `make build && make run` is
+the same daemon out of `./bin/`, and `make install` sets it up as a service.
 
 `make install-onboard-skill` installs a `/seam-onboard` Claude Code skill that
 walks an agent through this setup and verifies each step.

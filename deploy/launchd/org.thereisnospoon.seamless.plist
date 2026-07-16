@@ -5,6 +5,9 @@
   Placeholders __BINARY__ / __CONFIG__ / __LOG__ are substituted by `make install`, which
   renders this template to ~/Library/LaunchAgents/ and (re)loads it. Do not hand-edit the
   installed copy; re-run `make install` to update.
+
+  This is the clone's copy. docs/install (the curl | sh path) inlines the same job because
+  it is fetched alone, with no checkout to read a template out of -- keep the two in step.
 -->
 <plist version="1.0">
 <dict>
