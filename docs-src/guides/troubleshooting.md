@@ -51,10 +51,10 @@ daemon up, key valid - is broken, and every link in it fails silently by design.
 2. `seam doctor` → is the daemon actually up and is the key accepted? An empty
    `mcp.api_key` makes the daemon reject every MCP and hook request while looking
    perfectly healthy on `/healthz`.
-3. Did the `seam` binary move? Command hooks bake in an **absolute path**. A
-   rebuild is fine; moving or cleaning the repo is not. Re-run
-   `install-hooks`, or install the release layout so the hooks point at stable
-   copies rather than your working tree.
+3. Did the `seam` binary move? Command hooks bake in an **absolute path**, and
+   `make install` points them at `~/.local/bin/seam` - a stable copy, not your
+   working tree. If you moved the install prefix or wired the hooks up by hand
+   against some other path, re-run `make install`.
 4. Check the hook's **type** if you hand-edited settings.json. Claude Code
    silently ignores an `http` hook for `SessionStart` - it must be a `command`
    hook. This is why `install-hooks` writes it that way.

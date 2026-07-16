@@ -1,6 +1,6 @@
 ---
 title: Install & deploy
-description: Dev vs release layouts, the launchd service, upgrading, uninstalling, and the security posture you are accepting.
+description: The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.
 ---
 
 The [Quickstart](/quickstart/) builds and runs Seamless in the foreground. This
@@ -8,49 +8,51 @@ page is what you do once you want it running for real.
 
 ## One instance per machine
 
-Both install layouts drive **the same single instance**: port `8081`, data dir
-`~/.seamless`. Only one is active at a time - installing prod replaces dev, and
-vice versa.
+There is **one instance**: port `8081`, data dir `~/.seamless`. One daemon, one
+database, one set of files.
 
-This is the single most common source of confusion, so it is worth stating
-plainly: there is no "dev instance" and "prod instance" side by side. There is
-one daemon, one database, one set of files, and two ways of deciding which
-binary and config it runs from.
+Both are config keys, not fixed facts - set `addr:` and `data_dir:` in
+`~/.config/seamless/seamless.yaml` (or the `SEAMLESS_ADDR` / `SEAMLESS_DATA_DIR`
+env overrides) and re-run `make install`. The config is the single source of
+truth for the bind address: the Makefile reads the port back out of it, so the
+health check and `make help` follow your change rather than assuming `8081`.
+Nothing bakes the address into the service - which is why editing `addr:` works
+instead of being silently overridden.
 
-## Dev layout
-
-Runs the service and hooks straight from the working tree, so a rebuild takes
-effect on the next restart.
-
-```bash
-make install-service   # launchd service -> ./bin/seamlessd + ./seamless.yaml
-make install-hooks     # hooks -> ./bin/seam
-make dev               # rebuild + restart in place
-```
-
-Fast to iterate. The catch: `make build`, a branch switch, or moving the repo
-changes what the live service and the global SessionStart hook actually execute.
-That is fine while you are working on Seamless itself and a trap otherwise -
-every agent on the machine is running the hook from your working tree.
-
-## Release layout
-
-Snapshots the binaries and config to stable locations independent of the working
-tree, then points launchd and the hooks at the copies. Survives rebuilds, branch
-switches, and a moved or cleaned repo.
+## Install
 
 ```bash
-make install-prod                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
-make install-prod PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
-make uninstall-prod                  # remove prod service + binaries (config kept)
+make install                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
+make install PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
+make uninstall                  # remove service + binaries (config kept)
 ```
 
-`install-prod` copies `seamless.yaml` **only when the destination is absent**, so
-it never clobbers an edited prod config. Delete the copy to re-seed from the
-repo. It lands in `~/.config/seamless/`, one of the paths `seam` already
-searches, so the hooks resolve config from any directory.
+`make install` snapshots the binaries and config to stable locations, then points
+launchd **and** the Claude Code hooks at the copies. Nothing live resolves
+through your working tree, so `make build`, a branch switch, and a moved or
+cleaned repo cannot change what the running daemon and every agent's hooks
+execute. Swapping them is `make install`, deliberately.
 
-To go back to dev: `make install-service && make install-hooks`.
+The config lands in `~/.config/seamless/`, one of the paths Seamless already
+searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
+It is seeded **only when absent** - an install never clobbers a config holding
+your bearer key. Delete it to re-seed.
+
+## Iterating on Seamless itself
+
+`make install` is also the edit-test loop. When the rendered plist is unchanged -
+the common case - it skips the launchd bootout/bootstrap and kickstarts the
+service in place, so its marginal cost over `make build` is two file copies.
+
+```bash
+make build      # compile only; nothing live changes
+make install    # ...and now it does
+make logs       # follow ~/.seamless/seamlessd.log
+```
+
+That split is the point. `make build` on a half-finished edit is free, because
+the daemon and hooks keep running the last thing you installed. Rebuilding is not
+deploying.
 
 ## The launchd service
 
@@ -70,7 +72,7 @@ make stop-service      # unload (KeepAlive will not resurrect an unloaded job)
 ```bash
 git pull
 make check             # everything green before you swap the running daemon
-make install-prod      # or: make dev, for the dev layout
+make install           # swap it
 make doctor            # confirm config + DB after the swap
 ```
 
@@ -85,7 +87,7 @@ binary looks exactly like a bug in the new one.
 ## Uninstalling
 
 ```bash
-make uninstall-prod          # or: make uninstall-service
+make uninstall
 ```
 
 Neither touches `~/.seamless`. Your memories and notes are markdown files; the

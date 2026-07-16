@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Install &amp; deploy - Seamless docs</title>
-<meta name="description" content="Dev vs release layouts, the launchd service, upgrading, uninstalling, and the security posture you are accepting.">
+<meta name="description" content="The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -156,39 +156,42 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Install &amp; deploy</h1>
-  <p class="lede">Dev vs release layouts, the launchd service, upgrading, uninstalling, and the security posture you are accepting.</p>
+  <p class="lede">The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.</p>
   <p>The <a href="../quickstart/">Quickstart</a> builds and runs Seamless in the foreground. This
 page is what you do once you want it running for real.</p>
 <h2 id="one-instance-per-machine">One instance per machine</h2>
-<p>Both install layouts drive <strong>the same single instance</strong>: port <code>8081</code>, data dir
-<code>~/.seamless</code>. Only one is active at a time - installing prod replaces dev, and
-vice versa.</p>
-<p>This is the single most common source of confusion, so it is worth stating
-plainly: there is no &quot;dev instance&quot; and &quot;prod instance&quot; side by side. There is
-one daemon, one database, one set of files, and two ways of deciding which
-binary and config it runs from.</p>
-<h2 id="dev-layout">Dev layout</h2>
-<p>Runs the service and hooks straight from the working tree, so a rebuild takes
-effect on the next restart.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-service   <span class="c1"># launchd service -&gt; ./bin/seamlessd + ./seamless.yaml</span>
-</span></span><span class="line"><span class="cl">make install-hooks     <span class="c1"># hooks -&gt; ./bin/seam</span>
-</span></span><span class="line"><span class="cl">make dev               <span class="c1"># rebuild + restart in place</span>
-</span></span></code></pre><p>Fast to iterate. The catch: <code>make build</code>, a branch switch, or moving the repo
-changes what the live service and the global SessionStart hook actually execute.
-That is fine while you are working on Seamless itself and a trap otherwise -
-every agent on the machine is running the hook from your working tree.</p>
-<h2 id="release-layout">Release layout</h2>
-<p>Snapshots the binaries and config to stable locations independent of the working
-tree, then points launchd and the hooks at the copies. Survives rebuilds, branch
-switches, and a moved or cleaned repo.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-prod                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
-</span></span><span class="line"><span class="cl">make install-prod <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
-</span></span><span class="line"><span class="cl">make uninstall-prod                  <span class="c1"># remove prod service + binaries (config kept)</span>
-</span></span></code></pre><p><code>install-prod</code> copies <code>seamless.yaml</code> <strong>only when the destination is absent</strong>, so
-it never clobbers an edited prod config. Delete the copy to re-seed from the
-repo. It lands in <code>~/.config/seamless/</code>, one of the paths <code>seam</code> already
-searches, so the hooks resolve config from any directory.</p>
-<p>To go back to dev: <code>make install-service &amp;&amp; make install-hooks</code>.</p>
+<p>There is <strong>one instance</strong>: port <code>8081</code>, data dir <code>~/.seamless</code>. One daemon, one
+database, one set of files.</p>
+<p>Both are config keys, not fixed facts - set <code>addr:</code> and <code>data_dir:</code> in
+<code>~/.config/seamless/seamless.yaml</code> (or the <code>SEAMLESS_ADDR</code> / <code>SEAMLESS_DATA_DIR</code>
+env overrides) and re-run <code>make install</code>. The config is the single source of
+truth for the bind address: the Makefile reads the port back out of it, so the
+health check and <code>make help</code> follow your change rather than assuming <code>8081</code>.
+Nothing bakes the address into the service - which is why editing <code>addr:</code> works
+instead of being silently overridden.</p>
+<h2 id="install">Install</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
+</span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
+</span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service + binaries (config kept)</span>
+</span></span></code></pre><p><code>make install</code> snapshots the binaries and config to stable locations, then points
+launchd <strong>and</strong> the Claude Code hooks at the copies. Nothing live resolves
+through your working tree, so <code>make build</code>, a branch switch, and a moved or
+cleaned repo cannot change what the running daemon and every agent's hooks
+execute. Swapping them is <code>make install</code>, deliberately.</p>
+<p>The config lands in <code>~/.config/seamless/</code>, one of the paths Seamless already
+searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
+It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
+your bearer key. Delete it to re-seed.</p>
+<h2 id="iterating-on-seamless-itself">Iterating on Seamless itself</h2>
+<p><code>make install</code> is also the edit-test loop. When the rendered plist is unchanged -
+the common case - it skips the launchd bootout/bootstrap and kickstarts the
+service in place, so its marginal cost over <code>make build</code> is two file copies.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
+</span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
+</span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>
+</span></span></code></pre><p>That split is the point. <code>make build</code> on a half-finished edit is free, because
+the daemon and hooks keep running the last thing you installed. Rebuilding is not
+deploying.</p>
 <h2 id="the-launchd-service">The launchd service</h2>
 <p>The service is a macOS user LaunchAgent labelled
 <code>org.thereisnospoon.seamless</code>, rendered from <code>deploy/launchd/</code> into
@@ -200,7 +203,7 @@ searches, so the hooks resolve config from any directory.</p>
 </span></span></code></pre><h2 id="upgrading">Upgrading</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">git pull
 </span></span><span class="line"><span class="cl">make check             <span class="c1"># everything green before you swap the running daemon</span>
-</span></span><span class="line"><span class="cl">make install-prod      <span class="c1"># or: make dev, for the dev layout</span>
+</span></span><span class="line"><span class="cl">make install           <span class="c1"># swap it</span>
 </span></span><span class="line"><span class="cl">make doctor            <span class="c1"># confirm config + DB after the swap</span>
 </span></span></code></pre><p>Migrations apply automatically at startup - there is no separate migrate step.
 Run <code>make doctor</code> afterwards anyway: it is the cheapest way to learn that the new
@@ -209,7 +212,7 @@ build disagrees with your config before an agent does.</p>
 check it before you debug anything else - a stale daemon still serving the old
 binary looks exactly like a bug in the new one.</p>
 <h2 id="uninstalling">Uninstalling</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">make uninstall-prod          <span class="c1"># or: make uninstall-service</span>
+<pre class="chroma"><code><span class="line"><span class="cl">make uninstall
 </span></span></code></pre><p>Neither touches <code>~/.seamless</code>. Your memories and notes are markdown files; the
 uninstall of a program should not delete your knowledge. Remove the directory by
 hand if you actually mean it - and see <a href="../reference/storage/">Storage</a> first for
@@ -250,7 +253,7 @@ on loopback.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#dev-layout">Dev layout</a></li><li class="lvl-2"><a href="#release-layout">Release layout</a></li><li class="lvl-2"><a href="#the-launchd-service">The launchd service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install">Install</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-launchd-service">The launchd service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
     </ul>
   </aside>
   

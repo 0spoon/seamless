@@ -405,16 +405,21 @@ will not serve without one.</p>
 </div>
 <h2 id="annotated-example">Annotated example</h2>
 <p>This is <code>seamless.yaml.example</code> from the repository, verbatim.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="c"># Seamless configuration example. Copy to seamless.yaml and fill in secrets.</span><span class="w">
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="c"># Seamless configuration example: every key, at its default. Safe to commit --</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># it holds no secrets.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c">#</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c">#   cp seamless.yaml.example seamless.yaml</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># `make install` seeds ~/.config/seamless/seamless.yaml from this file when that</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># config does not exist yet, and never overwrites it afterwards. So fill in your</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># secrets THERE, not here: the installed copy is the live one, and the daemon and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># hooks read it from any directory.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c">#</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># seamless.yaml is gitignored (it holds API keys). This .example file is safe to</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># commit. Every key also has a SEAMLESS_* environment override, and env wins over</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># the file. Config file search order: $SEAMLESS_CONFIG, ~/.config/seamless/seamless.yaml,</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># ./seamless.yaml.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Every key also has a SEAMLESS_* environment override, and env wins over the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># file. Config file search order: $SEAMLESS_CONFIG, ~/.config/seamless/seamless.yaml,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># ./seamless.yaml (gitignored -- the pre-install layout&#39;s config).</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="c"># HTTP bind address. Dev runs on 8081 so it never collides with v1 Seam on 8080.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># HTTP bind address. Change it here and re-run `make install`: this file is the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># single source of truth for the bind, and the Makefile reads the port back out</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># of it rather than assuming 8081.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_ADDR</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">addr</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;127.0.0.1:8081&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">

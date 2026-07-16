@@ -114,7 +114,7 @@ cd ~/.seamless && git push          # or: tar czf seamless.tgz memory notes
 git clone <remote> ~/.seamless      # or untar
 cp seamless.yaml.example seamless.yaml   # NEW key: do not reuse the old one
 openssl rand -hex 32
-make install-prod && make install-hooks
+make install
 make doctor
 ```
 

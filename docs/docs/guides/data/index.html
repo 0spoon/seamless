@@ -247,7 +247,7 @@ any text editor.</p>
 </span></span><span class="line"><span class="cl">git clone &lt;remote&gt; ~/.seamless      <span class="c1"># or untar</span>
 </span></span><span class="line"><span class="cl">cp seamless.yaml.example seamless.yaml   <span class="c1"># NEW key: do not reuse the old one</span>
 </span></span><span class="line"><span class="cl">openssl rand -hex <span class="m">32</span>
-</span></span><span class="line"><span class="cl">make install-prod <span class="o">&amp;&amp;</span> make install-hooks
+</span></span><span class="line"><span class="cl">make install
 </span></span><span class="line"><span class="cl">make doctor
 </span></span></code></pre><p>The index rebuilds itself on first start. Generate a fresh <code>mcp.api_key</code> rather
 than copying the old config: the key is the only credential, and a machine
