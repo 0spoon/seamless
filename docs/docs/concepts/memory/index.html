@@ -234,7 +234,7 @@ is its entire purpose.</p>
 <tr>
 <td><code>stage</code></td>
 <td>Where a piece of multi-session work stands</td>
-<td>Pinned into briefings like a constraint</td>
+<td>The body must open with <code>Status: open|in_progress|blocked|done</code> (plus <code>Gate: human|ai</code>) - the pin belongs to the gate, not the kind</td>
 </tr>
 </tbody>
 </table>
@@ -244,6 +244,14 @@ is its entire purpose.</p>
 staleness-archived. Marking a preference as a constraint crowds out real
 constraints; filing a real constraint as a <code>reference</code> means agents will violate
 it.</p>
+<p>A stage's pin is conditional on it actually gating something. <code>Status: done</code>
+unpins it immediately; a missing or unparseable header renders as
+<code>status unknown</code> for a grace window
+(<code>briefing.stage_unknown_max_age_days</code>, default 7 days since last update) and
+then leaves the briefing, and the gardener proposes archiving gateless stages
+after <code>gardener.stale_stage_days</code> (14). A milestone breadcrumb (&quot;X landed&quot;) is
+a note or a finding, not a stage - written as a stage without a live gate, it
+now expires instead of pinning forever.</p>
 <p><code>refuted</code> deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,
 finds it dead, and moves on - every time. Recording the refutation makes that

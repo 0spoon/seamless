@@ -35,6 +35,7 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 30, d.Gardener.DigestDays)
 	require.Equal(t, 30, d.Gardener.ToolEventRetentionDays)
 	require.Equal(t, 14, d.Gardener.StalePlanDays)
+	require.Equal(t, 14, d.Gardener.StaleStageDays)
 	require.Equal(t, 45, d.Gardener.SessionIdleMinutes)
 	// Briefing defaults reproduce the historical hardcoded auto-inject behavior.
 	require.Equal(t, 0, d.Briefing.MemoryMaxAgeDays)
@@ -43,6 +44,7 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 0, d.Briefing.FindingsMaxAgeDays)
 	require.Equal(t, 3, d.Briefing.ReadyTasksShown)
 	require.Equal(t, 7, d.Briefing.PendingPlanMaxDays)
+	require.Equal(t, 7, d.Briefing.StageUnknownMaxAgeDays)
 	require.Equal(t, 2, d.Briefing.HardCapMultiplier)
 	require.True(t, d.Briefing.IncludeParentMemories)
 	require.Equal(t, 2, d.Briefing.SiblingFindingsCount)
@@ -178,9 +180,12 @@ gardener:
 	// Absent briefing keys keep their defaults.
 	require.Equal(t, 3, cfg.Briefing.ReadyTasksShown)
 	require.Equal(t, 7, cfg.Briefing.PendingPlanMaxDays)
+	require.Equal(t, 7, cfg.Briefing.StageUnknownMaxAgeDays)
 	require.True(t, cfg.Briefing.IncludeParentMemories)
 
 	t.Setenv("SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS", "90")
+	t.Setenv("SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS", "10")
+	t.Setenv("SEAMLESS_GARDENER_STALE_STAGE_DAYS", "21")
 	t.Setenv("SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS", "25")
 	t.Setenv("SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS", "14")
 	t.Setenv("SEAMLESS_BRIEFING_READY_TASKS_SHOWN", "1")
@@ -193,6 +198,8 @@ gardener:
 	cfg, err = LoadFrom(path)
 	require.NoError(t, err)
 	require.Equal(t, 90, cfg.Briefing.MemoryMaxAgeDays, "env wins over file")
+	require.Equal(t, 10, cfg.Briefing.StageUnknownMaxAgeDays)
+	require.Equal(t, 21, cfg.Gardener.StaleStageDays)
 	require.Equal(t, 25, cfg.Briefing.MemoryMaxItems)
 	require.Equal(t, 14, cfg.Briefing.FindingsMaxAgeDays)
 	require.Equal(t, 1, cfg.Briefing.ReadyTasksShown)
@@ -280,11 +287,14 @@ func TestValidate(t *testing.T) {
 		{"negative-tool-event-retention", func(c *Config) { c.Gardener.ToolEventRetentionDays = -1 }, true},
 		{"zero-stale-plan-days-ok", func(c *Config) { c.Gardener.StalePlanDays = 0 }, false},
 		{"negative-stale-plan-days", func(c *Config) { c.Gardener.StalePlanDays = -1 }, true},
+		{"zero-stale-stage-days-ok", func(c *Config) { c.Gardener.StaleStageDays = 0 }, false},
+		{"negative-stale-stage-days", func(c *Config) { c.Gardener.StaleStageDays = -1 }, true},
 		{"zero-session-idle-ok", func(c *Config) { c.Gardener.SessionIdleMinutes = 0 }, false},
 		{"negative-session-idle", func(c *Config) { c.Gardener.SessionIdleMinutes = -1 }, true},
 		{"zero-briefing-knobs-ok", func(c *Config) { c.Briefing = Briefing{} }, false},
 		{"negative-briefing-findings", func(c *Config) { c.Briefing.FindingsCount = -1 }, true},
 		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
+		{"negative-briefing-stage-window", func(c *Config) { c.Briefing.StageUnknownMaxAgeDays = -1 }, true},
 		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},
 		{"custom-capture-ports-ok", func(c *Config) { c.Capture.AllowedPorts = []int{8080, 65535} }, false},
 		{"zero-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{0} }, true},

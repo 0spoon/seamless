@@ -1,9 +1,11 @@
 // Package gardener runs the propose-only maintenance passes over the memory
 // corpus: it finds near-duplicate memories (dedup), memories that have gone
-// untouched for too long (staleness), and rolls recent sessions into a monthly
-// digest. Every pass only ever writes a gardener_proposals row for the owner to
-// apply or dismiss -- it never mutates a memory on its own. The passes run on a
-// ticker and are also invokable on demand (RunOnce).
+// untouched for too long (staleness), stage memories that stopped carrying a
+// live gate (stale-stage), captured plans that were never approved
+// (stale-plan), and rolls recent sessions into a monthly digest. Every pass
+// only ever writes a gardener_proposals row for the owner to apply or dismiss
+// -- it never mutates a memory on its own. The passes run on a ticker and are
+// also invokable on demand (RunOnce).
 package gardener
 
 import (
@@ -45,6 +47,10 @@ type Config struct {
 	// draft/presented after this many days. 0 disables the pass -- deliberately
 	// not defaulted, mirroring ToolEventRetentionDays.
 	StalePlanDays int
+	// StaleStageDays proposes archiving stage memories whose Status header is
+	// not a live gate (done, missing, or unrecognized) after this many days
+	// without an update. 0 disables the pass -- same contract as StalePlanDays.
+	StaleStageDays int
 	// SessionIdle is the no-activity age past which the reaper expires an
 	// active session. Non-positive falls back to core.SessionIdleTTL, keeping
 	// the reaper cutoff aligned with the console's live/idle derivation.
@@ -80,6 +86,7 @@ func FromConfig(g config.Gardener) Config {
 		Interval:               time.Duration(g.IntervalMinutes) * time.Minute,
 		ToolEventRetentionDays: g.ToolEventRetentionDays,
 		StalePlanDays:          g.StalePlanDays,
+		StaleStageDays:         g.StaleStageDays,
 		SessionIdle:            time.Duration(g.SessionIdleMinutes) * time.Minute,
 	}
 }
@@ -129,7 +136,7 @@ func (r PassResult) Total() int { return r.Merges + r.Archives + r.Digests + r.S
 // to propose" only when OK is true.
 func (r PassResult) OK() bool { return len(r.Failed) == 0 }
 
-// RunOnce refreshes retrieval stats, then runs all three propose-only passes and
+// RunOnce refreshes retrieval stats, then runs the propose-only passes and
 // returns what each created. A pass that fails is logged and skipped; a single
 // failing pass never aborts the others.
 func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
@@ -168,6 +175,10 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	}
 	res.Merges = run("dedup", s.proposeMerges)
 	res.Archives = run("staleness", s.proposeArchives)
+	// Stale-stage proposals are archive proposals too (same kind, same key
+	// namespace, so the two passes never double-propose one memory); they fold
+	// into the Archives count and are told apart in Failed by pass name.
+	res.Archives += run("stale-stage", s.proposeStaleStages)
 	res.Digests = run("digest", s.proposeDigests)
 	res.StalePlans = run("stale-plan", s.proposeStalePlans)
 

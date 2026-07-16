@@ -31,6 +31,7 @@ found, `gardener_apply` to act on one.
 | **staleness** | A memory untouched for `gardener.staleness_days` (90) | **archive**: marked invalid, still readable |
 | **digest** | Enough recent activity over `gardener.digest_days` (30) | a **digest** note summarizing it |
 | **stale-plan** | A plan idle for `gardener.stale_plan_days` (14) with steps still open | surfacing it, so it is abandoned deliberately rather than by neglect |
+| **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 
 Two more proposal types come from requests rather than the timer:
 
@@ -41,9 +42,9 @@ Two more proposal types come from requests rather than the timer:
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
 
-## Constraints and stages are exempt
+## Constraints and stages are exempt from staleness
 
-Age-filtering and staleness-archiving never touch `constraint` or pinned `stage`
+Age-filtering and staleness-archiving never touch `constraint` or `stage`
 memories.
 
 A constraint does not become less true by sitting still. "Never use CGO" is not
@@ -51,6 +52,15 @@ stale at 90 days - it is *settled*, and the absence of recent edits is evidence
 it is working, not evidence it is rotting. Time-based archival encodes the
 opposite assumption, so the pass simply skips the kinds where that assumption is
 wrong.
+
+Stages get their own pass instead, because staleness cannot see them at all:
+a pinned stage is re-injected into every briefing, so by the activity metric it
+never goes quiet. The stale-stage pass keys off the *update* time and the
+`Status:` header - a stage still carrying a live gate
+(`open`/`in_progress`/`blocked`) is never proposed at any age, while one that is
+done, headerless, or unparseable is proposed for archiving once it has sat
+unchanged for `gardener.stale_stage_days`. Both passes respect `[[links]]`: a
+memory another body points at is not proposed.
 
 ## Asking for it in words
 

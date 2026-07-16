@@ -50,13 +50,22 @@ is its entire purpose.
 | `decision` | A choice and its reasoning | The alternatives rejected, or it will be relitigated |
 | `refuted` | Something believed that turned out false | Keeping this is what stops the fleet re-deriving it |
 | `reference` | A pointer to something external | The URL and what is at it |
-| `stage` | Where a piece of multi-session work stands | Pinned into briefings like a constraint |
+| `stage` | Where a piece of multi-session work stands | The body must open with `Status: open\|in_progress\|blocked\|done` (plus `Gate: human\|ai`) - the pin belongs to the gate, not the kind |
 
 Choosing the kind is not filing paperwork. `constraint` and `stage` are
 **pinned**: they survive budget pressure and are never age-filtered or
 staleness-archived. Marking a preference as a constraint crowds out real
 constraints; filing a real constraint as a `reference` means agents will violate
 it.
+
+A stage's pin is conditional on it actually gating something. `Status: done`
+unpins it immediately; a missing or unparseable header renders as
+`status unknown` for a grace window
+(`briefing.stage_unknown_max_age_days`, default 7 days since last update) and
+then leaves the briefing, and the gardener proposes archiving gateless stages
+after `gardener.stale_stage_days` (14). A milestone breadcrumb ("X landed") is
+a note or a finding, not a stage - written as a stage without a live gate, it
+now expires instead of pinning forever.
 
 `refuted` deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,

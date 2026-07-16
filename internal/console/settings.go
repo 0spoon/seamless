@@ -92,14 +92,15 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 		IncludeSiblingMemories: r.PostFormValue("include_sibling_memories") != "",
 	}
 	for name, dst := range map[string]*int{
-		"memory_max_age_days":    &b.MemoryMaxAgeDays,
-		"memory_max_items":       &b.MemoryMaxItems,
-		"findings_count":         &b.FindingsCount,
-		"findings_max_age_days":  &b.FindingsMaxAgeDays,
-		"ready_tasks_shown":      &b.ReadyTasksShown,
-		"pending_plan_max_days":  &b.PendingPlanMaxDays,
-		"hard_cap_multiplier":    &b.HardCapMultiplier,
-		"sibling_findings_count": &b.SiblingFindingsCount,
+		"memory_max_age_days":        &b.MemoryMaxAgeDays,
+		"memory_max_items":           &b.MemoryMaxItems,
+		"findings_count":             &b.FindingsCount,
+		"findings_max_age_days":      &b.FindingsMaxAgeDays,
+		"ready_tasks_shown":          &b.ReadyTasksShown,
+		"pending_plan_max_days":      &b.PendingPlanMaxDays,
+		"stage_unknown_max_age_days": &b.StageUnknownMaxAgeDays,
+		"hard_cap_multiplier":        &b.HardCapMultiplier,
+		"sibling_findings_count":     &b.SiblingFindingsCount,
 	} {
 		v := strings.TrimSpace(r.PostFormValue(name))
 		if v == "" {

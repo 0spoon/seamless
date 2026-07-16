@@ -45,8 +45,9 @@
       <h2>Briefing injection <span class="h2-meta">{{if .BriefingOverridden}}console override active{{else}}matches file/env config{{end}}</span></h2>
       <p class="fnote">Tunes what the SessionStart <span class="mono">&lt;seam-briefing&gt;</span> auto-injects.
         Saving stores a runtime override in the database (the config file is never written) and applies from the
-        next session start &mdash; no restart needed. Constraints, pinned stages, and active-plan rollups are
-        never filtered, whatever is set here.</p>
+        next session start &mdash; no restart needed. Constraints and active-plan rollups are never
+        filtered, whatever is set here; a pinned stage is exempt too while its Status header marks a
+        live gate.</p>
       <div class="fgrid">
         <label class="f">Memory index max items
           <input type="number" name="memory_max_items" min="0" value="{{.Briefing.MemoryMaxItems}}">
@@ -71,6 +72,10 @@
         <label class="f">Pending plan window
           <input type="number" name="pending_plan_max_days" min="0" value="{{.Briefing.PendingPlanMaxDays}}">
           <span class="fhelp">days a captured plan stays &ldquo;awaiting approval&rdquo; &middot; 0 = no cutoff</span>
+        </label>
+        <label class="f">Gateless stage window
+          <input type="number" name="stage_unknown_max_age_days" min="0" value="{{.Briefing.StageUnknownMaxAgeDays}}">
+          <span class="fhelp">days a stage with no live Status gate stays pinned &middot; 0 = forever</span>
         </label>
         <label class="f">Sibling findings
           <input type="number" name="sibling_findings_count" min="0" value="{{.Briefing.SiblingFindingsCount}}">

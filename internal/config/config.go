@@ -63,9 +63,11 @@ type Budgets struct {
 // The JSON tags back the console's runtime override row (see
 // store.BriefingConfig), which layers on top of this file/env base.
 //
-// The never-drop invariant: constraints, pinned stages, and active-plan rollups
-// are exempt from every knob here -- recency and count filters apply only to
-// the memory index, findings, and sibling sections.
+// The never-drop invariant: constraints and active-plan rollups are exempt
+// from every knob here, and so is a pinned stage while its Status header marks
+// a live gate -- recency and count filters apply only to the memory index,
+// findings, and sibling sections. A stage with no live gate holds its pin only
+// through the StageUnknownMaxAgeDays grace window.
 type Briefing struct {
 	// MemoryMaxAgeDays drops memory-index lines not updated within this many
 	// days. 0 = no recency filter. Constraints and stages are exempt.
@@ -83,6 +85,11 @@ type Briefing struct {
 	// PendingPlanMaxDays is how far back captured-but-unapproved Claude Code
 	// plans earn "awaiting approval" lines. 0 = no age cutoff.
 	PendingPlanMaxDays int `yaml:"pending_plan_max_days" json:"pendingPlanMaxDays"`
+	// StageUnknownMaxAgeDays is the grace window (days since last update) a
+	// stage memory stays pinned when its Status header is missing or not a live
+	// gate (open/in_progress/blocked). Past it the stage leaves the briefing --
+	// recall still finds it. 0 = pin forever (the historical behavior).
+	StageUnknownMaxAgeDays int `yaml:"stage_unknown_max_age_days" json:"stageUnknownMaxAgeDays"`
 	// HardCapMultiplier times budgets.max_briefing_tokens is the absolute
 	// truncation ceiling. 0 falls back to 2.
 	HardCapMultiplier int `yaml:"hard_cap_multiplier" json:"hardCapMultiplier"`
@@ -111,6 +118,7 @@ func (b Briefing) Validate() error {
 		{"findings_max_age_days", b.FindingsMaxAgeDays},
 		{"ready_tasks_shown", b.ReadyTasksShown},
 		{"pending_plan_max_days", b.PendingPlanMaxDays},
+		{"stage_unknown_max_age_days", b.StageUnknownMaxAgeDays},
 		{"hard_cap_multiplier", b.HardCapMultiplier},
 		{"sibling_findings_count", b.SiblingFindingsCount},
 	} {
@@ -206,6 +214,11 @@ type Gardener struct {
 	// Code plan (plan-status draft/presented) is proposed for abandonment.
 	// 0 disables the pass.
 	StalePlanDays int `yaml:"stale_plan_days"`
+	// StaleStageDays is the age (days since last update) beyond which a stage
+	// memory that is not a live gate -- Status done, missing, or unrecognized --
+	// is proposed for archiving. Live gates (open/in_progress/blocked) are never
+	// proposed regardless of age. 0 disables the pass.
+	StaleStageDays int `yaml:"stale_stage_days"`
 	// SessionIdleMinutes is the no-activity age beyond which an active session
 	// is considered dead: the gardener reaper expires it and the console stops
 	// counting it as live. It is the single liveness threshold shared by both,
@@ -222,12 +235,13 @@ func Defaults() Config {
 		DataDir: "~/.seamless",
 		Budgets: Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000},
 		Briefing: Briefing{
-			FindingsCount:         3,
-			ReadyTasksShown:       3,
-			PendingPlanMaxDays:    7,
-			HardCapMultiplier:     2,
-			IncludeParentMemories: true,
-			SiblingFindingsCount:  2,
+			FindingsCount:          3,
+			ReadyTasksShown:        3,
+			PendingPlanMaxDays:     7,
+			StageUnknownMaxAgeDays: 7,
+			HardCapMultiplier:      2,
+			IncludeParentMemories:  true,
+			SiblingFindingsCount:   2,
 		},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
@@ -256,6 +270,7 @@ func Defaults() Config {
 			DigestDays:             30,
 			ToolEventRetentionDays: 30,
 			StalePlanDays:          14,
+			StaleStageDays:         14,
 			SessionIdleMinutes:     45,
 		},
 		Capture:     Capture{AllowedPorts: defaultAllowedPorts()},
@@ -342,6 +357,9 @@ func (c Config) Validate() error {
 	if c.Gardener.StalePlanDays < 0 {
 		return fmt.Errorf("config: gardener.stale_plan_days must be >= 0")
 	}
+	if c.Gardener.StaleStageDays < 0 {
+		return fmt.Errorf("config: gardener.stale_stage_days must be >= 0")
+	}
 	if c.Gardener.SessionIdleMinutes < 0 {
 		return fmt.Errorf("config: gardener.session_idle_minutes must be >= 0")
 	}
@@ -385,14 +403,15 @@ func (c *Config) applyEnv() error {
 	}
 
 	for key, dst := range map[string]*int{
-		"SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS":    &c.Briefing.MemoryMaxAgeDays,
-		"SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS":       &c.Briefing.MemoryMaxItems,
-		"SEAMLESS_BRIEFING_FINDINGS_COUNT":         &c.Briefing.FindingsCount,
-		"SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS":  &c.Briefing.FindingsMaxAgeDays,
-		"SEAMLESS_BRIEFING_READY_TASKS_SHOWN":      &c.Briefing.ReadyTasksShown,
-		"SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS":  &c.Briefing.PendingPlanMaxDays,
-		"SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER":    &c.Briefing.HardCapMultiplier,
-		"SEAMLESS_BRIEFING_SIBLING_FINDINGS_COUNT": &c.Briefing.SiblingFindingsCount,
+		"SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS":        &c.Briefing.MemoryMaxAgeDays,
+		"SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS":           &c.Briefing.MemoryMaxItems,
+		"SEAMLESS_BRIEFING_FINDINGS_COUNT":             &c.Briefing.FindingsCount,
+		"SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS":      &c.Briefing.FindingsMaxAgeDays,
+		"SEAMLESS_BRIEFING_READY_TASKS_SHOWN":          &c.Briefing.ReadyTasksShown,
+		"SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS":      &c.Briefing.PendingPlanMaxDays,
+		"SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS": &c.Briefing.StageUnknownMaxAgeDays,
+		"SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER":        &c.Briefing.HardCapMultiplier,
+		"SEAMLESS_BRIEFING_SIBLING_FINDINGS_COUNT":     &c.Briefing.SiblingFindingsCount,
 	} {
 		if err := envInt(key, dst); err != nil {
 			return err
@@ -442,6 +461,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envInt("SEAMLESS_GARDENER_STALE_PLAN_DAYS", &c.Gardener.StalePlanDays); err != nil {
+		return err
+	}
+	if err := envInt("SEAMLESS_GARDENER_STALE_STAGE_DAYS", &c.Gardener.StaleStageDays); err != nil {
 		return err
 	}
 	if err := envInt("SEAMLESS_GARDENER_SESSION_IDLE_MINUTES", &c.Gardener.SessionIdleMinutes); err != nil {

@@ -2,6 +2,7 @@ package retrieve
 
 import (
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
@@ -26,57 +27,23 @@ type stageLine struct {
 	gate   string
 }
 
-// stageHeaderScanLines bounds how far into a stage body ParseStageHeader looks
-// for the Status/Gate lines; the convention puts them at the very top.
-const stageHeaderScanLines = 12
-
-// ParseStageHeader extracts the Status and Gate values from a stage memory body.
-// The convention: the body opens with "Status: open|in_progress|blocked|done"
-// and "Gate: human|ai" lines (case-insensitive, order-independent, leading
-// markdown like "- " or "**" tolerated). Missing fields come back "".
-func ParseStageHeader(body string) (status, gate string) {
-	lines := strings.Split(body, "\n")
-	for i, line := range lines {
-		if i >= stageHeaderScanLines {
-			break
-		}
-		l := strings.TrimSpace(line)
-		l = strings.TrimLeft(l, "-*> \t")
-		if v, ok := headerValue(l, "status:"); ok && status == "" {
-			status = v
-		}
-		if v, ok := headerValue(l, "gate:"); ok && gate == "" {
-			gate = v
-		}
-		if status != "" && gate != "" {
-			break
-		}
-	}
-	return status, gate
-}
-
-// headerValue returns the trimmed, lowercased value after a case-insensitive
-// prefix, and whether the line had that prefix.
-func headerValue(line, prefix string) (string, bool) {
-	if len(line) < len(prefix) || !strings.EqualFold(line[:len(prefix)], prefix) {
-		return "", false
-	}
-	v := strings.TrimSpace(line[len(prefix):])
-	// Keep only the first token (drop trailing prose/markdown after the value).
-	if fields := strings.Fields(v); len(fields) > 0 {
-		v = fields[0]
-	}
-	return strings.ToLower(strings.Trim(v, "*`")), true
-}
-
-// pinnedStages reads each stage memory's body, parses its Status/Gate header, and
-// returns the non-done stages to pin in the briefing (newest-updated first, as
-// passed in). It returns nil when no body reader is configured, or a stage's
-// file cannot be read (best-effort; a missing stage body must not break the
-// briefing).
-func (s *Service) pinnedStages(stages []core.Memory) []stageLine {
+// pinnedStages reads each stage memory's body, parses its Status/Gate header
+// (core.ParseStageHeader), and returns the stages to pin in the briefing
+// (newest-updated first, as passed in). Done stages are never pinned. A stage
+// whose status is not a live gate (open/in_progress/blocked) -- missing,
+// unparseable, or unrecognized -- is pinned only while its last update is
+// within maxUnknownAgeDays: a grace window that surfaces the broken header
+// without granting it the permanent pin a real gate earns. 0 disables the
+// age-out (such stages then pin forever, the historical behavior). It returns
+// nil when no body reader is configured, or skips a stage whose file cannot be
+// read (best-effort; a missing stage body must not break the briefing).
+func (s *Service) pinnedStages(stages []core.Memory, maxUnknownAgeDays int, now time.Time) []stageLine {
 	if s.bodyReader == nil || len(stages) == 0 {
 		return nil
+	}
+	var cutoff time.Time
+	if maxUnknownAgeDays > 0 {
+		cutoff = now.AddDate(0, 0, -maxUnknownAgeDays)
 	}
 	var out []stageLine
 	for _, m := range stages {
@@ -85,9 +52,12 @@ func (s *Service) pinnedStages(stages []core.Memory) []stageLine {
 			s.logger.Warn("retrieve: read stage body", "name", m.Name, "error", err)
 			continue
 		}
-		status, gate := ParseStageHeader(mem.Body)
-		if status == "done" {
+		status, gate := core.ParseStageHeader(mem.Body)
+		if status == core.StageStatusDone {
 			continue // completed stages are not pinned
+		}
+		if !core.StageStatusLive(status) && maxUnknownAgeDays > 0 && !m.Updated.After(cutoff) {
+			continue // no live gate and past the grace window
 		}
 		out = append(out, stageLine{id: m.ID, name: m.Name, status: status, gate: gate})
 	}

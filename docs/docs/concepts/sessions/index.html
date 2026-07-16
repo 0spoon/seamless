@@ -226,7 +226,11 @@ shown.</li>
 constraint is a rule the project cannot violate; a briefing that omitted one to
 fit a token budget would be worse than no briefing at all.</li>
 <li><strong><code>STAGE:</code> lines</strong> are pinned right after constraints, for the same reason: a
-gated stage's status is load-bearing for the whole session.</li>
+gated stage's status is load-bearing for the whole session. The pin belongs to
+the <em>gate</em>: a stage whose body does not open with a live
+<code>Status: open|in_progress|blocked</code> header only renders (as <code>status unknown</code>)
+for the <code>briefing.stage_unknown_max_age_days</code> grace window (default 7) after
+its last update, then leaves the briefing rather than squatting in it forever.</li>
 <li><strong><code>PLAN:</code> rollups</strong> follow, also pinned. The counts (<code>2/3 done, 1 claimable</code>)
 tell the next agent what work it can pick up right now.</li>
 <li><strong>The memory index</strong> is <code>name: description</code> only - the description is the <em>only</em>
@@ -241,9 +245,13 @@ the briefing says so instead of pretending it is complete.</li>
 the whole thing is hard-capped at <code>briefing.hard_cap_multiplier</code> times that
 (default 2x).</p>
 <p>The <strong>never-drop invariant</strong>: constraints, pinned stages, and active-plan rollups
-are counted first and are exempt from budget dropping. Everything else - the
-memory index, sibling findings, sibling memories, recent findings, ready tasks -
-is packed in that order until the budget runs out. Later sections lose first.</p>
+are counted first and are exempt from budget dropping. Recent findings reserve
+their (small, <code>findings_count</code>-capped) share of the budget next - they are the
+&quot;what just happened here&quot; section, and without the reservation a fat memory
+index would silently evict all of them while the header still claimed they were
+present. Everything else - the memory index, sibling findings, sibling memories,
+ready tasks - then packs in render order until the budget runs out; the header
+counts only the findings that actually rendered.</p>
 <p>Every knob is tunable in <a href="../../reference/configuration/">Configuration</a>, and the
 <code>briefing:</code> block is also editable live in the console. Those runtime edits are
 stored in the database and win over both the file and the environment, applying

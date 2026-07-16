@@ -10,12 +10,21 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
+// errProtectionIncomplete fails a pass whose safety depends on reading a name's
+// absence from the reference set as "nothing links here": with any body
+// unreadable, that absence proves nothing. Shared by the staleness and
+// stale-stage passes.
+var errProtectionIncomplete = errors.New("protection set incomplete: some memory bodies were unreadable, so a name's absence no longer proves it is unreferenced")
+
 // proposeArchives proposes archiving active memories that have seen no activity
 // (update, injection, or read) for StalenessDays, subject to two protections:
 //
 //   - Kind: constraints and stages are never archived by staleness. A constraint
 //     is a load-bearing rule and a stage carries gated status; neither becomes
-//     irrelevant merely by going unread.
+//     irrelevant merely by going unread. (A stage that stopped carrying a live
+//     gate is retired by the stale-stage pass instead -- see stages.go --
+//     because pinning re-injects it every session, so it never looks inactive
+//     to this pass's activity metric.)
 //   - References: a memory named by a [[link]] in another memory's body is kept,
 //     since something still points at it.
 func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{}) (int, error) {
@@ -38,7 +47,7 @@ func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{})
 		// live, referenced memory gets archived. Fail the pass instead: the
 		// unreadable bodies are logged above, and RunOnce reports staleness as
 		// failed rather than as a clean zero.
-		return 0, errors.New("protection set incomplete: some memory bodies were unreadable, so a name's absence no longer proves it is unreferenced")
+		return 0, errProtectionIncomplete
 	}
 
 	created := 0

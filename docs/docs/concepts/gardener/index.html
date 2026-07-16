@@ -202,6 +202,11 @@ found, <code>gardener_apply</code> to act on one.</p>
 <td>A plan idle for <code>gardener.stale_plan_days</code> (14) with steps still open</td>
 <td>surfacing it, so it is abandoned deliberately rather than by neglect</td>
 </tr>
+<tr>
+<td><strong>stale-stage</strong></td>
+<td>A <code>stage</code> memory whose <code>Status:</code> header is done, missing, or unrecognized, unchanged for <code>gardener.stale_stage_days</code> (14)</td>
+<td><strong>archive</strong>: a stage that gates nothing should not hold a permanent briefing pin</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -214,14 +219,22 @@ and a shared parent, so it is planned as a unit, not as a pile of moves. That
 is why it is a separate tool (<code>gardener_split</code>) and not just a reproject to a
 name that does not exist yet.</li>
 </ul>
-<h2 id="constraints-and-stages-are-exempt">Constraints and stages are exempt</h2>
-<p>Age-filtering and staleness-archiving never touch <code>constraint</code> or pinned <code>stage</code>
+<h2 id="constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</h2>
+<p>Age-filtering and staleness-archiving never touch <code>constraint</code> or <code>stage</code>
 memories.</p>
 <p>A constraint does not become less true by sitting still. &quot;Never use CGO&quot; is not
 stale at 90 days - it is <em>settled</em>, and the absence of recent edits is evidence
 it is working, not evidence it is rotting. Time-based archival encodes the
 opposite assumption, so the pass simply skips the kinds where that assumption is
 wrong.</p>
+<p>Stages get their own pass instead, because staleness cannot see them at all:
+a pinned stage is re-injected into every briefing, so by the activity metric it
+never goes quiet. The stale-stage pass keys off the <em>update</em> time and the
+<code>Status:</code> header - a stage still carrying a live gate
+(<code>open</code>/<code>in_progress</code>/<code>blocked</code>) is never proposed at any age, while one that is
+done, headerless, or unparseable is proposed for archiving once it has sat
+unchanged for <code>gardener.stale_stage_days</code>. Both passes respect <code>[[links]]</code>: a
+memory another body points at is not proposed.</p>
 <h2 id="asking-for-it-in-words">Asking for it in words</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">gardener_request &#34;fold the two console theme memories together&#34;
 </span></span></code></pre><p><code>gardener_request</code> takes natural language and turns it into the same reviewable
@@ -251,7 +264,7 @@ bypass the review step - what comes back is still a proposal.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt">Constraints and stages are exempt</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li>
+      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li>
     </ul>
   </aside>
   
