@@ -20,6 +20,7 @@
 #   SEAMLESS_INSTALL_DIR        where the binaries go (default: ~/.local/bin)
 #   SEAMLESS_NO_HOOKS=1         skip the Claude Code hooks + MCP registration
 #   SEAMLESS_NO_ONBOARD_SKILL=1 skip installing the /seam-onboard Claude Code skill
+#   SEAMLESS_NO_RESEARCH_SKILL=1 skip installing the /seam-research Claude Code skill
 #   SEAMLESS_NO_SERVICE=1       skip the service; install the binaries and stop
 #   SEAMLESS_ALLOW_ROOT=1       permit running as root (containers)
 set -eu
@@ -216,6 +217,27 @@ install_onboard_skill() {
 	ONBOARD_READY=1
 }
 
+# Drop the seam-research Claude Code skill (the research-lab workflow:
+# lab_open/trial_record/trial_query) the same way. Unlike seam-onboard it is a
+# recurring workflow that never self-removes, so there is no delivered-once
+# marker: every run (re)installs it, which is also how an upgrade refreshes a
+# stale copy in place.
+install_research_skill() {
+	if [ -n "${SEAMLESS_NO_RESEARCH_SKILL:-}" ]; then
+		step research "skipped (SEAMLESS_NO_RESEARCH_SKILL)"
+		return 0
+	fi
+	[ -n "${SEAMLESS_NO_HOOKS:-}" ] && return 0
+
+	src="$TMP/seam-research/SKILL.md"
+	[ -f "$src" ] || return 0 # older/pinned release without the bundled skill
+
+	dst="$HOME/.claude/skills/seam-research"
+	mkdir -p "$dst"
+	install -m 0644 "$src" "$dst/SKILL.md"
+	step research "/seam-research skill installed"
+}
+
 # Read the port back out of the config the way the Makefile does, so someone who
 # edited addr: gets a health poll and a console URL that follow their change
 # instead of an install that claims to have failed.
@@ -377,6 +399,7 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	unpack
 	wire_hooks
 	install_onboard_skill
+	install_research_skill
 	read_addr
 
 	if [ -n "${SEAMLESS_NO_SERVICE:-}" ]; then

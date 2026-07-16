@@ -221,6 +221,12 @@ skill into <code>~/.claude/skills/</code>; from a clone, <code>make install-onbo
 <pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># (re)install the /seam-onboard skill from a clone</span>
 </span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
 writes a Seamless-awareness block into your <code>CLAUDE.md</code> before removing itself.</p>
+<p>The installer drops a second skill alongside it: <code>/seam-research</code>, the
+research-lab workflow for systematic debugging (see <a href="../guides/research-trials/">Run research
+trials</a>). Unlike <code>/seam-onboard</code> it is a recurring
+workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
+and Claude can activate it on its own when an investigation calls for
+structured trials. From a clone, <code>make install-research-skill</code> (re)installs it.</p>
 <p>Second - or if you skip the skill - add that block to your <code>CLAUDE.md</code> by hand:
 describe when to reach for Seamless (memory that should outlive the
 conversation, work that crosses agents) and when not to (trivial edits, things

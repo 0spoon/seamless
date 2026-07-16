@@ -39,10 +39,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 # One archive per platform holding both binaries, plus the files a fresh
-# install needs: the example config `make install` seeds from, and the
-# seam-onboard Claude Code skill the curl installer drops into
-# ~/.claude/skills/ (bundled here so a no-clone install can still deliver it --
-# it lands at seam-onboard/SKILL.md in the archive).
+# install needs: the example config `make install` seeds from, and the Claude
+# Code skills the curl installer drops into ~/.claude/skills/ (bundled here so
+# a no-clone install can still deliver them -- each lands at <name>/SKILL.md in
+# the archive).
 archives:
   - formats: [tar.gz]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
@@ -52,6 +52,9 @@ archives:
       - seamless.yaml.example
       - src: scripts/seam-onboard-skill/SKILL.md
         dst: seam-onboard
+        strip_parent: true
+      - src: scripts/seam-research-skill/SKILL.md
+        dst: seam-research
         strip_parent: true
 
 checksum:
