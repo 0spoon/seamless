@@ -50,8 +50,8 @@ func TestNotesByTagPrefix(t *testing.T) {
 	require.ElementsMatch(t, []string{"narr", "supp"}, noteIDs(scoped))
 }
 
-// TestGetNavCounts_CountsPlans counts distinct plan:<slug> compositions: a
-// capture and its agent-cache share one slug, a composed note is a second, and
+// TestGetNavCounts_CountsPlans counts distinct (project, plan:<slug>) pairs: a
+// capture and its agent-cache share one plan, a composed note is a second, and
 // plan-status: / untagged notes must not count.
 func TestGetNavCounts_CountsPlans(t *testing.T) {
 	db := openTestDB(t)
@@ -64,7 +64,22 @@ func TestGetNavCounts_CountsPlans(t *testing.T) {
 
 	n, err := GetNavCounts(ctx, db)
 	require.NoError(t, err)
-	require.Equal(t, 2, n.Plans) // distinct plan:<slug>: alpha, beta (plan-status: excluded)
+	require.Equal(t, 2, n.Plans) // (seam,alpha) + (web,beta); plan-status: excluded
+}
+
+// TestGetNavCounts_PlansAreProjectScoped pins the badge to the same identity the
+// Plans screen uses -- (project, slug), not the slug alone. The same plan name
+// running in two projects is two plans and lists as two rows, so counting bare
+// tag values here would badge 1 against a page showing 2.
+func TestGetNavCounts_PlansAreProjectScoped(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	insertNoteTags(t, db, "a", "seam", `["plan:shared"]`, "2026-07-13T01:00:00Z")
+	insertNoteTags(t, db, "b", "web", `["plan:shared"]`, "2026-07-13T02:00:00Z")
+
+	n, err := GetNavCounts(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, 2, n.Plans)
 }
 
 func noteIDs(notes []core.Note) []string {
