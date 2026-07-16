@@ -282,7 +282,7 @@ _wait-healthy:
 # Seed $(CONFIG) on first install only -- never clobber a config that may hold an
 # edited bearer key. ./seamless.yaml (gitignored, the pre-install layout's live
 # config) wins over the committed template so an existing setup keeps its keys;
-# a fresh clone gets the example and is told to fill it in.
+# a fresh clone gets the example with a generated mcp.api_key, ready to run.
 _seed-config:
 	@if [ -f $(CONFIG) ]; then \
 	    echo "config kept at $(CONFIG) (delete it to re-seed)"; \
@@ -290,7 +290,9 @@ _seed-config:
 	    install -m 0600 seamless.yaml $(CONFIG) && echo "seeded $(CONFIG) from ./seamless.yaml"; \
 	else \
 	    install -m 0600 seamless.yaml.example $(CONFIG); \
-	    echo "seeded $(CONFIG) from seamless.yaml.example -- set mcp.api_key (openssl rand -hex 32)"; \
+	    KEY=$$(openssl rand -hex 32); \
+	    sed -i '' -e "/^mcp:/,/api_key:/ s/api_key: \"\"/api_key: \"$$KEY\"/" $(CONFIG); \
+	    echo "seeded $(CONFIG) from seamless.yaml.example with a generated mcp.api_key"; \
 	fi
 
 # Stop + remove the service and the installed binaries. $(CONFIG) is left in

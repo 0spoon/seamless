@@ -112,13 +112,11 @@ cd ~/.seamless && git push          # or: tar czf seamless.tgz memory notes
 
 # on the new one
 git clone <remote> ~/.seamless      # or untar
-cp seamless.yaml.example seamless.yaml   # NEW key: do not reuse the old one
-openssl rand -hex 32
-make install
+make install                        # seeds a config with a NEW generated key
 make doctor
 ```
 
-The index rebuilds itself on first start. Generate a fresh `mcp.api_key` rather
-than copying the old config: the key is the only credential, and a machine
-migration is a good moment not to spread it around. See
-[Install & deploy](/install/).
+The index rebuilds itself on first start. The install generates a fresh
+`mcp.api_key` rather than copying the old config: the key is the only
+credential, and a machine migration is a good moment not to spread it around.
+See [Install & deploy](/install/).

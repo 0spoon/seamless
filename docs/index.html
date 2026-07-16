@@ -52,7 +52,7 @@
       <h1>Your agents share a brain. <em>You can read it.</em></h1>
       <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> - as markdown files in a folder you own, indexed by a single Go binary, curated with you in the loop.</p>
       <div class="cta-row">
-        <span class="install-pill"><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/seamlessd@latest">go install github.com/0spoon/seamless/cmd/seamlessd@latest</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+        <span class="install-pill"><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/...@latest">go install github.com/0spoon/seamless/cmd/...@latest</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
       </div>
       <div class="cta-secondary">
         <a href="https://github.com/0spoon/seamless">
@@ -312,8 +312,8 @@
         <span class="n">01</span>
         <div>
           <h3>Install</h3>
-          <div class="code"><span><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/seamlessd@latest">go install github.com/0spoon/seamless/cmd/seamlessd@latest</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">One static binary. Go 1.25+, no CGO, nothing else to install.</p>
+          <div class="code"><span><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/...@latest">go install github.com/0spoon/seamless/cmd/...@latest</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">The daemon and the <code>seam</code> CLI. Go 1.25+, no CGO, nothing else to install.</p>
         </div>
       </div>
       <div class="qs rv">
@@ -321,7 +321,7 @@
         <div>
           <h3>Serve</h3>
           <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd serve">seamlessd serve</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">Binds to <code>127.0.0.1:8081</code>, data in <code>~/.seamless</code>. Set an API key in <code>seamless.yaml</code>; <code>seamlessd doctor</code> checks the rest.</p>
+          <p class="note">Binds to <code>127.0.0.1:8081</code>, data in <code>~/.seamless</code>. First run generates the API key; <code>seamlessd doctor</code> checks the rest.</p>
         </div>
       </div>
       <div class="qs rv">
@@ -329,7 +329,7 @@
         <div>
           <h3>Wire your agents</h3>
           <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd install-hooks">seamlessd install-hooks</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">Installs the Claude Code hooks: briefing on session start, recall on every prompt. Other agents connect over MCP.</p>
+          <p class="note">Installs the Claude Code hooks and registers the MCP server: briefing on session start, recall on every prompt. Other agents connect over MCP.</p>
         </div>
       </div>
     </div>

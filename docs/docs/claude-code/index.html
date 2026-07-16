@@ -159,23 +159,16 @@
   <p class="lede">Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.</p>
   <p>Claude Code is the client Seamless is built around. Wiring it up is two
 independent halves - <strong>the MCP endpoint</strong> (what an agent can call) and <strong>the
-hooks</strong> (what happens without an agent calling anything) - and you want both.</p>
-<h2 id="register-the-mcp-endpoint">Register the MCP endpoint</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp <span class="se">\
-</span></span></span><span class="line"><span class="cl">  --header <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span>
-</span></span></code></pre><p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
-which ties the registration to whichever directory you happened to run it from.
-The tools then work in that one directory and silently vanish everywhere else -
-which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;the
-registration is scoped wrong&quot;.</p>
-<p>The key is <code>mcp.api_key</code> from your config. Find it:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">grep api_key ~/.config/seamless/seamless.yaml   <span class="c1"># release layout</span>
-</span></span><span class="line"><span class="cl">grep api_key ./seamless.yaml                    <span class="c1"># dev layout</span>
-</span></span></code></pre><h2 id="install-the-hooks">Install the hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd install-hooks
+hooks</strong> (what happens without an agent calling anything) - and you want both.
+One command installs both.</p>
+<h2 id="install-the-hooks-and-register-mcp">Install the hooks and register MCP</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks
 </span></span></code></pre><p>This merges six hook entries into your Claude Code <code>settings.json</code>, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.</p>
+<p>It then registers the MCP server with the <code>claude</code> CLI (<code>claude mcp add --scope user</code>). Pass <code>--mcp=false</code> to skip that half; if the CLI is missing or
+the registration fails, the hooks still land and the command prints the
+<code>claude mcp add</code> invocation to run yourself.</p>
 <p>The hooks are what make sessions <strong>ambient</strong> - an agent gets a briefing at
 startup, its prompts get matched against your memories, its findings get
 harvested at the end, and its plan-mode activity gets captured, all without the
@@ -197,8 +190,21 @@ active. As a command hook, Claude Code waits for it.</li>
 machine-wide <code>Write</code>/<code>Edit</code> hot path should never touch the network for files
 that have nothing to do with plans.</li>
 </ul>
-<h2 id="map-your-repos">Map your repos</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd map-repo --path ~/code/myrepo --project myrepo
+<h2 id="registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</h2>
+<p>For a different MCP client, or when <code>install-hooks</code> could not find the
+<code>claude</code> CLI:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp <span class="se">\
+</span></span></span><span class="line"><span class="cl">  --header <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span>
+</span></span></code></pre><p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
+which ties the registration to whichever directory you happened to run it from.
+The tools then work in that one directory and silently vanish everywhere else -
+which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;the
+registration is scoped wrong&quot;.</p>
+<p>The key is <code>mcp.api_key</code> from your config. Find it:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">grep api_key ~/.config/seamless/seamless.yaml   <span class="c1"># release layout</span>
+</span></span><span class="line"><span class="cl">grep api_key ./seamless.yaml                    <span class="c1"># dev layout</span>
+</span></span></code></pre><h2 id="map-your-repos">Map your repos</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
 </span></span></code></pre><p>This binds a working directory to a project. Afterwards, agents in that repo
 inherit project scope from their cwd - no <code>project</code> argument on any call. See
 <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
@@ -243,7 +249,7 @@ organized by symptom.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#register-the-mcp-endpoint">Register the MCP endpoint</a></li><li class="lvl-2"><a href="#install-the-hooks">Install the hooks</a></li><li class="lvl-3"><a href="#why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</a></li><li class="lvl-2"><a href="#map-your-repos">Map your repos</a></li><li class="lvl-2"><a href="#tell-your-agents-it-exists">Tell your agents it exists</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-3"><a href="#why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</a></li><li class="lvl-2"><a href="#registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</a></li><li class="lvl-2"><a href="#map-your-repos">Map your repos</a></li><li class="lvl-2"><a href="#tell-your-agents-it-exists">Tell your agents it exists</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
     </ul>
   </aside>
   

@@ -59,7 +59,7 @@ func runConsoleOpen(args []string) error {
 		return fmt.Errorf("seamlessd.console-open: %w", err)
 	}
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
-		return fmt.Errorf("seamlessd.console-open: mcp.api_key is empty; set it in seamless.yaml first")
+		return fmt.Errorf("seamlessd.console-open: mcp.api_key is empty; run `seamlessd serve` once to generate it, or set it in seamless.yaml")
 	}
 	host := browserHost(cfg.Addr)
 	if !serverReachable(host) {

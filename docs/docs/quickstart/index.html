@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart - Seamless docs</title>
-<meta name="description" content="Build Seamless, point Claude Code at it, and confirm the first briefing lands - one happy path, about ten commands.">
+<meta name="description" content="Install Seamless, point Claude Code at it, and confirm the first briefing lands - three commands and a check.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -156,32 +156,33 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Quickstart</h1>
-  <p class="lede">Build Seamless, point Claude Code at it, and confirm the first briefing lands - one happy path, about ten commands.</p>
-  <p>This is the one happy path: build from source, run the daemon, register it with
-Claude Code, and watch an agent get its first briefing. Every fork in the road is
-a link, not a branch in these steps.</p>
+  <p class="lede">Install Seamless, point Claude Code at it, and confirm the first briefing lands - three commands and a check.</p>
+  <p>This is the one happy path: install, serve, wire your agents, and watch a
+session open with a briefing. Every fork in the road is a link, not a branch in
+these steps.</p>
 <p>Requires <strong>Go 1.25+</strong>. No CGO toolchain, no external database, no Node.</p>
-<h2 id="build-and-run">Build and run</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless
-</span></span><span class="line"><span class="cl"><span class="nb">cd</span> seamless
-</span></span><span class="line"><span class="cl">cp seamless.yaml.example seamless.yaml
-</span></span><span class="line"><span class="cl">openssl rand -hex <span class="m">32</span>              <span class="c1"># put the result in mcp.api_key</span>
-</span></span><span class="line"><span class="cl">make build                        <span class="c1"># ./bin/seamlessd + ./bin/seam</span>
-</span></span><span class="line"><span class="cl">make doctor                       <span class="c1"># config, database, and tool-count self-checks</span>
-</span></span><span class="line"><span class="cl">make run                          <span class="c1"># serve on 127.0.0.1:8081</span>
-</span></span></code></pre><p><code>make doctor</code> is the checkpoint: it validates the config, opens the database,
-applies migrations, and asserts the tool count. If it is green, the daemon will
-start.</p>
-<h2 id="register-the-mcp-endpoint">Register the MCP endpoint</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp <span class="se">\
-</span></span></span><span class="line"><span class="cl">  --header <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span>
-</span></span></code></pre><p><code>--scope user</code> is required. Without it <code>claude mcp add</code> defaults to <code>local</code>,
-which ties the registration to whichever directory you happened to run it from -
-and the tools then vanish in every other repo.</p>
-<h2 id="install-the-hooks-and-map-a-repo">Install the hooks and map a repo</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd install-hooks                        <span class="c1"># SessionStart/UserPromptSubmit/SessionEnd</span>
-</span></span><span class="line"><span class="cl">./bin/seamlessd map-repo --path ~/code/myrepo --project myrepo
-</span></span></code></pre><p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
+<h2 id="install-and-run">Install and run</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">go install github.com/0spoon/seamless/cmd/...@latest   <span class="c1"># seamlessd + seam</span>
+</span></span><span class="line"><span class="cl">seamlessd serve                                        <span class="c1"># 127.0.0.1:8081, data in ~/.seamless</span>
+</span></span></code></pre><p>On a true first run - no config file anywhere - <code>serve</code> generates the bearer
+key and writes it to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy,
+nothing to paste.</p>
+<p>Working from a clone instead? <code>make build &amp;&amp; make run</code> does the same with
+<code>./bin/</code> binaries, and <code>make install</code> sets the daemon up as a service - see
+<a href="../install/">Install &amp; deploy</a>.</p>
+<p><code>seamlessd doctor</code> is the checkpoint: it validates the config, opens the
+database, applies migrations, and asserts the tool count. If it is green, the
+daemon will start.</p>
+<h2 id="wire-your-agents">Wire your agents</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks
+</span></span><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
+</span></span></code></pre><p><code>install-hooks</code> does both halves of the Claude Code wiring: it installs the
+hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
+SessionEnd) and registers the MCP server via <code>claude mcp add --scope user</code>. If
+the <code>claude</code> CLI is not on your PATH it prints the command to run yourself -
+see <a href="../claude-code/">Claude Code setup</a> for the by-hand version and why
+<code>--scope user</code> matters.</p>
+<p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
 calling a tool. <code>map-repo</code> binds a working directory to a project, so agents
 working in that repo inherit project scope without passing <code>project</code> on every
 call.</p>
@@ -197,11 +198,13 @@ injected briefing:</p>
 project, the daemon assembled a briefing within its token budget, and the agent
 started with your knowledge already in context.</p>
 <p>Open the console to watch it happen:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make console                                         <span class="c1"># opens pre-authenticated</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open                               <span class="c1"># opens pre-authenticated</span>
 </span></span></code></pre><h2 id="next-steps">Next steps</h2>
 <ul>
-<li><code>make install-onboard-skill</code> installs a <code>/seam-onboard</code> Claude Code skill that
-walks an agent through this setup and verifies each step.</li>
+<li><a href="../install/">Install &amp; deploy</a> makes the daemon a service that survives
+reboots instead of a foreground process.</li>
+<li>From a clone, <code>make install-onboard-skill</code> installs a <code>/seam-onboard</code> Claude
+Code skill that walks an agent through this setup and verifies each step.</li>
 <li>Look up any tool, key, or command in the <a href="../reference/">Reference</a>.</li>
 </ul>
 
@@ -220,7 +223,7 @@ walks an agent through this setup and verifies each step.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#build-and-run">Build and run</a></li><li class="lvl-2"><a href="#register-the-mcp-endpoint">Register the MCP endpoint</a></li><li class="lvl-2"><a href="#install-the-hooks-and-map-a-repo">Install the hooks and map a repo</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
+      <li class="lvl-2"><a href="#install-and-run">Install and run</a></li><li class="lvl-2"><a href="#wire-your-agents">Wire your agents</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
     </ul>
   </aside>
   

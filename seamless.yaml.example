@@ -22,7 +22,10 @@ addr: "127.0.0.1:8081"
 data_dir: "~/.seamless"
 
 mcp:
-  # Static bearer key protecting /api/mcp and the console. Generate one with:
+  # Static bearer key protecting /api/mcp and the console. On a true first run
+  # (no config file anywhere) `seamlessd serve` generates one into
+  # ~/.config/seamless/seamless.yaml; a file you author yourself needs one set
+  # by hand:
   #   openssl rand -hex 32
   # An empty key is reported as a warning by `seamlessd doctor`.
   # env: SEAMLESS_MCP_API_KEY

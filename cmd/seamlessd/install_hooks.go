@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -12,8 +13,9 @@ import (
 	"github.com/0spoon/seamless/internal/hooks"
 )
 
-// runInstallHooks installs the Seamless SessionStart/UserPromptSubmit hooks into
-// a Claude Code settings.json (default ~/.claude/settings.json). For the P2
+// runInstallHooks wires Claude Code to Seamless in one command: it installs the
+// hooks into a settings.json (default ~/.claude/settings.json) and, unless
+// --mcp=false, registers the MCP server with the claude CLI. For the P2
 // dogfood, point --settings at THIS repo's project-scoped .claude/settings.json
 // so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
@@ -21,6 +23,7 @@ func runInstallHooks(args []string) error {
 	settings := fs.String("settings", "~/.claude/settings.json", "settings.json to install into")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
+	mcpFlag := fs.Bool("mcp", true, "register the MCP server with the claude CLI (claude mcp add --scope user)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -29,8 +32,20 @@ func runInstallHooks(args []string) error {
 	if err != nil {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
+	var keyPath string
+	cfg, keyPath, err = config.EnsureAPIKey(cfg)
+	if err != nil {
+		return fmt.Errorf("seamlessd.install-hooks: %w", err)
+	}
+	if keyPath != "" {
+		fmt.Printf("first run: generated mcp.api_key into %s\n", keyPath)
+	}
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
-		return fmt.Errorf("seamlessd.install-hooks: mcp.api_key is empty; set it in seamless.yaml (openssl rand -hex 32)")
+		src := cfg.SourcePath()
+		if src == "" {
+			src = "the environment (SEAMLESS_MCP_API_KEY)"
+		}
+		return fmt.Errorf("seamlessd.install-hooks: mcp.api_key is empty in %s; set it (openssl rand -hex 32)", src)
 	}
 	baseURL := *urlFlag
 	if baseURL == "" {
@@ -41,6 +56,9 @@ func runInstallHooks(args []string) error {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
 	seamBin := resolveSeamBin(*seamFlag)
+	if _, lookErr := exec.LookPath(seamBin); lookErr != nil {
+		fmt.Printf("warning: seam CLI not found (%q); the command hooks will fail until it is installed:\n  go install github.com/0spoon/seamless/cmd/seam@latest\n", seamBin)
+	}
 	configPath := absConfigPath(cfg.SourcePath())
 
 	res, err := hooks.Install(hooks.InstallOptions{
@@ -61,7 +79,41 @@ func runInstallHooks(args []string) error {
 	} else {
 		fmt.Printf("Seamless hooks already up to date in %s\n", path)
 	}
+	if *mcpFlag {
+		registerClaudeMCP(baseURL, cfg.MCP.APIKey)
+	}
 	return nil
+}
+
+// claudeMCPAddArgs builds the claude CLI argv that registers the Seamless MCP
+// server. --scope user is deliberate: the default local scope ties the
+// registration to the directory it ran from, and the tools then vanish in
+// every other repo.
+func claudeMCPAddArgs(baseURL, key string) []string {
+	return []string{"mcp", "add", "--scope", "user", "--transport", "http", "seamless",
+		baseURL + "/api/mcp", "--header", "Authorization: Bearer " + key}
+}
+
+// registerClaudeMCP registers /api/mcp with the Claude Code CLI so hooks and
+// MCP tools land in one command. Best-effort by design: the hooks are already
+// installed at this point, so a missing or failing claude CLI degrades to
+// printing the manual command rather than failing the install.
+func registerClaudeMCP(baseURL, key string) {
+	manual := fmt.Sprintf("claude mcp add --scope user --transport http seamless %s/api/mcp --header \"Authorization: Bearer <mcp.api_key>\"", baseURL)
+	claude, err := exec.LookPath("claude")
+	if err != nil {
+		fmt.Printf("claude CLI not found; register the MCP endpoint with your client yourself:\n  %s\n", manual)
+		return
+	}
+	if exec.Command(claude, "mcp", "get", "seamless").Run() == nil {
+		fmt.Println("MCP server \"seamless\" already registered with claude; if the key or URL changed, run: claude mcp remove seamless --scope user, then rerun this command")
+		return
+	}
+	if out, aerr := exec.Command(claude, claudeMCPAddArgs(baseURL, key)...).CombinedOutput(); aerr != nil {
+		fmt.Printf("claude mcp add failed (%v): %s\nregister it yourself:\n  %s\n", aerr, strings.TrimSpace(string(out)), manual)
+		return
+	}
+	fmt.Printf("registered MCP server \"seamless\" with claude (--scope user, %s/api/mcp)\n", baseURL)
 }
 
 // absConfigPath makes the loaded config file absolute so it can be baked into

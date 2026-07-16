@@ -6,36 +6,22 @@ description: Register the MCP endpoint, install the hooks that make sessions amb
 Claude Code is the client Seamless is built around. Wiring it up is two
 independent halves - **the MCP endpoint** (what an agent can call) and **the
 hooks** (what happens without an agent calling anything) - and you want both.
+One command installs both.
 
-## Register the MCP endpoint
-
-```bash
-claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp \
-  --header "Authorization: Bearer $KEY"
-```
-
-**`--scope user` is required.** Without it, `claude mcp add` defaults to `local`,
-which ties the registration to whichever directory you happened to run it from.
-The tools then work in that one directory and silently vanish everywhere else -
-which reads exactly like "the MCP server is broken" rather than "the
-registration is scoped wrong".
-
-The key is `mcp.api_key` from your config. Find it:
+## Install the hooks and register MCP
 
 ```bash
-grep api_key ~/.config/seamless/seamless.yaml   # release layout
-grep api_key ./seamless.yaml                    # dev layout
-```
-
-## Install the hooks
-
-```bash
-./bin/seamlessd install-hooks
+seamlessd install-hooks
 ```
 
 This merges six hook entries into your Claude Code `settings.json`, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.
+
+It then registers the MCP server with the `claude` CLI (`claude mcp add
+--scope user`). Pass `--mcp=false` to skip that half; if the CLI is missing or
+the registration fails, the hooks still land and the command prints the
+`claude mcp add` invocation to run yourself.
 
 The hooks are what make sessions **ambient** - an agent gets a briefing at
 startup, its prompts get matched against your memories, its findings get
@@ -60,10 +46,33 @@ This looks inconsistent and is not:
   machine-wide `Write`/`Edit` hot path should never touch the network for files
   that have nothing to do with plans.
 
+## Registering the MCP endpoint by hand
+
+For a different MCP client, or when `install-hooks` could not find the
+`claude` CLI:
+
+```bash
+claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp \
+  --header "Authorization: Bearer $KEY"
+```
+
+**`--scope user` is required.** Without it, `claude mcp add` defaults to `local`,
+which ties the registration to whichever directory you happened to run it from.
+The tools then work in that one directory and silently vanish everywhere else -
+which reads exactly like "the MCP server is broken" rather than "the
+registration is scoped wrong".
+
+The key is `mcp.api_key` from your config. Find it:
+
+```bash
+grep api_key ~/.config/seamless/seamless.yaml   # release layout
+grep api_key ./seamless.yaml                    # dev layout
+```
+
 ## Map your repos
 
 ```bash
-./bin/seamlessd map-repo --path ~/code/myrepo --project myrepo
+seamlessd map-repo --path ~/code/myrepo --project myrepo
 ```
 
 This binds a working directory to a project. Afterwards, agents in that repo
