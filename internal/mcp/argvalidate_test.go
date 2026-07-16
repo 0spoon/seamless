@@ -112,7 +112,12 @@ func TestToolArgsCoerceLegacyForms(t *testing.T) {
 	viaArray := callJSON(t, ctx, cli, "tasks_add", map[string]any{
 		"title": "via array", "depends_on": []any{id1, id2},
 	})
-	require.Equal(t, []any{id1, id2}, viaArray["depends_on"], "an array of ids must survive")
+	// ElementsMatch, not Equal: dependsOnOf returns deps ordered by ULID (ORDER BY
+	// depends_on ASC), and core.NewID is not monotonic within a millisecond, so
+	// id1/id2's relative ULID order is random -- asserting a fixed order flakes. The
+	// pin is that BOTH ids survive (the bug yielded zero); the CSV-equals-array
+	// assertion below carries the order-stability guarantee.
+	require.ElementsMatch(t, []any{id1, id2}, viaArray["depends_on"], "an array of ids must survive")
 	require.Equal(t, viaCSV["depends_on"], viaArray["depends_on"], "CSV and array must be identical")
 
 	// Whitespace and blanks normalize the same across both forms, so the legacy
