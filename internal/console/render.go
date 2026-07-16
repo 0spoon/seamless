@@ -23,6 +23,9 @@ var interactionsJS []byte
 //go:embed static/search.js
 var searchJS []byte
 
+//go:embed static/charts.js
+var chartsJS []byte
+
 //go:embed static/favicon.svg
 var faviconSVG []byte
 

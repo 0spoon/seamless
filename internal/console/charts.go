@@ -1,6 +1,7 @@
 package console
 
 import (
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"sort"
@@ -149,6 +150,52 @@ func kindBars(rows []store.KindReach) template.HTML {
 }
 
 // ---------------------------------------------------------------------------
+// Hover readout -- the payload static/charts.js snaps a crosshair to
+// ---------------------------------------------------------------------------
+
+// hoverPoint is one datum of a line chart's hover readout: where the crosshair
+// snaps to (in viewBox units, so it needs no re-derivation client-side) and the
+// already-formatted text the tooltip shows. The phrasing and the local-time
+// labels are decided here for the same reason the rest of the chart is: the
+// server is the only side that holds the window, the units, and the locale.
+type hoverPoint struct {
+	X     float64 `json:"x"`
+	Y     float64 `json:"y"`
+	Label string  `json:"label"`
+	Value string  `json:"value"`
+	Sub   string  `json:"sub,omitempty"`
+}
+
+// hoverData is a chart's whole hover payload: the viewBox (W x H) the client maps
+// pointer pixels through, the Top/Bot the crosshair spans, and the points.
+type hoverData struct {
+	W   float64      `json:"w"`
+	H   float64      `json:"h"`
+	Top float64      `json:"top"`
+	Bot float64      `json:"bot"`
+	Pts []hoverPoint `json:"pts"`
+}
+
+// hoverAttr renders the data-hover attribute that arms a chart's hover readout.
+// It is pure progressive enhancement -- charts.js is what reads this, and a chart
+// still renders whole (with its aria-label, ticks and any <title> fallbacks)
+// without it -- so nothing here may change the static drawing. Returns "" when the
+// payload cannot be marshaled, dropping the readout rather than emitting a
+// broken attribute.
+func hoverAttr(w, h, top, bot float64, pts []hoverPoint) string {
+	if len(pts) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(hoverData{W: w, H: h, Top: top, Bot: bot, Pts: pts})
+	if err != nil {
+		return ""
+	}
+	// json.Marshal already escapes <, > and &; HTMLEscapeString closes the quote
+	// (a label is server-formatted, but this attribute is hand-written markup).
+	return ` data-hover="` + template.HTMLEscapeString(string(b)) + `"`
+}
+
+// ---------------------------------------------------------------------------
 // Area chart -- injection trend
 // ---------------------------------------------------------------------------
 
@@ -193,10 +240,18 @@ func areaChart(points []store.TrendBucket) template.HTML {
 	}
 	area := line.String() + fmt.Sprintf("L%.1f %.1f L%.1f %.1f Z", x(n-1), padT+ph, x(0), padT+ph)
 
+	hov := make([]hoverPoint, 0, n)
+	for i, p := range points {
+		hov = append(hov, hoverPoint{
+			X: x(i), Y: y(p.Count), Label: p.Label,
+			Value: plural(p.Count, "injection", "injections"),
+		})
+	}
+
 	alt := fmt.Sprintf("Injection trend across %d periods; peak %d at %s", n, points[peak].Count, points[peak].Label)
 	var b strings.Builder
-	b.WriteString(`<div class="area">`)
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--brand)" role="img" aria-label="%s">`, w, h, template.HTMLEscapeString(alt))
+	fmt.Fprintf(&b, `<div class="area"%s>`, hoverAttr(w, h, padT, padT+ph, hov))
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--brand)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
 	b.WriteString(`<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
 	// baseline gridlines
 	for _, g := range []float64{0.25, 0.5, 0.75, 1} {
@@ -278,6 +333,7 @@ func coverageTrend(buckets []store.CoverageBucket) template.HTML {
 	}
 
 	var line, area, dots strings.Builder
+	hov := make([]hoverPoint, 0, n)
 	for i, d := range buckets {
 		cmd := "L"
 		if i == 0 {
@@ -285,9 +341,22 @@ func coverageTrend(buckets []store.CoverageBucket) template.HTML {
 		}
 		fmt.Fprintf(&line, "%s%.1f %.1f ", cmd, x(i), y(pctOf(d)))
 		if d.Total > 0 { // mark only buckets that actually had sessions
+			// The <title> is the no-JS readout: it survives as the fallback for the
+			// charts.js hover layer, which masks it with its own capture rect (two
+			// tooltips for one point would otherwise stack up).
 			fmt.Fprintf(&dots, `<circle class="cov-dot" cx="%.1f" cy="%.1f" r="3.5" fill="var(--ok)" stroke="var(--surface)" stroke-width="2" vector-effect="non-scaling-stroke"><title>%s: %d%% (%d of %d)</title></circle>`,
 				x(i), y(pctOf(d)), template.HTMLEscapeString(d.Label), int(pctOf(d)+0.5), d.Covered, d.Total)
 		}
+		p := hoverPoint{X: x(i), Y: y(pctOf(d)), Label: d.Label}
+		// A quiet bucket is drawn at the floor but is NOT 0% retention; say so
+		// rather than let the reader take the dip at face value.
+		if d.Total == 0 {
+			p.Value = "No sessions"
+		} else {
+			p.Value = fmt.Sprintf("%d%% covered", int(pctOf(d)+0.5))
+			p.Sub = fmt.Sprintf("%d of %s retained knowledge", d.Covered, plural(d.Total, "session", "sessions"))
+		}
+		hov = append(hov, p)
 	}
 	// One continuous area under the line, pinching to the baseline on empty buckets.
 	fmt.Fprintf(&area, "M%.1f %.1f ", x(0), padT+ph)
@@ -307,8 +376,8 @@ func coverageTrend(buckets []store.CoverageBucket) template.HTML {
 	}
 	alt := fmt.Sprintf("Session coverage trend across %d periods; %d%% of %d sessions left a durable artifact", n, rate, tot)
 	var b strings.Builder
-	b.WriteString(`<div class="area">`)
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--ok)" role="img" aria-label="%s">`, w, h, template.HTMLEscapeString(alt))
+	fmt.Fprintf(&b, `<div class="area"%s>`, hoverAttr(w, h, padT, padT+ph, hov))
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--ok)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
 	b.WriteString(`<defs><linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
 	// horizontal gridlines with % axis labels at 100 / 50 / 0
 	for _, g := range []struct {
