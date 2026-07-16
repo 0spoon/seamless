@@ -62,6 +62,9 @@ type memRec struct {
 
 func main() {
 	dataDir := flag.String("data", "", "throwaway data dir to seed (required, must not be a live instance)")
+	scenesMode := flag.Bool("scenes", false, "seed the minimal terminal-scenes fixture (plan:terminal-scenes) instead of the console fleet history")
+	repoPath := flag.String("repo", "", "with -scenes: path of the myapp demo repo to map to the myapp project")
+	race := flag.Bool("race", false, "with -scenes: leave two plan steps claimable so the two-agents-one-queue scene can race")
 	flag.Parse()
 	if *dataDir == "" {
 		log.Fatal("demoseed: -data is required")
@@ -94,6 +97,11 @@ func main() {
 		now:      time.Now().UTC(),
 		used:     map[string]bool{},
 		injected: map[string]bool{},
+	}
+
+	if *scenesMode {
+		s.scenes(*repoPath, *race)
+		return
 	}
 
 	s.projects()
