@@ -7,32 +7,36 @@ This is the one happy path: install, serve, wire your agents, and watch a
 session open with a briefing. Every fork in the road is a link, not a branch in
 these steps.
 
-No CGO toolchain, no external database, no Node. Building from source needs
-**Go 1.25+**; the prebuilt binaries need nothing.
+No CGO toolchain, no external database, no Node. The installer needs `curl` and
+`tar`; building from source needs **Go 1.25+**.
 
-## Install and run
+## Install
 
 ```bash
-go install github.com/0spoon/seamless/cmd/...@latest   # seamlessd + seam
-seamlessd serve                                        # 127.0.0.1:8081, data in ~/.seamless
+curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
-No Go toolchain? Every tagged release ships prebuilt archives for macOS and
-Linux (amd64 and arm64) with both binaries inside - grab one from
-[GitHub releases](https://github.com/0spoon/seamless/releases) and put
-`seamlessd` and `seam` on your PATH.
+One command does the lot: it fetches the checksum-verified release archive for
+your platform (macOS and Linux, amd64 and arm64), installs `seamlessd` and
+`seam` into `~/.local/bin`, generates the bearer key, wires Claude Code, and
+starts the daemon as a per-user service on `127.0.0.1:8081` with data in
+`~/.seamless`. Re-run it to upgrade. [Install & deploy](/install/) has the
+overrides, the service details, and how to remove it.
 
-On a true first run - no config file anywhere - `serve` generates the bearer
-key and writes it to `~/.config/seamless/seamless.yaml`. Nothing to copy,
-nothing to paste.
+Piping a stranger's script into a shell deserves a read first - it is
+[one file](https://thereisnospoon.org/install), and every other route to the
+same place is on that page: prebuilt archives from
+[GitHub releases](https://github.com/0spoon/seamless/releases),
+`go install github.com/0spoon/seamless/cmd/...@latest`, or `make install` from
+a clone.
+
+On a true first run - no config file anywhere - the bearer key is generated and
+written to `~/.config/seamless/seamless.yaml`. Nothing to copy, nothing to
+paste.
 
 No LLM key is required either: without one, recall degrades to plain full-text
 search. Add OpenAI or Ollama in the [configuration](/reference/configuration/)
 when you want semantic recall.
-
-Working from a clone instead? `make build && make run` does the same with
-`./bin/` binaries, and `make install` sets the daemon up as a service - see
-[Install & deploy](/install/).
 
 `seamlessd doctor` is the checkpoint: it validates the config, opens the
 database, applies migrations, and asserts the tool count. If it is green, the
@@ -40,8 +44,9 @@ daemon will start.
 
 ## Wire your agents
 
+The installer already ran `install-hooks` for you, so one step is left:
+
 ```bash
-seamlessd install-hooks
 seamlessd map-repo --path ~/code/myrepo --project myrepo
 ```
 
@@ -50,12 +55,13 @@ hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
 SessionEnd) and registers the MCP server via `claude mcp add --scope user`. If
 the `claude` CLI is not on your PATH it prints the command to run yourself -
 see [Claude Code setup](/claude-code/) for the by-hand version and why
-`--scope user` matters.
+`--scope user` matters. Installed by hand? Run `seamlessd install-hooks`
+yourself before the `map-repo` above.
 
 The hooks are what make sessions *ambient*: an agent gets a briefing without
 calling a tool. `map-repo` binds a working directory to a project, so agents
 working in that repo inherit project scope without passing `project` on every
-call.
+call. Restart Claude Code afterwards so it loads the hooks and the MCP server.
 
 ## Confirm it works
 

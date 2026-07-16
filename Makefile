@@ -61,8 +61,14 @@ DOCS_SRC  := docs-src
 DOCS_OUT  := docs/docs
 DOCS_ADDR ?= 127.0.0.1:8899
 
+# The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).
+# It lives at the site root because GitHub Pages serves docs/ verbatim, so this
+# path IS the published URL -- there is no copy to keep in step. docsgen never
+# touches it: it owns $(DOCS_OUT) only.
+INSTALLER := docs/install
+
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
-	docs docs-check docs-serve release-snapshot install-git-hooks uninstall-git-hooks \
+	docs docs-check docs-serve installer-check release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
 
@@ -81,6 +87,7 @@ help:
 	@echo "  docs       regenerate the docs site (docs-src/ -> docs/docs/, committed)"
 	@echo "  docs-check fail if the committed docs site is stale (part of check)"
 	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
+	@echo "  installer-check   parse-check $(INSTALLER) (part of check)"
 	@echo "  release-snapshot  dry-run the release build into dist/ (needs goreleaser)"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server in the foreground ($(ADDR))"
@@ -166,6 +173,7 @@ check:
 	@$(MAKE) vet
 	@$(MAKE) fmt-check
 	@$(MAKE) docs-check
+	@$(MAKE) installer-check
 	@$(MAKE) lint
 	@$(MAKE) test-race
 	@echo "check: all green"
@@ -179,8 +187,20 @@ check-fast:
 	@$(MAKE) fmt-check
 	@$(MAKE) vet
 	@$(MAKE) docs-check
+	@$(MAKE) installer-check
 	@$(MAKE) lint
 	@echo "check-fast: all green (test-race not run -- 'make check' is the full gate)"
+
+# $(INSTALLER) is served verbatim at https://thereisnospoon.org/install and is
+# the first command a new user ever runs, so a syntax error in it is a broken
+# front door that no Go test can see. `sh -n` is the gate because it needs
+# nothing installed. shellcheck is the better tool and runs when it happens to
+# be present, but only advisory: a gate that fails based on what you have
+# installed is a gate that is green in CI and red on your laptop.
+installer-check:
+	@sh -n $(INSTALLER) || { echo "ERROR: $(INSTALLER) has a syntax error"; exit 1; }
+	@if command -v shellcheck >/dev/null; then shellcheck -s sh $(INSTALLER) || true; fi
+	@echo "installer-check: $(INSTALLER) parses"
 
 # Git hooks. Committed under .githooks/ because .git/hooks is neither committed
 # nor shared between worktrees. core.hooksPath is repo-local config, so enabling

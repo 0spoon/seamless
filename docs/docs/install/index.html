@@ -157,37 +157,96 @@
   <p class="eyebrow">Getting started</p>
   <h1>Install &amp; deploy</h1>
   <p class="lede">The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.</p>
-  <p>The <a href="../quickstart/">Quickstart</a> builds and runs Seamless in the foreground. This
-page is what you do once you want it running for real.</p>
+  <p>The <a href="../quickstart/">Quickstart</a> gets Seamless running in one command. This page is
+what that command did, and what to do when you want to steer it yourself.</p>
 <h2 id="one-instance-per-machine">One instance per machine</h2>
 <p>There is <strong>one instance</strong>: port <code>8081</code>, data dir <code>~/.seamless</code>. One daemon, one
 database, one set of files.</p>
 <p>Both are config keys, not fixed facts - set <code>addr:</code> and <code>data_dir:</code> in
 <code>~/.config/seamless/seamless.yaml</code> (or the <code>SEAMLESS_ADDR</code> / <code>SEAMLESS_DATA_DIR</code>
-env overrides) and re-run <code>make install</code>. The config is the single source of
-truth for the bind address: the Makefile reads the port back out of it, so the
-health check and <code>make help</code> follow your change rather than assuming <code>8081</code>.
+env overrides) and restart the service. The config is the single source of truth
+for the bind address: the installer and the Makefile both read the port back out
+of it, so the health check follows your change rather than assuming <code>8081</code>.
 Nothing bakes the address into the service - which is why editing <code>addr:</code> works
 instead of being silently overridden.</p>
-<h2 id="install">Install</h2>
+<h2 id="install-in-one-command">Install in one command</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+</span></span></code></pre><p>This is the path for using Seamless (as opposed to working on it). It needs
+<code>curl</code> and <code>tar</code>; no Go toolchain is involved. In order, it:</p>
+<ol>
+<li>resolves the latest release and downloads the archive for your platform
+(macOS and Linux, amd64 and arm64), <strong>verifying its SHA-256</strong> against the
+release's <code>checksums.txt</code> before unpacking anything;</li>
+<li>installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>;</li>
+<li>runs <code>seamlessd install-hooks</code>, which generates the bearer key into
+<code>~/.config/seamless/seamless.yaml</code> on first run, installs the Claude Code
+hooks, and registers the MCP server;</li>
+<li>installs and starts the per-user service - launchd on macOS, systemd
+<code>--user</code> on Linux - and polls <code>/healthz</code> until the daemon actually answers.</li>
+</ol>
+<p>Re-running it upgrades in place: binaries are swapped by rename (safe while the
+daemon holds them open), the service restarts on the new build, and your config,
+your hooks, and <code>~/.seamless</code> are left alone. It is <a href="https://thereisnospoon.org/install">one shell
+script</a> with no dependencies to audit.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Override</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>SEAMLESS_VERSION=0.3.0</code></td>
+<td>install that version instead of the latest</td>
+</tr>
+<tr>
+<td><code>SEAMLESS_INSTALL_DIR=~/bin</code></td>
+<td>put the binaries somewhere else</td>
+</tr>
+<tr>
+<td><code>SEAMLESS_NO_HOOKS=1</code></td>
+<td>skip the Claude Code hooks and MCP registration</td>
+</tr>
+<tr>
+<td><code>SEAMLESS_NO_SERVICE=1</code></td>
+<td>install the binaries only; run <code>seamlessd serve</code> yourself</td>
+</tr>
+<tr>
+<td><code>SEAMLESS_ALLOW_ROOT=1</code></td>
+<td>permit running as root (single-user containers)</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Set them ahead of the shell, not the curl:
+<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh</code>.</p>
+<p>Everything here is per-user by construction - <code>~/.local/bin</code>, <code>~/.config</code>,
+<code>~/.seamless</code>, a user service - so run it as yourself. Under <code>curl | sudo sh</code> it
+would all land in root's home where your agents will never look, which is why
+the script refuses root unless you insist.</p>
+<h2 id="install-from-a-clone">Install from a clone</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
 </span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
 </span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service + binaries (config kept)</span>
-</span></span></code></pre><p><code>make install</code> snapshots the binaries and config to stable locations, then points
-launchd <strong>and</strong> the Claude Code hooks at the copies. Nothing live resolves
-through your working tree, so <code>make build</code>, a branch switch, and a moved or
-cleaned repo cannot change what the running daemon and every agent's hooks
-execute. Swapping them is <code>make install</code>, deliberately.</p>
+</span></span></code></pre><p><code>make install</code> is the same destination from your own build, and it is macOS-only
+(it renders the launchd plist from <code>deploy/launchd/</code>). It snapshots the binaries
+and config to stable locations, then points launchd <strong>and</strong> the Claude Code hooks
+at the copies. Nothing live resolves through your working tree, so <code>make build</code>,
+a branch switch, and a moved or cleaned repo cannot change what the running
+daemon and every agent's hooks execute. Swapping them is <code>make install</code>,
+deliberately.</p>
 <p>The config lands in <code>~/.config/seamless/</code>, one of the paths Seamless already
 searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
 It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.</p>
-<p>Not working from a clone? Tagged releases carry prebuilt archives for macOS and
-Linux (<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a>). The
-binaries are identical; what you lose is the Makefile. From a bare binary,
-<code>seamlessd serve</code> covers the essentials - first run seeds the config - and
-<code>seamlessd install-hooks</code> wires Claude Code; only the service management on
-this page assumes the repo.</p>
+<p>The other two routes end up in the same place with less done for you:
+<code>go install github.com/0spoon/seamless/cmd/...@latest</code> needs Go 1.25+, and the
+<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a> carry the same
+prebuilt archives the installer fetches. From a bare binary, <code>seamlessd serve</code>
+covers the essentials - first run seeds the config - and <code>seamlessd install-hooks</code>
+wires Claude Code; what you take on yourself is the service.</p>
 <h2 id="iterating-on-seamless-itself">Iterating on Seamless itself</h2>
 <p><code>make install</code> is also the edit-test loop. When the rendered plist is unchanged -
 the common case - it skips the launchd bootout/bootstrap and kickstarts the
@@ -198,15 +257,32 @@ service in place, so its marginal cost over <code>make build</code> is two file 
 </span></span></code></pre><p>That split is the point. <code>make build</code> on a half-finished edit is free, because
 the daemon and hooks keep running the last thing you installed. Rebuilding is not
 deploying.</p>
-<h2 id="the-launchd-service">The launchd service</h2>
-<p>The service is a macOS user LaunchAgent labelled
-<code>org.thereisnospoon.seamless</code>, rendered from <code>deploy/launchd/</code> into
-<code>~/Library/LaunchAgents/</code>.</p>
+<h2 id="the-service">The service</h2>
+<p>It runs as <strong>your</strong> user, not root: it reads your config, writes your files, and
+should die with your login session, not the machine.</p>
+<p>On <strong>macOS</strong> it is a user LaunchAgent labelled <code>org.thereisnospoon.seamless</code> in
+<code>~/Library/LaunchAgents/</code>, logging to <code>~/.seamless/seamlessd.log</code>. From a clone,
+the Makefile wraps launchctl:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">make service-status    <span class="c1"># is it loaded, what pid, last exit</span>
 </span></span><span class="line"><span class="cl">make logs              <span class="c1"># follow ~/.seamless/seamlessd.log</span>
 </span></span><span class="line"><span class="cl">make restart-service   <span class="c1"># restart in place</span>
 </span></span><span class="line"><span class="cl">make stop-service      <span class="c1"># unload (KeepAlive will not resurrect an unloaded job)</span>
-</span></span></code></pre><h2 id="upgrading">Upgrading</h2>
+</span></span></code></pre><p>Without a clone, that is <code>launchctl print gui/$(id -u)/org.thereisnospoon.seamless</code>,
+<code>launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless</code>, and
+<code>launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless</code>.</p>
+<p>On <strong>Linux</strong> the installer writes a systemd user unit to
+<code>~/.config/systemd/user/seamless.service</code> and enables lingering, so the daemon
+starts at boot rather than at your next login:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">systemctl --user status seamless      <span class="c1"># state, pid, last exit</span>
+</span></span><span class="line"><span class="cl">journalctl --user -u seamless -f      <span class="c1"># follow the log</span>
+</span></span><span class="line"><span class="cl">systemctl --user restart seamless
+</span></span><span class="line"><span class="cl">systemctl --user stop seamless
+</span></span></code></pre><p>No systemd user session (some containers, WSL1)? The installer says so and skips
+the step; run <code>seamlessd serve</code> under whatever supervises processes there.</p>
+<h2 id="upgrading">Upgrading</h2>
+<p>Installed with the one-command installer? Re-run it - that <em>is</em> the upgrade:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+</span></span></code></pre><p>From a clone:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">git pull
 </span></span><span class="line"><span class="cl">make check             <span class="c1"># everything green before you swap the running daemon</span>
 </span></span><span class="line"><span class="cl">make install           <span class="c1"># swap it</span>
@@ -218,11 +294,24 @@ build disagrees with your config before an agent does.</p>
 check it before you debug anything else - a stale daemon still serving the old
 binary looks exactly like a bug in the new one.</p>
 <h2 id="uninstalling">Uninstalling</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">make uninstall
-</span></span></code></pre><p>Neither touches <code>~/.seamless</code>. Your memories and notes are markdown files; the
-uninstall of a program should not delete your knowledge. Remove the directory by
-hand if you actually mean it - and see <a href="../reference/storage/">Storage</a> first for
-what is in there.</p>
+<p>From a clone, <code>make uninstall</code> removes the service and the binaries. By hand it
+is three lines - stop the service, remove its definition, remove the binaries:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># macOS</span>
+</span></span><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless
+</span></span><span class="line"><span class="cl">rm ~/Library/LaunchAgents/org.thereisnospoon.seamless.plist
+</span></span><span class="line"><span class="cl">rm ~/.local/bin/seamlessd ~/.local/bin/seam
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="c1"># Linux</span>
+</span></span><span class="line"><span class="cl">systemctl --user disable --now seamless
+</span></span><span class="line"><span class="cl">rm ~/.config/systemd/user/seamless.service
+</span></span><span class="line"><span class="cl">rm ~/.local/bin/seamlessd ~/.local/bin/seam
+</span></span></code></pre><p>Claude Code keeps its own registrations: <code>claude mcp remove seamless --scope user</code>
+drops the MCP server, and the hooks come out of <code>~/.claude/settings.json</code> (the
+install backed up the original next to it).</p>
+<p>None of this touches <code>~/.seamless</code> or your config. Your memories and notes are
+markdown files; the uninstall of a program should not delete your knowledge.
+Remove the directory by hand if you actually mean it - and see
+<a href="../reference/storage/">Storage</a> first for what is in there.</p>
 <h2 id="security-posture">Security posture</h2>
 <p>What you are accepting when you run this:</p>
 <ul>
@@ -235,6 +324,12 @@ reach it.</li>
 outbound request on an agent's behalf, and its destination ports are restricted
 to <code>capture.allowed_ports</code> (80 and 443 by default) - never &quot;any port&quot;.</li>
 <li><strong>No telemetry.</strong> Nothing phones home.</li>
+<li><strong>The installer trusts HTTPS and a checksum.</strong> <code>curl | sh</code> runs whatever the
+site serves, so the honest description is: you are trusting this project's
+GitHub Pages and its releases. The script verifies each archive's SHA-256
+against the release <code>checksums.txt</code> before unpacking, which catches a corrupt
+or swapped asset - not a compromised release. Read it first, or skip it and
+use <code>go install</code>; both land in the same place.</li>
 </ul>
 <p>The key and loopback are a matched pair. A static bearer key is adequate
 <em>because</em> the listener is on loopback; it would not be adequate on a public
@@ -259,7 +354,7 @@ on loopback.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install">Install</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-launchd-service">The launchd service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#install-from-a-clone">Install from a clone</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
     </ul>
   </aside>
   

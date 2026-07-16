@@ -1,0 +1,372 @@
+#!/bin/sh
+# Seamless one-command installer.
+#
+#   curl -fsSL https://thereisnospoon.org/install | sh
+#
+# This file IS the published artifact. The site is served from docs/ on GitHub
+# Pages, so docs/install lands at https://thereisnospoon.org/install verbatim.
+# It is not generated (docsgen owns docs/docs/ only) and there is deliberately
+# no second copy under scripts/: a shell script living at two paths is a shell
+# script that drifts.
+#
+# What it does: fetch this platform's release archive from GitHub, verify its
+# checksum, install seamlessd + seam into ~/.local/bin, wire Claude Code (which
+# generates the bearer key on first run), then run the daemon as a per-user
+# service -- launchd on macOS, systemd --user on Linux. Re-running it upgrades
+# in place; the config and ~/.seamless are never touched.
+#
+# Overrides:
+#   SEAMLESS_VERSION      version to install          (default: latest release)
+#   SEAMLESS_INSTALL_DIR  where the binaries go       (default: ~/.local/bin)
+#   SEAMLESS_NO_HOOKS=1   skip the Claude Code hooks + MCP registration
+#   SEAMLESS_NO_SERVICE=1 skip the service; install the binaries and stop
+#   SEAMLESS_ALLOW_ROOT=1 permit running as root (containers)
+set -eu
+
+REPO=0spoon/seamless
+LABEL=org.thereisnospoon.seamless
+DOCS=https://thereisnospoon.org/docs/
+
+# The canonical config path: the one EnsureAPIKey writes on first run, and the
+# one the service points SEAMLESS_CONFIG at. The installer owns this path only
+# -- a config somewhere else is a hand-managed setup, so say so rather than
+# generating a key in one place and a service that reads another.
+CONFIG=$HOME/.config/seamless/seamless.yaml
+LOG=$HOME/.seamless/seamlessd.log
+
+# The bind address lives in the config; this is only the pre-config fallback for
+# the health poll, and mirrors config.Defaults().
+DEFAULT_ADDR=127.0.0.1:8081
+
+# Set by the service steps that actually started something. The health poll is
+# conditional on it: a run that deliberately skipped the service (no systemd
+# user session, SEAMLESS_NO_SERVICE) must not then fail for the absence of a
+# daemon nobody started.
+SERVICE_STARTED=0
+
+say()  { printf '  %s\n' "$*"; }
+step() { printf '  %-12s %s\n' "$1" "$2"; }
+warn() { printf '  warning: %s\n' "$*" >&2; }
+die()  { printf '\nerror: %s\n' "$*" >&2; exit 1; }
+
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# One fetcher for the whole script: the entrypoint is curl, but `wget -qO- |
+# sh` is a real way people run these, and then curl may not be installed at all.
+fetch() {
+	if have curl; then curl -fsSL "$1"
+	elif have wget; then wget -qO- "$1"
+	else die "need curl or wget"
+	fi
+}
+
+fetch_to() {
+	if have curl; then curl -fsSL -o "$2" "$1"
+	elif have wget; then wget -qO "$2" "$1"
+	else die "need curl or wget"
+	fi
+}
+
+http_ok() {
+	if have curl; then curl -sf --max-time 1 -o /dev/null "$1"
+	elif have wget; then wget -q --timeout=1 -O /dev/null "$1"
+	else return 1
+	fi
+}
+
+sha256_of() {
+	if have sha256sum; then sha256sum "$1" | cut -d' ' -f1
+	elif have shasum; then shasum -a 256 "$1" | cut -d' ' -f1
+	else die "need sha256sum or shasum to verify the download"
+	fi
+}
+
+# Map uname's vocabulary onto goreleaser's. darwin + linux only: the daemon's
+# service integration is launchd/systemd and nothing is tested on Windows.
+detect_platform() {
+	OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+	case $OS in
+	darwin | linux) ;;
+	*) die "unsupported OS: $OS (Seamless ships macOS and Linux builds; build from source with Go 1.25+)" ;;
+	esac
+
+	ARCH=$(uname -m)
+	case $ARCH in
+	x86_64 | amd64) ARCH=amd64 ;;
+	arm64 | aarch64) ARCH=arm64 ;;
+	*) die "unsupported architecture: $ARCH (amd64 and arm64 only)" ;;
+	esac
+}
+
+# The GitHub API rather than parsing the /releases/latest redirect: it is one
+# request either way, and a rate-limited API answers with JSON we can detect
+# instead of a 302 we would silently misread.
+resolve_version() {
+	VERSION=${SEAMLESS_VERSION:-}
+	if [ -z "$VERSION" ]; then
+		VERSION=$(fetch "https://api.github.com/repos/$REPO/releases/latest" |
+			sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1) || true
+	fi
+	[ -n "$VERSION" ] ||
+		die "could not resolve the latest release (GitHub API rate limit?); pin one instead:
+  curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh"
+	VERSION=${VERSION#v}
+}
+
+download() {
+	base="https://github.com/$REPO/releases/download/v$VERSION"
+	TARBALL="seamless_${VERSION}_${OS}_${ARCH}.tar.gz"
+
+	step downloading "$TARBALL"
+	fetch_to "$base/$TARBALL" "$TMP/$TARBALL" ||
+		die "no such release asset: $base/$TARBALL
+check the version at https://github.com/$REPO/releases"
+	fetch_to "$base/checksums.txt" "$TMP/checksums.txt" ||
+		die "could not fetch $base/checksums.txt"
+
+	# Every archive is listed in one checksums.txt, so match the filename
+	# exactly -- a substring match would happily verify amd64 against arm64.
+	want=$(awk -v f="$TARBALL" '$2 == f { print $1 }' "$TMP/checksums.txt")
+	[ -n "$want" ] || die "$TARBALL is not listed in checksums.txt"
+	got=$(sha256_of "$TMP/$TARBALL")
+	[ "$want" = "$got" ] || die "checksum mismatch for $TARBALL
+  expected $want
+  got      $got"
+	step checksum ok
+}
+
+# Install via a temp name + rename: a plain copy over the live seamlessd fails
+# with ETXTBSY while the service is running, and re-running this script over a
+# running install is the upgrade path. rename swaps the directory entry, so the
+# old daemon keeps its inode until the service restart below replaces it.
+install_binary() {
+	install -m 0755 "$TMP/$1" "$INSTALL_DIR/.$1.new"
+	mv -f "$INSTALL_DIR/.$1.new" "$INSTALL_DIR/$1"
+}
+
+unpack() {
+	tar -xzf "$TMP/$TARBALL" -C "$TMP" ||
+		die "could not extract $TARBALL"
+	mkdir -p "$INSTALL_DIR"
+	install_binary seamlessd
+	install_binary seam
+	step installed "$INSTALL_DIR/seamlessd, $INSTALL_DIR/seam"
+}
+
+# install-hooks does the config bootstrap too: it calls config.EnsureAPIKey,
+# which generates the bearer key into $CONFIG when no config file exists. So it
+# must run BEFORE the service starts -- the service hardcodes SEAMLESS_CONFIG,
+# and a SEAMLESS_CONFIG pointing at a missing file is a hard error that KeepAlive
+# would turn into a respawn loop.
+#
+# The cd is not decoration: ./seamless.yaml is the last entry in the config
+# search path, so running from a clone would otherwise bind the install to
+# whatever config happened to be in the user's cwd.
+wire_hooks() {
+	if [ -n "${SEAMLESS_NO_HOOKS:-}" ]; then
+		step hooks "skipped (SEAMLESS_NO_HOOKS)"
+		return 0
+	fi
+	if [ -f "$CONFIG" ]; then
+		(cd "$TMP" && SEAMLESS_CONFIG="$CONFIG" "$INSTALL_DIR/seamlessd" install-hooks --seam "$INSTALL_DIR/seam")
+	else
+		# Unset, not pointed at $CONFIG: the file does not exist yet, and
+		# EnsureAPIKey only writes it when the config resolves to nothing.
+		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks --seam "$INSTALL_DIR/seam")
+	fi
+}
+
+# Read the port back out of the config the way the Makefile does, so someone who
+# edited addr: gets a health poll and a console URL that follow their change
+# instead of an install that claims to have failed.
+read_addr() {
+	ADDR=$(sed -n 's/^addr:[[:space:]]*"\{0,1\}\([^"[:space:]]*\).*/\1/p' "$CONFIG" 2>/dev/null | head -1) || true
+	[ -n "${ADDR:-}" ] || ADDR=$DEFAULT_ADDR
+}
+
+# Keep in step with deploy/launchd/org.thereisnospoon.seamless.plist, which is
+# what `make install` renders from a clone. The duplication is deliberate: this
+# script is fetched on its own, with no repo and no checkout to read a template
+# out of, and inlining beats shipping a template only future releases would
+# carry.
+service_launchd() {
+	plist=$HOME/Library/LaunchAgents/$LABEL.plist
+	mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.seamless"
+	cat >"$plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Written by https://thereisnospoon.org/install. Re-run it to update. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>$LABEL</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$INSTALL_DIR/seamlessd</string>
+    <string>serve</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>SEAMLESS_CONFIG</key>
+    <string>$CONFIG</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>$LOG</string>
+  <key>StandardErrorPath</key>
+  <string>$LOG</string>
+</dict>
+</plist>
+EOF
+
+	# bootout is asynchronous: the label lingers for a moment and bootstrapping
+	# too soon fails with "Bootstrap failed: 5: Input/output error". Retry.
+	uid=$(id -u)
+	launchctl bootout "gui/$uid/$LABEL" 2>/dev/null || true
+	i=0
+	while [ "$i" -lt 10 ]; do
+		launchctl bootstrap "gui/$uid" "$plist" 2>/dev/null && break
+		i=$((i + 1))
+		sleep 1
+	done
+	launchctl kickstart -k "gui/$uid/$LABEL" 2>/dev/null || true
+	launchctl print "gui/$uid/$LABEL" >/dev/null 2>&1 ||
+		die "$LABEL failed to bootstrap; check $LOG"
+	SERVICE_STARTED=1
+	step service "$LABEL (launchd)"
+}
+
+service_systemd() {
+	if ! have systemctl || ! systemctl --user show-environment >/dev/null 2>&1; then
+		step service "skipped (no systemd --user session)"
+		say "start it yourself: SEAMLESS_CONFIG=$CONFIG $INSTALL_DIR/seamlessd serve"
+		return 0
+	fi
+	unit=$HOME/.config/systemd/user/seamless.service
+	mkdir -p "$HOME/.config/systemd/user" "$HOME/.seamless"
+	cat >"$unit" <<EOF
+# Written by https://thereisnospoon.org/install. Re-run it to update.
+[Unit]
+Description=Seamless -- local-first memory and coordination substrate for AI agents
+Documentation=$DOCS
+After=network.target
+
+[Service]
+Type=simple
+Environment=SEAMLESS_CONFIG=$CONFIG
+ExecStart=$INSTALL_DIR/seamlessd serve
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=default.target
+EOF
+	systemctl --user daemon-reload
+	systemctl --user enable seamless.service >/dev/null 2>&1 ||
+		die "systemctl --user enable seamless.service failed"
+	# enable --now would leave an already-running old binary in place, which is
+	# exactly the upgrade case. Enable, then restart unconditionally.
+	systemctl --user restart seamless.service ||
+		die "systemctl --user restart seamless.service failed; check: journalctl --user -u seamless -n 50"
+
+	# Without linger a user service dies at logout and never starts at boot --
+	# the wrong shape for a daemon agents expect to find. Best-effort: on a
+	# locked-down box it needs polkit or root, and a failure here is not fatal.
+	if have loginctl && ! loginctl show-user "$(id -un)" 2>/dev/null | grep -q '^Linger=yes'; then
+		loginctl enable-linger "$(id -un)" >/dev/null 2>&1 ||
+			warn "could not enable linger; the service will stop when you log out (sudo loginctl enable-linger $(id -un))"
+	fi
+	SERVICE_STARTED=1
+	step service "seamless.service (systemd --user)"
+}
+
+# launchd and systemd both report success as soon as they have started the
+# process, but the daemon binds its listener ~100ms later. Poll until it actually
+# answers, so a green install means it is serving rather than racing a listener
+# that is not up.
+wait_healthy() {
+	i=0
+	while [ "$i" -lt 50 ]; do
+		if http_ok "http://$ADDR/healthz"; then
+			step healthz "ok -- http://$ADDR"
+			return 0
+		fi
+		i=$((i + 1))
+		sleep 0.2
+	done
+	# The daemon logs wherever its supervisor sends it, so point at the one
+	# that exists on this platform rather than a path Linux never writes.
+	case $OS in
+	darwin) where="check the log: $LOG" ;;
+	*) where="check the log: journalctl --user -u seamless -n 50" ;;
+	esac
+	die "no /healthz from $ADDR after 10s; $where"
+}
+
+main() {
+	INSTALL_DIR=${SEAMLESS_INSTALL_DIR:-$HOME/.local/bin}
+
+	# launchd/systemd --user, ~/.config, ~/.seamless: every path here is per
+	# user. Under `curl | sudo sh` all of it would land in root's home and the
+	# agents that need it would never see it.
+	if [ "$(id -u)" = 0 ] && [ -z "${SEAMLESS_ALLOW_ROOT:-}" ]; then
+		die "run this as your own user, not root: Seamless installs a per-user service
+into \$HOME (set SEAMLESS_ALLOW_ROOT=1 if you really are a single-user container)"
+	fi
+	have tar || die "need tar"
+
+	# A SEAMLESS_CONFIG in the environment pointing at a file that does not
+	# exist would make every seamlessd call below fail; and honouring one that
+	# does exist while the service reads $CONFIG would install a split brain.
+	if [ -n "${SEAMLESS_CONFIG:-}" ] && [ "$SEAMLESS_CONFIG" != "$CONFIG" ]; then
+		die "SEAMLESS_CONFIG is set to $SEAMLESS_CONFIG, but this installer manages $CONFIG
+unset it to install, or set the daemon up by hand: $DOCS"'install/'
+	fi
+
+	detect_platform
+	resolve_version
+	printf '\n  seamless %s  %s/%s\n' "$VERSION" "$OS" "$ARCH"
+
+	TMP=$(mktemp -d)
+	trap 'rm -rf "$TMP"' EXIT INT TERM
+
+	download
+	unpack
+	wire_hooks
+	read_addr
+
+	if [ -n "${SEAMLESS_NO_SERVICE:-}" ]; then
+		step service "skipped (SEAMLESS_NO_SERVICE)"
+		say "start it yourself: SEAMLESS_CONFIG=$CONFIG $INSTALL_DIR/seamlessd serve"
+	else
+		case $OS in
+		darwin) service_launchd ;;
+		linux) service_systemd ;;
+		esac
+	fi
+	if [ "$SERVICE_STARTED" = 1 ]; then
+		wait_healthy
+	fi
+
+	printf '\n'
+	case ":$PATH:" in
+	*":$INSTALL_DIR:"*) ;;
+	*)
+		say "$INSTALL_DIR is not on your PATH. Add it:"
+		say "  export PATH=\"$INSTALL_DIR:\$PATH\""
+		printf '\n'
+		;;
+	esac
+	say 'next:'
+	say "  seamlessd map-repo --path ~/code/myrepo --project myrepo   # bind a repo to a project"
+	say "  seamlessd console-open                                     # open the console, logged in"
+	printf '\n'
+	say 'restart Claude Code so it picks up the hooks and the MCP server.'
+	say "docs: $DOCS"
+	printf '\n'
+}
+
+main "$@"
