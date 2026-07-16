@@ -21,7 +21,8 @@ preserved read-only as a fallback archive.
 ## Project structure
 
 ```
-cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks
+cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks, map-repo,
+                   family, console-open
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
 cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see docs/README-site.md)
 docs-src/          docs site markdown + nav.yaml (source; docs/docs/ is output)
@@ -31,17 +32,21 @@ internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations
 internal/events/   append-only event log; SSE fan-out; retrieval stats
 internal/validate/ path/title/name guards
 internal/files/    markdown layer: frontmatter, atomic writes, watcher     [P1]
+internal/markdown/ agent markdown -> sanitized console HTML (goldmark + bluemonday)
 internal/llm/      OpenAI (default), Ollama, Anthropic chat + embeddings   [P1]
-internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF) [P2/P4]
+internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF),
+                   console search                                          [P2/P4]
 internal/lifecycle/ supersession, arbitration, provenance                  [P3]
 # (the dependency-aware ready-queue + lease-based claiming live in
 #  internal/store/tasks*.go -- there is no internal/tasks package)
-internal/gardener/ dedup / staleness / digest / stale-plan proposals      [P4]
+internal/gardener/ dedup / staleness / digest / stale-plan passes, plus the
+                   request- and split-driven proposals                     [P4]
 internal/plans/    captured CC plan vocabulary: tags, statuses, tracking task
 internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount [P2+]
 internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
+internal/importer/ one-shot import of the v1 (~/.seam) snapshot
 ```
 
 Bracketed tags mark the phase that introduces the package; unbuilt ones do not
@@ -50,14 +55,20 @@ exist yet.
 ## Common commands
 
 ```bash
-make build      # build ./bin/seamlessd
+make build      # ./bin/seamlessd + ./bin/seam (touches nothing live)
+make install    # build + snapshot binaries/config to ~/.local/bin +
+                # ~/.config/seamless, repoint the service and hooks, restart
 make test       # unit tests
 make test-race  # unit tests with the race detector
+make check      # the full gate: build + vet + fmt-check + docs-check + lint + test-race
+make check-fast # the pre-commit subset (no test-race); .githooks/pre-commit runs it
 make lint       # golangci-lint
 make vet        # go vet
-make fmt        # gofmt -w .
+make fmt        # gofmt tracked files -- NOT `gofmt -w .`, which rewrites other
+                # agents' worktrees under dot-dirs that go's ./... skips
 make run        # build + serve on 127.0.0.1:8081
 make doctor     # build + config/DB self-checks
+make console    # open the console in a browser, pre-authenticated
 make clean      # remove bin/ and coverage files
 
 make docs       # regenerate the docs site (docs-src/ -> docs/docs/, committed)
@@ -139,7 +150,9 @@ notes (`notes_create/read/update/append/delete`), projects (`project_list/create
 tasks (`tasks_add/update/ready/list` -- `tasks_list id=<id>` loads a single task
 by its globally-unique id -- plus `tasks_claim`/`tasks_release` for
 atomic lease-based claiming), research lab (`lab_open`, `trial_record`,
-`trial_query`), gardener (`gardener_proposals`, `gardener_apply`), utility
+`trial_query`), gardener (`gardener_proposals`, `gardener_apply`, plus the
+natural-language `gardener_request` and the project-split planner
+`gardener_split` -- both LLM-backed, and both only ever propose), utility
 (`capture_url`, `usage_summary`). Project and session are inherited from the
 session binding; agents in mapped repos rarely pass `project` explicitly.
 
