@@ -265,7 +265,9 @@ body::before {
   :root:not([data-theme="light"]) .icon-sun { display: block; }
 }
 @media (max-width: 720px) {
-  .head-nav a:not(.gh-link) { display: none; }
+  /* Anchors collapse on phones, but Docs is a destination, not an anchor --
+     without it the only mobile path to the docs is the footer. */
+  .head-nav a:not(.gh-link):not(.docs-link) { display: none; }
 }
 
 /* ==========================================================================

@@ -26,6 +26,10 @@ On a true first run - no config file anywhere - `serve` generates the bearer
 key and writes it to `~/.config/seamless/seamless.yaml`. Nothing to copy,
 nothing to paste.
 
+No LLM key is required either: without one, recall degrades to plain full-text
+search. Add OpenAI or Ollama in the [configuration](/reference/configuration/)
+when you want semantic recall.
+
 Working from a clone instead? `make build && make run` does the same with
 `./bin/` binaries, and `make install` sets the daemon up as a service - see
 [Install & deploy](/install/).
