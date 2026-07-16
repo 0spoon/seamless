@@ -66,7 +66,7 @@ var errNoSession = errors.New("no active session: call session_start first, or p
 // choose.
 var errNoScope = errors.New(
 	"ambiguous scope: no bound or ambient session to infer the project from; " +
-		"pass project=<slug> for a project item, or project=global for a global one")
+		"name the scope with project=<slug> or project=global")
 
 // errAmbiguousScope is returned when a durable create has no explicit project and
 // no bound session, and active ambient sessions span multiple projects
@@ -84,8 +84,41 @@ var errAmbiguousSession = errors.New(
 
 var errAmbiguousScope = errors.New(
 	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
-		"projects (concurrent agents); pass project=<slug> for a project item, or " +
-		"project=global for a global one")
+		"projects (concurrent agents); name the scope with project=<slug> or project=global")
+
+// writeScopeHelp is the tail resolveWriteScope appends to either scope error. It
+// carries the two facts an agent stuck at this decision cannot get anywhere else,
+// and whose absence reliably produces the wrong answer:
+//
+// A new slug is a legal choice. resolveWriteScope registers whatever slug it is
+// given, so "will an unmapped slug error?" -- the question with no cheap way to be
+// answered at the call site -- is settled here as "no". An agent that cannot
+// answer it treats naming a new project as the risky move.
+//
+// global is not the neutral fallback it looks like. It reads as the conservative
+// pick (it claims nothing about which project owns the item) while being the one
+// choice with machine-wide blast radius: a global memory is injected into EVERY
+// project's briefing, indefinitely. The safe-looking option is the expensive one,
+// so the error says so rather than leaving the two to look symmetric.
+const writeScopeHelp = "an unknown slug CREATES that project, so a new project is always " +
+	"an available choice and never an error; project=global is not a neutral fallback -- it puts " +
+	"the item in EVERY project's briefing, so choose it only for genuinely cross-project knowledge"
+
+// maxScopeErrorProjects caps the slug list a scope error carries, so a machine
+// with many projects still returns an error an agent can actually read.
+const maxScopeErrorProjects = 30
+
+// writeProjectArgDesc documents the project argument on every tool that resolves
+// scope through resolveWriteScope. It is one string rather than five hand-worded
+// ones because the fact an agent needs BEFORE it calls -- that naming a new
+// project is an ordinary working choice, and that global is not the free default
+// it resembles -- is precisely the fact that would go stale in four of five copies.
+// The scope error carries the same guidance; this is the half that prevents the
+// bad call rather than correcting it.
+const writeProjectArgDesc = "project slug; defaults to the bound/ambient session's project. " +
+	"An unknown slug CREATES that project -- naming a new one is normal and never an error. " +
+	"Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a " +
+	"neutral default. With no session and no explicit project the call is rejected as ambiguous."
 
 // normalizeProject maps the reserved global tokens to the internal empty-string
 // global scope, and leaves every other slug untouched.
@@ -105,10 +138,21 @@ func normalizeProject(explicit string) string {
 // to a path INSIDE the data dir but outside its tree, letting one item clobber
 // another tree's files. Every tool taking a project/slug argument resolves it
 // through here (via resolveReadScope/resolveWriteScope or directly).
+//
+// It also rejects the widening token, which project_create has always refused for
+// the same reason: gardener_request reads "all" as every project, so a project
+// slugged "all" is permanently unaddressable through it. Shape validation alone
+// used to let the token through here as an ordinary slug -- harmless only while
+// nothing acted on it, and no longer, now that resolveWriteScope registers the
+// slug it is handed. The two ways to name a project scope agree on what a project
+// may be called.
 func validateProjectArg(explicit string) (string, error) {
 	project := normalizeProject(explicit)
 	if project == "" {
 		return "", nil
+	}
+	if project == allProjectsToken {
+		return "", fmt.Errorf("project %q is reserved: gardener_request reads it as every project; name a real slug", explicit)
 	}
 	if err := validate.Name(project); err != nil {
 		return "", fmt.Errorf("invalid project %q: %w", explicit, err)
@@ -453,9 +497,59 @@ func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string,
 		return sess.ProjectSlug, nil
 	}
 	if ambiguous {
-		return "", errAmbiguousScope
+		return "", s.scopeErr(ctx, errAmbiguousScope, "")
 	}
 	return "", nil
+}
+
+// scopeErr decorates a scope sentinel with the guidance an agent needs to answer
+// it: the caller's path-specific help (write only -- a read creates nothing, so
+// telling a reader that a new slug would be created is advice for a different
+// question), plus the slugs that actually exist. It wraps rather than replaces,
+// so errors.Is still sees the sentinel.
+func (s *Server) scopeErr(ctx context.Context, base error, help string) error {
+	tail := ""
+	if help != "" {
+		tail += "; " + help
+	}
+	if known := s.knownProjects(ctx); known != "" {
+		tail += "; known projects: " + known
+	}
+	if tail == "" {
+		return base
+	}
+	return fmt.Errorf("%w%s", base, tail)
+}
+
+// knownProjects renders the active project slugs for a scope error, so an agent
+// picking a project can match one that exists instead of coining a near-duplicate
+// of it -- the failure mode registering unknown slugs would otherwise invite.
+// Retired projects (emptied by a split) are real slugs but not ones to write into,
+// so they are left out. Best-effort: on a store failure the error simply carries
+// no list, rather than trading a scope error the agent can act on for a database
+// error it cannot.
+func (s *Server) knownProjects(ctx context.Context) string {
+	ps, err := store.ListProjects(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("mcp: scope error project list", "error", err)
+		return ""
+	}
+	slugs := make([]string, 0, len(ps))
+	for _, p := range ps {
+		if p.RetiredAt != nil {
+			continue
+		}
+		slugs = append(slugs, p.Slug)
+	}
+	if len(slugs) == 0 {
+		return ""
+	}
+	if len(slugs) > maxScopeErrorProjects {
+		extra := len(slugs) - maxScopeErrorProjects
+		slugs = append(slugs[:maxScopeErrorProjects:maxScopeErrorProjects],
+			fmt.Sprintf("(+%d more -- project_list)", extra))
+	}
+	return strings.Join(slugs, ", ")
 }
 
 // resolveWriteScope is resolveReadScope for durable creates (memory/note/task/
@@ -465,9 +559,33 @@ func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string,
 // or a single-project ambient fallback. When active ambient sessions span
 // multiple projects (concurrent agents), it refuses to guess rather than bleed
 // the write into the wrong project.
+//
+// A named slug is also registered, so a durable create into a not-yet-known
+// project produces a first-class project instead of an orphan scope. The file and
+// its index row land under the slug either way; what was missing was the
+// projects-table row, leaving the project invisible to project_list and the
+// console until some unrelated path (a session_start in a mapped repo,
+// map-repo, an import) happened to backfill it. The gap was silent and
+// self-fulfilling: an agent had no way to tell a new-project write from a broken
+// one, so it avoided naming a new project and reached for project=global -- the
+// one scope that bleeds into every project's briefing. Registering here is what
+// lets writeScopeHelp promise that a new slug works.
+//
+// It registers a typo'd slug too. That is not a regression but the same orphan
+// made visible: the typo already created a scope on disk, and a project_list the
+// console renders is where a wrong one can be noticed and merged, rather than
+// lingering as a directory nothing lists. EnsureProject is idempotent, and a
+// no-op for the global scope.
 func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
-		return validateProjectArg(explicit)
+		project, err := validateProjectArg(explicit)
+		if err != nil {
+			return "", err
+		}
+		if _, err := store.EnsureProject(ctx, s.cfg.DB, project, project); err != nil {
+			return "", err
+		}
+		return project, nil
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
@@ -477,9 +595,9 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 		return sess.ProjectSlug, nil
 	}
 	if ambiguous {
-		return "", errAmbiguousScope
+		return "", s.scopeErr(ctx, errAmbiguousScope, writeScopeHelp)
 	}
-	return "", errNoScope
+	return "", s.scopeErr(ctx, errNoScope, writeScopeHelp)
 }
 
 // setBindingLab records the current research lab on the connection's binding, so

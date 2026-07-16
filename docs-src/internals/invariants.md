@@ -114,6 +114,26 @@ Failing closed is the whole point: with no bound session, no ambient session, an
 no explicit `project`, the write is rejected as ambiguous and the agent must
 choose. `project: global` says it on purpose.
 
+### `resolveWriteScope` registers the slug it is given
+
+A durable create into an unregistered slug used to write the file and its index row
+while leaving the projects table untouched: the project existed for the write, yet
+was absent from `project_list` and the console until some unrelated path (a
+`session_start` in a mapped repo, `map-repo`, an import) happened to backfill the
+row.
+
+That gap made the fail-closed error above unanswerable in practice. An agent told
+to "pass `project=<slug>`" had no cheap way to learn whether an unmapped slug
+would be rejected, and an agent that cannot tell a new-project write from a broken
+one picks `project=global` - the single scope that reaches every project's
+briefing. The guard calls `EnsureProject` on the named slug, which is what lets
+the tool descriptions and the scope error *promise* that a new slug creates its
+project. The guidance and the behavior are the same fix; either alone is a lie.
+
+A typo'd slug is registered too. That is the same orphan made visible rather than
+a new failure: the typo already created a scope on disk, and a row the console
+lists is where a wrong one can be noticed and merged.
+
 ### Precedence, and no guessing
 
 ```text

@@ -44,7 +44,7 @@ func trialRecordTool() mcp.Tool {
 		mcp.WithDescription("Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short trial title")),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project (project=global for a global trial)")),
+		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),
 		mcp.WithString("changes", mcp.Description("what was changed for this trial")),
 		mcp.WithString("expected", mcp.Description("expected result")),
 		mcp.WithString("actual", mcp.Description("observed result")),
