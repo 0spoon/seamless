@@ -12,7 +12,7 @@ import (
 )
 
 // RetrievalWindowKeys are the selectable trailing windows for the retrieval-health
-// views, in display order. "all" (the default) spans every recorded event.
+// views, in display order. "24h" is the default; "all" spans every recorded event.
 var RetrievalWindowKeys = []string{"24h", "7d", "30d", "all"}
 
 // RetrievalWindow is a resolved trailing time window for the retrieval-health
@@ -25,17 +25,18 @@ type RetrievalWindow struct {
 }
 
 // ResolveRetrievalWindow maps a selector key to a window anchored at now. Unknown
-// or empty keys fall back to "all", the default.
+// or empty keys fall back to "24h", the default: an unscoped console page answers
+// about today rather than about all history.
 func ResolveRetrievalWindow(key string, now time.Time) RetrievalWindow {
 	switch key {
-	case "24h":
-		return RetrievalWindow{Key: "24h", Label: "24h", Since: now.Add(-24 * time.Hour)}
 	case "7d":
 		return RetrievalWindow{Key: "7d", Label: "7d", Since: now.AddDate(0, 0, -7)}
 	case "30d":
 		return RetrievalWindow{Key: "30d", Label: "30d", Since: now.AddDate(0, 0, -30)}
-	default:
+	case "all":
 		return RetrievalWindow{Key: "all", Label: "all time"}
+	default:
+		return RetrievalWindow{Key: "24h", Label: "24h", Since: now.Add(-24 * time.Hour)}
 	}
 }
 

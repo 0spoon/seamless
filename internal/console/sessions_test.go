@@ -42,7 +42,7 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	var list sessionsData
 	getJSON(t, mux, "/console/sessions?format=json", &list)
 	require.Equal(t, 1, list.Total)
-	require.Equal(t, "all", list.Window, "defaults to the all-time window")
+	require.Equal(t, "24h", list.Window, "defaults to the 24h window")
 	require.Equal(t, 1, list.Completed)
 	require.Zero(t, list.Active)
 	require.Len(t, list.Sessions, 1)
@@ -173,9 +173,10 @@ func TestSessionsPage_WindowFilter(t *testing.T) {
 	require.NoError(t, store.CreateSession(ctx, db, mk("recent", now.Add(-time.Hour))))
 	require.NoError(t, store.CreateSession(ctx, db, mk("old", now.Add(-72*time.Hour))))
 
-	// All-time lists both; the 24h window drops the 72h-old session.
+	// All-time lists both; the 24h window drops the 72h-old session. The all-time
+	// window is asked for by key: a bare URL now resolves to 24h, the default.
 	var all sessionsData
-	getJSON(t, mux, "/console/sessions?format=json", &all)
+	getJSON(t, mux, "/console/sessions?w=all&format=json", &all)
 	require.Len(t, all.Sessions, 2)
 
 	var day sessionsData

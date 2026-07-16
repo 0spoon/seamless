@@ -46,7 +46,7 @@ func TestRetrievalPage_RatesAndLists(t *testing.T) {
 	require.Equal(t, m.ID, data.TopInjected[0].ID)
 	require.Equal(t, 2, data.TopInjected[0].Sessions)
 	require.NotEmpty(t, data.Trend, "today's injections should appear in the trend")
-	require.Equal(t, "all", data.Window, "defaults to the all-time window")
+	require.Equal(t, "24h", data.Window, "defaults to the 24h window")
 }
 
 func TestRetrievalPage_EmptyRenders(t *testing.T) {

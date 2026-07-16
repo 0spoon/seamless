@@ -208,7 +208,8 @@ seam plan list [--project SLUG] [--window WINDOW]
 Lists captured plans with slug, status, title, project, iteration, agent count,
 task progress, and age. `--window` is `24h`, `7d`, `30d`, or `all` (default
 `all`) and is applied by the server; anything else is a parse error rather than a
-silent fall back to `all`. `--project` filters the returned rows client-side.
+silent fall back to the server's `24h` default. `--project` filters the returned
+rows client-side.
 Prints `(no captured plans)` when nothing matches.
 
 `plan list` takes no positional: `seam plan list <slug>` is an error pointing at

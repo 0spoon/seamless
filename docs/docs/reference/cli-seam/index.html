@@ -280,7 +280,8 @@ locally. Bare <code>seam plan</code> is not a command - it names its subcommands
 </span></span></code></pre><p>Lists captured plans with slug, status, title, project, iteration, agent count,
 task progress, and age. <code>--window</code> is <code>24h</code>, <code>7d</code>, <code>30d</code>, or <code>all</code> (default
 <code>all</code>) and is applied by the server; anything else is a parse error rather than a
-silent fall back to <code>all</code>. <code>--project</code> filters the returned rows client-side.
+silent fall back to the server's <code>24h</code> default. <code>--project</code> filters the returned
+rows client-side.
 Prints <code>(no captured plans)</code> when nothing matches.</p>
 <p><code>plan list</code> takes no positional: <code>seam plan list &lt;slug&gt;</code> is an error pointing at
 <code>seam plan show</code>, not a listing of every plan.</p>
