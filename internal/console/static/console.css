@@ -1272,13 +1272,16 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 @media (max-width: 900px) { .two { grid-template-columns: 1fr; } }
 
 /* --- PLAN timeline card (workspace) --------------------------------------- */
-/* .plan-head is scoped under .plan here so it never collides with the
-   gardener's .plan-group .plan-head (rescoped above). */
-.plan { border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 18px; }
-.plan .plan-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
-.plan .plan-head .ico { width: 15px; height: 15px; color: var(--k-decision); }
-.plan .plan-head .nm { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); }
-.plan .plan-head .prog { margin-left: auto; font-size: var(--text-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The card is .plan-card, never a bare .plan: `plan` is also a CATEGORY modifier
+   (.dot.plan, .ix-vseg.plan), so a bare .plan component rule lands on every
+   category-tinted dot and histogram segment too. .plan-head stays scoped under
+   the card so it never collides with the gardener's .plan-group .plan-head
+   (rescoped above). */
+.plan-card { border: 1px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; margin-bottom: 18px; }
+.plan-card .plan-head { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+.plan-card .plan-head .ico { width: 15px; height: 15px; color: var(--k-decision); }
+.plan-card .plan-head .nm { font-family: var(--font-mono); font-weight: 600; font-size: var(--text-sm); }
+.plan-card .plan-head .prog { margin-left: auto; font-size: var(--text-2xs); color: var(--muted); font-variant-numeric: tabular-nums; }
 .plan-bar { height: 4px; background: var(--surface-3); display: flex; }
 .plan-bar span { height: 100%; display: block; }
 .plan-bar .done { background: var(--ok); }

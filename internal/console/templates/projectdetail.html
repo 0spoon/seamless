@@ -64,7 +64,7 @@
 <!-- TAB: tasks -->
 <div class="tabpanel{{if eq .ActiveTab "tasks"}} on{{end}}" data-panel="tasks">
   {{range .Plans}}
-  <div class="plan">
+  <div class="plan-card">
     <div class="plan-head">{{icon "git-merge"}}<span class="nm">plan:{{.Slug}}</span><span class="prog">{{.Done}} done &middot; {{.InFlight}} in progress &middot; {{.Open}} open &middot; {{.Total}} steps</span></div>
     <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
     {{range .Steps}}
