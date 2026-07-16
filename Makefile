@@ -68,7 +68,7 @@ DOCS_ADDR ?= 127.0.0.1:8899
 INSTALLER := docs/install
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
-	docs docs-check docs-serve installer-check release-snapshot install-git-hooks uninstall-git-hooks \
+	docs docs-check docs-serve installer-check site-check release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
 
@@ -78,8 +78,8 @@ help:
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
-	@echo "  check      the full gate: build + vet + fmt-check + docs-check + lint + test-race"
-	@echo "  check-fast the pre-commit subset: fmt-check + vet + docs-check + lint (no test-race)"
+	@echo "  check      the full gate: build + vet + fmt + docs + installer + site + lint + test-race"
+	@echo "  check-fast the pre-commit subset: same minus build and test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
 	@echo "  fmt        gofmt tracked files"
@@ -88,6 +88,7 @@ help:
 	@echo "  docs-check fail if the committed docs site is stale (part of check)"
 	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
 	@echo "  installer-check   parse-check $(INSTALLER) (part of check)"
+	@echo "  site-check        fail if the landing page drifts from the installer/CLI (part of check)"
 	@echo "  release-snapshot  dry-run the release build into dist/ (needs goreleaser)"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server in the foreground ($(ADDR))"
@@ -174,12 +175,13 @@ check:
 	@$(MAKE) fmt-check
 	@$(MAKE) docs-check
 	@$(MAKE) installer-check
+	@$(MAKE) site-check
 	@$(MAKE) lint
 	@$(MAKE) test-race
 	@echo "check: all green"
 
 # The fast half of `check`: everything except test-race, which is ~37s against
-# ~3s for these four combined. This is what .githooks/pre-commit runs, and it is
+# ~3s for these six combined. This is what .githooks/pre-commit runs, and it is
 # the quick iterate loop by hand. `build` is omitted as redundant -- vet
 # type-checks, so it already fails on anything that would not compile.
 # Cheapest-first, same as `check`. NOT a substitute for the full gate.
@@ -188,6 +190,7 @@ check-fast:
 	@$(MAKE) vet
 	@$(MAKE) docs-check
 	@$(MAKE) installer-check
+	@$(MAKE) site-check
 	@$(MAKE) lint
 	@echo "check-fast: all green (test-race not run -- 'make check' is the full gate)"
 
@@ -201,6 +204,17 @@ installer-check:
 	@sh -n $(INSTALLER) || { echo "ERROR: $(INSTALLER) has a syntax error"; exit 1; }
 	@if command -v shellcheck >/dev/null; then shellcheck -s sh $(INSTALLER) || true; fi
 	@echo "installer-check: $(INSTALLER) parses"
+
+# docs/index.html is the one page with no generator behind it, so it is the one
+# page that can lie indefinitely: the curl|sh installer shipped in d1e926b with
+# every generated surface correct and this gate green, while the hero pill still
+# said `go install`. The script checks only what is mechanically verifiable --
+# the install command each surface teaches, the subcommands the page names, and
+# whether the copy buttons copy what they show. The prose is still on you.
+# Paths and the canonical install command live in the script, not here, so it
+# stays runnable on its own and there is one place to change them.
+site-check:
+	@scripts/site-check.sh
 
 # Git hooks. Committed under .githooks/ because .git/hooks is neither committed
 # nor shared between worktrees. core.hooksPath is repo-local config, so enabling

@@ -54,6 +54,36 @@ Upgrading chroma, goldmark, or Go can shift the generated HTML for the same
 reason. Regenerate in the same PR as the upgrade. Never auto-regenerate in CI:
 the point of committing the output is that a human saw it.
 
+## The landing page is not
+
+`index.html` is hand-written, and that cuts both ways: no build step, but also
+no generator to keep it honest. `docs-check` never reads it, so for a while
+nothing did -- the `curl | sh` installer shipped with the README and every docs
+page correct and the whole gate green, while the hero pill still told visitors
+to run `go install`.
+
+`make site-check` (in `check` and `check-fast`) closes the part of that a
+machine can see:
+
+```bash
+make site-check     # scripts/site-check.sh
+```
+
+1. the hero pill runs the canonical install command
+2. `index.html`, `README.md`, `docs-src/quickstart.md`, and `docs-src/install.md`
+   all teach that same command
+3. every `seamlessd <sub>` the page names in a `data-copy` or `<code>` is a real
+   subcommand in `cmd/seamlessd/main.go`
+4. every copy button's `data-copy` matches the text beside it -- the button reads
+   the attribute, not the DOM, so the two drift silently and nobody proof-reads
+   an attribute
+
+The canonical install command lives in one place, `INSTALL_CMD` in
+`scripts/site-check.sh`. Change it there and the check names every file that
+still disagrees.
+
+It does not read prose. "One binary, no ceremony" is still yours to keep true.
+
 ## Preview locally
 
 ```

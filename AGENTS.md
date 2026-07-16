@@ -235,8 +235,9 @@ the pointer is where to look, not a substitute for reading it.
 
 ## Verification before declaring done
 
-1. **`make check`** -- build + vet + fmt-check + docs-check + lint + test-race,
-   in that order. This is the gate; the individual targets exist for iterating.
+1. **`make check`** -- build + vet + fmt-check + docs-check + installer-check +
+   site-check + lint + test-race, in that order. This is the gate; the individual
+   targets exist for iterating.
 2. Update `*_test.go` in the same change if a signature changed.
 3. For any change touching a recurring pattern above, grep for siblings and fix
    them together.
