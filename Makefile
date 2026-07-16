@@ -70,7 +70,8 @@ INSTALLER := docs/install
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve installer-check site-check release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
-	service-status logs install-onboard-skill uninstall-onboard-skill clean
+	service-status logs install-onboard-skill uninstall-onboard-skill \
+	install-research-skill uninstall-research-skill clean
 
 help:
 	@echo "Seamless targets:"
@@ -108,6 +109,8 @@ help:
 	@echo "  uninstall-git-hooks      disable .githooks/"
 	@echo "  install-onboard-skill    install the /seam-onboard Claude Code skill"
 	@echo "  uninstall-onboard-skill  remove the /seam-onboard skill"
+	@echo "  install-research-skill   install the /seam-research Claude Code skill"
+	@echo "  uninstall-research-skill remove the /seam-research skill"
 	@echo "  clean      remove build artifacts"
 
 build:
@@ -379,10 +382,16 @@ logs:
 	@tail -f $(SVC_LOG)
 
 install-onboard-skill:
-	@scripts/install-onboard-skill.sh
+	@scripts/install-skill.sh seam-onboard
 
 uninstall-onboard-skill:
-	@scripts/uninstall-onboard-skill.sh
+	@scripts/uninstall-skill.sh seam-onboard
+
+install-research-skill:
+	@scripts/install-skill.sh seam-research
+
+uninstall-research-skill:
+	@scripts/uninstall-skill.sh seam-research
 
 clean:
 	rm -rf $(BIN_DIR) dist coverage.*

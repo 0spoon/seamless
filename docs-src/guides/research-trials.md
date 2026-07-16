@@ -71,6 +71,16 @@ memory carries the conclusion. A briefing has a token budget, and twelve trials
 of a solved problem are not what an agent needs injected before it starts work.
 See [Write memories that get recalled](/guides/write-good-memories/).
 
+## The skill
+
+The curl installer drops a `/seam-research` Claude Code skill into
+`~/.claude/skills/` (from a clone: `make install-research-skill`). It wraps
+this loop - open the lab, query before trying, predict before running, record
+once with the outcome, distill decisions into memory - and it is
+model-invocable: Claude activates it on its own when an investigation turns
+into repeated experiments. `/seam-research <lab-name> <problem>` starts or
+resumes one explicitly.
+
 ## The tools
 
 `lab_open`, `trial_record`, and `trial_query` are documented in
