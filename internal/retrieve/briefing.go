@@ -361,7 +361,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	head.WriteString(planHead(sec.plans))
 
 	var tail strings.Builder
-	tail.WriteString("Recall on demand with recall; read a memory with memory_read.\n")
+	tail.WriteString("Recall on demand with recall; read a memory with memory_read. Trust a tool's inputSchema (required + enums) over prose when building a call.\n")
 	if source == "compact" || source == "resume" {
 		tail.WriteString("(resumed session -- earlier context may be summarized; recall to re-ground.)\n")
 	}

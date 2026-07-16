@@ -182,7 +182,24 @@ func TestNormalizeArgs_RequiredRunsAfterTheEmptyStringRule(t *testing.T) {
 	schema := schemaOf(mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds)))
 
 	_, err := normalizeArgs(schema, map[string]any{"kind": ""})
-	require.EqualError(t, err, `missing required parameter "kind"`)
+	require.EqualError(t, err, `missing required parameter "kind" (one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
+}
+
+// TestNormalizeArgs_RequiredBatchesAndEnriches pins the two upgrades to the
+// missing-required report: every absent required field is named in one message
+// (not one rejection per round-trip), and a missing enum field carries its
+// allowed values so the caller clears that hurdle on the same retry. This is the
+// exact opening call from the field report -- name and kind both absent.
+func TestNormalizeArgs_RequiredBatchesAndEnriches(t *testing.T) {
+	schema := schemaOf(
+		mcp.WithString("name", mcp.Required()),
+		mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds)),
+		mcp.WithString("body", mcp.Required()),
+	)
+
+	_, err := normalizeArgs(schema, map[string]any{"body": "b"})
+	require.EqualError(t, err,
+		`missing required parameters: "name", "kind" (one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
 }
 
 // TestArgsCoerceLegacyForms is the plan's headline pin: the array and CSV forms

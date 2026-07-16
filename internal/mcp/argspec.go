@@ -174,11 +174,14 @@ func normalizeArgs(schema mcp.ToolInputSchema, raw map[string]any) (map[string]a
 		}
 	}
 
+	var missing []string
 	for _, name := range schema.Required {
-		if _, ok := out[name]; ok {
-			continue
+		if _, ok := out[name]; !ok {
+			missing = append(missing, name)
 		}
-		return nil, missingRequiredError(name)
+	}
+	if len(missing) > 0 {
+		return nil, missingRequiredError(schema, missing)
 	}
 
 	// Coerce -> enum -> range, per parameter. Sorted for the same determinism.
@@ -522,13 +525,37 @@ func unknownParamError(key string, known []string) error {
 	return fmt.Errorf("unknown parameter %q: valid parameters are: %s", key, strings.Join(known, ", "))
 }
 
-// missingRequiredError reports an absent required parameter, naming its aliases
-// so a caller that sent none of the accepted names sees all of them.
-func missingRequiredError(name string) error {
-	if a := aliasesFor(name); len(a) > 0 {
-		return fmt.Errorf("missing required parameter %q (aliases: %s)", name, strings.Join(a, ", "))
+// missingRequiredError reports every absent required parameter in one message --
+// not one per round-trip -- and, for each, the hints that let a caller fix it
+// without a second rejection: the alternate names an aliased parameter accepts,
+// and the allowed values of an enum. That levels these up to the self-correcting
+// enum/scope errors -- an agent that omitted kind is told it is required AND what
+// the valid kinds are, in a single response -- and collapses the "one mistake,
+// one round-trip" sequence a caller that sent none of the required fields used to
+// pay for.
+func missingRequiredError(schema mcp.ToolInputSchema, names []string) error {
+	parts := make([]string, 0, len(names))
+	for _, name := range names {
+		part := fmt.Sprintf("%q", name)
+		if a := aliasesFor(name); len(a) > 0 {
+			part += fmt.Sprintf(" (aliases: %s)", strings.Join(a, ", "))
+		}
+		// An enum on a missing field is the caller's next hurdle; naming its
+		// values here clears it before the retry. A malformed schema is this
+		// package's own defect and coerceProp surfaces it on the present-value
+		// path, so a lookup miss here just omits the hint rather than masking the
+		// missing-required report.
+		if prop, err := propSchema(schema, name); err == nil {
+			if vals, ok, verr := enumValues(prop, name); verr == nil && ok {
+				part += fmt.Sprintf(" (one of: %s)", strings.Join(vals, ", "))
+			}
+		}
+		parts = append(parts, part)
 	}
-	return fmt.Errorf("missing required parameter %q", name)
+	if len(parts) == 1 {
+		return fmt.Errorf("missing required parameter %s", parts[0])
+	}
+	return fmt.Errorf("missing required parameters: %s", strings.Join(parts, ", "))
 }
 
 // suggestParam returns the parameter the caller most likely meant, or "" when
