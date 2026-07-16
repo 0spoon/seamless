@@ -172,6 +172,9 @@ Linux (amd64 and arm64) with both binaries inside - grab one from
 <p>On a true first run - no config file anywhere - <code>serve</code> generates the bearer
 key and writes it to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy,
 nothing to paste.</p>
+<p>No LLM key is required either: without one, recall degrades to plain full-text
+search. Add OpenAI or Ollama in the <a href="../reference/configuration/">configuration</a>
+when you want semantic recall.</p>
 <p>Working from a clone instead? <code>make build &amp;&amp; make run</code> does the same with
 <code>./bin/</code> binaries, and <code>make install</code> sets the daemon up as a service - see
 <a href="../install/">Install &amp; deploy</a>.</p>
