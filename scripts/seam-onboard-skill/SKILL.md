@@ -48,7 +48,7 @@ If the output is non-empty, record it as `api_key` and jump to 1d.
 
 #### 1b. Find the Seamless config via the installed service
 
-`make install-service` bootstraps seamlessd with `SEAMLESS_CONFIG` set to the config path. Pull that path out of the service definition:
+`make install` bootstraps seamlessd with `SEAMLESS_CONFIG` set to the config path. Pull that path out of the service definition:
 
 - **macOS (launchd):**
   ```bash

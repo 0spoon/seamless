@@ -215,10 +215,10 @@ it rather than trusting the exit code. Fix with <code>seamlessd install-hooks</c
 <li><code>seam doctor</code> → is the daemon actually up and is the key accepted? An empty
 <code>mcp.api_key</code> makes the daemon reject every MCP and hook request while looking
 perfectly healthy on <code>/healthz</code>.</li>
-<li>Did the <code>seam</code> binary move? Command hooks bake in an <strong>absolute path</strong>. A
-rebuild is fine; moving or cleaning the repo is not. Re-run
-<code>install-hooks</code>, or install the release layout so the hooks point at stable
-copies rather than your working tree.</li>
+<li>Did the <code>seam</code> binary move? Command hooks bake in an <strong>absolute path</strong>, and
+<code>make install</code> points them at <code>~/.local/bin/seam</code> - a stable copy, not your
+working tree. If you moved the install prefix or wired the hooks up by hand
+against some other path, re-run <code>make install</code>.</li>
 <li>Check the hook's <strong>type</strong> if you hand-edited settings.json. Claude Code
 silently ignores an <code>http</code> hook for <code>SessionStart</code> - it must be a <code>command</code>
 hook. This is why <code>install-hooks</code> writes it that way.</li>

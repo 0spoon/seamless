@@ -2,9 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
   Seamless launchd service (macOS user LaunchAgent).
-  Placeholders __BINARY__ / __CONFIG__ / __LOG__ are substituted by `make install-service`,
-  which renders this template to ~/Library/LaunchAgents/ and (re)loads it. Do not hand-edit
-  the installed copy; re-run `make install-service` to update.
+  Placeholders __BINARY__ / __CONFIG__ / __LOG__ are substituted by `make install`, which
+  renders this template to ~/Library/LaunchAgents/ and (re)loads it. Do not hand-edit the
+  installed copy; re-run `make install` to update.
 -->
 <plist version="1.0">
 <dict>
