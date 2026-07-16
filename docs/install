@@ -16,11 +16,12 @@
 # in place; the config and ~/.seamless are never touched.
 #
 # Overrides:
-#   SEAMLESS_VERSION      version to install          (default: latest release)
-#   SEAMLESS_INSTALL_DIR  where the binaries go       (default: ~/.local/bin)
-#   SEAMLESS_NO_HOOKS=1   skip the Claude Code hooks + MCP registration
-#   SEAMLESS_NO_SERVICE=1 skip the service; install the binaries and stop
-#   SEAMLESS_ALLOW_ROOT=1 permit running as root (containers)
+#   SEAMLESS_VERSION            version to install (default: latest release)
+#   SEAMLESS_INSTALL_DIR        where the binaries go (default: ~/.local/bin)
+#   SEAMLESS_NO_HOOKS=1         skip the Claude Code hooks + MCP registration
+#   SEAMLESS_NO_ONBOARD_SKILL=1 skip installing the /seam-onboard Claude Code skill
+#   SEAMLESS_NO_SERVICE=1       skip the service; install the binaries and stop
+#   SEAMLESS_ALLOW_ROOT=1       permit running as root (containers)
 set -eu
 
 REPO=0spoon/seamless
@@ -43,6 +44,10 @@ DEFAULT_ADDR=127.0.0.1:8081
 # user session, SEAMLESS_NO_SERVICE) must not then fail for the absence of a
 # daemon nobody started.
 SERVICE_STARTED=0
+
+# Set when the /seam-onboard skill is freshly delivered this run, so the closing
+# message points the user at it only when it is actually there to run.
+ONBOARD_READY=0
 
 say()  { printf '  %s\n' "$*"; }
 step() { printf '  %-12s %s\n' "$1" "$2"; }
@@ -174,6 +179,41 @@ wire_hooks() {
 		# EnsureAPIKey only writes it when the config resolves to nothing.
 		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks --seam "$INSTALL_DIR/seam")
 	fi
+}
+
+# Drop the seam-onboard Claude Code skill into ~/.claude/skills/ from the copy
+# bundled in the release archive (see .goreleaser.yaml), so a no-clone install
+# can still deliver it. The skill self-removes after /seam-onboard runs, so a
+# delivered-once marker keeps re-runs (upgrades) from re-adding a skill the user
+# already used up. Skipped when the whole Claude Code wiring is opted out
+# (SEAMLESS_NO_HOOKS) or explicitly (SEAMLESS_NO_ONBOARD_SKILL). A release that
+# predates the bundled skill simply has nothing to install here.
+install_onboard_skill() {
+	if [ -n "${SEAMLESS_NO_ONBOARD_SKILL:-}" ]; then
+		step onboard "skipped (SEAMLESS_NO_ONBOARD_SKILL)"
+		return 0
+	fi
+	[ -n "${SEAMLESS_NO_HOOKS:-}" ] && return 0
+
+	src="$TMP/seam-onboard/SKILL.md"
+	[ -f "$src" ] || return 0 # older/pinned release without the bundled skill
+
+	skills="$HOME/.claude/skills"
+	dst="$skills/seam-onboard"
+	marker="$skills/.seam-onboard-delivered"
+	mkdir -p "$skills"
+
+	# Delivered before and now gone: the user ran /seam-onboard (which deletes
+	# the skill), so do not re-add it on this upgrade.
+	if [ ! -d "$dst" ] && [ -f "$marker" ]; then
+		return 0
+	fi
+
+	mkdir -p "$dst"
+	install -m 0644 "$src" "$dst/SKILL.md"
+	: >"$marker" 2>/dev/null || true
+	step onboard "/seam-onboard skill installed"
+	ONBOARD_READY=1
 }
 
 # Read the port back out of the config the way the Makefile does, so someone who
@@ -336,6 +376,7 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	download
 	unpack
 	wire_hooks
+	install_onboard_skill
 	read_addr
 
 	if [ -n "${SEAMLESS_NO_SERVICE:-}" ]; then
@@ -361,10 +402,13 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 		;;
 	esac
 	say 'next:'
-	say "  seamlessd map-repo --path ~/code/myrepo --project myrepo   # bind a repo to a project"
-	say "  seamlessd console-open                                     # open the console, logged in"
+	say '  open any git repo in Claude Code -- Seamless maps it to a project on its own'
+	say "  seamlessd console-open   # open the console, already logged in"
 	printf '\n'
 	say 'restart Claude Code so it picks up the hooks and the MCP server.'
+	if [ "$ONBOARD_READY" = 1 ]; then
+		say 'then run  /seam-onboard  once to teach your agents when to reach for Seamless.'
+	fi
 	say "docs: $DOCS"
 	printf '\n'
 }

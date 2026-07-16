@@ -222,8 +222,10 @@ started with your knowledge already in context.</p>
 <ul>
 <li><a href="../install/">Install &amp; deploy</a> makes the daemon a service that survives
 reboots instead of a foreground process.</li>
-<li>From a clone, <code>make install-onboard-skill</code> installs a <code>/seam-onboard</code> Claude
-Code skill that walks an agent through this setup and verifies each step.</li>
+<li>The installer already dropped a <code>/seam-onboard</code> Claude Code skill into
+<code>~/.claude/skills/</code>; run <code>/seam-onboard</code> once to write a Seamless-awareness
+block into a global or project <code>CLAUDE.md</code>. (From a clone,
+<code>make install-onboard-skill</code> re-installs it.)</li>
 <li>Look up any tool, key, or command in the <a href="../reference/">Reference</a>.</li>
 </ul>
 

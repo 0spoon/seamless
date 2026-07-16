@@ -48,6 +48,7 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 | `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
 | `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
 | `SEAMLESS_NO_HOOKS=1` | skip the Claude Code hooks and MCP registration |
+| `SEAMLESS_NO_ONBOARD_SKILL=1` | skip dropping the `/seam-onboard` skill into `~/.claude/skills/` |
 | `SEAMLESS_NO_SERVICE=1` | install the binaries only; run `seamlessd serve` yourself |
 | `SEAMLESS_ALLOW_ROOT=1` | permit running as root (single-user containers) |
 

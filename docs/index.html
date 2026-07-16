@@ -316,7 +316,7 @@
         <div>
           <h3>Open Claude Code in any repo</h3>
           <div class="code"><span><span class="p">$</span> <span data-copy="cd ~/code/myrepo &amp;&amp; claude">cd ~/code/myrepo &amp;&amp; claude</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. Want a slug that isn't the directory name? <code>seamlessd map-repo</code> is still there.</p>
+          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. One optional one-time step: run <code>/seam-onboard</code> - the installer dropped that skill into <code>~/.claude/skills/</code> - to write a short Seamless-awareness block into your <code>CLAUDE.md</code> so agents know when to reach for it. Want a slug that isn't the directory name? <code>seamlessd map-repo</code> is still there.</p>
         </div>
       </div>
       <div class="qs rv">

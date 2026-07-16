@@ -214,12 +214,17 @@ project scope from their cwd - no <code>project</code> argument on any call.</p>
 </span></span></code></pre><p>See <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
 unmapped writes are rejected rather than defaulted to global.</p>
 <h2 id="tell-your-agents-it-exists">Tell your agents it exists</h2>
-<p>Installing the tools does not mean an agent will use them well. Two things help:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># installs the /seam-onboard Claude Code skill</span>
-</span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above and verifies each step.</p>
-<p>Second, add a short block to your <code>CLAUDE.md</code> describing when to reach for
-Seamless - memory that should outlive the conversation, work that crosses
-agents - and when not to (trivial edits, things the codebase already records).
+<p>Installing the tools does not mean an agent will use them well. Two things help.</p>
+<p>First, run <code>/seam-onboard</code>. The curl installer already drops this Claude Code
+skill into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-skill</code>
+(re)installs it:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># (re)install the /seam-onboard skill from a clone</span>
+</span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
+writes a Seamless-awareness block into your <code>CLAUDE.md</code> before removing itself.</p>
+<p>Second - or if you skip the skill - add that block to your <code>CLAUDE.md</code> by hand:
+describe when to reach for Seamless (memory that should outlive the
+conversation, work that crosses agents) and when not to (trivial edits, things
+the codebase already records).
 The briefing tells an agent <em>what you know</em>; your <code>CLAUDE.md</code> tells it <em>when to
 write more down</em>.</p>
 <h2 id="verify">Verify</h2>
