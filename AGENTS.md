@@ -269,6 +269,8 @@ files; use them.
 ## Console (server-rendered)
 
 The observability console is `html/template` + vanilla JS + SSE, served by
-`internal/console` -- no node, npm, React, or build step. It is read-mostly (the
-one write is archiving a memory). Keep pages self-contained and dependency-free so
-an agent can edit them without a toolchain.
+`internal/console` -- no node, npm, React, or build step. It is read-mostly: the
+writes are the owner's overrides and curation actions -- archive a memory, approve
+a plan, force-release a task's claim lock, ask/split/apply/dismiss/retarget a
+gardener proposal, and save or reset the briefing settings. Keep pages
+self-contained and dependency-free so an agent can edit them without a toolchain.

@@ -1,10 +1,12 @@
 // Package console serves the Seamless observability UI: server-rendered
 // html/template pages plus an SSE feed, with no node/npm/React or build step.
-// It is read-mostly -- the only writes are archiving a memory,
-// applying/dismissing a gardener proposal, and force-releasing a task's claim
-// lock (the owner override). Access is guarded by the same static bearer key as
-// the MCP surface: a browser trades the key for a cookie at /console/login, and
-// the seam CLI presents the key as a bearer token.
+// It is read-mostly -- the writes are the owner's overrides and curation
+// actions: archiving a memory, approving a plan, force-releasing a task's claim
+// lock, asking the gardener for proposals (request/split) and resolving them
+// (apply/dismiss/retarget), and saving or resetting the briefing settings.
+// Access is guarded by the same static bearer key as the MCP surface: a browser
+// trades the key for a cookie at /console/login, and the seam CLI presents the
+// key as a bearer token.
 package console
 
 import (
