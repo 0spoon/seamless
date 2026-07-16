@@ -526,6 +526,291 @@ body::before {
 .how-diagram .d-arrowhead { fill: var(--muted); }
 
 /* ==========================================================================
+   TERMINAL SCENES -- animated verbatim with/without transcripts (scenes.js)
+   ========================================================================== */
+.scenes { display: flex; flex-direction: column; gap: 26px; }
+.term-scene:empty { display: none; } /* JS-off: collapse the mount, <noscript> carries the note */
+
+.term-scene {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: clamp(18px, 3vw, 28px);
+}
+
+/* scene header */
+.ts-head { margin-bottom: 16px; }
+.ts-kicker {
+  font-family: var(--font-mono);
+  font-size: 11.5px; font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--pop-strong);
+  background: var(--pop-soft);
+  display: inline-block; padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  margin-bottom: 12px;
+}
+.ts-title {
+  font-family: var(--font-display);
+  font-size: clamp(20px, 2.4vw, 24px); font-weight: 700;
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.16;
+}
+.ts-ask {
+  margin-top: 12px;
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--ink);
+}
+.ts-ask-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--brand);
+  background: var(--brand-soft); padding: 2px 8px; border-radius: var(--radius-xs);
+  flex: none;
+}
+
+/* the without|with toggle */
+.term-tabs {
+  display: flex; gap: 6px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  padding: 4px;
+  margin-bottom: 14px;
+  width: max-content; max-width: 100%;
+}
+.term-tab {
+  appearance: none; cursor: pointer;
+  border: 1px solid transparent; background: transparent;
+  border-radius: var(--radius-pill);
+  padding: 7px 16px;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted);
+  display: inline-flex; align-items: center; gap: 8px;
+  white-space: nowrap;
+  transition: color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out);
+}
+.term-tab:hover { color: var(--ink); }
+.term-tab.active {
+  background: var(--surface); color: var(--ink);
+  border-color: var(--border-strong); box-shadow: var(--shadow-sm);
+}
+.term-tab .tab-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-strong); flex: none;
+}
+.term-tab.tab-without.active .tab-dot { background: var(--pop); }
+.term-tab.tab-with.active .tab-dot { background: var(--ok); }
+.term-tab.hint { color: var(--ink); animation: ts-tabhint 1.6s var(--ease-out) infinite; }
+@keyframes ts-tabhint {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--ok) 40%, transparent); }
+  55%      { box-shadow: 0 0 0 6px transparent; }
+}
+
+/* terminal panel (reuses the hero .term component) */
+.term-scene-term { box-shadow: var(--shadow-md); font-size: 13px; }
+.term-scene-term .term-body {
+  position: relative;
+  height: clamp(300px, 46vh, 460px);
+  overflow: auto;
+  scrollbar-width: thin;
+}
+.ts-pane { display: none; }
+.ts-pane.on { display: block; }
+
+/* per-step reveal -- SCOPED to scene terminals. The hero .term (no
+   .term-scene-term) is static HTML with no .show/.idle, so an unscoped
+   opacity:0 here blanks the whole hero terminal. Keep this prefix. */
+.term-scene-term .term-body .ln, .term-scene-term .term-body .ffwd {
+  opacity: 0; transform: translateY(3px);
+  transition: opacity .28s var(--ease-out), transform .28s var(--ease-out);
+}
+.term-scene-term .term-body .ln.show, .term-scene-term .term-body .ffwd.show,
+.term-scene-term .term-body .ln.idle { opacity: 1; transform: none; }
+
+/* typed user prompt */
+.term-body .ln.user { white-space: pre-wrap; margin: 2px 0; }
+.term-body .ln.user .typed { color: var(--term-ink); }
+.term-body .ln.user.typing .typed::after,
+.term-body .ln.idle .caret {
+  content: ""; display: inline-block;
+  width: 7px; height: 1.05em; margin-left: 1px;
+  vertical-align: text-bottom; background: var(--term-green);
+  animation: blink 1.1s steps(1) infinite;
+}
+
+/* injection block -- appears as a unit, focus lines highlighted */
+.term-body .ln.inject {
+  white-space: pre-wrap;
+  margin: 8px 0 10px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--term-brand) 45%, transparent);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--term-brand) 12%, transparent);
+  color: var(--term-muted);
+  font-size: 12px; line-height: 1.65;
+}
+.inject-tag {
+  display: block; margin-bottom: 6px;
+  font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--term-brand);
+}
+.term-body .ln.inject mark.foc {
+  background: color-mix(in srgb, var(--term-pop) 22%, transparent);
+  color: var(--term-ink);
+  border-radius: 3px; padding: 0 2px;
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--term-pop) 55%, transparent);
+}
+.term-body .ln.inject.pulse { animation: ts-inject-pulse 1.2s var(--ease-out); }
+@keyframes ts-inject-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--term-brand) 55%, transparent); }
+  100% { box-shadow: 0 0 0 10px transparent; }
+}
+
+/* collapsed tool-call line */
+.term-body .ln.tool { white-space: normal; margin: 3px 0; color: var(--term-muted); }
+.term-body .ln.tool .tool-dot { color: var(--term-green); }
+.term-body .ln.tool .tool-label { color: var(--term-ink); }
+
+/* agent prose (markdown-lite) */
+.term-body .ln.agent { white-space: normal; margin: 6px 0 8px; color: var(--term-ink); line-height: 1.7; }
+.term-body .ln.agent p { margin: 0 0 8px; }
+.term-body .ln.agent p:last-child, .term-body .ln.agent > :last-child { margin-bottom: 0; }
+.term-body .ln.agent strong { color: #eef0f5; font-weight: 700; }
+.term-body .ln.agent em { color: var(--term-muted); font-style: italic; }
+.term-body .ln.agent code {
+  font-size: 12px; color: var(--term-pop);
+  background: color-mix(in srgb, var(--term-ink) 12%, transparent);
+  border-radius: 3px; padding: 0 4px;
+}
+.term-body .ln.agent h4 {
+  font-family: var(--font-mono);
+  font-size: 12px; font-weight: 700; letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; color: var(--term-brand);
+  margin: 12px 0 6px;
+}
+.term-body .ln.agent blockquote {
+  margin: 8px 0; padding: 4px 0 4px 12px;
+  border-left: 2px solid color-mix(in srgb, var(--term-pop) 60%, transparent);
+  color: var(--term-muted);
+}
+.term-body .ln.agent ul, .term-body .ln.agent ol { margin: 6px 0 8px; padding-left: 20px; }
+.term-body .ln.agent li { margin: 2px 0; }
+
+/* fast-forward span */
+.term-body .ffwd {
+  display: flex; align-items: baseline; gap: 9px;
+  margin: 5px 0;
+  color: var(--term-muted); font-size: 12px; font-style: italic;
+}
+.ffwd-chip {
+  font-style: normal;
+  font-size: 10px; font-weight: 700; letter-spacing: var(--tracking-wide);
+  color: var(--term-green);
+  border: 1px solid color-mix(in srgb, var(--term-green) 45%, transparent);
+  border-radius: var(--radius-xs);
+  padding: 1px 6px; flex: none;
+}
+
+/* footer: outcome + replay */
+.ts-foot {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin-top: 16px;
+}
+.ts-outcome { font-size: 14px; color: var(--ink-2); flex: 1; min-width: 0; }
+.ts-replay {
+  appearance: none; cursor: pointer; flex: none;
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border-strong); background: var(--surface);
+  color: var(--ink-2);
+  border-radius: var(--radius-pill);
+  padding: 7px 14px;
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.ts-replay:hover { color: var(--ink); border-color: var(--ink-2); }
+
+/* --- scene 3: two agents, one timeline (layout:"split") ------------------- */
+.ts-split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+}
+.ts-col { display: flex; flex-direction: column; min-width: 0; }
+.ts-split-term .term-bar span {
+  font-size: 11px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* same specificity as `.term-scene-term .term-body`, declared later -> wins */
+.ts-split-term .ts-splitpane {
+  height: clamp(260px, 40vh, 400px);
+  overflow: auto; scrollbar-width: thin;
+}
+.ts-col-outcome { margin-top: 12px; font-size: 13px; }
+.ts-foot-split { justify-content: center; margin-top: 18px; }
+
+/* the claim collision: flash the winner green, the bounce coral */
+.term-body .ln.tool.tool-win .tool-res { color: var(--term-green); }
+.term-body .ln.tool.tool-bounce .tool-res { color: var(--term-pop); }
+.term-body .ln.tool.tool-win.show { animation: ts-claim 1.3s var(--ease-out); --claim: var(--term-green); }
+.term-body .ln.tool.tool-bounce.show { animation: ts-claim 1.3s var(--ease-out); --claim: var(--term-pop); }
+@keyframes ts-claim {
+  0%, 15% { background: transparent; }
+  42%     { background: color-mix(in srgb, var(--claim) 20%, transparent); }
+  100%    { background: transparent; }
+}
+
+/* --- files-as-truth epilogue: folded into scene 1's with-side ending ------- */
+.cl-ln {
+  display: block; white-space: pre-wrap;
+  color: var(--term-ink); line-height: 1.7;
+  opacity: 0; transform: translateY(3px);
+  transition: opacity .3s var(--ease-out), transform .3s var(--ease-out);
+}
+.cl-ln.show { opacity: 1; transform: none; }
+.cl-ln.cl-comment { color: var(--term-muted); margin: 2px 0; }
+.cl-ln.cl-cmd { margin: 7px 0 2px; }
+.cl-ln.cl-fm { font-size: 12.5px; }
+.cl-filegrid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px 20px; margin: 4px 0 2px; max-width: 540px;
+}
+.cl-file { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cl-file.new { grid-column: 1 / -1; color: var(--term-green); font-weight: 600; }
+.cl-tag { color: var(--term-muted); font-weight: 400; }
+@media (max-width: 720px) {
+  .ts-split { grid-template-columns: 1fr; }
+  .ts-split-term .ts-splitpane { height: clamp(220px, 34vh, 320px); }
+}
+
+@media (max-width: 620px) {
+  .ts-foot { flex-direction: column; align-items: flex-start; }
+  .term-tabs { width: 100%; }
+  /* min-width:0 lets the two nowrap tabs shrink to share a 320px row instead of
+     forcing a horizontal scroll; trimmed padding/tracking buys the slack. */
+  .term-tab {
+    flex: 1 1 0; min-width: 0; justify-content: center;
+    padding: 7px 8px; gap: 6px; font-size: 11.5px; letter-spacing: 0;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .term-scene-term .term-body .ln, .term-scene-term .term-body .ffwd { opacity: 1; transform: none; transition: none; }
+  .term-body .ln.user.typing .typed::after, .term-body .ln.idle .caret { animation: none; }
+  .term-body .ln.inject.pulse { animation: none; }
+  .term-tab.hint { animation: none; }
+  .ln.tool.tool-win, .ln.tool.tool-bounce { animation: none; }
+  .cl-ln { opacity: 1; transform: none; transition: none; }
+}
+
+/* ==========================================================================
    CONSOLE SECTION
    ========================================================================== */
 .console-grid {
