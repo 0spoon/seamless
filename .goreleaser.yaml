@@ -1,0 +1,70 @@
+# goreleaser config: cross-compiled release binaries for tagged versions.
+# Triggered by .github/workflows/release.yml on a v* tag; dry-run locally with
+# `make release-snapshot`. The version comes from the git tag (leading v
+# stripped), injected as main.version -- see cmd/seamlessd/main.go.
+version: 2
+
+project_name: seamless
+
+builds:
+  # No CGO anywhere (pure-Go SQLite), so plain cross-compilation covers every
+  # target. darwin + linux only: the daemon's service integration is launchd/
+  # systemd and nothing is tested on Windows.
+  - id: seamlessd
+    main: ./cmd/seamlessd
+    binary: seamlessd
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X main.version={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.buildDate={{ .Date }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+  # seam has no link-time metadata; it reports the server's version via
+  # `seam status` instead of carrying its own.
+  - id: seam
+    main: ./cmd/seam
+    binary: seam
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags: [-trimpath]
+    ldflags: [-s -w]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+# One archive per platform holding both binaries, plus the docs a fresh
+# install needs (the example config is what `make install` seeds from).
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+      - seamless.yaml.example
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Other
+      order: 999
+  filters:
+    exclude:
+      - '^docs'
+      - '^chore'
+      - '^ci'
+      - '^test'

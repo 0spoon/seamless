@@ -62,7 +62,7 @@ DOCS_OUT  := docs/docs
 DOCS_ADDR ?= 127.0.0.1:8899
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
-	docs docs-check docs-serve install-git-hooks uninstall-git-hooks \
+	docs docs-check docs-serve release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill clean
 
@@ -81,6 +81,7 @@ help:
 	@echo "  docs       regenerate the docs site (docs-src/ -> docs/docs/, committed)"
 	@echo "  docs-check fail if the committed docs site is stale (part of check)"
 	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
+	@echo "  release-snapshot  dry-run the release build into dist/ (needs goreleaser)"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server in the foreground ($(ADDR))"
 	@echo "  doctor     build and run config + DB self-checks"
@@ -194,6 +195,14 @@ install-git-hooks:
 uninstall-git-hooks:
 	@git config --unset core.hooksPath 2>/dev/null || true
 	@echo "git hooks disabled"
+
+# Local dry-run of the release pipeline (.goreleaser.yaml): validates the
+# config and cross-compiles every platform into dist/ without tagging or
+# publishing. Real releases run in CI on a v* tag (.github/workflows/release.yml).
+release-snapshot:
+	@command -v goreleaser >/dev/null \
+	    || { echo "ERROR: goreleaser not found (brew install goreleaser)"; exit 1; }
+	goreleaser release --snapshot --clean
 
 tidy:
 	$(GO) mod tidy
@@ -342,4 +351,4 @@ uninstall-onboard-skill:
 	@scripts/uninstall-onboard-skill.sh
 
 clean:
-	rm -rf $(BIN_DIR) coverage.*
+	rm -rf $(BIN_DIR) dist coverage.*

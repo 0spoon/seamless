@@ -160,11 +160,16 @@
   <p>This is the one happy path: install, serve, wire your agents, and watch a
 session open with a briefing. Every fork in the road is a link, not a branch in
 these steps.</p>
-<p>Requires <strong>Go 1.25+</strong>. No CGO toolchain, no external database, no Node.</p>
+<p>No CGO toolchain, no external database, no Node. Building from source needs
+<strong>Go 1.25+</strong>; the prebuilt binaries need nothing.</p>
 <h2 id="install-and-run">Install and run</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">go install github.com/0spoon/seamless/cmd/...@latest   <span class="c1"># seamlessd + seam</span>
 </span></span><span class="line"><span class="cl">seamlessd serve                                        <span class="c1"># 127.0.0.1:8081, data in ~/.seamless</span>
-</span></span></code></pre><p>On a true first run - no config file anywhere - <code>serve</code> generates the bearer
+</span></span></code></pre><p>No Go toolchain? Every tagged release ships prebuilt archives for macOS and
+Linux (amd64 and arm64) with both binaries inside - grab one from
+<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a> and put
+<code>seamlessd</code> and <code>seam</code> on your PATH.</p>
+<p>On a true first run - no config file anywhere - <code>serve</code> generates the bearer
 key and writes it to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy,
 nothing to paste.</p>
 <p>Working from a clone instead? <code>make build &amp;&amp; make run</code> does the same with

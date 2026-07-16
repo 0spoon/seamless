@@ -38,6 +38,13 @@ searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
 It is seeded **only when absent** - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.
 
+Not working from a clone? Tagged releases carry prebuilt archives for macOS and
+Linux ([GitHub releases](https://github.com/0spoon/seamless/releases)). The
+binaries are identical; what you lose is the Makefile. From a bare binary,
+`seamlessd serve` covers the essentials - first run seeds the config - and
+`seamlessd install-hooks` wires Claude Code; only the service management on
+this page assumes the repo.
+
 ## Iterating on Seamless itself
 
 `make install` is also the edit-test loop. When the rendered plist is unchanged -
