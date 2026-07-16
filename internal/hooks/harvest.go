@@ -6,12 +6,15 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // harvestFallback is the finding recorded when no assistant text can be
 // harvested (missing/unreadable/empty transcript). It marks the session ended
-// without a summary rather than leaving findings blank.
-const harvestFallback = "(auto) session ended, no summary harvested"
+// without a summary rather than leaving findings blank. The briefing filters it
+// back out (core.FindingNoSummary) so a content-free line never reaches an agent.
+const harvestFallback = core.FindingNoSummary
 
 // maxHarvestRunes caps auto-harvested findings so a long final message does not
 // bloat the session record or later briefings.

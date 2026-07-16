@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/llm"
 )
 
@@ -65,9 +65,10 @@ func sanitizeField(s string, maxRunes int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = injectionRe.ReplaceAllString(s, "")
 	s = strings.Join(strings.Fields(s), " ")
-	if maxRunes > 3 && utf8.RuneCountInString(s) > maxRunes {
-		r := []rune(s)
-		s = string(r[:maxRunes-3]) + "..."
+	// maxRunes <= 3 disables the cap (the historical contract); above it, cut on
+	// a word boundary with a trailing ellipsis rather than mid-word.
+	if maxRunes > 3 {
+		s = core.TruncateWords(s, maxRunes)
 	}
 	return s
 }

@@ -79,6 +79,11 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, b, "<seam-briefing>")
 	require.Contains(t, b, "</seam-briefing>")
+	// Header reports one memory total with constraints as its named subset (1
+	// constraint + 3 index memories incl. the visible global = 4), not two
+	// disjoint pools -- so the count reconciles with the rendered CONSTRAINT and
+	// memory lines.
+	require.Contains(t, b, "Seam project: seam -- 4 memories (1 constraints), 1 recent findings.")
 	require.Contains(t, b, "CONSTRAINT: no-force-push: never force push to main")
 	require.Contains(t, b, "chroma-boot-race")
 	require.Contains(t, b, "global-fact") // global memory visible in project scope
