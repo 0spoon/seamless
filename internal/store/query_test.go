@@ -191,6 +191,18 @@ func TestSessionsCRUDAndFindings(t *testing.T) {
 	rf, err = RecentFindings(ctx, db, "seam", 5)
 	require.NoError(t, err)
 	require.Len(t, rf, 1)
+
+	// A completed session whose findings is the no-summary sentinel is excluded:
+	// it carries no knowledge and must not spend an agent's briefing context.
+	require.NoError(t, CreateSession(ctx, db, core.Session{
+		ID: "01U", Name: "cc/9900", ProjectSlug: "seam", Status: core.SessionCompleted,
+		Ambient: true, Findings: core.FindingNoSummary,
+		CreatedAt: now, UpdatedAt: now.Add(2 * time.Minute), // newest, so it would sort first
+	}))
+	rf, err = RecentFindings(ctx, db, "seam", 5)
+	require.NoError(t, err)
+	require.Len(t, rf, 1)
+	require.Equal(t, "discovered the boot race", rf[0].Findings, "sentinel finding filtered out")
 }
 
 func memNames(ms []core.Memory) []string {

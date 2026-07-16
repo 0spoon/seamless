@@ -333,9 +333,16 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// is only known after the findings reservation below; headLine defers its
 	// composition. Estimating the budget with the pre-reservation count is fine
 	// -- the two strings differ by at most a digit.
+	//
+	// Constraints ARE memories (kind=constraint), just pinned and rendered first,
+	// so the header reports one memory total with constraints called out as its
+	// subset. Reporting them as two disjoint pools ("6 constraints, 76 memories")
+	// contradicts the body, where 6 CONSTRAINT lines + the index + the "+N older"
+	// trailer sum to the total, not to the index count alone.
+	totalMems := len(constraints) + len(index)
 	headLine := func(renderedFindings int) string {
-		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d constraints, %d memories, %d recent findings.\n",
-			sanitizeField(label, 80), len(constraints), len(index), renderedFindings)
+		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories (%d constraints), %d recent findings.\n",
+			sanitizeField(label, 80), totalMems, len(constraints), renderedFindings)
 	}
 
 	var head strings.Builder

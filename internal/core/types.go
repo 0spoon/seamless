@@ -177,6 +177,13 @@ type Session struct {
 	UpdatedAt       time.Time      `json:"updatedAt"`
 }
 
+// FindingNoSummary is the sentinel findings value recorded when a session ends
+// with nothing to harvest (missing/empty/unreadable transcript). It marks the
+// session ended-without-a-summary rather than leaving findings blank -- but it
+// carries no knowledge, so the briefing's findings queries exclude it: a
+// content-free line is not worth an agent's context window.
+const FindingNoSummary = "(auto) session ended, no summary harvested"
+
 // ---------------------------------------------------------------------------
 // Task
 // ---------------------------------------------------------------------------

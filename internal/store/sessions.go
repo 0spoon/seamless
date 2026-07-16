@@ -317,18 +317,20 @@ func SessionByName(ctx context.Context, db *sql.DB, name string) (core.Session, 
 	return sessionOne(ctx, db, `SELECT `+sessionCols+` FROM sessions WHERE name = ? LIMIT 1`, name)
 }
 
-// RecentFindings returns completed sessions with non-empty findings visible to a
+// RecentFindings returns completed sessions with meaningful findings visible to a
 // project (its own plus global sessions), most recent first. It backs the
-// briefing's "recent findings" section.
+// briefing's "recent findings" section, so it excludes both blank findings and
+// the core.FindingNoSummary sentinel (a session that ended with nothing to
+// harvest) -- a content-free line is not worth an agent's context.
 func RecentFindings(ctx context.Context, db *sql.DB, project string, limit int) ([]core.Session, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'completed' AND findings <> ''
+		WHERE status = 'completed' AND findings <> '' AND findings <> ?
 		  AND (project_slug = ? OR project_slug = '')
-		ORDER BY updated_at DESC, id DESC LIMIT ?`, project, limit)
+		ORDER BY updated_at DESC, id DESC LIMIT ?`, core.FindingNoSummary, project, limit)
 	if err != nil {
 		return nil, fmt.Errorf("store.RecentFindings: %w", err)
 	}
@@ -468,10 +470,11 @@ func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, project st
 	return out, rows.Err()
 }
 
-// SiblingFindings returns the most recent completed sessions with non-empty
+// SiblingFindings returns the most recent completed sessions with meaningful
 // findings across the given sibling projects, newest first, capped at limit. It
-// backs the briefing's "Sibling projects" section. An empty slugs slice yields
-// no results.
+// backs the briefing's "Sibling projects" section, so -- like RecentFindings --
+// it excludes blank findings and the core.FindingNoSummary sentinel. An empty
+// slugs slice yields no results.
 func SiblingFindings(ctx context.Context, db *sql.DB, slugs []string, limit int) ([]core.Session, error) {
 	if len(slugs) == 0 {
 		return nil, nil
@@ -479,14 +482,15 @@ func SiblingFindings(ctx context.Context, db *sql.DB, slugs []string, limit int)
 	if limit <= 0 {
 		limit = 2
 	}
-	args := make([]any, 0, len(slugs)+1)
+	args := make([]any, 0, len(slugs)+2)
+	args = append(args, core.FindingNoSummary)
 	for _, s := range slugs {
 		args = append(args, s)
 	}
 	args = append(args, limit)
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'completed' AND findings <> ''
+		WHERE status = 'completed' AND findings <> '' AND findings <> ?
 		  AND project_slug IN (`+placeholders(len(slugs))+`)
 		ORDER BY updated_at DESC, id DESC LIMIT ?`, args...)
 	if err != nil {

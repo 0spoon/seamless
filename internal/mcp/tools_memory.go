@@ -46,9 +46,9 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return errResult("memory_write", err)
 	}
-	if len([]rune(desc)) > maxDescriptionRunes {
-		desc = string([]rune(desc)[:maxDescriptionRunes])
-	}
+	// Cap on a word boundary with a trailing ellipsis so the stored description
+	// -- the only text shown in every index and briefing -- never ends mid-word.
+	desc = core.TruncateWords(desc, maxDescriptionRunes)
 
 	now := time.Now().UTC()
 	existing, found, err := s.resolveMemory(ctx, project, name, false)
