@@ -1,0 +1,34 @@
+name: Release
+
+# Cut a release by pushing a version tag: `git tag v0.3.0 && git push origin
+# v0.3.0`. goreleaser cross-compiles seamlessd + seam (see .goreleaser.yaml)
+# and publishes the archives, checksums, and changelog as a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Full history: the changelog is built from the commits since the
+      # previous tag, which a shallow checkout cannot see.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

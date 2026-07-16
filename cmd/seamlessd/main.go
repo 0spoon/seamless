@@ -39,14 +39,17 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// version is the seamlessd build version, bumped at release.
-const version = "0.2.1"
+// version is the seamlessd build version, bumped at release. A var, not a
+// const: goreleaser overrides it from the git tag via -X main.version (see
+// .goreleaser.yaml); a source build reports this default.
+var version = "0.3.0"
 
 // commit and buildDate are link-time build metadata, set via
 //
 //	go build -ldflags "-X main.commit=$(git rev-parse --short HEAD) -X main.buildDate=<utc>"
 //
-// (see the Makefile). They stay "unknown" for a plain `go build`/`go test`.
+// (see the Makefile and .goreleaser.yaml). They stay "unknown" for a plain
+// `go build`/`go test`.
 var (
 	commit    = "unknown"
 	buildDate = "unknown"

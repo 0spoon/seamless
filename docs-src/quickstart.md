@@ -7,7 +7,8 @@ This is the one happy path: install, serve, wire your agents, and watch a
 session open with a briefing. Every fork in the road is a link, not a branch in
 these steps.
 
-Requires **Go 1.25+**. No CGO toolchain, no external database, no Node.
+No CGO toolchain, no external database, no Node. Building from source needs
+**Go 1.25+**; the prebuilt binaries need nothing.
 
 ## Install and run
 
@@ -15,6 +16,11 @@ Requires **Go 1.25+**. No CGO toolchain, no external database, no Node.
 go install github.com/0spoon/seamless/cmd/...@latest   # seamlessd + seam
 seamlessd serve                                        # 127.0.0.1:8081, data in ~/.seamless
 ```
+
+No Go toolchain? Every tagged release ships prebuilt archives for macOS and
+Linux (amd64 and arm64) with both binaries inside - grab one from
+[GitHub releases](https://github.com/0spoon/seamless/releases) and put
+`seamlessd` and `seam` on your PATH.
 
 On a true first run - no config file anywhere - `serve` generates the bearer
 key and writes it to `~/.config/seamless/seamless.yaml`. Nothing to copy,

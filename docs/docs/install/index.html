@@ -182,6 +182,12 @@ execute. Swapping them is <code>make install</code>, deliberately.</p>
 searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
 It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.</p>
+<p>Not working from a clone? Tagged releases carry prebuilt archives for macOS and
+Linux (<a href="https://github.com/0spoon/seamless/releases">GitHub releases</a>). The
+binaries are identical; what you lose is the Makefile. From a bare binary,
+<code>seamlessd serve</code> covers the essentials - first run seeds the config - and
+<code>seamlessd install-hooks</code> wires Claude Code; only the service management on
+this page assumes the repo.</p>
 <h2 id="iterating-on-seamless-itself">Iterating on Seamless itself</h2>
 <p><code>make install</code> is also the edit-test loop. When the rendered plist is unchanged -
 the common case - it skips the launchd bootout/bootstrap and kickstarts the
