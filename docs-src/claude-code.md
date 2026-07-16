@@ -88,17 +88,23 @@ unmapped writes are rejected rather than defaulted to global.
 
 ## Tell your agents it exists
 
-Installing the tools does not mean an agent will use them well. Two things help:
+Installing the tools does not mean an agent will use them well. Two things help.
+
+First, run `/seam-onboard`. The curl installer already drops this Claude Code
+skill into `~/.claude/skills/`; from a clone, `make install-onboard-skill`
+(re)installs it:
 
 ```bash
-make install-onboard-skill    # installs the /seam-onboard Claude Code skill
+make install-onboard-skill    # (re)install the /seam-onboard skill from a clone
 ```
 
-`/seam-onboard` walks an agent through the setup above and verifies each step.
+`/seam-onboard` walks an agent through the setup above, verifies each step, and
+writes a Seamless-awareness block into your `CLAUDE.md` before removing itself.
 
-Second, add a short block to your `CLAUDE.md` describing when to reach for
-Seamless - memory that should outlive the conversation, work that crosses
-agents - and when not to (trivial edits, things the codebase already records).
+Second - or if you skip the skill - add that block to your `CLAUDE.md` by hand:
+describe when to reach for Seamless (memory that should outlive the
+conversation, work that crosses agents) and when not to (trivial edits, things
+the codebase already records).
 The briefing tells an agent *what you know*; your `CLAUDE.md` tells it *when to
 write more down*.
 

@@ -63,8 +63,11 @@ other MCP clients register `http://127.0.0.1:8081/api/mcp` with
 `Authorization: Bearer <mcp.api_key>`. From a clone, `make build && make run` is
 the same daemon out of `./bin/`, and `make install` sets it up as a service.
 
-`make install-onboard-skill` installs a `/seam-onboard` Claude Code skill that
-walks an agent through this setup and verifies each step.
+The curl installer drops a `/seam-onboard` Claude Code skill into
+`~/.claude/skills/`; run `/seam-onboard` once in Claude Code to write a
+Seamless-awareness block into a global or project `CLAUDE.md`, so agents know
+when to reach for it. From a clone, `make install-onboard-skill` (re)installs the
+same skill.
 
 Then: [Quickstart](https://thereisnospoon.org/docs/quickstart/) ·
 [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) ·
