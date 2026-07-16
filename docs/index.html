@@ -25,6 +25,7 @@
     <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="seam" aria-hidden="true"></span>less</a>
     <nav class="head-nav" aria-label="Site">
       <a href="#why">Why</a>
+      <a href="#scenes">Demo</a>
       <a href="#how">How it works</a>
       <a href="#console">Console</a>
       <a href="#quickstart">Quickstart</a>
@@ -114,6 +115,25 @@
         <p>A single static Go binary with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. One command installs it, wires your agents, and leaves it running as a service. Re-run that command to upgrade.</p>
       </article>
     </div>
+  </div>
+</section>
+
+<!-- ======================================================= TERMINAL SCENES -->
+<section class="section" id="scenes">
+  <div class="wrap">
+    <div class="section-head">
+      <p class="kicker">watch the seam</p>
+      <h2>Same prompt. Same repo. Different agent.</h2>
+      <p>Two real Claude Code sessions handed the identical prompt in the identical repo. The only difference is whether Seamless is installed. Flip between them.</p>
+    </div>
+    <div class="scenes">
+      <div class="term-scene" data-scene="cold-start"></div>
+      <div class="term-scene" data-scene="hardening-trap"></div>
+      <div class="term-scene" data-scene="token-safety"></div>
+      <div class="term-scene" data-scene="coordination"></div>
+      <noscript><p class="console-note"># these scenes animate real terminal transcripts and need JavaScript. The transcripts themselves are plain files in the repo: docs/static/scenes.js</p></noscript>
+    </div>
+    <p class="console-note"># real sessions against a seeded demo instance &mdash; transcripts verbatim, only the typing is animated.</p>
   </div>
 </section>
 
@@ -409,6 +429,8 @@
   </div>
 </footer>
 
+<script src="static/scenes.js"></script>
+<script src="static/scenes-player.js"></script>
 <script src="static/site.js"></script>
 </body>
 </html>

@@ -19,9 +19,24 @@
 //   agent  {text}                     assistant prose, verbatim
 //   tool   {label, result?}           a tool call; result = short verbatim excerpt
 //   ffwd   {text}                     an editorial span summary for skipped steps
+//   comment/cmd/files/fm              the files-as-truth epilogue folded into scene 1's
+//                                      with-side ending (a shell view of the harvested
+//                                      memory file). Illustrative like the hero, not
+//                                      verbatim -- the last comment line says so on-screen.
 //
 // Scene shape: {id, kicker, title, prompt, layout, caption, panes:[{key,label,source,outcome,steps}]}.
 // layout: "with-without" (two panes, toggle/side-by-side) | "split" (two agents, one timeline).
+//
+// Split-only step metadata (curation of the shared timeline; text stays verbatim):
+//   beat     integer -- the shared clock. The player merges both panes' steps and
+//            plays them in beat order; steps sharing a beat fire together (both
+//            prompts type at once), so a claim collision reads as a race: B's
+//            winning claim on beat N, A's bounce on beat N+1, right after.
+//   emphasis "win" | "bounce" -- flashes a claim tool line so the collision pops.
+//
+// The files-as-truth beat (a with-side session ends; its lesson is a plain file on
+// disk, the same store the hero shows) is folded into scene 1's with-side ending as
+// comment/cmd/files/fm steps -- illustrative like the hero, not a recorded line.
 
 window.SEAMLESS_SCENES = [
   {
@@ -122,6 +137,38 @@ window.SEAMLESS_SCENES = [
           {
             "role": "agent",
             "text": "Done. Step 5 of the **auth-refresh** plan is complete and committed to the plan's task/note trail. The plan is now 5/6, and the final step is unblocked."
+          },
+          {
+            "role": "comment",
+            "text": "# the session ended. the SQLite index could vanish — this would not."
+          },
+          {
+            "role": "cmd",
+            "text": "ls -t memory/myapp/"
+          },
+          {
+            "role": "files",
+            "files": [
+              { "name": "rate-limit-shared-storage.md", "tag": "just now" },
+              { "name": "rate-limit-not-in-memory.md" },
+              { "name": "edge-cache-gotcha.md" },
+              { "name": "refresh-token-single-use.md" },
+              { "name": "persist-refresh-tokens.md" },
+              { "name": "auth-cookies-samesite-lax.md" },
+              { "name": "deploy-runbook.md" }
+            ]
+          },
+          {
+            "role": "cmd",
+            "text": "head -4 memory/myapp/rate-limit-shared-storage.md"
+          },
+          { "role": "fm", "v": "---" },
+          { "role": "fm", "k": "kind:", "v": "gotcha" },
+          { "role": "fm", "k": "description:", "v": "Rate limiter must use shared storage, not a per-process map — each instance counts only its own traffic" },
+          { "role": "fm", "k": "source_session:", "v": "cc/52a41f8a" },
+          {
+            "role": "comment",
+            "text": "# what it learned is a file — illustrative, like the hero, not a line from the recorded take."
           }
         ]
       }
@@ -210,28 +257,35 @@ window.SEAMLESS_SCENES = [
         "steps": [
           {
             "role": "user",
+            "beat": 0,
             "text": "pick up the next step of the plan"
           },
           {
             "role": "tool",
+            "beat": 1,
             "label": "tasks_ready",
             "result": "2 steps ready"
           },
           {
             "role": "agent",
+            "beat": 2,
             "text": "Both remaining steps are unblocked. I'll take the rate-limiting step next (step 5) — it's the natural continuation of the token/reuse work, and there's a directly relevant project constraint (`rate-limit-not-in-memory`) to honor. Let me claim it and look at the code."
           },
           {
             "role": "tool",
+            "beat": 3,
+            "emphasis": "win",
             "label": "tasks_claim 01KXMRCX...",
             "result": "claimed_by \"01KXP8FEJQ6R5Z5NMVZ7082X5A\""
           },
           {
             "role": "ffwd",
+            "beat": 7,
             "text": "builds the per-IP + per-family limiter, reconciling live with the other agent's edits to the same files"
           },
           {
             "role": "agent",
+            "beat": 8,
             "text": "Done. Step 5 of the **auth-refresh** plan — *Rate-limit POST /auth/refresh (per-IP and per-family)* — is complete, and the plan is now 5/6."
           }
         ]
@@ -244,37 +298,46 @@ window.SEAMLESS_SCENES = [
         "steps": [
           {
             "role": "user",
+            "beat": 0,
             "text": "pick up the next step of the plan"
           },
           {
             "role": "tool",
+            "beat": 1,
             "label": "tasks_ready",
             "result": "2 steps ready"
           },
           {
             "role": "agent",
+            "beat": 2,
             "text": "I have the full picture. The next step is **\"Rate-limit POST /auth/refresh (per-IP and per-family)\"** — the older of the two claimable steps, and there's a clear `TODO` in `auth.go:13-14` plus the `rate-limit-not-in-memory` constraint. Let me claim it."
           },
           {
             "role": "tool",
+            "beat": 4,
+            "emphasis": "bounce",
             "label": "tasks_claim 01KXMRCX...",
             "result": "task already claimed: held by \"01KXP8FEJQ6R5Z5NMVZ7082X5A\""
           },
           {
             "role": "agent",
+            "beat": 5,
             "text": "The rate-limit step is already being worked by another session. That leaves the other claimable step — **\"Emit metrics and an alert for refresh-reuse revocations.\"** Let me claim that one."
           },
           {
             "role": "tool",
+            "beat": 6,
             "label": "tasks_claim 01KXN64BN3...",
             "result": "claimed"
           },
           {
             "role": "ffwd",
+            "beat": 7,
             "text": "implements the metrics + alert on the reuse path; finds and fixes a real reuse-detection bug along the way"
           },
           {
             "role": "agent",
+            "beat": 8,
             "text": "Done. Picked up and completed the plan's next available step."
           }
         ]
