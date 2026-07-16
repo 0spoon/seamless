@@ -24,7 +24,7 @@ func memoryWriteTool() mcp.Tool {
 		mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds), mcp.Description("memory kind")),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global to deliberately create a global (cross-project) memory. With no session and no explicit project the write is rejected as ambiguous.")),
+		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),
 		mcp.WithString("supersedes", mcp.Description("name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here")),
 	)
 }

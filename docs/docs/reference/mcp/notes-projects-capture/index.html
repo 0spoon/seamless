@@ -265,7 +265,7 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. Pass project=global for a global note. With no session and no explicit project the create is rejected as ambiguous.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
 </tr>
 <tr>
 <td><code>source_url</code></td>
@@ -466,7 +466,7 @@ things it should not. See <a href="../../../reference/configuration/">Configurat
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. Pass project=global to file it globally.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
 </tr>
 </tbody>
 </table>

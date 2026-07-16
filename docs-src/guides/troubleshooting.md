@@ -99,6 +99,12 @@ forever - and that must never be what happens when the system is *unsure*.
 | *no bound or ambient session to infer the project from* | No `session_start`, and no ambient session for this cwd | Call `session_start` with your `cwd`, or pass `project=<slug>` |
 | *active ambient sessions span multiple projects* | You are unbound and other agents are live in several repos, so inheriting would bleed your write into someone else's project | Pass `project=<slug>` explicitly |
 
+In both cases `project=<slug>` may name a project that does not exist yet - the
+write creates it. Do not answer this error with `project=global` because a new
+slug felt riskier: an invented project is cheap and local, while global puts the
+item in every project's briefing forever. The error text lists the slugs that do
+exist, so you can match one instead of coining a near-duplicate.
+
 If a call that worked all morning starts failing this way, suspect a **lost
 binding** - see the daemon-restart section below. `project: global` is always
 accepted; it is a token you pass on purpose.

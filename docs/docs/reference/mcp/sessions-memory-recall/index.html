@@ -366,7 +366,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. Pass project=global to deliberately create a global (cross-project) memory. With no session and no explicit project the write is rejected as ambiguous.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
 </tr>
 <tr>
 <td><code>supersedes</code></td>

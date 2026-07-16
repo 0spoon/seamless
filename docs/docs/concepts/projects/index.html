@@ -171,7 +171,9 @@ scope resolves from where the agent already is.</p>
 </span></span></code></pre><p>Worked through, rung by rung:</p>
 <p><strong>1. An explicit <code>project</code> argument.</strong> You said it, so it happens. This is also
 how you deliberately reach another project (<code>project: otherrepo</code>) or the global
-scope (<code>project: global</code>).</p>
+scope (<code>project: global</code>). A slug Seamless has never seen is <strong>not</strong> an error: the
+write registers it, and the new project appears in <code>project_list</code> and the console
+like any other. Naming a project into existence is an ordinary thing to do.</p>
 <p><strong>2. The bound session.</strong> <code>session_start</code> binds the connection: every later call
 on it inherits that project. This is why an agent that opens a session can then
 write memory with no <code>project</code> anywhere in sight.</p>
@@ -193,6 +195,12 @@ strong claim, and the last thing you want is for it to be what happens when the
 system is <em>unsure</em>. Silence should not be consent to the broadest possible scope.</p>
 <p>So a write with no resolvable scope errors out and says so. <code>project: global</code> is
 a token you pass on purpose, never a default you fall into.</p>
+<p>The way out of that error is to <strong>name the project</strong> - and if the right one does
+not exist yet, name it anyway. This is worth stating plainly because the opposite
+guess is so natural: an agent unsure whether an unmapped slug will be rejected
+reads <code>project: global</code> as the cautious choice, when it is the only choice with
+machine-wide blast radius. A new project is cheap, local, and reversible. Global
+is forever and everywhere. When in doubt, invent the project.</p>
 <p>Reads are more relaxed than writes - a search with no scope has an obvious safe
 answer (search what you can see), while a write does not.</p>
 <h2 id="mapping-a-repo">Mapping a repo</h2>

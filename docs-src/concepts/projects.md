@@ -25,7 +25,9 @@ Worked through, rung by rung:
 
 **1. An explicit `project` argument.** You said it, so it happens. This is also
 how you deliberately reach another project (`project: otherrepo`) or the global
-scope (`project: global`).
+scope (`project: global`). A slug Seamless has never seen is **not** an error: the
+write registers it, and the new project appears in `project_list` and the console
+like any other. Naming a project into existence is an ordinary thing to do.
 
 **2. The bound session.** `session_start` binds the connection: every later call
 on it inherits that project. This is why an agent that opens a session can then
@@ -55,6 +57,13 @@ system is *unsure*. Silence should not be consent to the broadest possible scope
 
 So a write with no resolvable scope errors out and says so. `project: global` is
 a token you pass on purpose, never a default you fall into.
+
+The way out of that error is to **name the project** - and if the right one does
+not exist yet, name it anyway. This is worth stating plainly because the opposite
+guess is so natural: an agent unsure whether an unmapped slug will be rejected
+reads `project: global` as the cautious choice, when it is the only choice with
+machine-wide blast radius. A new project is cheap, local, and reversible. Global
+is forever and everywhere. When in doubt, invent the project.
 
 Reads are more relaxed than writes - a search with no scope has an obvious safe
 answer (search what you can see), while a write does not.

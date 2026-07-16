@@ -22,7 +22,7 @@ func notesCreateTool() mcp.Tool {
 		mcp.WithString("title", mcp.Required(), mcp.Description("note title")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global note. With no session and no explicit project the create is rejected as ambiguous.")),
+		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),
 		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("tags (a comma-separated string is also accepted)")),
 		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=<slug> steps. Use it whenever this note is a plan's narrative or supporting context.")),
 		mcp.WithString("source_url", mcp.Description("optional source URL")),

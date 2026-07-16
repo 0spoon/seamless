@@ -22,7 +22,7 @@ func tasksAddTool() mcp.Tool {
 		mcp.WithDescription("Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short task title")),
 		mcp.WithString("body", mcp.Description("optional details / acceptance criteria (aliases: content, text)")),
-		mcp.WithString("project", mcp.Description("project slug; defaults to the bound/ambient session's project. Pass project=global for a global task. With no session and no explicit project the add is rejected as ambiguous.")),
+		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),
 		mcp.WithArray("depends_on", mcp.WithStringItems(), mcp.Description("task ids this task is blocked by (a comma-separated string is also accepted)")),
 		mcp.WithString("plan", mcp.Description("optional plan slug (plan:<slug> convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter.")),
 	)
