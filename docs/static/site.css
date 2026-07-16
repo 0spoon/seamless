@@ -546,93 +546,72 @@ body::before {
 }
 .console-note { margin-top: 26px; font-size: 13.5px; color: var(--faint); font-family: var(--font-mono); }
 
-/* console miniature (a sketch, not a screenshot) */
-.console-mini {
+/* console screenshots (captured from a seeded demo instance; see
+   docs/README-site.md "Regenerate the console shots") */
+.shot-frame {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-  display: grid;
-  grid-template-columns: 148px 1fr;
-  min-height: 380px;
-  font-family: var(--font-mono);
 }
-.cm-side {
+.shot-bar {
+  display: flex; align-items: center; gap: 5px;
+  padding: 9px 12px;
   background: var(--surface-2);
-  border-right: 1px solid var(--border);
-  padding: 16px 14px;
-  display: flex; flex-direction: column; gap: 4px;
-  font-size: 11px;
+  border-bottom: 1px solid var(--border);
 }
-.cm-side .cm-brand {
-  font-family: var(--font-display);
-  font-size: 13px; font-weight: 700;
-  color: var(--ink);
-  display: flex; align-items: center; gap: 7px;
-  margin-bottom: 14px;
+.shot-bar i {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--border-strong);
 }
-.cm-side .cm-brand .live-dot { width: 6px; height: 6px; }
-.cm-side .cm-group {
-  font-size: 9px; letter-spacing: var(--tracking-wider); text-transform: uppercase;
-  color: var(--faint); margin: 10px 0 4px;
+.shot-bar span {
+  margin-left: 8px;
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--faint);
 }
-.cm-side .cm-item {
-  display: flex; justify-content: space-between;
-  padding: 5px 8px; border-radius: var(--radius-xs);
-  color: var(--ink-2);
+.shot-img { display: block; width: 100%; height: auto; }
+.shot-frame a { display: block; line-height: 0; }
+.shot-strip {
+  margin-top: 44px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px;
 }
-.cm-side .cm-item.on { background: var(--brand-soft); color: var(--brand); font-weight: 600; }
-.cm-side .cm-item span:last-child { color: var(--faint); }
-.cm-main { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-.cm-title { font-family: var(--font-display); font-size: 16px; font-weight: 700; color: var(--ink); }
-.cm-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.cm-card {
-  background: var(--paper);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
+.shot-card { margin: 0; }
+.shot-card .shot-bar { padding: 7px 10px; }
+.shot-card .shot-bar i { width: 7px; height: 7px; }
+.shot-card figcaption {
+  margin-top: 10px;
+  display: flex; align-items: center; gap: 9px;
+  font-family: var(--font-mono); font-size: 12.5px; color: var(--muted);
 }
-.cm-card .cm-label {
-  font-size: 9.5px; letter-spacing: var(--tracking-wider); text-transform: uppercase;
-  color: var(--muted); margin-bottom: 6px;
+.shot-card figcaption .pt {
+  width: 20px; height: 20px; border-radius: var(--radius-xs); flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--brand-soft); color: var(--brand);
+  font-size: 10px; font-weight: 600;
 }
-.cm-card .cm-big {
-  font-family: var(--font-display);
-  font-size: 30px; font-weight: 700; letter-spacing: var(--tracking-tight);
-  line-height: 1.1;
+/* theme-paired images: the dark shot shows in dark mode, light in light.
+   An explicit data-theme choice (the toggle) outranks the OS preference.
+   Classes are doubled so these outrank element-qualified rules like
+   `.shot-frame a` on both the <img> and <a> carriers. */
+.themed-dark.themed-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  .themed-light.themed-light { display: none; }
+  .themed-dark.themed-dark { display: block; }
 }
-.cm-card .cm-big.brand { color: var(--brand); }
-.cm-card .cm-big.ok { color: var(--ok); }
-.cm-card .cm-sub { font-size: 10px; color: var(--faint); margin-top: 4px; }
-.cm-spark { display: flex; align-items: flex-end; gap: 3px; height: 34px; margin-top: 10px; }
-.cm-spark i { flex: 1; background: var(--brand-soft); border-radius: 2px 2px 0 0; }
-.cm-spark i.hot { background: var(--brand); }
-.cm-kinds { display: flex; flex-direction: column; gap: 7px; font-size: 10.5px; }
-.cm-kind { display: grid; grid-template-columns: 74px 1fr 20px; align-items: center; gap: 10px; color: var(--ink-2); }
-.cm-kind .bar { height: 5px; border-radius: var(--radius-pill); background: var(--surface-3); overflow: hidden; }
-.cm-kind .bar i { display: block; height: 100%; border-radius: inherit; }
-.cm-kind span:last-child { text-align: right; color: var(--muted); }
-.cm-rows { display: flex; flex-direction: column; gap: 6px; }
-.cm-row {
-  display: flex; align-items: center; gap: 10px;
-  border: 1px solid var(--border);
-  background: var(--paper);
-  border-radius: var(--radius-sm);
-  padding: 7px 10px;
-  font-size: 10.5px; color: var(--ink-2);
+:root[data-theme="dark"] .themed-light.themed-light { display: none; }
+:root[data-theme="dark"] .themed-dark.themed-dark { display: block; }
+:root[data-theme="light"] .themed-light.themed-light { display: block; }
+:root[data-theme="light"] .themed-dark.themed-dark { display: none; }
+@media (max-width: 1024px) {
+  .shot-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.cm-row .tag {
-  font-size: 9px; padding: 2px 7px; border-radius: var(--radius-xs);
-  background: var(--surface-3); color: var(--ink-2);
-}
-.cm-row .tag.inj { background: var(--brand-soft); color: var(--brand); }
-.cm-row .tag.tool { background: var(--ok-soft); color: var(--ok); }
-.cm-row .t { margin-left: auto; color: var(--faint); }
 @media (max-width: 900px) {
   .console-grid { grid-template-columns: 1fr; }
-  .console-mini { grid-template-columns: 1fr; }
-  .cm-side { display: none; }
+}
+@media (max-width: 540px) {
+  .shot-strip { grid-template-columns: 1fr; }
 }
 
 /* ==========================================================================

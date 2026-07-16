@@ -227,54 +227,47 @@
           <li><span class="pt">03</span><span><strong>Retrieval health.</strong> How much of the store is actually reaching agents - not how big it is.</span></li>
           <li><span class="pt">04</span><span><strong>Relations graph.</strong> How memories, notes, sessions, and tasks connect across projects.</span></li>
         </ul>
-        <p class="console-note"># this is a sketch. the real one ships inside the binary at<br>#&nbsp;127.0.0.1:8081/console - your data never leaves the machine.</p>
+        <p class="console-note"># captured from a live local instance - it ships inside the binary at<br>#&nbsp;127.0.0.1:8081/console. your data never leaves the machine.</p>
       </div>
-      <div class="console-mini rv" role="img" aria-label="Stylized sketch of the Seamless console overview: memory reach and knowledge coverage stats, memories by kind, and a live interactions feed">
-        <div class="cm-side">
-          <span class="cm-brand"><span class="live-dot" aria-hidden="true"></span> Seamless</span>
-          <span class="cm-group">observe</span>
-          <span class="cm-item on"><span>Overview</span></span>
-          <span class="cm-item"><span>Interactions</span></span>
-          <span class="cm-group">browse</span>
-          <span class="cm-item"><span>Projects</span><span>4</span></span>
-          <span class="cm-item"><span>Sessions</span><span>212</span></span>
-          <span class="cm-item"><span>Memories</span><span>128</span></span>
-          <span class="cm-item"><span>Notes</span><span>57</span></span>
-          <span class="cm-item"><span>Tasks</span><span>9</span></span>
-          <span class="cm-item"><span>Plans</span><span>6</span></span>
-          <span class="cm-group">system</span>
-          <span class="cm-item"><span>Gardener</span><span>2</span></span>
-        </div>
-        <div class="cm-main">
-          <span class="cm-title">Overview</span>
-          <div class="cm-cards">
-            <div class="cm-card">
-              <div class="cm-label">memory reach</div>
-              <div class="cm-big brand">61%</div>
-              <div class="cm-sub">78 of 128 memories surfaced</div>
-              <div class="cm-spark" aria-hidden="true">
-                <i style="height:30%"></i><i style="height:42%"></i><i style="height:38%"></i><i style="height:55%"></i><i style="height:64%" class="hot"></i><i style="height:58%"></i><i style="height:72%" class="hot"></i><i style="height:61%"></i>
-              </div>
-            </div>
-            <div class="cm-card">
-              <div class="cm-label">knowledge coverage</div>
-              <div class="cm-big ok">88%</div>
-              <div class="cm-sub">sessions that retained knowledge</div>
-              <div class="cm-kinds" style="margin-top:10px">
-                <div class="cm-kind"><span>gotcha</span><span class="bar"><i style="width:72%;background:var(--pop)"></i></span><span>31</span></div>
-                <div class="cm-kind"><span>decision</span><span class="bar"><i style="width:54%;background:#8b5cf6"></i></span><span>23</span></div>
-                <div class="cm-kind"><span>runbook</span><span class="bar"><i style="width:38%;background:var(--brand)"></i></span><span>16</span></div>
-              </div>
-            </div>
-          </div>
-          <div class="cm-rows">
-            <div class="cm-row"><span class="tag inj">injection</span> briefing &rarr; cc/ab12cd34 &#183; 3 memories, 1 plan <span class="t">2s</span></div>
-            <div class="cm-row"><span class="tag tool">tool.call</span> tasks_claim &rarr; release-checklist &#183; lease 900s <span class="t">1m</span></div>
-            <div class="cm-row"><span class="tag tool">tool.call</span> memory_write &rarr; edge-cache-gotcha &#183; supersedes v1 <span class="t">4m</span></div>
-            <div class="cm-row"><span class="tag">proposal</span> gardener: merge 2 near-duplicates &#183; awaiting you <span class="t">12m</span></div>
-          </div>
-        </div>
+      <div class="shot-frame rv">
+        <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i><span>127.0.0.1:8081/console</span></div>
+        <img class="shot-img themed-light" src="static/shots/overview-light.webp" width="1440" height="900" loading="lazy" alt="Seamless console overview: 61% memory reach with a 30-day trend, knowledge coverage, projects at a glance, and memories by kind">
+        <img class="shot-img themed-dark" src="static/shots/overview-dark.webp" width="1440" height="900" loading="lazy" alt="Seamless console overview: 61% memory reach with a 30-day trend, knowledge coverage, projects at a glance, and memories by kind">
       </div>
+    </div>
+    <div class="shot-strip">
+      <figure class="shot-card rv">
+        <div class="shot-frame">
+          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a class="themed-light" href="static/shots/interactions-light.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/interactions-light.webp" width="1440" height="900" loading="lazy" alt="Interactions feed: every tool call, injection, and prompt from three live sessions, with a volume histogram"></a>
+          <a class="themed-dark" href="static/shots/interactions-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/interactions-dark.webp" width="1440" height="900" loading="lazy" alt="Interactions feed: every tool call, injection, and prompt from three live sessions, with a volume histogram"></a>
+        </div>
+        <figcaption><span class="pt">01</span> interactions feed</figcaption>
+      </figure>
+      <figure class="shot-card rv">
+        <div class="shot-frame">
+          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a class="themed-light" href="static/shots/plans-light.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/plans-light.webp" width="1440" height="900" loading="lazy" alt="Plans board: six plans grouped by in progress, ready, and done, with step counts and claim status"></a>
+          <a class="themed-dark" href="static/shots/plans-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/plans-dark.webp" width="1440" height="900" loading="lazy" alt="Plans board: six plans grouped by in progress, ready, and done, with step counts and claim status"></a>
+        </div>
+        <figcaption><span class="pt">02</span> plans board</figcaption>
+      </figure>
+      <figure class="shot-card rv">
+        <div class="shot-frame">
+          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a class="themed-light" href="static/shots/retrieval-light.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/retrieval-light.webp" width="1440" height="900" loading="lazy" alt="Retrieval health: injections funnel, reach by kind and by project, and a 30-day injection trend"></a>
+          <a class="themed-dark" href="static/shots/retrieval-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/retrieval-dark.webp" width="1440" height="900" loading="lazy" alt="Retrieval health: injections funnel, reach by kind and by project, and a 30-day injection trend"></a>
+        </div>
+        <figcaption><span class="pt">03</span> retrieval health</figcaption>
+      </figure>
+      <figure class="shot-card rv">
+        <div class="shot-frame">
+          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
+          <a class="themed-light" href="static/shots/relations-light.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/relations-light.webp" width="1440" height="900" loading="lazy" alt="Relations spine: a plan expands into steps, the claiming live session, and the memories it wrote"></a>
+          <a class="themed-dark" href="static/shots/relations-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/relations-dark.webp" width="1440" height="900" loading="lazy" alt="Relations spine: a plan expands into steps, the claiming live session, and the memories it wrote"></a>
+        </div>
+        <figcaption><span class="pt">04</span> relations graph</figcaption>
+      </figure>
     </div>
   </div>
 </section>

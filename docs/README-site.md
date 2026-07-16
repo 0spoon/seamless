@@ -13,6 +13,7 @@ CNAME                   custom domain: thereisnospoon.org
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
 static/favicon.svg      the 0spoon mark (an empty set)
+static/shots/           console screenshots, dark + light (see below)
 static/og.png           1200x630 social preview card
 static/og-source.html   source for og.png (see below)
 static/fonts/           self-hosted variable woff2 (OFL, see OFL-NOTICE.txt)
@@ -84,11 +85,36 @@ then open http://127.0.0.1:8899/.
   --hide-scrollbars 'http://127.0.0.1:8899/static/og-source.html'
 ```
 
+## Regenerate the console shots
+
+`static/shots/` holds the console screenshots (5 pages x dark/light, WebP).
+They come from a THROWAWAY instance seeded with fictional data by
+`cmd/demoseed` -- never from a live data dir. To re-capture after a console
+change:
+
+```bash
+# 1. seed a throwaway data dir (numbers are tuned; see cmd/demoseed/data.go)
+go run ./cmd/demoseed -data /tmp/seamless-demo
+
+# 2. serve it on a port that is NOT your live daemon
+SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
+  SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
+
+# 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
+SEAMLESS_SHOT_BASE=http://127.0.0.1:8090 SEAMLESS_MCP_API_KEY=<same key> \
+  node scripts/console-shots.js /tmp/shots
+
+# 4. convert into place
+for f in /tmp/shots/*.png; do
+  cwebp -q 84 "$f" -o "docs/static/shots/$(basename "${f%.png}").webp"
+done
+```
+
+Capture within ~an hour of seeding: the demo's "live" sessions and leases are
+anchored to the seeding time and go stale on screen after that.
+
 ## Pending (owner approval required)
 
-- Real console screenshots / demo GIF to replace or accompany the CSS console
-  sketch (needs a sanitized demo instance; see memory
-  `throwaway-console-only-on-request`).
 - Spot-check on a real phone. Narrow widths are no longer unexercised: the page
   was swept at 320/360/390/414/600/768/900/1024/1280/1440 under Chrome device
   emulation and has no horizontal overflow at any of them. That sweep caught a
