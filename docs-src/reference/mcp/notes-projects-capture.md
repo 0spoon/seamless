@@ -47,8 +47,9 @@ inherits the design and the reasoning behind it, not just the step list. See
 ## Projects and scope
 
 `project_list` and `project_create` manage the scopes everything else inherits.
-Most agents never call either: a repo mapped with `seamlessd map-repo` resolves
-its project from the agent's working directory, and `session_start` binds it.
+Most agents never call either: a git repo maps itself on the first session and
+resolves its project from the agent's working directory, and `session_start`
+binds it.
 
 The `global` project slug is the deliberate cross-project scope. It is a token
 you pass on purpose, never a default you fall into - see the fail-closed rule in

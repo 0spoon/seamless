@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart - Seamless docs</title>
-<meta name="description" content="Install Seamless, point Claude Code at it, and confirm the first briefing lands - three commands and a check.">
+<meta name="description" content="Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -156,10 +156,10 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Quickstart</h1>
-  <p class="lede">Install Seamless, point Claude Code at it, and confirm the first briefing lands - three commands and a check.</p>
-  <p>This is the one happy path: install, serve, wire your agents, and watch a
-session open with a briefing. Every fork in the road is a link, not a branch in
-these steps.</p>
+  <p class="lede">Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.</p>
+  <p>This is the one happy path: install, start a session, and watch it open with a
+briefing. It is one command and a check - everything between them is automatic.
+Every fork in the road is a link, not a branch in these steps.</p>
 <p>No CGO toolchain, no external database, no Node. The installer needs <code>curl</code> and
 <code>tar</code>; building from source needs <strong>Go 1.25+</strong>.</p>
 <h2 id="install">Install</h2>
@@ -186,22 +186,28 @@ when you want semantic recall.</p>
 database, applies migrations, and asserts the tool count. If it is green, the
 daemon will start.</p>
 <h2 id="wire-your-agents">Wire your agents</h2>
-<p>The installer already ran <code>install-hooks</code> for you, so one step is left:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
+<p>The installer already ran <code>install-hooks</code> for you, so there is no second step:
+start Claude Code in any git repo.</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude
 </span></span></code></pre><p><code>install-hooks</code> does both halves of the Claude Code wiring: it installs the
 hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
 SessionEnd) and registers the MCP server via <code>claude mcp add --scope user</code>. If
 the <code>claude</code> CLI is not on your PATH it prints the command to run yourself -
 see <a href="../claude-code/">Claude Code setup</a> for the by-hand version and why
 <code>--scope user</code> matters. Installed by hand? Run <code>seamlessd install-hooks</code>
-yourself before the <code>map-repo</code> above.</p>
+yourself first.</p>
 <p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
-calling a tool. <code>map-repo</code> binds a working directory to a project, so agents
-working in that repo inherit project scope without passing <code>project</code> on every
-call. Restart Claude Code afterwards so it loads the hooks and the MCP server.</p>
+calling a tool. They also register the repo. On the first session inside a git
+repo, the SessionStart hook resolves your cwd to its git root, derives a project
+slug from that directory's name, and records the mapping - so agents inherit
+project scope without passing <code>project</code> on every call, and without you creating
+a project first. <code>seamlessd map-repo --path ~/code/myrepo --project myrepo</code> is
+the override when you want a slug that is not the directory name; see
+<a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain.</p>
+<p>Restart Claude Code once after installing so it loads the hooks and the MCP
+server.</p>
 <h2 id="confirm-it-works">Confirm it works</h2>
-<p>Start a Claude Code session in the mapped repo. Its context now opens with an
-injected briefing:</p>
+<p>That session's context now opens with an injected briefing:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
 </span></span><span class="line"><span class="cl">Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
 </span></span><span class="line"><span class="cl">CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...

@@ -204,10 +204,14 @@ registration is scoped wrong&quot;.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">grep api_key ~/.config/seamless/seamless.yaml   <span class="c1"># release layout</span>
 </span></span><span class="line"><span class="cl">grep api_key ./seamless.yaml                    <span class="c1"># dev layout</span>
 </span></span></code></pre><h2 id="map-your-repos">Map your repos</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/myrepo --project myrepo
-</span></span></code></pre><p>This binds a working directory to a project. Afterwards, agents in that repo
-inherit project scope from their cwd - no <code>project</code> argument on any call. See
-<a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
+<p>Usually you do not have to. The first session inside a git repo maps itself: the
+SessionStart hook resolves the agent's cwd to its git root, derives a project
+slug from that directory's name, and records the mapping. Agents then inherit
+project scope from their cwd - no <code>project</code> argument on any call.</p>
+<p>Map by hand to override the derived slug - an <code>ios</code> directory that should be the
+<code>arctop-ios</code> project:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
+</span></span></code></pre><p>See <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
 unmapped writes are rejected rather than defaulted to global.</p>
 <h2 id="tell-your-agents-it-exists">Tell your agents it exists</h2>
 <p>Installing the tools does not mean an agent will use them well. Two things help:</p>

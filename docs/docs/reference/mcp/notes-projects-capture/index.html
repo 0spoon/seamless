@@ -213,8 +213,9 @@ inherits the design and the reasoning behind it, not just the step list. See
 <a href="../../../reference/mcp/tasks/">Tasks</a> for the step half of the composition.</p>
 <h2 id="projects-and-scope">Projects and scope</h2>
 <p><code>project_list</code> and <code>project_create</code> manage the scopes everything else inherits.
-Most agents never call either: a repo mapped with <code>seamlessd map-repo</code> resolves
-its project from the agent's working directory, and <code>session_start</code> binds it.</p>
+Most agents never call either: a git repo maps itself on the first session and
+resolves its project from the agent's working directory, and <code>session_start</code>
+binds it.</p>
 <p>The <code>global</code> project slug is the deliberate cross-project scope. It is a token
 you pass on purpose, never a default you fall into - see the fail-closed rule in
 the <a href="../../../reference/mcp/">MCP API overview</a>.</p>

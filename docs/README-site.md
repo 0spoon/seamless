@@ -119,6 +119,6 @@ anchored to the seeding time and go stale on screen after that.
   was swept at 320/360/390/414/600/768/900/1024/1280/1440 under Chrome device
   emulation and has no horizontal overflow at any of them. That sweep caught a
   real bug (the hero and quickstart grids each declared a bare `1fr`, whose
-  min-content floor is the nowrap `go install` command -- 157px of overflow on a
+  min-content floor was the nowrap install command -- 157px of overflow on a
   390px phone); both now use `minmax(0, 1fr)`. A real handset would still add
   touch-target and font-rendering confidence that emulation can't.

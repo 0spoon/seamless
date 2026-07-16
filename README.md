@@ -31,18 +31,22 @@ MCP, and renders a web console for inspection.
 
 ```bash
 curl -fsSL https://thereisnospoon.org/install | sh
-seamlessd map-repo --path ~/code/myrepo --project myrepo
 ```
 
-The installer needs `curl` and `tar` and nothing else -- no Go, no CGO
-toolchain, no database, no Node. It fetches the checksum-verified release
+That is the whole install. It needs `curl` and `tar` and nothing else -- no Go,
+no CGO toolchain, no database, no Node. It fetches the checksum-verified release
 archive for your platform (macOS and Linux, amd64 and arm64), installs
 `seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
 the Claude Code hooks, registers the MCP server, and runs the daemon as a
 per-user service -- launchd on macOS, systemd `--user` on Linux. Re-run it to
-upgrade: your config and `~/.seamless` are never touched. `map-repo` binds a
-working directory to a project, so agents in that repo inherit project scope
-without passing it on every call.
+upgrade: your config and `~/.seamless` are never touched.
+
+Then just start Claude Code in a git repo. There is no project to create and no
+repo to register: the session-start hook resolves your cwd to its git root,
+derives a project from the repo's directory name, and records the mapping on the
+spot, so agents inherit project scope without passing it on every call. Reach for
+`seamlessd map-repo --path ~/code/myrepo --project myrepo` only to override the
+derived slug.
 
 It is [one shell script](docs/install) and piping a stranger's script into a
 shell deserves a read first. Prefer a toolchain, or want the pieces one at a

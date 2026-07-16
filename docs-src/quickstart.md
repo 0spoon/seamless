@@ -1,11 +1,11 @@
 ---
 title: Quickstart
-description: Install Seamless, point Claude Code at it, and confirm the first briefing lands - three commands and a check.
+description: Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.
 ---
 
-This is the one happy path: install, serve, wire your agents, and watch a
-session open with a briefing. Every fork in the road is a link, not a branch in
-these steps.
+This is the one happy path: install, start a session, and watch it open with a
+briefing. It is one command and a check - everything between them is automatic.
+Every fork in the road is a link, not a branch in these steps.
 
 No CGO toolchain, no external database, no Node. The installer needs `curl` and
 `tar`; building from source needs **Go 1.25+**.
@@ -44,10 +44,11 @@ daemon will start.
 
 ## Wire your agents
 
-The installer already ran `install-hooks` for you, so one step is left:
+The installer already ran `install-hooks` for you, so there is no second step:
+start Claude Code in any git repo.
 
 ```bash
-seamlessd map-repo --path ~/code/myrepo --project myrepo
+cd ~/code/myrepo && claude
 ```
 
 `install-hooks` does both halves of the Claude Code wiring: it installs the
@@ -56,17 +57,23 @@ SessionEnd) and registers the MCP server via `claude mcp add --scope user`. If
 the `claude` CLI is not on your PATH it prints the command to run yourself -
 see [Claude Code setup](/claude-code/) for the by-hand version and why
 `--scope user` matters. Installed by hand? Run `seamlessd install-hooks`
-yourself before the `map-repo` above.
+yourself first.
 
 The hooks are what make sessions *ambient*: an agent gets a briefing without
-calling a tool. `map-repo` binds a working directory to a project, so agents
-working in that repo inherit project scope without passing `project` on every
-call. Restart Claude Code afterwards so it loads the hooks and the MCP server.
+calling a tool. They also register the repo. On the first session inside a git
+repo, the SessionStart hook resolves your cwd to its git root, derives a project
+slug from that directory's name, and records the mapping - so agents inherit
+project scope without passing `project` on every call, and without you creating
+a project first. `seamlessd map-repo --path ~/code/myrepo --project myrepo` is
+the override when you want a slug that is not the directory name; see
+[Projects & scope](/concepts/projects/) for the full precedence chain.
+
+Restart Claude Code once after installing so it loads the hooks and the MCP
+server.
 
 ## Confirm it works
 
-Start a Claude Code session in the mapped repo. Its context now opens with an
-injected briefing:
+That session's context now opens with an injected briefing:
 
 ```text
 <seam-briefing>

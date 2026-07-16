@@ -52,7 +52,7 @@
       <h1>Your agents share a brain. <em>You can read it.</em></h1>
       <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> - as markdown files in a folder you own, indexed by a single Go binary, curated with you in the loop.</p>
       <div class="cta-row">
-        <span class="install-pill"><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/...@latest">go install github.com/0spoon/seamless/cmd/...@latest</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+        <span class="install-pill"><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
       </div>
       <div class="cta-secondary">
         <a href="https://github.com/0spoon/seamless">
@@ -111,7 +111,7 @@
       <article class="pillar rv">
         <span class="prob">problem: a runtime to babysit</span>
         <h3>One binary. No ceremony.</h3>
-        <p>A single static Go binary with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. <code>go install</code>, <code>serve</code>, done.</p>
+        <p>A single static Go binary with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. One command installs it, wires your agents, and leaves it running as a service. Re-run that command to upgrade.</p>
       </article>
     </div>
   </div>
@@ -298,31 +298,33 @@
   <div class="wrap">
     <div class="section-head">
       <p class="kicker">quickstart</p>
-      <h2>Three commands to a shared brain.</h2>
+      <h2>One command. Then just work.</h2>
+      <p>There is no project to create and no repo to register. The first session inside a git repo maps itself.</p>
     </div>
     <div class="qs-steps">
       <div class="qs rv">
         <span class="n">01</span>
         <div>
           <h3>Install</h3>
-          <div class="code"><span><span class="p">$</span> <span data-copy="go install github.com/0spoon/seamless/cmd/...@latest">go install github.com/0spoon/seamless/cmd/...@latest</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">The daemon and the <code>seam</code> CLI. Go 1.25+, no CGO - or skip Go entirely with a <a href="https://github.com/0spoon/seamless/releases">prebuilt release</a>.</p>
+          <div class="code"><span><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">Fetches the checksum-verified release for your platform, installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>, generates the API key, installs the Claude Code hooks, registers the MCP server, and starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code>. Needs <code>curl</code> and <code>tar</code> - no Go, no CGO, no database. No LLM key either: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
+          <p class="note">It is <a href="install">one shell script</a>, and piping a stranger's script into a shell deserves a read first. Prefer a toolchain, or want the pieces one at a time? <code>go install</code>, a <a href="https://github.com/0spoon/seamless/releases">prebuilt archive</a>, and <code>make install</code> all land in the same place - see <a href="docs/install/">Install &amp; deploy</a>.</p>
         </div>
       </div>
       <div class="qs rv">
         <span class="n">02</span>
         <div>
-          <h3>Serve</h3>
-          <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd serve">seamlessd serve</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">Binds to <code>127.0.0.1:8081</code>, data in <code>~/.seamless</code>. First run generates the API key; <code>seamlessd doctor</code> checks the rest. Runs without an LLM key - recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
+          <h3>Open Claude Code in any repo</h3>
+          <div class="code"><span><span class="p">$</span> <span data-copy="cd ~/code/myrepo &amp;&amp; claude">cd ~/code/myrepo &amp;&amp; claude</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. Want a slug that isn't the directory name? <code>seamlessd map-repo</code> is still there.</p>
         </div>
       </div>
       <div class="qs rv">
         <span class="n">03</span>
         <div>
-          <h3>Wire your agents</h3>
-          <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd install-hooks">seamlessd install-hooks</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">Installs the Claude Code hooks and registers the MCP server: briefing on session start, recall on every prompt. Other agents connect over MCP.</p>
+          <h3>Watch it work</h3>
+          <div class="code"><span><span class="p">$</span> <span data-copy="seamlessd console-open">seamlessd console-open</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note">Opens the console pre-authenticated: watch briefings inject, recall fire, and tasks get claimed, live over SSE. Optional - the loop above already closed without it.</p>
         </div>
       </div>
     </div>
