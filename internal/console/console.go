@@ -87,6 +87,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
 	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
 	mux.HandleFunc("GET /console/static/search.js", s.serveSearchJS)
+	mux.HandleFunc("GET /console/static/charts.js", s.serveChartsJS)
 	mux.HandleFunc("GET /console/static/favicon.svg", s.serveFavicon)
 	mux.HandleFunc("GET /console/login", s.loginForm)
 	mux.HandleFunc("POST /console/login", s.loginSubmit)
@@ -261,6 +262,14 @@ func (s *Service) serveSearchJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(searchJS)
+}
+
+// serveChartsJS serves the chart hover readout (see charts.go + static/charts.js),
+// loaded on every page: the charts are server-rendered into several of them.
+func (s *Service) serveChartsJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(chartsJS)
 }
 
 func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {
