@@ -181,10 +181,16 @@ what agents get injected while they are running, and it is the one place where
 the config file is not the last word - check the console before concluding a
 briefing setting is being ignored.</p>
 <h2 id="generating-a-key">Generating a key</h2>
-<p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. It has no default; the daemon
-will not serve without one.</p>
+<p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. On a true first run - no
+config file anywhere in the search order and no <code>SEAMLESS_MCP_API_KEY</code> in the
+environment - <code>seamlessd serve</code> (or <code>install-hooks</code>) generates one and writes
+it to <code>~/.config/seamless/seamless.yaml</code>, so a fresh install never handles the
+key by hand. An existing config file is never edited, even when its key is
+empty; set one yourself:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">openssl rand -hex <span class="m">32</span>
-</span></span></code></pre><h2 id="every-key">Every key</h2>
+</span></span></code></pre><p>The daemon still starts with an empty key, but every MCP and hook request is
+rejected until one is set - <code>seamlessd doctor</code> reports it as a warning.</p>
+<h2 id="every-key">Every key</h2>
 <div class="table-wrap">
 <table>
 <thead>
@@ -429,7 +435,10 @@ will not serve without one.</p>
 </span></span></span><span class="line"><span class="cl"><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;~/.seamless&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">mcp</span><span class="p">:</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Static bearer key protecting /api/mcp and the console. Generate one with:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Static bearer key protecting /api/mcp and the console. On a true first run</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (no config file anywhere) `seamlessd serve` generates one into</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># ~/.config/seamless/seamless.yaml; a file you author yourself needs one set</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># by hand:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c">#   openssl rand -hex 32</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># An empty key is reported as a warning by `seamlessd doctor`.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_MCP_API_KEY</span><span class="w">

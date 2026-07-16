@@ -25,6 +25,11 @@ Starts the HTTP server and blocks until SIGINT or SIGTERM, then shuts down
 gracefully. `--addr` overrides the configured bind address (default
 `127.0.0.1:8081`).
 
+On a true first run - no config file anywhere in the search order and no
+`SEAMLESS_MCP_API_KEY` in the environment - it generates the bearer key and
+writes it to `~/.config/seamless/seamless.yaml` before starting. An existing
+config file is never edited, even when its key is empty.
+
 It wires up:
 
 - `/healthz` - liveness plus a database ping. Reports `degraded` with a 503 when
@@ -40,8 +45,8 @@ where you find out:
   missing credential logs a warning; a *malformed* setting (a bad `base_url`)
   logs an error, because that one is a typo rather than a choice.
 - **No chat client** - gardener digest passes no-op.
-- **Empty `mcp.api_key`** - logs a warning, and every MCP and hook request is
-  then rejected.
+- **Empty `mcp.api_key`** (a config file exists but leaves it blank) - logs a
+  warning, and every MCP and hook request is then rejected.
 - **Gardener disabled** - logged, and no maintenance passes run.
 
 The startup line carries the version, commit, and data directory, which is how
@@ -102,21 +107,29 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--settings PATH] [--url BASE] [--seam PATH]
+seamlessd install-hooks [--settings PATH] [--url BASE] [--seam PATH] [--mcp=false]
 ```
 
-Merges the Seamless hook entries into a Claude Code `settings.json`.
+Merges the Seamless hook entries into a Claude Code `settings.json`, then
+registers the MCP server with the `claude` CLI.
 
 | Flag | Default | Meaning |
 |---|---|---|
 | `--settings` | `~/.claude/settings.json` | Target settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
 | `--url` | derived from the config addr | Base URL of the daemon. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
+| `--mcp` | `true` | Register the MCP server via `claude mcp add --scope user`. |
 
-It refuses to run when `mcp.api_key` is empty, since the key is what the hooks
-authenticate with. The loaded config path is made absolute and baked into the
-command hooks as `SEAMLESS_CONFIG`, so they resolve config from any working
-directory.
+It generates `mcp.api_key` on a true first run under the same rule as `serve`,
+and refuses to run when an existing config leaves the key empty, since the key
+is what the hooks authenticate with. The loaded config path is made absolute
+and baked into the command hooks as `SEAMLESS_CONFIG`, so they resolve config
+from any working directory. A `--seam` binary that cannot be found is a printed
+warning, not an error - the hooks would fail at fire time, so it says so now.
+
+The MCP registration is best-effort: the hooks land regardless, and a missing
+`claude` CLI or a failed `claude mcp add` prints the exact command to run
+yourself. An already-registered `seamless` server is left alone.
 
 The merge preserves unknown keys, replaces existing Seamless-managed entries in
 place, adopts unmarked entries that point at the same hook URL or run the same

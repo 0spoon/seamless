@@ -171,6 +171,10 @@ except <code>family</code>, which takes only positionals.</p>
 </span></span></code></pre><p>Starts the HTTP server and blocks until SIGINT or SIGTERM, then shuts down
 gracefully. <code>--addr</code> overrides the configured bind address (default
 <code>127.0.0.1:8081</code>).</p>
+<p>On a true first run - no config file anywhere in the search order and no
+<code>SEAMLESS_MCP_API_KEY</code> in the environment - it generates the bearer key and
+writes it to <code>~/.config/seamless/seamless.yaml</code> before starting. An existing
+config file is never edited, even when its key is empty.</p>
 <p>It wires up:</p>
 <ul>
 <li><code>/healthz</code> - liveness plus a database ping. Reports <code>degraded</code> with a 503 when
@@ -186,8 +190,8 @@ where you find out:</p>
 missing credential logs a warning; a <em>malformed</em> setting (a bad <code>base_url</code>)
 logs an error, because that one is a typo rather than a choice.</li>
 <li><strong>No chat client</strong> - gardener digest passes no-op.</li>
-<li><strong>Empty <code>mcp.api_key</code></strong> - logs a warning, and every MCP and hook request is
-then rejected.</li>
+<li><strong>Empty <code>mcp.api_key</code></strong> (a config file exists but leaves it blank) - logs a
+warning, and every MCP and hook request is then rejected.</li>
 <li><strong>Gardener disabled</strong> - logged, and no maintenance passes run.</li>
 </ul>
 <p>The startup line carries the version, commit, and data directory, which is how
@@ -293,8 +297,9 @@ a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
 prints a report even when the import ends in an error. With <code>--embed</code> on and no
 usable embedder, it warns and imports without vectors rather than failing.</p>
 <h2 id="seamlessd_install_hooks">seamlessd install-hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span>
-</span></span></code></pre><p>Merges the Seamless hook entries into a Claude Code <code>settings.json</code>.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span>
+</span></span></code></pre><p>Merges the Seamless hook entries into a Claude Code <code>settings.json</code>, then
+registers the MCP server with the <code>claude</code> CLI.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -320,13 +325,23 @@ usable embedder, it warns and imports without vectors rather than failing.</p>
 <td>sibling of this binary, else <code>seam</code> on PATH</td>
 <td>Path to the <code>seam</code> CLI baked into the command hooks.</td>
 </tr>
+<tr>
+<td><code>--mcp</code></td>
+<td><code>true</code></td>
+<td>Register the MCP server via <code>claude mcp add --scope user</code>.</td>
+</tr>
 </tbody>
 </table>
 </div>
-<p>It refuses to run when <code>mcp.api_key</code> is empty, since the key is what the hooks
-authenticate with. The loaded config path is made absolute and baked into the
-command hooks as <code>SEAMLESS_CONFIG</code>, so they resolve config from any working
-directory.</p>
+<p>It generates <code>mcp.api_key</code> on a true first run under the same rule as <code>serve</code>,
+and refuses to run when an existing config leaves the key empty, since the key
+is what the hooks authenticate with. The loaded config path is made absolute
+and baked into the command hooks as <code>SEAMLESS_CONFIG</code>, so they resolve config
+from any working directory. A <code>--seam</code> binary that cannot be found is a printed
+warning, not an error - the hooks would fail at fire time, so it says so now.</p>
+<p>The MCP registration is best-effort: the hooks land regardless, and a missing
+<code>claude</code> CLI or a failed <code>claude mcp add</code> prints the exact command to run
+yourself. An already-registered <code>seamless</code> server is left alone.</p>
 <p>The merge preserves unknown keys, replaces existing Seamless-managed entries in
 place, adopts unmarked entries that point at the same hook URL or run the same
 <code>seam hook &lt;event&gt;</code> command (this is what stops re-installs from duplicating

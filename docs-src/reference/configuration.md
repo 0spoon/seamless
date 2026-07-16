@@ -33,9 +33,16 @@ briefing setting is being ignored.
 
 ## Generating a key
 
-`mcp.api_key` guards `/api/mcp` and the console. It has no default; the daemon
-will not serve without one.
+`mcp.api_key` guards `/api/mcp` and the console. On a true first run - no
+config file anywhere in the search order and no `SEAMLESS_MCP_API_KEY` in the
+environment - `seamlessd serve` (or `install-hooks`) generates one and writes
+it to `~/.config/seamless/seamless.yaml`, so a fresh install never handles the
+key by hand. An existing config file is never edited, even when its key is
+empty; set one yourself:
 
 ```bash
 openssl rand -hex 32
 ```
+
+The daemon still starts with an empty key, but every MCP and hook request is
+rejected until one is set - `seamlessd doctor` reports it as a warning.

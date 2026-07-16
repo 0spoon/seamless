@@ -193,9 +193,13 @@ func mcpToolsCheck() check {
 	return check{statusOK, "mcp_tools", fmt.Sprintf("%d tools registered", n)}
 }
 
-// apiKeyCheck warns when the static bearer key is unset.
+// apiKeyCheck warns when the static bearer key is unset. On a true first run
+// (no config file at all) the message points at serve, which generates one.
 func apiKeyCheck(cfg config.Config) check {
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
+		if cfg.SourcePath() == "" {
+			return check{statusWarn, "mcp.api_key", "empty -- `seamlessd serve` generates one on first run (or set SEAMLESS_MCP_API_KEY)"}
+		}
 		return check{statusWarn, "mcp.api_key", "empty -- set SEAMLESS_MCP_API_KEY (or mcp.api_key) before exposing /api/mcp"}
 	}
 	return check{statusOK, "mcp.api_key", "set"}

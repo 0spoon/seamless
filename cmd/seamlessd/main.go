@@ -5,7 +5,7 @@
 //	seamlessd serve         start the HTTP server
 //	seamlessd doctor        run configuration + database self-checks
 //	seamlessd import        import a Seam v1 data directory
-//	seamlessd install-hooks install the Claude Code hooks
+//	seamlessd install-hooks install the Claude Code hooks + register MCP
 //	seamlessd map-repo      map a repo path to a project slug
 //	seamlessd family        manage project families
 //	seamlessd console-open  open the console in a browser, pre-authenticated
@@ -110,7 +110,7 @@ usage:
   seamlessd serve          start the HTTP server (127.0.0.1:8081)
   seamlessd doctor         run configuration + database self-checks
   seamlessd import         import a Seam v1 data directory (--from ~/.seam)
-  seamlessd install-hooks  install the SessionStart/UserPromptSubmit hooks
+  seamlessd install-hooks  install the Claude Code hooks + register the MCP server
   seamlessd map-repo       map a repo path to a project slug (repo_project_map)
   seamlessd family         manage project families (list|add|remove)
   seamlessd console-open   open the console in a browser, pre-authenticated
@@ -133,6 +133,14 @@ func runServe(args []string) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	var keyPath string
+	cfg, keyPath, err = config.EnsureAPIKey(cfg)
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: %w", err)
+	}
+	if keyPath != "" {
+		slog.Info("first run: generated mcp.api_key", "config", keyPath)
 	}
 	bind := cfg.Addr
 	if *addr != "" {

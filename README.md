@@ -32,28 +32,20 @@ MCP, and renders a web console for inspection.
 Requires Go 1.25+. No CGO toolchain, no external database, no Node.
 
 ```bash
-cp seamless.yaml.example seamless.yaml
-openssl rand -hex 32              # put the result in mcp.api_key
-make build                        # ./bin/seamlessd + ./bin/seam
-make doctor                       # config, database, and tool-count self-checks
-make run                          # serve on 127.0.0.1:8081
+go install github.com/0spoon/seamless/cmd/...@latest   # seamlessd + seam
+seamlessd serve                   # 127.0.0.1:8081; first run generates the API key
+seamlessd install-hooks           # Claude Code hooks + MCP registration
+seamlessd map-repo --path ~/code/myrepo --project myrepo
 ```
 
-Register the MCP endpoint with a client and install the Claude Code hooks:
-
-```bash
-claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp \
-  --header "Authorization: Bearer $KEY"
-
-./bin/seamlessd install-hooks                       # SessionStart/UserPromptSubmit/SessionEnd
-./bin/seamlessd map-repo --path ~/code/myrepo --project myrepo
-make console                                        # open the console, pre-authenticated
-```
-
-`--scope user` is required: `claude mcp add` otherwise defaults to `local` and
-ties the registration to whichever directory you ran it from. `map-repo` binds a
-working directory to a project, so agents in that repo inherit project scope
-without passing it on every call.
+On a true first run `serve` writes a generated bearer key to
+`~/.config/seamless/seamless.yaml`. `install-hooks` installs the Claude Code
+hooks and registers the MCP server (`claude mcp add --scope user`); other MCP
+clients register `http://127.0.0.1:8081/api/mcp` with
+`Authorization: Bearer <mcp.api_key>`. `map-repo` binds a working directory to
+a project, so agents in that repo inherit project scope without passing it on
+every call. From a clone, `make build && make run` is the same daemon out of
+`./bin/`, and `make install` sets it up as a service.
 
 `make install-onboard-skill` installs a `/seam-onboard` Claude Code skill that
 walks an agent through this setup and verifies each step.
