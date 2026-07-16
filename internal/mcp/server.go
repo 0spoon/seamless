@@ -86,6 +86,18 @@ var errAmbiguousScope = errors.New(
 	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
 		"projects (concurrent agents); name the scope with project=<slug> or project=global")
 
+// errAmbiguousActor is returned by resolveActor when an identity-sensitive task
+// operation (a claim, a release, or a mutation of a task under a live claim) has
+// no bound session and more than one active ambient session could be the caller
+// -- concurrent agents in the same project. Guessing the actor here would record a
+// claim under, or release/mutate a claim held by, the WRONG agent's session,
+// locking the true holder out of its own task (the cross-agent claim-bleed bug);
+// so the caller must name itself. Its cc/<id> ambient name is printed in the
+// session briefing.
+var errAmbiguousActor = errors.New(
+	"ambiguous agent: no bound session and multiple agents are active, so the acting " +
+		"session cannot be inferred; name yourself with session=<your cc/... from the briefing> or session_id=<ULID>")
+
 // writeScopeHelp is the tail resolveWriteScope appends to either scope error. It
 // carries the two facts an agent stuck at this decision cannot get anywhere else,
 // and whose absence reliably produces the wrong answer:
@@ -625,7 +637,11 @@ func (s *Server) boundLab(ctx context.Context) string {
 }
 
 // boundSession returns the bound session's ULID, a single unambiguous ambient
-// session's ULID (write-scope fallback), or "".
+// session's ULID (write-scope fallback), or "". It backs provenance/telemetry
+// stamping (memory SourceSession, event SessionID, created_by), where collapsing a
+// project's concurrent ambients to the most recent is an acceptable best-effort
+// attribution. Identity-sensitive task ownership (claim/release/update-under-lock)
+// must NOT use it -- see resolveActor, which refuses to guess.
 func (s *Server) boundSession(ctx context.Context) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID
@@ -634,6 +650,60 @@ func (s *Server) boundSession(ctx context.Context) string {
 		return sess.ID
 	}
 	return ""
+}
+
+// resolveActor resolves the session ULID that OWNS an identity-sensitive task
+// operation -- a claim, a release, or a mutation of a task under a live claim. It
+// is the strict counterpart of boundSession: where boundSession may collapse a
+// project's concurrent ambients to the most recently updated one (fine for
+// stamping provenance), an actor must never be GUESSED, because the guess becomes
+// claimed_by -- or is compared against it -- and a wrong guess locks the true
+// holder out of its own task (the cross-agent claim-bleed bug).
+//
+// Resolution mirrors resolveSession: an explicit session_id (ULID) or session name
+// the agent passes to name itself, then the connection binding, then -- only for
+// the solo-agent case -- the single active ambient. Concurrent same-project
+// ambients are ambiguous (errAmbiguousActor): the agent disambiguates with the
+// cc/<id> its briefing prints. Because the sole-ambient case resolves the same
+// ULID on every call, a solo agent's identity survives a lost binding (reconnect,
+// daemon restart) with no re-session_start -- the binding is a cache here, not the
+// source of truth.
+//
+// ok is false with a nil error only when there is no session at all to act as. An
+// explicit session_id/session that does not resolve is a loud error, not a silent
+// fall-through -- naming a bad identity should fail, not attribute elsewhere.
+func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (string, bool, error) {
+	if id := argString(req, "session_id"); id != "" {
+		sess, ok, err := store.SessionByID(ctx, s.cfg.DB, id)
+		if err != nil {
+			return "", false, err
+		}
+		if !ok {
+			return "", false, fmt.Errorf("session_id %q not found", id)
+		}
+		return sess.ID, true, nil
+	}
+	if name := argString(req, "session"); name != "" {
+		sess, ok, err := store.SessionByName(ctx, s.cfg.DB, name)
+		if err != nil {
+			return "", false, err
+		}
+		if !ok {
+			return "", false, fmt.Errorf("session %q not found", name)
+		}
+		return sess.ID, true, nil
+	}
+	if b, ok := s.getBinding(ctx); ok {
+		return b.sessionID, true, nil
+	}
+	sess, ok, ambiguous, err := s.ambientSessionTarget(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if ambiguous {
+		return "", false, errAmbiguousActor
+	}
+	return sess.ID, ok, nil
 }
 
 // ambientFallback returns the ambient session an unbound connection's writes

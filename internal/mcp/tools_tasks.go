@@ -17,6 +17,19 @@ import (
 // becomes reclaimable, unless the caller overrides it via lease_seconds.
 const defaultClaimLease = 15 * time.Minute
 
+// actorSessionArgDesc documents the `session` argument on the identity-sensitive
+// task tools (claim/release/update). It carries the one fact an agent stuck behind
+// errAmbiguousActor cannot get anywhere else: its own identity is the cc/<id> its
+// briefing prints, and passing it is how a concurrent agent names the claim as its
+// own instead of having one guessed for it.
+const actorSessionArgDesc = "the acting agent's session: your cc/<id> from the briefing, or a session name. " +
+	"Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when " +
+	"several agents are active and the actor is otherwise ambiguous."
+
+// actorSessionIDArgDesc documents the `session_id` argument -- the ULID power form
+// of actorSessionArgDesc, taking precedence over the name and the binding.
+const actorSessionIDArgDesc = "the acting agent's session ULID; takes precedence over session and the bound session"
+
 func tasksAddTool() mcp.Tool {
 	return mcp.NewTool("tasks_add",
 		mcp.WithDescription("Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker."),
@@ -70,6 +83,8 @@ func tasksUpdateTool() mcp.Tool {
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("reassign the task to another project slug (used when a split moves a project's open work to a child)")),
 		mcp.WithArray("add_depends_on", mcp.WithStringItems(), mcp.Description("task ids to add as blockers (a comma-separated string is also accepted)")),
+		mcp.WithString("session", mcp.Description("the acting agent's session (your cc/<id> from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active")),
+		mcp.WithString("session_id", mcp.Description(actorSessionIDArgDesc)),
 	)
 }
 
@@ -109,11 +124,22 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if patch.Status == nil && patch.Title == nil && patch.Body == nil && patch.ProjectSlug == nil && len(patch.AddDependsOn) == 0 {
 		return errResult("tasks_update", errors.New("nothing to update: pass status, title, body, project, or add_depends_on"))
 	}
-	updated, err := store.UpdateTask(ctx, s.cfg.DB, id, patch, s.boundSession(ctx), time.Now().UTC())
+	// Resolve the acting session for the holder-lock. An explicit-but-unknown
+	// identity (or a store error) fails loudly; an AMBIGUOUS actor does not --
+	// actor stays "" (a sentinel that matches no live holder). UpdateTask's
+	// holder-lock defers to core.Task.ClaimLive, so "" still freely edits an
+	// unclaimed task while a task under a sibling's live claim is refused. The
+	// agent names itself (session=) only when it must mutate a task it holds --
+	// exactly the case where guessing an identity onto a claim would corrupt it.
+	actor, _, err := s.resolveActor(ctx, req)
+	if err != nil && !errors.Is(err, errAmbiguousActor) {
+		return errResult("tasks_update", err)
+	}
+	updated, err := store.UpdateTask(ctx, s.cfg.DB, id, patch, actor, time.Now().UTC())
 	if err != nil {
 		return errResult("tasks_update", err)
 	}
-	s.record(ctx, core.EventTaskTransition, s.boundSession(ctx), updated.ProjectSlug, id,
+	s.record(ctx, core.EventTaskTransition, actor, updated.ProjectSlug, id,
 		map[string]any{"to": string(updated.Status)})
 	return jsonResult(taskJSON(updated))
 }
@@ -226,6 +252,8 @@ func tasksClaimTool() mcp.Tool {
 		// rather than a domain limit a schema could state. The validator owns the
 		// type; the handler owns range and domain.
 		mcp.WithNumber("lease_seconds", mcp.Description("lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900)")),
+		mcp.WithString("session", mcp.Description(actorSessionArgDesc)),
+		mcp.WithString("session_id", mcp.Description(actorSessionIDArgDesc)),
 	)
 }
 
@@ -234,9 +262,13 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 	if id == "" {
 		return errResult("tasks_claim", errors.New("id is required"))
 	}
-	sessionID := s.boundSession(ctx)
-	if sessionID == "" {
-		return errResult("tasks_claim", errors.New("no active session to claim as; start a session first"))
+	sessionID, ok, err := s.resolveActor(ctx, req)
+	if err != nil {
+		return errResult("tasks_claim", err)
+	}
+	if !ok {
+		return errResult("tasks_claim", errors.New(
+			"no active session to claim as: start a session (session_start), or name yourself with session=<cc/... or ULID>"))
 	}
 	lease := defaultClaimLease
 	if argPresent(req, "lease_seconds") {
@@ -266,6 +298,8 @@ func tasksReleaseTool() mcp.Tool {
 	return mcp.NewTool("tasks_release",
 		mcp.WithDescription("Release a task the current session holds, reopening it (status back to open, claim cleared) so another agent can claim it. Only the current holder may release."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id to release")),
+		mcp.WithString("session", mcp.Description(actorSessionArgDesc)),
+		mcp.WithString("session_id", mcp.Description(actorSessionIDArgDesc)),
 	)
 }
 
@@ -274,8 +308,11 @@ func (s *Server) handleTasksRelease(ctx context.Context, req mcp.CallToolRequest
 	if id == "" {
 		return errResult("tasks_release", errors.New("id is required"))
 	}
-	sessionID := s.boundSession(ctx)
-	if sessionID == "" {
+	sessionID, ok, err := s.resolveActor(ctx, req)
+	if err != nil {
+		return errResult("tasks_release", err)
+	}
+	if !ok {
 		return errResult("tasks_release", errors.New("no active session; nothing to release"))
 	}
 	released, err := store.ReleaseTask(ctx, s.cfg.DB, id, sessionID, time.Now().UTC())
