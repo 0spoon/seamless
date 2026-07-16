@@ -49,9 +49,13 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 		return n, err
 	}
 	// A "plan" is a composition keyed by a plan:<slug> tag (both cc-plan captures
-	// and composed plans carry it), so distinct plan:<slug> tag values across all
-	// notes is the plan count. Prefix matches internal/plans slugTagPrefix.
-	if err := scalar(&n.Plans, `SELECT COUNT(DISTINCT je.value) FROM notes_index n, json_each(n.tags) je WHERE je.value LIKE 'plan:%'`); err != nil {
+	// and composed plans carry it). Count distinct (project, plan:<slug>) PAIRS,
+	// not distinct tag values: a plan is identified by project+slug (see the
+	// console's planKey), so the same plan name running in two projects is two
+	// plans and the Plans screen lists two rows. Counting the value alone would
+	// badge that as one and disagree with the page it links to. Prefix matches
+	// internal/plans slugTagPrefix.
+	if err := scalar(&n.Plans, `SELECT COUNT(*) FROM (SELECT DISTINCT n.project, je.value FROM notes_index n, json_each(n.tags) je WHERE je.value LIKE 'plan:%')`); err != nil {
 		return n, err
 	}
 	return n, nil

@@ -41,29 +41,38 @@ const (
 
 // planRow is a display projection of one plan (capture or composed).
 type planRow struct {
-	NoteID     string    `json:"noteId"`
-	Slug       string    `json:"slug"`     // plan:<slug> composition key
-	Source     string    `json:"source"`   // capture | composed
-	Basename   string    `json:"basename"` // CC plan file name without .md (captures only)
-	Title      string    `json:"title"`
-	Project    string    `json:"project,omitempty"`
-	Status     string    `json:"status"`
-	Iteration  int       `json:"iteration,omitempty"`
-	Agents     int       `json:"agents"` // cached subagent notes in the composition
-	TasksDone  int       `json:"tasksDone"`
-	TasksOpen  int       `json:"tasksOpen"`       // open (not started, not closed) steps
-	TasksWIP   int       `json:"tasksInProgress"` // steps currently being worked
-	TasksTotal int       `json:"tasksTotal"`
-	Phase      string    `json:"phase"` // in_progress | ready | done
-	Updated    time.Time `json:"updated"`
+	NoteID     string `json:"noteId"`
+	Slug       string `json:"slug"`     // plan:<slug> composition key
+	Source     string `json:"source"`   // capture | composed
+	Basename   string `json:"basename"` // CC plan file name without .md (captures only)
+	Title      string `json:"title"`
+	Project    string `json:"project,omitempty"`
+	Status     string `json:"status"`
+	Iteration  int    `json:"iteration,omitempty"`
+	Agents     int    `json:"agents"` // cached subagent notes in the composition
+	TasksDone  int    `json:"tasksDone"`
+	TasksOpen  int    `json:"tasksOpen"`       // open (not started, not closed) steps
+	TasksWIP   int    `json:"tasksInProgress"` // steps currently being worked
+	TasksTotal int    `json:"tasksTotal"`
+	Phase      string `json:"phase"` // in_progress | ready | done
+	// Updated is the COMPOSITION's last activity: the newest stamp across every
+	// note tagged plan:<slug> and every plan-step task -- not the primary note's
+	// own. A plan moves when any part of it moves, so keying recency to the
+	// primary would drop an actively-worked plan out of the window (and sort it
+	// low) merely because its narrative note had not been re-saved.
+	Updated time.Time `json:"updated"`
 }
 
 // plansData is the Plans list payload. Rows are one merged, newest-first list;
 // the phase counts drive the three grouped sections the template renders (in
 // progress, then ready, then done).
 type plansData struct {
-	Rows        []planRow      `json:"rows"`
-	Count       int            `json:"count"`
+	Rows  []planRow `json:"rows"`
+	Count int       `json:"count"` // rows inside the window
+	// Total is every plan, all time -- what the sidebar badge counts. The headline
+	// leads with it (window as qualifier) so the badge never appears to disagree
+	// with the page it links to; Count scopes only the list.
+	Total       int            `json:"total"`
 	InProgress  int            `json:"inProgress"`
 	Ready       int            `json:"ready"`
 	Done        int            `json:"done"`
@@ -71,6 +80,11 @@ type plansData struct {
 	WindowLabel string         `json:"windowLabel"`
 	Windows     []windowOption `json:"-"`
 }
+
+// planKey identifies a plan by the (project, slug) pair rather than the slug
+// alone: the same plan name may run in more than one project, and those are
+// distinct plans with distinct steps.
+func planKey(project, slug string) string { return project + "\x00" + slug }
 
 // planNoteRef is a compact pointer to a note attached to a plan composition.
 type planNoteRef struct {
@@ -108,6 +122,15 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// Every note carrying a plan:<slug> tag, both sources: composedPrimaries picks
+	// the composed narratives out of this set, and the activity index spans all of
+	// it (captures and agent caches carry the slug tag too).
+	composed, err := store.NotesByTagPrefix(ctx, s.cfg.DB, "", plans.SlugTagPrefix())
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	activity := planNoteActivity(composed)
 	// Captures are the primary of their slug. A cc-plan note also carries its
 	// plan:<slug> tag, so track which (project, slug) pairs a capture already owns
 	// and let composed plans fill only the rest.
@@ -119,22 +142,18 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 	rows := make([]planRow, 0, len(captures))
 	owned := make(map[string]bool, len(captures))
 	for _, n := range captures {
-		row := s.planRow(ctx, n, agentCount)
-		owned[n.Project+"\x00"+row.Slug] = true
+		row := s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))])
+		owned[planKey(n.Project, row.Slug)] = true
 		rows = append(rows, row)
 	}
 	// Composed plans: any note carrying a plan:<slug> tag that is not itself a
 	// capture. The earliest-created non-agent note is the narrative primary.
-	composed, err := store.NotesByTagPrefix(ctx, s.cfg.DB, "", plans.SlugTagPrefix())
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
 	for _, n := range composedPrimaries(composed, owned) {
-		rows = append(rows, s.planRow(ctx, n, agentCount))
+		rows = append(rows, s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
 	}
-	// One merged ordering across both sources; window-filter last so it applies
-	// uniformly.
+	// Total is every plan regardless of window -- the headline the sidebar badge
+	// must agree with. Window-filter last so it applies uniformly across sources.
+	total := len(rows)
 	kept := rows[:0]
 	for _, row := range rows {
 		if win.Since.IsZero() || !row.Updated.Before(win.Since) {
@@ -148,7 +167,7 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 		return strings.Compare(b.NoteID, a.NoteID)
 	})
 	data := plansData{
-		Rows: kept, Count: len(kept),
+		Rows: kept, Count: len(kept), Total: total,
 		Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 	}
 	for _, row := range kept {
@@ -178,7 +197,7 @@ func composedPrimaries(notes []core.Note, owned map[string]bool) []core.Note {
 		if slug == "" {
 			continue
 		}
-		key := n.Project + "\x00" + slug
+		key := planKey(n.Project, slug)
 		if owned[key] {
 			continue
 		}
@@ -219,7 +238,15 @@ func (s *Service) planDetail(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount), Attached: attached}
+	// attached is every other note in the composition, so it carries the same
+	// note-activity the list derives from its index -- keep the two in step.
+	noteActivity := planNote.Updated
+	for _, a := range attached {
+		if a.Updated.After(noteActivity) {
+			noteActivity = a.Updated
+		}
+	}
+	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount, noteActivity), Attached: attached}
 	// The approve escape hatch is a CC-capture lifecycle action; composed plans
 	// have no draft/presented/approved state to flip.
 	d.CanApprove = d.Row.Source == planSourceCapture && d.Row.Status != plans.StatusApproved
@@ -353,6 +380,25 @@ func (s *Service) planComposition(ctx context.Context, slug string) (core.Note, 
 	return tagged[primary], attached, true, nil
 }
 
+// planNoteActivity indexes the newest note stamp per (project, slug) across a
+// set of plan-tagged notes, so each row's recency can reflect its whole
+// composition. Keyed by (project, slug) because that pair -- not the slug alone
+// -- identifies a plan: two projects may each run a plan of the same name.
+func planNoteActivity(notes []core.Note) map[string]time.Time {
+	act := make(map[string]time.Time, len(notes))
+	for _, n := range notes {
+		slug := plans.SlugFromTags(n.Tags)
+		if slug == "" {
+			continue
+		}
+		key := n.Project + "\x00" + slug
+		if cur, ok := act[key]; !ok || n.Updated.After(cur) {
+			act[key] = n.Updated
+		}
+	}
+	return act
+}
+
 // planAgentCounts counts agent-cache notes per plan slug, one query for the
 // whole list.
 func (s *Service) planAgentCounts(ctx context.Context) (map[string]int, error) {
@@ -372,7 +418,11 @@ func (s *Service) planAgentCounts(ctx context.Context) (map[string]int, error) {
 // planRow projects a plan's primary note into a display row. The capture-only
 // columns (basename, iteration) are read from the cc-plan note's frontmatter
 // (best-effort); composed primaries carry neither.
-func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int) planRow {
+//
+// noteActivity is the newest stamp across the composition's OTHER notes (zero if
+// unknown, which degrades to the primary's own); planRow folds in the step tasks
+// itself, since it already loads them. See planRow.Updated.
+func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int, noteActivity time.Time) planRow {
 	slug := plans.SlugFromTags(n.Tags)
 	isCapture := slices.Contains(n.Tags, plans.TagPlan)
 	row := planRow{
@@ -380,6 +430,9 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 		Title: n.Title, Project: n.Project,
 		Status: plans.StatusFromTags(n.Tags), Agents: agentCount[slug],
 		Updated: n.Updated,
+	}
+	if noteActivity.After(row.Updated) {
+		row.Updated = noteActivity
 	}
 	if isCapture {
 		row.Source = planSourceCapture
@@ -400,6 +453,10 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 				row.TasksWIP++
 			case core.TaskOpen:
 				row.TasksOpen++
+			}
+			// Claiming or closing a step is activity even when no note moves.
+			if t.UpdatedAt.After(row.Updated) {
+				row.Updated = t.UpdatedAt
 			}
 		}
 	}

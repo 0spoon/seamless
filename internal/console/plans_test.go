@@ -237,6 +237,86 @@ func addPlanTask(t *testing.T, db *sql.DB, slug string, status core.TaskStatus) 
 	}))
 }
 
+// seedPlanNoteAt writes a note tagged plan:<planSlug> in project demo, stamped
+// at ts, so a test can age one part of a composition independently of the rest.
+func seedPlanNoteAt(t *testing.T, mgr *files.Manager, noteSlug, planSlug string, ts time.Time) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	_, err = mgr.WriteNote(context.Background(), core.Note{
+		ID: id, Slug: noteSlug, Title: "Plan " + planSlug, Project: "demo",
+		Description: "note for " + planSlug, Body: "# " + planSlug,
+		Tags:    []string{plans.SlugTag(planSlug), "created-by:agent"},
+		Created: ts, Updated: ts,
+	})
+	require.NoError(t, err)
+}
+
+// addPlanTaskAt inserts a step task under plan:<slug> stamped at ts.
+func addPlanTaskAt(t *testing.T, db *sql.DB, slug string, status core.TaskStatus, ts time.Time) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateTask(context.Background(), db, core.Task{
+		ID: id, ProjectSlug: "demo", Title: "step for " + slug, Status: status,
+		CreatedBy: "test", PlanSlug: slug, CreatedAt: ts, UpdatedAt: ts,
+	}))
+}
+
+// TestPlans_WindowUsesCompositionActivity pins the recency window to the whole
+// composition rather than to whichever note represents it. A plan whose
+// narrative is old but whose supporting note or step task moved an hour ago is
+// active, and keying the window to the primary's own stamp hides exactly the
+// plans the window exists to surface.
+func TestPlans_WindowUsesCompositionActivity(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	old := time.Now().UTC().AddDate(0, 0, -3)
+	recent := time.Now().UTC().Add(-time.Hour)
+
+	// Narrative 3 days old, supporting note an hour old. The narrative is the
+	// primary (earliest created), so its stamp alone would exclude the plan.
+	seedPlanNoteAt(t, mgr, "narrative-live-plan", "live-plan", old)
+	seedPlanNoteAt(t, mgr, "support-live-plan", "live-plan", recent)
+
+	// Narrative 3 days old, but a step moved an hour ago: no note is recent at all.
+	seedPlanNoteAt(t, mgr, "narrative-task-plan", "task-plan", old)
+	addPlanTaskAt(t, db, "task-plan", core.TaskInProgress, recent)
+
+	// Nothing has moved in 3 days -- genuinely outside the window.
+	seedPlanNoteAt(t, mgr, "narrative-dormant-plan", "dormant-plan", old)
+
+	var list plansData
+	getJSON(t, mux, "/console/plans?format=json&w=24h", &list)
+
+	slugs := map[string]bool{}
+	for _, row := range list.Rows {
+		slugs[row.Slug] = true
+	}
+	require.True(t, slugs["live-plan"], "a recent supporting note keeps the plan in the 24h window")
+	require.True(t, slugs["task-plan"], "a recently moved step keeps the plan in the 24h window")
+	require.False(t, slugs["dormant-plan"], "a dormant plan still falls outside the window")
+	require.Equal(t, 2, list.Count)
+	require.Equal(t, 3, list.Total, "Total is all-time and must never be windowed")
+}
+
+// TestPlans_TotalIsUnwindowed pins the headline count the sidebar badge must
+// agree with: Total spans all time whatever window the list is scoped to.
+func TestPlans_TotalIsUnwindowed(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	seedPlanNoteAt(t, mgr, "narrative-fresh", "fresh-plan", time.Now().UTC())
+	seedPlanNoteAt(t, mgr, "narrative-stale", "stale-plan", time.Now().UTC().AddDate(0, 0, -10))
+
+	var win24 plansData
+	getJSON(t, mux, "/console/plans?format=json&w=24h", &win24)
+	require.Equal(t, 1, win24.Count, "only the fresh plan is inside 24h")
+	require.Equal(t, 2, win24.Total, "the badge counts both")
+
+	var all plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &all)
+	require.Equal(t, 2, all.Count)
+	require.Equal(t, 2, all.Total)
+}
+
 func TestPlans_PhaseGrouping(t *testing.T) {
 	db, mgr, mux := newConsoleWithFiles(t)
 
