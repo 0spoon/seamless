@@ -197,7 +197,7 @@ func TestOverview_CoverageInPayload(t *testing.T) {
 	}))
 
 	var data overviewData
-	getJSON(t, mux, "/console/?format=json", &data)
+	getJSON(t, mux, "/console/?w=all&format=json", &data)
 
 	require.Equal(t, 1, data.Covered)
 	require.Equal(t, 2, data.CovTotal)
@@ -207,7 +207,7 @@ func TestOverview_CoverageInPayload(t *testing.T) {
 	require.Equal(t, 1, data.CoverageRows[0].Count)
 	require.Equal(t, 50, data.CoverageRows[0].Pct)
 
-	// Default window is all-time, so the daily trend runs from today's session
+	// The all-time window buckets daily, so the trend runs from today's session
 	// back to itself: a single local-day bucket reflecting 1 of 2 covered.
 	require.NotEmpty(t, data.CoverageTrend)
 	today := data.CoverageTrend[len(data.CoverageTrend)-1]

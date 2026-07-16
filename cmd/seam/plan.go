@@ -79,9 +79,9 @@ type planListOpts struct {
 func bindPlanList(fs *flag.FlagSet) *planListOpts {
 	return &planListOpts{
 		project: fs.String("project", "", "filter by project `SLUG`"),
-		// --window bogus reached ResolveRetrievalWindow's `default:` and came back as
-		// "all time". Nothing in the output says which window it answered, so the
-		// caller reads a full-history list as the 24h one they asked for.
+		// --window bogus reaches ResolveRetrievalWindow's `default:` and comes back as
+		// "24h". Nothing in the output says which window it answered, so the caller
+		// reads a one-day list as the 30d one they asked for.
 		window: enumFlag(fs, "window", "all", "time `WINDOW`", planWindows),
 	}
 }

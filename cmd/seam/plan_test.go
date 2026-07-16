@@ -74,9 +74,9 @@ func TestPlanParse_RejectsTheSilentlyIgnoredArguments(t *testing.T) {
 	}
 }
 
-// --window bogus reached store.ResolveRetrievalWindow's `default:` and silently
-// came back as "all time": nothing in the output names the window it answered, so
-// a full-history list reads as the 24h one that was asked for.
+// --window bogus reaches store.ResolveRetrievalWindow's `default:` and silently
+// comes back as "24h": nothing in the output names the window it answered, so a
+// one-day list reads as the 30d one that was asked for.
 func TestPlanParse_WindowEnum(t *testing.T) {
 	_, err := parse(commands(), []string{"plan", "list", "--window", "bogus"})
 	require.Error(t, err)
@@ -105,7 +105,7 @@ func TestPlanWindows_MatchTheResolver(t *testing.T) {
 		require.Equal(t, w, store.ResolveRetrievalWindow(w, now).Key,
 			"seam accepts %q but the resolver does not answer to it", w)
 	}
-	require.Equal(t, "all", store.ResolveRetrievalWindow("bogus", now).Key,
+	require.Equal(t, "24h", store.ResolveRetrievalWindow("bogus", now).Key,
 		"the resolver's silent default is what the enum exists to keep unreachable")
 }
 
