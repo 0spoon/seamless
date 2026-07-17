@@ -123,7 +123,7 @@ They come from a THROWAWAY instance seeded with fictional data by
 change:
 
 ```bash
-# 1. seed a throwaway data dir (numbers are tuned; see cmd/demoseed/data.go)
+# 1. seed a throwaway data dir (numbers are tuned; see internal/demokit/data.go)
 go run ./cmd/demoseed -data /tmp/seamless-demo
 
 # 2. serve it on a port that is NOT your live daemon
