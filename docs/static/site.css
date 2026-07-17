@@ -326,6 +326,33 @@ body::before {
 }
 .copy-btn:hover { color: var(--term-ink); border-color: var(--term-muted); }
 .copy-btn.ok { color: var(--term-green); border-color: var(--term-green); }
+/* OS switch (hero + quickstart): the head script sets data-os on <html> from
+   the UA before first paint; picking a button overrides it. Without JS the
+   attribute is never set, so both commands show and the switch hides. */
+:root[data-os="unix"] [data-os-block="windows"],
+:root[data-os="windows"] [data-os-block="unix"] { display: none; }
+:root:not([data-os]) .os-switch { display: none; }
+.os-switch {
+  display: inline-flex; gap: 2px;
+  margin-bottom: 12px; padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+.os-switch button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: var(--tracking-wide);
+  color: var(--muted);
+  padding: 5px 12px;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.os-switch button:hover { color: var(--ink); }
+:root[data-os="unix"] .os-switch button[data-os-pick="unix"],
+:root[data-os="windows"] .os-switch button[data-os-pick="windows"] {
+  background: var(--brand-soft); color: var(--brand);
+}
+
 .cta-secondary { display: flex; gap: 18px; margin-top: 16px; }
 .cta-secondary a {
   font-size: 15px; font-weight: 600;

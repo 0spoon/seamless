@@ -12,8 +12,8 @@
 #
 # Four assertions, each one a thing a machine can actually verify:
 #
-#   1. the hero pill runs $INSTALL_CMD, not some other install route
-#   2. every surface that teaches installing teaches the SAME command
+#   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
+#   2. every surface that teaches installing teaches the SAME two commands
 #   3. every `seamlessd <sub>` the page names in a command context is real
 #   4. each copy button copies the command it visibly shows
 #
@@ -25,11 +25,12 @@ set -eu
 PAGE=docs/index.html
 MAIN=cmd/seamlessd/main.go
 
-# The canonical install command, and the single place it is written down. It is
-# a marketing claim as much as a command, so changing it should be deliberate
-# and should drag every surface along: edit it here, and this check names every
-# file that still disagrees.
+# The canonical install commands, and the single place they are written down.
+# They are marketing claims as much as commands, so changing one should be
+# deliberate and should drag every surface along: edit it here, and this check
+# names every file that still disagrees.
 INSTALL_CMD='curl -fsSL https://thereisnospoon.org/install | sh'
+WIN_INSTALL_CMD='irm https://thereisnospoon.org/install.ps1 | iex'
 
 # Every doc whose job includes telling a new user how to install.
 SURFACES="$PAGE README.md docs-src/quickstart.md docs-src/install.md"
@@ -40,19 +41,28 @@ err() {
 	fail=1
 }
 
-# 1. The hero pill is the first command anyone sees. It must be the real one.
-pill=$(grep -o 'class="install-pill".*' "$PAGE" | grep -oE 'data-copy="[^"]*"' | head -1 |
+# 1. The hero pills are the first commands anyone sees. One per OS, and each
+#    must be the real one -- no more, no less.
+pills=$(grep 'class="install-pill"' "$PAGE" | grep -oE 'data-copy="[^"]*"' |
 	sed 's/^data-copy="//; s/"$//')
-if [ -z "$pill" ]; then
+if [ -z "$pills" ]; then
 	err "no install-pill with a data-copy found in $PAGE (did the hero markup change?)"
-elif [ "$pill" != "$INSTALL_CMD" ]; then
-	err "hero install pill runs [$pill]; want [$INSTALL_CMD]"
+else
+	printf '%s\n' "$pills" | grep -qxF "$INSTALL_CMD" ||
+		err "no hero install pill runs [$INSTALL_CMD]"
+	printf '%s\n' "$pills" | grep -qxF "$WIN_INSTALL_CMD" ||
+		err "no hero install pill runs [$WIN_INSTALL_CMD]"
+	stray=$(printf '%s\n' "$pills" | grep -vxF "$INSTALL_CMD" | grep -vxF "$WIN_INSTALL_CMD" || true)
+	[ -z "$stray" ] || err "hero install pill runs unexpected command [$stray]"
 fi
 
-# 2. Nobody should have to wonder which install command is the current one.
+# 2. Nobody should have to wonder which install command is the current one --
+#    on either OS.
 for f in $SURFACES; do
 	grep -qF "$INSTALL_CMD" "$f" ||
 		err "$f never teaches the install command [$INSTALL_CMD]"
+	grep -qF "$WIN_INSTALL_CMD" "$f" ||
+		err "$f never teaches the Windows install command [$WIN_INSTALL_CMD]"
 done
 
 # 3. Commands the page names must exist. Scoped to command contexts -- copy

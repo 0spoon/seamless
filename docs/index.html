@@ -15,7 +15,7 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;})();</script>
 <link rel="stylesheet" href="static/site.css">
 </head>
 <body>
@@ -52,8 +52,13 @@
       <p class="kicker"><span class="live-dot" aria-hidden="true"></span> local-first coordination substrate for coding agents</p>
       <h1>Your agents share a brain. <em>You can read it.</em></h1>
       <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> - as markdown files in a folder you own, indexed by a single Go binary, curated with you in the loop.</p>
+      <div class="os-switch" role="group" aria-label="Show the install command for">
+        <button type="button" data-os-pick="unix" aria-pressed="false">macOS / Linux</button>
+        <button type="button" data-os-pick="windows" aria-pressed="false">Windows</button>
+      </div>
       <div class="cta-row">
-        <span class="install-pill"><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+        <span class="install-pill" data-os-block="unix"><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
+        <span class="install-pill" data-os-block="windows"><span class="p">PS&gt;</span> <span data-copy="irm https://thereisnospoon.org/install.ps1 | iex">irm https://thereisnospoon.org/install.ps1 | iex</span> <button class="copy-btn" type="button" aria-label="Copy install command">copy</button></span>
       </div>
       <div class="cta-secondary">
         <a href="https://github.com/0spoon/seamless">
@@ -329,9 +334,15 @@
         <span class="n">01</span>
         <div>
           <h3>Install</h3>
-          <div class="code"><span><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">Fetches the checksum-verified release for your platform, installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>, generates the API key, installs the Claude Code hooks, registers the MCP server, and starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code>. Needs <code>curl</code> and <code>tar</code> - no Go, no CGO, no database. No LLM key either: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
-          <p class="note">It is <a href="install">one shell script</a>, and piping a stranger's script into a shell deserves a read first. Prefer a toolchain, or want the pieces one at a time? <code>go install</code>, a <a href="https://github.com/0spoon/seamless/releases">prebuilt archive</a>, and <code>make install</code> all land in the same place - see <a href="docs/install/">Install &amp; deploy</a>.</p>
+          <div class="os-switch" role="group" aria-label="Show the install command for">
+            <button type="button" data-os-pick="unix" aria-pressed="false">macOS / Linux</button>
+            <button type="button" data-os-pick="windows" aria-pressed="false">Windows</button>
+          </div>
+          <div class="code" data-os-block="unix"><span><span class="p">$</span> <span data-copy="curl -fsSL https://thereisnospoon.org/install | sh">curl -fsSL https://thereisnospoon.org/install | sh</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <div class="code" data-os-block="windows"><span><span class="p">PS&gt;</span> <span data-copy="irm https://thereisnospoon.org/install.ps1 | iex">irm https://thereisnospoon.org/install.ps1 | iex</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
+          <p class="note" data-os-block="unix">Fetches the checksum-verified release for your platform, installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>, generates the API key, installs the Claude Code hooks, registers the MCP server, and starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code>. Needs <code>curl</code> and <code>tar</code> - no Go, no CGO, no database. No LLM key either: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
+          <p class="note" data-os-block="windows">Fetches the checksum-verified release for your platform, installs <code>seamlessd.exe</code> and <code>seam.exe</code> into <code>~\.local\bin</code>, generates the API key, installs the Claude Code hooks, registers the MCP server, and starts the daemon as a per-user Scheduled Task - at logon, as you, no admin - on <code>127.0.0.1:8081</code> with data in <code>~\.seamless</code>. Needs nothing beyond Windows itself; PowerShell 5.1 and 7 both work. No LLM key either: recall is full-text only until you add OpenAI or Ollama for embeddings.</p>
+          <p class="note">It is <a href="install">one shell script</a> (<a href="install.ps1">one PowerShell script</a> on Windows), and piping a stranger's script into a shell deserves a read first. Prefer a toolchain, or want the pieces one at a time? <code>go install</code>, a <a href="https://github.com/0spoon/seamless/releases">prebuilt archive</a>, and <code>make install</code> all land in the same place - see <a href="docs/install/">Install &amp; deploy</a>.</p>
         </div>
       </div>
       <div class="qs rv">
