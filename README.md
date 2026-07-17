@@ -33,13 +33,20 @@ MCP, and renders a web console for inspection.
 curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
+On Windows, the same install in PowerShell:
+
+```powershell
+irm https://thereisnospoon.org/install.ps1 | iex
+```
+
 That is the whole install. It needs `curl` and `tar` and nothing else -- no Go,
 no CGO toolchain, no database, no Node. It fetches the checksum-verified release
-archive for your platform (macOS and Linux, amd64 and arm64), installs
+archive for your platform (macOS, Linux, and Windows; amd64 and arm64), installs
 `seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
 the Claude Code hooks, registers the MCP server, and runs the daemon as a
-per-user service -- launchd on macOS, systemd `--user` on Linux. Re-run it to
-upgrade: your config and `~/.seamless` are never touched.
+per-user service -- launchd on macOS, systemd `--user` on Linux, an at-logon
+Scheduled Task on Windows. Re-run it to upgrade: your config and `~/.seamless`
+are never touched.
 
 Then just start Claude Code in a git repo. There is no project to create and no
 repo to register: the session-start hook resolves your cwd to its git root,

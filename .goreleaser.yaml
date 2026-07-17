@@ -8,14 +8,15 @@ project_name: seamless
 
 builds:
   # No CGO anywhere (pure-Go SQLite), so plain cross-compilation covers every
-  # target. darwin + linux only: the daemon's service integration is launchd/
-  # systemd and nothing is tested on Windows.
+  # target. Windows joins darwin + linux now that the Claude Code hooks emit
+  # exec form (no shell string) and the daemon runs under a per-user Scheduled
+  # Task; goreleaser appends .exe automatically for the windows targets.
   - id: seamlessd
     main: ./cmd/seamlessd
     binary: seamlessd
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags:
@@ -32,7 +33,7 @@ builds:
     binary: seam
     env:
       - CGO_ENABLED=0
-    goos: [darwin, linux]
+    goos: [darwin, linux, windows]
     goarch: [amd64, arm64]
     flags: [-trimpath]
     ldflags: [-s -w]
@@ -45,6 +46,12 @@ builds:
 # the archive).
 archives:
   - formats: [tar.gz]
+    # zip on Windows: the PowerShell installer (docs/install.ps1) uses
+    # Expand-Archive, and .tar.gz is not a native Windows format. Everything
+    # else stays tar.gz.
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - LICENSE

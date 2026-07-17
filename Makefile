@@ -64,8 +64,10 @@ DOCS_ADDR ?= 127.0.0.1:8899
 # The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).
 # It lives at the site root because GitHub Pages serves docs/ verbatim, so this
 # path IS the published URL -- there is no copy to keep in step. docsgen never
-# touches it: it owns $(DOCS_OUT) only.
-INSTALLER := docs/install
+# touches it: it owns $(DOCS_OUT) only. PS_INSTALLER is the Windows companion,
+# served the same way at /install.ps1.
+INSTALLER    := docs/install
+PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve installer-check site-check release-snapshot install-git-hooks uninstall-git-hooks \
@@ -207,6 +209,17 @@ installer-check:
 	@sh -n $(INSTALLER) || { echo "ERROR: $(INSTALLER) has a syntax error"; exit 1; }
 	@if command -v shellcheck >/dev/null; then shellcheck -s sh $(INSTALLER) || true; fi
 	@echo "installer-check: $(INSTALLER) parses"
+	@# The Windows installer is served the same way, so a syntax error in it is the
+	@# same broken front door. pwsh is the parser (the .ps1 analog of `sh -n`);
+	@# unlike shellcheck this fails on a real parse error, but only when pwsh is
+	@# present (CI's ubuntu runner has it), so the gate is never tool-dependent.
+	@if command -v pwsh >/dev/null 2>&1; then \
+	    pwsh -NoProfile -Command '$$err=$$null; [void][System.Management.Automation.Language.Parser]::ParseFile("$(PS_INSTALLER)", [ref]$$null, [ref]$$err); if ($$err.Count) { $$err | ForEach-Object { [Console]::Error.WriteLine($$_.Message) }; exit 1 }' \
+	        || { echo "ERROR: $(PS_INSTALLER) has a syntax error"; exit 1; }; \
+	    echo "installer-check: $(PS_INSTALLER) parses"; \
+	else \
+	    echo "installer-check: pwsh not found; $(PS_INSTALLER) parse skipped (advisory)"; \
+	fi
 
 # docs/index.html is the one page with no generator behind it, so it is the one
 # page that can lie indefinitely: the curl|sh installer shipped in d1e926b with

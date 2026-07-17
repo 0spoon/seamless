@@ -16,12 +16,19 @@ No CGO toolchain, no external database, no Node. The installer needs `curl` and
 curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
+On Windows, run the same install in PowerShell:
+
+```powershell
+irm https://thereisnospoon.org/install.ps1 | iex
+```
+
 One command does the lot: it fetches the checksum-verified release archive for
-your platform (macOS and Linux, amd64 and arm64), installs `seamlessd` and
-`seam` into `~/.local/bin`, generates the bearer key, wires Claude Code, and
+your platform (macOS, Linux, and Windows; amd64 and arm64), installs `seamlessd`
+and `seam` into `~/.local/bin`, generates the bearer key, wires Claude Code, and
 starts the daemon as a per-user service on `127.0.0.1:8081` with data in
-`~/.seamless`. Re-run it to upgrade. [Install & deploy](/install/) has the
-overrides, the service details, and how to remove it.
+`~/.seamless` - launchd on macOS, systemd `--user` on Linux, an at-logon
+Scheduled Task on Windows. Re-run it to upgrade. [Install & deploy](/install/)
+has the overrides, the service details, and how to remove it.
 
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install), and every other route to the

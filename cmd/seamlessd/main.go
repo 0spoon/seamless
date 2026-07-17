@@ -19,6 +19,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -130,9 +131,17 @@ usage:
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	addr := fs.String("addr", "", "HTTP bind address (overrides config)")
+	cfgPath := fs.String("config", "", "path to seamless.yaml (overrides $SEAMLESS_CONFIG and the search path)")
+	logFile := fs.String("log-file", "", "append logs to this file in addition to stderr")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+
+	closeLog, err := applyServeEnv(*cfgPath, *logFile)
+	if err != nil {
+		return err
+	}
+	defer closeLog()
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -290,6 +299,39 @@ func runServe(args []string) error {
 	garden.Wait()
 	slog.Info("seamlessd stopped")
 	return nil
+}
+
+// applyServeEnv wires the two supervisor-facing serve flags before config load
+// and returns a cleanup that closes the log file (always safe to call).
+//
+// --config becomes config.Load's documented $SEAMLESS_CONFIG override, moved onto
+// the command line so a supervisor that cannot carry an env prefix -- notably a
+// Windows Scheduled Task -- can still pin the config explicitly. Exporting it keeps
+// config.Load's search order the single code path, the same shape as `seam hook
+// --config`.
+//
+// --log-file gives the daemon a log the supervisor does not capture for it:
+// launchd/systemd redirect stderr to ~/.seamless/seamlessd.log, a Scheduled Task
+// does not, so the task passes --log-file to reach the same file every doc and the
+// installer's health-check message point at. stderr stays wired, so an interactive
+// `serve` still prints and a foreground run tees to the file.
+func applyServeEnv(cfgPath, logFile string) (func(), error) {
+	noop := func() {}
+	if cfgPath != "" {
+		if err := os.Setenv("SEAMLESS_CONFIG", cfgPath); err != nil {
+			return noop, fmt.Errorf("seamlessd.serve: set config path: %w", err)
+		}
+	}
+	if logFile == "" {
+		return noop, nil
+	}
+	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return noop, fmt.Errorf("seamlessd.serve: open log file: %w", err)
+	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(io.MultiWriter(os.Stderr, f),
+		&slog.HandlerOptions{Level: slog.LevelInfo})))
+	return func() { _ = f.Close() }, nil
 }
 
 // newHTTPServer builds the daemon's HTTP server. Requests inherit ctx as their

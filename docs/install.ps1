@@ -1,0 +1,334 @@
+# Seamless one-command installer for Windows (PowerShell).
+#
+#   irm https://thereisnospoon.org/install.ps1 | iex
+#
+# This file IS the published artifact -- the Windows companion to docs/install
+# (the POSIX `curl | sh` path). GitHub Pages serves docs/ verbatim, so this file
+# lands at https://thereisnospoon.org/install.ps1 unchanged. It is not generated
+# (docsgen owns docs/docs/ only), and there is deliberately no second copy under
+# scripts/: a script living at two paths is a script that drifts.
+#
+# What it does: fetch this platform's release zip from GitHub, verify its
+# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire Claude Code
+# (which generates the bearer key on first run), then run the daemon as a
+# per-user Scheduled Task -- an at-logon task running as you, no admin. That is
+# the Windows analog of launchd / systemd --user: the whole install is per-user,
+# which is why it never elevates. Re-running it upgrades in place; the config and
+# ~\.seamless are never touched.
+#
+# Overrides (set as environment variables before running):
+#   $env:SEAMLESS_VERSION             version to install (default: latest release)
+#   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
+#   $env:SEAMLESS_NO_HOOKS=1          skip the Claude Code hooks + MCP registration
+#   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip installing the /seam-onboard Claude Code skill
+#   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip installing the /seam-research Claude Code skill
+#   $env:SEAMLESS_NO_SERVICE=1        skip the service; install the binaries and stop
+
+$ErrorActionPreference = 'Stop'
+$ProgressPreference = 'SilentlyContinue' # no per-request progress bar spam
+
+# Windows PowerShell 5.1 does not negotiate TLS 1.2 by default, and GitHub
+# requires it. Harmless on PowerShell 7. Best-effort: some hosts lock it down.
+try {
+    [Net.ServicePointManager]::SecurityProtocol =
+        [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+} catch {}
+
+$Repo = '0spoon/seamless'
+$TaskName = 'Seamless'
+$DocsUrl = 'https://thereisnospoon.org/docs/'
+
+# Canonical paths, kept identical to the POSIX installer so the config the daemon
+# searches, the task runs against, and the hooks resolve are one file. On Windows
+# $HOME is %USERPROFILE%, so ~\.config\seamless is exactly what the Go config
+# search path (os.UserHomeDir + .config\seamless) already looks for.
+$ConfigDir = Join-Path $HOME '.config\seamless'
+$Config = Join-Path $ConfigDir 'seamless.yaml'
+$DataDir = Join-Path $HOME '.seamless'
+$LogFile = Join-Path $DataDir 'seamlessd.log'
+
+# Pre-config fallback for the health poll only; mirrors config.Defaults().
+$DefaultAddr = '127.0.0.1:8081'
+
+function Say { param([string]$Message) Write-Host "  $Message" }
+function Step { param([string]$Key, [string]$Message) Write-Host ('  {0,-12} {1}' -f $Key, $Message) }
+function Warn { param([string]$Message) Write-Warning $Message }
+function Die { param([string]$Message) [Console]::Error.WriteLine("`nerror: $Message"); exit 1 }
+
+# Map the process architecture onto goreleaser's vocabulary. PROCESSOR_ARCHITEW6432
+# is set when a 32-bit PowerShell runs on 64-bit Windows (WOW64); it names the real
+# machine, so it wins over PROCESSOR_ARCHITECTURE.
+function Get-Arch {
+    $a = $env:PROCESSOR_ARCHITEW6432
+    if (-not $a) { $a = $env:PROCESSOR_ARCHITECTURE }
+    switch ($a) {
+        'AMD64' { return 'amd64' }
+        'ARM64' { return 'arm64' }
+        default { Die "unsupported architecture: $a (Seamless ships amd64 and arm64 builds)" }
+    }
+}
+
+# The GitHub API rather than parsing the /releases/latest redirect: a rate-limited
+# API answers with JSON we can detect instead of a 302 we would silently misread.
+function Resolve-Version {
+    if ($env:SEAMLESS_VERSION) { return ($env:SEAMLESS_VERSION -replace '^v', '') }
+    $tag = $null
+    try {
+        $rel = Invoke-RestMethod -UseBasicParsing "https://api.github.com/repos/$Repo/releases/latest"
+        $tag = $rel.tag_name
+    } catch { $tag = $null }
+    if (-not $tag) {
+        Die @"
+could not resolve the latest release (GitHub API rate limit?); pin one instead:
+  `$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex
+"@
+    }
+    return ($tag -replace '^v', '')
+}
+
+# Download the zip and checksums.txt, and verify the SHA-256 before unpacking
+# anything. Match the filename exactly in checksums.txt -- a substring match would
+# happily verify amd64 against arm64.
+function Get-Release {
+    param([string]$Version, [string]$Arch, [string]$Tmp)
+    $base = "https://github.com/$Repo/releases/download/v$Version"
+    $zip = "seamless_${Version}_windows_${Arch}.zip"
+    $zipPath = Join-Path $Tmp $zip
+    $sumPath = Join-Path $Tmp 'checksums.txt'
+
+    Step 'downloading' $zip
+    try { Invoke-WebRequest -UseBasicParsing "$base/$zip" -OutFile $zipPath }
+    catch { Die "no such release asset: $base/$zip`ncheck the version at https://github.com/$Repo/releases" }
+    try { Invoke-WebRequest -UseBasicParsing "$base/checksums.txt" -OutFile $sumPath }
+    catch { Die "could not fetch $base/checksums.txt" }
+
+    $want = Get-Content $sumPath |
+        Where-Object { ($_ -split '\s+')[1] -eq $zip } |
+        ForEach-Object { ($_ -split '\s+')[0] } |
+        Select-Object -First 1
+    if (-not $want) { Die "$zip is not listed in checksums.txt" }
+    $got = (Get-FileHash -Algorithm SHA256 $zipPath).Hash
+    if ($want.ToLower() -ne $got.ToLower()) {
+        Die "checksum mismatch for $zip`n  expected $want`n  got      $got"
+    }
+    Step 'checksum' 'ok'
+    return $zipPath
+}
+
+# A running .exe cannot be overwritten in place -- the image is locked -- and
+# re-running this script over a live install IS the upgrade path. Windows does
+# allow *renaming* a loaded exe, so move the old one aside first, then drop the
+# new one into the freed name. The stale copy is removed best-effort (it may still
+# be locked for a moment); the next run clears any leftover.
+function Install-OneBinary {
+    param([string]$Src, [string]$Dst)
+    if (Test-Path $Dst) {
+        $old = "$Dst.old"
+        Remove-Item -Force $old -ErrorAction SilentlyContinue
+        try { Rename-Item -Path $Dst -NewName ([IO.Path]::GetFileName($old)) -Force } catch {}
+    }
+    Copy-Item -Path $Src -Destination $Dst -Force
+    Remove-Item -Force "$Dst.old" -ErrorAction SilentlyContinue
+}
+
+function Install-Binaries {
+    param([string]$ZipPath, [string]$Tmp, [string]$InstallDir)
+    Expand-Archive -Path $ZipPath -DestinationPath $Tmp -Force
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    Install-OneBinary (Join-Path $Tmp 'seamlessd.exe') (Join-Path $InstallDir 'seamlessd.exe')
+    Install-OneBinary (Join-Path $Tmp 'seam.exe') (Join-Path $InstallDir 'seam.exe')
+    Step 'installed' "$InstallDir\seamlessd.exe, $InstallDir\seam.exe"
+}
+
+# install-hooks does the config bootstrap too: it calls config.EnsureAPIKey, which
+# generates the bearer key into $Config when no config file exists. So it must run
+# BEFORE the service starts. The Push-Location is not decoration: ./seamless.yaml is
+# the last entry in the config search path, so running from a dir that had one would
+# otherwise bind the install to it. Missing claude/seam is a warning inside
+# install-hooks, not a failure, so a box without Claude Code still installs cleanly.
+function Invoke-WireHooks {
+    param([string]$Tmp, [string]$InstallDir)
+    if ($env:SEAMLESS_NO_HOOKS) { Step 'hooks' 'skipped (SEAMLESS_NO_HOOKS)'; return }
+    $seamlessd = Join-Path $InstallDir 'seamlessd.exe'
+    $seam = Join-Path $InstallDir 'seam.exe'
+    Push-Location $Tmp
+    try {
+        if (Test-Path $Config) {
+            $env:SEAMLESS_CONFIG = $Config
+        } else {
+            # Unset, not pointed at $Config: the file does not exist yet, and
+            # EnsureAPIKey only writes it when the config resolves to nothing.
+            Remove-Item Env:SEAMLESS_CONFIG -ErrorAction SilentlyContinue
+        }
+        & $seamlessd install-hooks --seam $seam
+        if ($LASTEXITCODE -ne 0) { Die "install-hooks failed (exit $LASTEXITCODE)" }
+    } finally {
+        Pop-Location
+        Remove-Item Env:SEAMLESS_CONFIG -ErrorAction SilentlyContinue
+    }
+}
+
+# Drop the seam-onboard Claude Code skill into ~\.claude\skills\ from the copy
+# bundled in the release archive, so a no-clone install can still deliver it. The
+# skill self-removes after /seam-onboard runs, so a delivered-once marker keeps
+# re-runs (upgrades) from re-adding a skill the user already used up. Returns
+# whether the skill is freshly present, so the closing message only points at it
+# when it is actually there to run.
+function Install-OnboardSkill {
+    param([string]$Tmp)
+    if ($env:SEAMLESS_NO_ONBOARD_SKILL) { Step 'onboard' 'skipped (SEAMLESS_NO_ONBOARD_SKILL)'; return $false }
+    if ($env:SEAMLESS_NO_HOOKS) { return $false }
+    $src = Join-Path $Tmp 'seam-onboard\SKILL.md'
+    if (-not (Test-Path $src)) { return $false } # older/pinned release without the bundled skill
+
+    $skills = Join-Path $HOME '.claude\skills'
+    $dst = Join-Path $skills 'seam-onboard'
+    $marker = Join-Path $skills '.seam-onboard-delivered'
+    New-Item -ItemType Directory -Force -Path $skills | Out-Null
+
+    # Delivered before and now gone: the user ran /seam-onboard (which deletes the
+    # skill), so do not re-add it on this upgrade.
+    if (-not (Test-Path $dst) -and (Test-Path $marker)) { return $false }
+
+    New-Item -ItemType Directory -Force -Path $dst | Out-Null
+    Copy-Item -Path $src -Destination (Join-Path $dst 'SKILL.md') -Force
+    New-Item -ItemType File -Force -Path $marker -ErrorAction SilentlyContinue | Out-Null
+    Step 'onboard' '/seam-onboard skill installed'
+    return $true
+}
+
+# Drop the seam-research skill the same way. Unlike seam-onboard it is a recurring
+# workflow that never self-removes, so there is no marker: every run (re)installs
+# it, which is also how an upgrade refreshes a stale copy in place.
+function Install-ResearchSkill {
+    param([string]$Tmp)
+    if ($env:SEAMLESS_NO_RESEARCH_SKILL) { Step 'research' 'skipped (SEAMLESS_NO_RESEARCH_SKILL)'; return }
+    if ($env:SEAMLESS_NO_HOOKS) { return }
+    $src = Join-Path $Tmp 'seam-research\SKILL.md'
+    if (-not (Test-Path $src)) { return }
+    $dst = Join-Path $HOME '.claude\skills\seam-research'
+    New-Item -ItemType Directory -Force -Path $dst | Out-Null
+    Copy-Item -Path $src -Destination (Join-Path $dst 'SKILL.md') -Force
+    Step 'research' '/seam-research skill installed'
+}
+
+# Read the port back out of the config the way the Makefile and the sh installer
+# do, so someone who edited addr: gets a health poll and a console URL that follow
+# their change instead of an install that claims to have failed.
+function Get-ConfiguredAddr {
+    if (-not (Test-Path $Config)) { return $DefaultAddr }
+    $m = Select-String -Path $Config -Pattern '^\s*addr:\s*"?([^"\s]+)' | Select-Object -First 1
+    if ($m) { return $m.Matches[0].Groups[1].Value }
+    return $DefaultAddr
+}
+
+# The Windows service: a per-user, at-logon Scheduled Task -- the analog of a
+# launchd LaunchAgent / systemd --user unit. LogonType Interactive + RunLevel
+# Limited means no admin and no stored password: it runs as you, while you are
+# logged in. A task action is a bare exec, not a shell string, so --config and
+# --log-file carry what a plist/unit would put in an env prefix: the config to
+# pin and the log file the task's process would otherwise write nowhere.
+function Register-Service {
+    param([string]$InstallDir)
+    $seamlessd = Join-Path $InstallDir 'seamlessd.exe'
+    New-Item -ItemType Directory -Force -Path $DataDir | Out-Null
+
+    $arg = 'serve --config "{0}" --log-file "{1}"' -f $Config, $LogFile
+    $action = New-ScheduledTaskAction -Execute $seamlessd -Argument $arg
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+    # The canonical account identity (COMPUTERNAME\user, or DOMAIN\user on a
+    # domain-joined box). $env:USERDOMAIN can read back as "WORKGROUP" on a local
+    # account, which is not a valid principal, so ask Windows for the real name.
+    $userId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    $principal = New-ScheduledTaskPrincipal -UserId $userId `
+        -LogonType Interactive -RunLevel Limited
+    # ExecutionTimeLimit 0 = never auto-kill a long-running daemon (the default is
+    # three days); restart-on-failure is the KeepAlive / Restart=always analog;
+    # IgnoreNew stops a second copy if the trigger somehow double-fires.
+    $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries `
+        -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) `
+        -RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 3 -MultipleInstances IgnoreNew
+
+    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+        -Principal $principal -Settings $settings -Force | Out-Null
+    Start-ScheduledTask -TaskName $TaskName
+    Step 'service' "$TaskName (Scheduled Task, at logon)"
+}
+
+# The Scheduled Task reports success as soon as it has started the process, but the
+# daemon binds its listener ~100ms later. Poll until it actually answers, so a green
+# install means it is serving rather than racing a listener that is not up.
+function Wait-Healthy {
+    param([string]$Addr)
+    for ($i = 0; $i -lt 50; $i++) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 "http://$Addr/healthz"
+            if ([int]$r.StatusCode -eq 200) { Step 'healthz' "ok -- http://$Addr"; return }
+        } catch {}
+        Start-Sleep -Milliseconds 200
+    }
+    Die "no /healthz from $Addr after 10s; check the log: $LogFile"
+}
+
+function Main {
+    $InstallDir = if ($env:SEAMLESS_INSTALL_DIR) { $env:SEAMLESS_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+
+    $arch = Get-Arch
+    $version = Resolve-Version
+    Write-Host ''
+    Write-Host ('  seamless {0}  windows/{1}' -f $version, $arch)
+
+    $onboardReady = $false
+    $tmp = Join-Path ([IO.Path]::GetTempPath()) ('seamless-' + [Guid]::NewGuid().ToString('N'))
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+    try {
+        $zip = Get-Release $version $arch $tmp
+
+        # Stop a running task before swapping binaries: a live seamlessd.exe holds
+        # its own image locked. Best-effort -- absent on a first install.
+        if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
+            Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+        }
+
+        Install-Binaries $zip $tmp $InstallDir
+        Invoke-WireHooks $tmp $InstallDir
+        $onboardReady = Install-OnboardSkill $tmp
+        Install-ResearchSkill $tmp
+        $addr = Get-ConfiguredAddr
+
+        if ($env:SEAMLESS_NO_SERVICE) {
+            Step 'service' 'skipped (SEAMLESS_NO_SERVICE)'
+            Say "start it yourself: & `"$InstallDir\seamlessd.exe`" serve --config `"$Config`""
+        } else {
+            Register-Service $InstallDir
+            Wait-Healthy $addr
+        }
+    } finally {
+        Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
+    }
+
+    # Put the install dir on the user PATH so `seam` works in new shells. The
+    # service uses absolute paths, so this is only for interactive use; it takes
+    # effect in the next terminal, not this one.
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if (($userPath -split ';') -notcontains $InstallDir) {
+        $newPath = if ($userPath) { "$userPath;$InstallDir" } else { $InstallDir }
+        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
+        Write-Host ''
+        Say "added $InstallDir to your user PATH (open a new terminal to pick it up)"
+    }
+
+    Write-Host ''
+    Say 'next:'
+    Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own'
+    Say "  & `"$InstallDir\seamlessd.exe`" console-open   # open the console, already logged in"
+    Write-Host ''
+    Say 'restart Claude Code so it picks up the hooks and the MCP server.'
+    if ($onboardReady) {
+        Say 'then run  /seam-onboard  once to teach your agents when to reach for Seamless.'
+    }
+    Say "docs: $DocsUrl"
+    Write-Host ''
+}
+
+Main
