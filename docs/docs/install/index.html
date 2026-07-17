@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Install &amp; deploy - Seamless docs</title>
-<meta name="description" content="The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.">
+<meta name="description" content="The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -156,7 +156,7 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Install &amp; deploy</h1>
-  <p class="lede">The install layout, the launchd service, upgrading, uninstalling, and the security posture you are accepting.</p>
+  <p class="lede">The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.</p>
   <p>The <a href="../quickstart/">Quickstart</a> gets Seamless running in one command. This page is
 what that command did, and what to do when you want to steer it yourself.</p>
 <h2 id="one-instance-per-machine">One instance per machine</h2>
@@ -171,19 +171,29 @@ Nothing bakes the address into the service - which is why editing <code>addr:</c
 instead of being silently overridden.</p>
 <h2 id="install-in-one-command">Install in one command</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>This is the path for using Seamless (as opposed to working on it). It needs
-<code>curl</code> and <code>tar</code>; no Go toolchain is involved. In order, it:</p>
+</span></span></code></pre><p>On Windows, run the <a href="https://thereisnospoon.org/install.ps1">PowerShell installer</a>
+instead - it does the same steps with a Scheduled Task in place of launchd/systemd:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
+</span></span></span></code></pre><p>This is the path for using Seamless (as opposed to working on it). The POSIX
+script needs <code>curl</code> and <code>tar</code>; the PowerShell one needs nothing beyond Windows
+itself. No Go toolchain is involved. In order, it:</p>
 <ol>
 <li>resolves the latest release and downloads the archive for your platform
-(macOS and Linux, amd64 and arm64), <strong>verifying its SHA-256</strong> against the
-release's <code>checksums.txt</code> before unpacking anything;</li>
+(macOS, Linux, and Windows; amd64 and arm64), <strong>verifying its SHA-256</strong>
+against the release's <code>checksums.txt</code> before unpacking anything;</li>
 <li>installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>;</li>
 <li>runs <code>seamlessd install-hooks</code>, which generates the bearer key into
 <code>~/.config/seamless/seamless.yaml</code> on first run, installs the Claude Code
 hooks, and registers the MCP server;</li>
 <li>installs and starts the per-user service - launchd on macOS, systemd
-<code>--user</code> on Linux - and polls <code>/healthz</code> until the daemon actually answers.</li>
+<code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
+<code>/healthz</code> until the daemon actually answers.</li>
 </ol>
+<p>The Windows installer is per-user by the same principle as the others: it runs
+as <strong>you</strong>, never elevates, and registers the Scheduled Task under your own
+account (<code>LogonType Interactive</code>), so a single signed-in user is all it needs and
+no administrator prompt ever appears. <code>~/.config/seamless</code> and <code>~/.seamless</code>
+resolve under <code>%USERPROFILE%</code>, exactly the paths the daemon already searches.</p>
 <p>Re-running it upgrades in place: binaries are swapped by rename (safe while the
 daemon holds them open), the service restarts on the new build, and your config,
 your hooks, and <code>~/.seamless</code> are left alone. It is <a href="https://thereisnospoon.org/install">one shell
@@ -229,7 +239,13 @@ script</a> with no dependencies to audit.</p>
 </table>
 </div>
 <p>Set them ahead of the shell, not the curl:
-<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh</code>.</p>
+<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh</code>. On
+Windows the same knobs are environment variables you set before the pipe -
+<code>$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex</code></p>
+<ul>
+<li>with the one exception of <code>SEAMLESS_ALLOW_ROOT</code>, which is POSIX-only (the
+Windows task is per-user by construction, so there is no root case to allow).</li>
+</ul>
 <p>Everything here is per-user by construction - <code>~/.local/bin</code>, <code>~/.config</code>,
 <code>~/.seamless</code>, a user service - so run it as yourself. Under <code>curl | sudo sh</code> it
 would all land in root's home where your agents will never look, which is why
@@ -287,6 +303,18 @@ starts at boot rather than at your next login:</p>
 </span></span><span class="line"><span class="cl">systemctl --user stop seamless
 </span></span></code></pre><p>No systemd user session (some containers, WSL1)? The installer says so and skips
 the step; run <code>seamlessd serve</code> under whatever supervises processes there.</p>
+<p>On <strong>Windows</strong> it is an at-logon Scheduled Task named <code>Seamless</code>, running as you
+(<code>LogonType Interactive</code>, no admin), logging to <code>~/.seamless/seamlessd.log</code>. The
+task action is a bare exec - <code>seamlessd.exe serve --config &lt;path&gt; --log-file &lt;path&gt;</code> - because a task cannot carry the <code>SEAMLESS_CONFIG</code> env prefix a plist or
+systemd unit does; the two flags pass exactly what that prefix would have:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Get-ScheduledTask</span> <span class="n">Seamless</span> <span class="p">|</span> <span class="nb">Get-ScheduledTaskInfo</span>   <span class="c"># state, last run, last result</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Get-Content</span> <span class="p">~/.</span><span class="n">seamless</span><span class="p">/</span><span class="n">seamlessd</span><span class="p">.</span><span class="py">log</span> <span class="n">-Wait</span>          <span class="c"># follow the log</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Restart-ScheduledTask</span> <span class="n">Seamless</span>                        <span class="c"># stop + start</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Stop-ScheduledTask</span> <span class="n">Seamless</span>                           <span class="c"># stop (it restarts at next logon)</span>
+</span></span></code></pre><p>It restarts on failure and never hits the default execution time limit, so it
+behaves like launchd's <code>KeepAlive</code>. Because it triggers at logon, it runs while
+you are signed in and stops when you sign out - a single-user desktop, which is
+the shape Seamless is built for.</p>
 <h2 id="upgrading">Upgrading</h2>
 <p>Installed with the one-command installer? Re-run it - that <em>is</em> the upgrade:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
@@ -313,6 +341,9 @@ is three lines - stop the service, remove its definition, remove the binaries:</
 </span></span><span class="line"><span class="cl">systemctl --user disable --now seamless
 </span></span><span class="line"><span class="cl">rm ~/.config/systemd/user/seamless.service
 </span></span><span class="line"><span class="cl">rm ~/.local/bin/seamlessd ~/.local/bin/seam
+</span></span></code></pre><p>On Windows (PowerShell), unregister the task and remove the binaries:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="n">Seamless</span> <span class="n">-Confirm:</span><span class="vm">$false</span>
+</span></span><span class="line"><span class="cl"><span class="nb">Remove-Item</span> <span class="p">~/.</span><span class="n">local</span><span class="p">/</span><span class="n">bin</span><span class="p">/</span><span class="n">seamlessd</span><span class="p">.</span><span class="n">exe</span><span class="p">,</span> <span class="p">~/.</span><span class="n">local</span><span class="p">/</span><span class="n">bin</span><span class="p">/</span><span class="n">seam</span><span class="p">.</span><span class="py">exe</span>
 </span></span></code></pre><p>Claude Code keeps its own registrations: <code>claude mcp remove seamless --scope user</code>
 drops the MCP server, and the hooks come out of <code>~/.claude/settings.json</code> (the
 install backed up the original next to it).</p>

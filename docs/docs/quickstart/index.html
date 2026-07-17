@@ -164,12 +164,15 @@ Every fork in the road is a link, not a branch in these steps.</p>
 <code>tar</code>; building from source needs <strong>Go 1.25+</strong>.</p>
 <h2 id="install">Install</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>One command does the lot: it fetches the checksum-verified release archive for
-your platform (macOS and Linux, amd64 and arm64), installs <code>seamlessd</code> and
-<code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires Claude Code, and
+</span></span></code></pre><p>On Windows, run the same install in PowerShell:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
+</span></span></span></code></pre><p>One command does the lot: it fetches the checksum-verified release archive for
+your platform (macOS, Linux, and Windows; amd64 and arm64), installs <code>seamlessd</code>
+and <code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires Claude Code, and
 starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in
-<code>~/.seamless</code>. Re-run it to upgrade. <a href="../install/">Install &amp; deploy</a> has the
-overrides, the service details, and how to remove it.</p>
+<code>~/.seamless</code> - launchd on macOS, systemd <code>--user</code> on Linux, an at-logon
+Scheduled Task on Windows. Re-run it to upgrade. <a href="../install/">Install &amp; deploy</a>
+has the overrides, the service details, and how to remove it.</p>
 <p>Piping a stranger's script into a shell deserves a read first - it is
 <a href="https://thereisnospoon.org/install">one file</a>, and every other route to the
 same place is on that page: prebuilt archives from
