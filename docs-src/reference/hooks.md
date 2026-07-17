@@ -122,7 +122,8 @@ An http entry looks like this:
 }
 ```
 
-A command entry carries no key and bakes in the absolute config path:
+A command entry carries no key and uses **exec form** - a bare `command` plus an
+`args` array, spawned directly with no shell:
 
 ```text
 {
@@ -131,17 +132,24 @@ A command entry carries no key and bakes in the absolute config path:
   "hooks": [
     {
       "type": "command",
-      "command": "SEAMLESS_CONFIG=/abs/path/seamless.yaml /abs/path/seam hook session-start",
+      "command": "/abs/path/seam",
+      "args": ["hook", "session-start", "--config", "/abs/path/seamless.yaml"],
       "timeout": 10
     }
   ]
 }
 ```
 
-`SEAMLESS_CONFIG` is baked in because the hook fires from any cwd, where the
-CLI's cwd-relative search for `seamless.yaml` would miss and leave it unable to
-authenticate. It is omitted when the config came from defaults and env with no
-file. The `matcher` key is omitted entirely for hooks that have none.
+Exec form is deliberate: it is the one shape that behaves identically on every
+OS. Claude Code runs a shell-form command hook through `sh -c` on Unix but
+PowerShell on Windows, where a POSIX string (an env prefix plus single-quoting)
+is not valid syntax; exec form passes each argument verbatim with no quoting at
+all. The config path is passed as `--config` because the hook fires from any
+cwd, where the CLI's cwd-relative search for `seamless.yaml` would miss and leave
+it unable to authenticate (exec form carries no environment, so this replaces the
+older `SEAMLESS_CONFIG` env prefix). It is omitted when the config came from
+defaults and env with no file. The `matcher` key is omitted entirely for hooks
+that have none.
 
 Install behavior:
 

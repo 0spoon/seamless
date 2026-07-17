@@ -140,7 +140,7 @@ is reported as added, updated, or unchanged.
 
 Six events are installed together: `SessionStart`, `UserPromptSubmit`,
 `SessionEnd`, `PostToolUse`, `SubagentStop`, and `PermissionRequest`. All are
-command hooks that shell out to `seam hook <event>` except `UserPromptSubmit`,
+command hooks that run `seam hook <event>` (exec form, no shell) except `UserPromptSubmit`,
 which is an http hook - Claude Code will not run an http hook for SessionStart
 at all, and at SessionEnd a fire-and-forget request races process teardown, so
 the findings harvest would often be lost.

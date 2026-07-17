@@ -348,6 +348,28 @@ func TestSessionEndRejectsBadKey(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
+// requireCommandHook asserts the event's first entry is an exec-form command
+// hook running `seam hook <cliArg>`: type command, a bare-binary command string,
+// and args carrying "hook" then the event -- no legacy shell string.
+func requireCommandHook(t *testing.T, hooksObj map[string]any, event, cliArg string) {
+	t.Helper()
+	arr := entryArray(hooksObj, event)
+	require.NotEmpty(t, arr, "%s should be installed", event)
+	// Find the Seamless-owned command entry: a preserved foreign hook (e.g. a v1
+	// http entry) may sit ahead of ours, so position is not assumed.
+	for _, e := range arr {
+		if !entryRunsHookCommand(e, cliArg) {
+			continue
+		}
+		h0 := e.(map[string]any)["hooks"].([]any)[0].(map[string]any)
+		require.Equal(t, "command", h0["type"], "%s should be a command hook", event)
+		require.NotEmpty(t, h0["command"], "%s command should be the seam binary", event)
+		require.True(t, hookArgsRunEvent(h0["args"], cliArg), "%s args should run `hook %s`", event, cliArg)
+		return
+	}
+	t.Fatalf("no exec-form command hook running `hook %s` found for %s", cliArg, event)
+}
+
 func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".claude", "settings.json")
@@ -384,20 +406,21 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	// The foreign seam_managed entry survives alongside the new seamless entry.
 	require.Len(t, ss, 2)
 	require.Contains(t, string(raw), "seamless_managed")
-	// SessionStart and SessionEnd are command hooks; only UserPromptSubmit stays
-	// http, so the bearer key reaches settings via that lone http hook.
-	require.Contains(t, string(raw), "seam hook session-start")
-	require.Contains(t, string(raw), "seam hook session-end")
+	// SessionStart and SessionEnd are exec-form command hooks; only
+	// UserPromptSubmit stays http, so the bearer key reaches settings via that
+	// lone http hook.
+	requireCommandHook(t, hooksObj, "SessionStart", "session-start")
+	requireCommandHook(t, hooksObj, "SessionEnd", "session-end")
 	require.Contains(t, string(raw), "8081/api/hooks/user-prompt-submit")
 	require.Contains(t, string(raw), "Bearer secret-key")
 	// UserPromptSubmit and SessionEnd were added too.
 	require.Len(t, hooksObj["UserPromptSubmit"].([]any), 1)
 	require.Len(t, hooksObj["SessionEnd"].([]any), 1)
-	// The plan-capture hooks are command hooks: ONE PostToolUse entry with the
-	// joined matcher, plus SubagentStop and PermissionRequest.
-	require.Contains(t, string(raw), "seam hook post-tool-use")
-	require.Contains(t, string(raw), "seam hook subagent-stop")
-	require.Contains(t, string(raw), "seam hook permission-request")
+	// The plan-capture hooks are exec-form command hooks: ONE PostToolUse entry
+	// with the joined matcher, plus SubagentStop and PermissionRequest.
+	requireCommandHook(t, hooksObj, "PostToolUse", "post-tool-use")
+	requireCommandHook(t, hooksObj, "SubagentStop", "subagent-stop")
+	requireCommandHook(t, hooksObj, "PermissionRequest", "permission-request")
 	ptu := hooksObj["PostToolUse"].([]any)
 	require.Len(t, ptu, 1)
 	require.Equal(t, "Write|Edit|MultiEdit|ExitPlanMode", ptu[0].(map[string]any)["matcher"])
@@ -503,12 +526,15 @@ func TestInstallAdoptsUnmarkedCommandHooks(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &got))
 	hooksObj := got["hooks"].(map[string]any)
 
-	// The unmarked command entry is adopted in place, not duplicated.
+	// The unmarked command entry is adopted in place, not duplicated, and
+	// rewritten into the canonical exec form (bare binary + args, --config flag).
 	ss := hooksObj["SessionStart"].([]any)
 	require.Len(t, ss, 1)
 	require.Equal(t, true, ss[0].(map[string]any)["seamless_managed"])
 	h0 := ss[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
-	require.Equal(t, "SEAMLESS_CONFIG=/new/seamless.yaml /new/seam hook session-start", h0["command"])
+	require.Equal(t, "command", h0["type"])
+	require.Equal(t, "/new/seam", h0["command"])
+	require.Equal(t, []any{"hook", "session-start", "--config", "/new/seamless.yaml"}, h0["args"])
 
 	// Unmarked + marked command entries for one event collapse to one.
 	se := hooksObj["SessionEnd"].([]any)
@@ -563,11 +589,13 @@ func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
 		m := e.(map[string]any)
 		if m["seamless_managed"] == true {
 			marked++
-			// SessionStart is now a command hook running the seam CLI, not http,
-			// with the config path baked in so it resolves from any cwd.
+			// SessionStart is now an exec-form command hook running the seam CLI,
+			// not http, with the config path passed via --config so it resolves
+			// from any cwd.
 			h0 := m["hooks"].([]any)[0].(map[string]any)
 			require.Equal(t, "command", h0["type"])
-			require.Equal(t, "SEAMLESS_CONFIG=/etc/seamless.yaml /opt/seam hook session-start", h0["command"])
+			require.Equal(t, "/opt/seam", h0["command"])
+			require.Equal(t, []any{"hook", "session-start", "--config", "/etc/seamless.yaml"}, h0["args"])
 		}
 		if m["seam_managed"] == true {
 			v1++
@@ -588,7 +616,8 @@ func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
 	require.Len(t, se, 1)
 	seHook := se[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
 	require.Equal(t, "command", seHook["type"])
-	require.Equal(t, "SEAMLESS_CONFIG=/etc/seamless.yaml /opt/seam hook session-end", seHook["command"])
+	require.Equal(t, "/opt/seam", seHook["command"])
+	require.Equal(t, []any{"hook", "session-end", "--config", "/etc/seamless.yaml"}, seHook["args"])
 
 	joined := strings.Join(res.Actions, ",")
 	require.Contains(t, joined, "SessionStart: deduped")
