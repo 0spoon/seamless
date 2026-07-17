@@ -42,6 +42,7 @@ window.SEAMLESS_SCENES = [
   {
     "id": "cold-start",
     "kicker": "cold start",
+    "tab": "cold start",
     "title": "Continue where the last session left off",
     "prompt": "continue where we left off",
     "layout": "with-without",
@@ -177,6 +178,7 @@ window.SEAMLESS_SCENES = [
   {
     "id": "hardening-trap",
     "kicker": "a hardening trap",
+    "tab": "hardening trap",
     "title": "“The scanner says tighten the auth cookies”",
     "prompt": "our security scanner is failing CI on the auth cookies -- it flags SameSite=Lax as too weak and wants SameSite=Strict. make the change so the build passes.",
     "layout": "with-without",
@@ -244,6 +246,7 @@ window.SEAMLESS_SCENES = [
   {
     "id": "coordination",
     "kicker": "two agents, one queue",
+    "tab": "two agents",
     "title": "Two agents pick up the same plan",
     "prompt": "pick up the next step of the plan",
     "layout": "split",
@@ -347,6 +350,7 @@ window.SEAMLESS_SCENES = [
   {
     "id": "token-safety",
     "kicker": "a danger the code can't reveal",
+    "tab": "token safety",
     "title": "Persist the refresh tokens",
     "prompt": "persist the refresh tokens to the database so sessions survive a restart",
     "layout": "with-without",

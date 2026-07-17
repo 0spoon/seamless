@@ -1,14 +1,20 @@
 /* scenes-player.js -- animates the verbatim with/without terminal transcripts
-   from scenes.js into the #scenes section. No dependencies, no network, no state
-   beyond the DOM.
+   from scenes.js into the #scenes section as ONE self-running reel. No
+   dependencies, no network, no state beyond the DOM.
 
-   Each <div class="term-scene" data-scene="ID"> is filled with a toggled player:
-   a dark terminal plus a without|with tab. On scroll into view the active pane
-   types itself out, then holds on the punchline and loops (re-typing after a
-   beat) for as long as the scene stays in view; scrolling it offscreen pauses
-   the loop. A replay button re-runs the active pane; a tab switch plays that
-   pane. prefers-reduced-motion renders the full transcript statically with no
-   autoplay and no loop. Text is real, selectable DOM.
+   The four scenes share a single viewport slot: a scene-selector nav on top,
+   one scene card below. On scroll into view the reel runs a tour and keeps
+   looping until the visitor scrolls away:
+
+     play `without` -> hold -> flip to `with` -> hold -> next scene -> ...
+     -> wrap back to the first scene
+
+   The split scene (layout:"split") has no without/with; it plays once, holds,
+   and advances. Scrolling the reel offscreen pauses the tour; returning resumes
+   it. Clicking a scene tab jumps the tour there; clicking the inner without|with
+   toggle or replay steers the current scene -- the tour then carries on from
+   wherever the visitor left it. prefers-reduced-motion renders transcripts
+   statically with no autoplay and no tour. Text is real, selectable DOM.
 
    Curation lives in the data (scenes.js), never here: this file renders whatever
    steps it is handed, verbatim. Two layouts: `with-without` (one terminal, a
@@ -24,6 +30,10 @@
 
   var reduced = window.matchMedia &&
     window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* how long to hold on a finished segment before the tour moves on */
+  var HOLD_PANE = 2600;   // after `without`, before flipping to `with`
+  var HOLD_SCENE = 3800;  // after the last segment, before the next scene
 
   var INJECT_LABEL = {
     "seam-briefing": "injected · session start",
@@ -167,10 +177,10 @@
     body.scrollTop = 0;
   }
 
-  /* animate a pane's body step by step; returns when finished or superseded */
+  /* animate a pane's body step by step; calls onDone() when finished, and
+     nothing at all if superseded (a newer token started). */
   async function playPane(pane, body, st, onDone) {
     var token = ++st.token;
-    st.done = false;
     body.innerHTML = "";
     for (var i = 0; i < pane.steps.length; i++) {
       if (st.token !== token) return;
@@ -190,25 +200,15 @@
       await wait(delayFor(step));
     }
     if (st.token !== token) return;
-    st.done = true;
     if (onDone) onDone();
   }
 
-  /* ---- build one scene player -------------------------------------------- */
-  function buildScene(mount) {
-    var scene = byId[mount.dataset.scene];
-    if (!scene) return;
-    if (scene.layout === "split") { buildSplitScene(mount, scene); return; }
-    if (scene.layout !== "with-without") return;
+  var REPLAY_SVG =
+    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>';
 
-    var panes = scene.panes;
-    var order = ["without", "with"];
-    var byKey = {};
-    panes.forEach(function (p) { byKey[p.key] = p; });
-
-    mount.innerHTML = "";
-
-    // header
+  function sceneHead(scene) {
     var head = document.createElement("div");
     head.className = "ts-head";
     head.innerHTML =
@@ -216,23 +216,34 @@
       '<h3 class="ts-title">' + esc(scene.title) + "</h3>" +
       '<p class="ts-ask"><span class="ts-ask-label">prompt</span>' +
       "<span>" + esc(scene.prompt) + "</span></p>";
-    mount.appendChild(head);
+    return head;
+  }
 
-    // tabs
+  /* ---- controller: with/without scene (one terminal, a without|with toggle) -
+     Returns { el, segments, playSegment, showStatic, stop } for the reel to
+     drive. `events` carries the reel's callbacks for user clicks. */
+  function buildWithWithout(scene, events, mount) {
+    var order = ["without", "with"].filter(function (k) {
+      return scene.panes.some(function (p) { return p.key === k; });
+    });
+    var byKey = {};
+    scene.panes.forEach(function (p) { byKey[p.key] = p; });
+
+    mount.appendChild(sceneHead(scene));
+
+    // without|with toggle
     var tabs = document.createElement("div");
     tabs.className = "term-tabs";
     tabs.setAttribute("role", "tablist");
     tabs.setAttribute("aria-label", esc(scene.title) + " -- with or without Seamless");
     var tabEls = {};
     order.forEach(function (key) {
-      var p = byKey[key];
-      if (!p) return;
       var b = document.createElement("button");
       b.type = "button";
       b.className = "term-tab tab-" + key;
       b.setAttribute("role", "tab");
       b.dataset.pane = key;
-      b.innerHTML = '<span class="tab-dot" aria-hidden="true"></span>' + esc(p.label);
+      b.innerHTML = '<span class="tab-dot" aria-hidden="true"></span>' + esc(byKey[key].label);
       tabs.appendChild(b);
       tabEls[key] = b;
     });
@@ -247,7 +258,6 @@
     term.appendChild(bar);
     var bodies = {};
     order.forEach(function (key) {
-      if (!byKey[key]) return;
       var body = document.createElement("div");
       body.className = "term-body ts-pane";
       body.dataset.pane = key;
@@ -261,40 +271,16 @@
     // footer: outcome + replay
     var foot = document.createElement("div");
     foot.className = "ts-foot";
-    foot.innerHTML =
-      '<p class="ts-outcome"></p>' +
-      '<button class="ts-replay" type="button">' +
-      '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
-      'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-      '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>replay</button>';
+    foot.innerHTML = '<p class="ts-outcome"></p>' +
+      '<button class="ts-replay" type="button">' + REPLAY_SVG + "replay</button>";
     mount.appendChild(foot);
     var outcomeEl = foot.querySelector(".ts-outcome");
-    var replayBtn = foot.querySelector(".ts-replay");
 
-    // per-pane playback state
     var state = {};
-    order.forEach(function (key) { if (byKey[key]) state[key] = { token: 0, done: false }; });
-    var active = order[0];
-
-    // loop: after a pane finishes, hold on the punchline then re-type, but only
-    // while the scene is in view (offscreen scenes pause instead of spinning).
-    var LOOP_HOLD = 3800;
-    var loopTimer = null;
-    var inView = false;
-    var started = false;
-    function clearLoop() { if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; } }
-    function scheduleLoop(key) {
-      clearLoop();
-      loopTimer = setTimeout(function () {
-        if (reduced || active !== key || !inView) return;
-        activate(key, true);
-      }, LOOP_HOLD);
-    }
+    order.forEach(function (key) { state[key] = { token: 0 }; });
 
     function showPane(key) {
-      active = key;
       order.forEach(function (k) {
-        if (!byKey[k]) return;
         var on = k === key;
         bodies[k].classList.toggle("on", on);
         tabEls[k].setAttribute("aria-selected", on ? "true" : "false");
@@ -304,80 +290,43 @@
       outcomeEl.textContent = byKey[key].outcome;
     }
 
-    function hintOther(fromKey) {
-      order.forEach(function (k) {
-        if (byKey[k]) tabEls[k].classList.toggle("hint", k !== fromKey && !state[k].done);
-      });
-    }
-    function clearHints() { order.forEach(function (k) { if (byKey[k]) tabEls[k].classList.remove("hint"); }); }
+    function stop() { order.forEach(function (k) { state[k].token++; }); }
 
-    function activate(key, forceReplay) {
-      clearLoop();
-      // stop any other pane mid-play
-      order.forEach(function (k) { if (k !== key && state[k]) state[k].token++; });
-      showPane(key);
-      var st = state[key];
-      var pane = byKey[key];
-      if (reduced) {
-        staticRender(pane, bodies[key]);
-        return;
-      }
-      if (forceReplay || !st.done) {
-        playPane(pane, bodies[key], st, function () { hintOther(key); scheduleLoop(key); });
-      } else {
-        staticRender(pane, bodies[key]); // already seen -> show final at once, then loop
-        scheduleLoop(key);
-      }
+    function playSegment(name, onDone) {
+      stop();
+      showPane(name);
+      playPane(byKey[name], bodies[name], state[name], onDone);
+    }
+
+    function showStatic(name) {
+      name = name || order[0];
+      showPane(name);
+      staticRender(byKey[name], bodies[name]);
+    }
+
+    // initial: idle caret on the first pane
+    showPane(order[0]);
+    if (!reduced) {
+      bodies[order[0]].innerHTML =
+        '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
     }
 
     order.forEach(function (key) {
-      if (!byKey[key]) return;
       tabEls[key].addEventListener("click", function () {
-        clearHints();
-        if (active === key && !state[key].done) return; // already playing this one
-        activate(key, false);
+        if (events.onSegment) events.onSegment(key);
       });
     });
-    replayBtn.addEventListener("click", function () {
-      clearHints();
-      activate(active, true);
+    foot.querySelector(".ts-replay").addEventListener("click", function () {
+      if (events.onReplay) events.onReplay();
     });
 
-    // initial state
-    showPane(order[0]);
-    if (reduced) {
-      staticRender(byKey[order[0]], bodies[order[0]]);
-      // both panes reachable via tabs; static-render lazily on switch
-      return;
-    }
-    bodies[order[0]].innerHTML = '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
-
-    // autoplay on scroll into view; keep observing so leaving the viewport pauses
-    // the loop and returning resumes it.
-    if ("IntersectionObserver" in window) {
-      var io = new IntersectionObserver(function (entries) {
-        entries.forEach(function (e) {
-          inView = e.isIntersecting;
-          if (e.isIntersecting) {
-            if (!started) { started = true; activate(order[0], false); }
-            else if (state[active] && state[active].done) { scheduleLoop(active); }
-          } else {
-            clearLoop();
-          }
-        });
-      }, { rootMargin: "0px 0px -12% 0px" });
-      io.observe(mount);
-    } else {
-      inView = true;
-      activate(order[0], false);
-    }
+    return {
+      segments: order,
+      playSegment: playSegment,
+      showStatic: showStatic,
+      stop: stop
+    };
   }
-
-  /* ---- scene 3: two agents on ONE shared timeline (layout:"split") --------- */
-  var REPLAY_SVG =
-    '<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" ' +
-    'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-    '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/></svg>';
 
   /* merge both panes' steps into one beat-ordered sequence, grouped so that
      steps sharing a beat fire together and the claim collision reads as a race:
@@ -418,9 +367,8 @@
     autoscroll(body, el, step.role === "inject");
   }
 
-  async function playSplit(groups, bodies, st) {
+  async function playSplit(groups, bodies, st, onDone) {
     var token = ++st.token;
-    st.done = false;
     Object.keys(bodies).forEach(function (k) { bodies[k].innerHTML = ""; });
     for (var gi = 0; gi < groups.length; gi++) {
       if (st.token !== token) return;
@@ -434,24 +382,16 @@
       await wait(gap);
     }
     if (st.token !== token) return;
-    st.done = true;
+    if (onDone) onDone();
   }
 
-  function buildSplitScene(mount, scene) {
+  /* ---- controller: split scene (two agents, one shared timeline) ----------- */
+  function buildSplit(scene, events, mount) {
     var order = ["A", "B"]; // display: agent A left, agent B right
     var byKey = {};
     scene.panes.forEach(function (p) { byKey[p.key] = p; });
 
-    mount.innerHTML = "";
-
-    var head = document.createElement("div");
-    head.className = "ts-head";
-    head.innerHTML =
-      '<p class="ts-kicker">' + esc(scene.kicker) + "</p>" +
-      '<h3 class="ts-title">' + esc(scene.title) + "</h3>" +
-      '<p class="ts-ask"><span class="ts-ask-label">prompt</span>' +
-      "<span>" + esc(scene.prompt) + "</span></p>";
-    mount.appendChild(head);
+    mount.appendChild(sceneHead(scene));
 
     var split = document.createElement("div");
     split.className = "ts-split";
@@ -489,64 +429,223 @@
     mount.appendChild(foot);
 
     var timeline = buildTimeline(scene.panes);
-    var st = { token: 0, done: false };
+    var st = { token: 0 };
 
-    function renderStatic() {
+    function stop() { st.token++; }
+
+    function playSegment(name, onDone) {
+      stop();
+      playSplit(timeline, bodies, st, onDone);
+    }
+
+    function showStatic() {
       order.forEach(function (key) { if (byKey[key]) staticRender(byKey[key], bodies[key]); });
     }
 
-    // loop the shared timeline while in view; pause offscreen (see buildScene).
-    var LOOP_HOLD = 4200;
-    var loopTimer = null;
-    var inView = false;
-    var started = false;
-    function clearLoop() { if (loopTimer) { clearTimeout(loopTimer); loopTimer = null; } }
-    function scheduleLoop() {
-      clearLoop();
-      loopTimer = setTimeout(function () { if (!reduced && inView) runSplit(); }, LOOP_HOLD);
-    }
-    function runSplit() {
-      clearLoop();
-      playSplit(timeline, bodies, st).then(function () {
-        if (st.done && !reduced && inView) scheduleLoop();
+    if (!reduced) {
+      order.forEach(function (key) {
+        if (byKey[key]) {
+          bodies[key].innerHTML =
+            '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
+        }
       });
     }
 
     foot.querySelector(".ts-replay").addEventListener("click", function () {
-      if (reduced) renderStatic();
-      else runSplit();
+      if (events.onReplay) events.onReplay();
     });
 
-    if (reduced) { renderStatic(); return; }
+    return {
+      segments: ["single"],
+      playSegment: playSegment,
+      showStatic: showStatic,
+      stop: stop
+    };
+  }
 
-    order.forEach(function (key) {
-      if (byKey[key]) {
-        bodies[key].innerHTML =
-          '<div class="ln idle"><span class="p">&gt;</span> <span class="caret"></span></div>';
+  /* ---- the reel: one slot, a scene nav, a self-running tour ---------------- */
+  function buildReel(reel) {
+    var mounts = Array.prototype.slice.call(reel.querySelectorAll(".term-scene[data-scene]"));
+    var scenes = mounts.map(function (m) { return byId[m.dataset.scene]; });
+    // keep only mounts whose scene exists, preserving order
+    var pairs = [];
+    mounts.forEach(function (m, i) { if (scenes[i]) pairs.push({ mount: m, scene: scenes[i] }); });
+    if (!pairs.length) return;
+
+    var nav = reel.querySelector(".scenes-nav");
+    if (!nav) {
+      nav = document.createElement("div");
+      nav.className = "scenes-nav";
+      nav.setAttribute("role", "tablist");
+      reel.insertBefore(nav, reel.firstChild);
+    }
+
+    var controllers = new Array(pairs.length); // lazy
+
+    // build the scene nav
+    var navEls = pairs.map(function (pair, i) {
+      var b = document.createElement("button");
+      b.type = "button";
+      b.className = "scene-tab";
+      b.setAttribute("role", "tab");
+      b.dataset.i = i;
+      var num = ("0" + (i + 1)).slice(-2);
+      b.innerHTML = '<span class="sr-num">' + num + "</span>" +
+        '<span class="sr-label">' + esc(pair.scene.tab || pair.scene.kicker) + "</span>" +
+        '<span class="sr-prog" aria-hidden="true"></span>';
+      nav.appendChild(b);
+      return b;
+    });
+
+    function controllerFor(i) {
+      if (controllers[i]) return controllers[i];
+      var scene = pairs[i].scene;
+      var events = {
+        onSegment: function (name) { userSegment(i, name); },
+        onReplay: function () { userReplay(i); }
+      };
+      var c = scene.layout === "split"
+        ? buildSplit(scene, events, pairs[i].mount)
+        : buildWithWithout(scene, events, pairs[i].mount);
+      controllers[i] = c;
+      return c;
+    }
+
+    function showScene(i) {
+      pairs.forEach(function (pair, j) {
+        pair.mount.classList.toggle("on", j === i);
+        navEls[j].classList.toggle("active", j === i);
+        navEls[j].setAttribute("aria-selected", j === i ? "true" : "false");
+        navEls[j].tabIndex = j === i ? 0 : -1;
+        if (j !== i) navEls[j].classList.remove("playing");
+      });
+    }
+
+    /* ---- tour state --------------------------------------------------------- */
+    var cur = 0, seg = 0, holdTimer = null, inView = false, started = false;
+
+    function setProgress(i, frac, ms) {
+      var prog = navEls[i].querySelector(".sr-prog");
+      if (!prog) return;
+      prog.style.transition = "none";
+      prog.style.transform = "scaleX(" + (frac ? 1 : 0) + ")";
+      if (ms) {
+        void prog.offsetWidth; // flush
+        prog.style.transition = "transform " + ms + "ms linear";
+        prog.style.transform = "scaleX(1)";
       }
+    }
+    function clearProgress() { navEls.forEach(function (b, i) { setProgress(i, 0, 0); }); }
+
+    function clearHold() {
+      if (holdTimer) { clearTimeout(holdTimer); holdTimer = null; }
+      clearProgress();
+    }
+
+    function holdMs() {
+      var segs = controllerFor(cur).segments;
+      return seg < segs.length - 1 ? HOLD_PANE : HOLD_SCENE;
+    }
+
+    function playSeg() {
+      clearHold();
+      navEls[cur].classList.add("playing");
+      var c = controllerFor(cur);
+      c.playSegment(c.segments[seg], onSegDone);
+    }
+
+    function onSegDone() {
+      if (!inView) return;
+      var ms = holdMs();
+      setProgress(cur, 0, ms); // telegraph the coming advance
+      holdTimer = setTimeout(advance, ms);
+    }
+
+    function advance() {
+      clearHold();
+      var segs = controllerFor(cur).segments;
+      if (seg < segs.length - 1) { seg++; playSeg(); return; }
+      controllerFor(cur).stop();
+      navEls[cur].classList.remove("playing");
+      cur = (cur + 1) % pairs.length;
+      seg = 0;
+      controllerFor(cur); // build before showing to avoid an empty flash
+      showScene(cur);
+      playSeg();
+    }
+
+    /* ---- user steering ------------------------------------------------------ */
+    function goScene(i) {
+      clearHold();
+      if (controllers[cur]) controllers[cur].stop();
+      navEls[cur].classList.remove("playing");
+      cur = i; seg = 0;
+      controllerFor(cur); // build before showing to avoid an empty flash
+      showScene(cur);
+      playSeg();
+    }
+    function userSegment(i, name) {
+      if (reduced) { pauseSwitch(i); controllerFor(i).showStatic(name); return; }
+      clearHold();
+      if (controllers[cur] && cur !== i) { controllers[cur].stop(); navEls[cur].classList.remove("playing"); }
+      cur = i;
+      var c = controllerFor(i);
+      var idx = c.segments.indexOf(name);
+      seg = idx < 0 ? 0 : idx;
+      showScene(i);
+      playSeg();
+    }
+    function userReplay(i) {
+      if (reduced) { pauseSwitch(i); controllerFor(i).showStatic(); return; }
+      clearHold();
+      cur = i;
+      showScene(i);
+      playSeg();
+    }
+    function pauseSwitch(i) { cur = i; seg = 0; showScene(i); }
+
+    navEls.forEach(function (b, i) {
+      b.addEventListener("click", function () {
+        if (reduced) { pauseSwitch(i); controllerFor(i).showStatic(); return; }
+        goScene(i);
+      });
     });
 
+    /* ---- reduced motion: static, no tour ------------------------------------ */
+    if (reduced) {
+      showScene(0);
+      controllerFor(0).showStatic();
+      return;
+    }
+
+    // build + show the first scene idle
+    controllerFor(0);
+    showScene(0);
+
+    // autoplay on scroll into view; leaving pauses, returning resumes
     if ("IntersectionObserver" in window) {
       var io = new IntersectionObserver(function (entries) {
         entries.forEach(function (e) {
           inView = e.isIntersecting;
           if (e.isIntersecting) {
-            if (!started) { started = true; runSplit(); }
-            else if (st.done) { scheduleLoop(); }
+            if (!started) { started = true; playSeg(); }
+            else { playSeg(); } // resume the current segment from the top
           } else {
-            clearLoop();
+            clearHold();
+            if (controllers[cur]) controllers[cur].stop();
+            navEls[cur].classList.remove("playing");
           }
         });
       }, { rootMargin: "0px 0px -12% 0px" });
-      io.observe(mount);
+      io.observe(reel);
     } else {
-      inView = true;
-      runSplit();
+      inView = true; started = true;
+      playSeg();
     }
   }
 
   function init() {
-    document.querySelectorAll(".term-scene[data-scene]").forEach(buildScene);
+    document.querySelectorAll(".scenes-reel").forEach(buildReel);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", init);
