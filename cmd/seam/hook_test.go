@@ -61,7 +61,7 @@ func TestUsageExit_HookIsTheOnlyExemption(t *testing.T) {
 // derives it from hookEvents so it cannot drift from what forwards.
 func TestRunHook_ErrorsNameTheValidEvents(t *testing.T) {
 	e, _, _ := stubEnv()
-	err := runHook(context.Background(), e, &noOpts{}, []string{"bogus"})
+	err := runHook(context.Background(), e, &hookOpts{}, []string{"bogus"})
 	require.ErrorContains(t, err, "valid values are session-start, user-prompt-submit")
 	require.NotContains(t, err.Error(), "want ")
 }

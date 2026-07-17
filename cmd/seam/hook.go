@@ -11,9 +11,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -59,13 +61,29 @@ func hookEventNames() string {
 	return strings.Join(names, ", ")
 }
 
+// hookOpts carries the flags for `seam hook`.
+type hookOpts struct {
+	config string // --config: abs seamless.yaml the installer bakes in (see bindHook)
+}
+
+// bindHook registers --config. install-hooks writes it into every command hook
+// so the hook resolves config from any cwd: exec-form command hooks carry no
+// environment, so this flag replaces the old SEAMLESS_CONFIG env prefix. runHook
+// exports it back to SEAMLESS_CONFIG (config.Load's documented override) before
+// loading, keeping every command's cwd-relative search otherwise unchanged.
+func bindHook(fs *flag.FlagSet) *hookOpts {
+	o := &hookOpts{}
+	fs.StringVar(&o.config, "config", "", "path to seamless.yaml, so the hook resolves config from any cwd")
+	return o
+}
+
 // hookCmd declares atLeast(0) positionals and no enum, so the table checks
 // nothing: every way of misusing hook lands in runHook, which fails open, rather
 // than in parse, which cannot. That is deliberate belt-and-braces with usageExit
 // (spec.go) -- hook keeps failing at exit 1 even if that exemption is ever lost --
 // and it is why the event name is validated in the handler instead of by an enum.
 var hookCmd = spec("hook", groupHooks, "forward the stdin hook payload to seamlessd",
-	atLeast(0, "EVENT"), bindNoOpts, runHook).
+	atLeast(0, "EVENT"), bindHook, runHook).
 	withLong("events: " + hookEventNames() + `
 
 Claude Code invokes this; it is not run by hand. post-tool-use fires machine-wide
@@ -76,7 +94,7 @@ A runtime failure (unreadable stdin, no config, server down) is reported on
 stderr and exits 0 -- a hook must never block the session it serves. Only an
 unknown event name, which is an install bug rather than a hiccup, is an error.`)
 
-func runHook(ctx context.Context, e *env, _ *noOpts, pos []string) error {
+func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	// Arity is not enforced by the spec (see hookCmd), so the handler owns the
 	// empty case. Both messages name the valid set rather than a "want" blob.
 	if len(pos) == 0 {
@@ -100,6 +118,16 @@ func runHook(ctx context.Context, e *env, _ *noOpts, pos []string) error {
 	// here, before any config load or network round-trip.
 	if event == "post-tool-use" && !shouldForwardPostToolUse(payload, defaultPlansDir()) {
 		return nil
+	}
+
+	// --config is config.Load's documented $SEAMLESS_CONFIG override, moved out of
+	// the shell (exec-form hooks carry no env). Setting it in this short-lived hook
+	// process is safe and keeps loadConfig's search order the single code path.
+	if o.config != "" {
+		if err := os.Setenv("SEAMLESS_CONFIG", o.config); err != nil {
+			fmt.Fprintln(e.stderr, "seam hook: set config path:", err)
+			return nil
+		}
 	}
 
 	cfg, err := e.loadConfig()

@@ -350,7 +350,7 @@ an already-current file is reported as up to date and left untouched. Each hook
 is reported as added, updated, or unchanged.</p>
 <p>Six events are installed together: <code>SessionStart</code>, <code>UserPromptSubmit</code>,
 <code>SessionEnd</code>, <code>PostToolUse</code>, <code>SubagentStop</code>, and <code>PermissionRequest</code>. All are
-command hooks that shell out to <code>seam hook &lt;event&gt;</code> except <code>UserPromptSubmit</code>,
+command hooks that run <code>seam hook &lt;event&gt;</code> (exec form, no shell) except <code>UserPromptSubmit</code>,
 which is an http hook - Claude Code will not run an http hook for SessionStart
 at all, and at SessionEnd a fire-and-forget request races process teardown, so
 the findings harvest would often be lost.</p>

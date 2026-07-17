@@ -34,9 +34,9 @@ type hookSpec struct {
 // but at process exit the fire-and-forget request races the teardown, so the
 // ambient-session harvest often never lands and sessions pile up as active;
 // running it as a command hook Claude Code waits on makes the harvest reliable.
-// Each shells out to `seam hook <event>`, which forwards the payload to
-// Endpoint. UserPromptSubmit fires mid-turn where http is reliable, so it keeps
-// an http hook (and carries the bearer key into settings.json).
+// Each runs `seam hook <event>` (exec form, no shell), which forwards the
+// payload to Endpoint. UserPromptSubmit fires mid-turn where http is reliable,
+// so it keeps an http hook (and carries the bearer key into settings.json).
 //
 // The plan-capture hooks (PostToolUse, SubagentStop, PermissionRequest) are
 // command hooks too: the seam CLI pre-filters PostToolUse locally so the
@@ -58,7 +58,7 @@ type InstallOptions struct {
 	BaseURL      string // e.g. http://127.0.0.1:8081
 	APIKey       string // static bearer key written into the Authorization header
 	SeamBin      string // path to the seam CLI for command hooks; "" => "seam" (PATH)
-	ConfigPath   string // abs seamless.yaml baked into command hooks as SEAMLESS_CONFIG so they resolve config from any cwd; "" omits it
+	ConfigPath   string // abs seamless.yaml passed to command hooks as `--config` so they resolve config from any cwd; "" omits it
 }
 
 // InstallResult reports what an install did.
@@ -235,22 +235,31 @@ func entryArray(hooksObj map[string]any, event string) []any {
 func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[string]any {
 	var hook map[string]any
 	if hs.CLIArg != "" {
-		// Command hook: Claude Code pipes the event JSON to the command's stdin
-		// and injects its stdout. `seam hook <arg>` forwards that to Endpoint and
-		// echoes the response, so no bearer key is written into settings.json.
-		// It fires from any cwd, so bake SEAMLESS_CONFIG in -- otherwise the CLI's
+		// Command hook, EXEC form: `command` is the bare seam binary and `args`
+		// carries the rest, so Claude Code spawns it directly with no shell. That
+		// is the one shape that behaves identically on every OS -- on Windows CC
+		// runs a shell-form command hook through PowerShell, where the old POSIX
+		// string (a `VAR=value` env prefix plus single-quoting) is not valid
+		// syntax. Exec form sidesteps quoting entirely: each arg is passed verbatim.
+		//
+		// Claude Code pipes the event JSON to stdin and injects stdout; `seam hook
+		// <arg>` forwards that to Endpoint and echoes the response, so no bearer
+		// key is written into settings.json. The hook fires from any cwd, so the
+		// config path is passed as `--config` (exec form carries no environment, so
+		// this replaces the old SEAMLESS_CONFIG env prefix) -- otherwise the CLI's
 		// cwd-relative config search misses seamless.yaml and it can't authenticate.
 		bin := seamBin
 		if bin == "" {
 			bin = "seam"
 		}
-		command := shellArg(bin) + " hook " + hs.CLIArg
+		args := []any{"hook", hs.CLIArg}
 		if configPath != "" {
-			command = "SEAMLESS_CONFIG=" + shellArg(configPath) + " " + command
+			args = append(args, "--config", configPath)
 		}
 		hook = map[string]any{
 			"type":    "command",
-			"command": command,
+			"command": bin,
+			"args":    args,
 			"timeout": hs.Timeout,
 		}
 	} else {
@@ -269,17 +278,6 @@ func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[st
 		entry["matcher"] = hs.Matcher
 	}
 	return entry
-}
-
-// shellArg returns s ready to drop into the shell command string Claude Code
-// runs for a command hook. Ordinary paths pass through bare for readability;
-// only a value with whitespace or shell metacharacters is single-quoted (with
-// embedded single quotes escaped), so a repo under "My Projects" still works.
-func shellArg(s string) string {
-	if s != "" && !strings.ContainsAny(s, " \t\n'\"\\$`&|;<>(){}*?!#~") {
-		return s
-	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // seamlessIndices returns the ascending indices of entries in arr that Seamless
@@ -336,10 +334,16 @@ func sameURL(a, b string) bool {
 }
 
 // entryRunsHookCommand reports whether any command hook in the entry invokes
-// the seam CLI for cliArg (a command ending in " hook <cliArg>") -- identifying
-// a Seamless command hook written without the marker, whatever binary path or
-// env prefix it carries. Command hooks have no URL, so without this an old
-// unmarked command entry would be duplicated instead of adopted.
+// the seam CLI for cliArg -- identifying a Seamless command hook written without
+// the marker, whatever binary path it carries. Command hooks have no URL, so
+// without this an unmarked command entry would be duplicated instead of adopted.
+// Both hook shapes are recognized so an upgrade adopts either in place:
+//
+//   - exec form (current): `args` carry "hook" then <cliArg> as adjacent
+//     elements, with the binary in `command`.
+//   - shell-string form (pre-exec installs, and hand edits): the whole
+//     invocation is one `command` string ending in " hook <cliArg>", possibly
+//     with a SEAMLESS_CONFIG= env prefix.
 func entryRunsHookCommand(e any, cliArg string) bool {
 	if cliArg == "" {
 		return false
@@ -357,8 +361,29 @@ func entryRunsHookCommand(e any, cliArg string) bool {
 		if !ok {
 			continue
 		}
+		if hookArgsRunEvent(hm["args"], cliArg) {
+			return true
+		}
 		if c, ok := hm["command"].(string); ok && strings.HasSuffix(strings.TrimSpace(c), " hook "+cliArg) {
 			return true
+		}
+	}
+	return false
+}
+
+// hookArgsRunEvent reports whether an exec-form hook's args invoke `hook
+// <cliArg>` -- "hook" immediately followed by the event name, anywhere in the
+// list (the installer always emits them first, but a hand edit may not).
+func hookArgsRunEvent(v any, cliArg string) bool {
+	args, ok := v.([]any)
+	if !ok {
+		return false
+	}
+	for i := 0; i+1 < len(args); i++ {
+		if s, ok := args[i].(string); ok && s == "hook" {
+			if next, ok := args[i+1].(string); ok && next == cliArg {
+				return true
+			}
 		}
 	}
 	return false

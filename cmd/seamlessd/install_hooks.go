@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/config"
@@ -133,16 +134,28 @@ func absConfigPath(src string) string {
 // resolveSeamBin picks the seam CLI path baked into the SessionStart command
 // hook. An explicit --seam wins; otherwise it prefers the seam binary sitting
 // next to this seamlessd (the normal `make build` layout) so the hook works
-// regardless of PATH, falling back to a bare "seam" resolved at hook time.
+// regardless of PATH, falling back to the bare binary name resolved at hook time.
+// The name carries .exe on Windows: exec-form command hooks spawn the binary
+// directly (no PATHEXT resolution of a bare name), and require a real .exe.
 func resolveSeamBin(override string) string {
 	if strings.TrimSpace(override) != "" {
 		return override
 	}
+	name := seamBinName()
 	if exe, err := os.Executable(); err == nil {
-		cand := filepath.Join(filepath.Dir(exe), "seam")
+		cand := filepath.Join(filepath.Dir(exe), name)
 		if info, err := os.Stat(cand); err == nil && !info.IsDir() {
 			return cand
 		}
+	}
+	return name
+}
+
+// seamBinName is the seam CLI's filename for the OS install-hooks runs on --
+// which is also the OS the hooks will fire on, so runtime.GOOS is correct.
+func seamBinName() string {
+	if runtime.GOOS == "windows" {
+		return "seam.exe"
 	}
 	return "seam"
 }

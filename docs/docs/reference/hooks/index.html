@@ -304,22 +304,30 @@ hook time. The command fails if <code>mcp.api_key</code> is empty.</p>
 </span></span><span class="line"><span class="cl">    ]
 </span></span><span class="line"><span class="cl">  }
 </span></span><span class="line"><span class="cl">}
-</span></span></code></pre><p>A command entry carries no key and bakes in the absolute config path:</p>
+</span></span></code></pre><p>A command entry carries no key and uses <strong>exec form</strong> - a bare <code>command</code> plus an
+<code>args</code> array, spawned directly with no shell:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">{
 </span></span><span class="line"><span class="cl">  &#34;seamless_managed&#34;: true,
 </span></span><span class="line"><span class="cl">  &#34;matcher&#34;: &#34;startup|resume|clear|compact&#34;,
 </span></span><span class="line"><span class="cl">  &#34;hooks&#34;: [
 </span></span><span class="line"><span class="cl">    {
 </span></span><span class="line"><span class="cl">      &#34;type&#34;: &#34;command&#34;,
-</span></span><span class="line"><span class="cl">      &#34;command&#34;: &#34;SEAMLESS_CONFIG=/abs/path/seamless.yaml /abs/path/seam hook session-start&#34;,
+</span></span><span class="line"><span class="cl">      &#34;command&#34;: &#34;/abs/path/seam&#34;,
+</span></span><span class="line"><span class="cl">      &#34;args&#34;: [&#34;hook&#34;, &#34;session-start&#34;, &#34;--config&#34;, &#34;/abs/path/seamless.yaml&#34;],
 </span></span><span class="line"><span class="cl">      &#34;timeout&#34;: 10
 </span></span><span class="line"><span class="cl">    }
 </span></span><span class="line"><span class="cl">  ]
 </span></span><span class="line"><span class="cl">}
-</span></span></code></pre><p><code>SEAMLESS_CONFIG</code> is baked in because the hook fires from any cwd, where the
-CLI's cwd-relative search for <code>seamless.yaml</code> would miss and leave it unable to
-authenticate. It is omitted when the config came from defaults and env with no
-file. The <code>matcher</code> key is omitted entirely for hooks that have none.</p>
+</span></span></code></pre><p>Exec form is deliberate: it is the one shape that behaves identically on every
+OS. Claude Code runs a shell-form command hook through <code>sh -c</code> on Unix but
+PowerShell on Windows, where a POSIX string (an env prefix plus single-quoting)
+is not valid syntax; exec form passes each argument verbatim with no quoting at
+all. The config path is passed as <code>--config</code> because the hook fires from any
+cwd, where the CLI's cwd-relative search for <code>seamless.yaml</code> would miss and leave
+it unable to authenticate (exec form carries no environment, so this replaces the
+older <code>SEAMLESS_CONFIG</code> env prefix). It is omitted when the config came from
+defaults and env with no file. The <code>matcher</code> key is omitted entirely for hooks
+that have none.</p>
 <p>Install behavior:</p>
 <ul>
 <li><strong>Unknown keys are preserved.</strong> The file is decoded into a generic map, so
