@@ -18,6 +18,23 @@
     });
   }
 
+  /* os switch: the head script already set data-os from the UA; a pick
+     overrides it everywhere on the page and persists. aria-pressed mirrors
+     data-os for assistive tech; the visual state is pure CSS off <html>. */
+  function syncOsButtons() {
+    document.querySelectorAll("[data-os-pick]").forEach(function (btn) {
+      btn.setAttribute("aria-pressed", btn.dataset.osPick === root.dataset.os ? "true" : "false");
+    });
+  }
+  syncOsButtons();
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest("[data-os-pick]");
+    if (!btn) return;
+    root.dataset.os = btn.dataset.osPick;
+    try { localStorage.setItem("os", btn.dataset.osPick); } catch (e) { /* private mode */ }
+    syncOsButtons();
+  });
+
   /* copy buttons: copy the nearest [data-copy] text */
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest(".copy-btn");
