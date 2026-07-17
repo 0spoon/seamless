@@ -20,11 +20,8 @@
     overflow: hidden;
   }
   .row { display: flex; justify-content: space-between; align-items: center; }
-  .wordmark { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; display: inline-flex; align-items: baseline; }
-  .wordmark .seam {
-    display: inline-block; width: 2px; height: 0.95em; margin: 0 2px; align-self: center;
-    background: linear-gradient(to bottom, transparent, #ff6a3d 30%, #ff6a3d 70%, transparent);
-  }
+  .wordmark { font-size: 40px; font-weight: 700; letter-spacing: -0.02em; }
+  .wordmark .caret { color: #7fd6a4; }
   .mark { width: 56px; height: 56px; border-radius: 13px; background: #3f56e8; position: relative; }
   .mark::before {
     content: ""; position: absolute; inset: 14px; border-radius: 50%;
@@ -44,7 +41,7 @@
 <body>
   <div id="card">
     <div class="row">
-      <span class="wordmark">seam<span class="seam"></span>less</span>
+      <span class="wordmark">seam<span class="caret">l</span>ess</span>
       <span class="mark"></span>
     </div>
     <h1>Your agents share a brain.<br><em>You can read it.</em></h1>

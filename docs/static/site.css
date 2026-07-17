@@ -218,20 +218,11 @@ body::before {
   font-size: 20px;
   letter-spacing: var(--tracking-tight);
   color: var(--ink);
-  display: inline-flex; align-items: baseline;
 }
 .wordmark:hover { text-decoration: none; }
-.wordmark .seam {
-  display: inline-block;
-  width: 1px; height: 0.95em;
-  margin: 0 1px;
-  align-self: center;
-  background: linear-gradient(to bottom, transparent, var(--pop) 30%, var(--pop) 70%, transparent);
-  animation: seamfade 4s var(--ease-out) infinite;
-}
-@keyframes seamfade {
-  0%, 100% { opacity: 1; }
-  50%      { opacity: 0.1; }
+.wordmark .caret {
+  color: var(--term-green);
+  animation: blink 1.1s steps(1) infinite;
 }
 .head-nav { display: flex; align-items: center; gap: 22px; }
 .head-nav a {
@@ -524,12 +515,59 @@ body::before {
 .how-diagram .d-file  { fill: var(--surface); stroke: var(--border-strong); }
 .how-diagram .d-arrow { stroke: var(--muted); fill: none; }
 .how-diagram .d-arrowhead { fill: var(--muted); }
+/* Edge labels sit on top of their arrow; the surface-colored halo keeps the
+   line from striking through the glyphs. */
+.how-diagram .d-edge-label {
+  stroke: var(--surface);
+  stroke-width: 7px;
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
 
 /* ==========================================================================
    TERMINAL SCENES -- animated verbatim with/without transcripts (scenes.js)
    ========================================================================== */
-.scenes { display: flex; flex-direction: column; gap: 26px; }
-.term-scene:empty { display: none; } /* JS-off: collapse the mount, <noscript> carries the note */
+/* the reel: a scene-selector nav on top, one scene card in the stage below */
+.scenes-reel { display: flex; flex-direction: column; gap: 16px; }
+.scenes-nav { display: flex; flex-wrap: wrap; gap: 8px; }
+.scenes-nav:empty { display: none; } /* JS-off: the empty nav collapses */
+.scene-tab {
+  appearance: none; cursor: pointer; position: relative; overflow: hidden;
+  display: inline-flex; align-items: center; gap: 9px;
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--radius-pill);
+  padding: 8px 15px;
+  font-family: var(--font-mono); font-size: 12.5px; font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  color: var(--muted);
+  transition: color var(--dur-fast) var(--ease-out),
+              border-color var(--dur-fast) var(--ease-out),
+              background var(--dur-fast) var(--ease-out);
+}
+.scene-tab:hover { color: var(--ink); border-color: var(--border-strong); }
+.scene-tab.active {
+  color: var(--ink); border-color: var(--brand); background: var(--brand-soft);
+}
+.scene-tab .sr-num {
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0;
+  color: var(--muted); opacity: .7;
+}
+.scene-tab.active .sr-num { color: var(--brand); opacity: 1; }
+/* auto-advance line: fills during the hold before the tour moves on */
+.scene-tab .sr-prog {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 2px;
+  background: var(--brand);
+  transform: scaleX(0); transform-origin: left center;
+}
+
+/* stage: exactly one scene card visible; JS toggles .on */
+.scenes-stage { position: relative; }
+.scenes-stage .term-scene { display: none; }
+.scenes-stage .term-scene.on { display: block; animation: reel-in .34s var(--ease-out); }
+@keyframes reel-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
 
 .term-scene {
   background: var(--surface);
@@ -791,6 +829,7 @@ body::before {
 }
 
 @media (max-width: 620px) {
+  .scene-tab { padding: 7px 11px; font-size: 11.5px; gap: 7px; }
   .ts-foot { flex-direction: column; align-items: flex-start; }
   .term-tabs { width: 100%; }
   /* min-width:0 lets the two nowrap tabs shrink to share a 320px row instead of
@@ -808,6 +847,8 @@ body::before {
   .term-tab.hint { animation: none; }
   .ln.tool.tool-win, .ln.tool.tool-bounce { animation: none; }
   .cl-ln { opacity: 1; transform: none; transition: none; }
+  .scenes-stage .term-scene.on { animation: none; }
+  .scene-tab .sr-prog { display: none; }
 }
 
 /* ==========================================================================
@@ -1069,7 +1110,7 @@ body::before {
 .rv:nth-child(4) { transition-delay: 210ms; }
 @media (prefers-reduced-motion: reduce) {
   .rv { opacity: 1; transform: none; transition: none; }
-  .live-dot, .cursor, .wordmark .seam { animation: none; }
+  .live-dot, .cursor, .wordmark .caret { animation: none; }
   html { scroll-behavior: auto; }
 }
 

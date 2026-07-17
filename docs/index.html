@@ -22,7 +22,7 @@
 
 <header class="site-head">
   <div class="wrap">
-    <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="seam" aria-hidden="true"></span>less</a>
+    <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="caret">l</span>ess</a>
     <nav class="head-nav" aria-label="Site">
       <a href="#why">Why</a>
       <a href="#scenes">Demo</a>
@@ -124,13 +124,16 @@
     <div class="section-head">
       <p class="kicker">watch the seam</p>
       <h2>Same prompt. Same repo. Different agent.</h2>
-      <p>Two real Claude Code sessions handed the identical prompt in the identical repo. The only difference is whether Seamless is installed. Flip between them.</p>
+      <p>Two real Claude Code sessions handed the identical prompt in the identical repo. The only difference is whether Seamless is installed. It plays through all four on its own &mdash; or jump to any scene.</p>
     </div>
-    <div class="scenes">
-      <div class="term-scene" data-scene="cold-start"></div>
-      <div class="term-scene" data-scene="hardening-trap"></div>
-      <div class="term-scene" data-scene="token-safety"></div>
-      <div class="term-scene" data-scene="coordination"></div>
+    <div class="scenes-reel">
+      <div class="scenes-nav" role="tablist" aria-label="Terminal scenes"></div>
+      <div class="scenes-stage">
+        <div class="term-scene" data-scene="cold-start"></div>
+        <div class="term-scene" data-scene="hardening-trap"></div>
+        <div class="term-scene" data-scene="token-safety"></div>
+        <div class="term-scene" data-scene="coordination"></div>
+      </div>
       <noscript><p class="console-note"># these scenes animate real terminal transcripts and need JavaScript. The transcripts themselves are plain files in the repo: docs/static/scenes.js</p></noscript>
     </div>
     <p class="console-note"># real sessions against a seeded demo instance &mdash; transcripts verbatim, only the typing is animated.</p>
@@ -162,10 +165,10 @@
           <path class="d-arrow" d="M80 60 L80 92 Q80 100 88 100 L152 100" stroke-width="1.3"/>
           <path class="d-arrow" d="M240 60 L240 100" stroke-width="1.3"/>
           <path class="d-arrow" d="M400 60 L400 92 Q400 100 392 100 L328 100" stroke-width="1.3"/>
-          <text class="d-dim" x="240" y="118" text-anchor="middle" font-size="9.5">hooks + mcp tools</text>
           <!-- daemon -->
           <path class="d-arrow" d="M240 100 L240 128" stroke-width="1.3"/>
           <polygon class="d-arrowhead" points="240,134 236,126 244,126"/>
+          <text class="d-dim d-edge-label" x="240" y="118" text-anchor="middle" font-size="9.5">hooks + mcp tools</text>
           <rect class="d-core" x="45" y="136" width="310" height="86" rx="10" stroke-width="1.4"/>
           <text class="d-title" x="200" y="164" text-anchor="middle" font-size="13">seamlessd</text>
           <text x="200" y="182" text-anchor="middle" font-size="9.5">one Go binary &#183; no CGO &#183; localhost</text>
@@ -407,7 +410,7 @@
 <footer class="site-foot">
   <div class="wrap">
     <div class="fm">
-      <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="seam" aria-hidden="true"></span>less</a>
+      <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="caret">l</span>ess</a>
       <p class="tagline">No seams. No spoons.</p>
       <p class="colophon">Type set in Space Grotesk, Hanken Grotesk &amp; JetBrains Mono, self-hosted (<a href="static/fonts/OFL-NOTICE.txt">OFL</a>). No trackers, no cookies, no CDNs - this page is a static file. Naturally, it's <a href="https://github.com/0spoon/seamless/tree/main/docs">in the repo</a>.</p>
     </div>
