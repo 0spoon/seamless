@@ -1,12 +1,13 @@
 // Scene-mode seeding for the landing page's with/without terminal captures
-// (plan:terminal-scenes). Unlike the console fleet seed in main.go/data.go, this
-// stands up a MINIMAL, precise state: one project (myapp), one active plan, a
-// handful of memories, one backdated finding, and one failed trial -- exactly
+// (plan:terminal-scenes). Unlike the console fleet seed in seeder.go/data.go,
+// this stands up a MINIMAL, precise state: one project (myapp), one active plan,
+// a handful of memories, one backdated finding, and one failed trial -- exactly
 // what scene 1's briefing and scene 2's landmine need, and nothing that would
 // clutter a recorded briefing. The repo->project mapping is seeded here too, so
 // a single `demoseed -scenes -repo <path>` run (before the daemon starts) leaves
 // the throwaway instance ready to record against.
-package main
+
+package demokit
 
 import (
 	"fmt"
@@ -41,7 +42,7 @@ Caching that is safe here:
 When a task says "HTML responses are slow -- add caching", cache the assets, not the HTML.`
 
 // scenes seeds the whole terminal-scenes fixture into the throwaway data dir.
-func (s *seeder) scenes(repoPath string, race bool) {
+func (s *Seeder) Scenes(repoPath string, race bool) {
 	if _, err := store.EnsureProject(s.ctx, s.db, sceneProject, sceneProject); err != nil {
 		log.Fatalf("demoseed: scenes: project: %v", err)
 	}
@@ -67,10 +68,10 @@ func (s *seeder) scenes(repoPath string, race bool) {
 
 // sceneSession creates one completed myapp session with the given finding,
 // ending at `end` (so the briefing ages it from there).
-func (s *seeder) sceneSession(name string, end time.Time, findings string) sessRec {
+func (s *Seeder) sceneSession(name string, end time.Time, findings string) sessRec {
 	start := end.Add(-45 * time.Minute)
 	sess := core.Session{
-		ID: s.idAt(start), Name: name, ProjectSlug: sceneProject, Status: core.SessionCompleted,
+		ID: s.IdAt(start), Name: name, ProjectSlug: sceneProject, Status: core.SessionCompleted,
 		Findings:        findings,
 		ClaudeSessionID: fmt.Sprintf("%08x-%04x-%04x", s.rng.Uint32(), s.rng.Uint32()&0xffff, s.rng.Uint32()&0xffff),
 		CWD:             "/home/dev/myapp", Source: "startup", Ambient: true,
@@ -88,7 +89,7 @@ func (s *seeder) sceneSession(name string, end time.Time, findings string) sessR
 // persist-token) engineered to fire the mid-session <seam-recall> injection.
 // Kinds and filenames match the hero term on docs/index.html so the closing
 // `ls memory/myapp/` beat mirrors it.
-func (s *seeder) sceneMemories(source string) {
+func (s *Seeder) sceneMemories(source string) {
 	mems := []struct {
 		kind, name, desc, body string
 		agoDays                int
@@ -141,9 +142,9 @@ func (s *seeder) sceneMemories(source string) {
 			"The primary sets a low statement_timeout so a runaway query can't stall writes. Long analytics/report queries hit it and error out. Route them to the read replica, which raises statement_timeout for the reporting role; never lift the timeout on the primary.", 12},
 	}
 	for _, m := range mems {
-		created := s.daysAgo(m.agoDays).Add(time.Duration(9+s.rng.Intn(6)) * time.Hour)
+		created := s.DaysAgo(m.agoDays).Add(time.Duration(9+s.rng.Intn(6)) * time.Hour)
 		mem := core.Memory{
-			ID: s.idAt(created), Kind: core.MemoryKind(m.kind), Name: m.name, Description: m.desc,
+			ID: s.IdAt(created), Kind: core.MemoryKind(m.kind), Name: m.name, Description: m.desc,
 			Project: sceneProject, Body: m.body, Created: created, Updated: created,
 			ValidFrom: created, SourceSession: source,
 		}
@@ -157,7 +158,7 @@ func (s *seeder) sceneMemories(source string) {
 // ready (the briefing's "1 claimable"), step 6 blocked on step 5. With race=true
 // step 6 depends on step 4 instead, so it too is claimable and scene 3's two
 // agents each get a distinct step after the claim collision.
-func (s *seeder) scenePlan(race bool, by string) {
+func (s *Seeder) scenePlan(race bool, by string) {
 	const slug = "auth-refresh"
 	steps := []struct {
 		title   string
@@ -175,9 +176,9 @@ func (s *seeder) scenePlan(race bool, by string) {
 	}
 	ids := make([]string, len(steps))
 	for i, st := range steps {
-		created := s.daysAgo(st.agoDays).Add(time.Duration(9+s.rng.Intn(6)) * time.Hour)
+		created := s.DaysAgo(st.agoDays).Add(time.Duration(9+s.rng.Intn(6)) * time.Hour)
 		t := core.Task{
-			ID: s.idAt(created), ProjectSlug: sceneProject, Title: st.title,
+			ID: s.IdAt(created), ProjectSlug: sceneProject, Title: st.title,
 			Body:      "Step of plan:" + slug + ". See the auth-refresh plan note for acceptance criteria.",
 			Status:    core.TaskOpen,
 			CreatedBy: by, PlanSlug: slug,
@@ -210,10 +211,10 @@ func raceDep(race bool) int {
 
 // sceneTrial seeds one failed trial: the dead-end scene 4 ("deja vu fix") plays
 // off -- a pool-timeout bump that didn't fix the real bug.
-func (s *seeder) sceneTrial(sess sessRec) {
+func (s *Seeder) sceneTrial(sess sessRec) {
 	at := s.now.Add(-26 * time.Hour)
 	t := core.Trial{
-		ID: s.idAt(at), Lab: "refresh-500s",
+		ID: s.IdAt(at), Lab: "refresh-500s",
 		Title:     "Bump the DB pool timeout to stop intermittent /auth/refresh 500s",
 		Changes:   "Raised the pgx pool size 10->25 and MaxConnIdleTime 30s->5m.",
 		Expected:  "The intermittent 500s on POST /auth/refresh disappear under load.",
@@ -227,7 +228,7 @@ func (s *seeder) sceneTrial(sess sessRec) {
 }
 
 // sceneSummary prints what was seeded and the one-line hint for the next step.
-func (s *seeder) sceneSummary(repoPath string, race bool) {
+func (s *Seeder) sceneSummary(repoPath string, race bool) {
 	claimable := "1 (step 5)"
 	if race {
 		claimable = "2 (steps 5+6, race mode)"

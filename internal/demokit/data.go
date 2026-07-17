@@ -1,9 +1,10 @@
-// Package main (demoseed) seeds a throwaway Seamless data dir with a fictional
-// but realistic six-week history so the console can be screenshotted for the
-// landing page. Not part of the shipped product; never point it at a live data
-// dir. All content below is invented: a solo dev's agent fleet working on a Go
-// SaaS backend (orbital), its frontend (orbital-web), a homelab, and dotfiles.
-package main
+// Console-fleet fixture data: the invented six-week history that demoseed's
+// default (SeedConsoleFleet) mode seeds so the console can be screenshotted for
+// the landing page. All content below is fictional -- a solo dev's agent fleet
+// on a Go SaaS backend (orbital), its frontend (orbital-web), a homelab, and
+// dotfiles. Not part of the shipped product; never point demoseed at a live dir.
+
+package demokit
 
 // memSpec is one memory to seed. hot ranks injection popularity: 0 = never
 // surfaced (cold tail), higher = injected more often. desc <= 150 chars.
