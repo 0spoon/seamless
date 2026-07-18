@@ -1,0 +1,11 @@
+{
+  "session_id": "019f7291-40f1-7311-8997-0d497579d27b",
+  "turn_id": "019f7291-413f-7a43-9856-577564be6281",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/17/rollout-2026-07-17T17-12-29-019f7291-40f1-7311-8997-0d497579d27b.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "Stop",
+  "model": "gpt-5.5",
+  "permission_mode": "bypassPermissions",
+  "stop_hook_active": false,
+  "last_assistant_message": "SEAMLESS_SENTINEL_SESSIONSTART=zebra-4417\nSEAMLESS_SENTINEL_PROMPTSUBMIT=falcon-9928"
+}
