@@ -1,14 +1,16 @@
 ---
-title: Claude Code hooks
-description: The six hooks Seamless installs, their transports and timeouts, the fail-open contract, and what install-hooks writes into settings.json.
+title: Hooks
+description: The hooks Seamless installs per client - six for Claude Code, three for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
 ---
 
-Seamless installs six Claude Code hooks. They are what makes sessions ambient:
-an agent gets a briefing, its prompts get matched against stored memories, its
-findings get harvested, and its plan-mode activity gets captured - without the
-agent calling a single MCP tool.
+Seamless installs hooks for two clients. They are what makes sessions ambient: an
+agent gets a briefing, its prompts get matched against stored memories, and its
+findings get harvested - without the agent calling a single MCP tool. The profile
+depends on the client: Claude Code gets six hooks (including plan-mode capture);
+[Codex](#codex-cli-three-hooks) gets three. `seamlessd install-hooks` targets
+Claude Code by default; `--client codex` (or `--client all`) targets Codex.
 
-## The installed hooks
+## Claude Code: six hooks
 
 Taken from the `seamlessHooks` definition in `internal/hooks/install.go`, in
 install order:
@@ -29,6 +31,33 @@ cannot spend the whole hook budget.
 `SessionStart` is the only hook with a matcher on session sources. Subagents
 (`agent_type` set) share the parent's session and get no ambient session of their
 own.
+
+## Codex CLI: three hooks
+
+`seamlessd install-hooks --client codex` installs three hooks into
+`~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`) instead of the six above.
+Codex has no plan mode to capture and emits no `SessionEnd` event in 0.144.5, so
+the profile is just SessionStart, UserPromptSubmit, and Stop.
+
+| Event | Transport | Endpoint | Effect |
+|---|---|---|---|
+| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes the ambient `cx/{prefix}` session. |
+| `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
+| `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
+
+All three are `command` hooks, and for one reason: Codex only runs
+`command`/`mcp_tool` hooks, and every command hook passes through Codex's **trust
+gate**. An untrusted hook is silently skipped, so a fresh install shows no
+briefing until the hooks are trusted - interactively at the Codex TUI startup
+review, or with `--dangerously-bypass-hook-trust` for headless runs.
+
+The `--client codex` discriminator rides as a `?client=codex` query param on the
+same `/api/hooks/*` endpoints the daemon already serves; the daemon normalizes
+Codex's payload (its `prompt` field, its `Stop` `last_assistant_message`) into the
+shared shape. Omitting the flag means Claude Code - the endpoint URLs are
+identical. Because Codex never sends a `SessionEnd`, its sessions close through the
+idle reaper rather than a clean cascade; [Codex CLI setup](/codex-cli/) covers
+that lifecycle and the tool-call approval gate.
 
 ## The fail-open contract
 
@@ -57,13 +86,17 @@ seam doctor        # server reachable, key accepted, tools/list count
 
 `seamlessd doctor`'s hooks check looks in `~/.claude/settings.json` and then
 `./.claude/settings.json`, reporting the first location that has all of them, and
-warning when they are partial or absent. `seam doctor` covers the other half: it
-hits `/healthz` and calls `tools/list`, which is what tells you whether the
+warning when they are partial or absent. When Codex is installed it also inspects
+`~/.codex/hooks.json` and reports the Codex MCP registration - a machine with no
+Codex is a single OK line, never a failure. `seam doctor` covers the other half:
+it hits `/healthz` and calls `tools/list`, which is what tells you whether the
 endpoint the hooks post to is actually answering.
 
-## Why two transports
+## Why Claude Code uses two transports
 
-Five hooks are `command`, one is `http`. The split is not stylistic:
+Five of the Claude Code hooks are `command`, one is `http`. (Codex, above, uses
+`command` for all three - its trust gate applies only to command hooks.) The
+split is not stylistic:
 
 - **`SessionStart` must be a command hook.** Claude Code only runs
   `command`/`mcp_tool` hooks for `SessionStart`. An `http` hook there is silently
@@ -93,12 +126,16 @@ seamlessd install-hooks                        # default: ~/.claude/settings.jso
 seamlessd install-hooks --settings ./.claude/settings.json
 seamlessd install-hooks --url http://127.0.0.1:8081
 seamlessd install-hooks --seam /path/to/seam
+seamlessd install-hooks --client codex         # ~/.codex/hooks.json + codex mcp add
+seamlessd install-hooks --client all           # both clients in one pass
 ```
 
 The base URL defaults to one derived from the config's bind address (a bind-all
 host maps to loopback). `--seam` defaults to the `seam` binary sitting next to
 the running `seamlessd`, falling back to a bare `seam` resolved from `PATH` at
-hook time. The command fails if `mcp.api_key` is empty.
+hook time. The command fails if `mcp.api_key` is empty. The examples below are the
+Claude Code (`settings.json`) shapes; the Codex profile is
+[shell strings, not exec form](#the-codex-profile-is-shell-strings).
 
 An http entry looks like this:
 
@@ -151,6 +188,39 @@ older `SEAMLESS_CONFIG` env prefix). It is omitted when the config came from
 defaults and env with no file. The `matcher` key is omitted entirely for hooks
 that have none.
 
+### The Codex profile is shell strings
+
+Codex's `hooks.json` schema takes a **shell-string** command, not the exec-form
+`command` + `args` array Claude Code uses. So the Codex profile writes a
+POSIX-quoted `command` and a double-quoted `command_windows`, both resolving the
+same `seam` binary plus `hook <event> --config <yaml> --client codex`:
+
+```text
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "seamless_managed": true,
+        "hooks": [
+          {
+            "type": "command",
+            "command": "'/abs/path/seam' hook session-start --config '/abs/path/seamless.yaml' --client codex",
+            "command_windows": "\"C:\\abs\\path\\seam.exe\" hook session-start --config \"C:\\abs\\path\\seamless.yaml\" --client codex",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Both forms carry the same resolved paths; the installer runs once per OS, so only
+the matching one ever fires. Codex's own file struct rejects unknown keys at the
+top level (only `description` and `hooks` are allowed there), but its matcher
+group and command handler tolerate extra fields, so the `seamless_managed` marker
+sits safely on the matcher group exactly as it does for Claude Code.
+
 Install behavior:
 
 - **Unknown keys are preserved.** The file is decoded into a generic map, so
@@ -178,8 +248,11 @@ if any of these hold:
 1. It carries the `seamless_managed` marker; or
 2. it is an http entry whose `url` matches the hook's URL under the base URL
    (trailing slash ignored); or
-3. it is a command entry whose `command` ends in ` hook <event>` - whatever
-   binary path or env prefix it carries.
+3. it is a command entry whose `command` runs ` hook <event>` as a token -
+   followed by a space or the end of the string, whatever binary path, env prefix,
+   or trailing flags it carries. (The token match, rather than a suffix match, is
+   what lets it recognize Codex's `... hook session-start --config ... --client
+   codex`, where the event is not the last word.)
 
 Rules 2 and 3 are what make re-installs adopt an existing entry in place rather
 than appending a duplicate beside it. When several owned entries exist for one
@@ -197,4 +270,6 @@ untouched.
   the hook URLs derive from, and the `briefing:` block that tunes what
   `SessionStart` injects.
 - [MCP API overview](/reference/mcp/) - the tool surface the same daemon serves.
+- [Claude Code setup](/claude-code/) and [Codex CLI setup](/codex-cli/) - the
+  per-client walkthroughs these hooks come from.
 - [Quickstart](/quickstart/) - install order for a working setup.

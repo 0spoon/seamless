@@ -16,6 +16,7 @@ sections:
       - quickstart.md
       - install.md
       - claude-code.md
+      - codex-cli.md
 
   - title: Concepts
     slug: concepts

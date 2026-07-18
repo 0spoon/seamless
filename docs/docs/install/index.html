@@ -57,6 +57,8 @@
         
         <li><a href="../claude-code/">Claude Code setup</a></li>
         
+        <li><a href="../codex-cli/">Codex CLI setup</a></li>
+        
       </ul>
     </div>
     
@@ -125,7 +127,7 @@
         
         <li><a href="../reference/configuration/">Configuration</a></li>
         
-        <li><a href="../reference/hooks/">Claude Code hooks</a></li>
+        <li><a href="../reference/hooks/">Hooks</a></li>
         
         <li><a href="../reference/console/">Console</a></li>
         
@@ -189,6 +191,9 @@ hooks, and registers the MCP server;</li>
 <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
 <code>/healthz</code> until the daemon actually answers.</li>
 </ol>
+<p>Step 3 wires <strong>Claude Code</strong>. Codex CLI is a one-command opt-in on top -
+<code>seamlessd install-hooks --client codex</code> - not part of the curl install; see
+<a href="../codex-cli/">Codex CLI setup</a>.</p>
 <p>The Windows installer is per-user by the same principle as the others: it runs
 as <strong>you</strong>, never elevates, and registers the Scheduled Task under your own
 account (<code>LogonType Interactive</code>), so a single signed-in user is all it needs and

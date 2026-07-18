@@ -2,8 +2,8 @@
 
 Local-first memory and coordination substrate for AI coding agents.
 
-Seamless gives a fleet of agents (Claude Code and any MCP-compatible client) a
-shared, durable memory and a way to divide work without colliding: memories with
+Seamless gives a fleet of agents (Claude Code, Codex, and any MCP-compatible
+client) a shared, durable memory and a way to divide work without colliding: memories with
 a supersession lifecycle, hybrid recall, a dependency-aware task queue with
 lease-based claiming, captured plans, and research trials. Durable knowledge is
 stored as markdown files on disk; a single Go binary indexes it, serves it over
@@ -65,10 +65,12 @@ seamlessd serve                   # 127.0.0.1:8081; first run generates the API 
 seamlessd install-hooks           # Claude Code hooks + MCP registration
 ```
 
-`install-hooks` registers the MCP server with `claude mcp add --scope user`;
-other MCP clients register `http://127.0.0.1:8081/api/mcp` with
-`Authorization: Bearer <mcp.api_key>`. From a clone, `make build && make run` is
-the same daemon out of `./bin/`, and `make install` sets it up as a service.
+`install-hooks` registers the MCP server with `claude mcp add --scope user`. For
+Codex CLI, `seamlessd install-hooks --client codex` installs its three hooks and
+registers the `seam mcp-proxy` stdio bridge; other MCP clients register
+`http://127.0.0.1:8081/api/mcp` with `Authorization: Bearer <mcp.api_key>`. From a
+clone, `make build && make run` is the same daemon out of `./bin/`, and `make
+install` sets it up as a service.
 
 The curl installer drops a `/seam-onboard` Claude Code skill into
 `~/.claude/skills/`; run `/seam-onboard` once in Claude Code to write a
@@ -78,6 +80,7 @@ same skill.
 
 Then: [Quickstart](https://thereisnospoon.org/docs/quickstart/) ·
 [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) ·
+[Codex CLI setup](https://thereisnospoon.org/docs/codex-cli/) ·
 [Install & deploy](https://thereisnospoon.org/docs/install/)
 
 ## Documentation

@@ -3,9 +3,10 @@ title: Integrate your agent
 description: Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.
 ---
 
-Claude Code gets Seamless for free: [hooks](/reference/hooks/) open a session,
-inject a briefing, and harvest findings without the agent deciding to. Any other
-client has no hooks. It has to run the loop itself.
+[Claude Code](/claude-code/) and [Codex](/codex-cli/) get Seamless mostly for
+free: [hooks](/reference/hooks/) open a session, inject a briefing, and harvest
+findings without the agent deciding to. Any other client has no hooks. It has to
+run the loop itself.
 
 This page is that loop, for a client you are wiring up by hand.
 
@@ -34,6 +35,22 @@ Seamless serves streamable-HTTP MCP at `/api/mcp` behind one static bearer key
 ([`mcp.api_key`](/reference/configuration/)). If your client speaks MCP over
 HTTP, point it here and you are done. If you are writing the transport yourself,
 the handshake is two calls.
+
+**Client only speaks MCP over stdio?** Some clients (Codex CLI among them) launch
+their MCP servers as a subprocess and talk JSON-RPC over stdio - they cannot POST
+to a URL. Bridge them with `seam mcp-proxy`, which speaks stdio to the client and
+forwards each frame to `/api/mcp`, carrying the bearer key from config and
+preserving the `Mcp-Session-Id` so session binding survives:
+
+```bash
+seam mcp-proxy --config /abs/path/seamless.yaml   # invoked by the MCP client, not by hand
+```
+
+Register it the way your client registers a stdio server - for Codex that is
+`codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml`,
+which `seamlessd install-hooks --client codex` does for you. See [Codex CLI
+setup](/codex-cli/). The rest of this page - session binding, scope, findings -
+applies to the bridged client unchanged.
 
 ```bash
 KEY=<mcp.api_key>

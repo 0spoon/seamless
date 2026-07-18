@@ -47,6 +47,10 @@ itself. No Go toolchain is involved. In order, it:
    `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
    `/healthz` until the daemon actually answers.
 
+Step 3 wires **Claude Code**. Codex CLI is a one-command opt-in on top -
+`seamlessd install-hooks --client codex` - not part of the curl install; see
+[Codex CLI setup](/codex-cli/).
+
 The Windows installer is per-user by the same principle as the others: it runs
 as **you**, never elevates, and registers the Scheduled Task under your own
 account (`LogonType Interactive`), so a single signed-in user is all it needs and

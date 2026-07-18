@@ -7,17 +7,17 @@ A **session** is one agent's stretch of work. A **briefing** is what that agent
 gets handed at the start of it, before it has called a single tool.
 
 This is the mechanism that makes Seamless ambient rather than opt-in. An agent
-does not have to remember to ask what it knows; a Claude Code SessionStart hook
-resolves the working directory to a project, assembles a briefing inside a token
-budget, and injects it into the agent's context. The agent begins already knowing
-your constraints.
+does not have to remember to ask what it knows; a SessionStart hook - installed
+for [Claude Code](/claude-code/) or [Codex](/codex-cli/) - resolves the working
+directory to a project, assembles a briefing inside a token budget, and injects it
+into the agent's context. The agent begins already knowing your constraints.
 
 ## Ambient vs. explicit sessions
 
 | | Ambient | Explicit |
 |---|---|---|
 | Opened by | The SessionStart hook, automatically | `session_start` |
-| Named | `cc/<id>` | Whatever you pass, or generated |
+| Named | `cc/<id>` (Claude Code) or `cx/<id>` (Codex) | Whatever you pass, or generated |
 | Gets | The short injected briefing | The full briefing, returned by the call |
 
 They are not two competing sessions. `session_start` **adopts** the sole ambient
