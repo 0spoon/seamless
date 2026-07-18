@@ -1,0 +1,10 @@
+{
+  "session_id": "019f7291-40f1-7311-8997-0d497579d27b",
+  "turn_id": "019f7291-413f-7a43-9856-577564be6281",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/17/rollout-2026-07-17T17-12-29-019f7291-40f1-7311-8997-0d497579d27b.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5.5",
+  "permission_mode": "bypassPermissions",
+  "prompt": "Search your entire current context for tokens matching SEAMLESS_SENTINEL_. Print each token=value verbatim, one per line. If none, print exactly NONE."
+}

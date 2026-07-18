@@ -1,0 +1,9 @@
+{
+  "session_id": "019f7291-40f1-7311-8997-0d497579d27b",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/17/rollout-2026-07-17T17-12-29-019f7291-40f1-7311-8997-0d497579d27b.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "SessionStart",
+  "model": "gpt-5.5",
+  "permission_mode": "bypassPermissions",
+  "source": "startup"
+}
