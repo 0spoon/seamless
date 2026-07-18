@@ -41,6 +41,9 @@ var hookEvents = []struct{ event, endpoint string }{
 	{"post-tool-use", "/api/hooks/post-tool-use"},
 	{"subagent-stop", "/api/hooks/subagent-stop"},
 	{"permission-request", "/api/hooks/permission-request"},
+	// Codex-only: its per-turn end signal (heartbeat + provisional harvest). Codex
+	// has no SessionEnd, so the codex install profile wires `seam hook stop`.
+	{"stop", "/api/hooks/stop"},
 }
 
 // hookEndpoint returns the endpoint an event forwards to.

@@ -178,6 +178,38 @@ func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.T
 	return nil
 }
 
+// UpdateAmbientFindingsByName upserts provisional findings onto an active ambient
+// session, keyed by its unique {cc|cx}/{prefix} name. It backs the Codex Stop
+// hook, which harvests the last agent message every turn: Codex has no SessionEnd
+// event, so findings must be in place BEFORE the idle reaper expires the session.
+//
+// The write is TARGETED -- only findings + updated_at, never a read-modify-write
+// of the whole row -- so a Stop landing between a resume's read and write cannot
+// be clobbered (mirroring the ensureAmbientSession contract), and repeated Stops
+// simply converge findings on the latest turn's message. The active-only + ambient
+// guard means it never resurrects a completed/expired session and never touches an
+// explicit session (whose findings the agent owns via session_update). Bumping
+// updated_at doubles as a heartbeat. No-op on an empty name or empty findings (a
+// turn with nothing to harvest leaves any prior harvest intact). Reports whether a
+// row was updated.
+func UpdateAmbientFindingsByName(ctx context.Context, db *sql.DB, name, findings string, now time.Time) (bool, error) {
+	if name == "" || findings == "" {
+		return false, nil
+	}
+	res, err := db.ExecContext(ctx, `
+		UPDATE sessions SET findings = ?, updated_at = ?
+		 WHERE name = ? AND status = 'active' AND ambient = 1`,
+		findings, core.FormatTime(now.UTC()), name)
+	if err != nil {
+		return false, fmt.Errorf("store.UpdateAmbientFindingsByName: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store.UpdateAmbientFindingsByName: rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
 // ExpireStaleSessions reaps active sessions whose last activity predates cutoff,
 // flipping each to SessionExpired. It leaves updated_at untouched so the row still
 // records when the session was last alive (the console orders and dates by it),
@@ -319,18 +351,28 @@ func SessionByName(ctx context.Context, db *sql.DB, name string) (core.Session, 
 	return sessionOne(ctx, db, `SELECT `+sessionCols+` FROM sessions WHERE name = ? LIMIT 1`, name)
 }
 
-// RecentFindings returns completed sessions with meaningful findings visible to a
+// RecentFindings returns ended sessions with meaningful findings visible to a
 // project (its own plus global sessions), most recent first. It backs the
 // briefing's "recent findings" section, so it excludes both blank findings and
 // the core.FindingNoSummary sentinel (a session that ended with nothing to
 // harvest) -- a content-free line is not worth an agent's context.
+//
+// "Ended" is completed OR reaper-expired-while-ambient. A Codex ambient session
+// has no SessionEnd event (design D5): the Stop hook harvests findings onto the
+// live row and the idle reaper flips it to 'expired', so requiring 'completed'
+// would hide every Codex session's findings. Restricting the expired arm to
+// ambient rows keeps this exact: a CC ambient session only ever gains findings at
+// SessionEnd (which also sets 'completed'), so no CC row is active-with-findings
+// to be reaped, and a crashed explicit session (ambient = 0) still does not
+// surface -- the set added here is precisely Codex's reaper-ended sessions.
 func RecentFindings(ctx context.Context, db *sql.DB, project string, limit int) ([]core.Session, error) {
 	if limit <= 0 {
 		limit = 3
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'completed' AND findings <> '' AND findings <> ?
+		WHERE (status = 'completed' OR (status = 'expired' AND ambient = 1))
+		  AND findings <> '' AND findings <> ?
 		  AND (project_slug = ? OR project_slug = '')
 		ORDER BY updated_at DESC, id DESC LIMIT ?`, core.FindingNoSummary, project, limit)
 	if err != nil {
@@ -472,11 +514,13 @@ func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, project st
 	return out, rows.Err()
 }
 
-// SiblingFindings returns the most recent completed sessions with meaningful
-// findings across the given sibling projects, newest first, capped at limit. It
-// backs the briefing's "Sibling projects" section, so -- like RecentFindings --
-// it excludes blank findings and the core.FindingNoSummary sentinel. An empty
-// slugs slice yields no results.
+// SiblingFindings returns the most recent ended sessions with meaningful findings
+// across the given sibling projects, newest first, capped at limit. It backs the
+// briefing's "Sibling projects" section, so -- like RecentFindings -- it excludes
+// blank findings and the core.FindingNoSummary sentinel, and treats a
+// reaper-expired ambient session as ended so Codex's SessionEnd-less sessions
+// surface too (see RecentFindings for why the expired arm is ambient-only). An
+// empty slugs slice yields no results.
 func SiblingFindings(ctx context.Context, db *sql.DB, slugs []string, limit int) ([]core.Session, error) {
 	if len(slugs) == 0 {
 		return nil, nil
@@ -492,7 +536,8 @@ func SiblingFindings(ctx context.Context, db *sql.DB, slugs []string, limit int)
 	args = append(args, limit)
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'completed' AND findings <> '' AND findings <> ?
+		WHERE (status = 'completed' OR (status = 'expired' AND ambient = 1))
+		  AND findings <> '' AND findings <> ?
 		  AND project_slug IN (`+placeholders(len(slugs))+`)
 		ORDER BY updated_at DESC, id DESC LIMIT ?`, args...)
 	if err != nil {
