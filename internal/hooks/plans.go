@@ -40,8 +40,9 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 
 	// Heartbeat the ambient session on any tool activity, so a long turn that never
 	// calls a seamless MCP tool still keeps its cc/* session live for the reaper.
+	// Plan/tool-capture hooks are Claude Code-only (Codex registers none).
 	hbCtx, hbCancel := context.WithTimeout(r.Context(), hookTimeout)
-	h.touchAmbient(hbCtx, p.SessionID)
+	h.touchAmbient(hbCtx, ClientClaudeCode, p.SessionID)
 	hbCancel()
 
 	extra := ""

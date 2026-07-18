@@ -277,7 +277,7 @@ func (s *Seeder) persistSession(r *sessRec, live bool) {
 	}
 	sess := core.Session{
 		ID: r.id, Name: r.name, ProjectSlug: r.project, Status: status,
-		Findings: findings, ClaudeSessionID: fmt.Sprintf("%08x-%04x-%04x", s.rng.Uint32(), s.rng.Uint32()&0xffff, s.rng.Uint32()&0xffff),
+		Findings: findings, ExternalSessionID: fmt.Sprintf("%08x-%04x-%04x", s.rng.Uint32(), s.rng.Uint32()&0xffff, s.rng.Uint32()&0xffff),
 		CWD: "/home/dev/" + r.project, Source: "startup", Ambient: s.rng.Float64() < 0.85,
 		CreatedAt: r.start, UpdatedAt: updated,
 	}

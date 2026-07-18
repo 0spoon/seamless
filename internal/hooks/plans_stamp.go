@@ -49,12 +49,14 @@ func planStamp(claudeSessionID, basename string, iter int, head string, now time
 		stampSession(claudeSessionID), basename, iter, shortHead(head), now.UTC().Format(time.RFC3339))
 }
 
-// stampSession names the capturing session in a stamp line.
+// stampSession names the capturing session in a stamp line. Plan capture is
+// Claude Code-only (Codex registers no plan-capture hooks), so the session is
+// always a cc/ ambient.
 func stampSession(claudeSessionID string) string {
 	if claudeSessionID == "" {
 		return "cc/unknown"
 	}
-	return ambientName(claudeSessionID)
+	return ambientName(ClientClaudeCode, claudeSessionID)
 }
 
 // shortHead abbreviates a commit hash for stamps ("unknown" when absent).

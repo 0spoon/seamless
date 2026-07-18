@@ -69,7 +69,7 @@ func ListSessionsForProject(ctx context.Context, db *sql.DB, project string, sta
 // resolve the name.
 func MemoriesForSession(ctx context.Context, db *sql.DB, sessionName string) ([]core.Memory, error) {
 	if looksLikeSessionULID(sessionName) {
-		return nil, errors.New("store.MemoriesForSession: expected a session NAME (e.g. cc/ab12cd34); got what looks like a session ULID -- resolve it via SessionByID(...).Name first")
+		return nil, errors.New("store.MemoriesForSession: expected a session NAME (e.g. cc/ab12cd34 or cx/ab12cd34); got what looks like a session ULID -- resolve it via SessionByID(...).Name first")
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
 		FROM memories_index WHERE source_session = ?

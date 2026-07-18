@@ -37,7 +37,9 @@ func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 		    (id, name, project_slug, status, findings, claude_session_id,
 		     cwd, source, ambient, metadata, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, s.Name, s.ProjectSlug, string(s.Status), s.Findings, s.ClaudeSessionID,
+		// claude_session_id column holds core.Session.ExternalSessionID (the column
+		// name predates Codex; see the field's doc for the intentional mismatch).
+		s.ID, s.Name, s.ProjectSlug, string(s.Status), s.Findings, s.ExternalSessionID,
 		s.CWD, s.Source, boolToInt(s.Ambient), meta,
 		core.FormatTime(s.CreatedAt), core.FormatTime(s.UpdatedAt))
 	if err != nil {
@@ -161,8 +163,8 @@ func TouchSession(ctx context.Context, db *sql.DB, id string, now time.Time) err
 }
 
 // TouchSessionByName is TouchSession keyed by the unique session name, for the
-// ambient hooks which know the cc/{prefix} name (not the ULID). Same active-only
-// guard and no-op-on-empty semantics.
+// ambient hooks which know the {cc|cx}/{prefix} name (not the ULID). Same
+// active-only guard and no-op-on-empty semantics.
 func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.Time) error {
 	if name == "" {
 		return nil
@@ -250,8 +252,8 @@ func staleActiveSessions(ctx context.Context, db *sql.DB, cutoff time.Time) ([]c
 	return stale, nil
 }
 
-// ActiveAmbientByCWD returns the active ambient (cc/*) sessions whose cwd matches,
-// most recent first. session_start consults it to link a freshly created explicit
+// ActiveAmbientByCWD returns the active ambient (cc/* or cx/*) sessions whose cwd
+// matches, most recent first. session_start consults it to link a freshly created explicit
 // session to the Claude session that owns the cwd (via its claude_session_id), so a
 // graceful SessionEnd can close both at once instead of leaving the explicit one to
 // the idle reaper. An empty cwd matches nothing (no basis to link).
@@ -278,8 +280,8 @@ func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, cwd string) ([]core.Ses
 	return out, rows.Err()
 }
 
-// ActiveSessionsByClaudeID returns every active session -- the ambient cc/* plus
-// any explicit session_start that linked to it -- stamped with claudeSessionID,
+// ActiveSessionsByClaudeID returns every active session -- the ambient cc/* or cx/*
+// plus any explicit session_start that linked to it -- stamped with claudeSessionID,
 // ambient first. The SessionEnd hook uses it to complete a whole Claude session's
 // sessions the moment we know it ended, rather than waiting out the idle TTL. An
 // empty id matches nothing.
@@ -390,7 +392,7 @@ func ListSessions(ctx context.Context, db *sql.DB, status core.SessionStatus, si
 }
 
 // LatestActiveAmbientSessionForProject returns the most recently updated active
-// ambient (cc/*) session in the given project, updated within the window, or
+// ambient (cc/* or cx/*) session in the given project, updated within the window, or
 // found=false when none. It backs the MCP write-scope fallback: an agent that
 // writes without calling session_start inherits its project's ambient session's
 // provenance. A non-positive within disables the recency filter. Scoping to a
@@ -408,7 +410,7 @@ func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, proje
 }
 
 // ActiveAmbientProjects returns the distinct project slugs that have at least one
-// active ambient (cc/*) session updated within the window, ordered by each
+// active ambient (cc/* or cx/*) session updated within the window, ordered by each
 // project's most recent activity. The MCP fallback consults it to tell a safe
 // single-project inference (len 1) from the ambiguous concurrent-agent case
 // (len > 1, agents in different repos) where guessing would bleed a write into
@@ -439,7 +441,7 @@ func ActiveAmbientProjects(ctx context.Context, db *sql.DB, within time.Duration
 	return out, rows.Err()
 }
 
-// ActiveAmbientSessionsForProject returns every active ambient (cc/*) session in
+// ActiveAmbientSessionsForProject returns every active ambient (cc/* or cx/*) session in
 // the given project updated within the window, most recent first. resolveSession
 // uses it to refuse targeting a session by inference when more than one same-
 // project ambient could be the one meant -- two agents in the same repo -- so a
@@ -532,7 +534,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 		created, updated string
 	)
 	if err := rows.Scan(
-		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ClaudeSessionID,
+		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
 		&s.CWD, &s.Source, &ambient, &meta, &created, &updated,
 	); err != nil {
 		return core.Session{}, err

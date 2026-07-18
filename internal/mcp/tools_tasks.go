@@ -19,10 +19,10 @@ const defaultClaimLease = 15 * time.Minute
 
 // actorSessionArgDesc documents the `session` argument on the identity-sensitive
 // task tools (claim/release/update). It carries the one fact an agent stuck behind
-// errAmbiguousActor cannot get anywhere else: its own identity is the cc/<id> its
-// briefing prints, and passing it is how a concurrent agent names the claim as its
+// errAmbiguousActor cannot get anywhere else: its own identity is the cc/<id> or
+// cx/<id> its briefing prints, and passing it is how a concurrent agent names the claim as its
 // own instead of having one guessed for it.
-const actorSessionArgDesc = "the acting agent's session: your cc/<id> from the briefing, or a session name. " +
+const actorSessionArgDesc = "the acting agent's session: your cc/<id> or cx/<id> from the briefing, or a session name. " +
 	"Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when " +
 	"several agents are active and the actor is otherwise ambiguous."
 
@@ -83,7 +83,7 @@ func tasksUpdateTool() mcp.Tool {
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("reassign the task to another project slug (used when a split moves a project's open work to a child)")),
 		mcp.WithArray("add_depends_on", mcp.WithStringItems(), mcp.Description("task ids to add as blockers (a comma-separated string is also accepted)")),
-		mcp.WithString("session", mcp.Description("the acting agent's session (your cc/<id> from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active")),
+		mcp.WithString("session", mcp.Description("the acting agent's session (your cc/<id> or cx/<id> from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active")),
 		mcp.WithString("session_id", mcp.Description(actorSessionIDArgDesc)),
 	)
 }
@@ -268,7 +268,7 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	if !ok {
 		return errResult("tasks_claim", errors.New(
-			"no active session to claim as: start a session (session_start), or name yourself with session=<cc/... or ULID>"))
+			"no active session to claim as: start a session (session_start), or name yourself with session=<cc/... or cx/... or ULID>"))
 	}
 	lease := defaultClaimLease
 	if argPresent(req, "lease_seconds") {

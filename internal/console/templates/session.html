@@ -71,7 +71,7 @@
         <dt>Started</dt><dd title="{{ts .Session.CreatedAt}}">{{ago .Session.CreatedAt}}</dd>
         <dt>Updated</dt><dd title="{{ts .Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd>
         <dt>CWD</dt><dd class="mono">{{if .Session.CWD}}{{.Session.CWD}}{{copyBtn .Session.CWD}}{{else}}&mdash;{{end}}</dd>
-        <dt>Claude</dt><dd class="mono">{{if .Session.ClaudeSessionID}}{{shortID .Session.ClaudeSessionID}}{{copyBtn .Session.ClaudeSessionID}}{{else}}&mdash;{{end}}</dd>
+        <dt>Agent</dt><dd class="mono">{{if .Session.ExternalSessionID}}{{shortID .Session.ExternalSessionID}}{{copyBtn .Session.ExternalSessionID}}{{else}}&mdash;{{end}}</dd>
       </dl>
     </div>
 

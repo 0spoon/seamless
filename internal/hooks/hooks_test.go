@@ -238,7 +238,7 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 	amb, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
 	require.NoError(t, err)
 	require.True(t, ok)
-	require.Equal(t, claudeID, amb.ClaudeSessionID)
+	require.Equal(t, claudeID, amb.ExternalSessionID)
 
 	// An explicit session_start that linked to the same Claude session (ambient=0,
 	// claude_session_id set), carrying its own interim findings and holding a claim.
@@ -246,7 +246,7 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.CreateSession(ctx, db, core.Session{
 		ID: explID, Name: "sess/work", ProjectSlug: "demo", Status: core.SessionActive,
-		ClaudeSessionID: claudeID, CWD: "/work/demo", Findings: "interim progress",
+		ExternalSessionID: claudeID, CWD: "/work/demo", Findings: "interim progress",
 		CreatedAt: amb.CreatedAt, UpdatedAt: amb.CreatedAt,
 	}))
 	taskID, err := core.NewID()
