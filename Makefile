@@ -70,7 +70,7 @@ INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
-	docs docs-check docs-serve installer-check site-check release-snapshot install-git-hooks uninstall-git-hooks \
+	docs docs-check docs-serve installer-check site-check site-stamp release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
 	service-status logs install-onboard-skill uninstall-onboard-skill \
 	install-research-skill uninstall-research-skill clean
@@ -92,6 +92,7 @@ help:
 	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
 	@echo "  installer-check   parse-check $(INSTALLER) (part of check)"
 	@echo "  site-check        fail if the landing page drifts from the installer/CLI (part of check)"
+	@echo "  site-stamp        restamp the landing page's static asset ?v= cache-busters"
 	@echo "  release-snapshot  dry-run the release build into dist/ (needs goreleaser)"
 	@echo "  tidy       go mod tidy"
 	@echo "  run        build and start the server in the foreground ($(ADDR))"
@@ -231,6 +232,13 @@ installer-check:
 # stays runnable on its own and there is one place to change them.
 site-check:
 	@scripts/site-check.sh
+
+# Restamp static/site.css and static/site.js with a content-hash ?v= in the
+# hand-written landing page, so a changed asset gets a fresh URL that the CDN
+# edge cache has never seen instead of serving stale behind its TTL. Run after
+# editing either asset; site-check fails until the stamped hash matches.
+site-stamp:
+	@scripts/site-stamp.sh
 
 # Git hooks. Committed under .githooks/ because .git/hooks is neither committed
 # nor shared between worktrees. core.hooksPath is repo-local config, so enabling

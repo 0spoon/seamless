@@ -99,6 +99,28 @@ func TestEveryPageIsMarked(t *testing.T) {
 	}
 }
 
+// TestDocsPagesCacheBustAssets: the docs pages are served behind the same CDN
+// edge cache as the landing page, which caches static/ for hours while passing
+// HTML through, so their mutable CSS/JS must carry a content-hash ?v= or a
+// deploy serves them stale behind fresh HTML. This is the docs-page half of what
+// site-check assertion 5 guards for the landing page. site.css is shared with
+// the landing page, so the docs pages must stamp the same token it does.
+func TestDocsPagesCacheBustAssets(t *testing.T) {
+	repoRoot(t)
+
+	files := renderRepoSite(t)
+	home, ok := files["index.html"]
+	require.True(t, ok, "the docs home page is emitted")
+	for _, want := range []string{"static/site.css?v=", "static/docs.css?v=", "static/docs.js?v="} {
+		require.Contains(t, home, want, "docs home must cache-bust %s", want)
+	}
+
+	siteCSS, err := os.ReadFile(landingCSSPath)
+	require.NoError(t, err)
+	require.Contains(t, home, "static/site.css"+assetVersion(siteCSS),
+		"the shared site.css token must match the file the landing page stamps")
+}
+
 // TestCleanOutputRefusesForeignDirectory guards the landing page. `-out docs`
 // instead of `-out docs/docs` would otherwise RemoveAll index.html, CNAME, and
 // the fonts.

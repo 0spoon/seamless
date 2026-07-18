@@ -10,12 +10,13 @@
 # run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
-# Four assertions, each one a thing a machine can actually verify:
+# Five assertions, each one a thing a machine can actually verify:
 #
 #   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
 #   2. every surface that teaches installing teaches the SAME two commands
 #   3. every `seamlessd <sub>` the page names in a command context is real
 #   4. each copy button copies the command it visibly shows
+#   5. each static asset carries a content-hash ?v= cache-buster that matches
 #
 # Deliberately not a prose linter: claims like "one binary, no ceremony" are the
 # author's problem. Commands are checkable, so these are checked.
@@ -89,6 +90,31 @@ if [ -n "$drift" ]; then
 	err "copy buttons do not copy what they show:"
 	printf '%s\n' "$drift" >&2
 fi
+
+# 5. The page is served through a CDN (Cloudflare) that edge-caches static/ for
+#    hours while passing the HTML through, so a deploy that changes site.css or
+#    site.js keeps serving the stale asset behind the HTML until the TTL lapses.
+#    That is exactly how the OS-switch shipped looking broken. A content-hash
+#    ?v= makes a changed asset a new URL the edge never cached; enforce that the
+#    stamped hash matches the file so a silent edit cannot un-bust it. `make
+#    site-stamp` restamps.
+sha8() {
+	if command -v sha256sum >/dev/null 2>&1; then
+		sha256sum "$1" | cut -c1-8
+	else
+		shasum -a 256 "$1" | cut -c1-8
+	fi
+}
+for asset in site.css site.js scenes.js scenes-player.js; do
+	want=$(sha8 "docs/static/$asset")
+	esc=$(printf '%s' "$asset" | sed 's/\./\\./g')
+	got=$(grep -oE "static/$esc\?v=[0-9a-f]+" "$PAGE" | head -1 | sed -E 's|.*\?v=||')
+	if [ -z "$got" ]; then
+		err "$PAGE references static/$asset without a ?v= cache-buster (run 'make site-stamp')"
+	elif [ "$got" != "$want" ]; then
+		err "$PAGE has static/$asset?v=$got but the file hashes to $want (run 'make site-stamp')"
+	fi
+done
 
 [ "$fail" -eq 0 ] || exit 1
 echo "site-check: $PAGE agrees with the installer and the CLI"

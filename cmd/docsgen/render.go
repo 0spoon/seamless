@@ -31,11 +31,13 @@ var templates = func() map[string]*template.Template {
 	return out
 }()
 
-// pageView is what a template receives: the page plus the site it belongs to
-// (for the sidebar) -- the two things every template needs and nothing else.
+// pageView is what a template receives: the page, the site it belongs to (for
+// the sidebar), and the asset cache-buster tokens the layout appends to its
+// stylesheet and script links.
 type pageView struct {
 	*Page
-	Site *Site
+	Site   *Site
+	Assets assetVersions
 }
 
 // renderPages fills in each page's Body, Headings, and Text. Generated pages get
@@ -91,8 +93,12 @@ func writeSite(outDir string, site *Site) error {
 	if err := cleanOutput(outDir); err != nil {
 		return err
 	}
+	assets, err := loadAssetVersions()
+	if err != nil {
+		return err
+	}
 	for _, p := range site.Pages {
-		html, err := renderPage(site, p)
+		html, err := renderPage(site, p, assets)
 		if err != nil {
 			return err
 		}
@@ -106,14 +112,14 @@ func writeSite(outDir string, site *Site) error {
 	return writeSearchIndex(outDir, site)
 }
 
-func renderPage(site *Site, p *Page) ([]byte, error) {
+func renderPage(site *Site, p *Page, assets assetVersions) ([]byte, error) {
 	tmpl, ok := templates[p.Template]
 	if !ok {
 		return nil, fmt.Errorf("%s: unknown template %q", p.Out, p.Template)
 	}
 	var buf bytes.Buffer
 	buf.WriteString(generatedMarker + "\n")
-	if err := tmpl.ExecuteTemplate(&buf, "layout", pageView{Page: p, Site: site}); err != nil {
+	if err := tmpl.ExecuteTemplate(&buf, "layout", pageView{Page: p, Site: site, Assets: assets}); err != nil {
 		return nil, fmt.Errorf("%s: %w", p.Out, err)
 	}
 	return buf.Bytes(), nil
