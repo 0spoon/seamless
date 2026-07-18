@@ -72,9 +72,9 @@ func (s *Seeder) sceneSession(name string, end time.Time, findings string) sessR
 	start := end.Add(-45 * time.Minute)
 	sess := core.Session{
 		ID: s.IdAt(start), Name: name, ProjectSlug: sceneProject, Status: core.SessionCompleted,
-		Findings:        findings,
-		ClaudeSessionID: fmt.Sprintf("%08x-%04x-%04x", s.rng.Uint32(), s.rng.Uint32()&0xffff, s.rng.Uint32()&0xffff),
-		CWD:             "/home/dev/myapp", Source: "startup", Ambient: true,
+		Findings:          findings,
+		ExternalSessionID: fmt.Sprintf("%08x-%04x-%04x", s.rng.Uint32(), s.rng.Uint32()&0xffff, s.rng.Uint32()&0xffff),
+		CWD:               "/home/dev/myapp", Source: "startup", Ambient: true,
 		CreatedAt: start, UpdatedAt: end,
 	}
 	if err := store.CreateSession(s.ctx, s.db, sess); err != nil {

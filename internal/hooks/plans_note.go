@@ -170,7 +170,8 @@ func (h *Handler) adoptPendingAgents(ctx context.Context, project, planSlug stri
 func (h *Handler) ensurePlanTask(ctx context.Context, p toolPayload, note core.Note, planSlug string) {
 	createdBy := ""
 	if p.SessionID != "" {
-		createdBy = ambientName(p.SessionID)
+		// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
+		createdBy = ambientName(ClientClaudeCode, p.SessionID)
 	}
 	task, created, err := plans.EnsureTask(ctx, h.db, note, planSlug, createdBy)
 	if err != nil {
@@ -226,7 +227,8 @@ func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note co
 	}
 	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
 		b.String() + "\n</seam-plan-context>"
-	h.recordInjection(ctx, "post-tool-use", p.SessionID, "", block, ids)
+	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
+	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", block, ids)
 	return block
 }
 
@@ -236,7 +238,8 @@ func (h *Handler) recordPlanEvent(ctx context.Context, kind core.EventKind, clau
 	if h.events == nil {
 		return
 	}
-	sessionID, project := h.ambientRef(ctx, claudeSessionID)
+	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
+	sessionID, project := h.ambientRef(ctx, ClientClaudeCode, claudeSessionID)
 	payload["claude_session_id"] = claudeSessionID
 	if _, err := h.events.Record(ctx, core.Event{
 		Kind: kind, SessionID: sessionID, ProjectSlug: project, ItemID: itemID, Payload: payload,

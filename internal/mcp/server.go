@@ -75,8 +75,8 @@ var errNoScope = errors.New(
 // must disambiguate with project=.
 // errAmbiguousSession is returned by resolveSession when a session_update/end
 // gives no explicit session_id or session name, has no bound session, and more
-// than one active ambient session -- across projects, or two agents' cc/* ambients
-// in the same repo -- could be the target. Guessing here would complete or
+// than one active ambient session -- across projects, or two agents' cc/* or cx/*
+// ambients in the same repo -- could be the target. Guessing here would complete or
 // overwrite another agent's session, so the caller must name it explicitly.
 var errAmbiguousSession = errors.New(
 	"ambiguous session: no bound session, and multiple active ambient sessions " +
@@ -92,11 +92,11 @@ var errAmbiguousScope = errors.New(
 // -- concurrent agents in the same project. Guessing the actor here would record a
 // claim under, or release/mutate a claim held by, the WRONG agent's session,
 // locking the true holder out of its own task (the cross-agent claim-bleed bug);
-// so the caller must name itself. Its cc/<id> ambient name is printed in the
-// session briefing.
+// so the caller must name itself. Its cc/<id> or cx/<id> ambient name is printed
+// in the session briefing.
 var errAmbiguousActor = errors.New(
 	"ambiguous agent: no bound session and multiple agents are active, so the acting " +
-		"session cannot be inferred; name yourself with session=<your cc/... from the briefing> or session_id=<ULID>")
+		"session cannot be inferred; name yourself with session=<your cc/... or cx/... from the briefing> or session_id=<ULID>")
 
 // writeScopeHelp is the tail resolveWriteScope appends to either scope error. It
 // carries the two facts an agent stuck at this decision cannot get anywhere else,
@@ -482,7 +482,7 @@ func (s *Server) maybeSweepBindings(ctx context.Context) {
 	s.mu.Unlock()
 }
 
-// ambientFallbackWindow bounds how stale an ambient (cc/*) session may be and
+// ambientFallbackWindow bounds how stale an ambient (cc/* or cx/*) session may be and
 // still absorb writes from an unbound connection. On a single-owner machine the
 // ambiguity window is acceptable; a shorter window would drop provenance for a
 // long-running session that has gone quiet.
@@ -664,7 +664,7 @@ func (s *Server) boundSession(ctx context.Context) string {
 // the agent passes to name itself, then the connection binding, then -- only for
 // the solo-agent case -- the single active ambient. Concurrent same-project
 // ambients are ambiguous (errAmbiguousActor): the agent disambiguates with the
-// cc/<id> its briefing prints. Because the sole-ambient case resolves the same
+// cc/<id> or cx/<id> its briefing prints. Because the sole-ambient case resolves the same
 // ULID on every call, a solo agent's identity survives a lost binding (reconnect,
 // daemon restart) with no re-session_start -- the binding is a cache here, not the
 // source of truth.
@@ -710,7 +710,7 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 // should attribute to. Because such a connection carries no project signal (MCP
 // tool calls receive no cwd, and no session_start ran), attribution is only safe
 // when active ambient sessions are confined to a single project: it then returns
-// that project's most recently updated cc/* session. When they span multiple
+// that project's most recently updated cc/* or cx/* session. When they span multiple
 // projects -- concurrent agents in different repos, the cross-agent-bleed case --
 // it returns ambiguous=true and ok=false so durable creates force an explicit
 // project= rather than guessing. It is only consulted when there is no binding.

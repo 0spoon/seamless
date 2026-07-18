@@ -76,6 +76,23 @@ func TestInjectAmbientLine(t *testing.T) {
 }
 
 func TestAmbientName(t *testing.T) {
-	require.Equal(t, "cc/abc12345", ambientName("ABC12345-6789-0000"))
-	require.Equal(t, "cc/short", ambientName("short"))
+	cases := []struct {
+		name   string
+		client Client
+		id     string
+		want   string
+	}{
+		{"claude-code truncates and lowercases", ClientClaudeCode, "ABC12345-6789-0000", "cc/abc12345"},
+		{"claude-code short id kept whole", ClientClaudeCode, "short", "cc/short"},
+		{"codex truncates and lowercases", ClientCodex, "ABC12345-6789-0000", "cx/abc12345"},
+		{"codex short id kept whole", ClientCodex, "short", "cx/short"},
+		{"empty client defaults to claude-code prefix", normalizeClient(""), "ABC12345-6789-0000", "cc/abc12345"},
+		{"unknown client falls back to claude-code prefix", normalizeClient("gemini"), "ABC12345", "cc/abc12345"},
+		{"codex via normalizeClient", normalizeClient("codex"), "DEADBEEF-1111", "cx/deadbeef"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, ambientName(tc.client, tc.id))
+		})
+	}
 }

@@ -39,9 +39,9 @@ const captureTimeout = 8 * time.Second
 // generous; anything larger is not a payload Seamless should buffer.
 const maxHookBody = 8 << 20
 
-// ambientPrefixLen is how many leading chars of the Claude session id name an
-// ambient session (cc/{prefix}); enough to be unique per machine, short enough
-// to read.
+// ambientPrefixLen is how many leading chars of the client's external session id
+// name an ambient session ({cc|cx}/{prefix}); enough to be unique per machine,
+// short enough to read.
 const ambientPrefixLen = 8
 
 // Config carries the Handler's dependencies. DB backs ambient sessions and the
@@ -111,6 +111,7 @@ type hookPayload struct {
 	CWD            string `json:"cwd"`
 	Source         string `json:"source"`     // startup|resume|clear|compact
 	AgentType      string `json:"agent_type"` // non-empty => subagent
+	Client         string `json:"client"`     // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 type promptPayload struct {
@@ -118,6 +119,7 @@ type promptPayload struct {
 	CWD           string `json:"cwd"`
 	UserPrompt    string `json:"user_prompt"`
 	HookEventName string `json:"hook_event_name"`
+	Client        string `json:"client"` // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 // endPayload is the SessionEnd request body.
@@ -125,6 +127,7 @@ type endPayload struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Reason         string `json:"reason"` // clear|logout|prompt_input_exit|other
+	Client         string `json:"client"` // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 // toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
@@ -188,11 +191,12 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		briefing, injectedIDs = "", nil // never block the agent
 	}
 	injected := briefing != ""
+	client := normalizeClient(p.Client)
 
-	// Ambient session: create or resume cc/{prefix} so work is recorded without
-	// the agent calling session_start. Subagents share the parent's session, so
-	// they get no ambient session of their own. Best-effort: a failure just omits
-	// the ambient line.
+	// Ambient session: create or resume {cc|cx}/{prefix} so work is recorded
+	// without the agent calling session_start. Subagents share the parent's
+	// session, so they get no ambient session of their own. Best-effort: a failure
+	// just omits the ambient line.
 	if p.AgentType == "" {
 		if name := h.ensureAmbientSession(ctx, p); name != "" {
 			briefing = injectAmbientLine(briefing, name)
@@ -201,7 +205,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// Record after the ambient line is appended so the stored content is exactly
 	// what the agent received. A SessionStart carries no user prompt (prompt="").
 	if injected {
-		h.recordInjection(ctx, "session-start", p.SessionID, "", briefing, injectedIDs)
+		h.recordInjection(ctx, "session-start", client, p.SessionID, "", briefing, injectedIDs)
 	}
 	writeHookResponse(w, "SessionStart", briefing)
 }
@@ -225,8 +229,8 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 }
 
 // ensureAmbientSession creates (source startup) or resumes (any source) the
-// ambient session cc/{prefix} for the agent's Claude session id, scoped to the
-// cwd-resolved project. It returns the session name, or "" when there is no
+// ambient session {cc|cx}/{prefix} for the agent's external session id, scoped to
+// the cwd-resolved project. It returns the session name, or "" when there is no
 // session id, no DB, or a store error (best-effort; never blocks the hook).
 // The resume path is a store-side targeted UPDATE of only the fields this hook
 // owns (status, project scope, recency) -- never a full-row read-modify-write,
@@ -236,7 +240,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 	if h.db == nil || p.SessionID == "" {
 		return ""
 	}
-	name := ambientName(p.SessionID)
+	name := ambientName(normalizeClient(p.Client), p.SessionID)
 	project, err := store.ResolveProjectForCWD(ctx, h.db, p.CWD)
 	if err != nil {
 		h.logger.Warn("hooks: ambient project resolve", "error", err)
@@ -261,7 +265,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 	}
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
-		ClaudeSessionID: p.SessionID, CWD: p.CWD, Source: p.Source, Ambient: true,
+		ExternalSessionID: p.SessionID, CWD: p.CWD, Source: p.Source, Ambient: true,
 		Metadata:  map[string]any{"claude_session_id": p.SessionID, "cwd": p.CWD, "source": p.Source},
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -279,8 +283,8 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 	return name
 }
 
-// completeClaudeSessions completes every active session owned by the ending Claude
-// session: its ambient cc/{prefix} (findings harvested from the transcript) plus any
+// completeClaudeSessions completes every active session owned by the ending client
+// session: its ambient {cc|cx}/{prefix} (findings harvested from the transcript) plus any
 // explicit session_start that linked to it via claude_session_id. Because a graceful
 // SessionEnd is a KNOWN end, these close immediately rather than waiting out the idle
 // TTL -- the reaper is only for sessions we get no end signal for. Task claims are
@@ -298,7 +302,7 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, p endPayload) {
 	if len(sessions) == 0 {
 		// Legacy ambient rows may predate claude_session_id linking; fall back to the
 		// name key so a graceful end still harvests the ambient.
-		if amb, ok, aerr := store.SessionByName(ctx, h.db, ambientName(p.SessionID)); aerr != nil {
+		if amb, ok, aerr := store.SessionByName(ctx, h.db, ambientName(normalizeClient(p.Client), p.SessionID)); aerr != nil {
 			h.logger.Warn("hooks: session-end ambient fallback", "error", aerr)
 			return
 		} else if ok && amb.Status == core.SessionActive {
@@ -333,13 +337,15 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, p endPayload) {
 	}
 }
 
-// ambientName is the ambient session name for a Claude session id: cc/{prefix}.
-func ambientName(claudeSessionID string) string {
-	prefix := claudeSessionID
+// ambientName is the ambient session name for a client's external session id:
+// {cc|cx}/{prefix}, where the prefix is the lowercased first ambientPrefixLen
+// chars of the id. The client selects cc/ (Claude Code) or cx/ (Codex).
+func ambientName(client Client, externalSessionID string) string {
+	prefix := externalSessionID
 	if len(prefix) > ambientPrefixLen {
 		prefix = prefix[:ambientPrefixLen]
 	}
-	return "cc/" + strings.ToLower(prefix)
+	return client.ambientPrefix() + strings.ToLower(prefix)
 }
 
 // injectAmbientLine adds the "Seam session: cc/xxxx (ambient)" line to a briefing,
@@ -374,7 +380,8 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	h.touchAmbient(ctx, p.SessionID)
+	client := normalizeClient(p.Client)
+	h.touchAmbient(ctx, client, p.SessionID)
 
 	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
 	if err != nil {
@@ -382,11 +389,11 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		out, injectedIDs = "", nil
 	}
 	if out != "" {
-		h.recordInjection(ctx, "user-prompt-submit", p.SessionID, p.UserPrompt, out, injectedIDs)
+		h.recordInjection(ctx, "user-prompt-submit", client, p.SessionID, p.UserPrompt, out, injectedIDs)
 	} else {
 		// A recall miss: capture the prompt as its own hook.prompt event so the
 		// Interactions feed can show "why didn't recall fire?" cases.
-		h.recordHookPrompt(ctx, p.SessionID, p.UserPrompt)
+		h.recordHookPrompt(ctx, client, p.SessionID, p.UserPrompt)
 	}
 	writeHookResponse(w, "UserPromptSubmit", out)
 }
@@ -400,11 +407,11 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 // right agent; the Claude session id still rides in the payload. prompt (empty for
 // SessionStart) is the user turn that triggered a recall injection; content is the
 // full injected block, stored verbatim.
-func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, prompt, content string, itemIDs []string) {
+func (h *Handler) recordInjection(ctx context.Context, hook string, client Client, claudeSessionID, prompt, content string, itemIDs []string) {
 	if h.events == nil {
 		return
 	}
-	sessionID, project := h.ambientRef(ctx, claudeSessionID)
+	sessionID, project := h.ambientRef(ctx, client, claudeSessionID)
 	payload := map[string]any{
 		"hook": hook, "claude_session_id": claudeSessionID,
 		"content": content, "item_ids": itemIDs,
@@ -426,11 +433,11 @@ func (h *Handler) recordInjection(ctx context.Context, hook, claudeSessionID, pr
 // no memory -- the recall-miss case. Matched prompts ride on the retrieval.injected
 // event instead (no duplicate row), so BuildRetrievalReport (which counts injected
 // rows) is unaffected. Session stamping mirrors recordInjection.
-func (h *Handler) recordHookPrompt(ctx context.Context, claudeSessionID, prompt string) {
+func (h *Handler) recordHookPrompt(ctx context.Context, client Client, claudeSessionID, prompt string) {
 	if h.events == nil || prompt == "" {
 		return
 	}
-	sessionID, project := h.ambientRef(ctx, claudeSessionID)
+	sessionID, project := h.ambientRef(ctx, client, claudeSessionID)
 	if _, err := h.events.Record(ctx, core.Event{
 		Kind:        core.EventHookPrompt,
 		SessionID:   sessionID,
@@ -444,30 +451,30 @@ func (h *Handler) recordHookPrompt(ctx context.Context, claudeSessionID, prompt 
 	}
 }
 
-// touchAmbient heartbeats the ambient session (cc/{prefix}) for a Claude session
-// id, keeping it live for the idle reaper. Every hook that carries a session id is
-// proof the agent is alive, so prompt/tool hooks bump updated_at between the MCP
-// tool calls that heartbeat it via the connection binding -- covering a long, quiet
-// turn that makes no seamless MCP calls. Best-effort: a no-op when the DB or id is
-// absent, or the session is not active.
-func (h *Handler) touchAmbient(ctx context.Context, claudeSessionID string) {
+// touchAmbient heartbeats the ambient session ({cc|cx}/{prefix}) for a client's
+// external session id, keeping it live for the idle reaper. Every hook that carries
+// a session id is proof the agent is alive, so prompt/tool hooks bump updated_at
+// between the MCP tool calls that heartbeat it via the connection binding --
+// covering a long, quiet turn that makes no seamless MCP calls. Best-effort: a
+// no-op when the DB or id is absent, or the session is not active.
+func (h *Handler) touchAmbient(ctx context.Context, client Client, claudeSessionID string) {
 	if h.db == nil || claudeSessionID == "" {
 		return
 	}
-	if err := store.TouchSessionByName(ctx, h.db, ambientName(claudeSessionID), time.Now().UTC()); err != nil {
+	if err := store.TouchSessionByName(ctx, h.db, ambientName(client, claudeSessionID), time.Now().UTC()); err != nil {
 		h.logger.Warn("hooks: ambient heartbeat", "error", err)
 	}
 }
 
-// ambientRef resolves the ambient session (cc/{prefix}) for a Claude session id
-// to its seamless ULID and project, best-effort. It returns empty strings when
-// the DB is absent, the id is empty, or no such session exists -- the event then
-// carries no session attribution rather than failing the hook.
-func (h *Handler) ambientRef(ctx context.Context, claudeSessionID string) (sessionID, project string) {
+// ambientRef resolves the ambient session ({cc|cx}/{prefix}) for a client's
+// external session id to its seamless ULID and project, best-effort. It returns
+// empty strings when the DB is absent, the id is empty, or no such session exists
+// -- the event then carries no session attribution rather than failing the hook.
+func (h *Handler) ambientRef(ctx context.Context, client Client, claudeSessionID string) (sessionID, project string) {
 	if h.db == nil || claudeSessionID == "" {
 		return "", ""
 	}
-	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(claudeSessionID))
+	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(client, claudeSessionID))
 	if err != nil {
 		h.logger.Warn("hooks: ambient ref lookup", "error", err)
 		return "", ""

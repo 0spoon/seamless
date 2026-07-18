@@ -142,7 +142,7 @@ func ValidSessionSource(s string) bool { return slices.Contains(SessionSources, 
 
 // SessionIdleTTL is the default no-activity age beyond which an active session
 // is considered dead: heartbeats (MCP tool calls for bound sessions, the ambient
-// hooks for cc/* sessions) bump updated_at, and anything quiet past this is
+// hooks for cc/* or cx/* sessions) bump updated_at, and anything quiet past this is
 // reaped to SessionExpired and shown as idle in the console. It is the canonical
 // liveness threshold shared by the gardener reaper and the console; it must
 // comfortably exceed a long single agent turn so live work is never reaped.
@@ -160,21 +160,26 @@ func (s Session) LiveAsOf(now time.Time, ttl time.Duration) bool {
 	return s.Status == SessionActive && now.Sub(s.UpdatedAt) < ttl
 }
 
-// Session is one agent work session. Ambient sessions are created by the
-// SessionStart hook (named cc/{prefix}); explicit ones by session_start.
+// Session is one agent work session. Ambient sessions are created by a hook
+// (named {cc|cx}/{prefix} per client); explicit ones by session_start.
 type Session struct {
-	ID              string         `json:"id"`
-	Name            string         `json:"name"`
-	ProjectSlug     string         `json:"projectSlug"`
-	Status          SessionStatus  `json:"status"`
-	Findings        string         `json:"findings"`
-	ClaudeSessionID string         `json:"claudeSessionId"`
-	CWD             string         `json:"cwd"`
-	Source          string         `json:"source"` // startup|resume|compact|clear|explicit
-	Ambient         bool           `json:"ambient"`
-	Metadata        map[string]any `json:"metadata"`
-	CreatedAt       time.Time      `json:"createdAt"`
-	UpdatedAt       time.Time      `json:"updatedAt"`
+	ID          string        `json:"id"`
+	Name        string        `json:"name"`
+	ProjectSlug string        `json:"projectSlug"`
+	Status      SessionStatus `json:"status"`
+	Findings    string        `json:"findings"`
+	// ExternalSessionID is the client's own session id (Claude Code's session_id,
+	// Codex's session id, ...) -- the key a client's SessionEnd/Stop hook uses to
+	// find the ambient session it owns. The DB column, the session metadata key,
+	// and the event payload key all remain "claude_session_id" for historical
+	// continuity (it long predated Codex); only this Go field was generalized.
+	ExternalSessionID string         `json:"externalSessionId"`
+	CWD               string         `json:"cwd"`
+	Source            string         `json:"source"` // startup|resume|compact|clear|explicit
+	Ambient           bool           `json:"ambient"`
+	Metadata          map[string]any `json:"metadata"`
+	CreatedAt         time.Time      `json:"createdAt"`
+	UpdatedAt         time.Time      `json:"updatedAt"`
 }
 
 // FindingNoSummary is the sentinel findings value recorded when a session ends

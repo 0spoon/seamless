@@ -591,7 +591,7 @@ func seedAmbientCWD(t *testing.T, ctx context.Context, db *sql.DB, name, claudeI
 	require.NoError(t, err)
 	require.NoError(t, store.CreateSession(ctx, db, core.Session{
 		ID: id, Name: name, ProjectSlug: "demo", Status: core.SessionActive,
-		Ambient: true, ClaudeSessionID: claudeID, CWD: cwd,
+		Ambient: true, ExternalSessionID: claudeID, CWD: cwd,
 		CreatedAt: updated, UpdatedAt: updated,
 	}))
 	return id
@@ -618,7 +618,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "agent-a", expl.Name, "a named start creates its own session")
-	require.Equal(t, "claude99-full", expl.ClaudeSessionID, "linked to the sole same-cwd ambient")
+	require.Equal(t, "claude99-full", expl.ExternalSessionID, "linked to the sole same-cwd ambient")
 
 	// A second same-cwd ambient makes the link ambiguous -> no link.
 	seedAmbientCWD(t, ctx, db, "cc/claudeaa", "claudeaa-full", "/work/demo", now)
@@ -628,7 +628,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	})
 	expl2, _, err := store.SessionByID(ctx, db, start2["session_id"].(string))
 	require.NoError(t, err)
-	require.Empty(t, expl2.ClaudeSessionID, "ambiguous same-cwd ambients -> no link")
+	require.Empty(t, expl2.ExternalSessionID, "ambiguous same-cwd ambients -> no link")
 }
 
 // TestSessionStart_AdoptsAmbient checks that an unnamed session_start with exactly
@@ -681,5 +681,5 @@ func TestSessionStart_NoAmbientCreatesFresh(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.False(t, sess.Ambient)
-	require.Empty(t, sess.ClaudeSessionID, "different-cwd ambient must not link")
+	require.Empty(t, sess.ExternalSessionID, "different-cwd ambient must not link")
 }

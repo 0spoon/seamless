@@ -68,7 +68,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	}
 
 	// Adopt the connection's ambient session: with no explicit name and exactly
-	// one active ambient (cc/*) session sharing the cwd, the SessionStart hook
+	// one active ambient (cc/* or cx/*) session sharing the cwd, the SessionStart hook
 	// already created this agent's session -- resume that row instead of minting
 	// a second sess/* one. Zero or many candidates (no hook ran, or two agents in
 	// one cwd) fall through to a fresh session, the same unambiguous-or-fallback
@@ -104,7 +104,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	now := time.Now().UTC()
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
-		CWD: cwd, Source: source, ClaudeSessionID: s.linkedClaudeID(ctx, cwd),
+		CWD: cwd, Source: source, ExternalSessionID: s.linkedClaudeID(ctx, cwd),
 		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := store.CreateSession(ctx, s.cfg.DB, sess); err != nil {
@@ -156,10 +156,10 @@ func (s *Server) linkedClaudeID(ctx context.Context, cwd string) string {
 	if !ok {
 		return ""
 	}
-	return ambient.ClaudeSessionID
+	return ambient.ExternalSessionID
 }
 
-// soleAmbientByCWD returns the single active ambient (cc/*) session sharing cwd --
+// soleAmbientByCWD returns the single active ambient (cc/* or cx/*) session sharing cwd --
 // the unambiguous this-agent case. Zero or many candidates (no ambient yet, or two
 // agents in one cwd) report ok=false so callers fall back to a fresh session rather
 // than risking a cross-agent match. Best-effort: a lookup error logs and reports no
@@ -284,8 +284,8 @@ func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (c
 // session_update/end may target, or reports ambiguity. It is stricter than
 // ambientFallback: that one collapses a project's ambients to the most recent for
 // provenance, which is fine for stamping an event but not for *completing* a
-// session. Here more than one candidate -- across projects, or two agents' cc/*
-// ambients in one project -- yields ambiguous=true and no session, so the caller
+// session. Here more than one candidate -- across projects, or two agents' cc/* or
+// cx/* ambients in one project -- yields ambiguous=true and no session, so the caller
 // must name the session. Exactly one candidate (the solo-agent case) resolves.
 func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, err error) {
 	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
