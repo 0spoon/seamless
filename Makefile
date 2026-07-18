@@ -332,7 +332,7 @@ install: build
 	    fi
 	@SEAMLESS_CONFIG=$(CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --seam $(PREFIX_BIN)/$(CLI)
 	@$(MAKE) _wait-healthy
-	@echo "installed: bin $(PREFIX_BIN), config $(CONFIG), service + hooks pointed there"
+	@$(PREFIX_BIN)/$(BINARY) install-summary --bin-dir $(PREFIX_BIN) --config $(CONFIG) --bins $(BINARY),$(CLI)
 
 # launchd returns as soon as it has *started* the process, but the daemon binds
 # its listener ~100ms later. Without this, `make install && make doctor` -- the

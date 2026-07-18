@@ -57,7 +57,7 @@ func runInstallHooks(args []string) error {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
 	if keyPath != "" {
-		fmt.Printf("first run: generated mcp.api_key into %s\n", keyPath)
+		fmt.Printf("%s generated mcp.api_key %s\n", green("first run:"), dim("-> "+tildePath(keyPath)))
 	}
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
 		src := cfg.SourcePath()
@@ -72,7 +72,8 @@ func runInstallHooks(args []string) error {
 	}
 	seamBin := resolveSeamBin(*seamFlag)
 	if _, lookErr := exec.LookPath(seamBin); lookErr != nil {
-		fmt.Printf("warning: seam CLI not found (%q); the command hooks will fail until it is installed:\n  go install github.com/0spoon/seamless/cmd/seam@latest\n", seamBin)
+		fmt.Printf("%s seam CLI not found (%q); command hooks fail until it is installed\n%s%s\n",
+			yellow("warning:"), seamBin, fieldCont, dim("go install github.com/0spoon/seamless/cmd/seam@latest"))
 	}
 	configPath := absConfigPath(cfg.SourcePath())
 
@@ -89,6 +90,55 @@ func runInstallHooks(args []string) error {
 		}
 	}
 	return nil
+}
+
+// runInstallSummary prints the final "Seamless" block that closes `make install`:
+// the build version and where the binaries and config landed. It is invoked by
+// the Makefile (which owns those paths), not typed by a user, so it stays out of
+// usage(). Missing flags simply drop their row, so it degrades cleanly.
+func runInstallSummary(args []string) error {
+	fs := flag.NewFlagSet("install-summary", flag.ContinueOnError)
+	binDir := fs.String("bin-dir", "", "directory the binaries were installed into")
+	configPath := fs.String("config", "", "path to the active seamless.yaml")
+	bins := fs.String("bins", "seamlessd,seam", "comma-separated installed binary filenames")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	printInstallSummary(*binDir, *configPath, splitBins(*bins))
+	return nil
+}
+
+// printInstallSummary renders the install-complete block in the same styled
+// shape as the per-client blocks above it: a bold header and aligned label rows.
+func printInstallSummary(binDir, configPath string, bins []string) {
+	fmt.Printf("\n%s\n", bold("Seamless"))
+	fieldRow("version", buildVersion())
+	if binDir != "" {
+		names := strings.Join(bins, ", ")
+		if len(bins) > 1 {
+			names = "{" + names + "}"
+		}
+		fieldRow("bin", tildePath(binDir)+"/"+names)
+	}
+	if configPath != "" {
+		fieldRow("config", tildePath(configPath))
+	}
+	// A quiet call-to-action footer: the two doors to "what now?", the actionable
+	// anchors lifted out of the dim guidance so the eye lands on them.
+	fmt.Printf("\n  %s %s %s %s\n",
+		dim("Next:"), green("seam --help"), dim("or"), green("https://thereisnospoon.org/docs"))
+}
+
+// splitBins parses the comma-separated --bins list into filenames, dropping
+// blanks so a trailing comma or empty value yields no phantom entry.
+func splitBins(raw string) []string {
+	var out []string
+	for b := range strings.SplitSeq(raw, ",") {
+		if b = strings.TrimSpace(b); b != "" {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // parseInstallClients maps the --client flag to the client profiles to install,
@@ -129,10 +179,10 @@ func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, e
 // so a closed stdin cannot loop forever.
 func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) ([]hooks.Client, error) {
 	def := defaultClientChoice(claudeOK, codexOK)
-	fmt.Fprintln(out, "Install Seamless hooks for which agent client?")
-	fmt.Fprintf(out, "  [1] Claude Code %s\n", detectedTag(claudeOK))
-	fmt.Fprintf(out, "  [2] Codex %s\n", detectedTag(codexOK))
-	fmt.Fprintln(out, "  [3] Both")
+	fmt.Fprintln(out, bold("Install Seamless hooks for which agent client?"))
+	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(claudeOK))
+	fmt.Fprintf(out, "  %s Codex %s\n", dim("[2]"), detectedColor(codexOK))
+	fmt.Fprintf(out, "  %s Both\n", dim("[3]"))
 	reader := bufio.NewReader(in)
 	for {
 		fmt.Fprintf(out, "Enter 1, 2, or 3 [%s]: ", def)
@@ -187,6 +237,15 @@ func detectedTag(ok bool) string {
 		return "(detected)"
 	}
 	return "(not detected)"
+}
+
+// detectedColor is detectedTag tinted for the interactive menu: green when the
+// client is present, dim when it is not.
+func detectedColor(ok bool) string {
+	if ok {
+		return green(detectedTag(ok))
+	}
+	return dim(detectedTag(ok))
 }
 
 // stdinIsTerminal reports whether stdin is an interactive terminal, so the
@@ -247,7 +306,7 @@ func installClaudeHooks(cfg config.Config, settings, baseURL, seamBin, configPat
 	if err != nil {
 		return err
 	}
-	reportInstall(res, "Claude Code", path, baseURL)
+	printClientBlock(res, "Claude Code", path)
 	if doMCP {
 		registerClaudeMCP(baseURL, cfg.MCP.APIKey)
 	}
@@ -274,27 +333,74 @@ func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPa
 	if err != nil {
 		return err
 	}
-	reportInstall(res, "Codex", path, baseURL)
+	printClientBlock(res, "Codex", path)
 	if doMCP {
 		registerCodexMCP(seamBin, configPath)
 	}
-	fmt.Println("note: Codex runs hooks only after you trust them. On your next interactive `codex` run, approve the Seamless hooks at the trust prompt; for headless `codex exec`, pass --dangerously-bypass-hook-trust.")
+	// Codex ignores hooks until the user trusts them; no config we write can do
+	// that on their behalf (see the codex-hook-contract memory), so flag it.
+	fieldRow("trust", yellow("approve hooks on the next `codex` run"))
+	fmt.Printf("%s%s\n", fieldCont, dim("headless: pass --dangerously-bypass-hook-trust"))
 	return nil
 }
 
-// reportInstall prints the per-hook actions and the summary line for one client's
-// install, so both client paths report identically.
-func reportInstall(res hooks.InstallResult, client, path, baseURL string) {
-	for _, a := range res.Actions {
-		fmt.Printf("  %s\n", a)
+// printClientBlock renders one client's install as a compact, colored block: a
+// bold client header, a one-line hook summary (action counts + the settings
+// path), the specific hooks that changed (omitted when nothing did), and any
+// backup. The caller adds the mcp (and, for Codex, trust) rows beneath it, so
+// both client paths report identically.
+func printClientBlock(res hooks.InstallResult, client, path string) {
+	fmt.Printf("\n%s\n", bold(client))
+	summary, changed := summarizeActions(res.Actions)
+	fieldRow("hooks", summary+"  "+dim("· "+tildePath(path)))
+	for _, line := range changed {
+		fmt.Printf("%s%s\n", fieldCont, line)
 	}
 	if res.BackupPath != "" {
-		fmt.Printf("backed up original to %s\n", res.BackupPath)
+		fieldRow("backup", dim(tildePath(res.BackupPath)))
 	}
-	if res.Changed {
-		fmt.Printf("installed Seamless %s hooks into %s (url %s)\n", client, path, baseURL)
-	} else {
-		fmt.Printf("Seamless %s hooks already up to date in %s\n", client, path)
+}
+
+// summarizeActions turns per-hook action strings ("SessionStart: added") into a
+// colored count summary ("2 added, 4 unchanged") plus one detail line per action
+// that changed something ("added: SessionStart, PostToolUse"). Unchanged hooks
+// are counted but never enumerated -- they are the boring, scannable majority.
+func summarizeActions(actions []string) (summary string, changed []string) {
+	// Stable display order; unchanged trails so the eye lands on changes first.
+	order := []string{"added", "updated", "adopted", "deduped", "unchanged"}
+	counts := map[string]int{}
+	events := map[string][]string{}
+	for _, a := range actions {
+		event, act, ok := strings.Cut(a, ": ")
+		if !ok {
+			continue
+		}
+		counts[act]++
+		events[act] = append(events[act], event)
+	}
+	var segs []string
+	for _, act := range order {
+		if counts[act] == 0 {
+			continue
+		}
+		segs = append(segs, colorAction(act, fmt.Sprintf("%d %s", counts[act], act)))
+		if act != "unchanged" {
+			changed = append(changed, colorAction(act, act+": ")+strings.Join(events[act], ", "))
+		}
+	}
+	return strings.Join(segs, dim(", ")), changed
+}
+
+// colorAction tints an action word by outcome: green for a real change (added /
+// updated / adopted), yellow for a dedupe, dim for unchanged.
+func colorAction(act, text string) string {
+	switch act {
+	case "unchanged":
+		return dim(text)
+	case "deduped":
+		return yellow(text)
+	default:
+		return green(text)
 	}
 }
 
@@ -325,18 +431,21 @@ func registerClaudeMCP(baseURL, key string) {
 	manual := fmt.Sprintf("claude mcp add --scope user --transport http seamless %s/api/mcp --header \"Authorization: Bearer <mcp.api_key>\"", baseURL)
 	claude, err := exec.LookPath("claude")
 	if err != nil {
-		fmt.Printf("claude CLI not found; register the MCP endpoint with your client yourself:\n  %s\n", manual)
+		fieldRow("mcp", yellow("claude CLI not found"))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
 	if exec.Command(claude, "mcp", "get", "seamless").Run() == nil {
-		fmt.Println("MCP server \"seamless\" already registered with claude; if the key or URL changed, run: claude mcp remove seamless --scope user, then rerun this command")
+		fieldRow("mcp", dim("already registered"))
 		return
 	}
 	if out, aerr := exec.Command(claude, claudeMCPAddArgs(baseURL, key)...).CombinedOutput(); aerr != nil {
-		fmt.Printf("claude mcp add failed (%v): %s\nregister it yourself:\n  %s\n", aerr, strings.TrimSpace(string(out)), manual)
+		fieldRow("mcp", yellow("registration failed"))
+		fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
-	fmt.Printf("registered MCP server \"seamless\" with claude (--scope user, %s/api/mcp)\n", baseURL)
+	fieldRow("mcp", green("registered")+dim(" (--scope user)"))
 }
 
 // codexMCPAddArgs builds the codex CLI argv that registers the Seamless MCP
@@ -361,18 +470,21 @@ func registerCodexMCP(seamBin, configPath string) {
 	manual := fmt.Sprintf("codex mcp add seamless -- %s mcp-proxy --config <abs seamless.yaml>", seamBin)
 	codex, err := exec.LookPath("codex")
 	if err != nil {
-		fmt.Printf("codex CLI not found; register the MCP bridge with codex yourself:\n  %s\n", manual)
+		fieldRow("mcp", yellow("codex CLI not found"))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
 	if exec.Command(codex, "mcp", "get", "seamless").Run() == nil {
-		fmt.Println("MCP server \"seamless\" already registered with codex; if the path changed, run: codex mcp remove seamless, then rerun this command")
+		fieldRow("mcp", dim("already registered"))
 		return
 	}
 	if out, aerr := exec.Command(codex, codexMCPAddArgs(seamBin, configPath)...).CombinedOutput(); aerr != nil {
-		fmt.Printf("codex mcp add failed (%v): %s\nregister it yourself:\n  %s\n", aerr, strings.TrimSpace(string(out)), manual)
+		fieldRow("mcp", yellow("registration failed"))
+		fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
-	fmt.Println("registered MCP server \"seamless\" with codex (stdio bridge: seam mcp-proxy)")
+	fieldRow("mcp", green("registered")+dim(" (stdio bridge: seam mcp-proxy)"))
 }
 
 // absConfigPath makes the loaded config file absolute so it can be baked into
