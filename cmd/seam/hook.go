@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -61,19 +62,31 @@ func hookEventNames() string {
 	return strings.Join(names, ", ")
 }
 
+// clientQueryParam is the query key that carries the client discriminator to the
+// daemon. It mirrors internal/hooks' unexported constant of the same name (this
+// binary must not import that package -- see the file header). Both are the
+// literal "client", and a mismatch would merely resolve to the Claude Code
+// default server-side, so no silent breakage hides behind drift.
+const clientQueryParam = "client"
+
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
 	config string // --config: abs seamless.yaml the installer bakes in (see bindHook)
+	client string // --client: agent CLI discriminator ("codex"); "" => Claude Code
 }
 
-// bindHook registers --config. install-hooks writes it into every command hook
-// so the hook resolves config from any cwd: exec-form command hooks carry no
-// environment, so this flag replaces the old SEAMLESS_CONFIG env prefix. runHook
-// exports it back to SEAMLESS_CONFIG (config.Load's documented override) before
-// loading, keeping every command's cwd-relative search otherwise unchanged.
+// bindHook registers --config and --client. install-hooks writes --config into
+// every command hook so the hook resolves config from any cwd: exec-form command
+// hooks carry no environment, so this flag replaces the old SEAMLESS_CONFIG env
+// prefix. runHook exports it back to SEAMLESS_CONFIG (config.Load's documented
+// override) before loading, keeping every command's cwd-relative search otherwise
+// unchanged. --client rides on the forwarded request as ?client=<value> so the
+// daemon can pick the right per-client payload adapter; the codex install profile
+// sets it, and an omitted flag keeps every Claude Code hook request unchanged.
 func bindHook(fs *flag.FlagSet) *hookOpts {
 	o := &hookOpts{}
 	fs.StringVar(&o.config, "config", "", "path to seamless.yaml, so the hook resolves config from any cwd")
+	fs.StringVar(&o.client, "client", "", "agent CLI this hook fires for (e.g. codex); default Claude Code")
 	return o
 }
 
@@ -134,6 +147,12 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	if err != nil {
 		fmt.Fprintln(e.stderr, "seam hook: load config:", err)
 		return nil
+	}
+	// --client rides as ?client=<value> so the daemon selects the per-client
+	// payload adapter. Omitted (Claude Code), the URL is byte-identical to before,
+	// so existing CC hooks are untouched.
+	if o.client != "" {
+		ep += "?" + clientQueryParam + "=" + url.QueryEscape(o.client)
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mcpBase(cfg)+ep, bytes.NewReader(payload))
 	if err != nil {

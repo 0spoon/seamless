@@ -37,7 +37,7 @@ func TestEnsureAmbientSession_ResumeDoesNotClobberHarvest(t *testing.T) {
 	ctx := context.Background()
 
 	payload := hookPayload{SessionID: "racecafe-0001", Source: "startup"}
-	require.Equal(t, "cc/racecafe", h.ensureAmbientSession(ctx, payload))
+	require.Equal(t, "cc/racecafe", h.ensureAmbientSession(ctx, ClientClaudeCode, payload))
 	sess, ok, err := store.SessionByName(ctx, db, "cc/racecafe")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -63,7 +63,7 @@ func TestEnsureAmbientSession_ResumeDoesNotClobberHarvest(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range iters {
-			if got := h.ensureAmbientSession(ctx, payload); got != "cc/racecafe" {
+			if got := h.ensureAmbientSession(ctx, ClientClaudeCode, payload); got != "cc/racecafe" {
 				t.Errorf("resume %d: got %q, want cc/racecafe", i, got)
 				return
 			}
@@ -96,7 +96,7 @@ func TestEnsureAmbientSession_ConcurrentCreateSingleRow(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i] = h.ensureAmbientSession(ctx, payload)
+			results[i] = h.ensureAmbientSession(ctx, ClientClaudeCode, payload)
 		}(i)
 	}
 	wg.Wait()
