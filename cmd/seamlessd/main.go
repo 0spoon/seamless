@@ -86,6 +86,8 @@ func main() {
 		err = runImport(args)
 	case "install-hooks":
 		err = runInstallHooks(args)
+	case "install-summary":
+		err = runInstallSummary(args)
 	case "map-repo":
 		err = runMapRepo(args)
 	case "family":

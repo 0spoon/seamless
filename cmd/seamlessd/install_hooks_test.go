@@ -31,6 +31,37 @@ func TestCodexMCPAddArgs(t *testing.T) {
 	}, codexMCPAddArgs("/opt/seam", ""))
 }
 
+// summarizeActions runs with color disabled (stdout is not a tty under go
+// test), so counts and detail lines compare as plain text.
+func TestSummarizeActions(t *testing.T) {
+	summary, changed := summarizeActions([]string{
+		"SessionStart: added", "UserPromptSubmit: unchanged", "SessionEnd: added",
+		"PostToolUse: deduped", "SubagentStop: unchanged",
+	})
+	// added precedes deduped precedes unchanged; unchanged is counted, not listed.
+	require.Equal(t, "2 added, 1 deduped, 2 unchanged", summary)
+	require.Equal(t, []string{
+		"added: SessionStart, SessionEnd",
+		"deduped: PostToolUse",
+	}, changed)
+
+	// All unchanged -> a single dim count, no detail lines.
+	summary, changed = summarizeActions([]string{"A: unchanged", "B: unchanged"})
+	require.Equal(t, "2 unchanged", summary)
+	require.Empty(t, changed)
+
+	// A malformed entry (no ": ") is skipped, not counted.
+	summary, _ = summarizeActions([]string{"garbage", "A: added"})
+	require.Equal(t, "1 added", summary)
+}
+
+func TestSplitBins(t *testing.T) {
+	require.Equal(t, []string{"seamlessd", "seam"}, splitBins("seamlessd,seam"))
+	require.Equal(t, []string{"seamlessd", "seam"}, splitBins(" seamlessd , seam "))
+	require.Equal(t, []string{"seamlessd"}, splitBins("seamlessd,,"))
+	require.Empty(t, splitBins(""))
+}
+
 func TestParseInstallClients(t *testing.T) {
 	for _, tt := range []struct {
 		raw  string
