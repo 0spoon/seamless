@@ -57,6 +57,8 @@
         
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
+        <li><a href="../../codex-cli/">Codex CLI setup</a></li>
+        
       </ul>
     </div>
     
@@ -125,7 +127,7 @@
         
         <li><a href="../../reference/configuration/">Configuration</a></li>
         
-        <li><a href="../../reference/hooks/">Claude Code hooks</a></li>
+        <li><a href="../../reference/hooks/">Hooks</a></li>
         
         <li><a href="../../reference/console/">Console</a></li>
         
@@ -157,9 +159,10 @@
   <p class="eyebrow">Guides</p>
   <h1>Integrate your agent</h1>
   <p class="lede">Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.</p>
-  <p>Claude Code gets Seamless for free: <a href="../../reference/hooks/">hooks</a> open a session,
-inject a briefing, and harvest findings without the agent deciding to. Any other
-client has no hooks. It has to run the loop itself.</p>
+  <p><a href="../../claude-code/">Claude Code</a> and <a href="../../codex-cli/">Codex</a> get Seamless mostly for
+free: <a href="../../reference/hooks/">hooks</a> open a session, inject a briefing, and harvest
+findings without the agent deciding to. Any other client has no hooks. It has to
+run the loop itself.</p>
 <p>This page is that loop, for a client you are wiring up by hand.</p>
 <h2 id="the-loop">The loop</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">session_start   ─▶ bind the connection, get the briefing
@@ -180,6 +183,17 @@ integrating at all.</p>
 (<a href="../../reference/configuration/"><code>mcp.api_key</code></a>). If your client speaks MCP over
 HTTP, point it here and you are done. If you are writing the transport yourself,
 the handshake is two calls.</p>
+<p><strong>Client only speaks MCP over stdio?</strong> Some clients (Codex CLI among them) launch
+their MCP servers as a subprocess and talk JSON-RPC over stdio - they cannot POST
+to a URL. Bridge them with <code>seam mcp-proxy</code>, which speaks stdio to the client and
+forwards each frame to <code>/api/mcp</code>, carrying the bearer key from config and
+preserving the <code>Mcp-Session-Id</code> so session binding survives:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy --config /abs/path/seamless.yaml   <span class="c1"># invoked by the MCP client, not by hand</span>
+</span></span></code></pre><p>Register it the way your client registers a stdio server - for Codex that is
+<code>codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml</code>,
+which <code>seamlessd install-hooks --client codex</code> does for you. See <a href="../../codex-cli/">Codex CLI
+setup</a>. The rest of this page - session binding, scope, findings -
+applies to the bridged client unchanged.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">KEY</span><span class="o">=</span>&lt;mcp.api_key&gt;
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">curl -sD - -X POST http://127.0.0.1:8081/api/mcp <span class="se">\

@@ -161,7 +161,7 @@
             <text class="d-title" x="80" y="34" text-anchor="middle" font-size="11">claude code</text>
             <text class="d-dim" x="80" y="49" text-anchor="middle" font-size="9.5">session #1</text>
             <rect class="d-box" x="170" y="14" width="140" height="46" rx="8"/>
-            <text class="d-title" x="240" y="34" text-anchor="middle" font-size="11">claude code</text>
+            <text class="d-title" x="240" y="34" text-anchor="middle" font-size="11">codex</text>
             <text class="d-dim" x="240" y="49" text-anchor="middle" font-size="9.5">session #2</text>
             <rect class="d-box" x="330" y="14" width="140" height="46" rx="8"/>
             <text class="d-title" x="400" y="34" text-anchor="middle" font-size="11">any mcp agent</text>
@@ -308,7 +308,7 @@
       <h2>The parts you'd expect, done plainly.</h2>
     </div>
     <div class="stakes">
-      <div class="stake rv"><b>ambient capture</b> SessionStart briefing, prompt-matched recall, session-end harvest - via plain Claude Code hooks.</div>
+      <div class="stake rv"><b>ambient capture</b> SessionStart briefing, prompt-matched recall, end-of-turn harvest - via plain Claude Code and Codex hooks.</div>
       <div class="stake rv"><b>plan-mode capture</b> Claude Code plans are captured, tracked, and checked for staleness against git.</div>
       <div class="stake rv"><b>memory lifecycle</b> Supersession with provenance and arbitration - history is kept, never silently rewritten.</div>
       <div class="stake rv"><b>research lab</b> Structured trials so parallel agents can run one investigation without trampling each other.</div>
@@ -350,7 +350,7 @@
         <div>
           <h3>Open Claude Code in any repo</h3>
           <div class="code"><span><span class="p">$</span> <span data-copy="cd ~/code/myrepo &amp;&amp; claude">cd ~/code/myrepo &amp;&amp; claude</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. One optional one-time step: run <code>/seam-onboard</code> - the installer dropped that skill into <code>~/.claude/skills/</code> - to write a short Seamless-awareness block into your <code>CLAUDE.md</code> so agents know when to reach for it. Want a slug that isn't the directory name? <code>seamlessd map-repo</code> is still there.</p>
+          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. One optional one-time step: run <code>/seam-onboard</code> - the installer dropped that skill into <code>~/.claude/skills/</code> - to write a short Seamless-awareness block into your <code>CLAUDE.md</code> so agents know when to reach for it. Want a slug that isn't the directory name? <code>seamlessd map-repo</code> is still there. Prefer <a href="docs/codex-cli/">Codex CLI</a>? One command wires it too: <code>seamlessd install-hooks --client codex</code>.</p>
         </div>
       </div>
       <div class="qs rv">

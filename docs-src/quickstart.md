@@ -78,6 +78,12 @@ the override when you want a slug that is not the directory name; see
 Restart Claude Code once after installing so it loads the hooks and the MCP
 server.
 
+Using **Codex CLI** instead of (or alongside) Claude Code? The curl installer
+wires Claude Code only; add Codex with one command -
+`seamlessd install-hooks --client codex` - then trust the hooks at the Codex
+startup review. [Codex CLI setup](/codex-cli/) has the details, including the
+mcp-proxy bridge and why Codex sessions close through the idle reaper.
+
 ## Confirm it works
 
 That session's context now opens with an injected briefing:
