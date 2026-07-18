@@ -14,19 +14,27 @@ import (
 	"github.com/0spoon/seamless/internal/hooks"
 )
 
-// runInstallHooks wires Claude Code to Seamless in one command: it installs the
-// hooks into a settings.json (default ~/.claude/settings.json) and, unless
-// --mcp=false, registers the MCP server with the claude CLI. For the P2
-// dogfood, point --settings at THIS repo's project-scoped .claude/settings.json
-// so v2 hooks fire only here.
+// runInstallHooks wires an agent client to Seamless in one command: it installs
+// the hooks into that client's config file and, unless --mcp=false, registers
+// the MCP server with the client's CLI. --client selects which: claude (default,
+// ~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
+// `codex mcp add ... seam mcp-proxy`), or all (both). The default is unchanged
+// Claude Code behavior. For the P2 dogfood, point --settings at THIS repo's
+// project-scoped .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
-	settings := fs.String("settings", "~/.claude/settings.json", "settings.json to install into")
+	clientFlag := fs.String("client", "claude", "which agent client to install for: claude|codex|all")
+	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
+	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
-	mcpFlag := fs.Bool("mcp", true, "register the MCP server with the claude CLI (claude mcp add --scope user)")
+	mcpFlag := fs.Bool("mcp", true, "register the MCP server with the client's CLI (claude/codex mcp add)")
 	if err := fs.Parse(args); err != nil {
 		return err
+	}
+	clients, err := parseInstallClients(*clientFlag)
+	if err != nil {
+		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
 
 	cfg, err := config.Load()
@@ -52,23 +60,95 @@ func runInstallHooks(args []string) error {
 	if baseURL == "" {
 		baseURL = hookBaseURL(cfg.Addr)
 	}
-	path, err := expandHome(*settings)
-	if err != nil {
-		return fmt.Errorf("seamlessd.install-hooks: %w", err)
-	}
 	seamBin := resolveSeamBin(*seamFlag)
 	if _, lookErr := exec.LookPath(seamBin); lookErr != nil {
 		fmt.Printf("warning: seam CLI not found (%q); the command hooks will fail until it is installed:\n  go install github.com/0spoon/seamless/cmd/seam@latest\n", seamBin)
 	}
 	configPath := absConfigPath(cfg.SourcePath())
 
+	for _, client := range clients {
+		switch client {
+		case hooks.ClientCodex:
+			if err := installCodexHooks(cfg, *codexHooksFlag, baseURL, seamBin, configPath, *mcpFlag); err != nil {
+				return fmt.Errorf("seamlessd.install-hooks: %w", err)
+			}
+		default:
+			if err := installClaudeHooks(cfg, *settings, baseURL, seamBin, configPath, *mcpFlag); err != nil {
+				return fmt.Errorf("seamlessd.install-hooks: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// parseInstallClients maps the --client flag to the client profiles to install,
+// in a stable order (Claude Code before Codex for "all"). An empty value is the
+// default Claude Code, so an omitted flag keeps the pre-Codex behavior.
+func parseInstallClients(raw string) ([]hooks.Client, error) {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "", "claude", "claude-code", "cc":
+		return []hooks.Client{hooks.ClientClaudeCode}, nil
+	case "codex", "cx":
+		return []hooks.Client{hooks.ClientCodex}, nil
+	case "all", "both":
+		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, nil
+	default:
+		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, all", raw)
+	}
+}
+
+// installClaudeHooks installs the Claude Code hook profile into settings.json and
+// (unless doMCP is false) registers the MCP server with the claude CLI.
+func installClaudeHooks(cfg config.Config, settings, baseURL, seamBin, configPath string, doMCP bool) error {
+	path, err := expandHome(settings)
+	if err != nil {
+		return err
+	}
 	res, err := hooks.Install(hooks.InstallOptions{
-		SettingsPath: path, BaseURL: baseURL, APIKey: cfg.MCP.APIKey,
-		SeamBin: seamBin, ConfigPath: configPath,
+		Client: hooks.ClientClaudeCode, SettingsPath: path, BaseURL: baseURL,
+		APIKey: cfg.MCP.APIKey, SeamBin: seamBin, ConfigPath: configPath,
 	})
 	if err != nil {
-		return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		return err
 	}
+	reportInstall(res, "Claude Code", path, baseURL)
+	if doMCP {
+		registerClaudeMCP(baseURL, cfg.MCP.APIKey)
+	}
+	return nil
+}
+
+// installCodexHooks installs the Codex hook profile into $CODEX_HOME/hooks.json
+// and (unless doMCP is false) registers the seam mcp-proxy stdio bridge with the
+// codex CLI. It closes by pointing at Codex's hook trust gate, which no config we
+// write can satisfy on the user's behalf (see the codex-hook-contract memory).
+func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPath string, doMCP bool) error {
+	target := codexHooks
+	if strings.TrimSpace(target) == "" {
+		target = defaultCodexHooksPath()
+	}
+	path, err := expandHome(target)
+	if err != nil {
+		return err
+	}
+	res, err := hooks.Install(hooks.InstallOptions{
+		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: baseURL,
+		APIKey: cfg.MCP.APIKey, SeamBin: seamBin, ConfigPath: configPath,
+	})
+	if err != nil {
+		return err
+	}
+	reportInstall(res, "Codex", path, baseURL)
+	if doMCP {
+		registerCodexMCP(seamBin, configPath)
+	}
+	fmt.Println("note: Codex runs hooks only after you trust them. On your next interactive `codex` run, approve the Seamless hooks at the trust prompt; for headless `codex exec`, pass --dangerously-bypass-hook-trust.")
+	return nil
+}
+
+// reportInstall prints the per-hook actions and the summary line for one client's
+// install, so both client paths report identically.
+func reportInstall(res hooks.InstallResult, client, path, baseURL string) {
 	for _, a := range res.Actions {
 		fmt.Printf("  %s\n", a)
 	}
@@ -76,14 +156,20 @@ func runInstallHooks(args []string) error {
 		fmt.Printf("backed up original to %s\n", res.BackupPath)
 	}
 	if res.Changed {
-		fmt.Printf("installed Seamless hooks into %s (url %s)\n", path, baseURL)
+		fmt.Printf("installed Seamless %s hooks into %s (url %s)\n", client, path, baseURL)
 	} else {
-		fmt.Printf("Seamless hooks already up to date in %s\n", path)
+		fmt.Printf("Seamless %s hooks already up to date in %s\n", client, path)
 	}
-	if *mcpFlag {
-		registerClaudeMCP(baseURL, cfg.MCP.APIKey)
+}
+
+// defaultCodexHooksPath is where the Codex installer writes when --codex-hooks is
+// omitted: $CODEX_HOME/hooks.json if CODEX_HOME is set (Codex's own override),
+// else ~/.codex/hooks.json. The "~" is expanded by the caller (expandHome).
+func defaultCodexHooksPath() string {
+	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
+		return filepath.Join(home, "hooks.json")
 	}
-	return nil
+	return "~/.codex/hooks.json"
 }
 
 // claudeMCPAddArgs builds the claude CLI argv that registers the Seamless MCP
@@ -115,6 +201,42 @@ func registerClaudeMCP(baseURL, key string) {
 		return
 	}
 	fmt.Printf("registered MCP server \"seamless\" with claude (--scope user, %s/api/mcp)\n", baseURL)
+}
+
+// codexMCPAddArgs builds the codex CLI argv that registers the Seamless MCP
+// bridge as a stdio server (design decision D6): `codex mcp add seamless --
+// <seam> mcp-proxy --config <yaml>`. The bridge reads the bearer key from
+// --config at runtime, so -- unlike a streamable-HTTP registration -- no secret
+// is duplicated into ~/.codex/config.toml. --config is baked in because codex
+// records the argv with no environment (same reason the command hooks carry it).
+func codexMCPAddArgs(seamBin, configPath string) []string {
+	args := []string{"mcp", "add", "seamless", "--", seamBin, "mcp-proxy"}
+	if configPath != "" {
+		args = append(args, "--config", configPath)
+	}
+	return args
+}
+
+// registerCodexMCP registers the seam mcp-proxy stdio bridge with the Codex CLI.
+// Best-effort by design, symmetric with registerClaudeMCP: the hooks are already
+// installed, so a missing or failing codex CLI degrades to printing the manual
+// command rather than failing the install. An already-present entry is left as-is.
+func registerCodexMCP(seamBin, configPath string) {
+	manual := fmt.Sprintf("codex mcp add seamless -- %s mcp-proxy --config <abs seamless.yaml>", seamBin)
+	codex, err := exec.LookPath("codex")
+	if err != nil {
+		fmt.Printf("codex CLI not found; register the MCP bridge with codex yourself:\n  %s\n", manual)
+		return
+	}
+	if exec.Command(codex, "mcp", "get", "seamless").Run() == nil {
+		fmt.Println("MCP server \"seamless\" already registered with codex; if the path changed, run: codex mcp remove seamless, then rerun this command")
+		return
+	}
+	if out, aerr := exec.Command(codex, codexMCPAddArgs(seamBin, configPath)...).CombinedOutput(); aerr != nil {
+		fmt.Printf("codex mcp add failed (%v): %s\nregister it yourself:\n  %s\n", aerr, strings.TrimSpace(string(out)), manual)
+		return
+	}
+	fmt.Println("registered MCP server \"seamless\" with codex (stdio bridge: seam mcp-proxy)")
 }
 
 // absConfigPath makes the loaded config file absolute so it can be baked into

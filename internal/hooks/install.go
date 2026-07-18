@@ -17,12 +17,12 @@ import (
 // entries never match (and clobber) each other if they ever share a file.
 const managedMarker = "seamless_managed"
 
-// hookSpec describes one Claude Code hook Seamless installs.
+// hookSpec describes one hook Seamless installs for a client.
 type hookSpec struct {
-	Event    string // settings.json hooks key (SessionStart, UserPromptSubmit)
-	Matcher  string // "" omits the matcher key (UserPromptSubmit has none)
+	Event    string // hooks key (SessionStart, UserPromptSubmit, Stop, ...)
+	Matcher  string // "" omits the matcher key (UserPromptSubmit/Stop have none)
 	Endpoint string // path appended to the base URL (the http url, and the dedup key)
-	Timeout  int    // seconds (Claude Code's unit)
+	Timeout  int    // seconds (both clients' unit)
 	CLIArg   string // non-empty => install a `command` hook (`<seam> hook <CLIArg>`) not http
 }
 
@@ -52,11 +52,37 @@ var seamlessHooks = []hookSpec{
 	{Event: "PermissionRequest", Matcher: "ExitPlanMode", Endpoint: "/api/hooks/permission-request", Timeout: 10, CLIArg: "permission-request"},
 }
 
+// codexHooks is the Codex CLI install profile (design decision D4). Codex has no
+// http hook type and (as of 0.144.5) no SessionEnd event; its session end is
+// reaper-driven off the per-turn Stop hook (D5). So the set is three command
+// hooks -- SessionStart (briefing), UserPromptSubmit (recall), Stop (heartbeat +
+// provisional harvest) -- and no plan-capture hooks: Codex has no plan-mode
+// surface, so D7 keeps that CC-only. UserPromptSubmit is a command hook here (CC
+// keeps it http; Codex has no http hook type). Every Codex command hook is a
+// SHELL STRING, not the exec-form argv CC uses (buildEntry emits the difference).
+var codexHooks = []hookSpec{
+	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
+	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5, CLIArg: "user-prompt-submit"},
+	{Event: "Stop", Matcher: "", Endpoint: "/api/hooks/stop", Timeout: 10, CLIArg: "stop"},
+}
+
+// hookProfile returns the hook set for a client: the Codex profile for
+// ClientCodex, the Claude Code profile otherwise (the default an empty client
+// resolves to). The two never share a file (settings.json vs ~/.codex/hooks.json),
+// so a command hook's `hook <event>` match stays unambiguous within either.
+func hookProfile(client Client) []hookSpec {
+	if client == ClientCodex {
+		return codexHooks
+	}
+	return seamlessHooks
+}
+
 // InstallOptions configures an install.
 type InstallOptions struct {
-	SettingsPath string // target settings.json (created if absent)
+	Client       Client // agent client profile; "" (zero value) => Claude Code
+	SettingsPath string // target file: CC settings.json or Codex hooks.json (created if absent)
 	BaseURL      string // e.g. http://127.0.0.1:8081
-	APIKey       string // static bearer key written into the Authorization header
+	APIKey       string // static bearer key (written into the CC http hook header; Codex command hooks carry none)
 	SeamBin      string // path to the seam CLI for command hooks; "" => "seam" (PATH)
 	ConfigPath   string // abs seamless.yaml passed to command hooks as `--config` so they resolve config from any cwd; "" omits it
 }
@@ -68,8 +94,8 @@ type InstallResult struct {
 	Actions    []string // per-hook: "SessionStart: added|updated|unchanged"
 }
 
-// Install merges the Seamless hook entries into the settings.json at
-// opts.SettingsPath, preserving unknown keys, replacing any existing
+// Install merges the client's Seamless hook entries into the settings/hooks file
+// at opts.SettingsPath, preserving unknown keys, replacing any existing
 // Seamless-managed entries in place, and backing the file up once before the
 // first change. It is idempotent: an already-current file is left untouched.
 func Install(opts InstallOptions) (InstallResult, error) {
@@ -89,9 +115,13 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	}
 	hooksObj := nestedObject(settings, "hooks")
 
+	// Both clients nest event arrays under a top-level "hooks" key, so the merge
+	// engine below is shared; only the hook set (hookProfile) and each entry's
+	// handler shape (buildEntry) vary by client. An empty client is Claude Code.
+	client := normalizeClient(string(opts.Client))
 	var res InstallResult
-	for _, hs := range seamlessHooks {
-		desired := buildEntry(hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
+	for _, hs := range hookProfile(client) {
+		desired := buildEntry(client, hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		arr := entryArray(hooksObj, hs.Event)
 		// Match every entry Seamless owns for this event: those carrying our
@@ -137,18 +167,23 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	return res, nil
 }
 
-// InstalledEvents is the set of hook events Seamless installs, in install order.
-// A caller (doctor) compares InstalledStatus against len(InstalledEvents).
-func InstalledEvents() []string {
-	out := make([]string, len(seamlessHooks))
-	for i, hs := range seamlessHooks {
+// InstalledEvents is the set of hook events Seamless installs for a client, in
+// install order. A caller (doctor) compares InstalledStatus against
+// len(InstalledEvents) for the same client.
+func InstalledEvents(client Client) []string {
+	profile := hookProfile(normalizeClient(string(client)))
+	out := make([]string, len(profile))
+	for i, hs := range profile {
 		out[i] = hs.Event
 	}
 	return out
 }
 
 // CommandHookEndpoints returns the `seam hook <arg>` events the installer wires
-// as command hooks, each mapped to the endpoint that hook must forward to.
+// as command hooks across every client profile, each mapped to the endpoint that
+// hook must forward to. It is a union: the Codex profile adds user-prompt-submit
+// (a command hook there, http for CC) and stop, so the CLI pin covers both
+// clients. An event that both profiles wire as a command hook shares one endpoint.
 //
 // It exists for the seam CLI's test. The CLI keeps its own copy of this mapping
 // -- it cannot import this package without dragging the store, the retriever, and
@@ -159,31 +194,33 @@ func InstalledEvents() []string {
 // stopped arriving.
 func CommandHookEndpoints() map[string]string {
 	out := make(map[string]string)
-	for _, hs := range seamlessHooks {
-		if hs.CLIArg != "" {
-			out[hs.CLIArg] = hs.Endpoint
+	for _, profile := range [][]hookSpec{seamlessHooks, codexHooks} {
+		for _, hs := range profile {
+			if hs.CLIArg != "" {
+				out[hs.CLIArg] = hs.Endpoint
+			}
 		}
 	}
 	return out
 }
 
-// InstalledStatus reports which Seamless-managed hook events are present in the
-// settings.json at path, using the same ownership test as Install: the managed
-// marker, or an unmarked entry that targets the hook's URL under baseURL or
-// runs `... hook <event>` via the seam CLI. The marker alone cannot be
-// trusted: Claude Code re-serializes settings.json through its own schema when
-// the owner edits config or permissions, dropping the seamless_managed key
-// while keeping the functional entries -- those still-firing hooks must count
-// as installed. A missing or empty file yields an empty slice and no error.
-// The result is a subset of InstalledEvents(), in install order.
-func InstalledStatus(path, baseURL string) ([]string, error) {
+// InstalledStatus reports which of a client's Seamless-managed hook events are
+// present in the settings/hooks file at path, using the same ownership test as
+// Install: the managed marker, or an unmarked entry that targets the hook's URL
+// under baseURL or runs `... hook <event>` via the seam CLI. The marker alone
+// cannot be trusted: Claude Code re-serializes settings.json through its own
+// schema when the owner edits config or permissions, dropping the
+// seamless_managed key while keeping the functional entries -- those still-firing
+// hooks must count as installed. A missing or empty file yields an empty slice
+// and no error. The result is a subset of InstalledEvents(client), in install order.
+func InstalledStatus(client Client, path, baseURL string) ([]string, error) {
 	settings, _, err := loadSettings(path)
 	if err != nil {
 		return nil, err
 	}
 	hooksObj := nestedObject(settings, "hooks")
 	var present []string
-	for _, hs := range seamlessHooks {
+	for _, hs := range hookProfile(normalizeClient(string(client))) {
 		desiredURL := strings.TrimRight(baseURL, "/") + hs.Endpoint
 		if len(seamlessIndices(entryArray(hooksObj, hs.Event), desiredURL, hs.CLIArg)) > 0 {
 			present = append(present, hs.Event)
@@ -232,9 +269,28 @@ func entryArray(hooksObj map[string]any, event string) []any {
 	return nil
 }
 
-func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[string]any {
+func buildEntry(client Client, hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[string]any {
 	var hook map[string]any
-	if hs.CLIArg != "" {
+	switch {
+	case client == ClientCodex:
+		// Codex command hooks are SHELL STRINGS, not exec-form argv (its config
+		// schema has no `args` field -- see the codex-hook-contract-0-144-5 memory).
+		// The whole invocation is one `command` string, plus a `command_windows`
+		// variant carrying Windows quoting for a Windows install. Both run the same
+		// `<seam> hook <event> --config <yaml> --client codex`: no bearer key is
+		// written into hooks.json (the CLI loads it from --config at hook time), and
+		// --client codex is what selects the Codex payload adapter server-side.
+		bin := seamBin
+		if bin == "" {
+			bin = "seam"
+		}
+		hook = map[string]any{
+			"type":            "command",
+			"command":         codexCommand(bin, hs.CLIArg, configPath, posixQuote),
+			"command_windows": codexCommand(bin, hs.CLIArg, configPath, winQuote),
+			"timeout":         hs.Timeout,
+		}
+	case hs.CLIArg != "":
 		// Command hook, EXEC form: `command` is the bare seam binary and `args`
 		// carries the rest, so Claude Code spawns it directly with no shell. That
 		// is the one shape that behaves identically on every OS -- on Windows CC
@@ -262,7 +318,7 @@ func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[st
 			"args":    args,
 			"timeout": hs.Timeout,
 		}
-	} else {
+	default:
 		hook = map[string]any{
 			"type":    "http",
 			"url":     strings.TrimRight(baseURL, "/") + hs.Endpoint,
@@ -278,6 +334,37 @@ func buildEntry(hs hookSpec, baseURL, apiKey, seamBin, configPath string) map[st
 		entry["matcher"] = hs.Matcher
 	}
 	return entry
+}
+
+// codexCommand builds a Codex command-hook shell string:
+//
+//	<seam> hook <event> [--config <yaml>] --client codex
+//
+// quote is the shell quoter for the target OS (posixQuote for `command`,
+// winQuote for `command_windows`) so a binary or config path with a space is
+// not word-split by the shell Codex runs the string through. The `hook <event>`
+// token is left unquoted so entryRunsHookCommand can still recognize a
+// Seamless-owned entry whose marker was stripped.
+func codexCommand(seamBin, cliArg, configPath string, quote func(string) string) string {
+	parts := []string{quote(seamBin), "hook", cliArg}
+	if configPath != "" {
+		parts = append(parts, "--config", quote(configPath))
+	}
+	parts = append(parts, "--client", string(ClientCodex))
+	return strings.Join(parts, " ")
+}
+
+// posixQuote single-quotes s for a POSIX shell, escaping any embedded single
+// quote (path -> '...'\”...'). Codex runs command hooks as shell strings, so an
+// unquoted path with a space would split into separate argv.
+func posixQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// winQuote double-quotes s for cmd.exe / PowerShell. Windows paths cannot
+// contain a double quote, so no escaping is needed.
+func winQuote(s string) string {
+	return `"` + s + `"`
 }
 
 // seamlessIndices returns the ascending indices of entries in arr that Seamless
@@ -339,11 +426,13 @@ func sameURL(a, b string) bool {
 // without this an unmarked command entry would be duplicated instead of adopted.
 // Both hook shapes are recognized so an upgrade adopts either in place:
 //
-//   - exec form (current): `args` carry "hook" then <cliArg> as adjacent
-//     elements, with the binary in `command`.
-//   - shell-string form (pre-exec installs, and hand edits): the whole
-//     invocation is one `command` string ending in " hook <cliArg>", possibly
-//     with a SEAMLESS_CONFIG= env prefix.
+//   - exec form (CC): `args` carry "hook" then <cliArg> as adjacent elements,
+//     with the binary in `command`.
+//   - shell-string form (Codex, pre-exec CC installs, and hand edits): the whole
+//     invocation is one `command` string containing " hook <cliArg>" as a token
+//     -- at the end (old CC shell form, possibly with a SEAMLESS_CONFIG= prefix)
+//     or followed by more flags (Codex: `... hook <cliArg> --config ... --client
+//     codex`).
 func entryRunsHookCommand(e any, cliArg string) bool {
 	if cliArg == "" {
 		return false
@@ -364,11 +453,26 @@ func entryRunsHookCommand(e any, cliArg string) bool {
 		if hookArgsRunEvent(hm["args"], cliArg) {
 			return true
 		}
-		if c, ok := hm["command"].(string); ok && strings.HasSuffix(strings.TrimSpace(c), " hook "+cliArg) {
+		if c, ok := hm["command"].(string); ok && shellCmdRunsEvent(c, cliArg) {
 			return true
 		}
 	}
 	return false
+}
+
+// shellCmdRunsEvent reports whether a shell-string command runs `seam hook
+// <cliArg>` -- the " hook <cliArg>" token appears followed by end-of-string or a
+// space (a trailing flag). The space/end boundary keeps `hook session-start`
+// from matching a hypothetical `hook session-start-foo`.
+func shellCmdRunsEvent(cmd, cliArg string) bool {
+	cmd = strings.TrimSpace(cmd)
+	marker := " hook " + cliArg
+	i := strings.Index(cmd, marker)
+	if i < 0 {
+		return false
+	}
+	end := i + len(marker)
+	return end == len(cmd) || cmd[end] == ' '
 }
 
 // hookArgsRunEvent reports whether an exec-form hook's args invoke `hook

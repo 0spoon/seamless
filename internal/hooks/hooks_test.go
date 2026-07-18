@@ -443,7 +443,7 @@ func TestInstalledStatus(t *testing.T) {
 	path := filepath.Join(dir, ".claude", "settings.json")
 
 	// Missing file -> nothing installed, no error.
-	present, err := InstalledStatus(path, "http://127.0.0.1:8081")
+	present, err := InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
 	require.NoError(t, err)
 	require.Empty(t, present)
 
@@ -452,9 +452,9 @@ func TestInstalledStatus(t *testing.T) {
 	_, err = Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
 	require.NoError(t, err)
 
-	present, err = InstalledStatus(path, "http://127.0.0.1:8081")
+	present, err = InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
 	require.NoError(t, err)
-	require.ElementsMatch(t, InstalledEvents(), present)
+	require.ElementsMatch(t, InstalledEvents(ClientClaudeCode), present)
 	require.Len(t, present, 6)
 }
 
@@ -483,14 +483,14 @@ func TestInstalledStatusSurvivesMarkerStripping(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
 
-	present, err := InstalledStatus(path, "http://127.0.0.1:8081")
+	present, err := InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
 	require.NoError(t, err)
-	require.ElementsMatch(t, InstalledEvents(), present)
+	require.ElementsMatch(t, InstalledEvents(ClientClaudeCode), present)
 
 	// An unmarked http entry at a different base URL is not ours (e.g. a v1
 	// leftover): the http hook must drop out while the seam-CLI command hooks
 	// still match by their `hook <event>` command.
-	present, err = InstalledStatus(path, "http://127.0.0.1:9999")
+	present, err = InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:9999")
 	require.NoError(t, err)
 	require.NotContains(t, present, "UserPromptSubmit")
 	require.Len(t, present, 5)
