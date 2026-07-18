@@ -104,6 +104,11 @@ func doctor(args []string) error {
 // has all of them, or a warning when they are partial or absent. Detection
 // matches by hook URL/command, not just the managed marker, because Claude Code
 // strips the marker when it rewrites settings.json.
+//
+// When nothing is installed AND Claude Code is not detected on this machine, it
+// resolves to a quiet OK "not detected" line rather than a warning -- symmetric
+// with codexChecks, so a Codex-only user is not perpetually nagged to install a
+// client they do not run.
 func hooksCheck(cfg config.Config) check {
 	want := len(hooks.InstalledEvents(hooks.ClientClaudeCode))
 	baseURL := hookBaseURL(cfg.Addr)
@@ -131,6 +136,9 @@ func hooksCheck(cfg config.Config) check {
 	}
 	if found {
 		return best
+	}
+	if !claudeDetected() {
+		return check{statusOK, "hooks", "Claude Code not detected (no claude CLI or ~/.claude)"}
 	}
 	return check{statusWarn, "hooks", "not installed (run: seamlessd install-hooks)"}
 }

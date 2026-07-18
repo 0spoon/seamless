@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -48,4 +49,49 @@ func TestParseInstallClients(t *testing.T) {
 
 	_, err := parseInstallClients("gemini")
 	require.ErrorContains(t, err, "unknown --client")
+}
+
+func TestDefaultClientChoice(t *testing.T) {
+	require.Equal(t, "1", defaultClientChoice(false, false)) // nothing detected -> historical default
+	require.Equal(t, "1", defaultClientChoice(true, false))
+	require.Equal(t, "2", defaultClientChoice(false, true)) // codex-only machine defaults to codex
+	require.Equal(t, "3", defaultClientChoice(true, true))  // both detected -> both
+}
+
+func TestPromptInstallClients(t *testing.T) {
+	cc := []hooks.Client{hooks.ClientClaudeCode}
+	cx := []hooks.Client{hooks.ClientCodex}
+	both := []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}
+
+	for _, tt := range []struct {
+		name     string
+		input    string
+		claudeOK bool
+		codexOK  bool
+		want     []hooks.Client
+	}{
+		{"pick claude", "1\n", true, false, cc},
+		{"pick codex", "2\n", true, true, cx},
+		{"pick both", "3\n", false, false, both},
+		{"word alias", "codex\n", false, true, cx},
+		{"empty takes default codex", "\n", false, true, cx},
+		{"empty takes default claude", "\n", false, false, cc},
+		{"reprompt then valid", "9\nboth\n", false, false, both},
+		{"eof falls back to default", "", false, true, cx},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out strings.Builder
+			got, err := promptInstallClients(strings.NewReader(tt.input), &out, tt.claudeOK, tt.codexOK)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+			// The menu always renders all three options with a detection tag.
+			require.Contains(t, out.String(), "[1] Claude Code")
+			require.Contains(t, out.String(), "[2] Codex")
+		})
+	}
+}
+
+func TestDetectedTag(t *testing.T) {
+	require.Equal(t, "(detected)", detectedTag(true))
+	require.Equal(t, "(not detected)", detectedTag(false))
 }

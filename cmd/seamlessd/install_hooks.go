@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bufio"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"golang.org/x/term"
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
@@ -32,7 +36,13 @@ func runInstallHooks(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	clients, err := parseInstallClients(*clientFlag)
+	clientSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "client" {
+			clientSet = true
+		}
+	})
+	clients, err := resolveInstallClients(*clientFlag, clientSet)
 	if err != nil {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
@@ -95,6 +105,132 @@ func parseInstallClients(raw string) ([]hooks.Client, error) {
 	default:
 		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, all", raw)
 	}
+}
+
+// resolveInstallClients decides which client profiles to install for. An
+// explicit --client always wins and drives every non-interactive path, so
+// scripts, CI, and any piped invocation keep their exact prior behavior. When
+// --client was omitted AND stdin is a terminal, it prompts the user to pick
+// Claude Code, Codex, or both (annotating each with whether it was detected on
+// this machine). When --client was omitted and stdin is not a terminal, it
+// falls back to the flag default (Claude Code) with no prompt, so a redirected
+// or automated run never blocks.
+func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, error) {
+	if clientSet || !stdinIsTerminal() {
+		return parseInstallClients(clientFlag)
+	}
+	return promptInstallClients(os.Stdin, os.Stdout, claudeDetected(), codexDetected())
+}
+
+// promptInstallClients asks an interactive user which client(s) to wire up. It
+// annotates each option with whether that client was detected, defaults to the
+// detected set (Claude Code when nothing is detected, preserving the historical
+// default), re-prompts on an unrecognized answer, and takes the default on EOF
+// so a closed stdin cannot loop forever.
+func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) ([]hooks.Client, error) {
+	def := defaultClientChoice(claudeOK, codexOK)
+	fmt.Fprintln(out, "Install Seamless hooks for which agent client?")
+	fmt.Fprintf(out, "  [1] Claude Code %s\n", detectedTag(claudeOK))
+	fmt.Fprintf(out, "  [2] Codex %s\n", detectedTag(codexOK))
+	fmt.Fprintln(out, "  [3] Both")
+	reader := bufio.NewReader(in)
+	for {
+		fmt.Fprintf(out, "Enter 1, 2, or 3 [%s]: ", def)
+		line, err := reader.ReadString('\n')
+		choice := strings.TrimSpace(line)
+		if choice == "" {
+			choice = def
+		}
+		if clients, ok := clientsForChoice(choice); ok {
+			return clients, nil
+		}
+		if err != nil {
+			// EOF/read error with an unusable answer: take the default rather
+			// than loop on a stdin that will never yield more input.
+			clients, _ := clientsForChoice(def)
+			return clients, nil
+		}
+		fmt.Fprintln(out, "  please enter 1, 2, or 3")
+	}
+}
+
+// clientsForChoice maps a menu answer (number or client word) to its profiles.
+// The second return is false for an unrecognized answer, so the caller can
+// re-prompt.
+func clientsForChoice(s string) ([]hooks.Client, bool) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "1", "claude", "cc":
+		return []hooks.Client{hooks.ClientClaudeCode}, true
+	case "2", "codex", "cx":
+		return []hooks.Client{hooks.ClientCodex}, true
+	case "3", "both", "all":
+		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, true
+	}
+	return nil, false
+}
+
+// defaultClientChoice is the menu default: the detected set, falling back to
+// Claude Code when nothing is detected so the historical default is unchanged.
+func defaultClientChoice(claudeOK, codexOK bool) string {
+	switch {
+	case claudeOK && codexOK:
+		return "3"
+	case codexOK && !claudeOK:
+		return "2"
+	default:
+		return "1"
+	}
+}
+
+func detectedTag(ok bool) string {
+	if ok {
+		return "(detected)"
+	}
+	return "(not detected)"
+}
+
+// stdinIsTerminal reports whether stdin is an interactive terminal, so the
+// installer prompts a human but never blocks (or silently picks a
+// detection-based default for) a piped, /dev/null, or otherwise redirected run.
+// term.IsTerminal does the real ioctl -- unlike an os.ModeCharDevice heuristic,
+// which misreads /dev/null (also a character device) as a terminal.
+func stdinIsTerminal() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// claudeDetected reports whether Claude Code appears installed on this machine:
+// the `claude` CLI on PATH, or a ~/.claude directory (Claude Code creates it on
+// first run). It keeps install/doctor from nagging a user who does not run CC.
+// A directory that a prior `install-hooks --client claude` created also counts,
+// which is correct: that user opted into the Claude Code profile.
+func claudeDetected() bool {
+	if _, err := exec.LookPath("claude"); err == nil {
+		return true
+	}
+	if home, err := expandHome("~/.claude"); err == nil {
+		if info, statErr := os.Stat(home); statErr == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
+// codexDetected reports whether Codex appears installed: the `codex` CLI on
+// PATH, or a $CODEX_HOME/~/.codex directory. Symmetric with claudeDetected.
+func codexDetected() bool {
+	if _, err := exec.LookPath("codex"); err == nil {
+		return true
+	}
+	dir := "~/.codex"
+	if home := strings.TrimSpace(os.Getenv("CODEX_HOME")); home != "" {
+		dir = home
+	}
+	if path, err := expandHome(dir); err == nil {
+		if info, statErr := os.Stat(path); statErr == nil && info.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 // installClaudeHooks installs the Claude Code hook profile into settings.json and
