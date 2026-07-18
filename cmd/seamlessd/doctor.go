@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -90,19 +91,21 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
-	checks = append(checks, mcpToolsCheck(), hooksCheck(cfg), gardenerCheck(cfg))
+	checks = append(checks, mcpToolsCheck(), hooksCheck(cfg))
+	checks = append(checks, codexChecks(cfg)...)
+	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
 }
 
-// hooksCheck reports whether the Seamless hooks are installed. It looks in
-// the global settings (~/.claude/settings.json) and the project-scoped dogfood
-// settings (./.claude/settings.json), reporting the first location that has all
-// of them, or a warning when they are partial or absent. Detection matches by
-// hook URL/command, not just the managed marker, because Claude Code strips
-// the marker when it rewrites settings.json.
+// hooksCheck reports whether the Claude Code Seamless hooks are installed. It
+// looks in the global settings (~/.claude/settings.json) and the project-scoped
+// dogfood settings (./.claude/settings.json), reporting the first location that
+// has all of them, or a warning when they are partial or absent. Detection
+// matches by hook URL/command, not just the managed marker, because Claude Code
+// strips the marker when it rewrites settings.json.
 func hooksCheck(cfg config.Config) check {
-	want := len(hooks.InstalledEvents())
+	want := len(hooks.InstalledEvents(hooks.ClientClaudeCode))
 	baseURL := hookBaseURL(cfg.Addr)
 	var candidates []string
 	if home, err := expandHome("~/.claude/settings.json"); err == nil {
@@ -113,7 +116,7 @@ func hooksCheck(cfg config.Config) check {
 	var best check
 	found := false
 	for _, path := range candidates {
-		present, err := hooks.InstalledStatus(path, baseURL)
+		present, err := hooks.InstalledStatus(hooks.ClientClaudeCode, path, baseURL)
 		if err != nil || len(present) == 0 {
 			continue
 		}
@@ -130,6 +133,58 @@ func hooksCheck(cfg config.Config) check {
 		return best
 	}
 	return check{statusWarn, "hooks", "not installed (run: seamlessd install-hooks)"}
+}
+
+// codexChecks reports the Codex CLI integration: the hooks in
+// $CODEX_HOME/hooks.json and whether the seam mcp-proxy bridge is registered
+// with `codex mcp`. It never FAILs -- a machine with no Codex install must not
+// break `doctor` for a Claude Code user -- so an absent Codex resolves to a
+// single OK "not detected" line, and every other outcome is OK or a warning.
+func codexChecks(cfg config.Config) []check {
+	hooksPath, herr := expandHome(defaultCodexHooksPath())
+	_, codexErr := exec.LookPath("codex")
+	codexOnPath := codexErr == nil
+
+	var present []string
+	if herr == nil {
+		present, _ = hooks.InstalledStatus(hooks.ClientCodex, hooksPath, hookBaseURL(cfg.Addr)) //nolint:errcheck // a stat/parse error reads as "nothing installed"; doctor never fails on Codex
+	}
+
+	// Nothing to report when Codex is neither on PATH nor has any Seamless hooks:
+	// the common Claude-Code-only machine gets one quiet line, not two warnings.
+	if !codexOnPath && len(present) == 0 {
+		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless hooks in ~/.codex)"}}
+	}
+
+	want := len(hooks.InstalledEvents(hooks.ClientCodex))
+	var hooksChk check
+	switch {
+	case len(present) == want:
+		hooksChk = check{statusOK, "codex hooks", fmt.Sprintf("%d/%d installed in %s", want, want, hooksPath)}
+	case len(present) > 0:
+		hooksChk = check{statusWarn, "codex hooks",
+			fmt.Sprintf("%d/%d installed in %s (%s)", len(present), want, hooksPath, strings.Join(present, ","))}
+	default:
+		hooksChk = check{statusWarn, "codex hooks", "not installed (run: seamlessd install-hooks --client codex)"}
+	}
+	return []check{hooksChk, codexMCPCheck()}
+}
+
+// codexMCPCheck reports whether the Seamless MCP bridge is registered with the
+// Codex CLI (`codex mcp get seamless` exits 0). It is bounded by a short timeout
+// so a slow Codex startup cannot hang `doctor`, and it warns rather than fails
+// when Codex is missing or the server is not registered.
+func codexMCPCheck() check {
+	codex, err := exec.LookPath("codex")
+	if err != nil {
+		return check{statusWarn, "codex mcp", "codex CLI not found (skipped)"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if exec.CommandContext(ctx, codex, "mcp", "get", "seamless").Run() == nil {
+		return check{statusOK, "codex mcp", "seamless registered (seam mcp-proxy stdio bridge)"}
+	}
+	return check{statusWarn, "codex mcp", "seamless not registered (run: seamlessd install-hooks --client codex)"}
 }
 
 // gardenerCheck reports the gardener ticker configuration.
