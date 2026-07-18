@@ -19,13 +19,14 @@ const (
 	groupPlans         = "captured plans (Claude Code plan mode)"
 	groupObservability = "observability"
 	groupHooks         = "hooks (invoked by Claude Code, not by hand)"
+	groupBridge        = "mcp bridge (invoked by an MCP client, not by hand)"
 )
 
 // groupOrder is the order help renders the sections in. A group naming no
 // command renders nothing; help_test pins the converse, that every group a
 // command names is listed here, since a spec in an unlisted group renders
 // nowhere at all.
-var groupOrder = []string{groupAgentLoop, groupTasks, groupPlans, groupObservability, groupHooks}
+var groupOrder = []string{groupAgentLoop, groupTasks, groupPlans, groupObservability, groupHooks, groupBridge}
 
 // commands returns the migrated command table, in help order.
 //
@@ -61,5 +62,7 @@ func commands() []cmd {
 		doctorCmd,
 
 		hookCmd,
+
+		mcpProxyCmd,
 	}
 }
