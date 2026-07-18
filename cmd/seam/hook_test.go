@@ -2,10 +2,14 @@ package main
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
 )
 
@@ -64,6 +68,50 @@ func TestRunHook_ErrorsNameTheValidEvents(t *testing.T) {
 	err := runHook(context.Background(), e, &hookOpts{}, []string{"bogus"})
 	require.ErrorContains(t, err, "valid values are session-start, user-prompt-submit")
 	require.NotContains(t, err.Error(), "want ")
+}
+
+// captureHookServer stands in for seamlessd: it records the path+query and
+// bearer of the one request seam hook forwards, and returns an empty 200 so the
+// hook succeeds. loadConfig points seam hook at it via cfg.Addr.
+func captureHookServer(t *testing.T, payload string) (*env, **http.Request) {
+	t.Helper()
+	var got *http.Request
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Clone(context.Background())
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	e, _, _ := stubEnv()
+	e.stdin = strings.NewReader(payload)
+	e.loadConfig = func() (config.Config, error) {
+		cfg := config.Defaults()
+		cfg.Addr = strings.TrimPrefix(srv.URL, "http://")
+		cfg.MCP.APIKey = "k"
+		return cfg, nil
+	}
+	return e, &got // caller reads *got after runHook returns
+}
+
+// --client threads the discriminator to the daemon as ?client=<value> on the
+// forwarded request, so the server can pick the right per-client payload adapter.
+func TestRunHook_ClientFlagForwardsQueryParam(t *testing.T) {
+	e, got := captureHookServer(t, `{"session_id":"019f7291-x","cwd":"/w","prompt":"hi"}`)
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{client: "codex"}, []string{"user-prompt-submit"}))
+	require.NotNil(t, *got, "seam hook must forward to the daemon")
+	require.Equal(t, "/api/hooks/user-prompt-submit", (*got).URL.Path)
+	require.Equal(t, "codex", (*got).URL.Query().Get("client"))
+}
+
+// The default (no --client) leaves the forwarded URL byte-identical to before --
+// no query string at all -- so every existing Claude Code hook is untouched.
+func TestRunHook_NoClientFlagOmitsQueryParam(t *testing.T) {
+	e, got := captureHookServer(t, `{"session_id":"abc","cwd":"/w"}`)
+	require.NoError(t, runHook(context.Background(), e, &hookOpts{}, []string{"session-start"}))
+	require.NotNil(t, *got, "seam hook must forward to the daemon")
+	require.Equal(t, "/api/hooks/session-start", (*got).URL.Path)
+	require.Empty(t, (*got).URL.RawQuery, "no --client => no query string, CC request unchanged")
 }
 
 // The pin that keeps the CLI's copy of the event table honest against the

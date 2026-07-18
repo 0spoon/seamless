@@ -104,22 +104,21 @@ func (h *Handler) Register(mux *http.ServeMux) {
 }
 
 // hookPayload is the SessionStart request body (tolerant decode; unknown fields
-// ignored, empty body OK).
+// ignored, empty body OK). The client discriminator is not a body field: it rides
+// on the request as the ?client= query param (see adapter.go).
 type hookPayload struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	CWD            string `json:"cwd"`
 	Source         string `json:"source"`     // startup|resume|clear|compact
 	AgentType      string `json:"agent_type"` // non-empty => subagent
-	Client         string `json:"client"`     // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 type promptPayload struct {
 	SessionID     string `json:"session_id"`
 	CWD           string `json:"cwd"`
-	UserPrompt    string `json:"user_prompt"`
+	UserPrompt    string `json:"user_prompt"` // Codex names this `prompt`; decodePrompt normalizes it
 	HookEventName string `json:"hook_event_name"`
-	Client        string `json:"client"` // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 // endPayload is the SessionEnd request body.
@@ -127,7 +126,6 @@ type endPayload struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Reason         string `json:"reason"` // clear|logout|prompt_input_exit|other
-	Client         string `json:"client"` // ""/"claude-code" => cc/, "codex" => cx/
 }
 
 // toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
@@ -164,9 +162,8 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
-	var p hookPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero
+	client := clientFromRequest(r)
+	p := decodeSessionStart(client, readHookBody(w, r))
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -191,14 +188,13 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		briefing, injectedIDs = "", nil // never block the agent
 	}
 	injected := briefing != ""
-	client := normalizeClient(p.Client)
 
 	// Ambient session: create or resume {cc|cx}/{prefix} so work is recorded
 	// without the agent calling session_start. Subagents share the parent's
 	// session, so they get no ambient session of their own. Best-effort: a failure
 	// just omits the ambient line.
 	if p.AgentType == "" {
-		if name := h.ensureAmbientSession(ctx, p); name != "" {
+		if name := h.ensureAmbientSession(ctx, client, p); name != "" {
 			briefing = injectAmbientLine(briefing, name)
 		}
 	}
@@ -215,14 +211,13 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
-	var p endPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no session id -> no-op)
+	client := clientFromRequest(r)
+	p := decodeSessionEnd(client, readHookBody(w, r))
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	h.completeClaudeSessions(ctx, p)
+	h.completeClaudeSessions(ctx, client, p)
 	// SessionEnd has no hookSpecificOutput variant in Claude Code's schema, so
 	// the response is a bare ack -- emitting one fails root validation.
 	writeHookAck(w)
@@ -236,11 +231,11 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 // owns (status, project scope, recency) -- never a full-row read-modify-write,
 // which could clobber the findings a concurrent transcript harvest wrote to the
 // same session between the read and the write-back.
-func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) string {
+func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hookPayload) string {
 	if h.db == nil || p.SessionID == "" {
 		return ""
 	}
-	name := ambientName(normalizeClient(p.Client), p.SessionID)
+	name := ambientName(client, p.SessionID)
 	project, err := store.ResolveProjectForCWD(ctx, h.db, p.CWD)
 	if err != nil {
 		h.logger.Warn("hooks: ambient project resolve", "error", err)
@@ -290,7 +285,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, p hookPayload) strin
 // TTL -- the reaper is only for sessions we get no end signal for. Task claims are
 // released. It is a no-op when nothing is active (an explicit session_end already
 // ran, or a crash left it to the reaper). Never errors: the hook must always 200.
-func (h *Handler) completeClaudeSessions(ctx context.Context, p endPayload) {
+func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p endPayload) {
 	if h.db == nil || p.SessionID == "" {
 		return
 	}
@@ -302,7 +297,7 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, p endPayload) {
 	if len(sessions) == 0 {
 		// Legacy ambient rows may predate claude_session_id linking; fall back to the
 		// name key so a graceful end still harvests the ambient.
-		if amb, ok, aerr := store.SessionByName(ctx, h.db, ambientName(normalizeClient(p.Client), p.SessionID)); aerr != nil {
+		if amb, ok, aerr := store.SessionByName(ctx, h.db, ambientName(client, p.SessionID)); aerr != nil {
 			h.logger.Warn("hooks: session-end ambient fallback", "error", aerr)
 			return
 		} else if ok && amb.Status == core.SessionActive {
@@ -369,9 +364,8 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
-	var p promptPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no prompt -> empty response)
+	client := clientFromRequest(r)
+	p := decodePrompt(client, readHookBody(w, r))
 	if p.UserPrompt == "" {
 		writeHookResponse(w, "UserPromptSubmit", "")
 		return
@@ -380,7 +374,6 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	client := normalizeClient(p.Client)
 	h.touchAmbient(ctx, client, p.SessionID)
 
 	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
