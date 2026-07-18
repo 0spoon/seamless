@@ -98,6 +98,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hooks/session-start", h.sessionStart)
 	mux.HandleFunc("POST /api/hooks/user-prompt-submit", h.userPromptSubmit)
 	mux.HandleFunc("POST /api/hooks/session-end", h.sessionEnd)
+	mux.HandleFunc("POST /api/hooks/stop", h.stop)
 	mux.HandleFunc("POST /api/hooks/post-tool-use", h.postToolUse)
 	mux.HandleFunc("POST /api/hooks/subagent-stop", h.subagentStop)
 	mux.HandleFunc("POST /api/hooks/permission-request", h.permissionRequest)
@@ -126,6 +127,18 @@ type endPayload struct {
 	SessionID      string `json:"session_id"`
 	TranscriptPath string `json:"transcript_path"`
 	Reason         string `json:"reason"` // clear|logout|prompt_input_exit|other
+}
+
+// stopPayload is the Codex Stop request body. Stop fires at every turn end and,
+// for Codex, stands in for the missing SessionEnd: it carries the turn's last
+// agent message directly (LastAssistantMessage), with transcript_path as the
+// rollout-file fallback when it is absent.
+type stopPayload struct {
+	SessionID            string `json:"session_id"`
+	CWD                  string `json:"cwd"`
+	TranscriptPath       string `json:"transcript_path"`
+	LastAssistantMessage string `json:"last_assistant_message"`
+	StopHookActive       bool   `json:"stop_hook_active"`
 }
 
 // toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
@@ -221,6 +234,57 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 	// SessionEnd has no hookSpecificOutput variant in Claude Code's schema, so
 	// the response is a bare ack -- emitting one fails root validation.
 	writeHookAck(w)
+}
+
+// stop serves the Stop hook. Stop fires at every turn end. For Codex -- which has
+// no SessionEnd event (design D5) -- it is the only end-ish signal, so it both
+// heartbeats the ambient session and provisionally harvests the turn's last agent
+// message into that session's findings; the idle reaper later expires the session
+// with the findings already in place. For any other client it only heartbeats
+// (Claude Code harvests on its own SessionEnd, and installs no Stop hook), so a CC
+// session's end path is untouched.
+func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
+	if !verifyBearer(r, h.apiKey) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	client := clientFromRequest(r)
+	p := decodeStop(client, readHookBody(w, r))
+
+	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
+	defer cancel()
+
+	// A Stop is proof the agent is alive this turn: heartbeat so the idle reaper
+	// does not expire the session mid-work. Always, for every client.
+	h.touchAmbient(ctx, client, p.SessionID)
+
+	if client == ClientCodex {
+		h.harvestCodexStop(ctx, p)
+	}
+
+	// Stop has no hookSpecificOutput variant in Codex's schema (it can only
+	// continue / decision:block / systemMessage), so the response is a bare ack --
+	// Stop cannot inject.
+	writeHookAck(w)
+}
+
+// harvestCodexStop upserts the turn's last agent message onto the Codex ambient
+// session as provisional findings. Best-effort by the package's never-block
+// contract: a missing session id or DB, a turn with nothing to harvest, or a
+// store error all leave the heartbeat above as the Stop's only effect, logged at
+// debug rather than surfaced. Repeated Stops converge findings on the latest turn.
+func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
+	if h.db == nil || p.SessionID == "" {
+		return
+	}
+	findings := codexStopFindings(p.LastAssistantMessage, p.TranscriptPath)
+	if findings == "" {
+		return // nothing this turn; the heartbeat kept the session alive
+	}
+	name := ambientName(ClientCodex, p.SessionID)
+	if _, err := store.UpdateAmbientFindingsByName(ctx, h.db, name, findings, time.Now().UTC()); err != nil {
+		h.logger.Warn("hooks: codex stop harvest", "session", name, "error", err)
+	}
 }
 
 // ensureAmbientSession creates (source startup) or resumes (any source) the

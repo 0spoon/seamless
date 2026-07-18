@@ -88,3 +88,14 @@ func decodeSessionEnd(_ Client, body []byte) endPayload {
 	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
 	return p
 }
+
+// decodeStop decodes a Stop body into stopPayload. Stop is a Codex-only hook (it
+// is Codex's per-turn end signal, standing in for the SessionEnd it lacks); the
+// field names match the internal struct, so the decode is identity and the client
+// parameter is kept for the uniform adapter surface. Tolerant: a decode error
+// leaves the zero payload (no session id -> heartbeat/harvest both no-op).
+func decodeStop(_ Client, body []byte) stopPayload {
+	var p stopPayload
+	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
+	return p
+}

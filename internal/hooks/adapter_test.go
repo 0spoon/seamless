@@ -120,3 +120,74 @@ func TestCodexHooks_EndToEnd(t *testing.T) {
 	require.Equal(t, sess.ID, inj[0].SessionID,
 		"the prompt injection is stamped with the cx/ ambient session")
 }
+
+// The Stop lifecycle for Codex: each Stop harvests the turn's last agent message
+// onto the ambient session's findings, so repeated Stops converge on the latest
+// turn, an empty turn leaves the prior harvest intact, and the session stays
+// active (the idle reaper -- not Stop -- ends it).
+func TestCodexStopHook_ConvergesFindings(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	codexID := "019f7291-40f1-7311-8997-0d497579d27b"
+
+	// Start the cx/ ambient session so Stop has something to harvest onto.
+	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": codexID, "cwd": "/work/demo", "source": "startup",
+	})
+
+	stopURL := ts.URL + "/api/hooks/stop?client=codex"
+	findings := func() string {
+		s, ok, err := store.SessionByName(ctx, db, "cx/019f7291")
+		require.NoError(t, err)
+		require.True(t, ok)
+		return s.Findings
+	}
+
+	// First turn's Stop harvests its last message; the response is a bare ack.
+	resp, out := post(t, stopURL, testKey, map[string]any{
+		"session_id": codexID, "last_assistant_message": "first turn summary",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, true, out["continue"])
+	require.Nil(t, out["hookSpecificOutput"], "Stop cannot inject -- no hookSpecificOutput")
+	require.Equal(t, "(auto-harvested) first turn summary", findings())
+
+	// A later turn overwrites: findings converge on the most recent message.
+	_, _ = post(t, stopURL, testKey, map[string]any{
+		"session_id": codexID, "last_assistant_message": "second turn summary",
+	})
+	require.Equal(t, "(auto-harvested) second turn summary", findings())
+
+	// A turn with nothing to harvest (no payload message, no transcript) leaves the
+	// prior harvest intact rather than blanking it.
+	_, _ = post(t, stopURL, testKey, map[string]any{"session_id": codexID})
+	require.Equal(t, "(auto-harvested) second turn summary", findings())
+
+	// Stop never ends the session; the reaper does. It is still active.
+	s, ok, err := store.SessionByName(ctx, db, "cx/019f7291")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, s.Status)
+}
+
+// A Stop for Claude Code (the default client) only heartbeats: it must not harvest
+// findings, since CC ends via its own SessionEnd path. This keeps the CC end path
+// untouched even though CC installs no Stop hook of its own.
+func TestStopHook_ClaudeCodeOnlyHeartbeats(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	ccID := "abcdef12-3456"
+
+	_, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": ccID, "cwd": "/work/demo", "source": "startup",
+	})
+
+	// A CC-shaped Stop carrying a last message must NOT write findings.
+	_, _ = post(t, ts.URL+"/api/hooks/stop", testKey, map[string]any{
+		"session_id": ccID, "last_assistant_message": "should not be harvested",
+	})
+	s, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Empty(t, s.Findings, "a Claude Code Stop only heartbeats -- CC harvests on SessionEnd")
+}
