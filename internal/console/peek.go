@@ -5,18 +5,21 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// The peek handlers render a single entity three ways through renderDetail: JSON
-// for the CLI, an HTML fragment for the in-page detail pane (?peek=1), and a
-// full layout-wrapped page by default (a shareable, no-JS fallback). Every
-// entity reference across the console links to one of these routes with
-// data-peek, so split list screens can surface related items in the pane
-// without a page navigation.
+// The detail handlers here serve a single entity four ways: JSON for the CLI,
+// an HTML fragment for the in-page detail pane (?peek=1), a reader fragment
+// for the library screens' in-place swap (?reader=1, notes/memories/tasks),
+// and -- by default -- the entity's library page with that entity open in the
+// reader (a shareable, no-JS URL). Entity references across the console link
+// to these routes; on split list screens (sessions, plans) a data-peek link
+// loads the ?peek=1 fragment into the pane without a page navigation.
 
 // memoryRef is a compact pointer to another memory (a supersession neighbor),
 // enough to render a peek link.
@@ -58,19 +61,9 @@ type memoryDetail struct {
 	CanArchive   bool          `json:"-"`
 }
 
-func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := r.PathValue("id")
-	m, ok, err := store.MemoryByID(ctx, s.cfg.DB, id)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	if !ok {
-		s.notFound(w, r, "No memory with id "+id+".")
-		return
-	}
-
+// memoryDetailData projects an index row into the full detail payload: body
+// from the file, retrieval stats, provenance, and supersession both ways.
+func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDetail, error) {
 	status := "active"
 	if !m.Active() {
 		if m.SupersededBy != "" {
@@ -92,7 +85,7 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 	// error leaves the metadata intact with the body simply unavailable.
 	if s.cfg.Files != nil {
 		if full, ferr := s.cfg.Files.Store().ReadMemory(m.FilePath); ferr != nil {
-			s.logger.Warn("console: read memory body", "id", id, "error", ferr)
+			s.logger.Warn("console: read memory body", "id", m.ID, "error", ferr)
 		} else {
 			d.BodyText = full.Body
 			d.BodyLoaded = true
@@ -101,7 +94,7 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if stat, found, serr := store.GetRetrievalStat(ctx, s.cfg.DB, m.ID); serr != nil {
-		s.logger.Warn("console: memory retrieval stat", "id", id, "error", serr)
+		s.logger.Warn("console: memory retrieval stat", "id", m.ID, "error", serr)
 	} else if found {
 		d.Injects, d.Reads = stat.InjectCount, stat.ReadCount
 		d.LastInjected, d.LastRead = stat.LastInjectedAt, stat.LastReadAt
@@ -126,16 +119,70 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	superseded, err := store.MemoriesSuperseding(ctx, s.cfg.DB, m.ID)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return memoryDetail{}, err
 	}
 	for _, sm := range superseded {
 		d.Supersedes = append(d.Supersedes, memoryRef{
 			ID: sm.ID, Name: sm.Name, Kind: string(sm.Kind), Project: sm.Project,
 		})
 	}
+	return d, nil
+}
 
-	s.renderDetail(w, r, "memory", pageData{Title: "Memory " + m.Name, Active: "memories", Data: d})
+// memoryDetailByID loads a memory and projects it into its detail payload.
+// found=false means no such memory.
+func (s *Service) memoryDetailByID(ctx context.Context, id string) (memoryDetail, bool, error) {
+	m, ok, err := store.MemoryByID(ctx, s.cfg.DB, id)
+	if err != nil || !ok {
+		return memoryDetail{}, ok, err
+	}
+	d, err := s.memoryDetailData(ctx, m)
+	if err != nil {
+		return memoryDetail{}, false, err
+	}
+	return d, true, nil
+}
+
+func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	m, ok, err := store.MemoryByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !ok {
+		s.notFound(w, r, "No memory with id "+id+".")
+		return
+	}
+	d, err := s.memoryDetailData(ctx, m)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, d)
+		return
+	}
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "memory", d)
+		return
+	}
+	if r.URL.Query().Get("reader") == "1" {
+		s.renderReader(w, r, "memories", "memory-reader", d)
+		return
+	}
+	sortKey, query, ok2 := s.parseSortQuery(w, r, memorySortKeys, "name")
+	if !ok2 {
+		return
+	}
+	data, err := s.memoriesPage(ctx, sortKey, query)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data.Selected = &d
+	s.render(w, r, "memories", pageData{Title: "Memory " + m.Name, Active: "memories", Data: data})
 }
 
 // noteDetail is the payload for a single note's peek/detail.
@@ -148,6 +195,7 @@ type noteDetail struct {
 	Body        template.HTML `json:"-"`
 	BodyText    string        `json:"body"`
 	BodyLoaded  bool          `json:"bodyAvailable"`
+	Words       int           `json:"words,omitempty"`
 	Tags        []string      `json:"tags,omitempty"`
 	SourceURL   string        `json:"sourceUrl,omitempty"`
 	Created     time.Time     `json:"created"`
@@ -155,6 +203,39 @@ type noteDetail struct {
 	FilePath    string        `json:"filePath"`
 	AbsPath     string        `json:"absPath"`
 	EditURL     template.URL  `json:"-"`
+}
+
+// noteDetailData projects an index row into the full detail payload, reading
+// the body from the file (a nil Files subsystem degrades to metadata only).
+func (s *Service) noteDetailData(ctx context.Context, n core.Note) noteDetail {
+	abs, edit := absAndEditURL(s.cfg.DataDir, n.FilePath)
+	d := noteDetail{
+		ID: n.ID, Title: n.Title, Slug: n.Slug, Description: n.Description,
+		Project: n.Project, Tags: n.Tags, SourceURL: n.SourceURL,
+		Created: n.Created, Updated: n.Updated,
+		FilePath: n.FilePath, AbsPath: abs, EditURL: edit,
+	}
+	if s.cfg.Files != nil {
+		if full, ferr := s.cfg.Files.Store().ReadNote(n.FilePath); ferr != nil {
+			s.logger.Warn("console: read note body", "id", n.ID, "error", ferr)
+		} else {
+			d.BodyText = full.Body
+			d.BodyLoaded = true
+			d.Words = len(strings.Fields(full.Body))
+			d.Body = s.renderBody(ctx, full.Body, n.Project)
+		}
+	}
+	return d
+}
+
+// noteDetailByID loads a note and projects it into its detail payload.
+// found=false means no such note.
+func (s *Service) noteDetailByID(ctx context.Context, id string) (noteDetail, bool, error) {
+	n, ok, err := store.NoteByID(ctx, s.cfg.DB, id)
+	if err != nil || !ok {
+		return noteDetail{}, ok, err
+	}
+	return s.noteDetailData(ctx, n), true, nil
 }
 
 func (s *Service) noteDetail(w http.ResponseWriter, r *http.Request) {
@@ -169,23 +250,30 @@ func (s *Service) noteDetail(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r, "No note with id "+id+".")
 		return
 	}
-	abs, edit := absAndEditURL(s.cfg.DataDir, n.FilePath)
-	d := noteDetail{
-		ID: n.ID, Title: n.Title, Slug: n.Slug, Description: n.Description,
-		Project: n.Project, Tags: n.Tags, SourceURL: n.SourceURL,
-		Created: n.Created, Updated: n.Updated,
-		FilePath: n.FilePath, AbsPath: abs, EditURL: edit,
+	d := s.noteDetailData(ctx, n)
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, d)
+		return
 	}
-	if s.cfg.Files != nil {
-		if full, ferr := s.cfg.Files.Store().ReadNote(n.FilePath); ferr != nil {
-			s.logger.Warn("console: read note body", "id", id, "error", ferr)
-		} else {
-			d.BodyText = full.Body
-			d.BodyLoaded = true
-			d.Body = s.renderBody(ctx, full.Body, n.Project)
-		}
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "note", d)
+		return
 	}
-	s.renderDetail(w, r, "note", pageData{Title: "Note " + n.Title, Active: "notes", Data: d})
+	if r.URL.Query().Get("reader") == "1" {
+		s.renderReader(w, r, "notes", "note-reader", d)
+		return
+	}
+	sortKey, query, ok2 := s.parseSortQuery(w, r, noteSortKeys, "recent")
+	if !ok2 {
+		return
+	}
+	data, err := s.notesPage(ctx, sortKey, query)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data.Selected = &d
+	s.render(w, r, "notes", pageData{Title: "Note " + n.Title, Active: "notes", Data: data})
 }
 
 // taskRef is a compact pointer to a related task (a dependency or a dependent).
@@ -218,18 +306,9 @@ type taskDetail struct {
 	Closed      *time.Time    `json:"closed,omitempty"`
 }
 
-func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	id := r.PathValue("id")
-	t, err := store.TaskByID(ctx, s.cfg.DB, id)
-	if err != nil {
-		if errors.Is(err, store.ErrTaskNotFound) {
-			s.notFound(w, r, "No task with id "+id+".")
-			return
-		}
-		s.serverError(w, r, err)
-		return
-	}
+// taskDetailData projects a task into the full detail payload, resolving both
+// dependency directions.
+func (s *Service) taskDetailData(ctx context.Context, t core.Task) (taskDetail, error) {
 	d := taskDetail{
 		ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
 		BodyText: t.Body, PlanSlug: t.PlanSlug, CreatedBy: t.CreatedBy,
@@ -246,20 +325,73 @@ func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
 			if errors.Is(derr, store.ErrTaskNotFound) {
 				continue // a dangling dep edge should not 500 the page
 			}
-			s.serverError(w, r, derr)
-			return
+			return taskDetail{}, derr
 		}
 		d.Deps = append(d.Deps, taskRef{ID: dep.ID, Title: dep.Title, Status: string(dep.Status)})
 	}
 	blocks, err := store.TasksBlockedBy(ctx, s.cfg.DB, t.ID)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return taskDetail{}, err
 	}
 	for _, b := range blocks {
 		d.Blocks = append(d.Blocks, taskRef{ID: b.ID, Title: b.Title, Status: string(b.Status)})
 	}
-	s.renderDetail(w, r, "task", pageData{Title: "Task " + shortID(t.ID), Active: "tasks", Data: d})
+	return d, nil
+}
+
+// taskDetailByID loads a task and projects it into its detail payload.
+// found=false means no such task.
+func (s *Service) taskDetailByID(ctx context.Context, id string) (taskDetail, bool, error) {
+	t, err := store.TaskByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			return taskDetail{}, false, nil
+		}
+		return taskDetail{}, false, err
+	}
+	d, err := s.taskDetailData(ctx, t)
+	if err != nil {
+		return taskDetail{}, false, err
+	}
+	return d, true, nil
+}
+
+func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	t, err := store.TaskByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		if errors.Is(err, store.ErrTaskNotFound) {
+			s.notFound(w, r, "No task with id "+id+".")
+			return
+		}
+		s.serverError(w, r, err)
+		return
+	}
+	d, err := s.taskDetailData(ctx, t)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, d)
+		return
+	}
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "task", d)
+		return
+	}
+	if r.URL.Query().Get("reader") == "1" {
+		s.renderReader(w, r, "tasks", "task-reader", d)
+		return
+	}
+	data, err := s.tasksPage(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data.Selected = &d
+	s.render(w, r, "tasks", pageData{Title: "Task " + shortID(t.ID), Active: "tasks", Data: data})
 }
 
 // projectDetail is the payload for a single project's peek/detail: its metadata

@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"net/url"
@@ -29,44 +30,44 @@ type blocker struct {
 	Status string `json:"status"`
 }
 
-// tasksData is the payload for the Tasks page.
+// tasksData is the payload for the Tasks library screen. Selected drives the
+// HTML reader pane only; JSON callers get the same lean payload as before.
 type tasksData struct {
 	Ready      []taskRow `json:"ready"`
 	InProgress []taskRow `json:"inProgress"`
 	Blocked    []taskRow `json:"blocked"`
 	Closed     []taskRow `json:"closed"`
 	ClosedMore int       `json:"closedMore"`
+	// Selected is the task open in the reader: the requested one on a
+	// /console/tasks/{id} page, or the most relevant one on the list URL
+	// (SelectedAuto, which the client pins into the URL).
+	Selected     *taskDetail `json:"-"`
+	SelectedAuto bool        `json:"-"`
 }
 
 const closedLimit = 25
 
-func (s *Service) tasks(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-
+// tasksPage assembles the four status buckets of the tasks list.
+func (s *Service) tasksPage(ctx context.Context) (tasksData, error) {
 	ready, err := store.AllReadyTasks(ctx, s.cfg.DB)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return tasksData{}, err
 	}
 	inProgress, err := store.AllTasksByStatus(ctx, s.cfg.DB, core.TaskInProgress)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return tasksData{}, err
 	}
 	blocked, err := store.AllBlockedTasks(ctx, s.cfg.DB)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return tasksData{}, err
 	}
 	done, err := store.AllTasksByStatus(ctx, s.cfg.DB, core.TaskDone)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return tasksData{}, err
 	}
 	dropped, err := store.AllTasksByStatus(ctx, s.cfg.DB, core.TaskDropped)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return tasksData{}, err
 	}
 
 	closed := append(done, dropped...)
@@ -79,14 +80,49 @@ func (s *Service) tasks(w http.ResponseWriter, r *http.Request) {
 		closed = closed[:closedLimit]
 	}
 
-	data := tasksData{
+	return tasksData{
 		Ready:      taskRows(ready),
 		InProgress: taskRows(inProgress),
 		Blocked:    blockedRows(blocked),
 		Closed:     taskRows(closed),
 		ClosedMore: closedMore,
+	}, nil
+}
+
+func (s *Service) tasks(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	data, err := s.tasksPage(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	// The HTML library auto-opens the most relevant task in the reader.
+	if !wantsJSON(r) {
+		if id := defaultTaskID(data); id != "" {
+			d, found, derr := s.taskDetailByID(ctx, id)
+			if derr != nil {
+				s.serverError(w, r, derr)
+				return
+			}
+			if found {
+				data.Selected = &d
+				data.SelectedAuto = true
+			}
+		}
 	}
 	s.render(w, r, "tasks", pageData{Title: "Tasks", Active: "tasks", Data: data})
+}
+
+// defaultTaskID picks the reader's default selection on the list URL: the work
+// happening now first, then the ready queue, then blocked, then the newest
+// closed ("" when there are no tasks at all).
+func defaultTaskID(data tasksData) string {
+	for _, bucket := range [][]taskRow{data.InProgress, data.Ready, data.Blocked, data.Closed} {
+		if len(bucket) > 0 {
+			return bucket[0].ID
+		}
+	}
+	return ""
 }
 
 // taskRelease is the owner override for a claimed task: it force-releases the

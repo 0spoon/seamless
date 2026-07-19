@@ -90,12 +90,14 @@ Every route answers in the shape the caller asked for:
 - **JSON** when the caller sets `?format=json` or an `Accept` header that wants
   JSON and not HTML. This is how `seam` reads the console's data.
 - **An HTML fragment** for entity details when the caller passes `?peek=1` - the
-  detail pane loads it without a page navigation.
+  detail pane loads it without a page navigation - or `?reader=1`, the richer
+  reader fragment the library screens (memories, notes, tasks) swap in place.
 
-Memory, note, task, event, and plan pages compose their full page from the same
-`detail-body` block their peek fragment renders, so the two cannot drift. Session
-and project deliberately do not: their fragments are compact summaries of much
-richer bespoke pages.
+Event and plan pages compose their full page from the same `detail-body` block
+their peek fragment renders, so the two cannot drift. Session and project
+deliberately do not: their fragments are compact summaries of much richer
+bespoke pages. Memory, note, and task detail URLs render their library screen
+with that entity open in the reader.
 
 Strictly-validated query params (`?sort`, `?scope`, `?tab`, `?w`) return a 400
 naming the bad param and listing the valid values, rather than silently falling
@@ -204,38 +206,44 @@ their lease countdowns, and the memories it produced.
 
 `/console/memories`, `/console/memories/{id}`
 
-The browser, grouped by project (global first) and then by kind in canonical
-order, with active and inactive memories separated. Each row shows the
-description - the only text an index ever shows - plus injection and read counts,
-last-injected time, and a `vscode://` link straight to the file. Sortable by name,
-recency, or reach; filterable by a substring of name, description, kind, or tag.
+A two-pane library: a rail of memories grouped by project (global first, kinds
+in canonical order, each dot colored by kind) beside a full-height reader.
+Sortable by name, recency, or reach; filterable by a substring of name,
+description, kind, or tag. Inactive memories collapse into an
+archived-and-superseded group at the rail's end, each carrying its status and,
+when superseded, what replaced it.
 
-Inactive memories carry their status (`superseded` or `archived`) and, when
-superseded, a link to what replaced them.
+The reader renders the body uncapped (through the markdown layer, with raw HTML
+disabled and a sanitizer on the output), the metadata - kind, project, tags,
+timestamps, the session that produced it - its reach counts, the `vscode://`
+link straight to the file, and its supersession neighbors in **both**
+directions: what replaced it, and what it replaced. **Archive** is the one
+action here.
 
-A memory's page renders the body (through the markdown layer, with raw HTML
-disabled and a sanitizer on the output), its metadata - kind, project, tags,
-timestamps, the session that produced it - its reach counts, and its supersession
-neighbors in **both** directions: what replaced it, and what it replaced.
-**Archive** is the one action here.
+Opening `/console/memories` auto-opens the most recently updated match; a
+memory's own URL opens the same screen with it selected. Clicking rail items
+swaps the reader in place (real URLs, browser Back works), and `j` / `k` step
+through the rail.
 
 ## Notes
 
 `/console/notes`, `/console/notes/{id}`
 
-The same browser shape for notes: grouped by project with global (`""`) first,
-sortable by recency or title, filterable by title, description, or tag. A note's
-page renders the body.
+The same library shape for notes: a project-grouped rail (global `""` first),
+sortable by recency or title, filterable by title, description, or tag. The
+reader renders the note as a document - uncapped body in a measured reading
+column, description, tags, word count, source URL, and the file path with an
+editor link.
 
 ## Tasks
 
 `/console/tasks`, `/console/tasks/{id}`
 
-Four buckets: **ready** (no unfinished blocker), **in progress**, **blocked** -
-each blocked row naming the specific tasks blocking it - and **closed** (done and
-dropped merged, newest first, capped at 25 with a count of the rest).
-
-A task's page carries its detail; **force-release** is the action, and it is the
+The same library shape, with the rail grouped into four buckets: **ready** (no
+unfinished blocker), **in progress**, **blocked**, and **closed** (done and
+dropped merged, newest first, capped at 25 with a count of the rest, collapsed
+by default). The reader carries the task's body, claim and lease state, and
+both dependency directions; **force-release** is the action, and it is the
 owner override - it takes the lock from whoever holds it.
 
 ## Plans
