@@ -45,8 +45,9 @@ archive for your platform (macOS, Linux, and Windows; amd64 and arm64), installs
 `seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
 the Claude Code hooks, registers the MCP server, and runs the daemon as a
 per-user service -- launchd on macOS, systemd `--user` on Linux, an at-logon
-Scheduled Task on Windows. Re-run it to upgrade: your config and `~/.seamless`
-are never touched.
+Scheduled Task on Windows. Upgrade any time with `seamlessd update` (re-runs the
+installer for you; `--check` reports installed vs latest): your config and
+`~/.seamless` are never touched.
 
 Then just start Claude Code in a git repo. There is no project to create and no
 repo to register: the session-start hook resolves your cwd to its git root,
