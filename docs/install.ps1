@@ -14,7 +14,8 @@
 # per-user Scheduled Task -- an at-logon task running as you, no admin. That is
 # the Windows analog of launchd / systemd --user: the whole install is per-user,
 # which is why it never elevates. Re-running it upgrades in place; the config and
-# ~\.seamless are never touched.
+# ~\.seamless are never touched. Uninstall anytime with `seamlessd.exe uninstall`
+# (add --purge to also delete the config and data).
 #
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
@@ -235,11 +236,15 @@ function Register-Service {
 
     $arg = 'serve --config "{0}" --log-file "{1}"' -f $Config, $LogFile
     $action = New-ScheduledTaskAction -Execute $seamlessd -Argument $arg
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
     # The canonical account identity (COMPUTERNAME\user, or DOMAIN\user on a
     # domain-joined box). $env:USERDOMAIN can read back as "WORKGROUP" on a local
     # account, which is not a valid principal, so ask Windows for the real name.
     $userId = [Security.Principal.WindowsIdentity]::GetCurrent().Name
+    # -User is load-bearing: without it -AtLogOn means "any user logs on", and
+    # registering an any-user logon trigger needs elevation (0x80070005 for a
+    # standard user) -- the same rule that makes `schtasks /create /sc onlogon`
+    # demand an admin prompt. Scoped to yourself it registers without admin.
+    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $userId
     $principal = New-ScheduledTaskPrincipal -UserId $userId `
         -LogonType Interactive -RunLevel Limited
     # ExecutionTimeLimit 0 = never auto-kill a long-running daemon (the default is
@@ -327,6 +332,8 @@ function Main {
     if ($onboardReady) {
         Say 'then run  /seam-onboard  once to teach your agents when to reach for Seamless.'
     }
+    Write-Host ''
+    Say "uninstall anytime: & `"$InstallDir\seamlessd.exe`" uninstall"
     Say "docs: $DocsUrl"
     Write-Host ''
 }

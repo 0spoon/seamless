@@ -13,7 +13,8 @@
 # checksum, install seamlessd + seam into ~/.local/bin, wire Claude Code (which
 # generates the bearer key on first run), then run the daemon as a per-user
 # service -- launchd on macOS, systemd --user on Linux. Re-running it upgrades
-# in place; the config and ~/.seamless are never touched.
+# in place; the config and ~/.seamless are never touched. Uninstall anytime with
+# `seamlessd uninstall` (add --purge to also delete the config and data).
 #
 # Overrides:
 #   SEAMLESS_VERSION            version to install (default: latest release)
@@ -432,6 +433,8 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	if [ "$ONBOARD_READY" = 1 ]; then
 		say 'then run  /seam-onboard  once to teach your agents when to reach for Seamless.'
 	fi
+	printf '\n'
+	say "uninstall anytime:  $INSTALL_DIR/seamlessd uninstall"
 	say "docs: $DOCS"
 	printf '\n'
 }

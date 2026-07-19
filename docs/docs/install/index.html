@@ -258,7 +258,7 @@ the script refuses root unless you insist.</p>
 <h2 id="install-from-a-clone">Install from a clone</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
 </span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
-</span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service + binaries (config kept)</span>
+</span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service, hooks, MCP, skills + binaries (data kept)</span>
 </span></span></code></pre><p><code>make install</code> is the same destination from your own build, and it is macOS-only
 (it renders the launchd plist from <code>deploy/launchd/</code>). It snapshots the binaries
 and config to stable locations, then points launchd <strong>and</strong> the Claude Code hooks
@@ -335,27 +335,28 @@ build disagrees with your config before an agent does.</p>
 check it before you debug anything else - a stale daemon still serving the old
 binary looks exactly like a bug in the new one.</p>
 <h2 id="uninstalling">Uninstalling</h2>
-<p>From a clone, <code>make uninstall</code> removes the service and the binaries. By hand it
-is three lines - stop the service, remove its definition, remove the binaries:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># macOS</span>
-</span></span><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless
-</span></span><span class="line"><span class="cl">rm ~/Library/LaunchAgents/org.thereisnospoon.seamless.plist
-</span></span><span class="line"><span class="cl">rm ~/.local/bin/seamlessd ~/.local/bin/seam
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl"><span class="c1"># Linux</span>
-</span></span><span class="line"><span class="cl">systemctl --user disable --now seamless
-</span></span><span class="line"><span class="cl">rm ~/.config/systemd/user/seamless.service
-</span></span><span class="line"><span class="cl">rm ~/.local/bin/seamlessd ~/.local/bin/seam
-</span></span></code></pre><p>On Windows (PowerShell), unregister the task and remove the binaries:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="n">Seamless</span> <span class="n">-Confirm:</span><span class="vm">$false</span>
-</span></span><span class="line"><span class="cl"><span class="nb">Remove-Item</span> <span class="p">~/.</span><span class="n">local</span><span class="p">/</span><span class="n">bin</span><span class="p">/</span><span class="n">seamlessd</span><span class="p">.</span><span class="n">exe</span><span class="p">,</span> <span class="p">~/.</span><span class="n">local</span><span class="p">/</span><span class="n">bin</span><span class="p">/</span><span class="n">seam</span><span class="p">.</span><span class="py">exe</span>
-</span></span></code></pre><p>Claude Code keeps its own registrations: <code>claude mcp remove seamless --scope user</code>
-drops the MCP server, and the hooks come out of <code>~/.claude/settings.json</code> (the
-install backed up the original next to it).</p>
-<p>None of this touches <code>~/.seamless</code> or your config. Your memories and notes are
-markdown files; the uninstall of a program should not delete your knowledge.
-Remove the directory by hand if you actually mean it - and see
-<a href="../reference/storage/">Storage</a> first for what is in there.</p>
+<p><code>seamlessd uninstall</code> is the one command, on every OS. It reverses the whole
+install - stops and removes the per-user service, strips the Claude Code and
+Codex hooks, deregisters the MCP server, removes the <code>/seam-onboard</code> and
+<code>/seam-research</code> skills, and deletes the binaries - and it is idempotent, so a
+second run is a clean no-op. Preview it first with <code>--dry-run</code>:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall --dry-run   <span class="c1"># print exactly what would be removed</span>
+</span></span><span class="line"><span class="cl">seamlessd uninstall             <span class="c1"># do it (asks to confirm on a terminal)</span>
+</span></span></code></pre><p>From a clone it is <code>make uninstall</code>, which builds first and then runs that same
+command against your installed copy.</p>
+<p><strong>Your knowledge is kept by default.</strong> <code>~/.config/seamless</code> (your bearer key) and
+<code>~/.seamless</code> (the database, and your memories and notes as markdown) are left in
+place - the uninstall of a program should not delete your knowledge. Add
+<code>--purge</code> (or <code>make uninstall PURGE=1</code>) only when you actually mean to delete
+them; a guard refuses to purge a path that resolves to your home directory or the
+filesystem root. See <a href="../reference/storage/">Storage</a> for what is in there.</p>
+<p>The hooks come out of <code>~/.claude/settings.json</code> (and Codex's <code>hooks.json</code>) by the
+same ownership test the installer uses, so an entry whose marker Claude Code
+stripped is still recognized; the install's original backup sits next to the file
+either way. If you would rather do it by hand - a bare binary you never installed
+a service for, say - the service teardown is <code>launchctl bootout</code> /
+<code>systemctl --user disable --now</code> / <code>Unregister-ScheduledTask -TaskName Seamless</code>,
+and <code>claude mcp remove seamless</code> drops the MCP registration.</p>
 <h2 id="security-posture">Security posture</h2>
 <p>What you are accepting when you run this:</p>
 <ul>
