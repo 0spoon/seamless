@@ -386,11 +386,11 @@ func TestPlans_HTMLShellRenders(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "agent-cache")
 }
 
-// TestPlanPeek_FragmentAndAffordance covers the plan fragment path added when
-// plans rows became peek triggers: planDetail now serves three ways through
-// renderDetail (JSON / ?peek=1 fragment / full plan.html page), and the list
-// rows carry data-peek so a whole-row click loads the detail pane.
-func TestPlanPeek_FragmentAndAffordance(t *testing.T) {
+// TestPlanPeek_FragmentAndLibraryPage covers the two HTML shapes of a plan
+// detail: the ?peek=1 fragment kept for detail-pane surfaces (search results),
+// and the default page, which is the plans library with the plan open in the
+// reader.
+func TestPlanPeek_FragmentAndLibraryPage(t *testing.T) {
 	_, mgr, mux := newConsoleWithFiles(t)
 	seedPlanComposition(t, mgr)
 
@@ -404,24 +404,51 @@ func TestPlanPeek_FragmentAndAffordance(t *testing.T) {
 	require.Contains(t, fb, "agent-cache")     // attached agent note ref
 	require.Contains(t, fb, "/console/notes/") // note refs are peek links
 
-	// Default (no peek) still renders the bespoke full plan.html page.
+	// Default (no peek) renders the library page with the plan in the reader.
 	full := getPeek(t, mux, "/console/plans/my-plan")
 	require.Equal(t, http.StatusOK, full.Code)
 	require.Contains(t, full.Body.String(), "<html")
+	require.Contains(t, full.Body.String(), `id="lib-reader"`)
 	require.Contains(t, full.Body.String(), "Do the thing.")
+	require.NotContains(t, full.Body.String(), "data-auto-url=", "an explicit selection is not client-pinned")
 
-	// The list rows are peek triggers now (whole-row click loads the pane).
+	// The rail items are plain links; the window filter rides along on them.
 	list := getPeek(t, mux, "/console/plans?w=all")
 	require.Equal(t, http.StatusOK, list.Code)
-	require.Contains(t, list.Body.String(), `data-href="/console/plans/my-plan" data-peek`)
+	require.Contains(t, list.Body.String(), `href="/console/plans/my-plan?w=all"`)
 
 	// Unknown slug still 404s through the styled path.
 	require.Equal(t, http.StatusNotFound, getPeek(t, mux, "/console/plans/no-such-plan?peek=1").Code)
 }
 
+// TestPlansLibrary_AutoSelectPrefersInProgress pins the reader's default
+// selection on the list URL to the first rail item: the in-progress group
+// leads, so its newest plan wins over a ready one.
+func TestPlansLibrary_AutoSelectPrefersInProgress(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	seedPlanNarrative(t, mgr, "ready-plan")
+	addPlanTask(t, db, "ready-plan", core.TaskOpen)
+	seedPlanNarrative(t, mgr, "wip-plan")
+	addPlanTask(t, db, "wip-plan", core.TaskInProgress)
+
+	html := getPeek(t, mux, "/console/plans?w=all")
+	require.Equal(t, http.StatusOK, html.Code)
+	body := html.Body.String()
+	require.Contains(t, body, `id="lib-reader"`)
+	require.Contains(t, body, `data-auto-url="/console/plans/wip-plan?w=all"`)
+	require.Contains(t, body, `aria-current="page"`)
+
+	// ?reader=1 returns just the reader fragment for the in-place swap.
+	frag := getPeek(t, mux, "/console/plans/ready-plan?reader=1")
+	require.Equal(t, http.StatusOK, frag.Code)
+	require.NotContains(t, frag.Body.String(), "<html")
+	require.Contains(t, frag.Body.String(), "reader-sheet")
+	require.Contains(t, frag.Body.String(), "plan:ready-plan")
+}
+
 // TestPlans_HTMLGroupsInOrder renders the list HTML with a plan in each phase
-// and asserts the three grouped sections appear, newest-first order aside, in
-// the fixed order: In progress, then Ready, then Done.
+// and asserts the three rail groups appear, newest-first order aside, in the
+// fixed order: in progress, then ready, then done.
 func TestPlans_HTMLGroupsInOrder(t *testing.T) {
 	db, mgr, mux := newConsoleWithFiles(t)
 	seedPlanNarrative(t, mgr, "wip-plan")
@@ -437,10 +464,10 @@ func TestPlans_HTMLGroupsInOrder(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 	body := rr.Body.String()
 
-	inProgress := strings.Index(body, `In progress <span class="count">`)
-	ready := strings.Index(body, `Ready <span class="count">`)
-	done := strings.Index(body, `Done <span class="count">`)
-	require.Greater(t, inProgress, -1, "In progress header present")
-	require.Greater(t, ready, inProgress, "Ready header after In progress")
-	require.Greater(t, done, ready, "Done header after Ready")
+	inProgress := strings.Index(body, `id="rg-inprogress"`)
+	ready := strings.Index(body, `id="rg-ready"`)
+	done := strings.Index(body, `id="rg-done"`)
+	require.Greater(t, inProgress, -1, "in-progress group present")
+	require.Greater(t, ready, inProgress, "ready group after in progress")
+	require.Greater(t, done, ready, "done group after ready")
 }

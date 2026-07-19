@@ -91,13 +91,14 @@ Every route answers in the shape the caller asked for:
   JSON and not HTML. This is how `seam` reads the console's data.
 - **An HTML fragment** for entity details when the caller passes `?peek=1` - the
   detail pane loads it without a page navigation - or `?reader=1`, the richer
-  reader fragment the library screens (memories, notes, tasks) swap in place.
+  reader fragment the library screens (memories, notes, tasks, plans) swap in
+  place.
 
-Event and plan pages compose their full page from the same `detail-body` block
-their peek fragment renders, so the two cannot drift. Session and project
+The event page composes its full page from the same `detail-body` block its
+peek fragment renders, so the two cannot drift. Session and project
 deliberately do not: their fragments are compact summaries of much richer
-bespoke pages. Memory, note, and task detail URLs render their library screen
-with that entity open in the reader.
+bespoke pages. Memory, note, task, and plan detail URLs render their library
+screen with that entity open in the reader.
 
 Strictly-validated query params (`?sort`, `?scope`, `?tab`, `?w`) return a 400
 naming the bad param and listing the valid values, rather than silently falling
@@ -250,18 +251,20 @@ owner override - it takes the lock from whoever holds it.
 
 `/console/plans`, `/console/plans/{slug}`
 
-Both kinds of plan in one list, grouped by phase (in progress, ready, done):
+The same library shape, with the rail grouped by phase (**in progress**,
+**ready**, **done**) and scoped by the window selector in the rail's tools
+(24h by default). Both kinds of plan share the rail:
 
 - **captures** - Claude Code plan-mode captures (`cc-plan` notes), with their
   lifecycle status, iteration count, and cached subagent runs.
 - **composed** - plain [plans-as-composition](/concepts/tasks-and-plans/) plans (a
   note tagged `plan:<slug>` plus its tasks), which have none of the capture-only
-  columns.
+  fields.
 
-A capture owns its slug; composed plans fill only the rest. A plan's page shows
-the rendered plan body, the notes attached to the composition (supporting notes
-and agent caches), and the step tasks. **Approve** appears here, for captures
-only.
+A capture owns its slug; composed plans fill only the rest. The reader shows
+the rendered plan body, the step tasks, and the notes attached to the
+composition (supporting notes and agent caches). **Approve** appears here, for
+captures only.
 
 ## Relations
 

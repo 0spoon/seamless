@@ -1,5 +1,7 @@
 {{define "content"}}
 {{with .Data}}
+{{$sel := .Selected}}
+{{$qs := .QS}}
 <div class="topbar">
   <div>
     <h1>Plans</h1>
@@ -7,67 +9,116 @@
   </div>
 </div>
 
-<div class="win-tabs win-tabs-page">
-  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/plans?w={{.Key}}">{{.Label}}</a>{{end}}
-</div>
-
-<div class="list-detail-split">
-  <div class="list-pane">
-{{if .Rows}}
-
-{{if .InProgress}}
-<div class="sess-group">
-  <h2><span class="live-dot"></span> In progress <span class="count">{{.InProgress}}</span></h2>
-  {{template "plan-table" phaseRows .Rows "in_progress"}}
-</div>
-{{end}}
-
-{{if .Ready}}
-<div class="sess-group">
-  <h2>Ready <span class="count">{{.Ready}}</span></h2>
-  {{template "plan-table" phaseRows .Rows "ready"}}
-</div>
-{{end}}
-
-{{if .Done}}
-<div class="sess-group">
-  <h2>Done <span class="count">{{.Done}}</span></h2>
-  {{template "plan-table" phaseRows .Rows "done"}}
-</div>
-{{end}}
-
-{{else}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "map"}}</span><div>No plans{{if ne .Window "all"}} in this window{{end}} &mdash; Claude Code plan-mode captures and plan:&lt;slug&gt; compositions land here.</div></div>
-{{end}}
-  </div><!-- .list-pane -->
-  <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Plan detail">
-    <div class="detail-pane-chrome">
-      <a class="detail-open btn small" href="#">open full &nearr;</a>
-      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+{{if or .Total .Selected}}
+<div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/plans/{{.Selected.Row.Slug}}{{$qs}}"{{end}}>
+  <nav class="lib-rail" aria-label="Plans">
+    <div class="rail-tools">
+      {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
+      <div class="seg">
+        {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
+      </div>
     </div>
-    <div class="detail-pane-body"></div>
+    <div class="rail-scroll">
+    {{if .Rows}}
+    <div class="rail-groups">
+      {{if .InProgress}}
+      <section class="rail-group" id="rg-inprogress">
+        <header class="rail-group-hd"><span class="hd-label"><span class="live-dot"></span>in progress</span> <span class="n">{{.InProgress}}</span></header>
+        <div class="rail-items">
+          {{range phaseRows .Rows "in_progress"}}
+          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+      {{if .Ready}}
+      <section class="rail-group" id="rg-ready">
+        <header class="rail-group-hd">ready <span class="n">{{.Ready}}</span></header>
+        <div class="rail-items">
+          {{range phaseRows .Rows "ready"}}
+          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+      {{if .Done}}
+      <section class="rail-group" id="rg-done">
+        <header class="rail-group-hd">done <span class="n">{{.Done}}</span></header>
+        <div class="rail-items">
+          {{range phaseRows .Rows "done"}}
+          <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="rail-none">No plans in {{.WindowLabel}} &mdash; widen the window.</div>
+    {{end}}
+    </div><!-- .rail-scroll -->
+  </nav>
+  <section class="lib-reader" id="lib-reader" data-base="/console/plans" aria-live="polite" aria-label="Plan">
+    {{if .Selected}}{{template "plan-reader" .Selected}}{{else}}
+    <div class="reader-empty dotgrid"><span class="empty-ico">{{icon "map"}}</span><div>Select a plan to read it here.</div></div>
+    {{end}}
   </section>
-</div><!-- .list-detail-split -->
+</div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "map"}}</span><div>No plans yet &mdash; Claude Code plan-mode captures and plan:&lt;slug&gt; compositions land here.</div></div>
+{{end}}
 {{end}}
 {{end}}
 
-{{define "plan-table"}}
-<div class="table-wrap">
-  <table>
-    <thead><tr><th>Plan</th><th>Status</th><th>Project</th><th>Tasks</th><th>Iter</th><th>Agents</th><th>Updated</th></tr></thead>
-    <tbody>
-      {{range .}}
-      <tr id="plan-{{.Slug}}" class="row-link" data-href="/console/plans/{{.Slug}}" data-peek>
-        <td class="mem-name"><strong><a href="/console/plans/{{.Slug}}" data-peek>{{.Title}}</a></strong><div class="desc mono">plan:{{.Slug}} &middot; {{if eq .Source "capture"}}{{.Basename}}.md{{else}}composed{{end}}</div></td>
-        <td>{{if .Status}}<span class="badge {{planTone .Status}}">{{.Status}}</span>{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        <td class="mono">{{if .TasksTotal}}{{.TasksDone}}/{{.TasksTotal}}{{if .TasksWIP}} <span class="live-dot" title="{{.TasksWIP}} in progress"></span>{{end}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        <td>{{if .Iteration}}{{.Iteration}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        <td>{{if .Agents}}{{.Agents}}{{else}}<span class="muted">&mdash;</span>{{end}}</td>
-        <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
-      </tr>
-      {{end}}
-    </tbody>
-  </table>
-</div>
+{{define "plan-reader"}}
+<article class="reader-sheet">
+  <header class="reader-head">
+    <div class="reader-eyebrow">
+      <span class="kind">plan:{{.Row.Slug}}</span>{{copyBtn .Row.Slug}}
+      {{if .Row.Status}}<span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>{{end}}
+      {{if .Row.Project}}<a class="chip-parent" href="/console/projects/{{.Row.Project}}">{{icon "git-branch"}}{{.Row.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
+    </div>
+    <h2 class="reader-title">{{.Row.Title}}{{copyBtn .Row.Title}}</h2>
+    <div class="reader-facts">
+      <span class="fact">{{if eq .Row.Source "capture"}}CC capture{{if .Row.Basename}} &middot; <span class="mono">{{.Row.Basename}}.md</span>{{end}}{{else}}composed{{end}}</span>
+      {{if .Row.Iteration}}<span class="fact">iteration {{.Row.Iteration}}</span>{{end}}
+      {{if .Row.TasksTotal}}<span class="fact">{{.Row.TasksDone}}/{{.Row.TasksTotal}} steps done{{if .Row.TasksWIP}} &middot; {{.Row.TasksWIP}} in progress{{end}}</span>{{end}}
+      {{if .Row.Agents}}<span class="fact">{{.Row.Agents}} agent run{{if ne .Row.Agents 1}}s{{end}}</span>{{end}}
+      <span class="fact" title="{{ts .Row.Updated}}">updated {{ago .Row.Updated}}</span>
+      <span class="fact"><a href="/console/notes/{{.Row.NoteID}}">{{icon "file-text"}} note</a></span>
+    </div>
+  </header>
+  {{if .BodyLoaded}}<div class="prose doc">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
+  {{if .Tasks}}
+  <section class="reader-links">
+    <h3>Steps <span class="count">{{len .Tasks}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Tasks}}<li><a href="/console/tasks/{{.ID}}">{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+  {{if .Attached}}
+  <section class="reader-links">
+    <h3>Attached notes <span class="count">{{len .Attached}}</span></h3>
+    <ul class="peek-refs">
+      {{range .Attached}}<li><a href="/console/notes/{{.ID}}">{{.Title}}</a> {{if .IsAgent}}<span class="badge">agent-cache</span>{{end}} <span class="muted" title="{{ts .Updated}}">{{ago .Updated}}</span></li>{{end}}
+    </ul>
+  </section>
+  {{end}}
+  {{if .CanApprove}}
+  <footer class="reader-foot">
+    <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
+      <button class="link-act" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">approve plan</button>
+    </form>
+  </footer>
+  {{end}}
+</article>
 {{end}}
