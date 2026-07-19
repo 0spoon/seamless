@@ -10,6 +10,7 @@
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
 //	seamlessd family        manage project families
 //	seamlessd console-open  open the console in a browser, pre-authenticated
+//	seamlessd start         start|stop|restart|status the installed service
 //	seamlessd version       print the version
 package main
 
@@ -97,6 +98,14 @@ func main() {
 		err = runFamily(args)
 	case "console-open":
 		err = runConsoleOpen(args)
+	case "start":
+		err = runServiceAction(actionStart, args)
+	case "stop":
+		err = runServiceAction(actionStop, args)
+	case "restart":
+		err = runServiceAction(actionRestart, args)
+	case "status":
+		err = runServiceAction(actionStatus, args)
 	case "version", "-v", "--version":
 		fmt.Printf("seamlessd %s (commit %s, built %s)\n", version, commit, buildDate)
 	case "help", "-h", "--help":
@@ -127,6 +136,10 @@ usage:
   seamlessd family         manage project families (list|add|remove)
   seamlessd console-open   open the console in a browser, pre-authenticated
                            (--browser "Google Chrome" targets a specific browser; macOS only)
+  seamlessd start          start the installed service (launchd/systemd/Scheduled Task)
+  seamlessd stop           stop the installed service
+  seamlessd restart        restart the installed service in place
+  seamlessd status         print the installed service's state
   seamlessd version        print the version
 `, version)
 }

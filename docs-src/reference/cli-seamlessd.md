@@ -1,6 +1,6 @@
 ---
 title: seamlessd CLI
-description: The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, and version.
+description: The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.
 ---
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
@@ -204,6 +204,29 @@ error on other platforms rather than silently opening the default browser.
 It refuses to run when `mcp.api_key` is empty, or when the server does not
 answer `/healthz` within two seconds - the page has nowhere to POST otherwise.
 Any HTTP response counts as reachable, including a degraded 503.
+
+## seamlessd start / stop / restart / status {#seamlessd_service}
+
+```bash
+seamlessd start      # or: stop | restart | status
+```
+
+Control the installed background service without remembering each platform's
+service manager. `start`, `stop`, and `restart` act on the LaunchAgent (macOS),
+the systemd `--user` unit (Linux), or the Scheduled Task (Windows); `status`
+prints that manager's own state output.
+
+These control an **already-installed** service - they do not create one. If it
+was never installed, they exit with a hint to run the installer (or `make
+install` from a clone) rather than a cryptic launchctl/systemctl/schtasks error.
+
+`restart` is in-place and fast (on macOS `launchctl kickstart -k`, falling back
+to a fresh load if the job was unloaded). `stop` fully stops the service - on
+macOS the LaunchAgent has `KeepAlive`, so this unloads it rather than letting it
+be resurrected. Idempotent no-ops - starting a running service, stopping a
+stopped one - are reported as a note, not a failure.
+
+From a clone, `make start` / `stop` / `restart` / `status` wrap these exactly.
 
 ## seamlessd version {#seamlessd_version}
 

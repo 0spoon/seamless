@@ -71,8 +71,8 @@ PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve installer-check site-check site-stamp release-snapshot install-git-hooks uninstall-git-hooks \
-	install uninstall _seed-config _reload-service _wait-healthy start-service stop-service restart-service \
-	service-status logs install-onboard-skill uninstall-onboard-skill \
+	install uninstall _seed-config _reload-service _wait-healthy start stop restart status \
+	logs install-onboard-skill uninstall-onboard-skill \
 	install-research-skill uninstall-research-skill clean
 
 help:
@@ -104,10 +104,10 @@ help:
 	@echo "                       point the service + hooks there, and restart"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
-	@echo "    start-service      load the installed service"
-	@echo "    stop-service       unload the service (KeepAlive will not resurrect it)"
-	@echo "    restart-service    restart the running service in place"
-	@echo "    service-status     print the service's launchd state"
+	@echo "    start              start the installed service (launchd/systemd/task)"
+	@echo "    stop               stop the installed service"
+	@echo "    restart            restart the installed service in place"
+	@echo "    status             print the installed service's state"
 	@echo "    logs               follow the service log ($(SVC_LOG))"
 	@echo "  install-git-hooks        enable .githooks/ (pre-commit runs check-fast)"
 	@echo "  uninstall-git-hooks      disable .githooks/"
@@ -376,31 +376,22 @@ PURGE ?=
 uninstall: build
 	@$(BIN_DIR)/$(BINARY) uninstall --yes --install-dir $(PREFIX_BIN) $(if $(strip $(PURGE)),--purge,)
 
-# Load the already-installed plist. Run install first if it is missing.
-start-service:
-	@test -f $(SVC_PLIST) || { echo "ERROR: $(SVC_PLIST) not found; run 'make install' first"; exit 1; }
-	@launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null \
-	    && echo "started $(SVC_LABEL)" \
-	    || echo "$(SVC_LABEL) already loaded (use 'make restart-service')"
+# Service lifecycle, delegated to the Go binary so there is ONE cross-OS
+# implementation (launchd / systemd --user / Scheduled Task) instead of the old
+# macOS-only launchctl targets -- the same move `uninstall` made. `build` first
+# so a clean tree has a binary to run; it drives the INSTALLED service wherever
+# the installer placed it. A not-installed service prints a hint, not a crash.
+start: build
+	@$(BIN_DIR)/$(BINARY) start
 
-# Unload the service. Bootout stops it for good; KeepAlive only resurrects a
-# still-loaded job, so an unloaded one stays down until start/install.
-stop-service:
-	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null \
-	    && echo "stopped $(SVC_LABEL)" \
-	    || echo "$(SVC_LABEL) was not loaded"
+stop: build
+	@$(BIN_DIR)/$(BINARY) stop
 
-# Restart the running instance in place (fast; no plist re-render). Falls back
-# to bootstrap when the service is installed but not currently loaded.
-restart-service:
-	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null \
-	    && echo "restarted $(SVC_LABEL)" \
-	    || $(MAKE) start-service
+restart: build
+	@$(BIN_DIR)/$(BINARY) restart
 
-service-status:
-	@launchctl print gui/$(UID)/$(SVC_LABEL) 2>/dev/null \
-	    | grep -E 'state|pid|program =|last exit' \
-	    || echo "$(SVC_LABEL) is not loaded (run 'make start-service')"
+status: build
+	@$(BIN_DIR)/$(BINARY) status
 
 logs:
 	@test -f $(SVC_LOG) || { echo "no log yet at $(SVC_LOG)"; exit 1; }
