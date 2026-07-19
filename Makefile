@@ -102,7 +102,8 @@ help:
 	@echo "  Deploy (snapshots to stable paths; this is also the iterate loop):"
 	@echo "    install            build + copy bin/config to $(PREFIX_BIN) + $(CONFIG_DIR),"
 	@echo "                       point the service + hooks there, and restart"
-	@echo "    uninstall          remove the service + installed binaries (config kept)"
+	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
+	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
 	@echo "    start-service      load the installed service"
 	@echo "    stop-service       unload the service (KeepAlive will not resurrect it)"
 	@echo "    restart-service    restart the running service in place"
@@ -362,15 +363,18 @@ _seed-config:
 	    echo "seeded $(CONFIG) from seamless.yaml.example with a generated mcp.api_key"; \
 	fi
 
-# Stop + remove the service and the installed binaries. $(CONFIG) is left in
-# place (it holds your bearer key and any local edits) -- delete it by hand to
-# fully reset. Nothing here touches ~/.seamless: see `make help` and the docs,
-# your memories and notes are markdown and outlive the program.
-uninstall:
-	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
-	@rm -f $(SVC_PLIST)
-	@rm -f $(PREFIX_BIN)/$(BINARY) $(PREFIX_BIN)/$(CLI)
-	@echo "removed service $(SVC_LABEL) + binaries from $(PREFIX_BIN); left $(CONFIG) in place"
+# Full uninstall, delegated to the Go command so there is ONE cross-OS
+# implementation (service + hooks + MCP + skills + binaries) instead of the old
+# macOS-only launchctl+rm, which reversed neither the hooks/MCP/skills nor the
+# Linux/Windows services. --yes because make is non-interactive; --install-dir
+# honors `make install PREFIX=...`. $(CONFIG) and ~/.seamless are kept (your
+# memories and notes are markdown that outlive the program) unless you opt in:
+# `make uninstall PURGE=1`. `build` first so a clean tree still has a binary to
+# run -- it tears down the INSTALLED service and $(PREFIX_BIN) binaries, a
+# different file from ./bin, so it never deletes the one running it.
+PURGE ?=
+uninstall: build
+	@$(BIN_DIR)/$(BINARY) uninstall --yes --install-dir $(PREFIX_BIN) $(if $(strip $(PURGE)),--purge,)
 
 # Load the already-installed plist. Run install first if it is missing.
 start-service:

@@ -89,7 +89,7 @@ the script refuses root unless you insist.
 ```bash
 make install                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
 make install PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
-make uninstall                  # remove service + binaries (config kept)
+make uninstall                  # remove service, hooks, MCP, skills + binaries (data kept)
 ```
 
 `make install` is the same destination from your own build, and it is macOS-only
@@ -207,36 +207,34 @@ binary looks exactly like a bug in the new one.
 
 ## Uninstalling
 
-From a clone, `make uninstall` removes the service and the binaries. By hand it
-is three lines - stop the service, remove its definition, remove the binaries:
+`seamlessd uninstall` is the one command, on every OS. It reverses the whole
+install - stops and removes the per-user service, strips the Claude Code and
+Codex hooks, deregisters the MCP server, removes the `/seam-onboard` and
+`/seam-research` skills, and deletes the binaries - and it is idempotent, so a
+second run is a clean no-op. Preview it first with `--dry-run`:
 
 ```bash
-# macOS
-launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless
-rm ~/Library/LaunchAgents/org.thereisnospoon.seamless.plist
-rm ~/.local/bin/seamlessd ~/.local/bin/seam
-
-# Linux
-systemctl --user disable --now seamless
-rm ~/.config/systemd/user/seamless.service
-rm ~/.local/bin/seamlessd ~/.local/bin/seam
+seamlessd uninstall --dry-run   # print exactly what would be removed
+seamlessd uninstall             # do it (asks to confirm on a terminal)
 ```
 
-On Windows (PowerShell), unregister the task and remove the binaries:
+From a clone it is `make uninstall`, which builds first and then runs that same
+command against your installed copy.
 
-```powershell
-Unregister-ScheduledTask -TaskName Seamless -Confirm:$false
-Remove-Item ~/.local/bin/seamlessd.exe, ~/.local/bin/seam.exe
-```
+**Your knowledge is kept by default.** `~/.config/seamless` (your bearer key) and
+`~/.seamless` (the database, and your memories and notes as markdown) are left in
+place - the uninstall of a program should not delete your knowledge. Add
+`--purge` (or `make uninstall PURGE=1`) only when you actually mean to delete
+them; a guard refuses to purge a path that resolves to your home directory or the
+filesystem root. See [Storage](/reference/storage/) for what is in there.
 
-Claude Code keeps its own registrations: `claude mcp remove seamless --scope user`
-drops the MCP server, and the hooks come out of `~/.claude/settings.json` (the
-install backed up the original next to it).
-
-None of this touches `~/.seamless` or your config. Your memories and notes are
-markdown files; the uninstall of a program should not delete your knowledge.
-Remove the directory by hand if you actually mean it - and see
-[Storage](/reference/storage/) first for what is in there.
+The hooks come out of `~/.claude/settings.json` (and Codex's `hooks.json`) by the
+same ownership test the installer uses, so an entry whose marker Claude Code
+stripped is still recognized; the install's original backup sits next to the file
+either way. If you would rather do it by hand - a bare binary you never installed
+a service for, say - the service teardown is `launchctl bootout` /
+`systemctl --user disable --now` / `Unregister-ScheduledTask -TaskName Seamless`,
+and `claude mcp remove seamless` drops the MCP registration.
 
 ## Security posture
 

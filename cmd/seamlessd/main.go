@@ -6,6 +6,7 @@
 //	seamlessd doctor        run configuration + database self-checks
 //	seamlessd import        import a Seam v1 data directory
 //	seamlessd install-hooks install the Claude Code hooks + register MCP
+//	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
 //	seamlessd family        manage project families
 //	seamlessd console-open  open the console in a browser, pre-authenticated
@@ -88,6 +89,8 @@ func main() {
 		err = runInstallHooks(args)
 	case "install-summary":
 		err = runInstallSummary(args)
+	case "uninstall":
+		err = runUninstall(args)
 	case "map-repo":
 		err = runMapRepo(args)
 	case "family":
@@ -117,6 +120,8 @@ usage:
   seamlessd doctor         run configuration + database self-checks
   seamlessd import         import a Seam v1 data directory (--from ~/.seam)
   seamlessd install-hooks  install the Claude Code hooks + register the MCP server
+  seamlessd uninstall      remove Seamless: service, hooks, MCP, skills, binaries
+                           (--purge also deletes config + ~/.seamless; --dry-run to preview)
   seamlessd map-repo       override a repo's auto-derived project slug (rarely needed;
                            repos self-map on first session -- repo_project_map)
   seamlessd family         manage project families (list|add|remove)
