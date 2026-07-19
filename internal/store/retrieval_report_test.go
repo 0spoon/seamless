@@ -68,6 +68,77 @@ func TestBuildRetrievalReport_ByProject(t *testing.T) {
 	require.Equal(t, ProjectReach{Project: "", Surfaced: 0, Active: 1, ReachRate: 0, Injects: 0}, rep.ByProject[2])
 }
 
+func TestProjectRetrievalTrend(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	base := now.Add(-time.Hour)
+
+	seedMemoryRowProject(t, db, "A1", "alpha-one", "alpha", now)
+	seedMemoryRowProject(t, db, "B1", "beta-one", "beta", now)
+	seedMemoryRowProject(t, db, "G1", "global-one", "", now) // active, never surfaced
+
+	// alpha surfaced twice, beta once, plus an unknown id X (no active project).
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "", `{"item_ids":["A1"]}`, base)
+	insertRetrievalEvent(t, db, core.EventInjected, "sessB", "", `{"item_ids":["A1"]}`, base)
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "", `{"item_ids":["B1"]}`, base)
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "", `{"item_ids":["X"]}`, base)
+
+	sumBuckets := func(bs []TrendBucket) int {
+		n := 0
+		for _, b := range bs {
+			n += b.Count
+		}
+		return n
+	}
+
+	win := ResolveRetrievalWindow("all", now)
+
+	alpha, err := ProjectRetrievalTrend(ctx, db, win, "alpha")
+	require.NoError(t, err)
+	require.Equal(t, 2, sumBuckets(alpha), "only alpha's two A1 injections")
+
+	beta, err := ProjectRetrievalTrend(ctx, db, win, "beta")
+	require.NoError(t, err)
+	require.Equal(t, 1, sumBuckets(beta), "only beta's single B1 injection")
+
+	// global (G1 never surfaced; unknown X is not attributable) -> empty trend.
+	global, err := ProjectRetrievalTrend(ctx, db, win, "")
+	require.NoError(t, err)
+	require.Empty(t, global)
+
+	// The alpha trend agrees with the reach report's per-project injection volume.
+	rep, err := BuildRetrievalReport(ctx, db, win, 12)
+	require.NoError(t, err)
+	require.Equal(t, rep.ByProject[0].Injects, sumBuckets(alpha))
+}
+
+func TestProjectRetrievalTrend_WindowBounds(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	seedMemoryRowProject(t, db, "A1", "alpha-one", "alpha", now)
+
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "", `{"item_ids":["A1"]}`, now.Add(-48*time.Hour))
+	insertRetrievalEvent(t, db, core.EventInjected, "sessB", "", `{"item_ids":["A1"]}`, now.Add(-90*time.Minute))
+
+	sumBuckets := func(bs []TrendBucket) int {
+		n := 0
+		for _, b := range bs {
+			n += b.Count
+		}
+		return n
+	}
+
+	day, err := ProjectRetrievalTrend(ctx, db, ResolveRetrievalWindow("24h", now), "alpha")
+	require.NoError(t, err)
+	require.Equal(t, 1, sumBuckets(day), "the 48h-old injection is outside the 24h window")
+
+	all, err := ProjectRetrievalTrend(ctx, db, ResolveRetrievalWindow("all", now), "alpha")
+	require.NoError(t, err)
+	require.Equal(t, 2, sumBuckets(all))
+}
+
 func TestBuildRetrievalReport_Reach(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

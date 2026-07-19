@@ -262,6 +262,60 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 	return rep, nil
 }
 
+// ProjectRetrievalTrend builds the injection trend for a single project's active
+// memories over the window: the same time-bucketed series as RetrievalReport.Trend,
+// but counting only injections of memories whose project is `project`. Attribution
+// matches RetrievalReport.ByProject (by the injected memory's own project, not the
+// injecting session's), so a project's trend agrees with the reach numbers shown
+// beside it. Injections of archived/unknown ids -- which have no active project --
+// are excluded (unlike the global trend, they cannot be attributed to a slice).
+func ProjectRetrievalTrend(ctx context.Context, db *sql.DB, w RetrievalWindow, project string) ([]TrendBucket, error) {
+	meta, err := activeMemoryMeta(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	args := []any{string(core.EventInjected)}
+	q := `SELECT ts, item_id, payload FROM events WHERE kind = ?`
+	if !w.Since.IsZero() {
+		q += ` AND ts >= ?`
+		args = append(args, core.FormatTime(w.Since))
+	}
+	q += ` ORDER BY ts ASC, id ASC`
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("store.ProjectRetrievalTrend: query events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var injections []injection
+	var earliest time.Time
+	for rows.Next() {
+		var tsStr, itemID, payload string
+		if err := rows.Scan(&tsStr, &itemID, &payload); err != nil {
+			return nil, fmt.Errorf("store.ProjectRetrievalTrend: scan: %w", err)
+		}
+		ts, err := core.ParseTime(tsStr)
+		if err != nil {
+			return nil, fmt.Errorf("store.ProjectRetrievalTrend: parse ts: %w", err)
+		}
+		for _, id := range injectedItemIDs(itemID, payload) {
+			if m, ok := meta[id]; !ok || m.project != project {
+				continue
+			}
+			injections = append(injections, injection{item: id, at: ts})
+			if earliest.IsZero() || ts.Before(earliest) {
+				earliest = ts
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ProjectRetrievalTrend: rows: %w", err)
+	}
+
+	return buildTrend(injections, w, w.Key == "24h", earliest, time.Now()), nil
+}
+
 // injectedSessionKey resolves the session an injection belongs to: the event's
 // session_id column when set, else the payload's claude_session_id (older
 // briefing injections were recorded before the ambient session was linked, so

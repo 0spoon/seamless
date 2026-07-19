@@ -79,8 +79,8 @@ type projNoteVM struct {
 }
 
 // fillOverviewTab loads the Overview panel: memories-by-kind (project's active
-// memories), the global injection trend (no per-project series exists), and the
-// project's recent activity.
+// memories), this project's injection trend (its own memories, matching the
+// board reach), and the project's recent activity.
 func (s *Service) fillOverviewTab(ctx context.Context, data *projectWorkspaceData, slug string, win store.RetrievalWindow) error {
 	active, err := store.ActiveMemories(ctx, s.cfg.DB, slug)
 	if err != nil {
@@ -94,11 +94,11 @@ func (s *Service) fillOverviewTab(ctx context.Context, data *projectWorkspaceDat
 	}
 	data.MemByKind = orderKinds(byKind)
 
-	report, err := store.BuildRetrievalReport(ctx, s.cfg.DB, win, 0)
+	trend, err := store.ProjectRetrievalTrend(ctx, s.cfg.DB, win, slug)
 	if err != nil {
 		return err
 	}
-	data.Trend = report.Trend
+	data.Trend = trend
 
 	if s.cfg.Events != nil {
 		evs, err := s.cfg.Events.RecentExcluding(ctx, 120, core.EventToolCall, core.EventHookPrompt)

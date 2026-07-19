@@ -41,7 +41,8 @@ type projectWorkspaceData struct {
 	Tabs        []projectTabVM
 
 	Metrics   projectMetrics
-	Trend     []store.TrendBucket // global injection trend (no per-project series exists yet)
+	Trend     []store.TrendBucket // this project's injection trend (its own memories)
+	TrendWin  string              // window label the trend covers (e.g. "24h")
 	MemByKind []kindCount
 	Recent    []eventRow
 
@@ -148,7 +149,7 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 	data := projectWorkspaceData{
 		Slug: slug, Name: p.Name, Description: p.Description,
 		Parent: p.ParentSlug, Retired: p.Retired(), ActiveTab: tab,
-		IsRoot: p.ParentSlug == "",
+		IsRoot: p.ParentSlug == "", TrendWin: win.Label,
 	}
 	if data.Name == "" {
 		data.Name = slug
