@@ -42,10 +42,13 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// version is the seamlessd build version, bumped at release. A var, not a
-// const: goreleaser overrides it from the git tag via -X main.version (see
-// .goreleaser.yaml); a source build reports this default.
-var version = "0.3.0"
+// version is the seamlessd build version, injected from the git tag at build
+// time: goreleaser sets it via -X main.version (see .goreleaser.yaml) and so
+// does `make build`/`make install` (see the Makefile's VERSION). The git tag is
+// the single source of truth -- this default is only reached by a plain
+// `go build`/`go test` with no ldflags, so it is a non-release dev sentinel
+// (never a real version number, which would silently go stale here).
+var version = "0.0.0-dev"
 
 // commit and buildDate are link-time build metadata, set via
 //
