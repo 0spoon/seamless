@@ -185,13 +185,31 @@ the shape Seamless is built for.
 
 ## Upgrading
 
-Installed with the one-command installer? Re-run it - that *is* the upgrade:
+`seamlessd update` is the one command, on every OS. It upgrades in place to the
+latest release by re-running the canonical installer for you - so there is a
+single upgrade path to trust, not a second copy of the download-and-swap logic
+that could drift from the installer:
+
+```bash
+seamlessd update --check   # report installed vs latest, change nothing
+seamlessd update --dry-run # print exactly what it would fetch and run
+seamlessd update           # fetch the latest release and swap it in
+```
+
+It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
+update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
+Under the hood it fetches [the installer](https://thereisnospoon.org/install)
+(the PowerShell one on Windows) and runs it, which is exactly the same as doing
+it by hand:
 
 ```bash
 curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
-From a clone:
+From a clone, `make update` builds first and then runs that same command against
+your installed copy (`make update CHECK=1` only reports). Note that both
+`seamlessd update` and `make update` install the latest *release*, which may be
+older than your clone's HEAD - to deploy the build from your working tree instead:
 
 ```bash
 git pull

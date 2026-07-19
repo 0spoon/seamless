@@ -323,9 +323,22 @@ behaves like launchd's <code>KeepAlive</code>. Because it triggers at logon, it 
 you are signed in and stops when you sign out - a single-user desktop, which is
 the shape Seamless is built for.</p>
 <h2 id="upgrading">Upgrading</h2>
-<p>Installed with the one-command installer? Re-run it - that <em>is</em> the upgrade:</p>
+<p><code>seamlessd update</code> is the one command, on every OS. It upgrades in place to the
+latest release by re-running the canonical installer for you - so there is a
+single upgrade path to trust, not a second copy of the download-and-swap logic
+that could drift from the installer:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs latest, change nothing</span>
+</span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
+</span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
+</span></span></code></pre><p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
+Under the hood it fetches <a href="https://thereisnospoon.org/install">the installer</a>
+(the PowerShell one on Windows) and runs it, which is exactly the same as doing
+it by hand:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>From a clone:</p>
+</span></span></code></pre><p>From a clone, <code>make update</code> builds first and then runs that same command against
+your installed copy (<code>make update CHECK=1</code> only reports). Note that both
+<code>seamlessd update</code> and <code>make update</code> install the latest <em>release</em>, which may be
+older than your clone's HEAD - to deploy the build from your working tree instead:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">git pull
 </span></span><span class="line"><span class="cl">make check             <span class="c1"># everything green before you swap the running daemon</span>
 </span></span><span class="line"><span class="cl">make install           <span class="c1"># swap it</span>

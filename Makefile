@@ -80,7 +80,7 @@ PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve installer-check site-check site-stamp release-snapshot install-git-hooks uninstall-git-hooks \
-	install uninstall _seed-config _reload-service _wait-healthy start stop restart status \
+	install uninstall update _seed-config _reload-service _wait-healthy start stop restart status \
 	logs install-onboard-skill uninstall-onboard-skill \
 	install-research-skill uninstall-research-skill clean
 
@@ -113,6 +113,7 @@ help:
 	@echo "                       point the service + hooks there, and restart"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
+	@echo "    update             upgrade in place to the latest release (CHECK=1 only reports)"
 	@echo "    start              start the installed service (launchd/systemd/task)"
 	@echo "    stop               stop the installed service"
 	@echo "    restart            restart the installed service in place"
@@ -384,6 +385,17 @@ _seed-config:
 PURGE ?=
 uninstall: build
 	@$(BIN_DIR)/$(BINARY) uninstall --yes --install-dir $(PREFIX_BIN) $(if $(strip $(PURGE)),--purge,)
+
+# Self-update to the latest published release, delegated to the Go binary so the
+# release-fetch + checksum + swap logic keeps ONE home (the installer scripts the
+# binary re-runs) -- the same delegation `uninstall` and the lifecycle verbs use.
+# `build` first so a clean tree has a binary to run. Note this installs the latest
+# RELEASE into $(PREFIX_BIN), which may be OLDER than this clone's HEAD -- to
+# deploy your local build instead, use `make install`. CHECK=1 only reports
+# installed vs latest and changes nothing.
+CHECK ?=
+update: build
+	@$(BIN_DIR)/$(BINARY) update $(if $(strip $(CHECK)),--check,)
 
 # Service lifecycle, delegated to the Go binary so there is ONE cross-OS
 # implementation (launchd / systemd --user / Scheduled Task) instead of the old
