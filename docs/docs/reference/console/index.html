@@ -290,13 +290,14 @@ cookie to the browser they can actually see. (<code>--browser</code> is macOS-on
 JSON and not HTML. This is how <code>seam</code> reads the console's data.</li>
 <li><strong>An HTML fragment</strong> for entity details when the caller passes <code>?peek=1</code> - the
 detail pane loads it without a page navigation - or <code>?reader=1</code>, the richer
-reader fragment the library screens (memories, notes, tasks) swap in place.</li>
+reader fragment the library screens (memories, notes, tasks, plans) swap in
+place.</li>
 </ul>
-<p>Event and plan pages compose their full page from the same <code>detail-body</code> block
-their peek fragment renders, so the two cannot drift. Session and project
+<p>The event page composes its full page from the same <code>detail-body</code> block its
+peek fragment renders, so the two cannot drift. Session and project
 deliberately do not: their fragments are compact summaries of much richer
-bespoke pages. Memory, note, and task detail URLs render their library screen
-with that entity open in the reader.</p>
+bespoke pages. Memory, note, task, and plan detail URLs render their library
+screen with that entity open in the reader.</p>
 <p>Strictly-validated query params (<code>?sort</code>, <code>?scope</code>, <code>?tab</code>, <code>?w</code>) return a 400
 naming the bad param and listing the valid values, rather than silently falling
 back to a default - so an agent driving the console by URL sees the fix.</p>
@@ -442,18 +443,20 @@ both dependency directions; <strong>force-release</strong> is the action, and it
 owner override - it takes the lock from whoever holds it.</p>
 <h2 id="plans">Plans</h2>
 <p><code>/console/plans</code>, <code>/console/plans/{slug}</code></p>
-<p>Both kinds of plan in one list, grouped by phase (in progress, ready, done):</p>
+<p>The same library shape, with the rail grouped by phase (<strong>in progress</strong>,
+<strong>ready</strong>, <strong>done</strong>) and scoped by the window selector in the rail's tools
+(24h by default). Both kinds of plan share the rail:</p>
 <ul>
 <li><strong>captures</strong> - Claude Code plan-mode captures (<code>cc-plan</code> notes), with their
 lifecycle status, iteration count, and cached subagent runs.</li>
 <li><strong>composed</strong> - plain <a href="../../concepts/tasks-and-plans/">plans-as-composition</a> plans (a
 note tagged <code>plan:&lt;slug&gt;</code> plus its tasks), which have none of the capture-only
-columns.</li>
+fields.</li>
 </ul>
-<p>A capture owns its slug; composed plans fill only the rest. A plan's page shows
-the rendered plan body, the notes attached to the composition (supporting notes
-and agent caches), and the step tasks. <strong>Approve</strong> appears here, for captures
-only.</p>
+<p>A capture owns its slug; composed plans fill only the rest. The reader shows
+the rendered plan body, the step tasks, and the notes attached to the
+composition (supporting notes and agent caches). <strong>Approve</strong> appears here, for
+captures only.</p>
 <h2 id="relations">Relations</h2>
 <p><code>/console/relations</code></p>
 <p>The dependency spine a flat list cannot show: a plan expands into its steps, each

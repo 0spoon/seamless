@@ -37,7 +37,7 @@ var faviconSVG []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "search", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
-	"memories", "notes", "retrieval", "tasks", "plans", "plan", "gardener", "settings", "event", "error",
+	"memories", "notes", "retrieval", "tasks", "plans", "gardener", "settings", "event", "error",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -50,9 +50,9 @@ var peekNames = []string{"memory", "note", "task", "project", "session", "event"
 // the full page render one source (page chrome aside). session and project are
 // absent on purpose: their fragments are deliberate compact summaries of much
 // richer bespoke surfaces (the session workspace, the tabbed project workspace);
-// memory, note, and task are absent because their full pages are the library
-// screens, whose "<entity>-reader" blocks render the richer document view.
-var entityPeekPages = map[string]bool{"event": true, "plan": true}
+// memory, note, task, and plan are absent because their full pages are the
+// library screens, whose "<entity>-reader" blocks render the richer document view.
+var entityPeekPages = map[string]bool{"event": true}
 
 // pageData is the envelope every rendered page receives. Data holds the
 // page-specific payload; Nav/Active/Title drive the shared chrome.
@@ -210,7 +210,7 @@ func (s *Service) renderFragment(w http.ResponseWriter, r *http.Request, name st
 // renderReader writes a library entity's reader fragment -- the
 // "<entity>-reader" block of its library page template -- as a standalone HTML
 // fragment, for the in-place reader swap (?reader=1). page names the library
-// page ("notes", "memories", "tasks"); block its reader template.
+// page ("notes", "memories", "tasks", "plans"); block its reader template.
 func (s *Service) renderReader(w http.ResponseWriter, r *http.Request, page, block string, data any) {
 	tmpl, ok := s.pages[page]
 	if !ok {
@@ -229,9 +229,9 @@ func (s *Service) renderReader(w http.ResponseWriter, r *http.Request, page, blo
 // renderDetail serves an entity detail three ways: JSON for the CLI (wantsJSON),
 // an HTML fragment for a detail-pane fetch (?peek=1), or -- by default -- a full
 // layout-wrapped page (a shareable, no-JS fallback URL). name is the peek entity
-// ("event", "plan"); pd.Data is its payload. The library entities (memory,
-// note, task) branch by hand in their handlers instead, because their default
-// page is the shared library screen rather than a bespoke one.
+// ("event"); pd.Data is its payload. The library entities (memory, note, task,
+// plan) branch by hand in their handlers instead, because their default page is
+// the shared library screen rather than a bespoke one.
 func (s *Service) renderDetail(w http.ResponseWriter, r *http.Request, name string, pd pageData) {
 	if wantsJSON(r) {
 		writeJSON(w, http.StatusOK, pd.Data)

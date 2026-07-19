@@ -1,4 +1,4 @@
-/* Library screens (Notes / Memories / Tasks): a grouped rail on the left and a
+/* Library screens (Notes / Memories / Tasks / Plans): a grouped rail on the left and a
    document reader on the right. Every rail item is a real server-rendered link;
    this module upgrades clicks to an in-place reader swap (?reader=1 fragment +
    history.pushState of the item's canonical URL) so the rail keeps its scroll

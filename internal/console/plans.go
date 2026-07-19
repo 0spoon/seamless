@@ -2,10 +2,11 @@ package console
 
 // The Plans screen surfaces captured Claude Code plans (cc-plan notes): their
 // lifecycle status, iteration count, cached subagent runs, and tracking tasks.
-// It also carries the owner escape hatch for Claude Code bug #20397 (an
-// approval whose PostToolUse never fired): POST /console/plans/{slug}/approve
-// flips the note to approved and creates the tracking task, exactly as the
-// hook would have.
+// It is a library screen like Notes/Memories/Tasks: a phase-grouped rail beside
+// a reader, windowed by ?w=. It also carries the owner escape hatch for Claude
+// Code bug #20397 (an approval whose PostToolUse never fired): POST
+// /console/plans/{slug}/approve flips the note to approved and creates the
+// tracking task, exactly as the hook would have.
 
 import (
 	"context"
@@ -63,9 +64,10 @@ type planRow struct {
 	Updated time.Time `json:"updated"`
 }
 
-// plansData is the Plans list payload. Rows are one merged, newest-first list;
-// the phase counts drive the three grouped sections the template renders (in
-// progress, then ready, then done).
+// plansData is the Plans library payload. Rows are one merged, newest-first
+// list; the phase counts drive the three rail groups the template renders (in
+// progress, then ready, then done). The Selected/QS fields drive the HTML
+// reader pane only; JSON list callers get the same lean payload as before.
 type plansData struct {
 	Rows  []planRow `json:"rows"`
 	Count int       `json:"count"` // rows inside the window
@@ -79,6 +81,14 @@ type plansData struct {
 	Window      string         `json:"window"`
 	WindowLabel string         `json:"windowLabel"`
 	Windows     []windowOption `json:"-"`
+	// Selected is the plan open in the reader: the requested one on a
+	// /console/plans/{slug} page, or the first rail item on the list URL
+	// (SelectedAuto, which the client pins into the URL).
+	Selected     *planDetailData `json:"-"`
+	SelectedAuto bool            `json:"-"`
+	// QS is the ?w= suffix rail links carry so the active window survives a
+	// selection change ("" at the default).
+	QS string `json:"-"`
 }
 
 // planKey identifies a plan by the (project, slug) pair rather than the slug
@@ -117,18 +127,63 @@ type planDetailData struct {
 func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
-	agentCount, err := s.planAgentCounts(ctx)
+	data, err := s.plansPage(ctx, win)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	// The HTML library auto-opens the first rail item in the reader.
+	if !wantsJSON(r) {
+		if slug := defaultPlanSlug(data.Rows); slug != "" {
+			d, found, derr := s.planDetailBySlug(ctx, slug)
+			if derr != nil {
+				s.serverError(w, r, derr)
+				return
+			}
+			if found {
+				data.Selected = &d
+				data.SelectedAuto = true
+			}
+		}
+	}
+	s.render(w, r, "plans", pageData{Title: "Plans", Active: "plans", Data: data})
+}
+
+// defaultPlanSlug picks the reader's default selection on the list URL: the
+// first rail item in display order -- the newest in-progress plan, then ready,
+// then done ("" when the window is empty).
+func defaultPlanSlug(rows []planRow) string {
+	for _, phase := range []string{planPhaseInProgress, planPhaseReady, planPhaseDone} {
+		for _, r := range rows {
+			if r.Phase == phase {
+				return r.Slug
+			}
+		}
+	}
+	return ""
+}
+
+// planQS renders the ?w= suffix rail links carry so a selection change keeps
+// the active window ("" at the 24h default).
+func planQS(winKey string) string {
+	if winKey == "24h" {
+		return ""
+	}
+	return "?w=" + winKey
+}
+
+// plansPage assembles the merged, newest-first plan list for the given window.
+func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (plansData, error) {
+	agentCount, err := s.planAgentCounts(ctx)
+	if err != nil {
+		return plansData{}, err
 	}
 	// Every note carrying a plan:<slug> tag, both sources: composedPrimaries picks
 	// the composed narratives out of this set, and the activity index spans all of
 	// it (captures and agent caches carry the slug tag too).
 	composed, err := store.NotesByTagPrefix(ctx, s.cfg.DB, "", plans.SlugTagPrefix())
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return plansData{}, err
 	}
 	activity := planNoteActivity(composed)
 	// Captures are the primary of their slug. A cc-plan note also carries its
@@ -136,8 +191,7 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 	// and let composed plans fill only the rest.
 	captures, err := store.NotesByTag(ctx, s.cfg.DB, "", plans.TagPlan)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return plansData{}, err
 	}
 	rows := make([]planRow, 0, len(captures))
 	owned := make(map[string]bool, len(captures))
@@ -169,6 +223,7 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 	data := plansData{
 		Rows: kept, Count: len(kept), Total: total,
 		Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+		QS: planQS(win.Key),
 	}
 	for _, row := range kept {
 		switch row.Phase {
@@ -180,7 +235,7 @@ func (s *Service) plansList(w http.ResponseWriter, r *http.Request) {
 			data.Ready++
 		}
 	}
-	s.render(w, r, "plans", pageData{Title: "Plans", Active: "plans", Data: data})
+	return data, nil
 }
 
 // composedPrimaries groups plan:<slug> notes by (project, slug) and returns the
@@ -221,22 +276,17 @@ func earlierPrimary(a, b core.Note) bool {
 	return a.ID < b.ID
 }
 
-func (s *Service) planDetail(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	slug := r.PathValue("slug")
+// planDetailBySlug assembles a plan's full detail payload: the row, the
+// rendered plan body, and the composition's attached notes and step tasks.
+// found=false means no note carries the plan:<slug> tag.
+func (s *Service) planDetailBySlug(ctx context.Context, slug string) (planDetailData, bool, error) {
 	planNote, attached, ok, err := s.planComposition(ctx, slug)
-	if err != nil {
-		s.serverError(w, r, err)
-		return
-	}
-	if !ok {
-		s.notFound(w, r, "No plan with slug "+slug+".")
-		return
+	if err != nil || !ok {
+		return planDetailData{}, ok, err
 	}
 	agentCount, err := s.planAgentCounts(ctx)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return planDetailData{}, false, err
 	}
 	// attached is every other note in the composition, so it carries the same
 	// note-activity the list derives from its index -- keep the two in step.
@@ -261,16 +311,49 @@ func (s *Service) planDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	tasks, err := store.ListTasksForPlan(ctx, s.cfg.DB, planNote.Project, "", slug)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return planDetailData{}, false, err
 	}
 	for _, t := range tasks {
 		d.Tasks = append(d.Tasks, planTaskRef{ID: t.ID, Title: t.Title, Status: string(t.Status)})
 	}
-	// renderDetail serves this three ways: JSON (CLI), the peek fragment
-	// (?peek=1, for the detail pane plans rows open), or -- by default -- the
-	// bespoke full plan.html page (since "plan" is a registered page).
-	s.renderDetail(w, r, "plan", pageData{Title: "Plan " + d.Row.Title, Active: "plans", Data: d})
+	return d, true, nil
+}
+
+func (s *Service) planDetail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	slug := r.PathValue("slug")
+	d, found, err := s.planDetailBySlug(ctx, slug)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !found {
+		s.notFound(w, r, "No plan with slug "+slug+".")
+		return
+	}
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, d)
+		return
+	}
+	// The peek fragment stays for the surfaces that open plans in a detail pane
+	// (search results); the library screen itself swaps readers.
+	if r.URL.Query().Get("peek") == "1" {
+		s.renderFragment(w, r, "plan", d)
+		return
+	}
+	if r.URL.Query().Get("reader") == "1" {
+		s.renderReader(w, r, "plans", "plan-reader", d)
+		return
+	}
+	// Default: the plans library page with this plan open in the reader.
+	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
+	data, err := s.plansPage(ctx, win)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	data.Selected = &d
+	s.render(w, r, "plans", pageData{Title: "Plan " + d.Row.Title, Active: "plans", Data: data})
 }
 
 // planApprove is the owner escape hatch for Claude Code bug #20397 (approve +
