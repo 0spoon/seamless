@@ -289,14 +289,16 @@ deploying.</p>
 <h2 id="the-service">The service</h2>
 <p>It runs as <strong>your</strong> user, not root: it reads your config, writes your files, and
 should die with your login session, not the machine.</p>
+<p>Whatever the platform, one set of verbs controls it - they resolve your OS's
+service manager for you:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd start       <span class="c1"># start | stop | restart | status</span>
+</span></span><span class="line"><span class="cl">make start            <span class="c1"># the same, from a clone (start | stop | restart | status)</span>
+</span></span></code></pre><p>These act on the already-installed service and print a hint if it was never
+installed. The platform-native commands below are what they wrap.</p>
 <p>On <strong>macOS</strong> it is a user LaunchAgent labelled <code>org.thereisnospoon.seamless</code> in
-<code>~/Library/LaunchAgents/</code>, logging to <code>~/.seamless/seamlessd.log</code>. From a clone,
-the Makefile wraps launchctl:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make service-status    <span class="c1"># is it loaded, what pid, last exit</span>
-</span></span><span class="line"><span class="cl">make logs              <span class="c1"># follow ~/.seamless/seamlessd.log</span>
-</span></span><span class="line"><span class="cl">make restart-service   <span class="c1"># restart in place</span>
-</span></span><span class="line"><span class="cl">make stop-service      <span class="c1"># unload (KeepAlive will not resurrect an unloaded job)</span>
-</span></span></code></pre><p>Without a clone, that is <code>launchctl print gui/$(id -u)/org.thereisnospoon.seamless</code>,
+<code>~/Library/LaunchAgents/</code>, logging to <code>~/.seamless/seamlessd.log</code>; <code>make logs</code>
+follows that log. Underneath, the verbs above wrap
+<code>launchctl print gui/$(id -u)/org.thereisnospoon.seamless</code>,
 <code>launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless</code>, and
 <code>launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless</code>.</p>
 <p>On <strong>Linux</strong> the installer writes a systemd user unit to

@@ -63,7 +63,7 @@ func runConsoleOpen(args []string) error {
 	}
 	host := browserHost(cfg.Addr)
 	if !serverReachable(host) {
-		return fmt.Errorf("seamlessd.console-open: console not reachable at http://%s -- start it with `make run` or `make start-service`", host)
+		return fmt.Errorf("seamlessd.console-open: console not reachable at http://%s -- start it with `make run` or `make start`", host)
 	}
 
 	page, err := renderConsoleLoginPage(host, cfg.MCP.APIKey)

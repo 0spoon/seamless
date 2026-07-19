@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seamlessd CLI - Seamless docs</title>
-<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, and version.">
+<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -158,7 +158,7 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>seamlessd CLI</h1>
-  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, and version.</p>
+  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.</p>
   <p><code>seamlessd</code> is both the server and the operator CLI. <code>serve</code> runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
 directly, without going through a running server. That means most of them work
@@ -395,6 +395,20 @@ error on other platforms rather than silently opening the default browser.</p>
 <p>It refuses to run when <code>mcp.api_key</code> is empty, or when the server does not
 answer <code>/healthz</code> within two seconds - the page has nowhere to POST otherwise.
 Any HTTP response counts as reachable, including a degraded 503.</p>
+<h2 id="seamlessd_service">seamlessd start / stop / restart / status</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd start      <span class="c1"># or: stop | restart | status</span>
+</span></span></code></pre><p>Control the installed background service without remembering each platform's
+service manager. <code>start</code>, <code>stop</code>, and <code>restart</code> act on the LaunchAgent (macOS),
+the systemd <code>--user</code> unit (Linux), or the Scheduled Task (Windows); <code>status</code>
+prints that manager's own state output.</p>
+<p>These control an <strong>already-installed</strong> service - they do not create one. If it
+was never installed, they exit with a hint to run the installer (or <code>make install</code> from a clone) rather than a cryptic launchctl/systemctl/schtasks error.</p>
+<p><code>restart</code> is in-place and fast (on macOS <code>launchctl kickstart -k</code>, falling back
+to a fresh load if the job was unloaded). <code>stop</code> fully stops the service - on
+macOS the LaunchAgent has <code>KeepAlive</code>, so this unloads it rather than letting it
+be resurrected. Idempotent no-ops - starting a running service, stopping a
+stopped one - are reported as a note, not a failure.</p>
+<p>From a clone, <code>make start</code> / <code>stop</code> / <code>restart</code> / <code>status</code> wrap these exactly.</p>
 <h2 id="seamlessd_version">seamlessd version</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
 </span></span></code></pre><p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
@@ -418,7 +432,7 @@ daemon is running older code than what you just built.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
+      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
     </ul>
   </aside>
   

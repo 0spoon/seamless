@@ -133,18 +133,21 @@ deploying.
 It runs as **your** user, not root: it reads your config, writes your files, and
 should die with your login session, not the machine.
 
-On **macOS** it is a user LaunchAgent labelled `org.thereisnospoon.seamless` in
-`~/Library/LaunchAgents/`, logging to `~/.seamless/seamlessd.log`. From a clone,
-the Makefile wraps launchctl:
+Whatever the platform, one set of verbs controls it - they resolve your OS's
+service manager for you:
 
 ```bash
-make service-status    # is it loaded, what pid, last exit
-make logs              # follow ~/.seamless/seamlessd.log
-make restart-service   # restart in place
-make stop-service      # unload (KeepAlive will not resurrect an unloaded job)
+seamlessd start       # start | stop | restart | status
+make start            # the same, from a clone (start | stop | restart | status)
 ```
 
-Without a clone, that is `launchctl print gui/$(id -u)/org.thereisnospoon.seamless`,
+These act on the already-installed service and print a hint if it was never
+installed. The platform-native commands below are what they wrap.
+
+On **macOS** it is a user LaunchAgent labelled `org.thereisnospoon.seamless` in
+`~/Library/LaunchAgents/`, logging to `~/.seamless/seamlessd.log`; `make logs`
+follows that log. Underneath, the verbs above wrap
+`launchctl print gui/$(id -u)/org.thereisnospoon.seamless`,
 `launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless`, and
 `launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless`.
 
