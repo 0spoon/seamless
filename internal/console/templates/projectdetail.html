@@ -34,7 +34,7 @@
   </div>
   <div class="two">
     <div class="card">
-      <h2>Retrieval trend <span class="h2-meta">all projects</span></h2>
+      <h2>Retrieval trend <span class="h2-meta">{{.TrendWin}}</span></h2>
       {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
     </div>
     <div class="card">
