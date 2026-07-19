@@ -89,6 +89,7 @@
       <span class="fact">injected {{.Injects}}&times;{{if .LastInjected}} &middot; last <span title="{{ts .LastInjected}}">{{ago .LastInjected}}</span>{{end}}</span>
       <span class="fact" title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under injected), so agents rarely re-read a memory they already have.">read {{.Reads}}&times;</span>
       {{if .Source}}<span class="fact">source {{if .SourceID}}<a href="/console/sessions/{{.SourceID}}">{{.Source}}</a>{{else}}{{.Source}}{{end}}</span>{{end}}
+      {{if .Model}}<span class="fact" title="Model that produced this content">model <span class="mono">{{.Model}}</span></span>{{end}}
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
       <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
     </div>

@@ -12,7 +12,7 @@ import (
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
-	cwd, source, ambient, metadata, created_at, updated_at`
+	cwd, source, model, ambient, metadata, created_at, updated_at`
 
 // ErrSessionNameExists is returned by CreateSession when the name is already
 // taken (sessions.name is UNIQUE). It mirrors ErrSlugExists so a caller racing
@@ -35,12 +35,12 @@ func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO sessions
 		    (id, name, project_slug, status, findings, claude_session_id,
-		     cwd, source, ambient, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		     cwd, source, model, ambient, metadata, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// claude_session_id column holds core.Session.ExternalSessionID (the column
 		// name predates Codex; see the field's doc for the intentional mismatch).
 		s.ID, s.Name, s.ProjectSlug, string(s.Status), s.Findings, s.ExternalSessionID,
-		s.CWD, s.Source, boolToInt(s.Ambient), meta,
+		s.CWD, s.Source, s.Model, boolToInt(s.Ambient), meta,
 		core.FormatTime(s.CreatedAt), core.FormatTime(s.UpdatedAt))
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -174,6 +174,43 @@ func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.T
 		core.FormatTime(now.UTC()), name)
 	if err != nil {
 		return fmt.Errorf("store.TouchSessionByName: %w", err)
+	}
+	return nil
+}
+
+// SetSessionModel records which LLM powers an active session's agent, keyed by
+// session ULID. The value is stored verbatim as the provider names it (e.g.
+// "claude-fable-5"). Targeted single-column write for the same reason as
+// ReactivateSessionByName: no read-modify-write of the whole row, so it cannot
+// clobber a concurrent findings/metadata update. The active-only guard keeps a
+// completed/expired session's attribution frozen at what it ended with, and the
+// model <> ? guard makes repeated reports of the same value free. No-op on an
+// empty id or model (an agent that never learns its model is not an error), so
+// a matched-zero-rows outcome is legitimate and deliberately unchecked.
+func SetSessionModel(ctx context.Context, db *sql.DB, id, model string) error {
+	if id == "" || model == "" {
+		return nil
+	}
+	_, err := db.ExecContext(ctx,
+		`UPDATE sessions SET model = ? WHERE id = ? AND status = 'active' AND model <> ?`,
+		model, id, model)
+	if err != nil {
+		return fmt.Errorf("store.SetSessionModel: %w", err)
+	}
+	return nil
+}
+
+// SetSessionModelByName is SetSessionModel keyed by the unique session name,
+// for the ambient hooks which know the {cc|cx}/{prefix} name (not the ULID).
+func SetSessionModelByName(ctx context.Context, db *sql.DB, name, model string) error {
+	if name == "" || model == "" {
+		return nil
+	}
+	_, err := db.ExecContext(ctx,
+		`UPDATE sessions SET model = ? WHERE name = ? AND status = 'active' AND model <> ?`,
+		model, name, model)
+	if err != nil {
+		return fmt.Errorf("store.SetSessionModelByName: %w", err)
 	}
 	return nil
 }
@@ -580,7 +617,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 	)
 	if err := rows.Scan(
 		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
-		&s.CWD, &s.Source, &ambient, &meta, &created, &updated,
+		&s.CWD, &s.Source, &s.Model, &ambient, &meta, &created, &updated,
 	); err != nil {
 		return core.Session{}, err
 	}

@@ -145,7 +145,8 @@ func captureExtra(value *yaml.Node, known map[string]bool) (map[string]any, erro
 var memoryKnownKeys = map[string]bool{
 	"id": true, "kind": true, "name": true, "description": true,
 	"project": true, "created": true, "updated": true, "valid_from": true,
-	"invalid_at": true, "superseded_by": true, "source_session": true, "tags": true,
+	"invalid_at": true, "superseded_by": true, "source_session": true,
+	"model": true, "tags": true,
 }
 
 // memoryFrontmatter mirrors a memory file's YAML frontmatter. Timestamps are
@@ -164,6 +165,7 @@ type memoryFrontmatter struct {
 	InvalidAt     string         `yaml:"invalid_at"`
 	SupersededBy  string         `yaml:"superseded_by"`
 	SourceSession string         `yaml:"source_session"`
+	Model         string         `yaml:"model"`
 	Tags          []string       `yaml:"tags"`
 	Extra         map[string]any `yaml:"-"`
 }
@@ -194,6 +196,7 @@ func (fm *memoryFrontmatter) MarshalYAML() (any, error) {
 	b.put("invalid_at", stringOrNull(fm.InvalidAt))
 	b.put("superseded_by", stringOrNull(fm.SupersededBy))
 	b.putIf("source_session", fm.SourceSession)
+	b.putIf("model", fm.Model)
 	if len(fm.Tags) > 0 {
 		b.put("tags", flowSeqNode(fm.Tags))
 	}
@@ -209,7 +212,8 @@ func (fm *memoryFrontmatter) MarshalYAML() (any, error) {
 
 var noteKnownKeys = map[string]bool{
 	"id": true, "title": true, "slug": true, "description": true,
-	"project": true, "created": true, "updated": true, "source_url": true, "tags": true,
+	"project": true, "created": true, "updated": true, "source_url": true,
+	"model": true, "tags": true,
 }
 
 // noteFrontmatter mirrors a note file's YAML frontmatter.
@@ -222,6 +226,7 @@ type noteFrontmatter struct {
 	Created     string         `yaml:"created"`
 	Updated     string         `yaml:"updated"`
 	SourceURL   string         `yaml:"source_url"`
+	Model       string         `yaml:"model"`
 	Tags        []string       `yaml:"tags"`
 	Extra       map[string]any `yaml:"-"`
 }
@@ -249,6 +254,7 @@ func (fm *noteFrontmatter) MarshalYAML() (any, error) {
 	b.put("created", scalarNode(fm.Created))
 	b.put("updated", scalarNode(fm.Updated))
 	b.putIf("source_url", fm.SourceURL)
+	b.putIf("model", fm.Model)
 	if len(fm.Tags) > 0 {
 		b.put("tags", flowSeqNode(fm.Tags))
 	}

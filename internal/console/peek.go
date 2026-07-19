@@ -53,6 +53,7 @@ type memoryDetail struct {
 	LastRead     *time.Time    `json:"lastRead,omitempty"`
 	Source       string        `json:"sourceSession,omitempty"`   // session name
 	SourceID     string        `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
+	Model        string        `json:"model,omitempty"`           // producing model, as the provider names it
 	ReplacedBy   string        `json:"replacedBy,omitempty"`      // name of the superseder
 	ReplacedByID string        `json:"replacedById,omitempty"`
 	Supersedes   []memoryRef   `json:"supersedes,omitempty"` // reverse: memories this replaced
@@ -77,7 +78,7 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 	d := memoryDetail{
 		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, Status: status, Tags: m.Tags,
-		Created: m.Created, Updated: m.Updated, Source: m.SourceSession,
+		Created: m.Created, Updated: m.Updated, Source: m.SourceSession, Model: m.Model,
 		FilePath: m.FilePath, AbsPath: abs, EditURL: edit,
 		CanArchive: s.cfg.Files != nil && m.Active(),
 	}
@@ -199,6 +200,7 @@ type noteDetail struct {
 	Words       int           `json:"words,omitempty"`
 	Tags        []string      `json:"tags,omitempty"`
 	SourceURL   string        `json:"sourceUrl,omitempty"`
+	Model       string        `json:"model,omitempty"` // producing model, as the provider names it
 	Created     time.Time     `json:"created"`
 	Updated     time.Time     `json:"updated"`
 	FilePath    string        `json:"filePath"`
@@ -212,7 +214,7 @@ func (s *Service) noteDetailData(ctx context.Context, n core.Note) noteDetail {
 	abs, edit := absAndEditURL(s.cfg.DataDir, n.FilePath)
 	d := noteDetail{
 		ID: n.ID, Title: n.Title, Slug: n.Slug, Description: n.Description,
-		Project: n.Project, Tags: n.Tags, SourceURL: n.SourceURL,
+		Project: n.Project, Tags: n.Tags, SourceURL: n.SourceURL, Model: n.Model,
 		Created: n.Created, Updated: n.Updated,
 		FilePath: n.FilePath, AbsPath: abs, EditURL: edit,
 	}

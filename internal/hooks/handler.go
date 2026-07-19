@@ -113,13 +113,16 @@ type hookPayload struct {
 	CWD            string `json:"cwd"`
 	Source         string `json:"source"`     // startup|resume|clear|compact
 	AgentType      string `json:"agent_type"` // non-empty => subagent
+	Model          string `json:"model"`      // Codex sends it; Claude Code does not (see setAmbientModel)
 }
 
 type promptPayload struct {
-	SessionID     string `json:"session_id"`
-	CWD           string `json:"cwd"`
-	UserPrompt    string `json:"user_prompt"` // Codex names this `prompt`; decodePrompt normalizes it
-	HookEventName string `json:"hook_event_name"`
+	SessionID      string `json:"session_id"`
+	TranscriptPath string `json:"transcript_path"`
+	CWD            string `json:"cwd"`
+	UserPrompt     string `json:"user_prompt"` // Codex names this `prompt`; decodePrompt normalizes it
+	HookEventName  string `json:"hook_event_name"`
+	Model          string `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
 }
 
 // endPayload is the SessionEnd request body.
@@ -139,6 +142,7 @@ type stopPayload struct {
 	TranscriptPath       string `json:"transcript_path"`
 	LastAssistantMessage string `json:"last_assistant_message"`
 	StopHookActive       bool   `json:"stop_hook_active"`
+	Model                string `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
 }
 
 // toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
@@ -209,6 +213,7 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	if p.AgentType == "" {
 		if name := h.ensureAmbientSession(ctx, client, p); name != "" {
 			briefing = injectAmbientLine(briefing, name)
+			h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
 		}
 	}
 	// Record after the ambient line is appended so the stored content is exactly
@@ -257,6 +262,7 @@ func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
 	// A Stop is proof the agent is alive this turn: heartbeat so the idle reaper
 	// does not expire the session mid-work. Always, for every client.
 	h.touchAmbient(ctx, client, p.SessionID)
+	h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
 
 	if client == ClientCodex {
 		h.harvestCodexStop(ctx, p)
@@ -439,6 +445,7 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	defer cancel()
 
 	h.touchAmbient(ctx, client, p.SessionID)
+	h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
 
 	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
 	if err != nil {
@@ -523,6 +530,31 @@ func (h *Handler) touchAmbient(ctx context.Context, client Client, claudeSession
 	}
 }
 
+// setAmbientModel records which LLM powers the ambient session's agent, stored
+// verbatim as the provider names it ("claude-fable-5", "gpt-5.5"). Codex hook
+// payloads carry the model directly; Claude Code's do not, so its sessions
+// fall back to tail-sniffing the transcript for the last main-thread assistant
+// entry's model id. Called on session-start, every prompt, and stop, so a
+// mid-session model switch updates the row (SetSessionModelByName no-ops when
+// the value is unchanged). Best-effort by the package's never-block contract:
+// nothing sniffable leaves the previous attribution in place, and a store
+// error only logs.
+func (h *Handler) setAmbientModel(ctx context.Context, client Client, claudeSessionID, model, transcriptPath string) {
+	if h.db == nil || claudeSessionID == "" {
+		return
+	}
+	model = strings.TrimSpace(model)
+	if model == "" && client == ClientClaudeCode {
+		model = transcriptModel(transcriptPath)
+	}
+	if model == "" {
+		return
+	}
+	if err := store.SetSessionModelByName(ctx, h.db, ambientName(client, claudeSessionID), model); err != nil {
+		h.logger.Warn("hooks: ambient model", "error", err)
+	}
+}
+
 // ambientRef resolves the ambient session ({cc|cx}/{prefix}) for a client's
 // external session id to its seamless ULID and project, best-effort. It returns
 // empty strings when the DB is absent, the id is empty, or no such session exists
@@ -540,6 +572,24 @@ func (h *Handler) ambientRef(ctx context.Context, client Client, claudeSessionID
 		return "", ""
 	}
 	return sess.ID, sess.ProjectSlug
+}
+
+// ambientModel returns the model recorded on the client's ambient session, or
+// "" when unknown (no DB, no id, no session, or a lookup failure -- logged, per
+// ambientRef). Plan capture stamps it onto the notes it writes.
+func (h *Handler) ambientModel(ctx context.Context, client Client, claudeSessionID string) string {
+	if h.db == nil || claudeSessionID == "" {
+		return ""
+	}
+	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(client, claudeSessionID))
+	if err != nil {
+		h.logger.Warn("hooks: ambient model lookup", "error", err)
+		return ""
+	}
+	if !ok {
+		return ""
+	}
+	return sess.Model
 }
 
 // recordSession appends a session lifecycle event for an ambient session.

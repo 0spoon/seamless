@@ -35,6 +35,7 @@ func sampleMemory() core.Memory {
 		Updated:       time.Date(2026, 7, 10, 18, 30, 0, 0, time.UTC),
 		ValidFrom:     time.Date(2026, 7, 10, 18, 0, 0, 0, time.UTC),
 		SourceSession: "cc/ab12cd34",
+		Model:         "claude-fable-5",
 	}
 }
 
@@ -59,7 +60,22 @@ func TestMemoryRoundTrip(t *testing.T) {
 	require.Nil(t, got.InvalidAt)
 	require.Empty(t, got.SupersededBy)
 	require.Equal(t, m.SourceSession, got.SourceSession)
+	require.Equal(t, m.Model, got.Model)
 	require.Equal(t, "memory/seam/chroma-boot-race.md", got.FilePath)
+}
+
+// A memory with no model attribution omits the key entirely rather than
+// writing an empty one.
+func TestMemoryOmitsEmptyModel(t *testing.T) {
+	m := sampleMemory()
+	m.Model = ""
+	rendered, err := RenderMemory(m)
+	require.NoError(t, err)
+	require.NotContains(t, rendered, "model:")
+
+	got, err := ParseMemory(rendered, MemoryRelPath(m.Project, m.Name))
+	require.NoError(t, err)
+	require.Empty(t, got.Model)
 }
 
 // Rendering twice must be byte-identical (stable output => clean git diffs).
@@ -149,6 +165,7 @@ func TestNoteRoundTrip(t *testing.T) {
 		Body:        "# Findings\n\nMem0 delta was ~2%.\n",
 		Tags:        []string{"research"},
 		SourceURL:   "https://example.com/scan",
+		Model:       "gpt-5.5",
 		Created:     time.Date(2026, 7, 9, 2, 0, 0, 0, time.UTC),
 		Updated:     time.Date(2026, 7, 9, 3, 0, 0, 0, time.UTC),
 	}
@@ -165,6 +182,7 @@ func TestNoteRoundTrip(t *testing.T) {
 	require.Equal(t, n.Body, got.Body)
 	require.Equal(t, n.Tags, got.Tags)
 	require.Equal(t, n.SourceURL, got.SourceURL)
+	require.Equal(t, n.Model, got.Model)
 	require.True(t, n.Created.Equal(got.Created))
 	require.Equal(t, "notes/seam/landscape-scan.md", got.FilePath)
 }

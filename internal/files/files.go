@@ -111,6 +111,7 @@ func RenderMemory(m core.Memory) (string, error) {
 		ValidFrom:     rfc(m.ValidFrom),
 		SupersededBy:  m.SupersededBy,
 		SourceSession: m.SourceSession,
+		Model:         m.Model,
 		Tags:          m.Tags,
 		Extra:         m.Extra,
 	}
@@ -171,6 +172,7 @@ func ParseMemory(content, relPath string) (core.Memory, error) {
 		InvalidAt:     invalidAt,
 		SupersededBy:  fm.SupersededBy,
 		SourceSession: fm.SourceSession,
+		Model:         fm.Model,
 		ContentHash:   ContentHash(content),
 		Extra:         fm.Extra,
 	}, nil
@@ -191,6 +193,7 @@ func RenderNote(n core.Note) (string, error) {
 		Created:     rfc(n.Created),
 		Updated:     rfc(n.Updated),
 		SourceURL:   n.SourceURL,
+		Model:       n.Model,
 		Tags:        n.Tags,
 		Extra:       n.Extra,
 	}
@@ -230,6 +233,7 @@ func ParseNote(content, relPath string) (core.Note, error) {
 		FilePath:    relPath,
 		Tags:        fm.Tags,
 		SourceURL:   fm.SourceURL,
+		Model:       fm.Model,
 		Created:     created,
 		Updated:     updated,
 		ContentHash: ContentHash(content),

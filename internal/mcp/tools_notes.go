@@ -57,7 +57,8 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 	note := core.Note{
 		ID: id, Title: title, Slug: core.Slugify(title), Description: argString(req, "description"),
 		Project: project, Body: body, Tags: tags,
-		SourceURL: argString(req, "source_url"), Created: now, Updated: now,
+		SourceURL: argString(req, "source_url"), Model: s.boundSessionModel(ctx),
+		Created: now, Updated: now,
 	}
 	written, err := s.cfg.Files.WriteNote(ctx, note)
 	if err != nil {
@@ -83,10 +84,14 @@ func (s *Server) handleNotesRead(ctx context.Context, req mcp.CallToolRequest) (
 	if err != nil {
 		return errResult("notes_read", err)
 	}
-	return jsonResult(map[string]any{
+	out := map[string]any{
 		"id": note.ID, "title": note.Title, "slug": note.Slug, "description": note.Description,
 		"project": note.Project, "body": note.Body, "tags": note.Tags, "source_url": note.SourceURL,
-	})
+	}
+	if note.Model != "" {
+		out["model"] = note.Model
+	}
+	return jsonResult(out)
 }
 
 func notesUpdateTool() mcp.Tool {
@@ -122,6 +127,12 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 	}
 	if argPresent(req, "body") {
 		note.Body = argRaw(req, "body")
+		// A replaced body is new content: re-attribute it to the current model
+		// when known (an unknown model keeps the prior attribution). Metadata-only
+		// updates leave the producer untouched.
+		if model := s.boundSessionModel(ctx); model != "" {
+			note.Model = model
+		}
 		changed = true
 	}
 	if argPresent(req, "project") {

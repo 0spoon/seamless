@@ -652,6 +652,29 @@ func (s *Server) boundSession(ctx context.Context) string {
 	return ""
 }
 
+// boundSessionModel returns the model id recorded on the session boundSession
+// resolves to, or "". It stamps knowledge attribution (Memory.Model,
+// Note.Model) at write time -- read from the session row on every write, not
+// cached in the binding, because the hooks update the session's model in place
+// when the agent switches models mid-session. Best-effort like boundSession:
+// no session, no recorded model, or a lookup failure all yield "" (attribution
+// must never block a write); the failure is logged rather than silently eaten.
+func (s *Server) boundSessionModel(ctx context.Context) string {
+	id := s.boundSession(ctx)
+	if id == "" {
+		return ""
+	}
+	sess, ok, err := store.SessionByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		s.logger.Warn("model attribution: session lookup", "session_id", id, "error", err)
+		return ""
+	}
+	if !ok {
+		return ""
+	}
+	return sess.Model
+}
+
 // resolveActor resolves the session ULID that OWNS an identity-sensitive task
 // operation -- a claim, a release, or a mutation of a task under a live claim. It
 // is the strict counterpart of boundSession: where boundSession may collapse a

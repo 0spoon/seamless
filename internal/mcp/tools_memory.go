@@ -59,6 +59,7 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	mem := core.Memory{
 		Kind: kind, Name: name, Description: desc, Project: project, Body: body,
 		Updated: now, ValidFrom: now, SourceSession: s.boundSession(ctx),
+		Model: s.boundSessionModel(ctx),
 	}
 	var similar *map[string]any
 	if found {
@@ -71,6 +72,12 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 		}
 		if existing.SourceSession != "" {
 			mem.SourceSession = existing.SourceSession
+		}
+		// Model attribution follows the CONTENT, not creation: a rewrite is new
+		// knowledge produced by the current model. Only an unknown current model
+		// keeps the prior attribution -- never erase a known producer with "".
+		if mem.Model == "" {
+			mem.Model = existing.Model
 		}
 	} else {
 		id, err := core.NewID()
@@ -254,6 +261,9 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 		"id": mem.ID, "kind": string(mem.Kind), "name": mem.Name,
 		"description": mem.Description, "project": mem.Project, "body": mem.Body,
 		"tags": mem.Tags, "source_session": mem.SourceSession,
+	}
+	if mem.Model != "" {
+		out["model"] = mem.Model
 	}
 	if !mem.Active() {
 		out["warning"] = s.supersededWarning(ctx, mem)

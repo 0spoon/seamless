@@ -75,6 +75,7 @@ type Memory struct {
 	InvalidAt     *time.Time `json:"invalidAt"`     // nil = still valid
 	SupersededBy  string     `json:"supersededBy"`  // ULID of the replacement, "" = none
 	SourceSession string     `json:"sourceSession"` // provenance
+	Model         string     `json:"model"`         // model that produced the content, as the provider names it (e.g. "claude-fable-5")
 	ContentHash   string     `json:"contentHash"`
 	// Extra preserves unknown frontmatter keys (e.g. Obsidian plugin fields) so
 	// a parse -> render round-trip is lossless. Not mirrored to the index.
@@ -102,6 +103,7 @@ type Note struct {
 	FilePath    string    `json:"filePath"`
 	Tags        []string  `json:"tags"`
 	SourceURL   string    `json:"sourceUrl"`
+	Model       string    `json:"model"` // model that produced the content, as the provider names it (e.g. "claude-fable-5")
 	Created     time.Time `json:"created"`
 	Updated     time.Time `json:"updated"`
 	ContentHash string    `json:"contentHash"`
@@ -173,13 +175,20 @@ type Session struct {
 	// find the ambient session it owns. The DB column, the session metadata key,
 	// and the event payload key all remain "claude_session_id" for historical
 	// continuity (it long predated Codex); only this Go field was generalized.
-	ExternalSessionID string         `json:"externalSessionId"`
-	CWD               string         `json:"cwd"`
-	Source            string         `json:"source"` // startup|resume|compact|clear|explicit
-	Ambient           bool           `json:"ambient"`
-	Metadata          map[string]any `json:"metadata"`
-	CreatedAt         time.Time      `json:"createdAt"`
-	UpdatedAt         time.Time      `json:"updatedAt"`
+	ExternalSessionID string `json:"externalSessionId"`
+	CWD               string `json:"cwd"`
+	Source            string `json:"source"` // startup|resume|compact|clear|explicit
+	// Model is the LLM currently powering the session's agent, stored verbatim
+	// as the provider names it ("claude-fable-5", "gpt-5.5"). Sources, in
+	// arrival order: the session_start tool's model arg, the Codex hook
+	// payloads' model field, or a tail-sniff of the Claude Code transcript.
+	// Updated in place when the agent switches models, and stamped onto
+	// memories/notes at write time.
+	Model     string         `json:"model"`
+	Ambient   bool           `json:"ambient"`
+	Metadata  map[string]any `json:"metadata"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
 // FindingNoSummary is the sentinel findings value recorded when a session ends
