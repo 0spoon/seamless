@@ -19,6 +19,7 @@
     <dt>Injected</dt><dd>{{.Injects}}{{if .LastInjected}} <span class="muted">&middot; last {{ago .LastInjected}}</span>{{end}}</dd>
     <dt title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (see Injected), so agents rarely re-read a memory they already have.">Read</dt><dd>{{.Reads}}{{if .LastRead}} <span class="muted">&middot; last {{ago .LastRead}}</span>{{end}}</dd>
     {{if .Source}}<dt>Source</dt><dd>{{if .SourceID}}<a href="/console/sessions/{{.SourceID}}" data-peek>{{.Source}}</a>{{else}}{{.Source}}{{end}}</dd>{{end}}
+    {{if .Model}}<dt title="Model that produced this content">Model</dt><dd class="mono">{{.Model}}</dd>{{end}}
     {{if .ReplacedByID}}<dt>Superseded by</dt><dd><a href="/console/memories/{{.ReplacedByID}}" data-peek>{{.ReplacedBy}}</a></dd>{{end}}
     <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>

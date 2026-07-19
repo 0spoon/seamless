@@ -151,6 +151,11 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 			res.Skipped = append(res.Skipped, skip)
 			continue
 		}
+		if kind == store.ProposalConsolidate {
+			// Consolidate is the one op whose body the LLM authored; record the
+			// producer at generation time for the apply step to stamp.
+			payload["model"] = s.chat.Model()
+		}
 		if _, dup := seen[key]; dup {
 			res.Skipped = append(res.Skipped, kind+" is already proposed")
 			continue

@@ -245,6 +245,12 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td>Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- <code>seamlessd map-repo</code> only overrides the derived slug)</td>
 </tr>
 <tr>
+<td><code>model</code></td>
+<td>string</td>
+<td>no</td>
+<td>Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients</td>
+</tr>
+<tr>
 <td><code>name</code></td>
 <td>string</td>
 <td>no</td>

@@ -52,9 +52,12 @@ func (s *Service) proposeDigests(ctx context.Context, seen map[string]struct{}) 
 			s.logger.Warn("gardener: digest completion empty", "project", project)
 			continue
 		}
+		// The model is recorded at generation time -- the config's chat model can
+		// change between proposal and apply, and attribution names the producer.
 		payload := map[string]any{
 			"project": project, "month": month, "session_count": len(group),
 			"title": digestTitle(project, month), "body": body,
+			"model": s.chat.Model(),
 		}
 		if _, err := s.createProposal(ctx, store.ProposalDigest, key, payload, seen); err != nil {
 			return created, err

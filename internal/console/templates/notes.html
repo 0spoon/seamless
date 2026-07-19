@@ -72,6 +72,7 @@
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
       <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
       {{if .Words}}<span class="fact">{{.Words}} words</span>{{end}}
+      {{if .Model}}<span class="fact" title="Model that produced this content">model <span class="mono">{{.Model}}</span></span>{{end}}
       {{if .SourceURL}}<span class="fact"><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{icon "link"}} source</a></span>{{end}}
     </div>
   </header>

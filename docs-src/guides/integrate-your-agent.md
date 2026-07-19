@@ -133,6 +133,13 @@ So: **re-run `session_start` on reconnect**, with the same `name` to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.
 
+One more `session_start` argument worth passing from a custom client: `model`,
+the model id powering your agent exactly as the provider names it
+(`claude-fable-5`, `gpt-5.5`). Every memory and note the session writes is
+stamped with it (`model` in the frontmatter), so the store records which model
+produced each piece of knowledge. Claude Code and Codex sessions get this for
+free from the hooks; a bare MCP client only has attribution if it self-reports.
+
 ## Scope discipline
 
 Scope is the thing most integrations get wrong, and the failures are quiet -

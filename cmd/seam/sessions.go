@@ -85,6 +85,7 @@ func sessionDetail(out io.Writer, cfg config.Config, id string) error {
 			Name        string `json:"name"`
 			ProjectSlug string `json:"projectSlug"`
 			Status      string `json:"status"`
+			Model       string `json:"model"`
 		} `json:"session"`
 		Findings  string `json:"findings"`
 		ToolCalls int    `json:"toolCalls"`
@@ -101,6 +102,9 @@ func sessionDetail(out io.Writer, cfg config.Config, id string) error {
 		name = shortID(d.Session.ID)
 	}
 	fmt.Fprintf(out, "%s  [%s]  %s\n", name, d.Session.Status, orDash(d.Session.ProjectSlug))
+	if d.Session.Model != "" {
+		fmt.Fprintf(out, "model: %s\n", d.Session.Model)
+	}
 	fmt.Fprintf(out, "tool calls: %d  writes: %d  reads: %d  read-after-inject: %d/%d\n",
 		d.ToolCalls, d.Writes, d.Reads, d.ReadBack, d.Injected)
 	if strings.TrimSpace(d.Findings) != "" {

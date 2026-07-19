@@ -191,6 +191,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 </span></span></span><span class="line"><span class="cl"><span class="nt">invalid_at</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">superseded_by</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">source_session</span><span class="p">:</span><span class="w"> </span><span class="l">cc/ab12cd34</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l">claude-fable-5</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">x, y]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
@@ -259,6 +260,11 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <td><code>source_session</code></td>
 <td>system</td>
 <td>Provenance - the session that wrote it, e.g. <code>cc/ab12cd34</code>.</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>system</td>
+<td>The model that produced the content, verbatim as the provider names it (<code>claude-fable-5</code>, <code>gpt-5.5</code>). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown.</td>
 </tr>
 <tr>
 <td><code>tags</code></td>
@@ -338,12 +344,14 @@ Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 </span></span></span><span class="line"><span class="cl"><span class="nt">created</span><span class="p">:</span><span class="w"> </span><span class="ld">2026-07-10T18:00:00Z</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">updated</span><span class="p">:</span><span class="w"> </span><span class="ld">2026-07-10T18:00:00Z</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">source_url</span><span class="p">:</span><span class="w"> </span><span class="l">https://example.com/page</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l">claude-fable-5</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">research, plan:my-feature]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
 </span></span></span></code></pre><p><code>id</code>, <code>title</code>, <code>created</code>, and <code>updated</code> are always emitted. <code>slug</code>,
-<code>description</code>, <code>project</code>, <code>source_url</code>, and <code>tags</code> are omitted when empty.
-<code>source_url</code> is set when the note came from <code>capture_url</code>. Empty <code>project</code> means
+<code>description</code>, <code>project</code>, <code>source_url</code>, <code>model</code>, and <code>tags</code> are omitted when
+empty. <code>source_url</code> is set when the note came from <code>capture_url</code>; <code>model</code> is
+the producing model, stamped exactly as for memories. Empty <code>project</code> means
 <code>notes/_global/</code>. Unknown keys round-trip losslessly, same as memories.</p>
 <h2 id="what-lives-only-in-sqlite">What lives only in SQLite</h2>
 <p><code>seam.db</code> holds two categories of data with very different recovery stories.</p>

@@ -135,6 +135,7 @@ valid_from: 2026-07-10T18:00:00Z
 invalid_at: null           # set on supersession/archive; invalid memories leave indexes
 superseded_by: null        # ULID of the replacement
 source_session: cc/ab12cd34
+model: claude-fable-5      # the model that produced the content, verbatim as the provider names it
 tags: [x, y]
 ---
 body markdown

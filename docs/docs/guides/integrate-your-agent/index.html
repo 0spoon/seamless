@@ -253,6 +253,12 @@ sends the old id and the fresh process accepts it. Which one happens is a race.<
 <p>So: <strong>re-run <code>session_start</code> on reconnect</strong>, with the same <code>name</code> to resume the
 same session rather than opening a second one. Treat a sudden run of
 ambiguous-scope errors as a lost binding, not as a bug in your arguments.</p>
+<p>One more <code>session_start</code> argument worth passing from a custom client: <code>model</code>,
+the model id powering your agent exactly as the provider names it
+(<code>claude-fable-5</code>, <code>gpt-5.5</code>). Every memory and note the session writes is
+stamped with it (<code>model</code> in the frontmatter), so the store records which model
+produced each piece of knowledge. Claude Code and Codex sessions get this for
+free from the hooks; a bare MCP client only has attribution if it self-reports.</p>
 <h2 id="scope-discipline">Scope discipline</h2>
 <p>Scope is the thing most integrations get wrong, and the failures are quiet -
 knowledge lands somewhere nobody looks. The full precedence chain is in

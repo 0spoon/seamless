@@ -21,6 +21,7 @@ func sessionStartTool() mcp.Tool {
 		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
 		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
 		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default startup)")),
+		mcp.WithString("model", mcp.Description("Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients")),
 	)
 }
 
@@ -28,6 +29,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	name := argString(req, "name")
 	cwd := argString(req, "cwd")
 	source := argString(req, "source")
+	model := strings.TrimSpace(argString(req, "model"))
 	if source == "" {
 		source = "explicit"
 	}
@@ -57,6 +59,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			if err := store.UpdateSession(ctx, s.cfg.DB, existing); err != nil {
 				return errResult("session_start", err)
 			}
+			s.stampSessionModel(ctx, existing.ID, model)
 			s.setBinding(ctx, existing.ID, project)
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
 			return jsonResult(map[string]any{
@@ -83,6 +86,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			if err := store.UpdateSession(ctx, s.cfg.DB, ambient); err != nil {
 				return errResult("session_start", err)
 			}
+			s.stampSessionModel(ctx, ambient.ID, model)
 			s.setBinding(ctx, ambient.ID, project)
 			s.record(ctx, core.EventSessionStarted, ambient.ID, project, "",
 				map[string]any{"resumed": true, "adopted": true})
@@ -104,8 +108,9 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	now := time.Now().UTC()
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
-		CWD: cwd, Source: source, ExternalSessionID: s.linkedClaudeID(ctx, cwd),
-		CreatedAt: now, UpdatedAt: now,
+		CWD: cwd, Source: source, Model: model,
+		ExternalSessionID: s.linkedClaudeID(ctx, cwd),
+		CreatedAt:         now, UpdatedAt: now,
 	}
 	if err := store.CreateSession(ctx, s.cfg.DB, sess); err != nil {
 		return errResult("session_start", err)
@@ -116,6 +121,20 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		"session_id": id, "name": name, "project": project, "scope": scopeNote(project),
 		"briefing": s.briefing(ctx, cwd, source),
 	})
+}
+
+// stampSessionModel records a self-reported model id on a resumed/adopted
+// session. Best-effort: attribution must never fail a session_start, so an
+// error logs and the session simply keeps its previous (possibly empty) model.
+// No-op on an empty model -- the hooks' sniffed value survives an agent that
+// does not pass one.
+func (s *Server) stampSessionModel(ctx context.Context, sessionID, model string) {
+	if model == "" {
+		return
+	}
+	if err := store.SetSessionModel(ctx, s.cfg.DB, sessionID, model); err != nil {
+		s.logger.Warn("session_start: set model", "error", err)
+	}
 }
 
 // scopeNote explains, in the session_start result, how project scope was

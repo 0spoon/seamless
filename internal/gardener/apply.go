@@ -128,6 +128,7 @@ func (s *Service) applyDigest(ctx context.Context, p store.Proposal, now time.Ti
 	note := core.Note{
 		ID: id, Title: title, Slug: core.Slugify(title), Description: "Monthly session digest",
 		Project: project, Body: body, Tags: []string{"created-by:gardener", "digest"},
+		Model:   payloadString(p.Payload, "model"),
 		Created: now, Updated: now,
 	}
 	written, err := s.files.WriteNote(ctx, note)
@@ -169,6 +170,7 @@ func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now ti
 			ID: id, Kind: core.MemoryKind(payloadString(p.Payload, "kind")),
 			Name: name, Description: payloadString(p.Payload, "description"),
 			Project: project, Body: body,
+			Model:   payloadString(p.Payload, "model"),
 			Created: now, Updated: now, ValidFrom: now,
 		})
 		if werr != nil {

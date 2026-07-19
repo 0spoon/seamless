@@ -53,7 +53,7 @@ func (s *Server) handleCaptureURL(ctx context.Context, req mcp.CallToolRequest) 
 	note := core.Note{
 		ID: id, Title: content.Title, Slug: core.Slugify(content.Title), Description: "Captured from " + content.URL,
 		Project: project, Body: body, Tags: []string{"created-by:agent", "captured-url"},
-		SourceURL: content.URL, Created: now, Updated: now,
+		SourceURL: content.URL, Model: s.boundSessionModel(ctx), Created: now, Updated: now,
 	}
 	written, err := s.cfg.Files.WriteNote(ctx, note)
 	if err != nil {

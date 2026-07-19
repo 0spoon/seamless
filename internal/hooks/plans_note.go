@@ -79,6 +79,11 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 		}
 		note.Title = title
 		note.Body = planStamp(p.SessionID, basename, iter, gitHead(p.CWD), now) + "\n\n" + content
+		// New plan content is attributed to the capturing session's model; an
+		// unknown model keeps the note's prior attribution.
+		if m := h.ambientModel(ctx, ClientClaudeCode, p.SessionID); m != "" {
+			note.Model = m
+		}
 	}
 	if planSlug == "" {
 		planSlug = core.Slugify(note.Title)

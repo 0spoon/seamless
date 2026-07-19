@@ -14,6 +14,7 @@
     <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}inbox{{end}}</dd>
     {{if .Tags}}<dt>Tags</dt><dd class="peek-tags">{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</dd>{{end}}
     {{if .SourceURL}}<dt>Source</dt><dd><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{.SourceURL}}</a></dd>{{end}}
+    {{if .Model}}<dt title="Model that produced this content">Model</dt><dd class="mono">{{.Model}}</dd>{{end}}
     <dt>Created</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
     <dt>Updated</dt><dd title="{{ts .Updated}}">{{ago .Updated}}</dd>
     <dt>File</dt><dd class="mono">{{.FilePath}}{{copyBtn .FilePath}}</dd>
