@@ -87,6 +87,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
 	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
 	mux.HandleFunc("GET /console/static/search.js", s.serveSearchJS)
+	mux.HandleFunc("GET /console/static/library.js", s.serveLibraryJS)
 	mux.HandleFunc("GET /console/static/charts.js", s.serveChartsJS)
 	mux.HandleFunc("GET /console/static/favicon.svg", s.serveFavicon)
 	mux.HandleFunc("GET /console/login", s.loginForm)
@@ -262,6 +263,15 @@ func (s *Service) serveSearchJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(searchJS)
+}
+
+// serveLibraryJS serves the library-screen client (rail selection + in-place
+// reader swap on Notes/Memories/Tasks), loaded on every page and inert without
+// a #lib-reader.
+func (s *Service) serveLibraryJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(libraryJS)
 }
 
 // serveChartsJS serves the chart hover readout (see charts.go + static/charts.js),

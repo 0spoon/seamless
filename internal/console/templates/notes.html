@@ -1,68 +1,84 @@
 {{define "content"}}
 {{with .Data}}
+{{$sel := .Selected}}
+{{$qs := .QS}}
 <div class="topbar">
   <div>
     <h1>Notes</h1>
-    <div class="sub">{{.Count}}{{if .Query}} matching{{else}} total{{end}}</div>
+    <div class="sub">{{if .Query}}{{.Count}} matching &ldquo;{{.Query}}&rdquo;{{else}}{{.Count}} note{{if ne .Count 1}}s{{end}} across {{len .Groups}} project{{if ne (len .Groups) 1}}s{{end}}{{end}}</div>
   </div>
 </div>
 
-<div class="proj-toolbar">
-  <form class="search" method="get" action="/console/notes">
-    {{icon "search"}}
-    <input name="q" aria-label="Search notes by title, description, or tag" placeholder="Search title, description, tags&hellip;" value="{{.Query}}">
-    <input type="hidden" name="sort" value="{{.Sort}}">
-  </form>
-  <div class="seg">
-    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/notes?sort=recent&amp;q={{.Query}}">Recent</a>
-    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/notes?sort=name&amp;q={{.Query}}">Name</a>
-  </div>
-</div>
-
-<div class="list-detail-split">
-  <div class="list-pane">
-{{if .Groups}}
-<div class="mem-layout">
-  <nav class="mem-index">
-    <span class="hd">Projects</span>
-    {{range .Groups}}
-    <a href="#notes-{{if .Project}}{{.Project}}{{else}}global{{end}}">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="n">{{.Count}}</span></a>
+{{if or .Groups .Query}}
+<div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/notes/{{.Selected.ID}}{{$qs}}"{{end}}>
+  <nav class="lib-rail" aria-label="Notes">
+    <div class="rail-tools">
+      <form class="search" method="get" action="/console/notes">
+        {{icon "search"}}
+        <input name="q" aria-label="Search notes by title, description, or tag" placeholder="Search notes&hellip;" value="{{.Query}}">
+        {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+      </form>
+      {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
+      <div class="seg">
+        <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
+        <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
+      </div>
+    </div>
+    <div class="rail-scroll">
+    {{if .Groups}}
+    <div class="rail-groups">
+      {{range .Groups}}
+      <section class="rail-group" id="rg-{{if .Project}}{{.Project}}{{else}}global{{end}}">
+        <header class="rail-group-hd">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="n">{{.Count}}</span></header>
+        <div class="rail-items">
+          {{range .Notes}}
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/notes/{{.ID}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{if .Description}} &middot; {{.Description}}{{end}}</span>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="rail-none">No notes match &ldquo;{{.Query}}&rdquo;.</div>
     {{end}}
+    </div><!-- .rail-scroll -->
   </nav>
-
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Title</th><th>Tags</th><th>Updated</th></tr></thead>
-      <tbody>
-        {{range .Groups}}
-        <tr class="group-row" id="notes-{{if .Project}}{{.Project}}{{else}}global{{end}}"><td colspan="3">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="count">{{.Count}}</span></td></tr>
-        {{range .Notes}}
-        <tr id="{{.ID}}" class="row-link" data-href="/console/notes/{{.ID}}" data-peek>
-          <td class="mem-name"><strong><a href="/console/notes/{{.ID}}" data-peek>{{.Title}}</a></strong>{{copyBtn .Title}}{{if .Description}}<div class="desc">{{.Description}}</div>{{end}}</td>
-          <td>{{range .Tags}}<span class="badge">{{.}}</span> {{end}}</td>
-          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
-        </tr>
-        {{end}}
-        {{end}}
-      </tbody>
-    </table>
-  </div>
+  <section class="lib-reader" id="lib-reader" data-base="/console/notes" aria-live="polite" aria-label="Note">
+    {{if .Selected}}{{template "note-reader" .Selected}}{{else}}
+    <div class="reader-empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>Select a note to read it here.</div></div>
+    {{end}}
+  </section>
 </div>
-{{else}}
-{{if .Query}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>No notes match &ldquo;{{.Query}}&rdquo;.</div></div>
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>No notes yet &mdash; agents capture research, decisions, and summaries here with notes_create.</div></div>
 {{end}}
 {{end}}
-  </div><!-- .list-pane -->
-  <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Note detail">
-    <div class="detail-pane-chrome">
-      <a class="detail-open btn small" href="#">open full &nearr;</a>
-      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
-    </div>
-    <div class="detail-pane-body"></div>
-  </section>
-</div><!-- .list-detail-split -->
 {{end}}
+
+{{define "note-reader"}}
+<article class="reader-sheet">
+  <header class="reader-head">
+    <div class="reader-eyebrow">
+      <span class="kind">note</span>
+      {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}inbox</span>{{end}}
+      {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
+    </div>
+    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}</h2>
+    {{if .Description}}<p class="reader-desc">{{.Description}}</p>{{end}}
+    <div class="reader-facts">
+      <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
+      <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
+      {{if .Words}}<span class="fact">{{.Words}} words</span>{{end}}
+      {{if .SourceURL}}<span class="fact"><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{icon "link"}} source</a></span>{{end}}
+    </div>
+  </header>
+  {{if .BodyLoaded}}<div class="prose doc">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
+  <footer class="reader-foot">
+    <span class="path">{{.FilePath}}{{copyBtn .FilePath}}</span>
+    <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
+  </footer>
+</article>
 {{end}}

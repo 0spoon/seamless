@@ -289,12 +289,14 @@ cookie to the browser they can actually see. (<code>--browser</code> is macOS-on
 <li><strong>JSON</strong> when the caller sets <code>?format=json</code> or an <code>Accept</code> header that wants
 JSON and not HTML. This is how <code>seam</code> reads the console's data.</li>
 <li><strong>An HTML fragment</strong> for entity details when the caller passes <code>?peek=1</code> - the
-detail pane loads it without a page navigation.</li>
+detail pane loads it without a page navigation - or <code>?reader=1</code>, the richer
+reader fragment the library screens (memories, notes, tasks) swap in place.</li>
 </ul>
-<p>Memory, note, task, event, and plan pages compose their full page from the same
-<code>detail-body</code> block their peek fragment renders, so the two cannot drift. Session
-and project deliberately do not: their fragments are compact summaries of much
-richer bespoke pages.</p>
+<p>Event and plan pages compose their full page from the same <code>detail-body</code> block
+their peek fragment renders, so the two cannot drift. Session and project
+deliberately do not: their fragments are compact summaries of much richer
+bespoke pages. Memory, note, and task detail URLs render their library screen
+with that entity open in the reader.</p>
 <p>Strictly-validated query params (<code>?sort</code>, <code>?scope</code>, <code>?tab</code>, <code>?w</code>) return a 400
 naming the bad param and listing the valid values, rather than silently falling
 back to a default - so an agent driving the console by URL sees the fix.</p>
@@ -407,29 +409,36 @@ writes, items injected, and read-after-inject), the tasks it currently claims wi
 their lease countdowns, and the memories it produced.</p>
 <h2 id="memories">Memories</h2>
 <p><code>/console/memories</code>, <code>/console/memories/{id}</code></p>
-<p>The browser, grouped by project (global first) and then by kind in canonical
-order, with active and inactive memories separated. Each row shows the
-description - the only text an index ever shows - plus injection and read counts,
-last-injected time, and a <code>vscode://</code> link straight to the file. Sortable by name,
-recency, or reach; filterable by a substring of name, description, kind, or tag.</p>
-<p>Inactive memories carry their status (<code>superseded</code> or <code>archived</code>) and, when
-superseded, a link to what replaced them.</p>
-<p>A memory's page renders the body (through the markdown layer, with raw HTML
-disabled and a sanitizer on the output), its metadata - kind, project, tags,
-timestamps, the session that produced it - its reach counts, and its supersession
-neighbors in <strong>both</strong> directions: what replaced it, and what it replaced.
-<strong>Archive</strong> is the one action here.</p>
+<p>A two-pane library: a rail of memories grouped by project (global first, kinds
+in canonical order, each dot colored by kind) beside a full-height reader.
+Sortable by name, recency, or reach; filterable by a substring of name,
+description, kind, or tag. Inactive memories collapse into an
+archived-and-superseded group at the rail's end, each carrying its status and,
+when superseded, what replaced it.</p>
+<p>The reader renders the body uncapped (through the markdown layer, with raw HTML
+disabled and a sanitizer on the output), the metadata - kind, project, tags,
+timestamps, the session that produced it - its reach counts, the <code>vscode://</code>
+link straight to the file, and its supersession neighbors in <strong>both</strong>
+directions: what replaced it, and what it replaced. <strong>Archive</strong> is the one
+action here.</p>
+<p>Opening <code>/console/memories</code> auto-opens the most recently updated match; a
+memory's own URL opens the same screen with it selected. Clicking rail items
+swaps the reader in place (real URLs, browser Back works), and <code>j</code> / <code>k</code> step
+through the rail.</p>
 <h2 id="notes">Notes</h2>
 <p><code>/console/notes</code>, <code>/console/notes/{id}</code></p>
-<p>The same browser shape for notes: grouped by project with global (<code>&quot;&quot;</code>) first,
-sortable by recency or title, filterable by title, description, or tag. A note's
-page renders the body.</p>
+<p>The same library shape for notes: a project-grouped rail (global <code>&quot;&quot;</code> first),
+sortable by recency or title, filterable by title, description, or tag. The
+reader renders the note as a document - uncapped body in a measured reading
+column, description, tags, word count, source URL, and the file path with an
+editor link.</p>
 <h2 id="tasks">Tasks</h2>
 <p><code>/console/tasks</code>, <code>/console/tasks/{id}</code></p>
-<p>Four buckets: <strong>ready</strong> (no unfinished blocker), <strong>in progress</strong>, <strong>blocked</strong> -
-each blocked row naming the specific tasks blocking it - and <strong>closed</strong> (done and
-dropped merged, newest first, capped at 25 with a count of the rest).</p>
-<p>A task's page carries its detail; <strong>force-release</strong> is the action, and it is the
+<p>The same library shape, with the rail grouped into four buckets: <strong>ready</strong> (no
+unfinished blocker), <strong>in progress</strong>, <strong>blocked</strong>, and <strong>closed</strong> (done and
+dropped merged, newest first, capped at 25 with a count of the rest, collapsed
+by default). The reader carries the task's body, claim and lease state, and
+both dependency directions; <strong>force-release</strong> is the action, and it is the
 owner override - it takes the lock from whoever holds it.</p>
 <h2 id="plans">Plans</h2>
 <p><code>/console/plans</code>, <code>/console/plans/{slug}</code></p>

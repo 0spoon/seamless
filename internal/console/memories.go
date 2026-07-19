@@ -1,13 +1,12 @@
 package console
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"html/template"
 	"net/http"
 	"net/url"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -56,7 +55,9 @@ type projectGroup struct {
 	Kinds   []kindGroup `json:"kinds"`
 }
 
-// memoriesData is the payload for the Memories browser.
+// memoriesData is the payload for the Memories library screen. The Selected/QS
+// fields drive the HTML reader pane only; JSON list callers get the same lean
+// payload as before.
 type memoriesData struct {
 	Groups        []projectGroup `json:"groups"`
 	Inactive      []memoryRow    `json:"inactive"`
@@ -65,32 +66,29 @@ type memoriesData struct {
 	Query         string         `json:"query,omitempty"`
 	Sort          string         `json:"sort"`
 	CanArchive    bool           `json:"-"`
+	// Selected is the memory open in the reader: the requested one on a
+	// /console/memories/{id} page, or the newest match on the list URL
+	// (SelectedAuto, which the client pins into the URL).
+	Selected     *memoryDetail `json:"-"`
+	SelectedAuto bool          `json:"-"`
+	// QS is the ?q=&sort= suffix rail links carry so the active filter
+	// survives a selection change ("" when both are at their defaults).
+	QS string `json:"-"`
 }
 
-func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	sortKey := r.URL.Query().Get("sort")
-	if sortKey == "" {
-		sortKey = "name"
-	}
-	if !slices.Contains(memorySortKeys, sortKey) {
-		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(memorySortKeys, ", ")))
-		return
-	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
+// memoriesPage assembles the grouped memories list for the given sort + filter.
+func (s *Service) memoriesPage(ctx context.Context, sortKey, query string) (memoriesData, error) {
 	q := strings.ToLower(query)
 	if err := store.RebuildRetrievalStats(ctx, s.cfg.DB); err != nil {
 		s.logger.Warn("console: rebuild retrieval stats", "error", err)
 	}
 	mems, err := store.AllMemoriesIncludingInvalid(ctx, s.cfg.DB)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return memoriesData{}, err
 	}
 	stats, err := store.AllRetrievalStats(ctx, s.cfg.DB)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return memoriesData{}, err
 	}
 
 	nameByID := make(map[string]string, len(mems))
@@ -119,7 +117,7 @@ func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	data := memoriesData{
+	return memoriesData{
 		Groups:        buildGroups(active, sortKey),
 		Inactive:      inactive,
 		ActiveCount:   activeCount,
@@ -127,8 +125,62 @@ func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 		Query:         query,
 		Sort:          sortKey,
 		CanArchive:    s.cfg.Files != nil,
+		QS:            listQS(query, sortKey, "name"),
+	}, nil
+}
+
+func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sortKey, query, ok := s.parseSortQuery(w, r, memorySortKeys, "name")
+	if !ok {
+		return
+	}
+	data, err := s.memoriesPage(ctx, sortKey, query)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	// The HTML library auto-opens the most relevant match in the reader.
+	if !wantsJSON(r) {
+		if id := defaultMemoryID(data); id != "" {
+			d, found, derr := s.memoryDetailByID(ctx, id)
+			if derr != nil {
+				s.serverError(w, r, derr)
+				return
+			}
+			if found {
+				data.Selected = &d
+				data.SelectedAuto = true
+			}
+		}
 	}
 	s.render(w, r, "memories", pageData{Title: "Memories", Active: "memories", Data: data})
+}
+
+// defaultMemoryID picks the reader's default selection on the list URL: the
+// most recently updated active match, falling back to the newest inactive one
+// ("" when nothing matched).
+func defaultMemoryID(data memoriesData) string {
+	var id string
+	var newest time.Time
+	for _, g := range data.Groups {
+		for _, k := range g.Kinds {
+			for _, m := range k.Memories {
+				if id == "" || m.Updated.After(newest) {
+					id, newest = m.ID, m.Updated
+				}
+			}
+		}
+	}
+	if id != "" {
+		return id
+	}
+	for _, m := range data.Inactive {
+		if id == "" || m.Updated.After(newest) {
+			id, newest = m.ID, m.Updated
+		}
+	}
+	return id
 }
 
 // memoryMatches reports whether a memory satisfies the ?q text filter (empty q

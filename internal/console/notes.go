@@ -1,8 +1,10 @@
 package console
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strings"
@@ -32,30 +34,60 @@ type noteProjectGroup struct {
 	Notes   []noteRow `json:"notes"`
 }
 
-// notesData is the payload for the Notes browser.
+// notesData is the payload for the Notes library screen. The Selected/QS
+// fields drive the HTML reader pane only; JSON list callers get the same lean
+// payload as before.
 type notesData struct {
 	Groups []noteProjectGroup `json:"groups"`
 	Count  int                `json:"count"`
 	Query  string             `json:"query,omitempty"`
 	Sort   string             `json:"sort"`
+	// Selected is the note open in the reader: the requested one on a
+	// /console/notes/{id} page, or the newest match on the list URL
+	// (SelectedAuto, which the client pins into the URL).
+	Selected     *noteDetail `json:"-"`
+	SelectedAuto bool        `json:"-"`
+	// QS is the ?q=&sort= suffix rail links carry so the active filter
+	// survives a selection change ("" when both are at their defaults).
+	QS string `json:"-"`
 }
 
-func (s *Service) notesList(w http.ResponseWriter, r *http.Request) {
-	ctx := r.Context()
-	sortKey := r.URL.Query().Get("sort")
+// parseSortQuery validates ?sort against keys (empty -> def) and returns the
+// trimmed ?q. ok=false means the 400 response was already written.
+func (s *Service) parseSortQuery(w http.ResponseWriter, r *http.Request, keys []string, def string) (sortKey, query string, ok bool) {
+	sortKey = r.URL.Query().Get("sort")
 	if sortKey == "" {
-		sortKey = "recent"
+		sortKey = def
 	}
-	if !slices.Contains(noteSortKeys, sortKey) {
-		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(noteSortKeys, ", ")))
-		return
+	if !slices.Contains(keys, sortKey) {
+		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(keys, ", ")))
+		return "", "", false
 	}
-	query := strings.TrimSpace(r.URL.Query().Get("q"))
+	return sortKey, strings.TrimSpace(r.URL.Query().Get("q")), true
+}
+
+// listQS renders the ?q=&sort= suffix for library rail links ("" when both are
+// at their defaults), so changing the selection keeps the active filter.
+func listQS(query, sortKey, defSort string) string {
+	v := url.Values{}
+	if query != "" {
+		v.Set("q", query)
+	}
+	if sortKey != defSort {
+		v.Set("sort", sortKey)
+	}
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
+}
+
+// notesPage assembles the grouped notes list for the given sort + filter.
+func (s *Service) notesPage(ctx context.Context, sortKey, query string) (notesData, error) {
 	q := strings.ToLower(query)
 	notes, err := store.ListNotes(ctx, s.cfg.DB)
 	if err != nil {
-		s.serverError(w, r, err)
-		return
+		return notesData{}, err
 	}
 	byProject := map[string][]noteRow{}
 	matched := 0
@@ -70,11 +102,53 @@ func (s *Service) notesList(w http.ResponseWriter, r *http.Request) {
 		byProject[n.Project] = append(byProject[n.Project], row)
 		matched++
 	}
-	s.render(w, r, "notes", pageData{
-		Title:  "Notes",
-		Active: "notes",
-		Data:   notesData{Groups: buildNoteGroups(byProject, sortKey), Count: matched, Query: query, Sort: sortKey},
-	})
+	return notesData{
+		Groups: buildNoteGroups(byProject, sortKey), Count: matched,
+		Query: query, Sort: sortKey, QS: listQS(query, sortKey, "recent"),
+	}, nil
+}
+
+func (s *Service) notesList(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	sortKey, query, ok := s.parseSortQuery(w, r, noteSortKeys, "recent")
+	if !ok {
+		return
+	}
+	data, err := s.notesPage(ctx, sortKey, query)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	// The HTML library auto-opens the newest match in the reader.
+	if !wantsJSON(r) {
+		if id := newestNoteID(data.Groups); id != "" {
+			d, found, derr := s.noteDetailByID(ctx, id)
+			if derr != nil {
+				s.serverError(w, r, derr)
+				return
+			}
+			if found {
+				data.Selected = &d
+				data.SelectedAuto = true
+			}
+		}
+	}
+	s.render(w, r, "notes", pageData{Title: "Notes", Active: "notes", Data: data})
+}
+
+// newestNoteID picks the reader's default selection on the list URL: the most
+// recently updated note across every group ("" when the list is empty).
+func newestNoteID(groups []noteProjectGroup) string {
+	var id string
+	var newest time.Time
+	for _, g := range groups {
+		for _, n := range g.Notes {
+			if id == "" || n.Updated.After(newest) {
+				id, newest = n.ID, n.Updated
+			}
+		}
+	}
+	return id
 }
 
 // noteMatches reports whether a note row satisfies the ?q text filter (empty q
