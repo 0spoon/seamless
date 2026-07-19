@@ -7,10 +7,19 @@ GO      ?= go
 
 # Build metadata linked into the daemon (surfaced in /healthz, the MCP handshake,
 # and the startup log so a stale running daemon is visible). A plain `go build`
-# leaves these "unknown"; only `make build` stamps them.
+# leaves these at their in-source defaults ("unknown"/"0.0.0-dev"); only
+# `make build` stamps them.
+#
+# VERSION derives from the git tag exactly the way goreleaser does (nearest v*
+# tag, leading v stripped) so `make install` and a released binary report the
+# same number -- the tag is the single source of truth, never a hand-edited
+# constant. Off a tag it falls back to the dev sentinel; the +COMMIT suffix
+# buildVersion() appends still pins the exact build.
 COMMIT    := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
 BUILDDATE := $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-LDFLAGS   := -X main.commit=$(COMMIT) -X main.buildDate=$(BUILDDATE)
+VERSION   := $(shell git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || true)
+VERSION   := $(if $(VERSION),$(VERSION),0.0.0-dev)
+LDFLAGS   := -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildDate=$(BUILDDATE)
 
 # launchd service (macOS user LaunchAgent)
 UID           := $(shell id -u)
