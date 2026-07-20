@@ -236,7 +236,8 @@ func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note co
 	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
 		b.String() + "\n</seam-plan-context>"
 	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", block, ids)
+	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "",
+		prepareHookContext(ClientClaudeCode, block), ids)
 	return block
 }
 
