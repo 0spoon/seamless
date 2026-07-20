@@ -251,6 +251,16 @@ supports_client_flag() {
 	printf '%s' "$probe" | grep -q -- '-client'
 }
 
+# The embedded seam-onboard/seam-research skills shipped together with the
+# --skills flag: a pinned v0.3.3-v0.3.6 binary accepts --client but bundles no
+# skills, so the closing /seam-onboard advice would name a skill that was never
+# installed. Warn instead of silently under-delivering.
+supports_skills_flag() {
+	probe=$("$INSTALL_DIR/seamlessd" install-hooks -h 2>&1 || true)
+	[ -n "$probe" ] || return 0
+	printf '%s' "$probe" | grep -q -- '-skills'
+}
+
 wire_hooks() {
 	if [ -n "${SEAMLESS_NO_HOOKS:-}" ]; then
 		step hooks "skipped (SEAMLESS_NO_HOOKS)"
@@ -266,6 +276,9 @@ wire_hooks() {
 		# passed no --client here, so this is byte-for-byte its behavior.
 		warn "seamless $VERSION predates --client and the bundled skills; wiring Claude Code only"
 		CLIENT_ARGS=""
+	fi
+	if [ -n "$CLIENT_ARGS" ] && ! supports_skills_flag; then
+		warn "seamless $VERSION predates the bundled skills; the seam-onboard/seam-research skills will not be installed (drop SEAMLESS_VERSION to get the latest)"
 	fi
 	if [ -f "$CONFIG" ]; then
 		# shellcheck disable=SC2086
