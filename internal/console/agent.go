@@ -49,8 +49,14 @@ func harnessOfSessionName(name string) string {
 
 // sourceSessionResolver returns a memoized resolver for memory provenance
 // values, which hold either a session name (ambient stamps: cc/ab12cd34) or a
-// session ULID (bound stamps). Lookup failures resolve to the zero Session --
-// provenance display is best-effort, like sessionNamer.
+// session ULID (bound stamps). The stamp's shape picks the single lookup: a
+// ULID-shaped value resolves ONLY by id, because session names are
+// agent-supplied and unvalidated, so a name lookup on a ULID would let a
+// session named after another session's ULID hijack its provenance pill and
+// source link (and cost a doomed extra query on every bound stamp). Lookup
+// failures resolve to the zero Session -- provenance display is best-effort,
+// like sessionNamer -- but a DB error is logged so it stays distinguishable
+// from a deleted session.
 func (s *Service) sourceSessionResolver(ctx context.Context) func(string) core.Session {
 	cache := map[string]core.Session{}
 	return func(src string) core.Session {
@@ -60,9 +66,16 @@ func (s *Service) sourceSessionResolver(ctx context.Context) func(string) core.S
 		if sess, ok := cache[src]; ok {
 			return sess
 		}
-		sess, ok, err := store.SessionByName(ctx, s.cfg.DB, src)
-		if err == nil && !ok {
+		var sess core.Session
+		var ok bool
+		var err error
+		if store.LooksLikeSessionULID(src) {
 			sess, ok, err = store.SessionByID(ctx, s.cfg.DB, src)
+		} else {
+			sess, ok, err = store.SessionByName(ctx, s.cfg.DB, src)
+		}
+		if err != nil {
+			s.logger.Warn("console: memory source session", "source", src, "error", err)
 		}
 		if err != nil || !ok {
 			sess = core.Session{}

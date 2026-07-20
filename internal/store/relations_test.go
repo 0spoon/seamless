@@ -56,30 +56,33 @@ func TestMemoriesForSession(t *testing.T) {
 	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
 	ts := func(min int) string { return core.FormatTime(base.Add(time.Duration(min) * time.Minute)) }
 
+	sessID, err := core.NewID()
+	require.NoError(t, err)
 	insertMemory(t, db, "m1", "gotcha", "m1", "d", "seam", "b", ts(1), "")
 	insertMemory(t, db, "m2", "gotcha", "m2", "d", "seam", "b", ts(2), "")
 	insertMemory(t, db, "m3", "gotcha", "m3", "d", "seam", "b", ts(3), "")
-	setSourceSession(t, db, "m1", "cc/aabbccdd")
+	insertMemory(t, db, "m4", "gotcha", "m4", "d", "seam", "b", ts(4), "")
+	setSourceSession(t, db, "m1", "cc/aabbccdd") // ambient stamp: session name
 	setSourceSession(t, db, "m2", "cc/aabbccdd")
 	setSourceSession(t, db, "m3", "cc/other")
+	setSourceSession(t, db, "m4", sessID) // bound stamp: session ULID
 
-	got, err := MemoriesForSession(ctx, db, "cc/aabbccdd")
+	// Both stamp spellings belong to the one session, newest-updated first.
+	got, err := MemoriesForSession(ctx, db, core.Session{ID: sessID, Name: "cc/aabbccdd"})
 	require.NoError(t, err)
-	require.Equal(t, []string{"m2", "m1"}, memNames(got)) // newest-updated first
+	require.Equal(t, []string{"m4", "m2", "m1"}, memNames(got))
 
 	// A session that produced nothing yields none.
-	none, err := MemoriesForSession(ctx, db, "cc/nobody")
+	nobodyID, err := core.NewID()
+	require.NoError(t, err)
+	none, err := MemoriesForSession(ctx, db, core.Session{ID: nobodyID, Name: "cc/nobody"})
 	require.NoError(t, err)
 	require.Empty(t, none)
 
-	// GUARD: a bare session ULID is rejected with the name-vs-id fix.
-	ulidArg, err := core.NewID()
+	// A zero session matches nothing rather than matching empty stamps.
+	zero, err := MemoriesForSession(ctx, db, core.Session{})
 	require.NoError(t, err)
-	require.Len(t, ulidArg, 26)
-	_, err = MemoriesForSession(ctx, db, ulidArg)
-	require.Error(t, err)
-	require.ErrorContains(t, err, "expected a session NAME")
-	require.ErrorContains(t, err, "SessionByID")
+	require.Empty(t, zero)
 }
 
 func TestTasksClaimedBy(t *testing.T) {
