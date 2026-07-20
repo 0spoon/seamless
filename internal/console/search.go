@@ -59,7 +59,12 @@ type searchRow struct {
 	Href        string        `json:"href"`
 	Description string        `json:"description,omitempty"`
 	SnippetHTML template.HTML `json:"snippetHtml,omitempty"`
-	Peek        bool          `json:"peek"`
+	// Similarity is the semantic leg's cosine similarity as a percentage
+	// (1-100), so the observer can see where relevance falls off. Zero for a
+	// lexical-only hit -- an FTS match has a highlighted snippet instead of a
+	// distance -- and for the structured-entity groups, which match by LIKE.
+	Similarity int  `json:"similarity,omitempty"`
+	Peek       bool `json:"peek"`
 }
 
 // searchGroup is one entity kind's results.
@@ -278,6 +283,9 @@ func hitRow(h retrieve.Hit) searchRow {
 	row := searchRow{
 		Kind: h.Kind, ID: h.ID, Title: h.Title, Project: h.Project,
 		Age: h.Age, Description: h.Description, Peek: true,
+	}
+	if h.Similarity > 0 {
+		row.Similarity = min(int(h.Similarity*100+0.5), 100)
 	}
 	if h.Kind == "note" {
 		row.Href = "/console/notes/" + h.ID

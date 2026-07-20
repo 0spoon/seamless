@@ -291,6 +291,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td>-</td>
 </tr>
 <tr>
+<td><code>search.semantic_floor</code></td>
+<td>float64</td>
+<td><code>0.3</code></td>
+</tr>
+<tr>
 <td><code>llm.provider</code></td>
 <td>string</td>
 <td><code>openai</code></td>
@@ -516,6 +521,17 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># section (their constraints/stages never cross over). Off by default.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">include_sibling_memories</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Console search (the full page&#39;s fused semantic+lexical retrieval). Agent</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># recall is not affected by these knobs.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">search</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Minimum cosine similarity a semantic-only hit needs to appear in results;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># hits the keyword leg also matched are exempt. Without a floor the cosine leg</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># is pure nearest-neighbor, so any query -- including nonsense -- fills the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># page to its limit. 0 disables the floor. Useful values depend on the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># embedding model; 0.3 suits OpenAI text-embedding-3-*.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_SEARCH_SEMANTIC_FLOOR</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">semantic_floor</span><span class="p">:</span><span class="w"> </span><span class="m">0.3</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">llm</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Primary provider for chat (session digests) and embeddings. OpenAI is the</span><span class="w">

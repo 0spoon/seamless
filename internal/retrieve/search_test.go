@@ -280,6 +280,89 @@ func TestRecall_StillDropsOutOfScopeProjects(t *testing.T) {
 	require.ElementsMatch(t, []string{"alpha-thing", "global-thing"}, names)
 }
 
+// The cosine leg is pure nearest-neighbor: without a floor there is always a
+// "nearest" item, so any query -- including nonsense -- fills the page to its
+// limit. A semantic-only hit below search.semantic_floor must be dropped, and
+// setting the floor to 0 must restore the keep-everything behavior.
+func TestSearch_SemanticFloorDropsWeakHits(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	// Neither description shares a term with the query, isolating the cosine leg.
+	insMem(t, db, "01STRONG", "gotcha", "strong-vector", "unrelated words entirely", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01STRONG", "memory", "test-embed", []float32{0.6, 0.8, 0}))
+	insMem(t, db, "01WEAK", "gotcha", "weak-vector", "different unrelated words", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01WEAK", "memory", "test-embed", []float32{0.2, 0.98, 0}))
+
+	svc := New(db, fixedEmbedder{vec: []float32{1, 0, 0}}, budgets(), nil)
+	svc.SetSearchConfig(config.Search{SemanticFloor: 0.3})
+
+	hits, err := svc.Search(ctx, SearchInput{Query: "quantum flux capacitor", Semantic: true, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "strong-vector", hits[0].Name)
+	require.InDelta(t, 0.6, hits[0].Similarity, 0.01,
+		"a semantic hit must report its raw cosine similarity")
+
+	svc.SetSearchConfig(config.Search{SemanticFloor: 0})
+	hits, err = svc.Search(ctx, SearchInput{Query: "quantum flux capacitor", Semantic: true, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, hits, 2, "a zero floor must keep every nearest neighbor")
+}
+
+// A hit the lexical leg also matched earned its place by keyword, regardless of
+// how far its vector is; the floor applies only to semantic-only hits. Its
+// similarity still surfaces so the observer sees the weak distance.
+func TestSearch_SemanticFloorExemptsLexicalMatches(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	insMem(t, db, "01FUSE", "gotcha", "fused-hit", "quantum capacitor sizing notes", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01FUSE", "memory", "test-embed", []float32{0.2, 0.98, 0}))
+
+	svc := New(db, fixedEmbedder{vec: []float32{1, 0, 0}}, budgets(), nil)
+	svc.SetSearchConfig(config.Search{SemanticFloor: 0.3})
+
+	hits, err := svc.Search(ctx, SearchInput{Query: "quantum capacitor", Semantic: true, Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, hits, 1, "a keyword match must survive a below-floor vector")
+	require.Equal(t, "fused", hits[0].Source)
+	require.InDelta(t, 0.2, hits[0].Similarity, 0.01)
+}
+
+// A lexical-only hit has no vector distance to report: Similarity must stay
+// zero rather than posing as a measured relevance.
+func TestSearch_LexicalOnlyHitOmitsSimilarity(t *testing.T) {
+	db := setupDB(t)
+
+	insMem(t, db, "01A", "gotcha", "boot-race", "the daemon hits a chroma boot race", "seam")
+
+	svc := New(db, nil, budgets(), nil)
+	hits, err := svc.Search(context.Background(), SearchInput{Query: "chroma", Limit: 5})
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Zero(t, hits[0].Similarity)
+}
+
+// Recall's JSON payload is an agent-facing contract (see TestRecall_NeverSetsSnippet),
+// and the floor is Search's guard alone: recall keeps every neighbor, however
+// weak, and never emits Similarity.
+func TestRecall_IgnoresFloorAndNeverSetsSimilarity(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+
+	insMem(t, db, "01WEAK", "gotcha", "weak-vector", "different unrelated words", "seam")
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01WEAK", "memory", "test-embed", []float32{0.2, 0.98, 0}))
+
+	svc := New(db, fixedEmbedder{vec: []float32{1, 0, 0}}, budgets(), nil)
+	svc.SetSearchConfig(config.Search{SemanticFloor: 0.3})
+
+	hits, err := svc.Recall(ctx, RecallInput{Query: "quantum flux capacitor", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, hits, 1, "recall must keep a below-floor neighbor")
+	require.Zero(t, hits[0].Similarity, "recall must leave Similarity empty so its JSON stays byte-identical")
+}
+
 // The console renders a snippet by escaping first and substituting second. Pin
 // that the sentinels are what survives that order -- a literal "<mark>" in a body
 // would not.

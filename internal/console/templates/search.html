@@ -37,6 +37,7 @@
             <strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
             {{if .SnippetHTML}}<div class="desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="desc">{{.Description}}</div>{{end}}
           </td>
+          <td class="num muted">{{if .Similarity}}<span title="semantic similarity to the query">{{.Similarity}}%</span>{{end}}</td>
           <td><span class="kind">{{.Kind}}</span></td>
           <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
           <td class="muted">{{.Age}}</td>
@@ -51,7 +52,7 @@
 {{if .Query}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo;.</div></div>
 {{else}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
+<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
 {{end}}
 {{end}}
   </div><!-- .list-pane -->

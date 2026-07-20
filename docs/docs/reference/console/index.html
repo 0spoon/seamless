@@ -347,6 +347,14 @@ mirror and match by <code>LIKE</code>.</p>
 <p>The command palette (⌘K, available on every page) fetches this same route with
 <code>?format=json&amp;fast=1</code>, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.</p>
+<p>The semantic leg is nearest-neighbor: there is always a &quot;nearest&quot; memory,
+however far, so a semantic-only hit must clear <code>search.semantic_floor</code> (cosine
+similarity, default 0.3) to appear - without the floor any query, including
+nonsense, would fill the page to its limit. A hit the keyword leg also matched
+is exempt. Every hit the semantic leg found shows its similarity as a
+percentage, so you can see where relevance falls off; keyword-only hits show a
+highlighted snippet instead. Agent-facing recall applies no floor - an agent
+can judge a weak hit for itself.</p>
 <p>Coverage is deliberately partial in one place: events are excluded because the
 telemetry stream has its own Interactions surface and would flood results.</p>
 <h2 id="projects">Projects</h2>

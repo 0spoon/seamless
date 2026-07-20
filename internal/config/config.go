@@ -32,6 +32,7 @@ type Config struct {
 	MCP         MCP         `yaml:"mcp"`
 	Budgets     Budgets     `yaml:"budgets"`
 	Briefing    Briefing    `yaml:"briefing"`
+	Search      Search      `yaml:"search"`
 	LLM         LLM         `yaml:"llm"`
 	Gardener    Gardener    `yaml:"gardener"`
 	Capture     Capture     `yaml:"capture"`
@@ -127,6 +128,19 @@ func (b Briefing) Validate() error {
 		}
 	}
 	return nil
+}
+
+// Search tunes the human-facing console search (retrieve.Search). Agent-facing
+// recall is deliberately not covered: an agent can judge a weak hit for itself,
+// but an observer reads "20 results" as 20 matches.
+type Search struct {
+	// SemanticFloor is the minimum cosine similarity a semantic-only hit needs
+	// to appear in search results; hits the lexical leg also matched are exempt.
+	// Without it the cosine leg is pure nearest-neighbor -- there is always a
+	// "nearest" item, so any query fills the page. 0 disables the floor. Useful
+	// values depend on the embedding model; the default suits OpenAI
+	// text-embedding-3-*.
+	SemanticFloor float64 `yaml:"semantic_floor"`
 }
 
 // LLM configures chat (digests) and embeddings. OpenAI is the default provider.
@@ -243,6 +257,7 @@ func Defaults() Config {
 			IncludeParentMemories:  true,
 			SiblingFindingsCount:   2,
 		},
+		Search: Search{SemanticFloor: 0.3},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
 			OpenAI: OpenAI{
@@ -368,6 +383,9 @@ func (c Config) Validate() error {
 			return fmt.Errorf("config: capture.allowed_ports: %d is not a valid port (1-65535)", p)
 		}
 	}
+	if c.Search.SemanticFloor < 0 || c.Search.SemanticFloor > 1 {
+		return fmt.Errorf("config: search.semantic_floor must be in [0, 1]")
+	}
 	if err := c.Briefing.Validate(); err != nil {
 		return err
 	}
@@ -421,6 +439,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envBool("SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES", &c.Briefing.IncludeSiblingMemories); err != nil {
+		return err
+	}
+	if err := envFloat("SEAMLESS_SEARCH_SEMANTIC_FLOOR", &c.Search.SemanticFloor); err != nil {
 		return err
 	}
 

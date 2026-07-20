@@ -25,6 +25,7 @@ type Service struct {
 	bodyReader MemoryBodyReader // nil => briefing omits the pinned-stage section
 	budgets    config.Budgets
 	briefing   config.Briefing // file/env base; console overrides layer on at briefing time
+	search     config.Search
 	logger     *slog.Logger
 
 	corpus *corpusCache // prompt-matcher IDF corpus, cached per project scope
@@ -42,6 +43,7 @@ func New(db *sql.DB, embedder llm.Embedder, budgets config.Budgets, logger *slog
 		embedder: embedder,
 		budgets:  budgets,
 		briefing: config.Defaults().Briefing,
+		search:   config.Defaults().Search,
 		logger:   logger,
 		corpus:   newCorpusCache(),
 	}
@@ -52,6 +54,9 @@ func New(db *sql.DB, embedder llm.Embedder, budgets config.Budgets, logger *slog
 // on top of these at briefing-assembly time, so a console save takes effect on
 // the next session start without a restart.
 func (s *Service) SetBriefingConfig(b config.Briefing) { s.briefing = b }
+
+// SetSearchConfig sets the file/env search knobs (Defaults() until called).
+func (s *Service) SetSearchConfig(c config.Search) { s.search = c }
 
 // injectionRe strips imperative prompt-injection phrases from any field lifted
 // out of stored content and shown to an agent as trusted context.

@@ -232,6 +232,7 @@ func runServe(args []string) error {
 	ret := retrieve.New(db, embedder, cfg.Budgets, logger)
 	ret.SetBodyReader(mgr.Store()) // enables the pinned-stage briefing section
 	ret.SetBriefingConfig(cfg.Briefing)
+	ret.SetSearchConfig(cfg.Search)
 	rec := events.NewRecorder(db)
 
 	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool

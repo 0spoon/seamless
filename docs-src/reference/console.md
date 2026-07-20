@@ -160,6 +160,15 @@ The command palette (⌘K, available on every page) fetches this same route with
 `?format=json&fast=1`, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.
 
+The semantic leg is nearest-neighbor: there is always a "nearest" memory,
+however far, so a semantic-only hit must clear `search.semantic_floor` (cosine
+similarity, default 0.3) to appear - without the floor any query, including
+nonsense, would fill the page to its limit. A hit the keyword leg also matched
+is exempt. Every hit the semantic leg found shows its similarity as a
+percentage, so you can see where relevance falls off; keyword-only hits show a
+highlighted snippet instead. Agent-facing recall applies no floor - an agent
+can judge a weak hit for itself.
+
 Coverage is deliberately partial in one place: events are excluded because the
 telemetry stream has its own Interactions surface and would flood results.
 

@@ -90,6 +90,17 @@ briefing:
   # env: SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES
   include_sibling_memories: false
 
+# Console search (the full page's fused semantic+lexical retrieval). Agent
+# recall is not affected by these knobs.
+search:
+  # Minimum cosine similarity a semantic-only hit needs to appear in results;
+  # hits the keyword leg also matched are exempt. Without a floor the cosine leg
+  # is pure nearest-neighbor, so any query -- including nonsense -- fills the
+  # page to its limit. 0 disables the floor. Useful values depend on the
+  # embedding model; 0.3 suits OpenAI text-embedding-3-*.
+  # env: SEAMLESS_SEARCH_SEMANTIC_FLOOR
+  semantic_floor: 0.3
+
 llm:
   # Primary provider for chat (session digests) and embeddings. OpenAI is the
   # default and the first-class provider. One of: openai | ollama | anthropic.

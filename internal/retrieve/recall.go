@@ -43,6 +43,11 @@ type Hit struct {
 	// It is RAW item text: a renderer must HTML-escape before substituting the
 	// sentinels for markup.
 	Snippet string `json:"snippet,omitempty"`
+	// Similarity is the raw cosine similarity from the semantic leg, for hits
+	// that leg found. Like Snippet, only Search sets it -- Recall always leaves
+	// it zero, so omitempty keeps the MCP recall payload unchanged. A lexical-only
+	// hit has no vector distance to report and also omits it.
+	Similarity float64 `json:"similarity,omitempty"`
 }
 
 // RecallScopes lists every valid RecallInput.Scope value. An empty Scope is a
@@ -67,6 +72,7 @@ type fusedItem struct {
 	fts      bool
 	linked   bool // pulled in via a [[name]] link from a top hit
 	snippet  string
+	cosine   float64 // raw semantic-leg similarity; meaningful only when semantic
 }
 
 // candidates runs both retrieval legs and fuses them with RRF, returning the
@@ -86,7 +92,7 @@ type fusedItem struct {
 // a snippet it discards is cheaper than two divergent query paths.
 func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
 	acc := make(map[string]*fusedItem)
-	add := func(itemID, kind string, rank int, isSemantic bool, snippet string) {
+	add := func(itemID, kind string, rank int, isSemantic bool, snippet string, cosine float64) {
 		f := acc[itemID]
 		if f == nil {
 			f = &fusedItem{kind: kind}
@@ -95,6 +101,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 		f.score += 1.0 / float64(rrfK+rank+1)
 		if isSemantic {
 			f.semantic = true
+			f.cosine = cosine
 		} else {
 			f.fts = true
 			if snippet != "" && f.snippet == "" {
@@ -127,7 +134,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 				return nil, err
 			}
 			for rank, h := range hits {
-				add(h.ItemID, h.Kind, rank, true, "")
+				add(h.ItemID, h.Kind, rank, true, "", h.Score)
 			}
 		}
 	}
@@ -136,7 +143,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 		return nil, err
 	}
 	for rank, h := range ftsHits {
-		add(h.ItemID, h.Kind, rank, false, h.Snippet)
+		add(h.ItemID, h.Kind, rank, false, h.Snippet, 0)
 	}
 	return acc, nil
 }

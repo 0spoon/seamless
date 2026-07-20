@@ -49,6 +49,7 @@ func TestDefaults(t *testing.T) {
 	require.True(t, d.Briefing.IncludeParentMemories)
 	require.Equal(t, 2, d.Briefing.SiblingFindingsCount)
 	require.False(t, d.Briefing.IncludeSiblingMemories)
+	require.Equal(t, 0.3, d.Search.SemanticFloor)
 	require.True(t, d.PlanCapture.Enabled)
 	require.True(t, d.PlanCapture.AutoTask)
 	require.True(t, d.PlanCapture.InjectRelated)
@@ -109,6 +110,7 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_PLAN_CAPTURE_AUTO_TASK", "false")
 	t.Setenv("SEAMLESS_PLAN_CAPTURE_INJECT_RELATED", "false")
 	t.Setenv("SEAMLESS_GARDENER_STALE_PLAN_DAYS", "21")
+	t.Setenv("SEAMLESS_SEARCH_SEMANTIC_FLOOR", "0.45")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
@@ -121,6 +123,7 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	require.False(t, cfg.PlanCapture.Enabled)
 	require.False(t, cfg.PlanCapture.AutoTask)
 	require.False(t, cfg.PlanCapture.InjectRelated)
+	require.Equal(t, 0.45, cfg.Search.SemanticFloor)
 	require.Equal(t, "", cfg.SourcePath())
 }
 
@@ -296,6 +299,10 @@ func TestValidate(t *testing.T) {
 		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
 		{"negative-briefing-stage-window", func(c *Config) { c.Briefing.StageUnknownMaxAgeDays = -1 }, true},
 		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},
+		{"zero-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 0 }, false},
+		{"one-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 1 }, false},
+		{"negative-semantic-floor", func(c *Config) { c.Search.SemanticFloor = -0.1 }, true},
+		{"semantic-floor-above-one", func(c *Config) { c.Search.SemanticFloor = 1.1 }, true},
 		{"custom-capture-ports-ok", func(c *Config) { c.Capture.AllowedPorts = []int{8080, 65535} }, false},
 		{"zero-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{0} }, true},
 		{"negative-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{-1} }, true},

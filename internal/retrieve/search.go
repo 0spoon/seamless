@@ -43,6 +43,15 @@ type SearchInput struct {
 // Snippet is populated for hits the FTS leg found; a semantic-only hit has none
 // (there is no matched term to quote), and the caller falls back to the item's
 // description.
+//
+// Search adds one guard Recall does not have: the semantic floor
+// (search.semantic_floor). The cosine leg is pure nearest-neighbor -- there is
+// always a "nearest" item, however far, so without a floor any query fills the
+// page to its limit with noise. A semantic-only hit below the floor is dropped;
+// a hit the lexical leg also matched earned its place regardless of distance.
+// Recall keeps every neighbor on purpose: an agent can judge a weak hit, an
+// observer reads "20 results" as 20 matches. Similarity is set on every hit the
+// semantic leg found, so the caller can show where relevance falls off.
 func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 	kinds := scopeKinds(in.Scope)
 	limit := in.Limit
@@ -67,6 +76,9 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 			break
 		}
 		f := acc[id]
+		if f.semantic && !f.fts && f.cosine < s.search.SemanticFloor {
+			continue
+		}
 		var h Hit
 		if f.kind == "note" {
 			n, ok := notes[id]
@@ -89,6 +101,9 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		h.Source = fusedSource(f)
 		h.Score = f.score
 		h.Snippet = f.snippet
+		if f.semantic {
+			h.Similarity = f.cosine
+		}
 		out = append(out, h)
 	}
 	return out, nil

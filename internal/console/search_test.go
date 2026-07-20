@@ -5,14 +5,44 @@ import (
 	"database/sql"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
+
+// fixedEmbedder returns the same vector for every text (retrieve's tests keep a
+// twin); it lets a console test drive the semantic leg without a provider.
+type fixedEmbedder struct{ vec []float32 }
+
+func (e fixedEmbedder) Model() string { return "test-embed" }
+
+func (e fixedEmbedder) Embed(context.Context, string) ([]float32, error) { return e.vec, nil }
+
+// newSemanticConsole is newConsole with an embedder, for the tests that need
+// the semantic leg live.
+func newSemanticConsole(t *testing.T, vec []float32) (*sql.DB, *http.ServeMux) {
+	t.Helper()
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	svc, err := New(Config{
+		DB: db, Events: events.NewRecorder(db), APIKey: testKey,
+		Retrieve: retrieve.New(db, fixedEmbedder{vec: vec}, config.Defaults().Budgets, nil),
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+	return db, mux
+}
 
 // seedSearchMemory inserts a memory index row plus its fts row.
 func seedSearchMemory(t *testing.T, db *sql.DB, id, name, desc, project, body string) {
@@ -62,7 +92,10 @@ func TestSearch_EmptyQueryRendersEmptyState(t *testing.T) {
 	mux := newTestMux(t)
 	rr := getSearch(t, mux, "/console/search")
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), "Search memories, notes, tasks")
+	body := rr.Body.String()
+	require.Contains(t, body, "Search memories, notes, tasks")
+	require.Contains(t, body, "<kbd>Ctrl</kbd>+<kbd>K</kbd>")
+	require.Contains(t, body, "<kbd>Cmd</kbd>+<kbd>K</kbd>")
 }
 
 // A strictly validated enum must name its valid values, so an agent driving the
@@ -177,6 +210,42 @@ func TestSearch_SnippetEscapesItemMarkup(t *testing.T) {
 	require.NotContains(t, body, "<script>alert(1)", "item markup must never render live")
 	require.Contains(t, body, "&lt;script&gt;")
 	require.Contains(t, body, "<mark>chroma</mark>", "our own highlight must survive escaping")
+}
+
+// A semantic hit carries its cosine similarity as a percentage -- both in the
+// JSON contract and rendered on the page -- so the observer can see where
+// relevance falls off. The fixture's cosine (0.6) also sits above the default
+// semantic floor, pinning that an above-floor hit survives it end to end.
+func TestSearch_SemanticHitCarriesSimilarityPercent(t *testing.T) {
+	db, mux := newSemanticConsole(t, []float32{1, 0, 0})
+	seedSearchMemory(t, db, "01SEM", "vector-thing", "unrelated words entirely", "seam", "nothing lexical here")
+	require.NoError(t, store.UpsertEmbedding(context.Background(), db, "01SEM", "memory", "test-embed",
+		[]float32{0.6, 0.8, 0}))
+
+	var data searchData
+	getJSON(t, mux, "/console/search?format=json&q=quantum+flux&scope=memories", &data)
+	require.Len(t, data.Groups, 1)
+	require.Equal(t, 60, data.Groups[0].Rows[0].Similarity)
+
+	rr := getSearch(t, mux, "/console/search?q=quantum+flux&scope=memories")
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Body.String(), "60%")
+}
+
+// A lexical-only hit has no vector distance: its row must omit the similarity
+// cell rather than render a zero.
+func TestSearch_LexicalHitOmitsSimilarity(t *testing.T) {
+	db, mux := newConsole(t)
+	seedSearchMemory(t, db, "01MEM", "chroma-boot-race", "chroma health", "seam", "chroma body")
+
+	var data searchData
+	getJSON(t, mux, "/console/search?format=json&q=chroma&scope=memories", &data)
+	require.Len(t, data.Groups, 1)
+	require.Zero(t, data.Groups[0].Rows[0].Similarity)
+
+	rr := getSearch(t, mux, "/console/search?q=chroma&scope=memories")
+	require.NotContains(t, rr.Body.String(), "semantic similarity",
+		"a lexical-only page must not render the similarity tooltip span")
 }
 
 // The palette script loads on every page including the login screen, so its
