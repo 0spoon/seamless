@@ -113,7 +113,48 @@ function Get-Release {
         Die "checksum mismatch for $zip`n  expected $want`n  got      $got"
     }
     Step 'checksum' 'ok'
+
+    Test-Signature -Base $base -Tmp $Tmp -SumPath $sumPath
     return $zipPath
+}
+
+# A matching checksum proves the zip is the one checksums.txt describes, not that
+# checksums.txt came from us -- it is fetched from the same origin, so whoever
+# could tamper with one could tamper with both. The signature closes that gap
+# (audit M3); mirrors verify_signature in docs/install.
+#
+# Keyless Sigstore, so the IDENTITY is the check that matters: anyone can produce
+# a valid signature under their own identity, and pinning to this repo's release
+# workflow on a v* tag is what makes it mean "published by the Seamless
+# pipeline". cosign missing warns (installing a signing tool first would be real
+# friction, and a first install is trust-on-first-use over TLS regardless);
+# cosign present and failing is fatal, because that is positive evidence.
+function Test-Signature {
+    param([string]$Base, [string]$Tmp, [string]$SumPath)
+
+    if (-not (Get-Command cosign -ErrorAction SilentlyContinue)) {
+        Warn "cosign not found -- archive verified by checksum only.`n    For signature verification: https://docs.sigstore.dev/system_config/installation/"
+        return
+    }
+    $sig = Join-Path $Tmp 'checksums.txt.sig'
+    $cert = Join-Path $Tmp 'checksums.txt.pem'
+    try {
+        Invoke-WebRequest -UseBasicParsing "$Base/checksums.txt.sig" -OutFile $sig
+        Invoke-WebRequest -UseBasicParsing "$Base/checksums.txt.pem" -OutFile $cert
+    } catch {
+        Warn 'this release predates artifact signing -- checksum only'
+        return
+    }
+    $idRegex = "^https://github.com/$Repo/\.github/workflows/release\.yml@refs/tags/v"
+    & cosign verify-blob $SumPath `
+        --signature $sig `
+        --certificate $cert `
+        --certificate-identity-regexp $idRegex `
+        --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        Die "SIGNATURE VERIFICATION FAILED for checksums.txt.`n  The release artifacts are not signed by the $Repo release workflow.`n  Do not install. Please report this at https://github.com/$Repo/security"
+    }
+    Step 'signature' 'ok (sigstore)'
 }
 
 # A running .exe cannot be overwritten in place -- the image is locked -- and

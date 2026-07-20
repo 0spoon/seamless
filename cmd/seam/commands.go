@@ -64,5 +64,6 @@ func commands() []cmd {
 		hookCmd,
 
 		mcpProxyCmd,
+		mcpHeadersCmd,
 	}
 }

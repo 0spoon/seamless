@@ -78,7 +78,7 @@ DOCS_ADDR ?= 127.0.0.1:8899
 INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
-.PHONY: help build test test-race bench lint vet fmt fmt-check check check-fast tidy run doctor console console-chrome \
+.PHONY: help build test test-race bench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve installer-check site-check site-stamp release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall update _seed-config _reload-service _wait-healthy start stop restart status \
 	logs install-onboard-skill uninstall-onboard-skill \
@@ -90,10 +90,11 @@ help:
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
 	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
-	@echo "  check      the full gate: build + vet + fmt + docs + installer + site + lint + test-race"
+	@echo "  check      the full gate: build + vet + fmt + docs + installer + site + lint + vulncheck + test-race"
 	@echo "  check-fast the pre-commit subset: same minus build and test-race"
 	@echo "  lint       run golangci-lint"
 	@echo "  vet        run go vet"
+	@echo "  vulncheck  run govulncheck against the vuln DB (part of check; needs network)"
 	@echo "  fmt        gofmt tracked files"
 	@echo "  fmt-check  fail if tracked files have gofmt drift"
 	@echo "  docs       regenerate the docs site (docs-src/ -> docs/docs/, committed)"
@@ -150,6 +151,20 @@ lint:
 vet:
 	$(GO) vet $(PKG)
 
+# Known-vulnerability gate. Reachability-based (govulncheck reports only vulns
+# whose vulnerable symbols this code actually calls), so it stays quiet about
+# the long tail in transitive deps and fails only on something real.
+#
+# A hard requirement, like golangci-lint -- an advisory "skip if missing" gate
+# is the kind that is green on your laptop and red nowhere, which is how the
+# 16 hits in the 2026-07-19 audit accumulated unseen in the first place. It is
+# in `check` but NOT `check-fast`: it queries vuln.go.dev, and the pre-commit
+# hook has to work on a plane.
+vulncheck:
+	@command -v govulncheck >/dev/null \
+	    || { echo "ERROR: govulncheck not found (go install golang.org/x/vuln/cmd/govulncheck@latest)"; exit 1; }
+	govulncheck $(PKG)
+
 fmt:
 	@$(GOFILES) | xargs gofmt -w
 
@@ -194,6 +209,7 @@ check:
 	@$(MAKE) installer-check
 	@$(MAKE) site-check
 	@$(MAKE) lint
+	@$(MAKE) vulncheck
 	@$(MAKE) test-race
 	@echo "check: all green"
 
@@ -268,10 +284,14 @@ uninstall-git-hooks:
 # Local dry-run of the release pipeline (.goreleaser.yaml): validates the
 # config and cross-compiles every platform into dist/ without tagging or
 # publishing. Real releases run in CI on a v* tag (.github/workflows/release.yml).
+# --skip=sign: the `signs:` stage is keyless cosign, which needs the GitHub OIDC
+# token that only exists inside the release workflow. Off a runner it falls back
+# to an interactive browser flow, so a local dry-run would hang instead of
+# validating the build. Signing is exercised for real on a v* tag.
 release-snapshot:
 	@command -v goreleaser >/dev/null \
 	    || { echo "ERROR: goreleaser not found (brew install goreleaser)"; exit 1; }
-	goreleaser release --snapshot --clean
+	goreleaser release --snapshot --clean --skip=sign
 
 tidy:
 	$(GO) mod tidy

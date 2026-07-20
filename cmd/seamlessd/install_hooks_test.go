@@ -9,12 +9,29 @@ import (
 	"github.com/0spoon/seamless/internal/hooks"
 )
 
+// The Claude Code MCP registration names a headersHelper command instead of
+// carrying the bearer key: the key would otherwise sit in this argv, readable
+// via `ps auxww` during install (audit L4). Same trade as the Codex bridge
+// below -- the key is read from the 0600 config at connection time.
 func TestClaudeMCPAddArgs(t *testing.T) {
-	args := claudeMCPAddArgs("http://127.0.0.1:8081", "k3y")
+	args := claudeMCPAddArgs("http://127.0.0.1:8081", "/opt/seam", "/etc/seamless.yaml")
 	require.Equal(t, []string{
-		"mcp", "add", "--scope", "user", "--transport", "http", "seamless",
-		"http://127.0.0.1:8081/api/mcp", "--header", "Authorization: Bearer k3y",
+		"mcp", "add-json", "--scope", "user", "seamless",
+		`{"headersHelper":"/opt/seam mcp-headers --config /etc/seamless.yaml",` +
+			`"type":"http","url":"http://127.0.0.1:8081/api/mcp"}`,
 	}, args)
+
+	// No config path -> no trailing --config, matching codexMCPAddArgs.
+	require.Contains(t, claudeMCPAddArgs("http://127.0.0.1:8081", "/opt/seam", "")[5],
+		`"headersHelper":"/opt/seam mcp-headers"`)
+}
+
+// The whole point of L4: no argv this installer builds may contain the key.
+func TestClaudeMCPAddArgs_CarriesNoSecret(t *testing.T) {
+	const key = "0123456789abcdef0123456789abcdef"
+	joined := strings.Join(claudeMCPAddArgs("http://127.0.0.1:8081", "/opt/seam", "/etc/seamless.yaml"), " ")
+	require.NotContains(t, joined, key)
+	require.NotContains(t, joined, "Bearer")
 }
 
 // The Codex MCP registration is a stdio bridge (codex mcp add ... -- <cmd>), not

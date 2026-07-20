@@ -81,7 +81,7 @@ func (c *OpenAIEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	}
 
 	var out openaiEmbedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeJSONResponse(resp.Body, &out); err != nil {
 		return nil, fmt.Errorf("llm.OpenAI.Embed: decode: %w", err)
 	}
 	if len(out.Data) == 0 || len(out.Data[0].Embedding) == 0 {

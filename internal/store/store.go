@@ -37,8 +37,11 @@ func isUniqueViolation(err error) bool {
 // via the DSN so every pooled connection inherits them, runs migrations, and
 // returns the handle. The caller is responsible for closing the *sql.DB.
 func Open(dbPath string) (*sql.DB, error) {
+	// 0700: the data dir holds the corpus and the DB (sessions, events, tool
+	// bodies, embeddings). Owner-only, so a traversable home does not hand
+	// another local account a path into it. (Audit L5.)
 	if dir := filepath.Dir(dbPath); dir != "" {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("store.Open: create data dir: %w", err)
 		}
 	}

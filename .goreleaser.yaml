@@ -67,6 +67,50 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Sign checksums.txt so it proves AUTHENTICITY, not just integrity.
+#
+# Every archive is verified against checksums.txt by both installers, so
+# checksums.txt is the root of that trust -- and until now it was fetched from
+# the same origin as the archives with nothing binding it to this project. An
+# attacker who could publish a release or MITM the host could swap the tarball
+# and the manifest together and every checksum would still match (audit M3).
+#
+# Keyless (Sigstore): the signing identity is this repository's release workflow,
+# proven by the GitHub OIDC token, and the short-lived certificate is logged in
+# the public transparency log. There is no private key to generate, store as a
+# secret, rotate, or leak -- which is the whole reason to prefer it here, since
+# the alternative is a single maintainer holding a long-lived key.
+#
+# Requires `id-token: write` on the release job and the cosign binary; both are
+# wired in .github/workflows/release.yml. Local `make release-snapshot` passes
+# --skip=sign, because keyless signing off a CI runner would try to open a
+# browser for an interactive OIDC flow.
+signs:
+  - cmd: cosign
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    output: true
+    args:
+      - sign-blob
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+      - "--yes"
+
+# The canonical installer scripts and their Sigstore bundles ride along as
+# release assets so `seamlessd update` can fetch script + signature from one
+# immutable, atomically published origin and verify (via the sigstore-go
+# verifier compiled into the daemon) before piping anything to a shell (audit
+# M3). The bundles are produced by the "Sign installer scripts" step in
+# release.yml, which runs before goreleaser; humans keep using the
+# thereisnospoon.org one-liners, which serve the same bytes.
+release:
+  extra_files:
+    - glob: docs/install
+    - glob: docs/install.ps1
+    - glob: sigs/install.sigstore.json
+    - glob: sigs/install.ps1.sigstore.json
+
 changelog:
   sort: asc
   groups:

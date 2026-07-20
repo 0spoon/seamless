@@ -550,14 +550,39 @@ func backupOnce(path string, mode os.FileMode) (string, error) {
 		return "", fmt.Errorf("hooks: backup read: %w", err)
 	}
 	backup := path + ".seamless-bak-" + time.Now().UTC().Format("20060102-150405")
-	if err := os.WriteFile(backup, data, mode); err != nil {
+	// The backup is a verbatim copy, so if the file being replaced held a
+	// bearer key this copy does too -- and it is the one nothing will ever
+	// rewrite. It gets the same clamp as the live file.
+	if err := os.WriteFile(backup, data, secretSafeMode(mode, data)); err != nil {
 		return "", fmt.Errorf("hooks: write backup: %w", err)
 	}
 	return backup, nil
 }
 
+// secretSafeMode narrows mode to owner-only when data carries a bearer
+// credential, and otherwise leaves it exactly as found.
+//
+// This exists because loadSettings preserves an existing file's mode, and
+// Claude Code commonly creates ~/.claude/settings.json as 0644 -- so writing
+// our `Authorization: Bearer <key>` header into it would persist the daemon's
+// sole credential world-readable. On a shared machine that hands any other
+// local account the ability to read and write the operator's entire memory
+// corpus. (Audit L3.)
+//
+// The test is the file's content rather than "did *we* just add a key", so it
+// also covers the backup copy above and the uninstall path, neither of which
+// knows the key. A masking AND is deliberate: this may only ever narrow
+// permissions, never widen a deliberately stricter file.
+func secretSafeMode(mode os.FileMode, data []byte) os.FileMode {
+	if !bytes.Contains(data, []byte("Bearer ")) {
+		return mode
+	}
+	return mode & 0o600
+}
+
 // writeSettings atomically writes the settings map, sorted-key indented, with a
-// trailing newline, preserving the file mode.
+// trailing newline, preserving the file mode -- except that a file carrying a
+// bearer credential is clamped to owner-only (see secretSafeMode).
 func writeSettings(path string, settings map[string]any, mode os.FileMode) error {
 	if dir := filepath.Dir(path); dir != "" {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -569,7 +594,7 @@ func writeSettings(path string, settings map[string]any, mode os.FileMode) error
 		return fmt.Errorf("hooks: marshal settings: %w", err)
 	}
 	out = append(out, '\n')
-	if err := files.AtomicWrite(path, out, mode); err != nil {
+	if err := files.AtomicWrite(path, out, secretSafeMode(mode, out)); err != nil {
 		return fmt.Errorf("hooks: write settings: %w", err)
 	}
 	return nil

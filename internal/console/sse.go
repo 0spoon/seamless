@@ -2,6 +2,7 @@ package console
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -23,6 +24,18 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		http.Error(w, "streaming unsupported", http.StatusInternalServerError)
 		return
+	}
+
+	// Opt out of the server's per-request ReadTimeout for the life of this
+	// stream. That timeout exists to bound slow request bodies (audit L7), but
+	// it is a deadline on the *connection*: once it expires, the net/http
+	// background read that watches for client disconnects fails, and Go cancels
+	// the request context -- silently killing an idle feed after 30s. An SSE
+	// request has no body left to read, so dropping the deadline costs nothing.
+	// A server without SetReadDeadline support (a test recorder) just skips it.
+	if err := http.NewResponseController(w).SetReadDeadline(time.Time{}); err != nil &&
+		!errors.Is(err, http.ErrNotSupported) {
+		s.logger.Warn("console: sse clear read deadline", "error", err)
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")

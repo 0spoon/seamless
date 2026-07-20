@@ -110,6 +110,23 @@ func TestName(t *testing.T) {
 		{"backslash", "a\\b", true},
 		{"empty", "", true},
 		{"null-byte", "bad\x00name", true},
+
+		// Audit I11: a leading dot hides the file from the owner reviewing
+		// their own corpus, and "." alone yields the alarming-looking "..md".
+		{"leading-dot", ".hidden", true},
+		{"bare-dot", ".", true},
+		{"interior-dot-is-fine", "v1.2-notes", false},
+
+		// Audit I11: Windows resolves these as devices in every directory, so
+		// the file cannot exist there. Rejected everywhere, because the corpus
+		// is markdown that gets synced and cloned across machines.
+		{"reserved-con", "con", true},
+		{"reserved-uppercase", "CON", true},
+		{"reserved-with-extension", "nul.md", true},
+		{"reserved-com1", "COM1", true},
+		{"reserved-lpt9", "lpt9", true},
+		{"reserved-prefix-only-is-fine", "console-layout", false},
+		{"reserved-substring-is-fine", "auxiliary", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

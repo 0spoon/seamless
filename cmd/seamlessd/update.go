@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"os"
 	"os/exec"
 	"runtime"
@@ -15,20 +17,24 @@ import (
 	"time"
 )
 
-// Canonical installer endpoints. The release-fetch + checksum + binary-swap +
+// Canonical installer delivery. The release-fetch + checksum + binary-swap +
 // service-rewire logic lives in exactly two published scripts -- docs/install
-// (POSIX) and docs/install.ps1 (PowerShell), served verbatim at
-// thereisnospoon.org. `seamlessd update` deliberately does NOT reimplement any of
-// it: it fetches the script for this OS and runs it, the same path a fresh
-// install takes, so there is ONE upgrade implementation to keep correct. (These
-// are also the URLs baked into service.go's install hints and the two installers'
-// own headers; keep them in step if the site ever moves.)
+// (POSIX) and docs/install.ps1 (PowerShell). Humans run them from
+// thereisnospoon.org (service.go's install hints and the docs one-liners);
+// `seamlessd update` instead fetches the byte-identical copies published as
+// GitHub release assets, because those ship atomically with the Sigstore
+// bundles the release workflow signs them with (release.yml), and update
+// verifies script against bundle before piping anything to a shell -- TLS
+// authenticates the host, the bundle proves the bytes came out of this repo's
+// release pipeline (audit M3). update deliberately does NOT reimplement any
+// install logic: after verification it runs the same script a fresh install
+// runs, so there is ONE upgrade implementation to keep correct.
 const (
-	installerURLUnix    = "https://thereisnospoon.org/install"
-	installerURLWindows = "https://thereisnospoon.org/install.ps1"
 	// githubRepo is where releases live; the installer scripts hardcode the same
-	// "0spoon/seamless". Used only by --check to read the latest release tag.
+	// "0spoon/seamless". Also used by --check to read the latest release tag.
 	githubRepo = "0spoon/seamless"
+	// releaseDownloadBase resolves to the newest published release's assets.
+	releaseDownloadBase = "https://github.com/" + githubRepo + "/releases/latest/download"
 )
 
 // updatePlan is the OS-specific way to run the canonical installer: fetch URL
@@ -36,11 +42,12 @@ const (
 // serviceControlPlan it is a pure value so the argv can be asserted in tests
 // without fetching or executing anything.
 type updatePlan struct {
-	OS       string   // GOOS this plan targets
-	URL      string   // installer script fetched over HTTPS
-	Prog     string   // interpreter that runs the fetched script from stdin
-	ProgArgs []string // interpreter args; the script itself arrives on stdin
-	RunHint  string   // the equivalent hand-run one-liner, shown for transparency
+	OS        string   // GOOS this plan targets
+	URL       string   // installer script fetched over HTTPS
+	BundleURL string   // Sigstore bundle attesting the script; empty = unverifiable (custom --url)
+	Prog      string   // interpreter that runs the fetched script from stdin
+	ProgArgs  []string // interpreter args; the script itself arrives on stdin
+	RunHint   string   // the equivalent hand-run one-liner, shown for transparency
 }
 
 // updatePlanFor builds the plan for goos. darwin/linux run the POSIX installer
@@ -51,19 +58,21 @@ type updatePlan struct {
 func updatePlanFor(goos string) updatePlan {
 	if goos == "windows" {
 		return updatePlan{
-			OS:       goos,
-			URL:      installerURLWindows,
-			Prog:     "powershell",
-			ProgArgs: []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"},
-			RunHint:  installRunHint(goos, installerURLWindows),
+			OS:        goos,
+			URL:       releaseDownloadBase + "/install.ps1",
+			BundleURL: releaseDownloadBase + "/install.ps1.sigstore.json",
+			Prog:      "powershell",
+			ProgArgs:  []string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", "-"},
+			RunHint:   installRunHint(goos, releaseDownloadBase+"/install.ps1"),
 		}
 	}
 	return updatePlan{
-		OS:       goos,
-		URL:      installerURLUnix,
-		Prog:     "sh",
-		ProgArgs: []string{"-s"},
-		RunHint:  installRunHint(goos, installerURLUnix),
+		OS:        goos,
+		URL:       releaseDownloadBase + "/install",
+		BundleURL: releaseDownloadBase + "/install.sigstore.json",
+		Prog:      "sh",
+		ProgArgs:  []string{"-s"},
+		RunHint:   installRunHint(goos, releaseDownloadBase+"/install"),
 	}
 }
 
@@ -78,11 +87,15 @@ func installRunHint(goos, url string) string {
 }
 
 // runUpdate upgrades Seamless in place to the latest published release by
-// re-running the canonical installer for this OS. The installer's env knobs are
-// inherited by the child, so `SEAMLESS_VERSION=0.3.0 seamlessd update` pins a
-// version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets, exactly as
-// the curl installer does. --check only reports installed vs latest; --dry-run
-// prints what would run without fetching or executing.
+// re-running the canonical installer for this OS, after verifying the
+// script's Sigstore bundle against the release-workflow identity compiled
+// into this binary (update_verify.go) -- verification failure is fatal, with
+// no fallback. A custom --url has no bundle to verify, so it runs TLS-only
+// with a printed warning. The installer's env knobs are inherited by the
+// child, so `SEAMLESS_VERSION=0.3.0 seamlessd update` pins a version and
+// `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets, exactly as the curl
+// installer does. --check only reports installed vs latest; --dry-run prints
+// what would run without fetching or executing.
 func runUpdate(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	check := fs.Bool("check", false, "report installed vs latest release version and exit without changing anything")
@@ -99,11 +112,17 @@ func runUpdate(args []string) error {
 	plan := updatePlanFor(runtime.GOOS)
 	if u := strings.TrimSpace(*urlFlag); u != "" {
 		plan.URL = u
+		plan.BundleURL = "" // no signed bundle rides alongside a custom endpoint
 		plan.RunHint = installRunHint(plan.OS, u)
 	}
 
 	fmt.Printf("\n%s %s\n", bold("Seamless"), dim("update"+dryRunTag(*dryRun)))
 	fieldRow("source", plan.URL)
+	if plan.BundleURL != "" {
+		fieldRow("signature", dim("sigstore bundle, signed by this repo's release workflow"))
+	} else {
+		fieldRow("signature", yellow("none")+dim(" -- custom --url carries no sigstore bundle; https is the only authentication"))
+	}
 	fieldRow("run", dim(plan.RunHint))
 
 	if *dryRun {
@@ -113,7 +132,21 @@ func runUpdate(args []string) error {
 
 	script, err := fetchInstaller(plan.URL)
 	if err != nil {
-		return fmt.Errorf("seamlessd.update: %w", err)
+		return fmt.Errorf("seamlessd.update: %w", missingAssetHint(err))
+	}
+	if plan.BundleURL != "" {
+		bundleJSON, err := fetchInstaller(plan.BundleURL)
+		if err != nil {
+			return fmt.Errorf("seamlessd.update: %w", missingAssetHint(err))
+		}
+		trusted, err := sigstoreTrustedRoot()
+		if err != nil {
+			return fmt.Errorf("seamlessd.update: %w", err)
+		}
+		if err := verifyInstallerBundle(trusted, []byte(bundleJSON), []byte(script)); err != nil {
+			return fmt.Errorf("seamlessd.update: refusing to run %s: %w", plan.URL, err)
+		}
+		fmt.Printf("%s%s\n", fieldCont, green("signature verified")+dim(" -- release workflow identity on a version tag"))
 	}
 
 	fmt.Printf("\n%s\n", dim("running the installer..."))
@@ -128,26 +161,44 @@ func runUpdate(args []string) error {
 	return nil
 }
 
-// fetchInstaller downloads the installer script over HTTPS. This is the ONLY
-// network fetch update performs itself -- a single GET of a small bootstrap
-// script, NOT the release archive; the archive download, its checksum
-// verification, and the binary swap all stay inside the script this returns.
+// fetchInstaller downloads one small release asset over HTTPS -- the
+// installer script or its Sigstore bundle, NOT the release archive; the
+// archive download, its checksum verification, and the binary swap all stay
+// inside the script this returns.
+//
+// The script comes back to be piped straight into sh/powershell, which makes
+// this the one place where remote bytes become locally executing code. So the
+// transport is not merely preferred-HTTPS, it is required-HTTPS, on the
+// initial URL (--url can name anything) and on every redirect hop: a 302 from
+// https to http would otherwise hand the whole script to whoever is on the
+// wire. On the default (non---url) path the fetched script must additionally
+// survive verifyInstallerBundle before it runs.
 func fetchInstaller(url string) (string, error) {
+	return fetchInstallerWith(httpsOnlyClient(), url)
+}
+
+// fetchInstallerWith is fetchInstaller with the client injected, so tests can
+// supply an httptest TLS server's client (which trusts its throwaway cert)
+// without loosening the scheme rules the real path enforces.
+func fetchInstallerWith(client *http.Client, url string) (string, error) {
+	if err := requireHTTPS(url); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", fmt.Errorf("build request: %w", err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("fetch installer %s: %w", url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("fetch installer %s: unexpected status %s", url, resp.Status)
+		return "", &fetchStatusError{url: url, status: resp.Status, code: resp.StatusCode}
 	}
-	// Installers are a few KB; 1 MiB is generous and caps a misrouted response.
+	// Installers and bundles are a few KB; 1 MiB caps a misrouted response.
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
 		return "", fmt.Errorf("read installer %s: %w", url, err)
@@ -156,6 +207,62 @@ func fetchInstaller(url string) (string, error) {
 		return "", fmt.Errorf("fetch installer %s: empty response", url)
 	}
 	return string(body), nil
+}
+
+// fetchStatusError is a non-200 from the release-asset host, kept typed so
+// runUpdate can tell "asset missing" apart from transport failures without
+// string-matching the message.
+type fetchStatusError struct {
+	url    string
+	status string
+	code   int
+}
+
+func (e *fetchStatusError) Error() string {
+	return fmt.Sprintf("fetch installer %s: unexpected status %s", e.url, e.status)
+}
+
+// missingAssetHint decorates a 404 from the release-asset fetch with its
+// likely cause: the newest published release predates signed installer
+// assets, which this build requires but that release cannot provide. Any
+// other error passes through untouched.
+func missingAssetHint(err error) error {
+	var fse *fetchStatusError
+	if errors.As(err, &fse) && fse.code == http.StatusNotFound {
+		return fmt.Errorf("%w (the latest published release predates signed installer assets; install by hand with the documented one-liner, or wait for the next release)", err)
+	}
+	return err
+}
+
+// requireHTTPS rejects a URL that would fetch shell-bound content over an
+// unauthenticated channel. Plain http means any router between here and the
+// host can rewrite the script that is about to run as this user.
+func requireHTTPS(raw string) error {
+	u, err := neturl.Parse(raw)
+	if err != nil {
+		return fmt.Errorf("invalid installer URL %q: %w", raw, err)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return fmt.Errorf("refusing to fetch the installer over %q: %s is piped to a shell and must be https", u.Scheme, raw)
+	}
+	return nil
+}
+
+// httpsOnlyClient is http.DefaultClient with one difference: it refuses a
+// redirect that leaves https. Go's default follows a downgrade silently, so
+// without this the scheme check above only covers the first hop and a
+// compromised or misconfigured host could bounce the fetch to plaintext.
+func httpsOnlyClient() *http.Client {
+	return &http.Client{CheckRedirect: httpsOnlyRedirect}
+}
+
+// httpsOnlyRedirect is the CheckRedirect policy httpsOnlyClient installs, kept
+// separate so a test client can adopt the same rule.
+func httpsOnlyRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return fmt.Errorf("stopped after 10 redirects")
+	}
+	return requireHTTPS(req.URL.String())
 }
 
 // githubRelease is the sliver of the GitHub releases API that --check reads.

@@ -331,9 +331,12 @@ that could drift from the installer:</p>
 </span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
 </span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
 </span></span></code></pre><p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
-Under the hood it fetches <a href="https://thereisnospoon.org/install">the installer</a>
-(the PowerShell one on Windows) and runs it, which is exactly the same as doing
-it by hand:</p>
+Under the hood it fetches the installer script (the PowerShell one on Windows)
+from the latest release's assets together with the Sigstore bundle the release
+workflow signed it with, verifies the signature in-process - the script must
+have been produced by this repository's release workflow on a version tag, or
+update refuses to run it - and then runs it. That is the same script as doing
+it by hand, minus the signature check:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
 </span></span></code></pre><p>From a clone, <code>make update</code> builds first and then runs that same command against
 your installed copy (<code>make update CHECK=1</code> only reports). Note that both
