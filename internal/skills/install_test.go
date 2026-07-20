@@ -129,12 +129,18 @@ func TestAssets_ArePortableCodexSkills(t *testing.T) {
 		text := string(body)
 		require.True(t, strings.HasPrefix(text, "---\nname: "+name+"\ndescription:"))
 		require.NotContains(t, text, "user-invocable:")
-		require.NotContains(t, text, "disable-model-invocation:")
 		require.Contains(t, text, "$"+name)
 		require.Contains(t, text, "/"+name)
 		if name == OnboardName {
+			// The onboarding one-shot mutates global instructions and then
+			// self-removes, so Claude Code must never auto-invoke it. Codex
+			// ignores the unknown key (verified against codex-cli 0.144.6)
+			// and keeps its own guard in agents/openai.yaml.
+			require.Contains(t, text, "disable-model-invocation: true")
 			require.Contains(t, text, "AGENTS.md")
 			require.Contains(t, text, "CLAUDE.md")
+		} else {
+			require.NotContains(t, text, "disable-model-invocation:")
 		}
 	}
 }
