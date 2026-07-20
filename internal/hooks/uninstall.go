@@ -31,6 +31,10 @@ type UninstallResult struct {
 // idempotent: a file with nothing of ours -- or a missing file -- is left
 // untouched with no error.
 func Uninstall(opts UninstallOptions) (UninstallResult, error) {
+	client, profile, err := resolveHookProfile(opts.Client)
+	if err != nil {
+		return UninstallResult{}, fmt.Errorf("hooks.Uninstall: %w", err)
+	}
 	if strings.TrimSpace(opts.SettingsPath) == "" {
 		return UninstallResult{}, fmt.Errorf("hooks.Uninstall: settings path is required")
 	}
@@ -44,9 +48,8 @@ func Uninstall(opts UninstallOptions) (UninstallResult, error) {
 	}
 	hooksObj := nestedObject(settings, "hooks")
 
-	client := normalizeClient(string(opts.Client))
 	var res UninstallResult
-	for _, hs := range hookProfile(client) {
+	for _, hs := range profile {
 		arr := entryArray(hooksObj, hs.Event)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		// Uninstall does not need the original install paths or API key: exact

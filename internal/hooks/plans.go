@@ -34,6 +34,9 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if _, ok := requireRequestClient(w, r); !ok {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no tool name -> no capture)
@@ -70,6 +73,9 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) permissionRequest(w http.ResponseWriter, r *http.Request) {
 	if !verifyBearer(r, h.apiKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if _, ok := requireRequestClient(w, r); !ok {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)

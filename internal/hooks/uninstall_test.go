@@ -46,7 +46,7 @@ func TestUninstallRoundTrip(t *testing.T) {
 	res, err := Uninstall(UninstallOptions{SettingsPath: path, BaseURL: base})
 	require.NoError(t, err)
 	require.True(t, res.Changed)
-	require.Len(t, removedActions(res.Actions), len(InstalledEvents(ClientClaudeCode)))
+	require.Len(t, removedActions(res.Actions), len(installedEvents(t, ClientClaudeCode)))
 
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)

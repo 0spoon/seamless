@@ -32,6 +32,9 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
+	if _, ok := requireRequestClient(w, r); !ok {
+		return
+	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no agent id -> no capture)

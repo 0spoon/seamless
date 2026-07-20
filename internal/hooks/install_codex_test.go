@@ -193,7 +193,7 @@ func TestInstalledStatusCodex(t *testing.T) {
 
 	status, err = InstalledStatus(codexOpts(path))
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientCodex), status.Current)
+	require.Equal(t, installedEvents(t, ClientCodex), status.Current)
 	require.Empty(t, status.Stale)
 	require.Len(t, status.Current, 3)
 }

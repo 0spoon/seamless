@@ -99,6 +99,13 @@ func requireAmbientSession(t *testing.T, db *sql.DB, client Client, externalSess
 	return sess
 }
 
+func installedEvents(t *testing.T, client Client) []string {
+	t.Helper()
+	events, err := InstalledEvents(client)
+	require.NoError(t, err)
+	return events
+}
+
 func TestSessionStartHook(t *testing.T) {
 	ts, db := newHandlerServer(t)
 	url := ts.URL + "/api/hooks/session-start"
@@ -461,7 +468,7 @@ func TestInstalledStatus(t *testing.T) {
 
 	status, err = InstalledStatus(statusOpts)
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientClaudeCode), status.Current)
+	require.Equal(t, installedEvents(t, ClientClaudeCode), status.Current)
 	require.Empty(t, status.Stale)
 	require.Len(t, status.Current, 6)
 }
@@ -495,7 +502,7 @@ func TestInstalledStatusSurvivesMarkerStripping(t *testing.T) {
 		Client: ClientClaudeCode, SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k",
 	})
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientClaudeCode), status.Current)
+	require.Equal(t, installedEvents(t, ClientClaudeCode), status.Current)
 	require.Empty(t, status.Stale)
 
 	// An unmarked http entry at a different base URL is not ours (e.g. a v1

@@ -66,15 +66,18 @@ var codexHooks = []hookSpec{
 	{Event: "Stop", Matcher: "", Endpoint: "/api/hooks/stop", Timeout: 10, CLIArg: "stop"},
 }
 
-// hookProfile returns the hook set for a client: the Codex profile for
-// ClientCodex, the Claude Code profile otherwise (the default an empty client
-// resolves to). The two never share a file (settings.json vs ~/.codex/hooks.json),
-// so a command hook's `hook <event>` match stays unambiguous within either.
-func hookProfile(client Client) []hookSpec {
-	if client == ClientCodex {
-		return codexHooks
+// resolveHookProfile validates a programmatic client selection and returns its
+// canonical Client plus profile. The zero value is the documented absent/default
+// Claude selection; every non-empty value must belong to HookClients.
+func resolveHookProfile(raw Client) (Client, []hookSpec, error) {
+	client, err := parseClient(string(raw), raw != "")
+	if err != nil {
+		return "", nil, err
 	}
-	return seamlessHooks
+	if client == ClientCodex {
+		return client, codexHooks, nil
+	}
+	return client, seamlessHooks, nil
 }
 
 // InstallOptions configures an install.
@@ -108,6 +111,10 @@ type InstallStatus struct {
 // Seamless-managed entries in place, and backing the file up once before the
 // first change. It is idempotent: an already-current file is left untouched.
 func Install(opts InstallOptions) (InstallResult, error) {
+	client, profile, err := resolveHookProfile(opts.Client)
+	if err != nil {
+		return InstallResult{}, fmt.Errorf("hooks.Install: %w", err)
+	}
 	if strings.TrimSpace(opts.APIKey) == "" {
 		return InstallResult{}, fmt.Errorf("hooks.Install: api key is required")
 	}
@@ -128,11 +135,10 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	hooksObj := nestedObject(settings, "hooks")
 
 	// Both clients nest event arrays under a top-level "hooks" key, so the merge
-	// engine below is shared; only the hook set (hookProfile) and each entry's
-	// handler shape (buildEntry) vary by client. An empty client is Claude Code.
-	client := normalizeClient(string(opts.Client))
+	// engine below is shared; only the validated profile and each entry's handler
+	// shape (buildEntry) vary by client. An empty client is Claude Code.
 	var res InstallResult
-	for _, hs := range hookProfile(client) {
+	for _, hs := range profile {
 		desired := buildEntry(client, hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		arr := entryArray(hooksObj, hs.Event)
@@ -178,13 +184,16 @@ func Install(opts InstallOptions) (InstallResult, error) {
 // InstalledEvents is the set of hook events Seamless installs for a client, in
 // install order. A caller (doctor) compares InstalledStatus against
 // len(InstalledEvents) for the same client.
-func InstalledEvents(client Client) []string {
-	profile := hookProfile(normalizeClient(string(client)))
+func InstalledEvents(client Client) ([]string, error) {
+	_, profile, err := resolveHookProfile(client)
+	if err != nil {
+		return nil, fmt.Errorf("hooks.InstalledEvents: %w", err)
+	}
 	out := make([]string, len(profile))
 	for i, hs := range profile {
 		out[i] = hs.Event
 	}
-	return out
+	return out, nil
 }
 
 // CommandHookEndpoints returns the `seam hook <arg>` events the installer wires
@@ -217,6 +226,10 @@ func CommandHookEndpoints() map[string]string {
 // has exactly one current definition and no stale owned duplicate. A missing or
 // empty file yields an empty status and no error.
 func InstalledStatus(opts InstallOptions) (InstallStatus, error) {
+	client, profile, err := resolveHookProfile(opts.Client)
+	if err != nil {
+		return InstallStatus{}, fmt.Errorf("hooks.InstalledStatus: %w", err)
+	}
 	if strings.TrimSpace(opts.SettingsPath) == "" {
 		return InstallStatus{}, fmt.Errorf("hooks.InstalledStatus: settings path is required")
 	}
@@ -232,9 +245,8 @@ func InstalledStatus(opts InstallOptions) (InstallStatus, error) {
 		return InstallStatus{}, err
 	}
 	hooksObj := nestedObject(settings, "hooks")
-	client := normalizeClient(string(opts.Client))
 	var status InstallStatus
-	for _, hs := range hookProfile(client) {
+	for _, hs := range profile {
 		desired := buildEntry(client, hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		indices, classes := classifiedHookIndices(client, entryArray(hooksObj, hs.Event), desired, hs, desiredURL)

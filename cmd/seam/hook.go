@@ -68,14 +68,18 @@ func hookEventNames() string {
 // clientQueryParam is the query key that carries the client discriminator to the
 // daemon. It mirrors internal/hooks' unexported constant of the same name (this
 // binary must not import that package -- see the file header). Both are the
-// literal "client", and a mismatch would merely resolve to the Claude Code
-// default server-side, so no silent breakage hides behind drift.
+// literal "client", and the forwarding tests pin the resulting query contract.
 const clientQueryParam = "client"
+
+// hookClients is the CLI's thin-binary copy of internal/hooks.HookClients. The
+// test-only hooks import pins the two sets exactly; production seam avoids the
+// SQLite dependency graph that importing internal/hooks would add.
+var hookClients = []string{"claude-code", "codex"}
 
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
 	config string // --config: abs seamless.yaml the installer bakes in (see bindHook)
-	client string // --client: agent CLI discriminator ("codex"); "" => Claude Code
+	client string // --client: canonical agent CLI discriminator; "" => absent/Claude Code
 }
 
 // bindHook registers --config and --client. install-hooks writes --config into
@@ -89,15 +93,14 @@ type hookOpts struct {
 func bindHook(fs *flag.FlagSet) *hookOpts {
 	o := &hookOpts{}
 	fs.StringVar(&o.config, "config", "", "path to seamless.yaml, so the hook resolves config from any cwd")
-	fs.StringVar(&o.client, "client", "", "agent CLI this hook fires for (e.g. codex); default Claude Code")
+	fs.Var(&enumValue{val: &o.client, valid: hookClients}, "client",
+		"agent CLI this hook fires for (`CLIENT`); valid: "+strings.Join(hookClients, ", ")+"; default Claude Code")
 	return o
 }
 
-// hookCmd declares atLeast(0) positionals and no enum, so the table checks
-// nothing: every way of misusing hook lands in runHook, which fails open, rather
-// than in parse, which cannot. That is deliberate belt-and-braces with usageExit
-// (spec.go) -- hook keeps failing at exit 1 even if that exemption is ever lost --
-// and it is why the event name is validated in the handler instead of by an enum.
+// hookCmd declares loose positional arity so event misuse lands in runHook, which
+// fails open. --client uses the shared enum flag machinery and usageExit keeps
+// that parse error at 1 too: exit 2 would block the agent session.
 var hookCmd = spec("hook", groupHooks, "forward the stdin hook payload to seamlessd",
 	atLeast(0, "EVENT"), bindHook, runHook).
 	withLong("events: " + hookEventNames() + `
@@ -107,8 +110,8 @@ on every Write/Edit, so it is pre-filtered locally: a non-plan file never reache
 the network.
 
 A runtime failure (unreadable stdin, no config, server down) is reported on
-stderr and exits 0 -- a hook must never block the session it serves. Only an
-unknown event name, which is an install bug rather than a hiccup, is an error.`)
+stderr and exits 0 -- a hook must never block the session it serves. An unknown
+event or client is an install/configuration bug and exits 1, never 2.`)
 
 func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	// Arity is not enforced by the spec (see hookCmd), so the handler owns the

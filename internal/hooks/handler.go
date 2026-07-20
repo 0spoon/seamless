@@ -187,7 +187,10 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := clientFromRequest(r)
+	client, ok := requireRequestClient(w, r)
+	if !ok {
+		return
+	}
 	p := decodeSessionStart(client, readHookBody(w, r))
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
@@ -234,7 +237,10 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := clientFromRequest(r)
+	client, ok := requireRequestClient(w, r)
+	if !ok {
+		return
+	}
 	p := decodeSessionEnd(client, readHookBody(w, r))
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
@@ -258,7 +264,10 @@ func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := clientFromRequest(r)
+	client, ok := requireRequestClient(w, r)
+	if !ok {
+		return
+	}
 	p := decodeStop(client, readHookBody(w, r))
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
@@ -448,7 +457,10 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	client := clientFromRequest(r)
+	client, ok := requireRequestClient(w, r)
+	if !ok {
+		return
+	}
 	p := decodePrompt(client, readHookBody(w, r))
 	if p.UserPrompt == "" {
 		h.writeContextResponse(r.Context(), w, "UserPromptSubmit", "user-prompt-submit",
