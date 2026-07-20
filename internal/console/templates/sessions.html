@@ -42,7 +42,7 @@
     {{range .Sessions}}{{if eq .Status "active"}}
     <div id="{{.ID}}" class="sess-row row-link{{if not .Live}} idle{{end}}" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
         {{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
@@ -62,7 +62,7 @@
     {{range .Sessions}}{{if eq .Status "completed"}}
     <div id="{{.ID}}" class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
@@ -83,7 +83,7 @@
     {{range .Sessions}}{{if eq .Status "expired"}}
     <div id="{{.ID}}" class="sess-row row-link expired" data-href="/console/sessions/{{.ID}}" data-peek>
       <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
+        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
         <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>

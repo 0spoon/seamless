@@ -3,6 +3,7 @@
   <header class="peek-head">
     <span class="badge {{if eq .Session.Status "active"}}ok{{end}}">{{.Session.Status}}</span>
     {{if .Session.Ambient}}<span class="kind faint">ambient</span>{{end}}
+    {{agentPill .Harness .Session.Model}}
   </header>
   <h2 class="peek-title">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}{{copyBtn .Session.ID}}</h2>
 

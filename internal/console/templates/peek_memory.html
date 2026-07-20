@@ -3,6 +3,7 @@
   <header class="peek-head">
     <span class="kind">{{.Kind}}</span>
     <span class="badge {{if eq .Status "active"}}ok{{else if eq .Status "superseded"}}warn{{end}}">{{.Status}}</span>
+    {{agentPill .Harness .Model}}
   </header>
   <h2 class="peek-title">{{.Name}}{{copyBtn .Name}}</h2>
   {{if .Description}}<p class="peek-desc">{{.Description}}</p>{{end}}

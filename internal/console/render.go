@@ -85,6 +85,7 @@ var funcs = template.FuncMap{
 	"sub":           func(a, b int) int { return a - b },
 	"hasPrefix":     strings.HasPrefix,
 	"copyBtn":       copyBtn,
+	"agentPill":     agentPill,
 	"evtTone":       evtTone,
 	"evtIcon":       evtIcon,
 	"taskTone":      taskTone,

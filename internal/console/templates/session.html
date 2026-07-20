@@ -8,6 +8,7 @@
     <h1 style="font-family:var(--font-mono);font-size:var(--text-xl)">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h1>
     {{if eq .Session.Status "active"}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">completed</span>{{end}}
     {{if .Session.Ambient}}<span class="kind">ambient</span>{{end}}
+    {{agentPill .Harness .Session.Model}}
     <span class="chip-parent">{{icon "git-branch"}}{{if .Session.ProjectSlug}}{{.Session.ProjectSlug}}{{else}}global{{end}}</span>
   </div>
 </div>
