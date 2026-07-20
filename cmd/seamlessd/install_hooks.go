@@ -99,8 +99,14 @@ func runInstallHooks(args []string) error {
 			}
 		}
 		if *skillsFlag {
+			// Skills are an optional convenience layer, so they degrade like the
+			// missing-seam-binary and MCP-registration steps rather than aborting.
+			// install-hooks runs from `curl | sh` under `set -eu` before the service
+			// is registered: a non-writable ~/.claude/skills must not cost the user
+			// their daemon, nor stop a later client in the --client all loop.
 			if err := installClientSkills(client, skillOpts); err != nil {
-				return fmt.Errorf("seamlessd.install-hooks: %w", err)
+				fmt.Printf("%s skills for %s: %v\n%s%s\n", yellow("warning:"), client, err,
+					fieldCont, dim("set SEAMLESS_NO_ONBOARD_SKILL=1 / SEAMLESS_NO_RESEARCH_SKILL=1 to skip, or rerun install-hooks --skills"))
 			}
 		}
 	}
