@@ -86,10 +86,13 @@ mkdir -p "$data"
 
 # 5a. With-side: install Seamless hooks + register the MCP server, all into the
 #     throwaway CLAUDE_CONFIG_DIR so the real ~/.claude is untouched.
+#     --client claude is load-bearing: without it install-hooks detects clients,
+#     and on a machine with Codex it would prompt interactively (TTY) or wire
+#     the LIVE ~/.codex at the fixture's throwaway daemon (non-TTY).
 echo "==> wiring with-side harness ($cc_with)"
 rm -rf "$cc_with" && mkdir -p "$cc_with"
 SEAMLESS_CONFIG="$cfg" CLAUDE_CONFIG_DIR="$cc_with" \
-  "$seamlessd" install-hooks --settings "$cc_with/settings.json" \
+  "$seamlessd" install-hooks --client claude --settings "$cc_with/settings.json" \
     --url "http://127.0.0.1:$port" --seam "$seam" | sed 's/^/    /'
 
 # 5b. Without-side: a bare config dir -- no hooks, no MCP, vanilla Claude Code.
