@@ -16,10 +16,14 @@ import (
 	"time"
 )
 
-const (
-	seamlessMCPName   = "seamless"
-	mcpCommandTimeout = 5 * time.Second
-)
+const seamlessMCPName = "seamless"
+
+// mcpCommandTimeout bounds each client CLI invocation so a hung codex cannot
+// stall install, doctor, or uninstall. It is a variable only so tests that
+// exec the fake Codex script can widen it: even a trivial /bin/sh spawn can
+// exceed a bound tuned for an idle machine when the whole suite runs under
+// the race detector, and the fake always exits on its own.
+var mcpCommandTimeout = 5 * time.Second
 
 // codexMCPState is the machine-readable part of `codex mcp get --json` that
 // affects whether the reserved Seamless registration is operational. Unknown

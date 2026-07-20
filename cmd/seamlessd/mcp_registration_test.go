@@ -438,6 +438,15 @@ type fakeCodexCLI struct {
 
 func newFakeCodex(t *testing.T, initial, afterAdd []byte, mode string) fakeCodexCLI {
 	t.Helper()
+
+	// The production command bound guards against a hung real CLI; spawning even
+	// this trivial script can exceed it when the whole suite runs under -race.
+	// The fake always exits on its own, so tests need only a hang backstop.
+	// Tests that exercise the deadline path pass their own runner timeout.
+	prevTimeout := mcpCommandTimeout
+	mcpCommandTimeout = 5 * time.Minute
+	t.Cleanup(func() { mcpCommandTimeout = prevTimeout })
+
 	dir := t.TempDir()
 	statePath := filepath.Join(dir, "state.json")
 	afterPath := filepath.Join(dir, "after-add.json")
