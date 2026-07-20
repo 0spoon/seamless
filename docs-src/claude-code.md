@@ -90,9 +90,9 @@ unmapped writes are rejected rather than defaulted to global.
 
 Installing the tools does not mean an agent will use them well. Two things help.
 
-First, run `/seam-onboard`. The curl installer already drops this Claude Code
-skill into `~/.claude/skills/`; from a clone, `make install-onboard-skill`
-(re)installs it:
+First, run `/seam-onboard`. The installer drops the portable Claude Code copy
+into `~/.claude/skills/`; from a clone, `make install-onboard-skill`
+(re)installs it for the default `CLIENT=claude` profile:
 
 ```bash
 make install-onboard-skill    # (re)install the /seam-onboard skill from a clone

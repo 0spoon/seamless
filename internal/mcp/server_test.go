@@ -14,6 +14,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/agentguide"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
@@ -79,6 +80,23 @@ func dialClient(t *testing.T, ctx context.Context, url, key string) *mcpclient.C
 	_, err = cli.Initialize(ctx, initReq)
 	require.NoError(t, err)
 	return cli
+}
+
+func TestServer_InitializeIncludesAgentGuidance(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli, err := mcpclient.NewStreamableHttpClient(url,
+		transport.WithHTTPHeaders(map[string]string{"Authorization": "Bearer " + testKey}))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = cli.Close() })
+	require.NoError(t, cli.Start(ctx))
+
+	var initReq mcp.InitializeRequest
+	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcp.Implementation{Name: "instructions-test", Version: "0"}
+	result, err := cli.Initialize(ctx, initReq)
+	require.NoError(t, err)
+	require.Equal(t, agentguide.MCPInstructions, result.Instructions)
 }
 
 func callJSON(t *testing.T, ctx context.Context, cli *mcpclient.Client, name string, args map[string]any) map[string]any {

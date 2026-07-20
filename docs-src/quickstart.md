@@ -110,8 +110,9 @@ seamlessd console-open                               # opens pre-authenticated
 
 - [Install & deploy](/install/) makes the daemon a service that survives
   reboots instead of a foreground process.
-- The installer already dropped a `/seam-onboard` Claude Code skill into
-  `~/.claude/skills/`; run `/seam-onboard` once to write a Seamless-awareness
-  block into a global or project `CLAUDE.md`. (From a clone,
-  `make install-onboard-skill` re-installs it.)
+- The installer already delivered `seam-onboard` for the selected client. Run
+  `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once to write a
+  Seamless-awareness block into global or project instructions (`CLAUDE.md` or
+  `AGENTS.md`). From a clone, `make install-onboard-skill CLIENT=codex`
+  installs the Codex copy; `CLIENT=claude` is the default.
 - Look up any tool, key, or command in the [Reference](/reference/).

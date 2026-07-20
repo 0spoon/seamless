@@ -232,10 +232,11 @@ started with your knowledge already in context.</p>
 <ul>
 <li><a href="../install/">Install &amp; deploy</a> makes the daemon a service that survives
 reboots instead of a foreground process.</li>
-<li>The installer already dropped a <code>/seam-onboard</code> Claude Code skill into
-<code>~/.claude/skills/</code>; run <code>/seam-onboard</code> once to write a Seamless-awareness
-block into a global or project <code>CLAUDE.md</code>. (From a clone,
-<code>make install-onboard-skill</code> re-installs it.)</li>
+<li>The installer already delivered <code>seam-onboard</code> for the selected client. Run
+<code>/seam-onboard</code> in Claude Code or <code>$seam-onboard</code> in Codex once to write a
+Seamless-awareness block into global or project instructions (<code>CLAUDE.md</code> or
+<code>AGENTS.md</code>). From a clone, <code>make install-onboard-skill CLIENT=codex</code>
+installs the Codex copy; <code>CLIENT=claude</code> is the default.</li>
 <li>Look up any tool, key, or command in the <a href="../reference/">Reference</a>.</li>
 </ul>
 

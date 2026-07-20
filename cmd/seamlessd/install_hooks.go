@@ -17,6 +17,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
+	agentskills "github.com/0spoon/seamless/internal/skills"
 )
 
 // runInstallHooks wires an agent client to Seamless in one command: it installs
@@ -34,6 +35,7 @@ func runInstallHooks(args []string) error {
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
 	mcpFlag := fs.Bool("mcp", true, "register the MCP server with the client's CLI (claude/codex mcp add)")
+	skillsFlag := fs.Bool("skills", true, "install the client's seam-onboard and seam-research skills")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -77,6 +79,13 @@ func runInstallHooks(args []string) error {
 			yellow("warning:"), seamBin, fieldCont, dim("go install github.com/0spoon/seamless/cmd/seam@latest"))
 	}
 	configPath := absConfigPath(cfg.SourcePath())
+	var skillOpts agentskills.Options
+	if *skillsFlag {
+		skillOpts, err = agentskills.OptionsFromEnvironment()
+		if err != nil {
+			return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		}
+	}
 
 	for _, client := range clients {
 		switch client {
@@ -89,8 +98,59 @@ func runInstallHooks(args []string) error {
 				return fmt.Errorf("seamlessd.install-hooks: %w", err)
 			}
 		}
+		if *skillsFlag {
+			if err := installClientSkills(client, skillOpts); err != nil {
+				return fmt.Errorf("seamlessd.install-hooks: %w", err)
+			}
+		}
 	}
 	return nil
+}
+
+// installClientSkills follows the same client selection as hooks and MCP. The
+// embedded assets make this work from an installed release binary; no checkout
+// or archive path is needed at runtime.
+func installClientSkills(client hooks.Client, opts agentskills.Options) error {
+	skillClient, err := agentSkillClient(client)
+	if err != nil {
+		return err
+	}
+	result, err := agentskills.Install(skillClient, opts)
+	if err != nil {
+		return err
+	}
+	printSkillAction("onboard", agentskills.OnboardName, result.Root, result.Onboard,
+		"SEAMLESS_NO_ONBOARD_SKILL")
+	printSkillAction("research", agentskills.ResearchName, result.Root, result.Research,
+		"SEAMLESS_NO_RESEARCH_SKILL")
+	return nil
+}
+
+func agentSkillClient(client hooks.Client) (agentskills.Client, error) {
+	switch client {
+	case hooks.ClientClaudeCode:
+		return agentskills.ClientClaude, nil
+	case hooks.ClientCodex:
+		return agentskills.ClientCodex, nil
+	default:
+		return "", fmt.Errorf("invalid skill client %q: valid values are claude, codex", client)
+	}
+}
+
+func printSkillAction(label, name, root string, action agentskills.Action, skipEnv string) {
+	dst := tildePath(filepath.Join(root, name))
+	switch action {
+	case agentskills.ActionInstalled:
+		fieldRow(label, green("installed")+dim("  · "+dst))
+	case agentskills.ActionUpdated:
+		fieldRow(label, green("updated")+dim("  · "+dst))
+	case agentskills.ActionAlreadyDelivered:
+		fieldRow(label, dim("already used; one-shot skill not reinstalled"))
+	case agentskills.ActionSkipped:
+		fieldRow(label, dim("skipped ("+skipEnv+")"))
+	default:
+		fieldRow(label, yellow("unknown install result "+string(action)))
+	}
 }
 
 // runInstallSummary prints the final "Seamless" block that closes `make install`:

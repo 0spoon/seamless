@@ -20,6 +20,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 
+	"github.com/0spoon/seamless/internal/agentguide"
 	"github.com/0spoon/seamless/internal/capture"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
@@ -260,6 +261,7 @@ func New(cfg Config) *Server {
 	}
 	s.mcp = mcpserver.NewMCPServer(
 		serverName, version,
+		mcpserver.WithInstructions(agentguide.MCPInstructions),
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),
 		// mcp-go applies middlewares in reverse registration order, so the runtime

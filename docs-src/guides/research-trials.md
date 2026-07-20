@@ -73,13 +73,14 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 
 ## The skill
 
-The curl installer drops a `/seam-research` Claude Code skill into
-`~/.claude/skills/` (from a clone: `make install-research-skill`). It wraps
-this loop - open the lab, query before trying, predict before running, record
-once with the outcome, distill decisions into memory - and it is
-model-invocable: Claude activates it on its own when an investigation turns
-into repeated experiments. `/seam-research <lab-name> <problem>` starts or
-resumes one explicitly.
+The installer drops the portable `seam-research` package into the selected
+client's skill home. From a clone, use `make install-research-skill` for Claude
+Code or `make install-research-skill CLIENT=codex` for Codex. It wraps this loop
+- open the lab, query before trying, predict before running, record once with
+the outcome, distill decisions into memory - and can activate when an
+investigation becomes repeated experiments. Start or resume one explicitly with
+`/seam-research <lab-name> <problem>` in Claude Code or
+`$seam-research <lab-name> <problem>` in Codex.
 
 ## The tools
 

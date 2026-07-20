@@ -37,6 +37,7 @@ PREFIX        ?= $(HOME)/.local
 PREFIX_BIN    := $(PREFIX)/bin
 CONFIG_DIR    := $(HOME)/.config/seamless
 CONFIG        := $(CONFIG_DIR)/seamless.yaml
+CLIENT        ?= claude
 
 # gofmt over TRACKED files only. The go tool's ./... pattern skips dot-dirs, so
 # build/vet/test/lint never see .claude/worktrees/ (other agents' checkouts of
@@ -122,10 +123,10 @@ help:
 	@echo "    logs               follow the service log ($(SVC_LOG))"
 	@echo "  install-git-hooks        enable .githooks/ (pre-commit runs check-fast)"
 	@echo "  uninstall-git-hooks      disable .githooks/"
-	@echo "  install-onboard-skill    install the /seam-onboard Claude Code skill"
-	@echo "  uninstall-onboard-skill  remove the /seam-onboard skill"
-	@echo "  install-research-skill   install the /seam-research Claude Code skill"
-	@echo "  uninstall-research-skill remove the /seam-research skill"
+	@echo "  install-onboard-skill    install seam-onboard (CLIENT=claude|codex|all)"
+	@echo "  uninstall-onboard-skill  remove seam-onboard for CLIENT (default: claude)"
+	@echo "  install-research-skill   install seam-research (CLIENT=claude|codex|all)"
+	@echo "  uninstall-research-skill remove seam-research for CLIENT (default: claude)"
 	@echo "  clean      remove build artifacts"
 
 build:
@@ -439,16 +440,16 @@ logs:
 	@tail -f $(SVC_LOG)
 
 install-onboard-skill:
-	@scripts/install-skill.sh seam-onboard
+	@scripts/install-skill.sh seam-onboard $(CLIENT)
 
 uninstall-onboard-skill:
-	@scripts/uninstall-skill.sh seam-onboard
+	@scripts/uninstall-skill.sh seam-onboard $(CLIENT)
 
 install-research-skill:
-	@scripts/install-skill.sh seam-research
+	@scripts/install-skill.sh seam-research $(CLIENT)
 
 uninstall-research-skill:
-	@scripts/uninstall-skill.sh seam-research
+	@scripts/uninstall-skill.sh seam-research $(CLIENT)
 
 clean:
 	rm -rf $(BIN_DIR) dist coverage.*
