@@ -96,7 +96,7 @@ func isLegacyHookCommand(client Client, handler map[string]any, cliArg string) b
 	}
 	if strings.HasPrefix(words[0], "SEAMLESS_CONFIG=") {
 		configPath := strings.TrimPrefix(words[0], "SEAMLESS_CONFIG=")
-		if !isAbsoluteHookPath(configPath) {
+		if !isAnchoredHookPath(configPath) {
 			return false
 		}
 		words = words[1:]
@@ -128,14 +128,14 @@ func hookStringArgs(value any) ([]string, bool) {
 
 // knownHookArgs accepts the current argv and the two historical variants:
 // command hooks without --config, and Codex hooks missing --client codex. Any
-// extra flag, reordered token, or non-absolute config path is not adopted.
+// extra flag, reordered token, or non-anchored config path is not adopted.
 func knownHookArgs(client Client, args []string, cliArg string) bool {
 	if len(args) < 2 || args[0] != "hook" || args[1] != cliArg {
 		return false
 	}
 	args = args[2:]
 	if len(args) >= 2 && args[0] == "--config" {
-		if !isAbsoluteHookPath(args[1]) {
+		if !isAnchoredHookPath(args[1]) {
 			return false
 		}
 		args = args[2:]
@@ -163,6 +163,17 @@ func isAbsoluteHookPath(path string) bool {
 		return path[2] == '\\' || path[2] == '/'
 	}
 	return strings.HasPrefix(path, `\\`)
+}
+
+// isAnchoredHookPath accepts the paths a hand-written hook command may carry:
+// absolute, or home-anchored with a leading tilde (which the shell expands to
+// an absolute path before seam runs). Adoption-only; the installer's own
+// desired paths stay strictly absolute (validateDefinitionPaths).
+func isAnchoredHookPath(path string) bool {
+	if path == "~" || strings.HasPrefix(path, "~/") || strings.HasPrefix(path, `~\`) {
+		return true
+	}
+	return isAbsoluteHookPath(path)
 }
 
 // splitHookCommand tokenizes the deliberately small shell subset used by old
@@ -226,7 +237,9 @@ func splitHookCommand(command string) ([]string, bool) {
 				word.WriteRune(ch)
 			}
 			haveWord = true
-		case strings.ContainsRune(";&|<>$`(){}*?!#~", ch):
+		// Tilde is deliberately absent: it expands to a path, never to a
+		// command, and hand-written hooks routinely say ~/.local/bin/seam.
+		case strings.ContainsRune(";&|<>$`(){}*?!#", ch):
 			return nil, false
 		default:
 			word.WriteRune(ch)
