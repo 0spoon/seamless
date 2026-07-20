@@ -20,12 +20,10 @@ type UninstallResult struct {
 }
 
 // Uninstall removes the client's Seamless hook entries from the settings/hooks
-// file at opts.SettingsPath, the exact inverse of Install. It uses the same
-// three-way ownership test (managed marker, hook URL under BaseURL, or a
-// `seam hook <event>` command) via seamlessIndices, so it also removes entries
-// whose seamless_managed marker Claude Code stripped on an unrelated edit. It
-// preserves every unknown key and every foreign entry -- including a v1
-// "seam_managed" hook at a different URL, which matches none of the three arms.
+// file at opts.SettingsPath, the exact inverse of Install. It uses the shared
+// definition classifier and removes current, marked-stale, or confidently
+// legacy Seamless entries. It preserves every unknown key and every foreign
+// entry -- including a v1 "seam_managed" hook at a different URL.
 // An event array that empties is dropped, and the top-level "hooks" key is
 // dropped if it empties (the file itself is never deleted, even if it becomes
 // "{}"). It backs the file up once before the first change (reusing backupOnce,
@@ -51,7 +49,11 @@ func Uninstall(opts UninstallOptions) (UninstallResult, error) {
 	for _, hs := range hookProfile(client) {
 		arr := entryArray(hooksObj, hs.Event)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
-		matches := seamlessIndices(arr, desiredURL, hs.CLIArg)
+		// Uninstall does not need the original install paths or API key: exact
+		// entries that differ from this minimal desired value are still recognized
+		// as marked or legacy by the same classifier.
+		desired := buildEntry(client, hs, opts.BaseURL, "", "", "")
+		matches, _ := classifiedHookIndices(client, arr, desired, hs, desiredURL)
 		if len(matches) == 0 {
 			res.Actions = append(res.Actions, hs.Event+": absent")
 			continue

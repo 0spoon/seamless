@@ -361,13 +361,16 @@ func requireCommandHook(t *testing.T, hooksObj map[string]any, event, cliArg str
 	// Find the Seamless-owned command entry: a preserved foreign hook (e.g. a v1
 	// http entry) may sit ahead of ours, so position is not assumed.
 	for _, e := range arr {
-		if !entryRunsHookCommand(e, cliArg) {
+		if !isManaged(e) {
 			continue
 		}
 		h0 := e.(map[string]any)["hooks"].([]any)[0].(map[string]any)
 		require.Equal(t, "command", h0["type"], "%s should be a command hook", event)
 		require.NotEmpty(t, h0["command"], "%s command should be the seam binary", event)
-		require.True(t, hookArgsRunEvent(h0["args"], cliArg), "%s args should run `hook %s`", event, cliArg)
+		args, ok := hookStringArgs(h0["args"])
+		require.True(t, ok, "%s args should be strings", event)
+		require.GreaterOrEqual(t, len(args), 2, "%s args should include the hook event", event)
+		require.Equal(t, []string{"hook", cliArg}, args[:2], "%s args should run `hook %s`", event, cliArg)
 		return
 	}
 	t.Fatalf("no exec-form command hook running `hook %s` found for %s", cliArg, event)
@@ -446,19 +449,21 @@ func TestInstalledStatus(t *testing.T) {
 	path := filepath.Join(dir, ".claude", "settings.json")
 
 	// Missing file -> nothing installed, no error.
-	present, err := InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
+	statusOpts := InstallOptions{Client: ClientClaudeCode, SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"}
+	status, err := InstalledStatus(statusOpts)
 	require.NoError(t, err)
-	require.Empty(t, present)
+	require.Empty(t, status.Owned)
 
 	// After a full install, every event is reported.
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	_, err = Install(InstallOptions{SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k"})
 	require.NoError(t, err)
 
-	present, err = InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
+	status, err = InstalledStatus(statusOpts)
 	require.NoError(t, err)
-	require.ElementsMatch(t, InstalledEvents(ClientClaudeCode), present)
-	require.Len(t, present, 6)
+	require.Equal(t, InstalledEvents(ClientClaudeCode), status.Current)
+	require.Empty(t, status.Stale)
+	require.Len(t, status.Current, 6)
 }
 
 // Claude Code re-serializes settings.json through its own schema when the
@@ -486,17 +491,22 @@ func TestInstalledStatusSurvivesMarkerStripping(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(path, raw, 0o600))
 
-	present, err := InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:8081")
+	status, err := InstalledStatus(InstallOptions{
+		Client: ClientClaudeCode, SettingsPath: path, BaseURL: "http://127.0.0.1:8081", APIKey: "k",
+	})
 	require.NoError(t, err)
-	require.ElementsMatch(t, InstalledEvents(ClientClaudeCode), present)
+	require.Equal(t, InstalledEvents(ClientClaudeCode), status.Current)
+	require.Empty(t, status.Stale)
 
 	// An unmarked http entry at a different base URL is not ours (e.g. a v1
 	// leftover): the http hook must drop out while the seam-CLI command hooks
 	// still match by their `hook <event>` command.
-	present, err = InstalledStatus(ClientClaudeCode, path, "http://127.0.0.1:9999")
+	status, err = InstalledStatus(InstallOptions{
+		Client: ClientClaudeCode, SettingsPath: path, BaseURL: "http://127.0.0.1:9999", APIKey: "k",
+	})
 	require.NoError(t, err)
-	require.NotContains(t, present, "UserPromptSubmit")
-	require.Len(t, present, 5)
+	require.NotContains(t, status.Current, "UserPromptSubmit")
+	require.Len(t, status.Current, 5)
 }
 
 // Mirrors the plan-capture dogfood state: an older installer left UNMARKED

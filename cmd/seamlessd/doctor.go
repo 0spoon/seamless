@@ -101,9 +101,9 @@ func doctor(args []string) error {
 // hooksCheck reports whether the Claude Code Seamless hooks are installed. It
 // looks in the global settings (~/.claude/settings.json) and the project-scoped
 // dogfood settings (./.claude/settings.json), reporting the first location that
-// has all of them, or a warning when they are partial or absent. Detection
-// matches by hook URL/command, not just the managed marker, because Claude Code
-// strips the marker when it rewrites settings.json.
+// has all exact current definitions, or a warning when they are partial, stale,
+// or absent. Claude Code may strip the ownership marker; exact functional
+// definitions remain current without it.
 //
 // When nothing is installed AND Claude Code is not detected on this machine, it
 // resolves to a quiet OK "not detected" line rather than a warning -- symmetric
@@ -121,16 +121,26 @@ func hooksCheck(cfg config.Config) check {
 	var best check
 	found := false
 	for _, path := range candidates {
-		present, err := hooks.InstalledStatus(hooks.ClientClaudeCode, path, baseURL)
-		if err != nil || len(present) == 0 {
+		status, err := hooks.InstalledStatus(hooks.InstallOptions{
+			Client: hooks.ClientClaudeCode, SettingsPath: path, BaseURL: baseURL,
+			APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
+		})
+		if err != nil {
+			if !found {
+				best = check{statusWarn, "hooks", fmt.Sprintf("cannot inspect %s: %v", path, err)}
+				found = true
+			}
 			continue
 		}
-		if len(present) == want {
-			return check{statusOK, "hooks", fmt.Sprintf("%d/%d installed in %s", want, want, path)}
+		if len(status.Owned) == 0 {
+			continue
+		}
+		if len(status.Current) == want && len(status.Stale) == 0 {
+			return check{statusOK, "hooks", fmt.Sprintf("%d/%d current in %s", want, want, path)}
 		}
 		if !found {
 			best = check{statusWarn, "hooks",
-				fmt.Sprintf("%d/%d installed in %s (%s)", len(present), want, path, strings.Join(present, ","))}
+				fmt.Sprintf("%d/%d current in %s%s", len(status.Current), want, path, staleHookDetail(status.Stale))}
 			found = true
 		}
 	}
@@ -153,29 +163,44 @@ func codexChecks(cfg config.Config) []check {
 	_, codexErr := exec.LookPath("codex")
 	codexOnPath := codexErr == nil
 
-	var present []string
+	var status hooks.InstallStatus
+	var statusErr error
 	if herr == nil {
-		present, _ = hooks.InstalledStatus(hooks.ClientCodex, hooksPath, hookBaseURL(cfg.Addr)) //nolint:errcheck // a stat/parse error reads as "nothing installed"; doctor never fails on Codex
+		status, statusErr = hooks.InstalledStatus(hooks.InstallOptions{
+			Client: hooks.ClientCodex, SettingsPath: hooksPath, BaseURL: hookBaseURL(cfg.Addr),
+			APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
+		})
 	}
 
 	// Nothing to report when Codex is neither on PATH nor has any Seamless hooks:
 	// the common Claude-Code-only machine gets one quiet line, not two warnings.
-	if !codexOnPath && len(present) == 0 {
+	if !codexOnPath && herr == nil && statusErr == nil && len(status.Owned) == 0 {
 		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless hooks in ~/.codex)"}}
 	}
 
 	want := len(hooks.InstalledEvents(hooks.ClientCodex))
 	var hooksChk check
 	switch {
-	case len(present) == want:
-		hooksChk = check{statusOK, "codex hooks", fmt.Sprintf("%d/%d installed in %s", want, want, hooksPath)}
-	case len(present) > 0:
+	case herr != nil:
+		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf("cannot resolve hooks path: %v", herr)}
+	case statusErr != nil:
+		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf("cannot inspect %s: %v", hooksPath, statusErr)}
+	case len(status.Current) == want && len(status.Stale) == 0:
+		hooksChk = check{statusOK, "codex hooks", fmt.Sprintf("%d/%d current in %s", want, want, hooksPath)}
+	case len(status.Owned) > 0:
 		hooksChk = check{statusWarn, "codex hooks",
-			fmt.Sprintf("%d/%d installed in %s (%s)", len(present), want, hooksPath, strings.Join(present, ","))}
+			fmt.Sprintf("%d/%d current in %s%s", len(status.Current), want, hooksPath, staleHookDetail(status.Stale))}
 	default:
 		hooksChk = check{statusWarn, "codex hooks", "not installed (run: seamlessd install-hooks --client codex)"}
 	}
 	return []check{hooksChk, codexMCPCheck()}
+}
+
+func staleHookDetail(stale []string) string {
+	if len(stale) == 0 {
+		return ""
+	}
+	return " (stale: " + strings.Join(stale, ",") + ")"
 }
 
 // codexMCPCheck reports whether the Seamless MCP bridge is registered with the

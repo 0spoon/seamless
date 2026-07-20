@@ -21,6 +21,15 @@ func removedActions(actions []string) []string {
 	return out
 }
 
+func readInstallStatus(t *testing.T, client Client, path, baseURL string) InstallStatus {
+	t.Helper()
+	status, err := InstalledStatus(InstallOptions{
+		Client: client, SettingsPath: path, BaseURL: baseURL, APIKey: "k",
+	})
+	require.NoError(t, err)
+	return status
+}
+
 // Install then Uninstall is a round-trip: our hooks vanish, unknown top-level
 // keys survive, and the "hooks" key is dropped once only Seamless hooks lived
 // under it (rather than leaving an empty object behind).
@@ -47,13 +56,12 @@ func TestUninstallRoundTrip(t *testing.T) {
 	_, hasHooks := got["hooks"]
 	require.False(t, hasHooks, "hooks key dropped once only Seamless hooks were present")
 
-	present, err := InstalledStatus(ClientClaudeCode, path, base)
-	require.NoError(t, err)
-	require.Empty(t, present, "nothing of ours remains")
+	status := readInstallStatus(t, ClientClaudeCode, path, base)
+	require.Empty(t, status.Owned, "nothing of ours remains")
 }
 
-// Claude Code strips the seamless_managed marker on unrelated edits; the URL /
-// command ownership arms must still recognize those live hooks for removal.
+// Claude Code strips the seamless_managed marker on unrelated edits; the exact
+// current and known-legacy classifier states must still allow safe removal.
 func TestUninstallRemovesMarkerStrippedEntries(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "settings.json")
@@ -78,9 +86,8 @@ func TestUninstallRemovesMarkerStrippedEntries(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, res.Changed)
 
-	present, err := InstalledStatus(ClientClaudeCode, path, base)
-	require.NoError(t, err)
-	require.Empty(t, present, "marker-stripped hooks are still removed")
+	status := readInstallStatus(t, ClientClaudeCode, path, base)
+	require.Empty(t, status.Owned, "marker-stripped hooks are still removed")
 }
 
 // Uninstall removes only Seamless entries: a v1 seam_managed :8080 hook and an
@@ -127,9 +134,8 @@ func TestUninstallPreservesForeignAndUserHooks(t *testing.T) {
 	_, hasUPS := hooksObj["UserPromptSubmit"]
 	require.False(t, hasUPS, "UserPromptSubmit array dropped after our only entry was removed")
 
-	present, err := InstalledStatus(ClientClaudeCode, path, base)
-	require.NoError(t, err)
-	require.Empty(t, present)
+	status := readInstallStatus(t, ClientClaudeCode, path, base)
+	require.Empty(t, status.Owned)
 }
 
 // A missing file and a second run are both clean no-ops.
@@ -165,18 +171,16 @@ func TestUninstallCodexClient(t *testing.T) {
 	base := "http://127.0.0.1:8081"
 	_, err := Install(InstallOptions{Client: ClientCodex, SettingsPath: path, BaseURL: base, APIKey: "k"})
 	require.NoError(t, err)
-	present, err := InstalledStatus(ClientCodex, path, base)
-	require.NoError(t, err)
-	require.Len(t, present, 3)
+	status := readInstallStatus(t, ClientCodex, path, base)
+	require.Len(t, status.Current, 3)
 
 	res, err := Uninstall(UninstallOptions{Client: ClientCodex, SettingsPath: path, BaseURL: base})
 	require.NoError(t, err)
 	require.True(t, res.Changed)
 	require.Len(t, removedActions(res.Actions), 3)
 
-	present, err = InstalledStatus(ClientCodex, path, base)
-	require.NoError(t, err)
-	require.Empty(t, present)
+	status = readInstallStatus(t, ClientCodex, path, base)
+	require.Empty(t, status.Owned)
 }
 
 func TestUninstallValidatesOptions(t *testing.T) {

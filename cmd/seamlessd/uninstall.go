@@ -95,7 +95,11 @@ func runUninstall(args []string) error {
 				path = defaultCodexHooksPath()
 			}
 		}
-		if err := uninstallClientHooks(client, path, baseURL, *dryRun); err != nil {
+		statusOpts := hooks.InstallOptions{
+			Client: client, BaseURL: baseURL, APIKey: cfg.MCP.APIKey,
+			SeamBin: filepath.Join(installDir, seamBinName()), ConfigPath: absConfigPath(cfg.SourcePath()),
+		}
+		if err := uninstallClientHooks(client, path, statusOpts, *dryRun); err != nil {
 			return fmt.Errorf("seamlessd.uninstall: %w", err)
 		}
 		if *mcpFlag {
@@ -283,7 +287,7 @@ func runBestEffort(cmds []*exec.Cmd) {
 
 // uninstallClientHooks removes (or previews) one client's Seamless hook entries
 // from its settings/hooks file, printing a block that matches install's shape.
-func uninstallClientHooks(client hooks.Client, path, baseURL string, dryRun bool) error {
+func uninstallClientHooks(client hooks.Client, path string, statusOpts hooks.InstallOptions, dryRun bool) error {
 	expanded, err := expandHome(path)
 	if err != nil {
 		return err
@@ -295,14 +299,16 @@ func uninstallClientHooks(client hooks.Client, path, baseURL string, dryRun bool
 	fmt.Printf("\n%s\n", bold(label))
 
 	if dryRun {
-		present, err := hooks.InstalledStatus(client, expanded, baseURL)
+		statusOpts.Client = client
+		statusOpts.SettingsPath = expanded
+		status, err := hooks.InstalledStatus(statusOpts)
 		if err != nil {
 			return err
 		}
-		printHookRow(len(present), present, expanded, true)
+		printHookRow(len(status.Owned), status.Owned, expanded, true)
 		return nil
 	}
-	res, err := hooks.Uninstall(hooks.UninstallOptions{Client: client, SettingsPath: expanded, BaseURL: baseURL})
+	res, err := hooks.Uninstall(hooks.UninstallOptions{Client: client, SettingsPath: expanded, BaseURL: statusOpts.BaseURL})
 	if err != nil {
 		return err
 	}

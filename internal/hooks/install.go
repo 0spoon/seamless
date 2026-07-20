@@ -94,6 +94,15 @@ type InstallResult struct {
 	Actions    []string // per-hook: "SessionStart: added|updated|unchanged"
 }
 
+// InstallStatus separates exact current definitions from stale definitions
+// that Seamless owns or can confidently adopt. Owned is their union in profile
+// order and is the set uninstall may remove; foreign definitions are omitted.
+type InstallStatus struct {
+	Current []string
+	Stale   []string
+	Owned   []string
+}
+
 // Install merges the client's Seamless hook entries into the settings/hooks file
 // at opts.SettingsPath, preserving unknown keys, replacing any existing
 // Seamless-managed entries in place, and backing the file up once before the
@@ -107,6 +116,9 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	}
 	if strings.TrimSpace(opts.BaseURL) == "" {
 		return InstallResult{}, fmt.Errorf("hooks.Install: base URL is required")
+	}
+	if err := validateDefinitionPaths("hooks.Install", opts.SeamBin, opts.ConfigPath); err != nil {
+		return InstallResult{}, err
 	}
 
 	settings, mode, err := loadSettings(opts.SettingsPath)
@@ -124,29 +136,25 @@ func Install(opts InstallOptions) (InstallResult, error) {
 		desired := buildEntry(client, hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
 		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
 		arr := entryArray(hooksObj, hs.Event)
-		// Match every entry Seamless owns for this event: those carrying our
-		// managed marker, plus any UNMARKED entry pointing at exactly this hook
-		// URL or running `... hook <event>` via the seam CLI (a hand-edit, or a
-		// pre-marker installer). Adopting the latter -- rather than appending
-		// beside it -- is what stops re-installs from duplicating hooks. A v1
-		// "seam_managed" entry at a different URL (e.g. :8080) is not matched,
-		// so it is preserved untouched.
-		matches := seamlessIndices(arr, desiredURL, hs.CLIArg)
+		// Classify exact current definitions, marked stale definitions, and only
+		// the known marker-stripped Seamless URL/command shapes. Arbitrary tools
+		// whose arguments happen to contain hook + event remain foreign. A v1
+		// "seam_managed" entry at another URL remains foreign too.
+		matches, classes := classifiedHookIndices(client, arr, desired, hs, desiredURL)
 		switch {
 		case len(matches) == 0:
 			arr = append(arr, desired)
 			res.Changed = true
 			res.Actions = append(res.Actions, hs.Event+": added")
-		case len(matches) == 1 && canonicalEqual(arr[matches[0]], desired):
+		case len(matches) == 1 && classes[0] == hookDefinitionCurrent:
 			res.Actions = append(res.Actions, hs.Event+": unchanged")
 		default:
 			// Keep the first owned entry (replacing it with the canonical
 			// desired form) and drop any other owned duplicates.
-			firstWasManaged := isManaged(arr[matches[0]])
 			arr[matches[0]] = desired
 			arr = removeIndices(arr, matches[1:])
 			res.Changed = true
-			res.Actions = append(res.Actions, hs.Event+": "+matchAction(len(matches), firstWasManaged))
+			res.Actions = append(res.Actions, hs.Event+": "+matchAction(len(matches), classes[0]))
 		}
 		hooksObj[hs.Event] = arr
 	}
@@ -204,29 +212,43 @@ func CommandHookEndpoints() map[string]string {
 	return out
 }
 
-// InstalledStatus reports which of a client's Seamless-managed hook events are
-// present in the settings/hooks file at path, using the same ownership test as
-// Install: the managed marker, or an unmarked entry that targets the hook's URL
-// under baseURL or runs `... hook <event>` via the seam CLI. The marker alone
-// cannot be trusted: Claude Code re-serializes settings.json through its own
-// schema when the owner edits config or permissions, dropping the
-// seamless_managed key while keeping the functional entries -- those still-firing
-// hooks must count as installed. A missing or empty file yields an empty slice
-// and no error. The result is a subset of InstalledEvents(client), in install order.
-func InstalledStatus(client Client, path, baseURL string) ([]string, error) {
-	settings, _, err := loadSettings(path)
+// InstalledStatus classifies every event in a client's profile against the
+// exact desired definition described by opts. An event is Current only when it
+// has exactly one current definition and no stale owned duplicate. A missing or
+// empty file yields an empty status and no error.
+func InstalledStatus(opts InstallOptions) (InstallStatus, error) {
+	if strings.TrimSpace(opts.SettingsPath) == "" {
+		return InstallStatus{}, fmt.Errorf("hooks.InstalledStatus: settings path is required")
+	}
+	if strings.TrimSpace(opts.BaseURL) == "" {
+		return InstallStatus{}, fmt.Errorf("hooks.InstalledStatus: base URL is required")
+	}
+	if err := validateDefinitionPaths("hooks.InstalledStatus", opts.SeamBin, opts.ConfigPath); err != nil {
+		return InstallStatus{}, err
+	}
+
+	settings, _, err := loadSettings(opts.SettingsPath)
 	if err != nil {
-		return nil, err
+		return InstallStatus{}, err
 	}
 	hooksObj := nestedObject(settings, "hooks")
-	var present []string
-	for _, hs := range hookProfile(normalizeClient(string(client))) {
-		desiredURL := strings.TrimRight(baseURL, "/") + hs.Endpoint
-		if len(seamlessIndices(entryArray(hooksObj, hs.Event), desiredURL, hs.CLIArg)) > 0 {
-			present = append(present, hs.Event)
+	client := normalizeClient(string(opts.Client))
+	var status InstallStatus
+	for _, hs := range hookProfile(client) {
+		desired := buildEntry(client, hs, opts.BaseURL, opts.APIKey, opts.SeamBin, opts.ConfigPath)
+		desiredURL := strings.TrimRight(opts.BaseURL, "/") + hs.Endpoint
+		indices, classes := classifiedHookIndices(client, entryArray(hooksObj, hs.Event), desired, hs, desiredURL)
+		if len(indices) == 0 {
+			continue
+		}
+		status.Owned = append(status.Owned, hs.Event)
+		if len(indices) == 1 && classes[0] == hookDefinitionCurrent {
+			status.Current = append(status.Current, hs.Event)
+		} else {
+			status.Stale = append(status.Stale, hs.Event)
 		}
 	}
-	return present, nil
+	return status, nil
 }
 
 // loadSettings decodes settings.json into a generic map (preserving unknown
@@ -343,8 +365,8 @@ func buildEntry(client Client, hs hookSpec, baseURL, apiKey, seamBin, configPath
 // quote is the shell quoter for the target OS (posixQuote for `command`,
 // winQuote for `command_windows`) so a binary or config path with a space is
 // not word-split by the shell Codex runs the string through. The `hook <event>`
-// token is left unquoted so entryRunsHookCommand can still recognize a
-// Seamless-owned entry whose marker was stripped.
+// token is left unquoted for readability; classification parses the full known
+// command shape and verifies the seam executable rather than matching tokens.
 func codexCommand(seamBin, cliArg, configPath string, quote func(string) string) string {
 	parts := []string{quote(seamBin), "hook", cliArg}
 	if configPath != "" {
@@ -367,21 +389,6 @@ func winQuote(s string) string {
 	return `"` + s + `"`
 }
 
-// seamlessIndices returns the ascending indices of entries in arr that Seamless
-// owns for a hook: entries carrying the managed marker, plus unmarked entries
-// whose hook URL is desiredURL or whose command is a seam-CLI `hook <cliArg>`
-// invocation (written by hand or by a pre-marker installer). A v1
-// "seam_managed" entry at another URL is not matched, so it survives.
-func seamlessIndices(arr []any, desiredURL, cliArg string) []int {
-	var out []int
-	for i, e := range arr {
-		if isManaged(e) || entryTargetsURL(e, desiredURL) || entryRunsHookCommand(e, cliArg) {
-			out = append(out, i)
-		}
-	}
-	return out
-}
-
 // isManaged reports whether e is a hook entry carrying the Seamless managed marker.
 func isManaged(e any) bool {
 	m, ok := e.(map[string]any)
@@ -392,105 +399,9 @@ func isManaged(e any) bool {
 	return ok && v
 }
 
-// entryTargetsURL reports whether any http hook in the entry points at url
-// (trailing slash ignored) -- identifying a Seamless hook written without the marker.
-func entryTargetsURL(e any, url string) bool {
-	m, ok := e.(map[string]any)
-	if !ok {
-		return false
-	}
-	hooks, ok := m["hooks"].([]any)
-	if !ok {
-		return false
-	}
-	for _, h := range hooks {
-		hm, ok := h.(map[string]any)
-		if !ok {
-			continue
-		}
-		if u, ok := hm["url"].(string); ok && sameURL(u, url) {
-			return true
-		}
-	}
-	return false
-}
-
 // sameURL compares two hook URLs ignoring a trailing slash.
 func sameURL(a, b string) bool {
 	return strings.TrimRight(a, "/") == strings.TrimRight(b, "/")
-}
-
-// entryRunsHookCommand reports whether any command hook in the entry invokes
-// the seam CLI for cliArg -- identifying a Seamless command hook written without
-// the marker, whatever binary path it carries. Command hooks have no URL, so
-// without this an unmarked command entry would be duplicated instead of adopted.
-// Both hook shapes are recognized so an upgrade adopts either in place:
-//
-//   - exec form (CC): `args` carry "hook" then <cliArg> as adjacent elements,
-//     with the binary in `command`.
-//   - shell-string form (Codex, pre-exec CC installs, and hand edits): the whole
-//     invocation is one `command` string containing " hook <cliArg>" as a token
-//     -- at the end (old CC shell form, possibly with a SEAMLESS_CONFIG= prefix)
-//     or followed by more flags (Codex: `... hook <cliArg> --config ... --client
-//     codex`).
-func entryRunsHookCommand(e any, cliArg string) bool {
-	if cliArg == "" {
-		return false
-	}
-	m, ok := e.(map[string]any)
-	if !ok {
-		return false
-	}
-	hooks, ok := m["hooks"].([]any)
-	if !ok {
-		return false
-	}
-	for _, h := range hooks {
-		hm, ok := h.(map[string]any)
-		if !ok {
-			continue
-		}
-		if hookArgsRunEvent(hm["args"], cliArg) {
-			return true
-		}
-		if c, ok := hm["command"].(string); ok && shellCmdRunsEvent(c, cliArg) {
-			return true
-		}
-	}
-	return false
-}
-
-// shellCmdRunsEvent reports whether a shell-string command runs `seam hook
-// <cliArg>` -- the " hook <cliArg>" token appears followed by end-of-string or a
-// space (a trailing flag). The space/end boundary keeps `hook session-start`
-// from matching a hypothetical `hook session-start-foo`.
-func shellCmdRunsEvent(cmd, cliArg string) bool {
-	cmd = strings.TrimSpace(cmd)
-	marker := " hook " + cliArg
-	i := strings.Index(cmd, marker)
-	if i < 0 {
-		return false
-	}
-	end := i + len(marker)
-	return end == len(cmd) || cmd[end] == ' '
-}
-
-// hookArgsRunEvent reports whether an exec-form hook's args invoke `hook
-// <cliArg>` -- "hook" immediately followed by the event name, anywhere in the
-// list (the installer always emits them first, but a hand edit may not).
-func hookArgsRunEvent(v any, cliArg string) bool {
-	args, ok := v.([]any)
-	if !ok {
-		return false
-	}
-	for i := 0; i+1 < len(args); i++ {
-		if s, ok := args[i].(string); ok && s == "hook" {
-			if next, ok := args[i+1].(string); ok && next == cliArg {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 // removeIndices returns arr without the elements at the given (ascending) indices.
@@ -513,15 +424,25 @@ func removeIndices(arr []any, idxs []int) []any {
 
 // matchAction labels a rewrite when at least one owned entry already existed:
 // collapsing duplicates, updating our own marked entry, or adopting an unmarked one.
-func matchAction(n int, firstWasManaged bool) string {
+func matchAction(n int, firstClass hookDefinitionClass) string {
 	switch {
 	case n > 1:
 		return "deduped"
-	case firstWasManaged:
+	case firstClass == hookDefinitionManagedStale:
 		return "updated"
 	default:
 		return "adopted"
 	}
+}
+
+func validateDefinitionPaths(op, seamBin, configPath string) error {
+	if seamBin != "" && !isSeamExecutable(seamBin) {
+		return fmt.Errorf("%s: seam binary must be named seam or seam.exe", op)
+	}
+	if configPath != "" && !isAbsoluteHookPath(configPath) {
+		return fmt.Errorf("%s: config path must be absolute", op)
+	}
+	return nil
 }
 
 // canonicalEqual compares two JSON values ignoring key order and numeric
