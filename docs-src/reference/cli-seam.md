@@ -320,6 +320,27 @@ This is the client-side view. `seamlessd doctor` checks config, database, and
 credentials on the server side; they are different commands answering different
 questions.
 
+## MCP bridge and auth helper
+
+```bash
+seam mcp-proxy [--config PATH]
+seam mcp-headers [--config PATH]
+```
+
+These are client-launched helpers, not interactive commands.
+
+- `mcp-proxy` speaks MCP over stdio to its parent and forwards frames to
+  Seamless's Streamable HTTP `/api/mcp`, preserving `Mcp-Session-Id`. The Codex
+  installer registers it as Seamless's default policy so the bearer key remains
+  in the 0600 Seamless config. Current Codex also supports direct Streamable
+  HTTP; the bridge is a key-handling choice, not a Codex transport requirement.
+- `mcp-headers` prints the current Authorization header as a JSON object for
+  Claude Code's `headersHelper`. That keeps the key out of `claude mcp add`
+  argv and stored client configuration.
+
+`--config` selects the exact `seamless.yaml` both helpers read. Installers bake
+an absolute path into the client registration so it works from every repository.
+
 ## Hooks
 
 ```bash
@@ -337,8 +358,9 @@ daemon selects its payload adapter.
 Two behaviours matter if you are debugging a hook:
 
 - **Failures do not block the session.** A missing config, an unreachable
-  daemon, or an unreadable stdin is reported on stderr and exits 0. Only an
-  unknown event name - an install bug, not a runtime hiccup - is a hard error.
+  daemon, or an unreadable stdin is reported on stderr and exits 0. An unknown
+  event name or present-but-invalid `--client` value is an install/configuration
+  bug and exits 1; it never silently becomes Claude Code.
 - **`post-tool-use` pre-filters locally.** It fires machine-wide on every
   `Write`/`Edit`, so the CLI drops everything that is not an `ExitPlanMode`
   approval or a write to a file directly under `~/.claude/plans` before loading

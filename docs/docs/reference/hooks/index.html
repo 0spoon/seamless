@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/" class="current" aria-current="page">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -190,7 +192,7 @@ install order:</p>
 <td>command (<code>seam hook session-start</code>)</td>
 <td>10s</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cc/{prefix}-{digest}</code> session.</td>
+<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cc/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>
@@ -262,7 +264,7 @@ the three parent-session hooks with a deliberately bounded subagent lifecycle.</
 <td><code>SessionStart</code></td>
 <td>command (<code>seam hook session-start --client codex</code>)</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cx/{prefix}-{digest}</code> session.</td>
+<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes an opaque <code>cx/&lt;prefix&gt;-&lt;digest&gt;</code> ambient handle keyed by the full external ID.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>
@@ -291,11 +293,11 @@ the three parent-session hooks with a deliberately bounded subagent lifecycle.</
 </tbody>
 </table>
 </div>
-<p>All five are <code>command</code> hooks, and for one reason: Codex only runs
-<code>command</code>/<code>mcp_tool</code> hooks, and every command hook passes through Codex's <strong>trust
-gate</strong>. An untrusted hook is silently skipped, so a fresh install shows no
-briefing until the hooks are trusted - interactively at the Codex TUI startup
-review, or with <code>--dangerously-bypass-hook-trust</code> for headless runs.</p>
+<p>All five are <code>command</code> hooks. Codex's current hook schema executes command
+handlers, and every non-managed command hook passes through Codex's <strong>trust
+gate</strong>. An untrusted or changed definition is skipped, so a fresh install can
+show no briefing until the current commands are reviewed in <code>/hooks</code>. The
+<code>--dangerously-bypass-hook-trust</code> flag is the automation-only alternative.</p>
 <p>The <code>--client codex</code> discriminator rides as a <code>?client=codex</code> query param on the
 same <code>/api/hooks/*</code> endpoints the daemon already serves; the daemon normalizes
 Codex's payload (its <code>prompt</code> field, its <code>Stop</code> <code>last_assistant_message</code>) into the
@@ -303,6 +305,12 @@ shared shape. Omitting the flag means Claude Code - the endpoint URLs are
 identical. Because Codex never sends a <code>SessionEnd</code>, its sessions close through the
 idle reaper rather than a clean cascade; <a href="../../codex-cli/">Codex CLI setup</a> covers
 that lifecycle and the tool-call approval gate.</p>
+<p>Codex limits each model-visible hook-output entry to roughly 2,500 tokens and
+spills larger values to a temporary file. Seamless caps every Codex
+<code>additionalContext</code> response at 2,400 estimated tokens before it records
+injection telemetry or serializes the response. That covers SessionStart,
+UserPromptSubmit, and SubagentStart, and keeps the emitted bytes equal to the
+recorded bytes.</p>
 <h2 id="the-fail-open-contract">The fail-open contract</h2>
 <p><strong>A hook must never block an agent.</strong> Every handler in <code>internal/hooks</code> honors
 this: an internal error yields a 200 with empty <code>additionalContext</code> rather than a
@@ -318,15 +326,16 @@ is logged and the hook still acks 200.</p>
 a <code>seam</code> binary that moved - none of these produce an error an agent or the user
 will see. Work simply proceeds without a briefing, and nothing announces it.</p>
 <p>So troubleshooting starts with the doctor checks, not with looking for an error:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># includes the hooks check: N/N installed in &lt;settings path&gt;</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># desired definitions, Codex trust/activity, and MCP state</span>
 </span></span><span class="line"><span class="cl">seam doctor        <span class="c1"># server reachable, key accepted, tools/list count</span>
-</span></span></code></pre><p><code>seamlessd doctor</code>'s hooks check looks in <code>~/.claude/settings.json</code> and then
-<code>./.claude/settings.json</code>, reporting the first location that has all of them, and
-warning when they are partial or absent. When Codex is installed it also inspects
-<code>~/.codex/hooks.json</code> and reports the Codex MCP registration - a machine with no
-Codex is a single OK line, never a failure. <code>seam doctor</code> covers the other half:
-it hits <code>/healthz</code> and calls <code>tools/list</code>, which is what tells you whether the
-endpoint the hooks post to is actually answering.</p>
+</span></span></code></pre><p>For Claude Code, <code>seamlessd doctor</code> looks in <code>~/.claude/settings.json</code> and then
+<code>./.claude/settings.json</code> and compares installed entries with the definitions the
+installer would write now. For Codex it separately reports exact
+current/stale/missing definitions, trust (<code>unverified; inspect /hooks</code>), recent
+SessionStart/UserPromptSubmit activity (evidence only), and the machine-readable
+MCP state. It also checks the recorded binary and config targets exist. A machine
+with no Codex CLI, home, or Seamless Codex configuration is one quiet <code>not detected</code> line, never a failure. <code>seam doctor</code> covers the other half: it hits
+<code>/healthz</code> and calls <code>tools/list</code>, which proves the endpoint and key are working.</p>
 <h2 id="why-claude-code-uses-two-transports">Why Claude Code uses two transports</h2>
 <p>Five of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
 <code>command</code> for all five - its trust gate applies only to command hooks.) The
@@ -437,40 +446,68 @@ sits safely on the matcher group exactly as it does for Claude Code.</p>
 <ul>
 <li><strong>Unknown keys are preserved.</strong> The file is decoded into a generic map, so
 everything Seamless does not own survives.</li>
-<li><strong>Backed up once.</strong> The first time Seamless changes the file it copies it to
-<code>settings.json.seamless-bak-&lt;timestamp&gt;</code>. Later installs skip the backup, so
-the true original is never overwritten with a modified copy.</li>
+<li><strong>Backed up once.</strong> The first time Seamless changes a hook file it copies it to
+<code>&lt;file&gt;.seamless-bak-&lt;timestamp&gt;</code>. Later installs skip the backup, so the true
+original is never overwritten with a modified copy.</li>
 <li><strong>Idempotent.</strong> An already-current file is left untouched - no rewrite, no
 backup. Per-hook actions are reported as <code>added</code>, <code>updated</code>, <code>adopted</code>,
 <code>deduped</code>, or <code>unchanged</code>.</li>
 <li><strong>Written atomically</strong>, sorted-key indented, preserving the file mode (0600 for
 a file Seamless creates, since it may hold a bearer key).</li>
 </ul>
-<h3 id="why-detection-does-not-use-the-marker">Why detection does not use the marker</h3>
-<p>Entries are tagged <code>seamless_managed: true</code>, but <strong>that key cannot be trusted for
-detection</strong>. Claude Code re-serializes settings.json through its own schema
-whenever the owner edits config or permissions, which drops the unknown
-<code>seamless_managed</code> key while keeping the functional hook entries. Those hooks are
-still firing, so they must still count as installed.</p>
-<p>Both <code>Install</code> and <code>InstalledStatus</code> therefore treat an entry as Seamless-owned
-if any of these hold:</p>
-<ol>
-<li>It carries the <code>seamless_managed</code> marker; or</li>
-<li>it is an http entry whose <code>url</code> matches the hook's URL under the base URL
-(trailing slash ignored); or</li>
-<li>it is a command entry whose <code>command</code> runs <code> hook &lt;event&gt;</code> as a token -
-followed by a space or the end of the string, whatever binary path, env prefix,
-or trailing flags it carries. (The token match, rather than a suffix match, is
-what lets it recognize Codex's <code>... hook session-start --config ... --client codex</code>, where the event is not the last word.)</li>
-</ol>
-<p>Rules 2 and 3 are what make re-installs adopt an existing entry in place rather
-than appending a duplicate beside it. When several owned entries exist for one
-event, the first is replaced with the canonical form and the rest are dropped
-(<code>deduped</code>).</p>
-<p>The marker value is deliberately <code>seamless_managed</code>, distinct from Seam v1's
-<code>seam_managed</code>, so the two never match and clobber each other. A v1 entry
-pointing at a different URL is not matched by any of the three rules and is left
-untouched.</p>
+<h3 id="exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</h3>
+<p>Entries are tagged <code>seamless_managed: true</code>, but the marker alone cannot prove a
+definition is healthy. It can name an old binary or config, and Claude Code may
+strip the unknown marker while preserving a still-valid hook. Install, doctor,
+and uninstall therefore share one four-way classifier:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Class</th>
+<th>Meaning</th>
+<th>Install</th>
+<th>Uninstall</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>current</td>
+<td>Exactly the definition Seamless would write today</td>
+<td>Leave byte-for-byte alone</td>
+<td>Remove</td>
+</tr>
+<tr>
+<td>managed-stale</td>
+<td>Carries Seamless's marker but differs from desired state</td>
+<td>Replace</td>
+<td>Remove</td>
+</tr>
+<tr>
+<td>recognizable legacy</td>
+<td>Marker-free, but unmistakably a documented Seamless URL or <code>seam</code>/<code>seam.exe hook &lt;event&gt;</code> layout</td>
+<td>Adopt and replace</td>
+<td>Remove</td>
+</tr>
+<tr>
+<td>foreign</td>
+<td>Anything else, even if arbitrary arguments happen to contain <code>hook &lt;event&gt;</code></td>
+<td>Preserve</td>
+<td>Preserve</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>For Codex, “current” includes the event, command handler type, <code>seam</code> or
+<code>seam.exe</code> executable, hook argv, <code>--client codex</code>, expected absolute config
+path, timeout, and both OS command forms. A missing discriminator or an old
+binary is stale, not healthy. Recognizable legacy matching is deliberately
+narrow: arbitrary executables, extra shell operators, malformed quoting, and a
+v1 <code>seam_managed</code> entry at another URL remain foreign.</p>
+<p>This classifier is why re-install can repair owned drift without swallowing a
+neighboring user's hook, why duplicates collapse to one canonical entry, and why
+doctor compares current <strong>desired state</strong> rather than counting anything that
+looks vaguely Seamless-shaped.</p>
 <h2 id="related">Related</h2>
 <ul>
 <li><a href="../../reference/configuration/">Configuration</a> - <code>mcp.api_key</code>, the bind address
@@ -479,6 +516,8 @@ the hook URLs derive from, and the <code>briefing:</code> block that tunes what
 <li><a href="../../reference/mcp/">MCP API overview</a> - the tool surface the same daemon serves.</li>
 <li><a href="../../claude-code/">Claude Code setup</a> and <a href="../../codex-cli/">Codex CLI setup</a> - the
 per-client walkthroughs these hooks come from.</li>
+<li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a> - versioned
+live/schema evidence and the recapture procedure.</li>
 <li><a href="../../quickstart/">Quickstart</a> - install order for a working setup.</li>
 </ul>
 
@@ -488,7 +527,7 @@ per-client walkthroughs these hooks come from.</li>
     
     <nav class="page-nav" aria-label="Pagination">
       <a class="prev" href="../../reference/configuration/"><span class="dir">Previous</span><span class="t">Configuration</span></a>
-      <a class="next" href="../../reference/console/"><span class="dir">Next</span><span class="t">Console</span></a>
+      <a class="next" href="../../reference/codex-compatibility/"><span class="dir">Next</span><span class="t">Codex compatibility matrix</span></a>
     </nav>
     
   </main>
@@ -497,7 +536,7 @@ per-client walkthroughs these hooks come from.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#claude-code-six-hooks">Claude Code: six hooks</a></li><li class="lvl-2"><a href="#codex-cli-five-hooks">Codex CLI: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#why-detection-does-not-use-the-marker">Why detection does not use the marker</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#claude-code-six-hooks">Claude Code: six hooks</a></li><li class="lvl-2"><a href="#codex-cli-five-hooks">Codex CLI: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

@@ -24,7 +24,8 @@ The ambient handle keeps the first eight external-ID characters readable and
 adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
 external ID plus client, so two UUIDv7 sessions sharing a timestamp prefix never
 share scope, findings, or provenance. Pre-upgrade handles keep their old names
-when resumed.
+when resumed. The handle is a display label, not an API: treat `cc/...` and
+`cx/...` as opaque and never parse or construct them.
 
 They are not two competing sessions. `session_start` **adopts** the sole ambient
 session for the same working directory rather than opening a second one - that
@@ -33,6 +34,12 @@ adoption rule exists because the alternative was double-counting every agent.
 Call `session_start` when the work is non-trivial: it returns the full briefing
 (the injected one is deliberately shorter), and it binds the connection so
 everything afterward inherits the project scope.
+
+That distinction also appears in knowledge provenance. A write attributed by an
+ambient hook stores the session's `cc/...` or `cx/...` **name** in
+`source_session`; a write made through a bound MCP connection stores the
+session's ULID. Readers resolve both forms. Do not infer client, scope, or
+liveness from the spelling of `source_session`.
 
 ## An actual briefing, annotated
 
@@ -101,6 +108,12 @@ stored in the database and win over both the file and the environment, applying
 from the next session start without a daemon restart. If a briefing setting seems
 to be ignored, check the console before you check the YAML.
 
+Codex adds one client-specific safety ceiling after this packing step: every
+model-visible Seamless hook context is capped at 2,400 estimated tokens, below
+Codex's approximate 2,500-token temporary-file spill threshold. The cap runs
+before telemetry is recorded and preserves generated closing tags and the
+ambient handle. Claude Code does not use this additional cap.
+
 ## Liveness
 
 Sessions heartbeat. A session that ends cleanly cascades immediately; one that is
@@ -109,6 +122,10 @@ marked `expired`. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit "live" forever, and a slow one is not
 reaped out from under itself.
 
-`session_end` is where findings come from. Keep them tight - briefings show a
-short preview - but they are stored in full, not rejected, so a long finding is
-fine when it earns it.
+`session_end` is the explicit findings path. Claude Code's SessionEnd hook calls
+the same lifecycle. Codex 0.144.6 has no SessionEnd event, so each `Stop` hook
+updates provisional findings from `last_assistant_message` and the reaper later
+marks the idle ambient session `expired`; those expired ambient findings still
+surface in future briefings. Keep findings tight - briefings show a short preview
+- but they are stored in full, not rejected, so a long finding is fine when it
+earns it.

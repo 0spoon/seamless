@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -162,6 +164,11 @@
   <p>Claude Code's plan mode produces exactly the artifact that usually evaporates: a
 considered design, written down, immediately before the work starts and gone
 immediately after it. Seamless captures it without you doing anything.</p>
+<p>Codex also has a Plan mode, but this automatic artifact capture is
+Claude-Code-specific. Seamless has no verified Claude-style plan-file and
+<code>ExitPlanMode</code> surface to capture from Codex; Codex SubagentStart/Stop hooks
+provide bounded constraints and parent heartbeats, not plan notes. A Codex agent
+can still compose durable plans explicitly with a <code>plan:&lt;slug&gt;</code> note plus tasks.</p>
 <p>The result is a <a href="../../concepts/tasks-and-plans/">plan composition</a> - narrative,
 supporting context, and steps - built for you as you plan.</p>
 <h2 id="which-hook-captures-what">Which hook captures what</h2>

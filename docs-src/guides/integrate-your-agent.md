@@ -1,6 +1,6 @@
 ---
 title: Integrate your agent
-description: Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.
+description: Wire another agent into the loop - the MCP handshake, stdio bridge, session binding, scope discipline, and seam CLI fallback.
 ---
 
 [Claude Code](/claude-code/) and [Codex](/codex-cli/) get Seamless mostly for
@@ -36,21 +36,22 @@ Seamless serves streamable-HTTP MCP at `/api/mcp` behind one static bearer key
 HTTP, point it here and you are done. If you are writing the transport yourself,
 the handshake is two calls.
 
-**Client only speaks MCP over stdio?** Some clients (Codex CLI among them) launch
-their MCP servers as a subprocess and talk JSON-RPC over stdio - they cannot POST
-to a URL. Bridge them with `seam mcp-proxy`, which speaks stdio to the client and
-forwards each frame to `/api/mcp`, carrying the bearer key from config and
-preserving the `Mcp-Session-Id` so session binding survives:
+**Client requires or prefers MCP over stdio?** Bridge it with `seam mcp-proxy`,
+which speaks stdio to the client and forwards each frame to `/api/mcp`, carrying
+the bearer key from config and preserving `Mcp-Session-Id` so session binding
+survives:
 
 ```bash
 seam mcp-proxy --config /abs/path/seamless.yaml   # invoked by the MCP client, not by hand
 ```
 
-Register it the way your client registers a stdio server - for Codex that is
+Register it the way your client registers a stdio server. Codex supports both
+stdio and direct Streamable HTTP; Seamless deliberately installs the bridge with
 `codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml`,
-which `seamlessd install-hooks --client codex` does for you. See [Codex CLI
-setup](/codex-cli/). The rest of this page - session binding, scope, findings -
-applies to the bridged client unchanged.
+because this keeps the bearer key in Seamless's 0600 config. `seamlessd
+install-hooks --client codex` does that for you. See [Codex CLI setup](/codex-cli/).
+The rest of this page - session binding, scope, findings - applies to direct and
+bridged clients unchanged.
 
 ```bash
 KEY=<mcp.api_key>
@@ -64,7 +65,8 @@ curl -sD - -X POST http://127.0.0.1:8081/api/mcp \
                  "clientInfo":{"name":"my-agent","version":"1"}}}'
 ```
 
-The response body carries `serverInfo` (name and build version), but the part you
+The response body carries `serverInfo` (name and build version) plus concise
+server `instructions` describing the Seamless workflow. The part your transport
 must keep is a **header**: `Mcp-Session-Id: mcp-session-<uuid>`. Send it on every
 subsequent request. A `tools/call` without it - or with one the daemon does not
 know - is refused by the transport with `Invalid session ID` before any tool

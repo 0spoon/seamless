@@ -10,9 +10,11 @@
 # script that drifts.
 #
 # What it does: fetch this platform's release archive from GitHub, verify its
-# checksum, install seamlessd + seam into ~/.local/bin, wire the detected agent
-# client(s) (generating the bearer key on first run), then run the daemon as a
-# per-user service -- launchd on macOS, systemd --user on Linux. Re-running it upgrades
+# checksum, install seamlessd + seam into ~/.local/bin, wire hooks + MCP +
+# maintained skills for the detected Claude Code/Codex client(s) (generating the
+# bearer key on first run), then run the daemon as a per-user service -- launchd
+# on macOS, systemd --user on Linux. Codex gets the secret-preserving stdio proxy
+# by default; direct HTTP remains a supported manual Codex configuration. Re-running it upgrades
 # in place; the config and ~/.seamless are never touched. Uninstall anytime with
 # `seamlessd uninstall` (add --purge to also delete the config and data).
 #
@@ -489,10 +491,10 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 		say 'restart Claude Code, then run  /seam-onboard  once.'
 		;;
 	codex)
-		say 'restart Codex, approve the Seamless hooks, then run  $seam-onboard  once.'
+		say 'restart Codex, review/approve Seamless in  /hooks, then run  $seam-onboard  once.'
 		;;
 	all)
-		say 'restart both clients and approve the Seamless hooks in Codex.'
+		say 'restart both clients and review/approve Seamless in Codex  /hooks.'
 		say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
 		;;
 	esac

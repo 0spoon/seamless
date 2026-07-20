@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/" class="current" aria-current="page">Storage and file formats</a></li>
@@ -190,7 +192,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 </span></span></span><span class="line"><span class="cl"><span class="nt">valid_from</span><span class="p">:</span><span class="w"> </span><span class="ld">2026-07-10T18:00:00Z</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">invalid_at</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">superseded_by</span><span class="p">:</span><span class="w"> </span><span class="kc">null</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="nt">source_session</span><span class="p">:</span><span class="w"> </span><span class="l">cc/ab12cd34</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">source_session</span><span class="p">:</span><span class="w"> </span><span class="l">cc/019f7291-7ccbc0d8f16e51a4</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l">claude-fable-5</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">x, y]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
@@ -259,7 +261,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <tr>
 <td><code>source_session</code></td>
 <td>system</td>
-<td>Provenance - the session that wrote it, e.g. <code>cc/ab12cd34</code>.</td>
+<td>Provenance - an ambient session name such as <code>cc/019f7291-7ccbc0d8f16e51a4</code>, or the ULID of a bound explicit session. Consumers resolve both; treat names as opaque.</td>
 </tr>
 <tr>
 <td><code>model</code></td>

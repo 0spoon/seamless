@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Integrate your agent - Seamless docs</title>
-<meta name="description" content="Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.">
+<meta name="description" content="Wire another agent into the loop - the MCP handshake, stdio bridge, session binding, scope discipline, and seam CLI fallback.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -158,7 +160,7 @@
     <article class="prose">
   <p class="eyebrow">Guides</p>
   <h1>Integrate your agent</h1>
-  <p class="lede">Wire a non-Claude-Code client into the agent loop - the MCP handshake, the session binding, scope discipline, and the seam CLI as a fallback.</p>
+  <p class="lede">Wire another agent into the loop - the MCP handshake, stdio bridge, session binding, scope discipline, and seam CLI fallback.</p>
   <p><a href="../../claude-code/">Claude Code</a> and <a href="../../codex-cli/">Codex</a> get Seamless mostly for
 free: <a href="../../reference/hooks/">hooks</a> open a session, inject a briefing, and harvest
 findings without the agent deciding to. Any other client has no hooks. It has to
@@ -183,17 +185,17 @@ integrating at all.</p>
 (<a href="../../reference/configuration/"><code>mcp.api_key</code></a>). If your client speaks MCP over
 HTTP, point it here and you are done. If you are writing the transport yourself,
 the handshake is two calls.</p>
-<p><strong>Client only speaks MCP over stdio?</strong> Some clients (Codex CLI among them) launch
-their MCP servers as a subprocess and talk JSON-RPC over stdio - they cannot POST
-to a URL. Bridge them with <code>seam mcp-proxy</code>, which speaks stdio to the client and
-forwards each frame to <code>/api/mcp</code>, carrying the bearer key from config and
-preserving the <code>Mcp-Session-Id</code> so session binding survives:</p>
+<p><strong>Client requires or prefers MCP over stdio?</strong> Bridge it with <code>seam mcp-proxy</code>,
+which speaks stdio to the client and forwards each frame to <code>/api/mcp</code>, carrying
+the bearer key from config and preserving <code>Mcp-Session-Id</code> so session binding
+survives:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy --config /abs/path/seamless.yaml   <span class="c1"># invoked by the MCP client, not by hand</span>
-</span></span></code></pre><p>Register it the way your client registers a stdio server - for Codex that is
+</span></span></code></pre><p>Register it the way your client registers a stdio server. Codex supports both
+stdio and direct Streamable HTTP; Seamless deliberately installs the bridge with
 <code>codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml</code>,
-which <code>seamlessd install-hooks --client codex</code> does for you. See <a href="../../codex-cli/">Codex CLI
-setup</a>. The rest of this page - session binding, scope, findings -
-applies to the bridged client unchanged.</p>
+because this keeps the bearer key in Seamless's 0600 config. <code>seamlessd install-hooks --client codex</code> does that for you. See <a href="../../codex-cli/">Codex CLI setup</a>.
+The rest of this page - session binding, scope, findings - applies to direct and
+bridged clients unchanged.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">KEY</span><span class="o">=</span>&lt;mcp.api_key&gt;
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">curl -sD - -X POST http://127.0.0.1:8081/api/mcp <span class="se">\
@@ -203,7 +205,8 @@ applies to the bridged client unchanged.</p>
 </span></span></span><span class="line"><span class="cl">  -d <span class="s1">&#39;{&#34;jsonrpc&#34;:&#34;2.0&#34;,&#34;id&#34;:1,&#34;method&#34;:&#34;initialize&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">       &#34;params&#34;:{&#34;protocolVersion&#34;:&#34;2025-06-18&#34;,&#34;capabilities&#34;:{},
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;clientInfo&#34;:{&#34;name&#34;:&#34;my-agent&#34;,&#34;version&#34;:&#34;1&#34;}}}&#39;</span>
-</span></span></code></pre><p>The response body carries <code>serverInfo</code> (name and build version), but the part you
+</span></span></code></pre><p>The response body carries <code>serverInfo</code> (name and build version) plus concise
+server <code>instructions</code> describing the Seamless workflow. The part your transport
 must keep is a <strong>header</strong>: <code>Mcp-Session-Id: mcp-session-&lt;uuid&gt;</code>. Send it on every
 subsequent request. A <code>tools/call</code> without it - or with one the daemon does not
 know - is refused by the transport with <code>Invalid session ID</code> before any tool

@@ -11,17 +11,22 @@ One command installs both.
 ## Install the hooks and register MCP
 
 ```bash
-seamlessd install-hooks
+seamlessd install-hooks --client claude
 ```
+
+The explicit flag selects only Claude Code. Omit it to use the normal
+detection-based installer, which prompts on a terminal and can wire Codex too.
 
 This merges six hook entries into your Claude Code `settings.json`, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.
 
-It then registers the MCP server with the `claude` CLI (`claude mcp add
---scope user`). Pass `--mcp=false` to skip that half; if the CLI is missing or
-the registration fails, the hooks still land and the command prints the
-`claude mcp add` invocation to run yourself.
+It then registers the MCP server with `claude mcp add-json --scope user`. The
+registration uses `seam mcp-headers --config <absolute yaml>` as
+`headersHelper`, so the bearer key stays out of subprocess argv and
+`~/.claude.json`. Pass `--mcp=false` to skip that half; if the CLI is missing or
+registration fails, the hooks still land and the command prints the exact
+invocation to run yourself.
 
 The hooks are what make sessions **ambient** - an agent gets a briefing at
 startup, its prompts get matched against your memories, its findings get
@@ -52,8 +57,8 @@ For a different MCP client, or when `install-hooks` could not find the
 `claude` CLI:
 
 ```bash
-claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp \
-  --header "Authorization: Bearer $KEY"
+claude mcp add-json --scope user seamless \
+  '{"type":"http","url":"http://127.0.0.1:8081/api/mcp","headersHelper":"/abs/path/seam mcp-headers --config /abs/path/seamless.yaml"}'
 ```
 
 **`--scope user` is required.** Without it, `claude mcp add` defaults to `local`,
@@ -62,12 +67,9 @@ The tools then work in that one directory and silently vanish everywhere else -
 which reads exactly like "the MCP server is broken" rather than "the
 registration is scoped wrong".
 
-The key is `mcp.api_key` from your config. Find it:
-
-```bash
-grep api_key ~/.config/seamless/seamless.yaml   # release layout
-grep api_key ./seamless.yaml                    # dev layout
-```
+Use the absolute installed `seam` and config paths. The helper reads
+`mcp.api_key` at connection time; do not replace it with a literal `--header`,
+which exposes the daemon's sole credential in process argv and client config.
 
 ## Map your repos
 
@@ -92,21 +94,24 @@ Installing the tools does not mean an agent will use them well. Two things help.
 
 First, run `/seam-onboard`. The installer drops the portable Claude Code copy
 into `~/.claude/skills/`; from a clone, `make install-onboard-skill`
-(re)installs it for the default `CLIENT=claude` profile:
+(re)installs it for the explicit Claude profile:
 
 ```bash
-make install-onboard-skill    # (re)install the /seam-onboard skill from a clone
+make install-onboard-skill CLIENT=claude
 ```
 
 `/seam-onboard` walks an agent through the setup above, verifies each step, and
-writes a Seamless-awareness block into your `CLAUDE.md` before removing itself.
+shows the marked Seamless-awareness block it can add to global or project
+`CLAUDE.md`. It edits only after you choose a scope and approve the change, then
+removes its own one-shot skill directory.
 
 The installer drops a second skill alongside it: `/seam-research`, the
 research-lab workflow for systematic debugging (see [Run research
 trials](/guides/research-trials/)). Unlike `/seam-onboard` it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
-structured trials. From a clone, `make install-research-skill` (re)installs it.
+structured trials. From a clone, `make install-research-skill CLIENT=claude`
+(re)installs it.
 
 Second - or if you skip the skill - add that block to your `CLAUDE.md` by hand:
 describe when to reach for Seamless (memory that should outlive the

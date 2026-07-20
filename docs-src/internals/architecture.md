@@ -58,7 +58,7 @@ violation is visible in the import block.
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
 | `mcp` | surface | The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution. | `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
-| `hooks` | surface | The Claude Code hook endpoints, ambient sessions, transcript harvest, and plan-mode capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
+| `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |
 | `console` | surface | The server-rendered observability UI and its SSE feed. | `config`, `core`, `events`, `files`, `gardener`, `lifecycle`, `markdown`, `plans`, `retrieve`, `store` |
 
 The import columns are the real ones, and they are the quickest way to check a

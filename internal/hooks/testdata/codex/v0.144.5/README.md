@@ -79,11 +79,11 @@ context on SessionStart and UserPromptSubmit. Stop has no `hookSpecificOutput`
   `agent_message` (`payload.message`, `phase:"final_answer"`). `session_meta`
   (first line) carries `source` (`exec` vs `cli`) and `originator`
   (`codex_exec` vs `codex-tui`) to tell the front-end apart.
-- **Hook trust gate:** Codex only runs hooks whose `trusted_hash` is recorded (or
-  in the interactive TUI trust review). Headless automation must pass
-  `--dangerously-bypass-hook-trust` (a global flag, "intended only for automation
-  that already vets hook sources") or pre-seed `hooks.state."<key>".trusted_hash`.
-  The Seamless installer / E2E path must account for this.
+- **Hook trust gate:** this capture observed that untrusted hooks were skipped and
+  that `--dangerously-bypass-hook-trust` enabled the isolated automation run.
+  Private `hooks.state` / `trusted_hash` details recorded during the historical
+  investigation are evidence only, not a supported API: current Seamless neither
+  reads nor pre-seeds them and directs users to `/hooks`.
 
 ## How these were captured
 

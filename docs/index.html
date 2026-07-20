@@ -202,7 +202,7 @@
         <div class="step rv">
           <div>
             <h3>Hooks make it ambient</h3>
-            <p>Claude Code hooks inject a project briefing at session start and matched memories on every prompt. Capture and recall cost your agents zero effort - and zero prompt-engineering from you.</p>
+            <p>Claude Code and Codex hooks inject a project briefing at session start and matched memories on every prompt. Capture and recall cost your agents zero effort - and zero prompt-engineering from you.</p>
           </div>
         </div>
         <div class="step rv">
@@ -348,9 +348,9 @@
       <div class="qs rv">
         <span class="n">02</span>
         <div>
-          <h3>Open Claude Code in any repo</h3>
+          <h3>Open your detected agent in any repo</h3>
           <div class="code"><span><span class="p">$</span> <span data-copy="cd ~/code/myrepo &amp;&amp; claude">cd ~/code/myrepo &amp;&amp; claude</span></span><button class="copy-btn" type="button" aria-label="Copy">copy</button></div>
-          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart Claude Code once after installing so it picks up the hooks and the MCP server. One optional one-time step: run <code>/seam-onboard</code> to write a short Seamless-awareness block into <code>CLAUDE.md</code>. Prefer <a href="docs/codex-cli/">Codex CLI</a>? The installer detects it too; approve its hooks, then run <code>$seam-onboard</code> to add the same guidance to <code>AGENTS.md</code>.</p>
+          <p class="note">That is the whole setup. The session-start hook resolves your cwd to its git root, derives a project from the repo's name, and registers it on the spot - nothing to map, nothing to configure. The agent's context opens with an injected <code>&lt;seam-briefing&gt;</code>, and that block is the loop closing. Restart the selected client once after installing. In Claude Code, run <code>/seam-onboard</code> to add the optional guidance to <code>CLAUDE.md</code>. Prefer <a href="docs/codex-cli/">Codex CLI</a>? Open <code>/hooks</code> to review the current Seamless commands, then run <code>$seam-onboard</code> to add the same guidance to <code>AGENTS.md</code>.</p>
         </div>
       </div>
       <div class="qs rv">

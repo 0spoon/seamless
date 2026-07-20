@@ -8,9 +8,11 @@ project_name: seamless
 
 builds:
   # No CGO anywhere (pure-Go SQLite), so plain cross-compilation covers every
-  # target. Windows joins darwin + linux now that the Claude Code hooks emit
-  # exec form (no shell string) and the daemon runs under a per-user Scheduled
-  # Task; goreleaser appends .exe automatically for the windows targets.
+  # target. Windows joins darwin + linux: Claude Code hooks use exec form,
+  # Codex hooks carry a command_windows override, and the daemon runs under a
+  # per-user Scheduled Task. The public Codex compatibility matrix distinguishes
+  # this release/syntax coverage from a live Codex-on-Windows verification.
+  # goreleaser appends .exe automatically for the windows targets.
   - id: seamlessd
     main: ./cmd/seamlessd
     binary: seamlessd

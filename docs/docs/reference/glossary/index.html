@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -164,8 +166,10 @@ know them are the four <strong>disambiguation</strong> entries at the end: each 
 people routinely use interchangeably, and each pair means genuinely different
 things.</p>
 <h2 id="az">A–Z</h2>
-<p><strong>Ambient session</strong> - a session opened automatically by the SessionStart hook,
-named <code>cc/&lt;id&gt;</code>, without the agent asking. Contrast <em>explicit session</em>.</p>
+<p><strong>Ambient session</strong> - a session opened automatically by a Claude Code or Codex
+SessionStart hook, displayed with an opaque <code>cc/...</code> or <code>cx/...</code> handle, without
+the agent asking. Lifecycle identity uses the full external session ID plus
+client, not the display handle. Contrast <em>explicit session</em>.</p>
 <p><strong>Arbitration</strong> - deciding which of several competing memories wins when they
 disagree. Part of the memory lifecycle, alongside supersession and provenance.</p>
 <p><strong>Archive</strong> - marking a memory invalid because it is no longer relevant. It

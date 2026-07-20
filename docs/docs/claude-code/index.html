@@ -129,6 +129,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../reference/console/">Console</a></li>
         
         <li><a href="../reference/storage/">Storage and file formats</a></li>
@@ -164,13 +166,18 @@ independent halves - <strong>the MCP endpoint</strong> (what an agent can call) 
 hooks</strong> (what happens without an agent calling anything) - and you want both.
 One command installs both.</p>
 <h2 id="install-the-hooks-and-register-mcp">Install the hooks and register MCP</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks
-</span></span></code></pre><p>This merges six hook entries into your Claude Code <code>settings.json</code>, preserving
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude
+</span></span></code></pre><p>The explicit flag selects only Claude Code. Omit it to use the normal
+detection-based installer, which prompts on a terminal and can wire Codex too.</p>
+<p>This merges six hook entries into your Claude Code <code>settings.json</code>, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.</p>
-<p>It then registers the MCP server with the <code>claude</code> CLI (<code>claude mcp add --scope user</code>). Pass <code>--mcp=false</code> to skip that half; if the CLI is missing or
-the registration fails, the hooks still land and the command prints the
-<code>claude mcp add</code> invocation to run yourself.</p>
+<p>It then registers the MCP server with <code>claude mcp add-json --scope user</code>. The
+registration uses <code>seam mcp-headers --config &lt;absolute yaml&gt;</code> as
+<code>headersHelper</code>, so the bearer key stays out of subprocess argv and
+<code>~/.claude.json</code>. Pass <code>--mcp=false</code> to skip that half; if the CLI is missing or
+registration fails, the hooks still land and the command prints the exact
+invocation to run yourself.</p>
 <p>The hooks are what make sessions <strong>ambient</strong> - an agent gets a briefing at
 startup, its prompts get matched against your memories, its findings get
 harvested at the end, and its plan-mode activity gets captured, all without the
@@ -195,17 +202,17 @@ that have nothing to do with plans.</li>
 <h2 id="registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</h2>
 <p>For a different MCP client, or when <code>install-hooks</code> could not find the
 <code>claude</code> CLI:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add --scope user --transport http seamless http://127.0.0.1:8081/api/mcp <span class="se">\
-</span></span></span><span class="line"><span class="cl">  --header <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span>
+<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add-json --scope user seamless <span class="se">\
+</span></span></span><span class="line"><span class="cl">  <span class="s1">&#39;{&#34;type&#34;:&#34;http&#34;,&#34;url&#34;:&#34;http://127.0.0.1:8081/api/mcp&#34;,&#34;headersHelper&#34;:&#34;/abs/path/seam mcp-headers --config /abs/path/seamless.yaml&#34;}&#39;</span>
 </span></span></code></pre><p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
 which ties the registration to whichever directory you happened to run it from.
 The tools then work in that one directory and silently vanish everywhere else -
 which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;the
 registration is scoped wrong&quot;.</p>
-<p>The key is <code>mcp.api_key</code> from your config. Find it:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">grep api_key ~/.config/seamless/seamless.yaml   <span class="c1"># release layout</span>
-</span></span><span class="line"><span class="cl">grep api_key ./seamless.yaml                    <span class="c1"># dev layout</span>
-</span></span></code></pre><h2 id="map-your-repos">Map your repos</h2>
+<p>Use the absolute installed <code>seam</code> and config paths. The helper reads
+<code>mcp.api_key</code> at connection time; do not replace it with a literal <code>--header</code>,
+which exposes the daemon's sole credential in process argv and client config.</p>
+<h2 id="map-your-repos">Map your repos</h2>
 <p>Usually you do not have to. The first session inside a git repo maps itself: the
 SessionStart hook resolves the agent's cwd to its git root, derives a project
 slug from that directory's name, and records the mapping. Agents then inherit
@@ -219,16 +226,19 @@ unmapped writes are rejected rather than defaulted to global.</p>
 <p>Installing the tools does not mean an agent will use them well. Two things help.</p>
 <p>First, run <code>/seam-onboard</code>. The installer drops the portable Claude Code copy
 into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-skill</code>
-(re)installs it for the default <code>CLIENT=claude</code> profile:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># (re)install the /seam-onboard skill from a clone</span>
+(re)installs it for the explicit Claude profile:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>claude
 </span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
-writes a Seamless-awareness block into your <code>CLAUDE.md</code> before removing itself.</p>
+shows the marked Seamless-awareness block it can add to global or project
+<code>CLAUDE.md</code>. It edits only after you choose a scope and approve the change, then
+removes its own one-shot skill directory.</p>
 <p>The installer drops a second skill alongside it: <code>/seam-research</code>, the
 research-lab workflow for systematic debugging (see <a href="../guides/research-trials/">Run research
 trials</a>). Unlike <code>/seam-onboard</code> it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
-structured trials. From a clone, <code>make install-research-skill</code> (re)installs it.</p>
+structured trials. From a clone, <code>make install-research-skill CLIENT=claude</code>
+(re)installs it.</p>
 <p>Second - or if you skip the skill - add that block to your <code>CLAUDE.md</code> by hand:
 describe when to reach for Seamless (memory that should outlive the
 conversation, work that crosses agents) and when not to (trivial edits, things

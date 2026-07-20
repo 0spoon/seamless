@@ -29,8 +29,9 @@ SVC_PLIST     := $(HOME)/Library/LaunchAgents/$(SVC_LABEL).plist
 SVC_LOG       := $(HOME)/.seamless/seamlessd.log
 
 # Install locations: stable paths, independent of this working tree. `make
-# install` snapshots the binaries and config here and points launchd + the Claude
-# Code hooks at the copies, so `make build`, a branch switch, or a moved repo
+# install` snapshots the binaries and config here and points launchd + the
+# selected clients' hooks/MCP registrations at the copies, so `make build`, a
+# branch switch, or a moved repo
 # never change what the live daemon and every agent's hooks execute.
 # Override the prefix with `make install PREFIX=/custom`.
 PREFIX        ?= $(HOME)/.local
@@ -279,7 +280,7 @@ site-stamp:
 # them is a per-clone opt-in rather than something a checkout imposes on you.
 # The path stays relative: git resolves it against each worktree's top level, so
 # linked worktrees under .claude/worktrees/ run their own checkout's copy.
-# (Distinct from `install-hooks`, which installs the Claude Code hooks.)
+# (Distinct from `install-hooks`, which installs agent-client hooks.)
 install-git-hooks:
 	@git config core.hooksPath .githooks
 	@echo "git hooks enabled: pre-commit runs 'make check-fast' (bypass: git commit --no-verify)"
@@ -337,8 +338,9 @@ _reload-service:
 	    || { echo "ERROR: $(SVC_LABEL) failed to bootstrap; check $(SVC_LOG)"; exit 1; }
 
 # The one deploy path: snapshot the binaries + config to stable locations
-# independent of this working tree, then point launchd AND the Claude Code hooks
-# at the copies. Because nothing live resolves through ./bin, `make build`, a
+# independent of this working tree, then point launchd AND the selected clients'
+# hooks/MCP registrations at the copies. Because nothing live resolves through
+# ./bin, `make build`, a
 # branch switch, or a moved/cleaned repo cannot change what the running daemon
 # and every agent's hooks execute -- swapping them is this target, deliberately.
 #

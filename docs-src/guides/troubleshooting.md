@@ -44,25 +44,57 @@ daemon up, key valid - is broken, and every link in it fails silently by design.
 
 **Fix.** Walk the chain in order:
 
-1. `seamlessd doctor` → the `hooks` line. It reports `N/N installed in <path>`,
-   looking at `~/.claude/settings.json` and then `./.claude/settings.json`. Not
-   installed, or partial, is a warning - which does **not** fail the run, so read
-   it rather than trusting the exit code. Fix with `seamlessd install-hooks`.
-2. `seam doctor` → is the daemon actually up and is the key accepted? An empty
+1. `seamlessd doctor` → read the client-specific definition line. Claude Code
+   checks `~/.claude/settings.json` and then `./.claude/settings.json`; Codex
+   names exact `current`, `stale`, and `missing` events in its hooks file. A
+   warning does **not** fail the run, so read it rather than trusting the exit
+   code. Repair owned drift with `seamlessd install-hooks`.
+2. **Codex only:** read `codex hook trust`. `trust unverified` is honest, not a
+   failed probe - open `/hooks`, inspect the current commands, and approve them.
+   A recent activity timestamp is supporting evidence only; it cannot prove a
+   newly changed definition is trusted.
+3. `seam doctor` → is the daemon actually up and is the key accepted? An empty
    `mcp.api_key` makes the daemon reject every MCP and hook request while looking
    perfectly healthy on `/healthz`.
-3. Did the `seam` binary move? Command hooks bake in an **absolute path**, and
+4. Did the `seam` binary move? Command hooks bake in an **absolute path**, and
    `make install` points them at `~/.local/bin/seam` - a stable copy, not your
    working tree. If you moved the install prefix or wired the hooks up by hand
    against some other path, re-run `make install`.
-4. Check the hook's **type** if you hand-edited settings.json. Claude Code
+5. Check the hook's **type** if you hand-edited settings.json. Claude Code
    silently ignores an `http` hook for `SessionStart` - it must be a `command`
-   hook. This is why `install-hooks` writes it that way.
+   hook. Codex's Seamless profile uses command handlers for all five events.
 
-Detection matches by hook URL or command, **not** by the `seamless_managed`
-marker, because Claude Code strips unknown keys when it rewrites settings.json.
-So a hook that lost its marker still counts as installed, and a re-install adopts
-it in place rather than appending a duplicate.
+Definition classification is stricter than “contains `hook <event>`.” A current
+entry must match the desired event, paths, arguments, client discriminator,
+timeout, and OS command shape. The installer can adopt a marker-free entry only
+when it is unmistakably a documented Seamless URL or `seam`/`seam.exe` command;
+foreign entries survive install and uninstall.
+
+## Codex hooks are current, but doctor says `trust unverified`
+
+**What is happening.** Definition validity and trust are different facts. Codex
+does not expose a supported command that tells Seamless whether the current hook
+hash is trusted, and Seamless deliberately does not parse or pre-seed private
+trust state.
+
+**Fix.** Open `/hooks` inside Codex. Review and approve the current Seamless
+definitions. This warning remains honest even after approval; use a real session
+briefing as the end-to-end check. `codex hook activity` can tell you when
+SessionStart/UserPromptSubmit last reached the daemon, but it is not proof for a
+definition that may have changed since then.
+
+## Codex MCP is stale or incompatible
+
+**What is happening.** `seamlessd doctor` compares `codex mcp get seamless
+--json` with the exact enabled stdio bridge the installer wants, including the
+absolute `seam` path, ordered `mcp-proxy --config ...` arguments, and target-file
+existence. Mere registration is not enough.
+
+**Fix.** Run `seamlessd install-hooks --client codex`. A disabled or drifted
+owned stdio bridge is replaced in place and verified. A direct-HTTP or arbitrary
+foreign entry under the reserved `seamless` name is not overwritten: either keep
+it and use `--mcp=false` for future hook/skill refreshes, or explicitly run
+`codex mcp remove seamless` before reinstalling the maintained proxy.
 
 ## A briefing appears, but it is nearly empty or names the wrong project
 
@@ -235,6 +267,10 @@ older code.
 - **Tools missing in some repos?** That is not a daemon problem. `claude mcp add`
   defaults to `local` scope, tying the registration to the directory you ran it
   from. Register with `--scope user`.
+- **Codex tools missing?** Run `codex mcp get seamless --json`, then
+  `seamlessd doctor`. The maintained registration is an enabled user-level stdio
+  bridge; a disabled entry, stale binary/config path, or project override is a
+  client-configuration problem even while `/healthz` is green.
 
 ## `memory_write` says the name is held by a superseded memory
 
