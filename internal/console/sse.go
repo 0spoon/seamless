@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // ssePingInterval keeps the stream and any intermediary connections alive during
@@ -51,7 +53,7 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 	// full request/response bodies, instead of the default summary rows every
 	// page's layout EventSource consumes.
 	interactions := r.URL.Query().Get("feed") == "interactions"
-	var namer func(string) (string, bool)
+	var namer func(string) core.Session
 	if interactions {
 		namer = s.sessionNamer(ctx)
 	}

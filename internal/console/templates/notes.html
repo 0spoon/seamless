@@ -34,7 +34,7 @@
           {{range .Notes}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/notes/{{.ID}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
-            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{if .Description}} &middot; {{.Description}}{{end}}</span>
+            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{with agentPill "" .Model}} {{.}}{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</span>
           </a>
           {{end}}
         </div>
@@ -63,6 +63,7 @@
   <header class="reader-head">
     <div class="reader-eyebrow">
       <span class="kind">note</span>
+      {{agentPill "" .Model}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}inbox</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
     </div>
@@ -72,7 +73,6 @@
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
       <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
       {{if .Words}}<span class="fact">{{.Words}} words</span>{{end}}
-      {{if .Model}}<span class="fact" title="Model that produced this content">model <span class="mono">{{.Model}}</span></span>{{end}}
       {{if .SourceURL}}<span class="fact"><a href="{{.SourceURL}}" rel="noopener noreferrer" target="_blank">{{icon "link"}} source</a></span>{{end}}
     </div>
   </header>

@@ -34,7 +34,9 @@ type memoryRow struct {
 	Project      string       `json:"project"`
 	FilePath     string       `json:"filePath"`
 	Updated      time.Time    `json:"updated"`
-	Status       string       `json:"status"` // active|superseded|archived
+	Status       string       `json:"status"`            // active|superseded|archived
+	Harness      string       `json:"harness,omitempty"` // producing client, resolved from the source session
+	Model        string       `json:"model,omitempty"`   // producing model, verbatim
 	ReplacedBy   string       `json:"replacedBy,omitempty"`
 	ReplacedByID string       `json:"replacedById,omitempty"`
 	Injects      int          `json:"injects"`
@@ -98,6 +100,7 @@ func (s *Service) memoriesPage(ctx context.Context, sortKey, query string) (memo
 
 	// project -> kind -> rows (active only); inactive collected separately. The
 	// ?q filter applies to both sets.
+	resolve := s.sourceSessionResolver(ctx)
 	active := map[string]map[string][]memoryRow{}
 	var inactive []memoryRow
 	activeCount := 0
@@ -106,6 +109,7 @@ func (s *Service) memoriesPage(ctx context.Context, sortKey, query string) (memo
 			continue
 		}
 		row := toMemoryRow(m, stats[m.ID], nameByID, s.cfg.DataDir)
+		row.Harness = harnessOfSource(resolve, m.SourceSession)
 		if m.Active() {
 			activeCount++
 			if active[m.Project] == nil {
@@ -216,6 +220,7 @@ func toMemoryRow(m core.Memory, stat store.RetrievalStat, nameByID map[string]st
 	return memoryRow{
 		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, FilePath: m.FilePath, Updated: m.Updated, Status: status,
+		Model:      m.Model, // Harness is filled by the caller (it needs a session resolver)
 		ReplacedBy: nameByID[m.SupersededBy], ReplacedByID: m.SupersededBy,
 		Injects: stat.InjectCount, Reads: stat.ReadCount, LastInjected: stat.LastInjectedAt,
 		AbsPath: abs, EditURL: edit,

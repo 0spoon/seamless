@@ -36,7 +36,7 @@
           {{range .Memories}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/memories/{{.ID}}{{$qs}}" data-title="{{.Name}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title mono"><i class="kdot" data-kind="{{.Kind}}" title="{{.Kind}}"></i>{{.Name}}</span>
-            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{if .Injects}} &middot; {{.Injects}} inj{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</span>
+            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{if .Injects}} &middot; {{.Injects}} inj{{end}}{{with agentPill .Harness .Model}} {{.}}{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</span>
           </a>
           {{end}}
           {{end}}
@@ -50,7 +50,7 @@
           {{range .Inactive}}
           <a class="rail-item dim{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/memories/{{.ID}}{{$qs}}" data-title="{{.Name}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title mono"><i class="kdot" data-kind="{{.Kind}}" title="{{.Kind}}"></i>{{.Name}}</span>
-            <span class="ri-meta">{{.Status}}{{if .ReplacedBy}} by {{.ReplacedBy}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{.Status}}{{if .ReplacedBy}} by {{.ReplacedBy}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span>{{with agentPill .Harness .Model}} {{.}}{{end}}</span>
           </a>
           {{end}}
         </div>
@@ -80,6 +80,7 @@
     <div class="reader-eyebrow">
       <span class="kind">{{.Kind}}</span>
       <span class="badge {{if eq .Status "active"}}ok{{else if eq .Status "superseded"}}warn{{end}}">{{.Status}}</span>
+      {{agentPill .Harness .Model}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
     </div>
@@ -89,7 +90,6 @@
       <span class="fact">injected {{.Injects}}&times;{{if .LastInjected}} &middot; last <span title="{{ts .LastInjected}}">{{ago .LastInjected}}</span>{{end}}</span>
       <span class="fact" title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under injected), so agents rarely re-read a memory they already have.">read {{.Reads}}&times;</span>
       {{if .Source}}<span class="fact">source {{if .SourceID}}<a href="/console/sessions/{{.SourceID}}">{{.Source}}</a>{{else}}{{.Source}}{{end}}</span>{{end}}
-      {{if .Model}}<span class="fact" title="Model that produced this content">model <span class="mono">{{.Model}}</span></span>{{end}}
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
       <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
     </div>

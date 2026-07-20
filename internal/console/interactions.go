@@ -58,6 +58,8 @@ type interactionRow struct {
 	SessionID   string    `json:"sessionId,omitempty"`
 	SessionName string    `json:"sessionName,omitempty"`
 	Ambient     bool      `json:"ambient,omitempty"`
+	Harness     string    `json:"harness,omitempty"` // client discriminator (claude-code|codex)
+	Model       string    `json:"model,omitempty"`   // model powering the session, verbatim
 	IsError     bool      `json:"isError,omitempty"`
 	DurationMS  int64     `json:"durationMs,omitempty"`
 	Request     string    `json:"request,omitempty"`  // pretty-JSON tool args, or prompt text
@@ -65,10 +67,10 @@ type interactionRow struct {
 	Items       int       `json:"items,omitempty"`    // count of surfaced memories
 }
 
-// toInteractionRow projects an event into a feed row. name resolves a session id
-// to its (name, ambient) pair (memoized by the caller). It tolerates import-shaped
-// tool.call payloads that carry no args/result.
-func toInteractionRow(e core.Event, name func(string) (string, bool)) interactionRow {
+// toInteractionRow projects an event into a feed row. sessOf resolves a session
+// id to its session (memoized by the caller; the zero Session means unknown).
+// It tolerates import-shaped tool.call payloads that carry no args/result.
+func toInteractionRow(e core.Event, sessOf func(string) core.Session) interactionRow {
 	p := e.Payload
 	row := interactionRow{
 		ID: e.ID, TS: e.TS, Kind: string(e.Kind),
@@ -80,8 +82,10 @@ func toInteractionRow(e core.Event, name func(string) (string, bool)) interactio
 		row.IsError = true
 		row.Tone = "danger"
 	}
-	if e.SessionID != "" && name != nil {
-		row.SessionName, row.Ambient = name(e.SessionID)
+	if e.SessionID != "" && sessOf != nil {
+		sess := sessOf(e.SessionID)
+		row.SessionName, row.Ambient = sess.Name, sess.Ambient
+		row.Harness, row.Model = harnessOf(sess), sess.Model
 	}
 	if d, ok := p["duration_ms"].(float64); ok {
 		row.DurationMS = int64(d)
@@ -133,25 +137,25 @@ func prettyArgs(v any) string {
 	return string(b)
 }
 
-// sessionNamer returns a memoized session-id -> (name, ambient) resolver bound to
-// ctx, so a feed of many rows sharing a session costs one query. Unknown ids are
-// negatively cached and resolve to ("", false).
-func (s *Service) sessionNamer(ctx context.Context) func(string) (string, bool) {
+// sessionNamer returns a memoized session-id -> session resolver bound to ctx,
+// so a feed of many rows sharing a session costs one query. Unknown ids are
+// negatively cached and resolve to the zero Session.
+func (s *Service) sessionNamer(ctx context.Context) func(string) core.Session {
 	cache := map[string]core.Session{}
-	return func(id string) (string, bool) {
+	return func(id string) core.Session {
 		if id == "" {
-			return "", false
+			return core.Session{}
 		}
 		if sess, ok := cache[id]; ok {
-			return sess.Name, sess.Ambient
+			return sess
 		}
 		sess, ok, err := store.SessionByID(ctx, s.cfg.DB, id)
 		if err != nil || !ok {
 			cache[id] = core.Session{} // negative cache
-			return "", false
+			return core.Session{}
 		}
 		cache[id] = sess
-		return sess.Name, sess.Ambient
+		return sess
 	}
 }
 

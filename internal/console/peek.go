@@ -54,6 +54,7 @@ type memoryDetail struct {
 	Source       string        `json:"sourceSession,omitempty"`   // session name
 	SourceID     string        `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
 	Model        string        `json:"model,omitempty"`           // producing model, as the provider names it
+	Harness      string        `json:"harness,omitempty"`         // producing client, resolved from the source session
 	ReplacedBy   string        `json:"replacedBy,omitempty"`      // name of the superseder
 	ReplacedByID string        `json:"replacedById,omitempty"`
 	Supersedes   []memoryRef   `json:"supersedes,omitempty"` // reverse: memories this replaced
@@ -102,14 +103,14 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 		d.LastInjected, d.LastRead = stat.LastInjectedAt, stat.LastReadAt
 	}
 
-	// Provenance: SourceSession stores a session name, so resolve it to an id.
-	if m.SourceSession != "" {
-		if sess, found, serr := store.SessionByName(ctx, s.cfg.DB, m.SourceSession); serr != nil {
-			s.logger.Warn("console: memory source session", "name", m.SourceSession, "error", serr)
-		} else if found {
-			d.SourceID = sess.ID
-		}
+	// Provenance: SourceSession holds a session name (ambient stamps) or a
+	// session ULID (bound stamps); resolve either to the row for the link and
+	// the harness half of the attribution pill.
+	resolve := s.sourceSessionResolver(ctx)
+	if sess := resolve(m.SourceSession); sess.ID != "" {
+		d.SourceID = sess.ID
 	}
+	d.Harness = harnessOfSource(resolve, m.SourceSession)
 
 	// Supersession, both directions.
 	if m.SupersededBy != "" {

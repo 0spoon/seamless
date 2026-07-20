@@ -44,6 +44,8 @@ type sessionRow struct {
 	Status   string    `json:"status"`
 	Source   string    `json:"source"`
 	Ambient  bool      `json:"ambient"`
+	Harness  string    `json:"harness,omitempty"` // client discriminator (claude-code|codex)
+	Model    string    `json:"model,omitempty"`   // model powering the session, verbatim
 	Live     bool      `json:"live"`
 	Findings string    `json:"findings"`
 	Updated  time.Time `json:"updated"`
@@ -133,6 +135,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		rows = append(rows, sessionRow{
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
 			Status: string(sess.Status), Source: sess.Source, Ambient: sess.Ambient,
+			Harness: harnessOf(sess), Model: sess.Model,
 			Live: live, Findings: snippet(plain, 120), Updated: sess.UpdatedAt,
 		})
 	}
@@ -181,6 +184,7 @@ func sessionSortName(row sessionRow) string {
 // template shows.
 type sessionDetail struct {
 	Session      core.Session     `json:"session"`
+	Harness      string           `json:"harness,omitempty"` // client discriminator (claude-code|codex)
 	Findings     string           `json:"findings"`
 	FindingsHTML template.HTML    `json:"-"`
 	Timeline     []eventRow       `json:"timeline"`
@@ -266,7 +270,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		// right-rail cards cover the non-interaction detail (reads/writes, produced
 		// memories, claimed tasks). BySession returns oldest-first, so we walk it in
 		// reverse to build both newest-first.
-		namer := func(string) (string, bool) { return sess.Name, sess.Ambient }
+		namer := func(string) core.Session { return sess }
 		var ticks []events.KindTick
 		for i := len(evs) - 1; i >= 0; i-- {
 			e := evs[i]
@@ -295,7 +299,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := sessionDetail{
-		Session: sess, Findings: sess.Findings, Timeline: timeline,
+		Session: sess, Harness: harnessOf(sess), Findings: sess.Findings, Timeline: timeline,
 		Interactions: interactions, IxVolumeJSON: ixVolume,
 		ToolCalls: toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),

@@ -204,6 +204,33 @@
     return n ? wrap : null;
   }
 
+  // ---- agent attribution pill ------------------------------------------------
+  // Mirrors agentPill in internal/console/agent.go (tone classes, short labels,
+  // model shortening), so live-feed rows match the server-rendered surfaces.
+  var AGENTS = {
+    'claude-code': { cls: 'cc', label: 'cc', full: 'Claude Code' },
+    codex: { cls: 'cx', label: 'cx', full: 'Codex' }
+  };
+
+  function modelShort(model) {
+    var m = String(model || '').replace(/-20\d{6}$/, '');
+    if (m.indexOf('claude-') === 0 && m.length > 7) m = m.slice(7);
+    return m;
+  }
+
+  function agentPill(harness, model) {
+    var a = AGENTS[harness] || (harness ? { cls: '', label: harness, full: harness } : null);
+    var text = [], title = [];
+    if (a) { text.push(a.label); title.push(a.full); }
+    var m = modelShort(model);
+    if (m) text.push(m);
+    if (model) title.push(model);
+    if (!text.length) return null;
+    var pill = el('span', 'agent-pill' + (a && a.cls ? ' ' + a.cls : ''), text.join(' · '));
+    pill.title = title.join(' · ');
+    return pill;
+  }
+
   // ---- time / id helpers -----------------------------------------------------
   function rel(ts) {
     var t = Date.parse(ts);
@@ -232,6 +259,8 @@
     sum.appendChild(el('span', 'kind ' + (d.tone || ''), d.kind));
     if (d.label) sum.appendChild(el('span', 'ix-label mono', d.label));
     sum.appendChild(el('span', 'ix-sum', d.summary || ''));
+    var pill = agentPill(d.harness, d.model);
+    if (pill) sum.appendChild(pill);
     if (d.ambient) sum.appendChild(el('span', 'badge', 'ambient'));
     if (d.isError) sum.appendChild(el('span', 'badge danger', 'error'));
     var meta = [];
@@ -388,6 +417,7 @@
     el: el,
     iconEl: iconEl,
     evtIcon: evtIcon,
+    agentPill: agentPill,
     catOf: catOf,
     renderValue: renderValue,
     section: section,
