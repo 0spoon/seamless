@@ -502,13 +502,15 @@ func (h *Handler) recordInjection(ctx context.Context, hook string, client Clien
 		return
 	}
 	// A post-assembly cap can remove memory lines without retaining a structured
-	// id-to-line map. Do not credit possibly dropped items as injected; the
-	// bounded metadata keeps that exceptional undercount explicit.
+	// id-to-line map, so on truncation the list is a superset of what reached the
+	// model -- item_ids_exact records that. The ids are still credited, because
+	// item_ids is the only source of last_injected_at (store.RebuildRetrievalStats),
+	// which feeds store.StaleMemories and the gardener's archive proposals.
+	// Dropping them makes an actively injected memory read as never injected and
+	// proposes archiving it; over-crediting a trimmed line merely keeps it alive
+	// one more staleness cycle. Err toward the recoverable direction.
 	originalItemCount := len(itemIDs)
 	itemIDsExact := !prepared.truncated || originalItemCount == 0
-	if !itemIDsExact {
-		itemIDs = nil
-	}
 	sessionID, project := h.ambientRef(ctx, client, claudeSessionID)
 	payload := map[string]any{
 		"hook": hook, "claude_session_id": claudeSessionID,
