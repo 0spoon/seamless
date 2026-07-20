@@ -210,7 +210,7 @@ function Install-Binaries {
 # otherwise bind the install to it. Missing claude/seam is a warning inside
 # install-hooks, not a failure, so a box without Claude Code still installs cleanly.
 function Invoke-WireHooks {
-    param([string]$Tmp, [string]$InstallDir, [string]$AgentClient)
+    param([string]$Tmp, [string]$InstallDir, [string]$AgentClient, [string]$Version)
     if ($env:SEAMLESS_NO_HOOKS) { Step 'hooks' 'skipped (SEAMLESS_NO_HOOKS)'; return }
     $seamlessd = Join-Path $InstallDir 'seamlessd.exe'
     $seam = Join-Path $InstallDir 'seam.exe'
@@ -223,7 +223,36 @@ function Invoke-WireHooks {
             # EnsureAPIKey only writes it when the config resolves to nothing.
             Remove-Item Env:SEAMLESS_CONFIG -ErrorAction SilentlyContinue
         }
-        & $seamlessd install-hooks --client $AgentClient --seam $seam
+        # --client first shipped in v0.3.3, but this script is always fetched from
+        # main and can install any pinned $env:SEAMLESS_VERSION. Ask the binary we
+        # just unpacked: an unknown flag fails flag parsing, and Die would abort the
+        # install before the scheduled task is ever registered. -h parses flags and
+        # returns before any config load, so the probe is side-effect free.
+        # 2>&1 on a native command can surface as a terminating NativeCommandError
+        # under $ErrorActionPreference='Stop', so the probe relaxes it and catches.
+        $probe = ''
+        $prevEap = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = 'Continue'
+            $probe = (& $seamlessd install-hooks -h 2>&1 | Out-String)
+        } catch {
+            $probe = ''
+        } finally {
+            $ErrorActionPreference = $prevEap
+        }
+        $clientArgs = @('--client', $AgentClient)
+        # An empty probe failed to run; it did not prove the flag is absent. Assume
+        # the modern binary rather than silently downgrading a current install.
+        if ($probe -and $probe -notmatch '-client') {
+            if ($AgentClient -ne 'claude') {
+                Die "seamless $Version predates --client and cannot wire $AgentClient; rerun with `$env:SEAMLESS_CLIENT='claude', or drop SEAMLESS_VERSION to get the latest"
+            }
+            # Pre-0.3.3 is Claude-Code-only and bundles no skills; the old installer
+            # passed no --client here, so this is byte-for-byte its behavior.
+            Warn "seamless $Version predates --client and the bundled skills; wiring Claude Code only"
+            $clientArgs = @()
+        }
+        & $seamlessd install-hooks @clientArgs --seam $seam
         if ($LASTEXITCODE -ne 0) { Die "install-hooks failed (exit $LASTEXITCODE)" }
     } finally {
         Pop-Location
@@ -314,7 +343,7 @@ function Main {
         }
 
         Install-Binaries $zip $tmp $InstallDir
-        Invoke-WireHooks $tmp $InstallDir $agentClient
+        Invoke-WireHooks $tmp $InstallDir $agentClient $version
         $addr = Get-ConfiguredAddr
 
         if ($env:SEAMLESS_NO_SERVICE) {
