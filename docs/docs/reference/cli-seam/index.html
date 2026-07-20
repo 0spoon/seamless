@@ -356,6 +356,24 @@ expect. A mismatch means the running daemon is a different build.</li>
 <p>This is the client-side view. <code>seamlessd doctor</code> checks config, database, and
 credentials on the server side; they are different commands answering different
 questions.</p>
+<h3 id="seam_version">seam version</h3>
+<pre class="chroma"><code><span class="line"><span class="cl">seam version
+</span></span><span class="line"><span class="cl">seam -v
+</span></span><span class="line"><span class="cl">seam --version
+</span></span></code></pre><p>Prints the version of the daemon this CLI is configured to talk to, in the same
+form as <code>seamlessd version</code>:</p>
+<pre><code>seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+</code></pre>
+<p><code>seam</code> carries no version of its own. Both binaries ship from one tag and one
+commit, so a number stamped into <code>seam</code> could only repeat this one or contradict
+it - and only the daemon can report what is actually <em>running</em>. An installed CLI
+sitting next to a daemon nobody restarted would otherwise report the new version
+for a process still serving the old one.</p>
+<p>The version therefore comes from the daemon's <code>/healthz</code>, and an unreachable
+daemon fails the command rather than falling back: there is no second source, and
+printing the CLI's own build is the confusion this avoids. <code>seamlessd version</code>
+accepts the same three spellings and answers from the binary directly, without a
+running server.</p>
 <h2 id="mcp-bridge-and-auth-helper">MCP bridge and auth helper</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy <span class="o">[</span>--config PATH<span class="o">]</span>
 </span></span><span class="line"><span class="cl">seam mcp-headers <span class="o">[</span>--config PATH<span class="o">]</span>
@@ -409,7 +427,7 @@ config or touching the network. The daemon re-validates the path anyway.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
+      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-3"><a href="#seam_version">seam version</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
     </ul>
   </aside>
   

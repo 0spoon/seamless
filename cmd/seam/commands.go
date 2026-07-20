@@ -60,6 +60,7 @@ func commands() []cmd {
 		sessionsCmd,
 		usageCmd,
 		doctorCmd,
+		versionCmd,
 
 		hookCmd,
 

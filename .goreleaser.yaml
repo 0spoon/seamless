@@ -28,8 +28,10 @@ builds:
       - -X main.buildDate={{ .Date }}
     mod_timestamp: "{{ .CommitTimestamp }}"
 
-  # seam has no link-time metadata; it reports the server's version via
-  # `seam status` instead of carrying its own.
+  # seam has no link-time metadata: both binaries ship from one tag and one
+  # commit, so a version stamped into seam could only ever repeat seamlessd's or
+  # contradict it. `seam version` asks the running daemon instead, which is also
+  # the only thing that can report what is actually running.
   - id: seam
     main: ./cmd/seam
     binary: seam

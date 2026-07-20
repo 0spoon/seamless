@@ -46,6 +46,12 @@ func dispatch(ctx context.Context, e *env, argv []string) int {
 	case "help", "-h", "--help":
 		fmt.Fprint(e.stdout, helpText())
 		return 0
+	case "-v", "--version":
+		// The flag spellings are rewritten to the command rather than handled
+		// here, so all three reach one handler: seamlessd accepts the same three
+		// (main.go's "version", "-v", "--version"), and a second implementation
+		// is how the two binaries would drift back apart.
+		argv = append([]string{"version"}, argv[1:]...)
 	}
 
 	c, _, ok := lookup(commands(), argv)

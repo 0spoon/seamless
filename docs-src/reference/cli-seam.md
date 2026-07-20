@@ -320,6 +320,33 @@ This is the client-side view. `seamlessd doctor` checks config, database, and
 credentials on the server side; they are different commands answering different
 questions.
 
+### seam version {#seam_version}
+
+```bash
+seam version
+seam -v
+seam --version
+```
+
+Prints the version of the daemon this CLI is configured to talk to, in the same
+form as `seamlessd version`:
+
+```
+seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+```
+
+`seam` carries no version of its own. Both binaries ship from one tag and one
+commit, so a number stamped into `seam` could only repeat this one or contradict
+it - and only the daemon can report what is actually *running*. An installed CLI
+sitting next to a daemon nobody restarted would otherwise report the new version
+for a process still serving the old one.
+
+The version therefore comes from the daemon's `/healthz`, and an unreachable
+daemon fails the command rather than falling back: there is no second source, and
+printing the CLI's own build is the confusion this avoids. `seamlessd version`
+accepts the same three spellings and answers from the binary directly, without a
+running server.
+
 ## MCP bridge and auth helper
 
 ```bash
