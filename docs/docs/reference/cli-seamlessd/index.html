@@ -373,7 +373,8 @@ is reported as added, updated, or unchanged.</p>
 form, no shell) except <code>UserPromptSubmit</code>, which is an http hook - Claude Code
 will not run an http hook for SessionStart at all, and at SessionEnd a
 fire-and-forget request races process teardown, so the findings harvest would
-often be lost. The Codex profile is three shell-string command hooks; the
+often be lost. The Codex profile is five shell-string command hooks, including
+safe constraint injection and parent-only lifecycle handling for subagents; the
 <a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
 <h2 id="seamlessd_uninstall">seamlessd uninstall</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>

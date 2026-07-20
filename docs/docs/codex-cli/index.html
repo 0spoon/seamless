@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Codex CLI setup - Seamless docs</title>
-<meta name="description" content="Wire OpenAI&#39;s Codex CLI into Seamless - install-hooks --client codex for the three ambient hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.">
+<meta name="description" content="Wire OpenAI&#39;s Codex CLI into Seamless - install-hooks --client codex for ambient and subagent hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -158,7 +158,7 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Codex CLI setup</h1>
-  <p class="lede">Wire OpenAI&#39;s Codex CLI into Seamless - install-hooks --client codex for the three ambient hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.</p>
+  <p class="lede">Wire OpenAI&#39;s Codex CLI into Seamless - install-hooks --client codex for ambient and subagent hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.</p>
   <p>Codex is the second client Seamless supports directly. Wiring it up is the same
 two independent halves as <a href="../claude-code/">Claude Code</a> - <strong>the MCP endpoint</strong>
 (what an agent can call) and <strong>the hooks</strong> (what happens without an agent calling
@@ -170,8 +170,9 @@ is in the details, and those details are what this page is about.</p>
 interactive <code>install-hooks</code> run prompts for the client(s) to wire (defaulting to
 what it found on the machine), and a non-interactive run resolves <code>--client detect</code> - the clients actually present, Codex included. The Codex profile:</p>
 <ol>
-<li><strong>Merges three hooks</strong> - SessionStart, UserPromptSubmit, Stop - into
-<code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code> when that is set), with the
+<li><strong>Merges five hooks</strong> - SessionStart, UserPromptSubmit, Stop, SubagentStart,
+and SubagentStop - into <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>
+when that is set), with the
 same guarantees as the Claude Code installer: unknown entries are preserved,
 each managed group carries a <code>seamless_managed</code> marker, and the file is backed
 up once before the first change.</li>
@@ -204,11 +205,12 @@ only its own skill directory after success. Reinstall it from a clone with:</p>
 </span></span></code></pre><p><code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> opens or resumes the same structured,
 multi-agent research-lab workflow as Claude Code. It remains installed and is
 refreshed on upgrades.</p>
-<h2 id="the-three-hooks-and-what-they-inject">The three hooks, and what they inject</h2>
-<p>Codex installs three hooks against six for Claude Code. It has no plan-mode
-capture (Codex has no plan mode to capture) and <strong>no SessionEnd</strong> - Codex 0.144.5
-does not emit that event, so the lifecycle closes differently (see
-<a href="#no-sessionend-the-reaper-closes-sessions">below</a>).</p>
+<h2 id="the-five-hooks-and-what-they-inject">The five hooks, and what they inject</h2>
+<p>Codex installs five hooks against six for Claude Code. Seamless has no verified
+Claude-style plan-file/<code>ExitPlanMode</code> surface to capture from Codex, and Codex
+0.144.6 emits <strong>no SessionEnd</strong>, so the parent lifecycle closes differently (see
+<a href="#no-sessionend-the-reaper-closes-sessions">below</a>). Subagent hooks provide
+constraints and lifecycle safety without creating Codex plan notes.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -234,14 +236,24 @@ does not emit that event, so the lifecycle closes differently (see
 <td>nothing</td>
 <td>Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end.</td>
 </tr>
+<tr>
+<td><code>SubagentStart</code></td>
+<td>constraints-only <code>&lt;seam-briefing&gt;</code></td>
+<td>Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one.</td>
+</tr>
+<tr>
+<td><code>SubagentStop</code></td>
+<td>nothing</td>
+<td>Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes.</td>
+</tr>
 </tbody>
 </table>
 </div>
 <p>Codex delivers a hook's <code>additionalContext</code> to the model on both SessionStart and
-UserPromptSubmit, in <strong>both</strong> the interactive TUI and headless <code>codex exec</code> -
-there is no headless recall-injection gap of the kind <code>claude -p</code> has. The
-briefing and recall blocks reach the model either way.</p>
-<p>All three are <strong>command</strong> hooks - <code>seam hook &lt;event&gt; --config &lt;yaml&gt; --client codex</code> - never http. Codex only runs command and <code>mcp_tool</code> hooks, so an http
+UserPromptSubmit, and on SubagentStart, in <strong>both</strong> the interactive TUI and
+headless <code>codex exec</code> - there is no headless recall-injection gap of the kind
+<code>claude -p</code> has. The briefing and recall blocks reach the model either way.</p>
+<p>All five are <strong>command</strong> hooks - <code>seam hook &lt;event&gt; --config &lt;yaml&gt; --client codex</code> - never http. Codex only runs command and <code>mcp_tool</code> hooks, so an http
 hook would be silently skipped; and every command hook is subject to Codex's
 trust gate, covered next. See <a href="../reference/hooks/">the hooks reference</a> for the
 full per-client table and transports.</p>
@@ -290,7 +302,7 @@ launches - fragile to arrange reliably, which is the other reason the bridge is
 the default.</p>
 <h2 id="no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</h2>
 <p>Claude Code harvests findings and completes its session on SessionEnd. Codex
-0.144.5 emits no such event, so the lifecycle is built around <strong>Stop</strong> and the
+0.144.6 emits no such event, so the lifecycle is built around <strong>Stop</strong> and the
 <strong>idle reaper</strong> instead:</p>
 <ul>
 <li><strong>Every turn</strong>, the Stop hook heartbeats the session and re-harvests the
@@ -335,7 +347,7 @@ then the <a href="../guides/troubleshooting/">Troubleshooting</a> guide.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</a></li><li class="lvl-2"><a href="#the-three-hooks-and-what-they-inject">The three hooks, and what they inject</a></li><li class="lvl-3"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</a></li><li class="lvl-2"><a href="#the-five-hooks-and-what-they-inject">The five hooks, and what they inject</a></li><li class="lvl-3"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
     </ul>
   </aside>
   

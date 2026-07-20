@@ -67,7 +67,7 @@ seamlessd install-hooks           # selected client's hooks, MCP, and skills
 ```
 
 `install-hooks` registers the MCP server with `claude mcp add --scope user`. For
-Codex CLI, `seamlessd install-hooks --client codex` installs its three hooks and
+Codex CLI, `seamlessd install-hooks --client codex` installs its five hooks and
 registers the `seam mcp-proxy` stdio bridge; other MCP clients register
 `http://127.0.0.1:8081/api/mcp` with `Authorization: Bearer <mcp.api_key>`. From a
 clone, `make build && make run` is the same daemon out of `./bin/`, and `make

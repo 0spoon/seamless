@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hooks - Seamless docs</title>
-<meta name="description" content="The hooks Seamless installs per client - six for Claude Code, three for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
+<meta name="description" content="The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -158,12 +158,12 @@
     <article class="prose">
   <p class="eyebrow">Reference</p>
   <h1>Hooks</h1>
-  <p class="lede">The hooks Seamless installs per client - six for Claude Code, three for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.</p>
+  <p class="lede">The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.</p>
   <p>Seamless installs hooks for two clients. They are what makes sessions ambient: an
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-<a href="#codex-cli-three-hooks">Codex</a> gets three. <code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the profile; run interactively with no
+<a href="#codex-cli-five-hooks">Codex</a> gets five. <code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the profile; run interactively with no
 <code>--client</code> it prompts for the client(s), and a non-interactive run without the
 flag resolves <code>detect</code>: the clients present on this machine (the <code>claude</code>/<code>codex</code>
 CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory), falling back to Claude Code when
@@ -241,11 +241,12 @@ cannot spend the whole hook budget.</p>
 <p><code>SessionStart</code> is the only hook with a matcher on session sources. Subagents
 (<code>agent_type</code> set) share the parent's session and get no ambient session of their
 own.</p>
-<h2 id="codex-cli-three-hooks">Codex CLI: three hooks</h2>
-<p><code>seamlessd install-hooks --client codex</code> installs three hooks into
+<h2 id="codex-cli-five-hooks">Codex CLI: five hooks</h2>
+<p><code>seamlessd install-hooks --client codex</code> installs five hooks into
 <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>) instead of the six above.
-Codex has no plan mode to capture and emits no <code>SessionEnd</code> event in 0.144.5, so
-the profile is just SessionStart, UserPromptSubmit, and Stop.</p>
+Seamless has no verified Claude-style plan-file/<code>ExitPlanMode</code> surface to capture
+from Codex, and Codex emits no <code>SessionEnd</code> event in 0.144.6. The profile combines
+the three parent-session hooks with a deliberately bounded subagent lifecycle.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -275,10 +276,22 @@ the profile is just SessionStart, UserPromptSubmit, and Stop.</p>
 <td><code>/api/hooks/stop</code></td>
 <td>Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's <code>Stop</code> has no <code>hookSpecificOutput</code>. Fires at every turn end.</td>
 </tr>
+<tr>
+<td><code>SubagentStart</code></td>
+<td>command (<code>seam hook subagent-start --client codex</code>)</td>
+<td><code>/api/hooks/subagent-start</code></td>
+<td>Injects a constraints-only briefing under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
+</tr>
+<tr>
+<td><code>SubagentStop</code></td>
+<td>command (<code>seam hook subagent-stop --client codex</code>)</td>
+<td><code>/api/hooks/subagent-stop</code></td>
+<td>Heartbeats the parent only. It does not apply the child's model/final message to parent state or create Claude-style plan notes.</td>
+</tr>
 </tbody>
 </table>
 </div>
-<p>All three are <code>command</code> hooks, and for one reason: Codex only runs
+<p>All five are <code>command</code> hooks, and for one reason: Codex only runs
 <code>command</code>/<code>mcp_tool</code> hooks, and every command hook passes through Codex's <strong>trust
 gate</strong>. An untrusted hook is silently skipped, so a fresh install shows no
 briefing until the hooks are trusted - interactively at the Codex TUI startup
@@ -316,7 +329,7 @@ it hits <code>/healthz</code> and calls <code>tools/list</code>, which is what t
 endpoint the hooks post to is actually answering.</p>
 <h2 id="why-claude-code-uses-two-transports">Why Claude Code uses two transports</h2>
 <p>Five of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
-<code>command</code> for all three - its trust gate applies only to command hooks.) The
+<code>command</code> for all five - its trust gate applies only to command hooks.) The
 split is not stylistic:</p>
 <ul>
 <li><strong><code>SessionStart</code> must be a command hook.</strong> Claude Code only runs
@@ -484,7 +497,7 @@ per-client walkthroughs these hooks come from.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#claude-code-six-hooks">Claude Code: six hooks</a></li><li class="lvl-2"><a href="#codex-cli-three-hooks">Codex CLI: three hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#why-detection-does-not-use-the-marker">Why detection does not use the marker</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#claude-code-six-hooks">Claude Code: six hooks</a></li><li class="lvl-2"><a href="#codex-cli-five-hooks">Codex CLI: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#why-detection-does-not-use-the-marker">Why detection does not use the marker</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

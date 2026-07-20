@@ -52,18 +52,21 @@ var seamlessHooks = []hookSpec{
 	{Event: "PermissionRequest", Matcher: "ExitPlanMode", Endpoint: "/api/hooks/permission-request", Timeout: 10, CLIArg: "permission-request"},
 }
 
-// codexHooks is the Codex CLI install profile (design decision D4). Codex has no
-// http hook type and (through 0.144.6) no SessionEnd event; its session end is
-// reaper-driven off the per-turn Stop hook (D5). So the set is three command
-// hooks -- SessionStart (briefing), UserPromptSubmit (recall), Stop (heartbeat +
-// provisional harvest) -- and no plan-capture hooks: Codex has no plan-mode
-// surface, so D7 keeps that CC-only. UserPromptSubmit is a command hook here (CC
-// keeps it http; Codex has no http hook type). Every Codex command hook is a
-// SHELL STRING, not the exec-form argv CC uses (buildEntry emits the difference).
+// codexHooks is the Codex CLI install profile (design decisions D4-D6). Codex
+// has no http hook type and (through 0.144.6) no SessionEnd event; its session
+// end is reaper-driven off the per-turn Stop hook (D5). SubagentStart injects a
+// constraints-only briefing into a child, and SubagentStop performs only a safe
+// parent heartbeat. Neither enters Claude Code's durable plan-note capture: no
+// Claude-style plan-file/ExitPlanMode surface has been verified for Codex.
+// UserPromptSubmit is a command hook here (CC keeps it http). Every Codex command
+// hook is a SHELL STRING, not the exec-form argv CC uses (buildEntry emits the
+// difference).
 var codexHooks = []hookSpec{
 	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5, CLIArg: "user-prompt-submit"},
 	{Event: "Stop", Matcher: "", Endpoint: "/api/hooks/stop", Timeout: 10, CLIArg: "stop"},
+	{Event: "SubagentStart", Matcher: "", Endpoint: "/api/hooks/subagent-start", Timeout: 10, CLIArg: "subagent-start"},
+	{Event: "SubagentStop", Matcher: "", Endpoint: "/api/hooks/subagent-stop", Timeout: 10, CLIArg: "subagent-stop"},
 }
 
 // resolveHookProfile validates a programmatic client selection and returns its

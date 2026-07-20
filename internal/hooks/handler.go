@@ -109,6 +109,7 @@ func (h *Handler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/hooks/user-prompt-submit", h.userPromptSubmit)
 	mux.HandleFunc("POST /api/hooks/session-end", h.sessionEnd)
 	mux.HandleFunc("POST /api/hooks/stop", h.stop)
+	mux.HandleFunc("POST /api/hooks/subagent-start", h.subagentStart)
 	mux.HandleFunc("POST /api/hooks/post-tool-use", h.postToolUse)
 	mux.HandleFunc("POST /api/hooks/subagent-stop", h.subagentStop)
 	mux.HandleFunc("POST /api/hooks/permission-request", h.permissionRequest)
@@ -155,9 +156,9 @@ type stopPayload struct {
 	Model                string `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
 }
 
-// toolPayload is the tolerant shape of the PostToolUse, PermissionRequest, and
-// SubagentStop request bodies. ToolInput/ToolResponse stay raw: their shape is
-// per-tool, and only the plan-capture paths decode the fields they need.
+// toolPayload is the tolerant shape of the PostToolUse and PermissionRequest
+// request bodies. ToolInput/ToolResponse stay raw: their shape is per-tool, and
+// only the plan-capture paths decode the fields they need.
 type toolPayload struct {
 	SessionID      string          `json:"session_id"`
 	TranscriptPath string          `json:"transcript_path"`
@@ -167,8 +168,27 @@ type toolPayload struct {
 	HookEventName  string          `json:"hook_event_name"`
 	ToolInput      json.RawMessage `json:"tool_input"`
 	ToolResponse   json.RawMessage `json:"tool_response"`
-	AgentID        string          `json:"agent_id"`   // SubagentStop only
-	AgentType      string          `json:"agent_type"` // SubagentStop only
+}
+
+// subagentPayload is the normalized SubagentStart/SubagentStop shape. Codex
+// names session_id as the PARENT session on both events; the child is identified
+// separately by agent_id. SubagentStop also distinguishes the parent rollout
+// (transcript_path) from the child rollout (agent_transcript_path). Claude Code's
+// smaller SubagentStop payload decodes into the same shape with the Codex-only
+// fields left empty, preserving its plan-capture path.
+type subagentPayload struct {
+	ParentSessionID      string `json:"session_id"`
+	TurnID               string `json:"turn_id"`
+	AgentID              string `json:"agent_id"`
+	AgentType            string `json:"agent_type"`
+	CWD                  string `json:"cwd"`
+	Model                string `json:"model"`
+	PermissionMode       string `json:"permission_mode"`
+	HookEventName        string `json:"hook_event_name"`
+	TranscriptPath       string `json:"transcript_path"`
+	AgentTranscriptPath  string `json:"agent_transcript_path"`
+	LastAssistantMessage string `json:"last_assistant_message"`
+	StopHookActive       bool   `json:"stop_hook_active"`
 }
 
 // hookResponse is the Claude Code hook response envelope; the field names are

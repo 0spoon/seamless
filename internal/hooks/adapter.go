@@ -124,3 +124,26 @@ func decodeStop(_ Client, body []byte) stopPayload {
 	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
 	return p
 }
+
+// decodeSubagentStart normalizes the captured Codex SubagentStart contract into
+// subagentPayload. The event's session_id is the parent external session id;
+// agent_id identifies the child. Field names currently match the internal wire
+// tags, but keeping the decode in the client adapter gives future Codex renames a
+// single home. Tolerant: malformed input leaves the zero payload; the handler
+// then acknowledges it with empty context rather than guessing required fields.
+func decodeSubagentStart(_ Client, body []byte) subagentPayload {
+	var p subagentPayload
+	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
+	return p
+}
+
+// decodeSubagentStop normalizes both clients' SubagentStop payloads. Current
+// Codex carries the parent session/rollout, child rollout, turn, model, agent
+// identity, and a stable last_assistant_message. Claude Code omits the Codex-only
+// fields and continues through its existing planning-subagent capture behavior.
+// Tolerant: malformed input yields a no-op acknowledgment.
+func decodeSubagentStop(_ Client, body []byte) subagentPayload {
+	var p subagentPayload
+	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
+	return p
+}

@@ -149,7 +149,8 @@ For Claude Code, six events are installed together: `SessionStart`,
 form, no shell) except `UserPromptSubmit`, which is an http hook - Claude Code
 will not run an http hook for SessionStart at all, and at SessionEnd a
 fire-and-forget request races process teardown, so the findings harvest would
-often be lost. The Codex profile is three shell-string command hooks; the
+often be lost. The Codex profile is five shell-string command hooks, including
+safe constraint injection and parent-only lifecycle handling for subagents; the
 [hooks reference](/reference/hooks/) has both tables.
 
 ## seamlessd uninstall {#seamlessd_uninstall}
