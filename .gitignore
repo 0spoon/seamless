@@ -1,6 +1,10 @@
 # Binaries
 /bin/
 /dist/
+# Sigstore bundles for the installer scripts: written by the release workflow
+# before goreleaser runs. Untracked, they would leave the tree dirty and
+# goreleaser refuses to release from a dirty tree.
+/sigs/
 /seamlessd
 /seam
 /docsgen
