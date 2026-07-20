@@ -11,8 +11,10 @@ depends on the client: Claude Code gets six hooks (including plan-mode capture);
 <claude|codex|all|detect>` selects the profile; run interactively with no
 `--client` it prompts for the client(s), and a non-interactive run without the
 flag resolves `detect`: the clients present on this machine (the `claude`/`codex`
-CLI or a `~/.claude`/`$CODEX_HOME` directory), falling back to Claude Code when
-neither is found. The curl installer and `make install` make the same choice.
+CLI or a `~/.claude`/`$CODEX_HOME` directory). When neither is found, an
+interactive run warns and asks whether to install at all (defaulting to no), and
+a non-interactive run errors - nothing is wired without an explicit choice. The
+curl installer and `make install` make the same choice.
 
 ## Claude Code: six hooks
 

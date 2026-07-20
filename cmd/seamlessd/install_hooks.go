@@ -28,7 +28,8 @@ import (
 // (~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
 // `codex mcp add ... seam mcp-proxy`), all (both), or detect (the default: the
 // clients present on this machine, the same selection the curl installer
-// makes). For the P2 dogfood, point --settings at THIS repo's project-scoped
+// makes; an error when none are, so nothing is wired without an explicit
+// choice). For the P2 dogfood, point --settings at THIS repo's project-scoped
 // .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
@@ -214,12 +215,18 @@ func splitBins(raw string) []string {
 // parseInstallClients maps the --client flag to the client profiles to install,
 // in a stable order (Claude Code before Codex for "all"). "detect" (also the
 // meaning of an empty value) resolves to the detected client set via the
-// claudeOK/codexOK arguments, falling back to Claude Code when neither is
-// present -- the same selection the curl installer's select_agent_client makes.
+// claudeOK/codexOK arguments -- the same selection the curl installer's
+// select_agent_client makes. With neither client present, detect is an error,
+// never a silent Claude Code default: wiring a client the user does not run
+// creates its config directory and makes doctor report a phantom install.
 func parseInstallClients(raw string, claudeOK, codexOK bool) ([]hooks.Client, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
 	case "", "detect", "auto":
-		clients, _ := clientsForChoice(defaultClientChoice(claudeOK, codexOK))
+		def := defaultClientChoice(claudeOK, codexOK)
+		if def == "" {
+			return nil, errors.New("neither Claude Code nor Codex was detected on this machine; pass --client claude|codex|all to install anyway")
+		}
+		clients, _ := clientsForChoice(def)
 		return clients, nil
 	case "claude", "claude-code", "cc":
 		return []hooks.Client{hooks.ClientClaudeCode}, nil
@@ -238,7 +245,7 @@ func parseInstallClients(raw string, claudeOK, codexOK bool) ([]hooks.Client, er
 // --client was omitted AND stdin is a terminal, it prompts the user to pick
 // Claude Code, Codex, or both (annotating each with whether it was detected on
 // this machine). When --client was omitted and stdin is not a terminal, it
-// falls back to the flag default (detect: the detected client set, Claude Code
+// falls back to the flag default (detect: the detected client set, an error
 // when neither is present) with no prompt, so a redirected or automated run
 // never blocks and a codex-only machine still gets the right profile.
 func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, error) {
@@ -251,18 +258,29 @@ func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, e
 
 // promptInstallClients asks an interactive user which client(s) to wire up. It
 // annotates each option with whether that client was detected, defaults to the
-// detected set (Claude Code when nothing is detected, preserving the historical
-// default), re-prompts on an unrecognized answer, and takes the default on EOF
-// so a closed stdin cannot loop forever.
+// detected set, re-prompts on an unrecognized answer, and takes the default on
+// EOF so a closed stdin cannot loop forever. When neither client was detected
+// it first warns and asks whether to install at all (default no), then offers
+// the menu with no default -- the user must name the client they are opting
+// into, because there is no detected set to fall back on.
 func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) ([]hooks.Client, error) {
+	reader := bufio.NewReader(in)
+	if !claudeOK && !codexOK {
+		if err := confirmInstallWithoutClients(reader, out); err != nil {
+			return nil, err
+		}
+	}
 	def := defaultClientChoice(claudeOK, codexOK)
 	fmt.Fprintln(out, bold("Install Seamless hooks for which agent client?"))
 	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(claudeOK))
 	fmt.Fprintf(out, "  %s Codex %s\n", dim("[2]"), detectedColor(codexOK))
 	fmt.Fprintf(out, "  %s Both\n", dim("[3]"))
-	reader := bufio.NewReader(in)
 	for {
-		fmt.Fprintf(out, "Enter 1, 2, or 3 [%s]: ", def)
+		if def == "" {
+			fmt.Fprint(out, "Enter 1, 2, or 3: ")
+		} else {
+			fmt.Fprintf(out, "Enter 1, 2, or 3 [%s]: ", def)
+		}
 		line, err := reader.ReadString('\n')
 		choice := strings.TrimSpace(line)
 		if choice == "" {
@@ -273,11 +291,37 @@ func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) (
 		}
 		if err != nil {
 			// EOF/read error with an unusable answer: take the default rather
-			// than loop on a stdin that will never yield more input.
+			// than loop on a stdin that will never yield more input. With no
+			// default there is nothing safe to take, so abort.
+			if def == "" {
+				return nil, errors.New("no agent client selected")
+			}
 			clients, _ := clientsForChoice(def)
 			return clients, nil
 		}
 		fmt.Fprintln(out, "  please enter 1, 2, or 3")
+	}
+}
+
+// confirmInstallWithoutClients gates the interactive install when no agent
+// client was detected: it warns and asks for an explicit yes, defaulting to no
+// on an empty answer or EOF, so pressing Enter (or a closed stdin) aborts
+// rather than wiring a client that is not there.
+func confirmInstallWithoutClients(reader *bufio.Reader, out io.Writer) error {
+	fmt.Fprintf(out, "%s neither Claude Code nor Codex was detected on this machine\n", yellow("warning:"))
+	for {
+		fmt.Fprint(out, "Install hooks anyway? [y/N]: ")
+		line, err := reader.ReadString('\n')
+		switch strings.ToLower(strings.TrimSpace(line)) {
+		case "y", "yes":
+			return nil
+		case "", "n", "no":
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|all)")
+		}
+		if err != nil {
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|all)")
+		}
+		fmt.Fprintln(out, "  please answer y or n")
 	}
 }
 
@@ -296,16 +340,20 @@ func clientsForChoice(s string) ([]hooks.Client, bool) {
 	return nil, false
 }
 
-// defaultClientChoice is the menu default: the detected set, falling back to
-// Claude Code when nothing is detected so the historical default is unchanged.
+// defaultClientChoice is the menu default: the detected set, empty when
+// nothing is detected -- there is deliberately no Claude Code fallback, so
+// callers must either ask the user or fail, never silently wire a client
+// that is not installed.
 func defaultClientChoice(claudeOK, codexOK bool) string {
 	switch {
 	case claudeOK && codexOK:
 		return "3"
-	case codexOK && !claudeOK:
+	case codexOK:
 		return "2"
-	default:
+	case claudeOK:
 		return "1"
+	default:
+		return ""
 	}
 }
 

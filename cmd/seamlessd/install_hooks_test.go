@@ -141,7 +141,6 @@ func TestParseInstallClients(t *testing.T) {
 		{"detect", true, true, both},
 		{"detect", false, true, cx},
 		{"detect", true, false, cc},
-		{"detect", false, false, cc}, // neither found -> historical default
 		{"", false, true, cx},
 		{"auto", false, true, cx},
 	} {
@@ -150,13 +149,21 @@ func TestParseInstallClients(t *testing.T) {
 		require.Equal(t, tt.want, got, "raw %q claude=%v codex=%v", tt.raw, tt.claudeOK, tt.codexOK)
 	}
 
+	// detect with neither client present errors instead of silently wiring
+	// Claude Code -- explicit values remain the only way to force an install.
+	for _, raw := range []string{"detect", "", "auto"} {
+		_, err := parseInstallClients(raw, false, false)
+		require.ErrorContains(t, err, "neither Claude Code nor Codex", "raw %q", raw)
+		require.ErrorContains(t, err, "--client", "raw %q", raw)
+	}
+
 	_, err := parseInstallClients("gemini", true, true)
 	require.ErrorContains(t, err, "unknown --client")
 	require.ErrorContains(t, err, "detect")
 }
 
 func TestDefaultClientChoice(t *testing.T) {
-	require.Equal(t, "1", defaultClientChoice(false, false)) // nothing detected -> historical default
+	require.Equal(t, "", defaultClientChoice(false, false)) // nothing detected -> no default
 	require.Equal(t, "1", defaultClientChoice(true, false))
 	require.Equal(t, "2", defaultClientChoice(false, true)) // codex-only machine defaults to codex
 	require.Equal(t, "3", defaultClientChoice(true, true))  // both detected -> both
@@ -176,11 +183,11 @@ func TestPromptInstallClients(t *testing.T) {
 	}{
 		{"pick claude", "1\n", true, false, cc},
 		{"pick codex", "2\n", true, true, cx},
-		{"pick both", "3\n", false, false, both},
+		{"pick both", "3\n", true, true, both},
 		{"word alias", "codex\n", false, true, cx},
 		{"empty takes default codex", "\n", false, true, cx},
-		{"empty takes default claude", "\n", false, false, cc},
-		{"reprompt then valid", "9\nboth\n", false, false, both},
+		{"empty takes default both", "\n", true, true, both},
+		{"reprompt then valid", "9\nboth\n", true, true, both},
 		{"eof falls back to default", "", false, true, cx},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -193,6 +200,55 @@ func TestPromptInstallClients(t *testing.T) {
 			require.Contains(t, out.String(), "[2] Codex")
 		})
 	}
+}
+
+func TestPromptInstallClients_NothingDetected(t *testing.T) {
+	cx := []hooks.Client{hooks.ClientCodex}
+	both := []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}
+
+	// An explicit yes reaches the client menu, which then has no default: the
+	// user must name the client they are opting into.
+	for _, tt := range []struct {
+		name  string
+		input string
+		want  []hooks.Client
+	}{
+		{"yes then codex", "y\n2\n", cx},
+		{"yes then both", "yes\n3\n", both},
+		{"yes reprompt then valid", "y\n\nboth\n", both},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out strings.Builder
+			got, err := promptInstallClients(strings.NewReader(tt.input), &out, false, false)
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+			require.Contains(t, out.String(), "neither Claude Code nor Codex")
+		})
+	}
+
+	// The confirm gate defaults to no: empty answer, an explicit no, and EOF
+	// all abort before any menu is shown.
+	for _, tt := range []struct {
+		name  string
+		input string
+	}{
+		{"empty answer aborts", "\n"},
+		{"explicit no aborts", "n\n"},
+		{"eof aborts", ""},
+		{"garbage then eof aborts", "maybe\n"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var out strings.Builder
+			_, err := promptInstallClients(strings.NewReader(tt.input), &out, false, false)
+			require.ErrorContains(t, err, "aborted: no agent client detected")
+		})
+	}
+
+	// Yes at the gate but EOF at the menu still aborts: with nothing detected
+	// there is no default selection to fall back on.
+	var out strings.Builder
+	_, err := promptInstallClients(strings.NewReader("y\n"), &out, false, false)
+	require.ErrorContains(t, err, "no agent client selected")
 }
 
 func TestDetectedTag(t *testing.T) {

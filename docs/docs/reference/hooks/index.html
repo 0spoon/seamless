@@ -168,8 +168,10 @@ depends on the client: Claude Code gets six hooks (including plan-mode capture);
 <a href="#codex-cli-five-hooks">Codex</a> gets five. <code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the profile; run interactively with no
 <code>--client</code> it prompts for the client(s), and a non-interactive run without the
 flag resolves <code>detect</code>: the clients present on this machine (the <code>claude</code>/<code>codex</code>
-CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory), falling back to Claude Code when
-neither is found. The curl installer and <code>make install</code> make the same choice.</p>
+CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory). When neither is found, an
+interactive run warns and asks whether to install at all (defaulting to no), and
+a non-interactive run errors - nothing is wired without an explicit choice. The
+curl installer and <code>make install</code> make the same choice.</p>
 <h2 id="claude-code-six-hooks">Claude Code: six hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
 install order:</p>

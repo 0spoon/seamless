@@ -197,9 +197,12 @@ Codex, and installs that set's hooks, MCP registration, and skills;</li>
 </ol>
 <p>Step 3 detects <strong>Claude Code</strong>, <strong>Codex</strong>, or both and wires the detected set.
 That one client choice drives hooks, MCP registration, and the maintained
-<code>seam-onboard</code> / <code>seam-research</code> skills together. With neither client detected,
-the historical Claude Code default remains. Set <code>SEAMLESS_CLIENT</code> to make the
-choice explicit; see <a href="../codex-cli/">Codex CLI setup</a> for Codex's trust gate.</p>
+<code>seam-onboard</code> / <code>seam-research</code> skills together. With both detected, a run on a
+terminal confirms which to wire (both is the default); headless, both are wired.
+With neither detected, a run on a terminal warns and asks whether to install at
+all (defaulting to no), and a headless run aborts - the installer never silently
+wires a client that is not there. Set <code>SEAMLESS_CLIENT</code> to make the choice
+explicit; see <a href="../codex-cli/">Codex CLI setup</a> for Codex's trust gate.</p>
 <p>On every OS, Claude's copies live under <code>$HOME/.claude/skills</code>; Codex's live
 under <code>$CODEX_HOME/skills</code> when set, otherwise <code>$HOME/.codex/skills</code> (the same
 paths are <code>%USERPROFILE%</code>-relative on Windows). Invoke <code>/seam-onboard</code> in Claude

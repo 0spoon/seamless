@@ -39,8 +39,10 @@ PREFIX_BIN    := $(PREFIX)/bin
 CONFIG_DIR    := $(HOME)/.config/seamless
 CONFIG        := $(CONFIG_DIR)/seamless.yaml
 # detect = the agent clients present on this machine (codex CLI or ~/.codex,
-# claude CLI or ~/.claude; Claude Code when neither is found), resolved by
-# `seamlessd install-hooks` -- the same selection the curl installer makes.
+# claude CLI or ~/.claude), resolved by `seamlessd install-hooks` -- the same
+# selection the curl installer makes. When neither is found, install-hooks asks
+# on a terminal (defaulting to no) and errors otherwise; there is no silent
+# Claude Code fallback. Pass CLIENT=claude|codex|all to choose explicitly.
 CLIENT        ?= detect
 
 # gofmt over TRACKED files only. The go tool's ./... pattern skips dot-dirs, so

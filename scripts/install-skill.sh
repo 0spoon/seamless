@@ -9,7 +9,8 @@
 # Installing refreshes the maintained package at each selected client home.
 # detect (the default) resolves to the clients present on this machine, the
 # same selection docs/install makes: both when both are found, else the one
-# found, else claude.
+# found. With neither found it errors instead of assuming claude -- pass the
+# client explicitly to install for one that is not there yet.
 
 set -euo pipefail
 
@@ -33,7 +34,12 @@ if [ "$CLIENT" = detect ]; then
     case "$DETECT_CLAUDE:$DETECT_CODEX" in
     1:1) CLIENT=all ;;
     0:1) CLIENT=codex ;;
-    *) CLIENT=claude ;;
+    1:0) CLIENT=claude ;;
+    *)
+        err "neither Claude Code nor Codex detected; pass a client explicitly:"
+        err "  CLIENT=claude|codex|all $0 $NAME"
+        exit 1
+        ;;
     esac
 fi
 SRC_DIR="$REPO_ROOT/internal/skills/assets/$NAME"

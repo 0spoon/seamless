@@ -21,7 +21,10 @@
 # Overrides:
 #   SEAMLESS_VERSION            version to install (default: latest release)
 #   SEAMLESS_INSTALL_DIR        where the binaries go (default: ~/.local/bin)
-#   SEAMLESS_CLIENT             claude|codex|all (default: detected clients, else claude)
+#   SEAMLESS_CLIENT             claude|codex|all (default: the detected clients;
+#                               prompts on the terminal when both or neither are
+#                               found, and aborts when neither is found and no
+#                               terminal is attached -- never a silent default)
 #   SEAMLESS_NO_HOOKS=1         skip agent hooks, MCP registration, and skills
 #   SEAMLESS_NO_ONBOARD_SKILL=1 skip the one-shot seam-onboard skill
 #   SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
@@ -60,8 +63,52 @@ die()  { printf '\nerror: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 # Choose the same client set that install-hooks would offer interactively. A
-# curl|sh install has non-terminal stdin, so the script resolves detection once
-# and passes an explicit value; the embedded skills then follow that same choice.
+# curl|sh install has non-terminal stdin (the pipe carries this script), so
+# prompts read /dev/tty instead: with a terminal attached, both clients
+# detected asks which to wire (default both) and neither detected asks whether
+# to install at all (default no, then which client -- no default). Headless,
+# both resolves to all and neither aborts with guidance; there is deliberately
+# no silent Claude Code fallback. The resolved value is passed explicitly to
+# install-hooks, and the embedded skills follow that same choice.
+
+# tty_available: a readable+writable controlling terminal exists. The explicit
+# redirection probe matters: /dev/tty can exist yet fail to open (CI, cron).
+tty_available() { { : </dev/tty; } 2>/dev/null && { : >/dev/tty; } 2>/dev/null; }
+
+# ask_tty <prompt>: print the prompt to the terminal and read REPLY from it.
+# Returns non-zero on EOF so callers can treat a vanished tty as "no answer".
+ask_tty() {
+	printf '%s' "$1" >/dev/tty
+	IFS= read -r REPLY </dev/tty
+}
+
+# prompt_client_choice <default|""> : the install-hooks client menu over
+# /dev/tty. An empty default (nothing detected) requires an explicit answer;
+# EOF aborts, since there is no detected set to fall back on.
+prompt_client_choice() {
+	PCC_DEF=$1
+	{
+		printf 'Wire Seamless to which agent client?\n'
+		printf '  [1] Claude Code %s\n' "$([ "$SELECT_CLAUDE" = 1 ] && echo '(detected)' || echo '(not detected)')"
+		printf '  [2] Codex %s\n' "$([ "$SELECT_CODEX" = 1 ] && echo '(detected)' || echo '(not detected)')"
+		printf '  [3] Both\n'
+	} >/dev/tty
+	while :; do
+		if [ -n "$PCC_DEF" ]; then
+			ask_tty "Enter 1, 2, or 3 [$PCC_DEF]: " || REPLY=$PCC_DEF
+		else
+			ask_tty 'Enter 1, 2, or 3: ' || die 'aborted: no agent client selected'
+		fi
+		[ -n "$REPLY" ] || REPLY=$PCC_DEF
+		case $REPLY in
+		1 | claude) AGENT_CLIENT=claude; return 0 ;;
+		2 | codex) AGENT_CLIENT=codex; return 0 ;;
+		3 | both | all) AGENT_CLIENT=all; return 0 ;;
+		esac
+		printf '  please enter 1, 2, or 3\n' >/dev/tty
+	done
+}
+
 select_agent_client() {
 	if [ -n "${SEAMLESS_CLIENT:-}" ]; then
 		case $SEAMLESS_CLIENT in
@@ -77,9 +124,25 @@ select_agent_client() {
 	SELECT_CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 	if have codex || [ -d "$SELECT_CODEX_HOME" ]; then SELECT_CODEX=1; fi
 	case "$SELECT_CLAUDE:$SELECT_CODEX" in
-	1:1) AGENT_CLIENT=all ;;
+	1:0) AGENT_CLIENT=claude ;;
 	0:1) AGENT_CLIENT=codex ;;
-	*) AGENT_CLIENT=claude ;;
+	1:1)
+		if tty_available; then
+			prompt_client_choice 3
+		else
+			AGENT_CLIENT=all
+		fi
+		;;
+	*)
+		tty_available || die 'neither Claude Code nor Codex was detected on this machine
+set SEAMLESS_CLIENT=claude|codex|all to install anyway'
+		warn 'neither Claude Code nor Codex was detected on this machine'
+		ask_tty 'Install anyway? [y/N]: ' || REPLY=
+		case $REPLY in
+		y | Y | yes | YES) prompt_client_choice '' ;;
+		*) die 'aborted: no agent client detected (set SEAMLESS_CLIENT=claude|codex|all to force)' ;;
+		esac
+		;;
 	esac
 }
 

@@ -23,7 +23,11 @@
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
 #   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
-#   $env:SEAMLESS_CLIENT              claude|codex|all (default: detected clients, else claude)
+#   $env:SEAMLESS_CLIENT              claude|codex|all (default: the detected
+#                                     clients; prompts when both or neither are
+#                                     found, and aborts when neither is found and
+#                                     the session is non-interactive -- never a
+#                                     silent default)
 #   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and skills
 #   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip the one-shot seam-onboard skill
 #   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
@@ -60,9 +64,38 @@ function Step { param([string]$Key, [string]$Message) Write-Host ('  {0,-12} {1}
 function Warn { param([string]$Message) Write-Warning $Message }
 function Die { param([string]$Message) [Console]::Error.WriteLine("`nerror: $Message"); exit 1 }
 
-# A piped PowerShell installer has no interactive client menu. Resolve the same
-# detected set once and pass it explicitly to install-hooks, which installs the
-# matching hooks, MCP registration, and embedded skill packages together.
+# Client selection, kept in step with docs/install and the interactive
+# `seamlessd install-hooks` menu. Unlike the POSIX curl|sh pipe, `irm | iex`
+# runs in the caller's session, so stdin is still the console and Read-Host
+# works: with both clients detected the installer confirms which to wire
+# (default both); with neither it asks whether to install at all (default no),
+# then which client (no default). Non-interactively, both resolves to all and
+# neither aborts with guidance -- there is deliberately no silent Claude Code
+# fallback. The resolved value is passed explicitly to install-hooks, which
+# installs the matching hooks, MCP registration, and skill packages together.
+function Test-Interactive {
+    return ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected)
+}
+
+function Read-ClientChoice {
+    param([string]$DefaultChoice) # '' = no default: an explicit answer is required
+    Write-Host 'Wire Seamless to which agent client?'
+    Write-Host ('  [1] Claude Code {0}' -f $(if ($script:ClaudeDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host ('  [2] Codex {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host '  [3] Both'
+    while ($true) {
+        $prompt = if ($DefaultChoice) { "Enter 1, 2, or 3 [$DefaultChoice]" } else { 'Enter 1, 2, or 3' }
+        $answer = Read-Host $prompt
+        if (-not $answer) { $answer = $DefaultChoice }
+        switch -Regex ($answer) {
+            '^(1|claude)$' { return 'claude' }
+            '^(2|codex)$' { return 'codex' }
+            '^(3|both|all)$' { return 'all' }
+        }
+        Write-Host '  please enter 1, 2, or 3'
+    }
+}
+
 function Resolve-AgentClient {
     if ($env:SEAMLESS_CLIENT) {
         switch ($env:SEAMLESS_CLIENT.ToLowerInvariant()) {
@@ -75,9 +108,23 @@ function Resolve-AgentClient {
     $claude = (((Get-Command claude -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path (Join-Path $HOME '.claude')))
     $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
     $codex = (((Get-Command codex -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path $codexHome))
-    if ($claude -and $codex) { return 'all' }
-    if ($codex) { return 'codex' }
-    return 'claude'
+    $script:ClaudeDetected = $claude
+    $script:CodexDetected = $codex
+    if ($claude -and -not $codex) { return 'claude' }
+    if ($codex -and -not $claude) { return 'codex' }
+    if ($claude -and $codex) {
+        if (Test-Interactive) { return Read-ClientChoice '3' }
+        return 'all'
+    }
+    if (-not (Test-Interactive)) {
+        Die 'neither Claude Code nor Codex was detected on this machine; set $env:SEAMLESS_CLIENT=claude|codex|all to install anyway'
+    }
+    Warn 'neither Claude Code nor Codex was detected on this machine'
+    $answer = Read-Host 'Install anyway? [y/N]'
+    if ($answer -notmatch '^(y|yes)$') {
+        Die 'aborted: no agent client detected (set $env:SEAMLESS_CLIENT=claude|codex|all to force)'
+    }
+    return Read-ClientChoice ''
 }
 
 # Map the process architecture onto goreleaser's vocabulary. PROCESSOR_ARCHITEW6432

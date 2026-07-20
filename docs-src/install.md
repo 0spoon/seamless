@@ -51,9 +51,12 @@ itself. No Go toolchain is involved. In order, it:
 
 Step 3 detects **Claude Code**, **Codex**, or both and wires the detected set.
 That one client choice drives hooks, MCP registration, and the maintained
-`seam-onboard` / `seam-research` skills together. With neither client detected,
-the historical Claude Code default remains. Set `SEAMLESS_CLIENT` to make the
-choice explicit; see [Codex CLI setup](/codex-cli/) for Codex's trust gate.
+`seam-onboard` / `seam-research` skills together. With both detected, a run on a
+terminal confirms which to wire (both is the default); headless, both are wired.
+With neither detected, a run on a terminal warns and asks whether to install at
+all (defaulting to no), and a headless run aborts - the installer never silently
+wires a client that is not there. Set `SEAMLESS_CLIENT` to make the choice
+explicit; see [Codex CLI setup](/codex-cli/) for Codex's trust gate.
 
 On every OS, Claude's copies live under `$HOME/.claude/skills`; Codex's live
 under `$CODEX_HOME/skills` when set, otherwise `$HOME/.codex/skills` (the same

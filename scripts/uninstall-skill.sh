@@ -7,7 +7,8 @@
 # Counterpart to scripts/install-skill.sh. Safe to run when the skill is not
 # installed (e.g. seam-onboard already self-removed after a successful run).
 # detect (the default) resolves to the clients present on this machine, the
-# same selection docs/install makes.
+# same selection docs/install makes; with neither found there is nothing to
+# remove from, so it exits cleanly.
 
 set -euo pipefail
 
@@ -38,7 +39,11 @@ if [ "$CLIENT" = detect ]; then
     case "$DETECT_CLAUDE:$DETECT_CODEX" in
     1:1) CLIENT=all ;;
     0:1) CLIENT=codex ;;
-    *) CLIENT=claude ;;
+    1:0) CLIENT=claude ;;
+    *)
+        ok "neither Claude Code nor Codex detected; nothing to remove"
+        exit 0
+        ;;
     esac
 fi
 
