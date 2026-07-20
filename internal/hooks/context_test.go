@@ -148,7 +148,10 @@ func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T)
 			require.Equal(t, float64(retrieve.EstimateTokens(emitted)),
 				injected[0].Payload["emitted_estimated_tokens"])
 			require.Equal(t, false, injected[0].Payload["item_ids_exact"])
-			require.Nil(t, injected[0].Payload["item_ids"])
+			// Truncation makes the list a superset, not a reason to drop it:
+			// item_ids is the only source of last_injected_at, so discarding it
+			// would make an injected memory read as stale-and-archivable.
+			require.Equal(t, []any{"01A"}, injected[0].Payload["item_ids"])
 			require.Equal(t, float64(1), injected[0].Payload["original_item_count"])
 		})
 	}
@@ -216,7 +219,9 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	require.Equal(t, emitted, injected[0].Payload["content"])
 	require.Equal(t, true, injected[0].Payload["truncated"])
 	require.Equal(t, false, injected[0].Payload["item_ids_exact"])
-	require.Nil(t, injected[0].Payload["item_ids"])
+	// The truncated briefing still credits the constraints it injected, so they
+	// do not accumulate a null last_injected_at and become archive proposals.
+	require.NotEmpty(t, injected[0].Payload["item_ids"])
 	require.Greater(t, injected[0].Payload["original_estimated_tokens"].(float64),
 		float64(codexContextMaxTokens))
 }
