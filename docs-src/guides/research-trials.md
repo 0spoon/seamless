@@ -55,6 +55,15 @@ enumerable up front: one task per hypothesis, `tasks_claim` to avoid two agents
 testing the same one. See [Coordinate multiple
 agents](/guides/coordinate-agents/).
 
+## Watching a lab
+
+The console has a twin for this surface:
+[`/console/labs`](/reference/console/#labs) lists each investigation with its
+trial and outcome counts, and [`/console/trials`](/reference/console/#trials)
+shows every trial with expected and actual side by side - which is where a
+mis-predicted expectation is easiest to spot. Watch there while a fleet works a
+lab; nothing on either screen writes.
+
 ## Distil, then stop
 
 A lab is a working record, not a conclusion. When the investigation resolves,
