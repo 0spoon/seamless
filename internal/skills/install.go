@@ -226,7 +226,7 @@ func installAssetDir(name, dst string) error {
 		}
 		if entry.IsDir() {
 			if err := os.MkdirAll(target, 0o755); err != nil {
-				return fmt.Errorf("mkdir %s: %w", target, err)
+				return err // *os.PathError already names the op and path
 			}
 			return nil
 		}
