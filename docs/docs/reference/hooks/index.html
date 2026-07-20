@@ -163,8 +163,9 @@
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-<a href="#codex-cli-three-hooks">Codex</a> gets three. <code>seamlessd install-hooks</code> targets
-Claude Code by default; <code>--client codex</code> (or <code>--client all</code>) targets Codex.</p>
+<a href="#codex-cli-three-hooks">Codex</a> gets three. <code>seamlessd install-hooks --client &lt;claude|codex|all&gt;</code> selects the profile; run interactively with no <code>--client</code>
+it prompts for the client(s), and a non-interactive run without the flag
+defaults to Claude Code.</p>
 <h2 id="claude-code-six-hooks">Claude Code: six hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
 install order:</p>
@@ -290,11 +291,12 @@ that lifecycle and the tool-call approval gate.</p>
 <h2 id="the-fail-open-contract">The fail-open contract</h2>
 <p><strong>A hook must never block an agent.</strong> Every handler in <code>internal/hooks</code> honors
 this: an internal error yields a 200 with empty <code>additionalContext</code> rather than a
-failure. Only a bad bearer key returns non-2xx (401).</p>
+failure. Only a bad bearer key (401) or an unknown <code>?client=</code> discriminator
+(400) returns non-2xx - both are install bugs, not runtime conditions.</p>
 <p>The same contract runs client-side. <code>seam hook &lt;event&gt;</code> reports a failure to
 stderr and exits 0 - a server that is down, a config that will not load, an
-unreadable stdin, all produce exit 0. Only a misconfigured event name (an install
-bug, not a runtime condition) is a hard error.</p>
+unreadable stdin, all produce exit 0. Only a misconfigured event name or
+<code>--client</code> value (an install bug, not a runtime condition) is a hard error.</p>
 <p>Plan and subagent capture are best-effort under the same rule: a capture problem
 is logged and the hook still acks 200.</p>
 <p>The consequence is that <strong>hook failure is silent</strong>. A stopped daemon, a bad key,
