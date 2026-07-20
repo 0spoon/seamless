@@ -48,7 +48,7 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	h.touchAmbient(hbCtx, ClientClaudeCode, p.SessionID)
 	hbCancel()
 
-	extra := ""
+	var extra preparedHookContext
 	if h.captureEnabled() {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
 		defer cancel()
@@ -59,8 +59,10 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 			h.capturePlanApproval(ctx, p)
 		}
 	}
-	if extra != "" {
-		writePreparedHookResponse(w, "PostToolUse", prepareHookContext(ClientClaudeCode, extra))
+	if extra.content != "" {
+		// The SAME prepared value that recordInjection already logged: prepare
+		// once, so response and telemetry cannot drift apart.
+		writePreparedHookResponse(w, "PostToolUse", extra)
 		return
 	}
 	writeHookAck(w)
@@ -98,27 +100,27 @@ func (h *Handler) captureEnabled() bool {
 // capturePlanIteration re-reads the just-written plan file from disk (the hook
 // runs on the same machine, and re-reading is authoritative for Write and Edit
 // alike) and upserts the cc-plan note. On the session's first captured
-// iteration it returns a related-prior-knowledge block for injection ("" in
-// every other case).
-func (h *Handler) capturePlanIteration(ctx context.Context, p toolPayload) string {
+// iteration it returns the prepared related-prior-knowledge block for
+// injection (the zero value in every other case).
+func (h *Handler) capturePlanIteration(ctx context.Context, p toolPayload) preparedHookContext {
 	var in struct {
 		FilePath string `json:"file_path"`
 	}
 	if err := json.Unmarshal(p.ToolInput, &in); err != nil || in.FilePath == "" {
-		return ""
+		return preparedHookContext{}
 	}
 	path, ok := h.planFilePath(in.FilePath)
 	if !ok {
-		return "" // not a plan file
+		return preparedHookContext{} // not a plan file
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
 		h.logger.Warn("hooks: plan capture read", "error", err)
-		return ""
+		return preparedHookContext{}
 	}
 	up, ok := h.upsertPlanNote(ctx, p, planBasename(path), string(content), false)
 	if !ok || !up.first || !h.planCapture.InjectRelated {
-		return ""
+		return preparedHookContext{}
 	}
 	return h.relatedPlanContext(ctx, p, up.note)
 }
