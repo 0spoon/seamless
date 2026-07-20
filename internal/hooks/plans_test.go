@@ -124,7 +124,8 @@ func (e *captureEnv) loadNote(t *testing.T, slug string) (core.Note, bool) {
 
 func (e *captureEnv) sessionPlanMeta(t *testing.T) map[string]any {
 	t.Helper()
-	sess, ok, err := store.SessionByName(context.Background(), e.db, "cc/abcdef12")
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		context.Background(), e.db, ClientClaudeCode.externalIdentity(), testSID)
 	require.NoError(t, err)
 	require.True(t, ok)
 	m, _ := sess.Metadata["plan_capture"].(map[string]any)
@@ -146,7 +147,8 @@ func TestPlanCaptureIterationUpsert(t *testing.T) {
 	require.Contains(t, note.Tags, "cc-plan")
 	require.Contains(t, note.Tags, "plan-status:draft")
 	require.Contains(t, note.Tags, "created-by:agent")
-	require.Contains(t, note.Body, "> captured from cc/abcdef12 | clever-stallman.md | iter 1 | git ")
+	require.Contains(t, note.Body,
+		"> captured from "+ambientName(ClientClaudeCode, testSID)+" | clever-stallman.md | iter 1 | git ")
 	require.Contains(t, note.Body, "# My Plan\n\nStep one.")
 	require.Equal(t, 1, plans.NoteIteration(note))
 
@@ -280,7 +282,7 @@ func TestPlanApprovalFlipsStatusAndCreatesTask(t *testing.T) {
 	require.Equal(t, "Implement plan: My Plan", tasks[0].Title)
 	require.Equal(t, core.TaskOpen, tasks[0].Status)
 	require.Equal(t, "my-plan", tasks[0].PlanSlug)
-	require.Equal(t, "cc/abcdef12", tasks[0].CreatedBy)
+	require.Equal(t, ambientName(ClientClaudeCode, testSID), tasks[0].CreatedBy)
 	require.Contains(t, tasks[0].Body, "cc-plan-clever-stallman")
 	require.Contains(t, tasks[0].Body, note.ID)
 

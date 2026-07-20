@@ -90,6 +90,15 @@ func additionalContext(t *testing.T, out map[string]any) string {
 	return s
 }
 
+func requireAmbientSession(t *testing.T, db *sql.DB, client Client, externalSessionID string) core.Session {
+	t.Helper()
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		context.Background(), db, client.externalIdentity(), externalSessionID)
+	require.NoError(t, err)
+	require.True(t, ok, "ambient session %s/%s must exist", client, externalSessionID)
+	return sess
+}
+
 func TestSessionStartHook(t *testing.T) {
 	ts, db := newHandlerServer(t)
 	url := ts.URL + "/api/hooks/session-start"
@@ -164,7 +173,6 @@ func payloadString(v any) string {
 
 func TestHookEventCapture(t *testing.T) {
 	ts, db := newHandlerServer(t)
-	ctx := context.Background()
 	rec := events.NewRecorder(db)
 
 	// SessionStart creates the ambient session and records an injection stamped
@@ -174,9 +182,7 @@ func TestHookEventCapture(t *testing.T) {
 	})
 	require.Contains(t, additionalContext(t, out), "<seam-briefing>")
 
-	sess, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
-	require.NoError(t, err)
-	require.True(t, ok)
+	sess := requireAmbientSession(t, db, ClientClaudeCode, "abcdef12-3456")
 
 	inj := eventsOfKind(t, rec, core.EventInjected)
 	require.Len(t, inj, 1)
@@ -235,9 +241,7 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 	_, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
 		"session_id": claudeID, "cwd": "/work/demo", "source": "startup",
 	})
-	amb, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
-	require.NoError(t, err)
-	require.True(t, ok)
+	amb := requireAmbientSession(t, db, ClientClaudeCode, claudeID)
 	require.Equal(t, claudeID, amb.ExternalSessionID)
 
 	// An explicit session_start that linked to the same Claude session (ambient=0,
@@ -246,7 +250,8 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, store.CreateSession(ctx, db, core.Session{
 		ID: explID, Name: "sess/work", ProjectSlug: "demo", Status: core.SessionActive,
-		ExternalSessionID: claudeID, CWD: "/work/demo", Findings: "interim progress",
+		ExternalSessionID: claudeID, ExternalClient: "claude-code",
+		CWD: "/work/demo", Findings: "interim progress",
 		CreatedAt: amb.CreatedAt, UpdatedAt: amb.CreatedAt,
 	}))
 	taskID, err := core.NewID()
@@ -292,11 +297,10 @@ func TestAmbientSessionLifecycle(t *testing.T) {
 	_, out := post(t, startURL, testKey, map[string]any{
 		"session_id": "abcdef12-3456", "cwd": "/work/demo", "source": "startup",
 	})
-	require.Contains(t, additionalContext(t, out), "Seam session: cc/abcdef12 (ambient)")
+	require.Contains(t, additionalContext(t, out),
+		"Seam session: "+ambientName(ClientClaudeCode, "abcdef12-3456")+" (ambient)")
 
-	sess, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
-	require.NoError(t, err)
-	require.True(t, ok)
+	sess := requireAmbientSession(t, db, ClientClaudeCode, "abcdef12-3456")
 	require.Equal(t, core.SessionActive, sess.Status)
 	require.True(t, sess.Ambient)
 	require.Equal(t, "demo", sess.ProjectSlug)
@@ -307,7 +311,8 @@ func TestAmbientSessionLifecycle(t *testing.T) {
 		"session_id": "sub00000-0000", "cwd": "/work/demo", "agent_type": "Explore",
 	})
 	require.NotContains(t, additionalContext(t, out), "(ambient)")
-	_, ok, err = store.SessionByName(ctx, db, "cc/sub00000")
+	_, ok, err := store.AmbientSessionByExternalIdentity(
+		ctx, db, ClientClaudeCode.externalIdentity(), "sub00000-0000")
 	require.NoError(t, err)
 	require.False(t, ok, "subagents share the parent session, no ambient row")
 
@@ -323,9 +328,7 @@ func TestAmbientSessionLifecycle(t *testing.T) {
 	require.NotContains(t, endOut, "hookSpecificOutput")
 	require.Equal(t, true, endOut["continue"])
 
-	sess, ok, err = store.SessionByName(ctx, db, "cc/abcdef12")
-	require.NoError(t, err)
-	require.True(t, ok)
+	sess = requireAmbientSession(t, db, ClientClaudeCode, "abcdef12-3456")
 	require.Equal(t, core.SessionCompleted, sess.Status)
 	require.Equal(t, "(auto-harvested) Shipped the ready-queue.", sess.Findings)
 
@@ -334,7 +337,7 @@ func TestAmbientSessionLifecycle(t *testing.T) {
 		"session_id": "abcdef12-3456", "transcript_path": "", "reason": "other",
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	sess, _, _ = store.SessionByName(ctx, db, "cc/abcdef12")
+	sess = requireAmbientSession(t, db, ClientClaudeCode, "abcdef12-3456")
 	require.Equal(t, "(auto-harvested) Shipped the ready-queue.", sess.Findings)
 
 	// SessionEnd for an unknown session is a tolerated no-op (still 200).

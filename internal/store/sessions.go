@@ -12,7 +12,7 @@ import (
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
-	cwd, source, model, ambient, metadata, created_at, updated_at`
+	external_client, cwd, source, model, ambient, metadata, created_at, updated_at`
 
 // ErrSessionNameExists is returned by CreateSession when the name is already
 // taken (sessions.name is UNIQUE). It mirrors ErrSlugExists so a caller racing
@@ -25,8 +25,15 @@ const sessionCols = `id, name, project_slug, status, findings, claude_session_id
 // same assumption ErrSlugExists makes.
 var ErrSessionNameExists = errors.New("store: session name already exists")
 
+// ErrSessionIdentityExists is returned when an ambient row already owns the
+// same full external session id and client discriminator. It is distinct from a
+// display-name collision so callers can safely converge a concurrent create on
+// the existing authoritative identity.
+var ErrSessionIdentityExists = errors.New("store: ambient session identity already exists")
+
 // CreateSession inserts a session. The caller mints the ULID id; a duplicate
-// name returns ErrSessionNameExists.
+// name returns ErrSessionNameExists, while a duplicate authoritative ambient
+// identity returns ErrSessionIdentityExists.
 func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	meta, err := marshalMetadata(s.Metadata)
 	if err != nil {
@@ -35,15 +42,25 @@ func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO sessions
 		    (id, name, project_slug, status, findings, claude_session_id,
-		     cwd, source, model, ambient, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		     external_client, cwd, source, model, ambient, metadata, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// claude_session_id column holds core.Session.ExternalSessionID (the column
 		// name predates Codex; see the field's doc for the intentional mismatch).
 		s.ID, s.Name, s.ProjectSlug, string(s.Status), s.Findings, s.ExternalSessionID,
-		s.CWD, s.Source, s.Model, boolToInt(s.Ambient), meta,
+		s.ExternalClient, s.CWD, s.Source, s.Model, boolToInt(s.Ambient), meta,
 		core.FormatTime(s.CreatedAt), core.FormatTime(s.UpdatedAt))
 	if err != nil {
 		if isUniqueViolation(err) {
+			if s.Ambient && s.ExternalClient != "" && s.ExternalSessionID != "" {
+				_, found, lookupErr := AmbientSessionByExternalIdentity(
+					ctx, db, s.ExternalClient, s.ExternalSessionID)
+				if lookupErr != nil {
+					return fmt.Errorf("store.CreateSession: classify identity conflict: %w", lookupErr)
+				}
+				if found {
+					return fmt.Errorf("store.CreateSession: %w: client %q", ErrSessionIdentityExists, s.ExternalClient)
+				}
+			}
 			return fmt.Errorf("store.CreateSession: %w: %q", ErrSessionNameExists, s.Name)
 		}
 		return fmt.Errorf("store.CreateSession: %w", err)
@@ -77,33 +94,34 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	return nil
 }
 
-// ReactivateSessionByName resumes the named session with a single targeted
-// UPDATE: status flips back to active, project_slug is re-scoped (only when
-// project is non-empty), and updated_at is bumped -- findings and metadata are
-// never touched. The SessionStart hook resumes ambient sessions through it
-// instead of a full-row read-modify-write, so a concurrent transcript harvest
-// (which writes findings via UpdateSession) cannot be clobbered by a racing
-// resume that read the row before the harvest landed. found is false when no
-// session has that name.
-func ReactivateSessionByName(ctx context.Context, db *sql.DB, name, project string, now time.Time) (bool, error) {
-	if name == "" {
-		return false, nil
+// ReactivateAmbientSession resumes an ambient session by its authoritative
+// external identity. The targeted UPDATE flips status back to active, re-scopes
+// only when project is non-empty, and bumps recency without touching findings or
+// metadata. Returning the row gives callers its actual display name, including a
+// legacy pre-digest name preserved by migration 010.
+func ReactivateAmbientSession(
+	ctx context.Context,
+	db *sql.DB,
+	externalClient, externalSessionID, project string,
+	now time.Time,
+) (core.Session, bool, error) {
+	if externalClient == "" || externalSessionID == "" {
+		return core.Session{}, false, nil
 	}
-	res, err := db.ExecContext(ctx, `
+	sess, found, err := sessionOne(ctx, db, `
 		UPDATE sessions
 		   SET status = 'active',
 		       project_slug = CASE WHEN ? = '' THEN project_slug ELSE ? END,
 		       updated_at = ?
-		 WHERE name = ?`,
-		project, project, core.FormatTime(now.UTC()), name)
+		 WHERE ambient = 1
+		   AND external_client = ?
+		   AND claude_session_id = ?
+		 RETURNING `+sessionCols,
+		project, project, core.FormatTime(now.UTC()), externalClient, externalSessionID)
 	if err != nil {
-		return false, fmt.Errorf("store.ReactivateSessionByName: %w", err)
+		return core.Session{}, false, fmt.Errorf("store.ReactivateAmbientSession: %w", err)
 	}
-	n, err := res.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("store.ReactivateSessionByName: rows affected: %w", err)
-	}
-	return n > 0, nil
+	return sess, found, nil
 }
 
 // ActiveSessionIDs reports which of the given session ids belong to a currently
@@ -162,18 +180,20 @@ func TouchSession(ctx context.Context, db *sql.DB, id string, now time.Time) err
 	return nil
 }
 
-// TouchSessionByName is TouchSession keyed by the unique session name, for the
-// ambient hooks which know the {cc|cx}/{prefix} name (not the ULID). Same
-// active-only guard and no-op-on-empty semantics.
-func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.Time) error {
-	if name == "" {
+// TouchAmbientSession is TouchSession keyed by the full external session id and
+// client discriminator. The active-only guard prevents late hook traffic from
+// reviving a completed or reaped row.
+func TouchAmbientSession(ctx context.Context, db *sql.DB, externalClient, externalSessionID string, now time.Time) error {
+	if externalClient == "" || externalSessionID == "" {
 		return nil
 	}
 	_, err := db.ExecContext(ctx,
-		`UPDATE sessions SET updated_at = ? WHERE name = ? AND status = 'active'`,
-		core.FormatTime(now.UTC()), name)
+		`UPDATE sessions SET updated_at = ?
+		  WHERE ambient = 1 AND external_client = ? AND claude_session_id = ?
+		    AND status = 'active'`,
+		core.FormatTime(now.UTC()), externalClient, externalSessionID)
 	if err != nil {
-		return fmt.Errorf("store.TouchSessionByName: %w", err)
+		return fmt.Errorf("store.TouchAmbientSession: %w", err)
 	}
 	return nil
 }
@@ -181,7 +201,7 @@ func TouchSessionByName(ctx context.Context, db *sql.DB, name string, now time.T
 // SetSessionModel records which LLM powers an active session's agent, keyed by
 // session ULID. The value is stored verbatim as the provider names it (e.g.
 // "claude-fable-5"). Targeted single-column write for the same reason as
-// ReactivateSessionByName: no read-modify-write of the whole row, so it cannot
+// ReactivateAmbientSession: no read-modify-write of the whole row, so it cannot
 // clobber a concurrent findings/metadata update. The active-only guard keeps a
 // completed/expired session's attribution frozen at what it ended with, and the
 // model <> ? guard makes repeated reports of the same value free. No-op on an
@@ -200,25 +220,26 @@ func SetSessionModel(ctx context.Context, db *sql.DB, id, model string) error {
 	return nil
 }
 
-// SetSessionModelByName is SetSessionModel keyed by the unique session name,
-// for the ambient hooks which know the {cc|cx}/{prefix} name (not the ULID).
-func SetSessionModelByName(ctx context.Context, db *sql.DB, name, model string) error {
-	if name == "" || model == "" {
+// SetAmbientSessionModel records the model by authoritative external identity.
+func SetAmbientSessionModel(ctx context.Context, db *sql.DB, externalClient, externalSessionID, model string) error {
+	if externalClient == "" || externalSessionID == "" || model == "" {
 		return nil
 	}
 	_, err := db.ExecContext(ctx,
-		`UPDATE sessions SET model = ? WHERE name = ? AND status = 'active' AND model <> ?`,
-		model, name, model)
+		`UPDATE sessions SET model = ?
+		  WHERE ambient = 1 AND external_client = ? AND claude_session_id = ?
+		    AND status = 'active' AND model <> ?`,
+		model, externalClient, externalSessionID, model)
 	if err != nil {
-		return fmt.Errorf("store.SetSessionModelByName: %w", err)
+		return fmt.Errorf("store.SetAmbientSessionModel: %w", err)
 	}
 	return nil
 }
 
-// UpdateAmbientFindingsByName upserts provisional findings onto an active ambient
-// session, keyed by its unique {cc|cx}/{prefix} name. It backs the Codex Stop
-// hook, which harvests the last agent message every turn: Codex has no SessionEnd
-// event, so findings must be in place BEFORE the idle reaper expires the session.
+// UpdateAmbientFindings upserts provisional findings onto an active ambient
+// session by full external identity. It backs the Codex Stop hook, which
+// harvests the last agent message every turn: Codex has no SessionEnd event, so
+// findings must be in place BEFORE the idle reaper expires the session.
 //
 // The write is TARGETED -- only findings + updated_at, never a read-modify-write
 // of the whole row -- so a Stop landing between a resume's read and write cannot
@@ -226,23 +247,29 @@ func SetSessionModelByName(ctx context.Context, db *sql.DB, name, model string) 
 // simply converge findings on the latest turn's message. The active-only + ambient
 // guard means it never resurrects a completed/expired session and never touches an
 // explicit session (whose findings the agent owns via session_update). Bumping
-// updated_at doubles as a heartbeat. No-op on an empty name or empty findings (a
-// turn with nothing to harvest leaves any prior harvest intact). Reports whether a
-// row was updated.
-func UpdateAmbientFindingsByName(ctx context.Context, db *sql.DB, name, findings string, now time.Time) (bool, error) {
-	if name == "" || findings == "" {
+// updated_at doubles as a heartbeat. No-op on an incomplete identity or empty
+// findings (a turn with nothing to harvest leaves any prior harvest intact).
+// Reports whether a row was updated.
+func UpdateAmbientFindings(
+	ctx context.Context,
+	db *sql.DB,
+	externalClient, externalSessionID, findings string,
+	now time.Time,
+) (bool, error) {
+	if externalClient == "" || externalSessionID == "" || findings == "" {
 		return false, nil
 	}
 	res, err := db.ExecContext(ctx, `
 		UPDATE sessions SET findings = ?, updated_at = ?
-		 WHERE name = ? AND status = 'active' AND ambient = 1`,
-		findings, core.FormatTime(now.UTC()), name)
+		 WHERE external_client = ? AND claude_session_id = ?
+		   AND status = 'active' AND ambient = 1`,
+		findings, core.FormatTime(now.UTC()), externalClient, externalSessionID)
 	if err != nil {
-		return false, fmt.Errorf("store.UpdateAmbientFindingsByName: %w", err)
+		return false, fmt.Errorf("store.UpdateAmbientFindings: %w", err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return false, fmt.Errorf("store.UpdateAmbientFindingsByName: rows affected: %w", err)
+		return false, fmt.Errorf("store.UpdateAmbientFindings: rows affected: %w", err)
 	}
 	return n > 0, nil
 }
@@ -346,35 +373,44 @@ func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, cwd string) ([]core.Ses
 		}
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ActiveAmbientByCWD: %w", err)
+	}
+	return out, nil
 }
 
-// ActiveSessionsByClaudeID returns every active session -- the ambient cc/* or cx/*
-// plus any explicit session_start that linked to it -- stamped with claudeSessionID,
-// ambient first. The SessionEnd hook uses it to complete a whole Claude session's
-// sessions the moment we know it ended, rather than waiting out the idle TTL. An
-// empty id matches nothing.
-func ActiveSessionsByClaudeID(ctx context.Context, db *sql.DB, claudeSessionID string) ([]core.Session, error) {
-	if claudeSessionID == "" {
+// ActiveSessionsByExternalIdentity returns every active session -- the ambient
+// cc/* or cx/* plus any explicit session_start that linked to it -- stamped with
+// the same full external id and client discriminator, ambient first. A graceful
+// SessionEnd uses it to close only the issuing client's session family.
+func ActiveSessionsByExternalIdentity(
+	ctx context.Context,
+	db *sql.DB,
+	externalClient, externalSessionID string,
+) ([]core.Session, error) {
+	if externalClient == "" || externalSessionID == "" {
 		return nil, nil
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'active' AND claude_session_id = ?
-		ORDER BY ambient DESC, updated_at DESC, id DESC`, claudeSessionID)
+		WHERE status = 'active' AND external_client = ? AND claude_session_id = ?
+		ORDER BY ambient DESC, updated_at DESC, id DESC`, externalClient, externalSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("store.ActiveSessionsByClaudeID: %w", err)
+		return nil, fmt.Errorf("store.ActiveSessionsByExternalIdentity: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []core.Session
 	for rows.Next() {
 		s, serr := scanSession(rows)
 		if serr != nil {
-			return nil, fmt.Errorf("store.ActiveSessionsByClaudeID: %w", serr)
+			return nil, fmt.Errorf("store.ActiveSessionsByExternalIdentity: %w", serr)
 		}
 		out = append(out, s)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ActiveSessionsByExternalIdentity: %w", err)
+	}
+	return out, nil
 }
 
 // SessionByID returns the session with the given id. found is false when absent.
@@ -386,6 +422,26 @@ func SessionByID(ctx context.Context, db *sql.DB, id string) (core.Session, bool
 // when absent.
 func SessionByName(ctx context.Context, db *sql.DB, name string) (core.Session, bool, error) {
 	return sessionOne(ctx, db, `SELECT `+sessionCols+` FROM sessions WHERE name = ? LIMIT 1`, name)
+}
+
+// AmbientSessionByExternalIdentity resolves the authoritative ambient row for
+// a client-issued session id. Display names are deliberately absent from the
+// predicate so legacy and digest-suffixed names behave identically.
+func AmbientSessionByExternalIdentity(
+	ctx context.Context,
+	db *sql.DB,
+	externalClient, externalSessionID string,
+) (core.Session, bool, error) {
+	if externalClient == "" || externalSessionID == "" {
+		return core.Session{}, false, nil
+	}
+	sess, found, err := sessionOne(ctx, db, `SELECT `+sessionCols+` FROM sessions
+		WHERE ambient = 1 AND external_client = ? AND claude_session_id = ? LIMIT 1`,
+		externalClient, externalSessionID)
+	if err != nil {
+		return core.Session{}, false, fmt.Errorf("store.AmbientSessionByExternalIdentity: %w", err)
+	}
+	return sess, found, nil
 }
 
 // RecentFindings returns ended sessions with meaningful findings visible to a
@@ -617,7 +673,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 	)
 	if err := rows.Scan(
 		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
-		&s.CWD, &s.Source, &s.Model, &ambient, &meta, &created, &updated,
+		&s.ExternalClient, &s.CWD, &s.Source, &s.Model, &ambient, &meta, &created, &updated,
 	); err != nil {
 		return core.Session{}, err
 	}

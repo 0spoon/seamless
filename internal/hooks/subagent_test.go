@@ -53,7 +53,8 @@ func TestSubagentCaptureDuringPlanning(t *testing.T) {
 	require.Contains(t, note.Tags, "agent-cache")
 	require.Contains(t, note.Tags, "agent:Explore")
 	require.Contains(t, note.Tags, "created-by:agent")
-	require.Contains(t, note.Body, "> captured from cc/abcdef12 | agent abc123 | git ")
+	require.Contains(t, note.Body,
+		"> captured from "+ambientName(ClientClaudeCode, testSID)+" | agent abc123 | git ")
 	require.Contains(t, note.Body, "## Prompt\n\nExplore the gardener package and report its structure")
 	require.Contains(t, note.Body, "## Report\n\nFinal report: the gardener has three passes.")
 

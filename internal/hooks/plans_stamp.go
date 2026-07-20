@@ -44,19 +44,18 @@ func planBasename(path string) string {
 }
 
 // planStamp is the provenance blockquote prepended to every captured plan body.
-func planStamp(claudeSessionID, basename string, iter int, head string, now time.Time) string {
+func planStamp(sessionName, basename string, iter int, head string, now time.Time) string {
 	return fmt.Sprintf("> captured from %s | %s.md | iter %d | git %s | %s",
-		stampSession(claudeSessionID), basename, iter, shortHead(head), now.UTC().Format(time.RFC3339))
+		stampSession(sessionName), basename, iter, shortHead(head), now.UTC().Format(time.RFC3339))
 }
 
-// stampSession names the capturing session in a stamp line. Plan capture is
-// Claude Code-only (Codex registers no plan-capture hooks), so the session is
-// always a cc/ ambient.
-func stampSession(claudeSessionID string) string {
-	if claudeSessionID == "" {
+// stampSession formats an already-resolved capturing session name. Plan capture
+// is Claude Code-only, so the unknown fallback remains a cc/ handle.
+func stampSession(sessionName string) string {
+	if sessionName == "" {
 		return "cc/unknown"
 	}
-	return ambientName(ClientClaudeCode, claudeSessionID)
+	return sessionName
 }
 
 // shortHead abbreviates a commit hash for stamps ("unknown" when absent).

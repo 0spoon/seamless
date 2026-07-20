@@ -10,28 +10,32 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
-func TestReactivateSessionByName(t *testing.T) {
+func TestReactivateAmbientSession(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
 	created := time.Now().UTC().Add(-time.Hour)
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: "01REACT000000000000000000A", Name: "cc/react001", ProjectSlug: "demo",
 		Status: core.SessionCompleted, Findings: "harvested findings",
+		ExternalSessionID: "react001-full", ExternalClient: "claude-code", Ambient: true,
 		Metadata:  map[string]any{"cwd": "/work/demo"},
 		CreatedAt: created, UpdatedAt: created,
 	}))
 
-	// Missing name: found=false, no error.
-	found, err := ReactivateSessionByName(ctx, db, "cc/missing", "", time.Now().UTC())
+	// Missing identity: found=false, no error.
+	_, found, err := ReactivateAmbientSession(
+		ctx, db, "claude-code", "missing-full", "", time.Now().UTC())
 	require.NoError(t, err)
 	require.False(t, found)
 
 	// Empty project keeps the existing scope; findings and metadata are untouched;
 	// status flips back to active and updated_at is bumped.
 	now := time.Now().UTC()
-	found, err = ReactivateSessionByName(ctx, db, "cc/react001", "", now)
+	resumed, found, err := ReactivateAmbientSession(
+		ctx, db, "claude-code", "react001-full", "", now)
 	require.NoError(t, err)
 	require.True(t, found)
+	require.Equal(t, "cc/react001", resumed.Name, "legacy display names are preserved")
 	sess, ok, err := SessionByName(ctx, db, "cc/react001")
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -42,7 +46,8 @@ func TestReactivateSessionByName(t *testing.T) {
 	require.True(t, sess.UpdatedAt.After(created), "reactivation bumps recency")
 
 	// A non-empty project re-scopes.
-	found, err = ReactivateSessionByName(ctx, db, "cc/react001", "other", time.Now().UTC())
+	_, found, err = ReactivateAmbientSession(
+		ctx, db, "claude-code", "react001-full", "other", time.Now().UTC())
 	require.NoError(t, err)
 	require.True(t, found)
 	sess, _, err = SessionByName(ctx, db, "cc/react001")

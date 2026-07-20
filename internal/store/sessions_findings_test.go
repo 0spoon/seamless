@@ -10,22 +10,24 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
-// UpdateAmbientFindingsByName is a targeted, active-ambient-only findings upsert:
+// UpdateAmbientFindings is a targeted, active-ambient-only findings upsert:
 // it converges on the latest write, heartbeats updated_at, and refuses to touch a
 // completed/expired session or an explicit (non-ambient) one.
-func TestUpdateAmbientFindingsByName(t *testing.T) {
+func TestUpdateAmbientFindings(t *testing.T) {
 	ctx := context.Background()
 	db := openTestDB(t)
 	now := time.Now().UTC()
 
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: "01A", Name: "cx/019f7291", ProjectSlug: "seam", Status: core.SessionActive,
-		Ambient: true, CreatedAt: now, UpdatedAt: now,
+		ExternalSessionID: "019f7291-full", ExternalClient: "codex", Ambient: true,
+		CreatedAt: now, UpdatedAt: now,
 	}))
 
 	// First harvest lands and bumps updated_at.
 	later := now.Add(time.Minute)
-	updated, err := UpdateAmbientFindingsByName(ctx, db, "cx/019f7291", "(auto-harvested) first", later)
+	updated, err := UpdateAmbientFindings(
+		ctx, db, "codex", "019f7291-full", "(auto-harvested) first", later)
 	require.NoError(t, err)
 	require.True(t, updated)
 	s, ok, err := SessionByName(ctx, db, "cx/019f7291")
@@ -35,15 +37,18 @@ func TestUpdateAmbientFindingsByName(t *testing.T) {
 	require.True(t, s.UpdatedAt.After(now), "the harvest heartbeats updated_at")
 
 	// A later harvest overwrites (converges on the latest turn).
-	updated, err = UpdateAmbientFindingsByName(ctx, db, "cx/019f7291", "(auto-harvested) second", later)
+	updated, err = UpdateAmbientFindings(
+		ctx, db, "codex", "019f7291-full", "(auto-harvested) second", later)
 	require.NoError(t, err)
 	require.True(t, updated)
 	s, _, _ = SessionByName(ctx, db, "cx/019f7291")
 	require.Equal(t, "(auto-harvested) second", s.Findings)
 
-	// Empty name or empty findings is a no-op; the prior harvest survives.
-	for _, tc := range []struct{ name, findings string }{{"", "x"}, {"cx/019f7291", ""}} {
-		updated, err = UpdateAmbientFindingsByName(ctx, db, tc.name, tc.findings, later)
+	// Empty identity or empty findings is a no-op; the prior harvest survives.
+	for _, tc := range []struct{ client, id, findings string }{
+		{"", "019f7291-full", "x"}, {"codex", "", "x"}, {"codex", "019f7291-full", ""},
+	} {
+		updated, err = UpdateAmbientFindings(ctx, db, tc.client, tc.id, tc.findings, later)
 		require.NoError(t, err)
 		require.False(t, updated)
 	}
@@ -53,9 +58,10 @@ func TestUpdateAmbientFindingsByName(t *testing.T) {
 	// A completed session is off-limits (active-only guard).
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: "01B", Name: "cx/done0000", ProjectSlug: "seam", Status: core.SessionCompleted,
-		Ambient: true, CreatedAt: now, UpdatedAt: now,
+		ExternalSessionID: "done-full", ExternalClient: "codex", Ambient: true,
+		CreatedAt: now, UpdatedAt: now,
 	}))
-	updated, err = UpdateAmbientFindingsByName(ctx, db, "cx/done0000", "nope", later)
+	updated, err = UpdateAmbientFindings(ctx, db, "codex", "done-full", "nope", later)
 	require.NoError(t, err)
 	require.False(t, updated, "a completed session is not harvestable")
 
@@ -63,9 +69,10 @@ func TestUpdateAmbientFindingsByName(t *testing.T) {
 	// agent's own via session_update).
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: "01C", Name: "sess/work", ProjectSlug: "seam", Status: core.SessionActive,
-		Ambient: false, CreatedAt: now, UpdatedAt: now,
+		ExternalSessionID: "work-full", ExternalClient: "codex", Ambient: false,
+		CreatedAt: now, UpdatedAt: now,
 	}))
-	updated, err = UpdateAmbientFindingsByName(ctx, db, "sess/work", "nope", later)
+	updated, err = UpdateAmbientFindings(ctx, db, "codex", "work-full", "nope", later)
 	require.NoError(t, err)
 	require.False(t, updated, "an explicit session is not ambient-harvestable")
 }

@@ -77,7 +77,8 @@ func (h *Handler) ambientSession(ctx context.Context, claudeSessionID string) (c
 		return core.Session{}, false
 	}
 	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-	sess, ok, err := store.SessionByName(ctx, h.db, ambientName(ClientClaudeCode, claudeSessionID))
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		ctx, h.db, ClientClaudeCode.externalIdentity(), claudeSessionID)
 	if err != nil {
 		h.logger.Warn("hooks: ambient session lookup", "error", err)
 		return core.Session{}, false

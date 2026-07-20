@@ -27,6 +27,17 @@ func (c Client) ambientPrefix() string {
 	return "cc/"
 }
 
+// externalIdentity names the canonical client discriminator persisted beside a
+// full external session id. It deliberately mirrors the current defaulting
+// behavior; strict rejection of present invalid client input is handled by the
+// boundary parser, not by store identity construction.
+func (c Client) externalIdentity() string {
+	if c == ClientCodex {
+		return string(ClientCodex)
+	}
+	return string(ClientClaudeCode)
+}
+
 // normalizeClient maps a raw client string (from the hook payload / --client
 // flag) to a known Client, defaulting an empty or unrecognized value to
 // ClientClaudeCode so existing Claude Code hooks -- which send no discriminator

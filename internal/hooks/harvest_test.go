@@ -82,13 +82,13 @@ func TestAmbientName(t *testing.T) {
 		id     string
 		want   string
 	}{
-		{"claude-code truncates and lowercases", ClientClaudeCode, "ABC12345-6789-0000", "cc/abc12345"},
-		{"claude-code short id kept whole", ClientClaudeCode, "short", "cc/short"},
-		{"codex truncates and lowercases", ClientCodex, "ABC12345-6789-0000", "cx/abc12345"},
-		{"codex short id kept whole", ClientCodex, "short", "cx/short"},
-		{"empty client defaults to claude-code prefix", normalizeClient(""), "ABC12345-6789-0000", "cc/abc12345"},
-		{"unknown client falls back to claude-code prefix", normalizeClient("gemini"), "ABC12345", "cc/abc12345"},
-		{"codex via normalizeClient", normalizeClient("codex"), "DEADBEEF-1111", "cx/deadbeef"},
+		{"claude-code readable prefix plus digest", ClientClaudeCode, "ABC12345-6789-0000", "cc/abc12345-537a9f0416b71992"},
+		{"claude-code short id plus digest", ClientClaudeCode, "short", "cc/short-f9b0078b5df596d2"},
+		{"codex readable prefix plus digest", ClientCodex, "ABC12345-6789-0000", "cx/abc12345-537a9f0416b71992"},
+		{"codex short id plus digest", ClientCodex, "short", "cx/short-f9b0078b5df596d2"},
+		{"empty client defaults to claude-code prefix", normalizeClient(""), "ABC12345-6789-0000", "cc/abc12345-537a9f0416b71992"},
+		{"unknown client falls back to claude-code prefix", normalizeClient("gemini"), "ABC12345", "cc/abc12345-2221aa193aea3b3f"},
+		{"codex via normalizeClient", normalizeClient("codex"), "DEADBEEF-1111", "cx/deadbeef-ec2a1e0a41675c24"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

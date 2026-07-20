@@ -203,6 +203,26 @@ func TestBuildRetrievalReport_SessionFallback(t *testing.T) {
 	require.Equal(t, 2, rep.Top[0].Sessions)
 }
 
+func TestBuildRetrievalReport_SessionFallbackIncludesExternalClient(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	seedMemoryRow(t, db, "A", "mem-a", now)
+
+	insertRetrievalEvent(t, db, core.EventInjected, "", "",
+		`{"item_ids":["A"],"claude_session_id":"shared","external_client":"claude-code"}`,
+		now.Add(-time.Minute))
+	insertRetrievalEvent(t, db, core.EventInjected, "", "",
+		`{"item_ids":["A"],"claude_session_id":"shared","external_client":"codex"}`,
+		now)
+
+	rep, err := BuildRetrievalReport(ctx, db, ResolveRetrievalWindow("all", now), 12)
+	require.NoError(t, err)
+	require.Equal(t, 2, rep.SessionsReached,
+		"identical client-issued ids remain distinct when the event row has no Seamless session id")
+	require.Equal(t, 2, rep.Top[0].Sessions)
+}
+
 func TestBuildRetrievalReport_WindowBounds(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

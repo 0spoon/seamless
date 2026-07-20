@@ -188,7 +188,7 @@ var memSpecs = []memSpec{
 	{"", "constraint", "friday-no-deploys", "No production deploys after Friday 14:00 -- pager rotation is thin on weekends.", "", 5},
 	{"", "constraint", "agents-verify-in-worktree", "Agents verify builds in a throwaway worktree, never the shared checkout -- parallel edits break foreign builds.", "", 4},
 	{"", "constraint", "findings-are-for-the-next-agent", "Session findings are written for the NEXT agent: state what changed, what's open, and where the bodies are buried.", "", 4},
-	{"", "protocol", "session-naming-cc-hex", "Agent sessions are cc/<8 hex>; anything else breaks the provenance joins in the console.", "", 3},
+	{"", "protocol", "session-naming-cc-hex", "Ambient sessions use cc/<prefix>-<digest>; provenance joins resolve their stored full external identity.", "", 3},
 	{"", "protocol", "plan-before-multi-file-change", "Changes touching >3 files start in plan mode; the captured plan is the review artifact.", "", 3},
 	{"", "protocol", "escalate-after-two-failed-fixes", "Two failed fix attempts on the same symptom = stop and write up a trial; the third attempt needs a hypothesis.", "", 2},
 	{"", "reference", "fleet-model-pricing", "Current model pricing + context windows for the fleet's providers; refresh monthly.", "", 2},
@@ -295,7 +295,7 @@ var miscNotes = []noteSpec{
 	{"dotfiles", "brewfile-audit", "Brewfile audit: orphaned casks", "14 orphaned casks removed; the quarterly audit one-liner saved for next time.", []string{"audit", "created-by:agent"}, 11, "", 0},
 	// _global (2)
 	{"", "weekly-digest-2026-w28", "Weekly digest -- 2026-W28", "Cross-project week: storm postmortem drafted, dedupe store landed, token generator shipped, drill gap closed.", []string{"digest", "created-by:agent"}, 3, "", 0},
-	{"", "agent-fleet-conventions", "Agent fleet conventions: session naming + findings style", "The conventions every agent follows: cc/<hex> names, findings written for the next agent, plan-first for big changes.", []string{"reference"}, 38, "", 0},
+	{"", "agent-fleet-conventions", "Agent fleet conventions: session naming + findings style", "The conventions every agent follows: cc/<prefix>-<digest> names, findings written for the next agent, plan-first for big changes.", []string{"reference"}, 38, "", 0},
 }
 
 // planSpec drives plan-step task creation.
