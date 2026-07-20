@@ -147,18 +147,20 @@ func TestTouchSession(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: activeID, Name: "cc/beat", ProjectSlug: "seamless", Status: core.SessionActive,
+		ExternalSessionID: "beat-full", ExternalClient: "claude-code", Ambient: true,
 		CreatedAt: old, UpdatedAt: old,
 	}))
 	doneID, err := core.NewID()
 	require.NoError(t, err)
 	require.NoError(t, CreateSession(ctx, db, core.Session{
 		ID: doneID, Name: "cc/gone", ProjectSlug: "seamless", Status: core.SessionCompleted,
+		ExternalSessionID: "gone-full", ExternalClient: "claude-code", Ambient: true,
 		CreatedAt: old, UpdatedAt: old,
 	}))
 
 	beat := time.Now().UTC()
 	require.NoError(t, TouchSession(ctx, db, activeID, beat))
-	require.NoError(t, TouchSessionByName(ctx, db, "cc/beat", beat)) // by-name path
+	require.NoError(t, TouchAmbientSession(ctx, db, "claude-code", "beat-full", beat))
 
 	got, _, err := SessionByID(ctx, db, activeID)
 	require.NoError(t, err)
@@ -174,5 +176,5 @@ func TestTouchSession(t *testing.T) {
 
 	// Empty id/name are safe no-ops.
 	require.NoError(t, TouchSession(ctx, db, "", beat))
-	require.NoError(t, TouchSessionByName(ctx, db, "", beat))
+	require.NoError(t, TouchAmbientSession(ctx, db, "", "", beat))
 }

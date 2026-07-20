@@ -74,7 +74,8 @@ func TestAmbientModel_CodexPayload(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	sess, ok, err := store.SessionByName(ctx, db, "cx/0199f7a2")
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		ctx, db, "codex", "0199f7a2-codex-session")
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "gpt-5.5", sess.Model)
@@ -84,7 +85,8 @@ func TestAmbientModel_CodexPayload(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
-	sess, _, err = store.SessionByName(ctx, db, "cx/0199f7a2")
+	sess, _, err = store.AmbientSessionByExternalIdentity(
+		ctx, db, "codex", "0199f7a2-codex-session")
 	require.NoError(t, err)
 	require.Equal(t, "gpt-5.5-codex", sess.Model)
 }
@@ -100,7 +102,8 @@ func TestAmbientModel_ClaudeTranscriptSniff(t *testing.T) {
 		"session_id": "abc12345-cc-session", "cwd": "/work/demo", "source": "startup",
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	sess, ok, err := store.SessionByName(ctx, db, "cc/abc12345")
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		ctx, db, "claude-code", "abc12345-cc-session")
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Empty(t, sess.Model)
@@ -114,7 +117,8 @@ func TestAmbientModel_ClaudeTranscriptSniff(t *testing.T) {
 		"user_prompt": "keep going", "transcript_path": path,
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	sess, _, err = store.SessionByName(ctx, db, "cc/abc12345")
+	sess, _, err = store.AmbientSessionByExternalIdentity(
+		ctx, db, "claude-code", "abc12345-cc-session")
 	require.NoError(t, err)
 	require.Equal(t, "claude-fable-5", sess.Model)
 
@@ -128,18 +132,21 @@ func TestAmbientModel_ClaudeTranscriptSniff(t *testing.T) {
 		"user_prompt": "and again", "transcript_path": switched,
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	sess, _, err = store.SessionByName(ctx, db, "cc/abc12345")
+	sess, _, err = store.AmbientSessionByExternalIdentity(
+		ctx, db, "claude-code", "abc12345-cc-session")
 	require.NoError(t, err)
 	require.Equal(t, "claude-opus-4-8", sess.Model)
 
 	// A resume sniffs at session-start too.
-	require.NoError(t, store.SetSessionModelByName(ctx, db, "cc/abc12345", "stale-value"))
+	require.NoError(t, store.SetAmbientSessionModel(
+		ctx, db, "claude-code", "abc12345-cc-session", "stale-value"))
 	resp, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
 		"session_id": "abc12345-cc-session", "cwd": "/work/demo",
 		"source": "resume", "transcript_path": switched,
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
-	sess, _, err = store.SessionByName(ctx, db, "cc/abc12345")
+	sess, _, err = store.AmbientSessionByExternalIdentity(
+		ctx, db, "claude-code", "abc12345-cc-session")
 	require.NoError(t, err)
 	require.Equal(t, "claude-opus-4-8", sess.Model)
 }

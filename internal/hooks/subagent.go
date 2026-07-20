@@ -77,7 +77,10 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 	}
 	note.Title = agentNoteTitle(p.AgentType, prompt)
 	note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
-	note.Body = agentStamp(p.SessionID, p.AgentID, gitHead(p.CWD), now) +
+	note.Body = agentStamp(
+		h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
+		p.AgentID, gitHead(p.CWD), now,
+	) +
 		"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
 	note.Tags = agentNoteTags(meta.PlanSlug, p.AgentType)
 	note.Updated = now
@@ -133,9 +136,9 @@ func agentNoteTitle(agentType, prompt string) string {
 }
 
 // agentStamp is the provenance blockquote prepended to an agent-cache note.
-func agentStamp(claudeSessionID, agentID, head string, now time.Time) string {
+func agentStamp(sessionName, agentID, head string, now time.Time) string {
 	return fmt.Sprintf("> captured from %s | agent %s | git %s | %s",
-		stampSession(claudeSessionID), agentID, shortHead(head), now.UTC().Format(time.RFC3339))
+		stampSession(sessionName), agentID, shortHead(head), now.UTC().Format(time.RFC3339))
 }
 
 // subagentTranscriptPath resolves the subagent's JSONL transcript: the payload

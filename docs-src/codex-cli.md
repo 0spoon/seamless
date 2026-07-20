@@ -42,7 +42,7 @@ does not emit that event, so the lifecycle closes differently (see
 
 | Event | Injects | Effect |
 |---|---|---|
-| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes the ambient `cx/{prefix}` session. |
+| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes the ambient `cx/{prefix}-{digest}` session. |
 | `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
 | `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
 

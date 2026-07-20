@@ -29,6 +29,7 @@ type RetrievalStat struct {
 type injectedPayload struct {
 	ItemIDs         []string `json:"item_ids"`
 	ClaudeSessionID string   `json:"claude_session_id"`
+	ExternalClient  string   `json:"external_client"`
 }
 
 // RebuildRetrievalStats recomputes the entire retrieval_stats table from the

@@ -36,8 +36,8 @@ func TestDecodeSessionStart_CodexFixture(t *testing.T) {
 	require.Contains(t, p.TranscriptPath, "rollout-2026-07-17")
 	require.Empty(t, p.AgentType, "a top-level Codex session is not a subagent")
 
-	require.Equal(t, "cx/019f7291", ambientName(ClientCodex, p.SessionID),
-		"Codex ambient sessions carry the cx/ prefix off the first 8 id chars")
+	require.Equal(t, "cx/019f7291-46ec71e628fd86c6", ambientName(ClientCodex, p.SessionID),
+		"Codex ambient display names keep a readable prefix plus a full-id digest")
 }
 
 // The whole reason the adapter exists: Codex names the submitted prompt `prompt`,
@@ -99,10 +99,11 @@ func TestCodexHooks_EndToEnd(t *testing.T) {
 	})
 	ac := additionalContext(t, out)
 	require.Contains(t, ac, "<seam-briefing>")
-	require.Contains(t, ac, "Seam session: cx/019f7291 (ambient)",
+	codexName := ambientName(ClientCodex, codexID)
+	require.Contains(t, ac, "Seam session: "+codexName+" (ambient)",
 		"a Codex session gets a cx/ ambient line, not cc/")
 
-	sess, ok, err := store.SessionByName(ctx, db, "cx/019f7291")
+	sess, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "codex", codexID)
 	require.NoError(t, err)
 	require.True(t, ok, "SessionStart created the cx/ ambient session")
 	require.Equal(t, codexID, sess.ExternalSessionID)
@@ -137,7 +138,7 @@ func TestCodexStopHook_ConvergesFindings(t *testing.T) {
 
 	stopURL := ts.URL + "/api/hooks/stop?client=codex"
 	findings := func() string {
-		s, ok, err := store.SessionByName(ctx, db, "cx/019f7291")
+		s, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "codex", codexID)
 		require.NoError(t, err)
 		require.True(t, ok)
 		return s.Findings
@@ -164,7 +165,7 @@ func TestCodexStopHook_ConvergesFindings(t *testing.T) {
 	require.Equal(t, "(auto-harvested) second turn summary", findings())
 
 	// Stop never ends the session; the reaper does. It is still active.
-	s, ok, err := store.SessionByName(ctx, db, "cx/019f7291")
+	s, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "codex", codexID)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, core.SessionActive, s.Status)
@@ -186,7 +187,7 @@ func TestStopHook_ClaudeCodeOnlyHeartbeats(t *testing.T) {
 	_, _ = post(t, ts.URL+"/api/hooks/stop", testKey, map[string]any{
 		"session_id": ccID, "last_assistant_message": "should not be harvested",
 	})
-	s, ok, err := store.SessionByName(ctx, db, "cc/abcdef12")
+	s, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "claude-code", ccID)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Empty(t, s.Findings, "a Claude Code Stop only heartbeats -- CC harvests on SessionEnd")

@@ -184,7 +184,7 @@ into the agent's context. The agent begins already knowing your constraints.</p>
 </tr>
 <tr>
 <td>Named</td>
-<td><code>cc/&lt;id&gt;</code> (Claude Code) or <code>cx/&lt;id&gt;</code> (Codex)</td>
+<td><code>cc/&lt;prefix&gt;-&lt;digest&gt;</code> (Claude Code) or <code>cx/&lt;prefix&gt;-&lt;digest&gt;</code> (Codex)</td>
 <td>Whatever you pass, or generated</td>
 </tr>
 <tr>
@@ -195,6 +195,11 @@ into the agent's context. The agent begins already knowing your constraints.</p>
 </tbody>
 </table>
 </div>
+<p>The ambient handle keeps the first eight external-ID characters readable and
+adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
+external ID plus client, so two UUIDv7 sessions sharing a timestamp prefix never
+share scope, findings, or provenance. Pre-upgrade handles keep their old names
+when resumed.</p>
 <p>They are not two competing sessions. <code>session_start</code> <strong>adopts</strong> the sole ambient
 session for the same working directory rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.</p>
@@ -218,7 +223,7 @@ everything afterward inherits the project scope.</p>
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">Recent findings:
 </span></span><span class="line"><span class="cl">Recall on demand with recall; read a memory with memory_read.
-</span></span><span class="line"><span class="cl">Seam session: cc/8dd2fd5b (ambient)
+</span></span><span class="line"><span class="cl">Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </span></span><span class="line"><span class="cl">&lt;/seam-briefing&gt;
 </span></span></code></pre><p>Line by line:</p>
 <ul>

@@ -187,7 +187,7 @@ install order:</p>
 <td>command (<code>seam hook session-start</code>)</td>
 <td>10s</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cc/{prefix}</code> session.</td>
+<td>Registers the agent's cwd in the repo→project map, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cc/{prefix}-{digest}</code> session.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>
@@ -258,7 +258,7 @@ the profile is just SessionStart, UserPromptSubmit, and Stop.</p>
 <td><code>SessionStart</code></td>
 <td>command (<code>seam hook session-start --client codex</code>)</td>
 <td><code>/api/hooks/session-start</code></td>
-<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cx/{prefix}</code> session.</td>
+<td>Registers the cwd's project, assembles the <code>&lt;seam-briefing&gt;</code>, and creates or resumes the ambient <code>cx/{prefix}-{digest}</code> session.</td>
 </tr>
 <tr>
 <td><code>UserPromptSubmit</code></td>

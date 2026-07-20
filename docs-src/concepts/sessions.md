@@ -17,8 +17,14 @@ into the agent's context. The agent begins already knowing your constraints.
 | | Ambient | Explicit |
 |---|---|---|
 | Opened by | The SessionStart hook, automatically | `session_start` |
-| Named | `cc/<id>` (Claude Code) or `cx/<id>` (Codex) | Whatever you pass, or generated |
+| Named | `cc/<prefix>-<digest>` (Claude Code) or `cx/<prefix>-<digest>` (Codex) | Whatever you pass, or generated |
 | Gets | The short injected briefing | The full briefing, returned by the call |
+
+The ambient handle keeps the first eight external-ID characters readable and
+adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
+external ID plus client, so two UUIDv7 sessions sharing a timestamp prefix never
+share scope, findings, or provenance. Pre-upgrade handles keep their old names
+when resumed.
 
 They are not two competing sessions. `session_start` **adopts** the sole ambient
 session for the same working directory rather than opening a second one - that
@@ -48,7 +54,7 @@ Memories (seamless):
 
 Recent findings:
 Recall on demand with recall; read a memory with memory_read.
-Seam session: cc/8dd2fd5b (ambient)
+Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
 ```
 

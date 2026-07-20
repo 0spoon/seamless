@@ -163,7 +163,8 @@ func (s Session) LiveAsOf(now time.Time, ttl time.Duration) bool {
 }
 
 // Session is one agent work session. Ambient sessions are created by a hook
-// (named {cc|cx}/{prefix} per client); explicit ones by session_start.
+// (readable {cc|cx}/ names with a stable full-id digest); explicit ones by
+// session_start.
 type Session struct {
 	ID          string        `json:"id"`
 	Name        string        `json:"name"`
@@ -176,8 +177,12 @@ type Session struct {
 	// and the event payload key all remain "claude_session_id" for historical
 	// continuity (it long predated Codex); only this Go field was generalized.
 	ExternalSessionID string `json:"externalSessionId"`
-	CWD               string `json:"cwd"`
-	Source            string `json:"source"` // startup|resume|compact|clear|explicit
+	// ExternalClient disambiguates identical external session ids issued by
+	// different agent clients. It is the authoritative client half of an ambient
+	// session identity; Name remains a human-readable display handle.
+	ExternalClient string `json:"externalClient"`
+	CWD            string `json:"cwd"`
+	Source         string `json:"source"` // startup|resume|compact|clear|explicit
 	// Model is the LLM currently powering the session's agent, stored verbatim
 	// as the provider names it ("claude-fable-5", "gpt-5.5"). Sources, in
 	// arrival order: the session_start tool's model arg, the Codex hook

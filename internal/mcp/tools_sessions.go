@@ -75,7 +75,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	// already created this agent's session -- resume that row instead of minting
 	// a second sess/* one. Zero or many candidates (no hook ran, or two agents in
 	// one cwd) fall through to a fresh session, the same unambiguous-or-fallback
-	// guard as linkedClaudeID, so adoption can never bind a sibling's session.
+	// guard as linkedExternalIdentity, so adoption can never bind a sibling's session.
 	if name == "" {
 		if ambient, ok := s.soleAmbientByCWD(ctx, cwd); ok {
 			if project == "" {
@@ -106,11 +106,12 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		name = "sess/" + shortID(id)
 	}
 	now := time.Now().UTC()
+	externalSessionID, externalClient := s.linkedExternalIdentity(ctx, cwd)
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
 		CWD: cwd, Source: source, Model: model,
-		ExternalSessionID: s.linkedClaudeID(ctx, cwd),
-		CreatedAt:         now, UpdatedAt: now,
+		ExternalSessionID: externalSessionID, ExternalClient: externalClient,
+		CreatedAt: now, UpdatedAt: now,
 	}
 	if err := store.CreateSession(ctx, s.cfg.DB, sess); err != nil {
 		return errResult("session_start", err)
@@ -164,18 +165,18 @@ func (s *Server) briefing(ctx context.Context, cwd, source string) string {
 	return briefing
 }
 
-// linkedClaudeID resolves the Claude session id to stamp on a freshly created
-// NAMED explicit session, so a graceful SessionEnd closes it alongside its ambient
-// rather than leaving it for the idle reaper. (An unnamed session_start with a sole
-// same-cwd ambient adopts that session outright and never gets here.) Ambiguity
-// yields "" so the session falls back to the reaper instead of risking a link to
-// the wrong agent. Best-effort.
-func (s *Server) linkedClaudeID(ctx context.Context, cwd string) string {
+// linkedExternalIdentity resolves the client/id pair to stamp on a freshly
+// created NAMED explicit session, so a graceful SessionEnd closes it alongside
+// its ambient rather than leaving it for the idle reaper. (An unnamed
+// session_start with a sole same-cwd ambient adopts that session outright and
+// never gets here.) Ambiguity yields empty values so the session falls back to
+// the reaper instead of risking a link to the wrong agent. Best-effort.
+func (s *Server) linkedExternalIdentity(ctx context.Context, cwd string) (externalSessionID, externalClient string) {
 	ambient, ok := s.soleAmbientByCWD(ctx, cwd)
 	if !ok {
-		return ""
+		return "", ""
 	}
-	return ambient.ExternalSessionID
+	return ambient.ExternalSessionID, ambient.ExternalClient
 }
 
 // soleAmbientByCWD returns the single active ambient (cc/* or cx/*) session sharing cwd --

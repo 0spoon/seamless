@@ -78,7 +78,10 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 			title = basename
 		}
 		note.Title = title
-		note.Body = planStamp(p.SessionID, basename, iter, gitHead(p.CWD), now) + "\n\n" + content
+		note.Body = planStamp(
+			h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
+			basename, iter, gitHead(p.CWD), now,
+		) + "\n\n" + content
 		// New plan content is attributed to the capturing session's model; an
 		// unknown model keeps the note's prior attribution.
 		if m := h.ambientModel(ctx, ClientClaudeCode, p.SessionID); m != "" {
@@ -176,7 +179,7 @@ func (h *Handler) ensurePlanTask(ctx context.Context, p toolPayload, note core.N
 	createdBy := ""
 	if p.SessionID != "" {
 		// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-		createdBy = ambientName(ClientClaudeCode, p.SessionID)
+		createdBy = h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID)
 	}
 	task, created, err := plans.EnsureTask(ctx, h.db, note, planSlug, createdBy)
 	if err != nil {
@@ -246,6 +249,7 @@ func (h *Handler) recordPlanEvent(ctx context.Context, kind core.EventKind, clau
 	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
 	sessionID, project := h.ambientRef(ctx, ClientClaudeCode, claudeSessionID)
 	payload["claude_session_id"] = claudeSessionID
+	payload["external_client"] = ClientClaudeCode.externalIdentity()
 	if _, err := h.events.Record(ctx, core.Event{
 		Kind: kind, SessionID: sessionID, ProjectSlug: project, ItemID: itemID, Payload: payload,
 	}); err != nil {

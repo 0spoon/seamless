@@ -362,6 +362,56 @@ func TestWriteScopeFallbackToAmbient(t *testing.T) {
 	require.Equal(t, id, r["source_session"], "unbound write inherits ambient provenance")
 }
 
+func TestSamePrefixAmbientBindingsKeepKnowledgeProvenanceIsolated(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	now := time.Now().UTC()
+	seed := func(id, name, project, externalID string) {
+		t.Helper()
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
+			ExternalSessionID: externalID, ExternalClient: "codex", Ambient: true,
+			CreatedAt: now, UpdatedAt: now,
+		}))
+	}
+	idA, err := core.NewID()
+	require.NoError(t, err)
+	idB, err := core.NewID()
+	require.NoError(t, err)
+	const (
+		nameA = "cx/019f7291-aaaaaaaaaaaaaaaa"
+		nameB = "cx/019f7291-bbbbbbbbbbbbbbbb"
+	)
+	seed(idA, nameA, "alpha", "019f7291-alpha-full")
+	seed(idB, nameB, "beta", "019f7291-beta-full")
+
+	write := func(name, memoryName string) map[string]any {
+		t.Helper()
+		cli := dialClient(t, ctx, url, testKey)
+		start := callJSON(t, ctx, cli, "session_start", map[string]any{"name": name})
+		require.Equal(t, name, start["name"])
+		return callJSON(t, ctx, cli, "memory_write", map[string]any{
+			"name": memoryName, "kind": "reference",
+			"description": "same-prefix provenance regression",
+			"body":        "The bound ambient must remain the source.\n",
+		})
+	}
+	alphaWrite := write(nameA, "alpha-provenance")
+	betaWrite := write(nameB, "beta-provenance")
+	require.Equal(t, "alpha", alphaWrite["project"])
+	require.Equal(t, "beta", betaWrite["project"])
+
+	alpha, found, err := store.MemoryByName(ctx, db, "alpha", "alpha-provenance")
+	require.NoError(t, err)
+	require.True(t, found)
+	beta, found, err := store.MemoryByName(ctx, db, "beta", "beta-provenance")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, idA, alpha.SourceSession)
+	require.Equal(t, idB, beta.SourceSession)
+	require.NotEqual(t, alpha.SourceSession, beta.SourceSession)
+}
+
 // TestConcurrentAmbientDoesNotBleed is the regression test for the cross-agent
 // session-bleed bug: when two agents run in different repos, both leaving an
 // active ambient session, an unbound durable create must NOT silently attribute
@@ -591,7 +641,7 @@ func seedAmbientCWD(t *testing.T, ctx context.Context, db *sql.DB, name, claudeI
 	require.NoError(t, err)
 	require.NoError(t, store.CreateSession(ctx, db, core.Session{
 		ID: id, Name: name, ProjectSlug: "demo", Status: core.SessionActive,
-		Ambient: true, ExternalSessionID: claudeID, CWD: cwd,
+		Ambient: true, ExternalSessionID: claudeID, ExternalClient: "claude-code", CWD: cwd,
 		CreatedAt: updated, UpdatedAt: updated,
 	}))
 	return id
@@ -619,6 +669,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "agent-a", expl.Name, "a named start creates its own session")
 	require.Equal(t, "claude99-full", expl.ExternalSessionID, "linked to the sole same-cwd ambient")
+	require.Equal(t, "claude-code", expl.ExternalClient, "the linked client disambiguates its external id")
 
 	// A second same-cwd ambient makes the link ambiguous -> no link.
 	seedAmbientCWD(t, ctx, db, "cc/claudeaa", "claudeaa-full", "/work/demo", now)
@@ -629,6 +680,7 @@ func TestSessionStart_LinksClaudeSessionID(t *testing.T) {
 	expl2, _, err := store.SessionByID(ctx, db, start2["session_id"].(string))
 	require.NoError(t, err)
 	require.Empty(t, expl2.ExternalSessionID, "ambiguous same-cwd ambients -> no link")
+	require.Empty(t, expl2.ExternalClient, "ambiguous same-cwd ambients -> no client link")
 }
 
 // TestSessionStart_AdoptsAmbient checks that an unnamed session_start with exactly
@@ -682,4 +734,5 @@ func TestSessionStart_NoAmbientCreatesFresh(t *testing.T) {
 	require.True(t, ok)
 	require.False(t, sess.Ambient)
 	require.Empty(t, sess.ExternalSessionID, "different-cwd ambient must not link")
+	require.Empty(t, sess.ExternalClient, "different-cwd ambient must not link a client")
 }

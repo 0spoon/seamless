@@ -317,9 +317,9 @@ func ProjectRetrievalTrend(ctx context.Context, db *sql.DB, w RetrievalWindow, p
 }
 
 // injectedSessionKey resolves the session an injection belongs to: the event's
-// session_id column when set, else the payload's claude_session_id (older
-// briefing injections were recorded before the ambient session was linked, so
-// their column is empty but the claude id is always in the payload).
+// session_id column when set, else the payload's external client + historical
+// claude_session_id. Older payloads without the client retain their original
+// id-only fallback; new cross-client ids can no longer collapse together.
 func injectedSessionKey(sessionID, payload string) string {
 	if sessionID != "" {
 		return sessionID
@@ -329,6 +329,9 @@ func injectedSessionKey(sessionID, payload string) string {
 	}
 	var p injectedPayload
 	if err := json.Unmarshal([]byte(payload), &p); err == nil {
+		if p.ExternalClient != "" && p.ClaudeSessionID != "" {
+			return p.ExternalClient + "\x00" + p.ClaudeSessionID
+		}
 		return p.ClaudeSessionID
 	}
 	return ""
