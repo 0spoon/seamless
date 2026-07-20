@@ -27,7 +27,7 @@ func requireCodexCommandHook(t *testing.T, hooksObj map[string]any, event, cliAr
 	arr := entryArray(hooksObj, event)
 	require.NotEmpty(t, arr, "%s should be installed", event)
 	for _, e := range arr {
-		if !entryRunsHookCommand(e, cliArg) {
+		if !isManaged(e) {
 			continue
 		}
 		m := e.(map[string]any)
@@ -184,17 +184,18 @@ func TestInstalledStatusCodex(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hooks.json")
 
-	present, err := InstalledStatus(ClientCodex, path, "http://127.0.0.1:8081")
+	status, err := InstalledStatus(codexOpts(path))
 	require.NoError(t, err)
-	require.Empty(t, present)
+	require.Empty(t, status.Owned)
 
 	_, err = Install(codexOpts(path))
 	require.NoError(t, err)
 
-	present, err = InstalledStatus(ClientCodex, path, "http://127.0.0.1:8081")
+	status, err = InstalledStatus(codexOpts(path))
 	require.NoError(t, err)
-	require.ElementsMatch(t, InstalledEvents(ClientCodex), present)
-	require.Len(t, present, 3)
+	require.Equal(t, InstalledEvents(ClientCodex), status.Current)
+	require.Empty(t, status.Stale)
+	require.Len(t, status.Current, 3)
 }
 
 // topKeys returns the sorted top-level keys of a decoded JSON object.
