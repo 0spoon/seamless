@@ -107,18 +107,23 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--settings PATH] [--url BASE] [--seam PATH] [--mcp=false]
+seamlessd install-hooks [--client claude|codex|all] [--settings PATH] [--codex-hooks PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
-Merges the Seamless hook entries into a Claude Code `settings.json`, then
-registers the MCP server with the `claude` CLI.
+Wires the selected agent client(s) to Seamless: merges the hook entries into
+each client's hook file (Claude Code `settings.json`, Codex `hooks.json`),
+registers the MCP server with the client's CLI, and installs the embedded
+`seam-onboard` and `seam-research` skills into the client's skill home.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--settings` | `~/.claude/settings.json` | Target settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
+| `--client` | `claude` | Which client(s) to wire: `claude`, `codex`, or `all`. Run interactively with the flag omitted, it prompts (annotating which clients were detected); non-interactive runs take the default with no prompt. |
+| `--settings` | `~/.claude/settings.json` | Target Claude Code settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
+| `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Target Codex hooks file, created if absent. |
 | `--url` | derived from the config addr | Base URL of the daemon. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
-| `--mcp` | `true` | Register the MCP server via `claude mcp add --scope user`. |
+| `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add --scope user` / `codex mcp add`). |
+| `--skills` | `true` | Install the embedded skills for each wired client. A failure here degrades to a warning - skills must not cost the daemon bootstrap. |
 
 It generates `mcp.api_key` on a true first run under the same rule as `serve`,
 and refuses to run when an existing config leaves the key empty, since the key
@@ -138,12 +143,40 @@ hooks), and backs the file up once before the first change. It is idempotent:
 an already-current file is reported as up to date and left untouched. Each hook
 is reported as added, updated, or unchanged.
 
-Six events are installed together: `SessionStart`, `UserPromptSubmit`,
-`SessionEnd`, `PostToolUse`, `SubagentStop`, and `PermissionRequest`. All are
-command hooks that run `seam hook <event>` (exec form, no shell) except `UserPromptSubmit`,
-which is an http hook - Claude Code will not run an http hook for SessionStart
-at all, and at SessionEnd a fire-and-forget request races process teardown, so
-the findings harvest would often be lost.
+For Claude Code, six events are installed together: `SessionStart`,
+`UserPromptSubmit`, `SessionEnd`, `PostToolUse`, `SubagentStop`, and
+`PermissionRequest`. All are command hooks that run `seam hook <event>` (exec
+form, no shell) except `UserPromptSubmit`, which is an http hook - Claude Code
+will not run an http hook for SessionStart at all, and at SessionEnd a
+fire-and-forget request races process teardown, so the findings harvest would
+often be lost. The Codex profile is three shell-string command hooks; the
+[hooks reference](/reference/hooks/) has both tables.
+
+## seamlessd uninstall {#seamlessd_uninstall}
+
+```bash
+seamlessd uninstall [--client claude|codex|all] [--dry-run] [--yes] [--purge]
+```
+
+Reverses a full install on any supported OS: stops and removes the per-user
+service, strips the Seamless hook entries, deregisters the MCP server, removes
+the installed skills, and deletes the binaries. Config and the data dir
+(`~/.seamless` - memories and notes are markdown that outlive the program) are
+kept unless `--purge` is passed. Every external step is best-effort: an
+already-gone file or a missing client CLI is a note, never a failure, so
+uninstall is idempotent and safe to re-run.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--client` | `all` | Which client(s) to remove hooks/MCP/skills for. |
+| `--dry-run` | `false` | Print what would be removed and exit without changing anything. |
+| `--yes` | `false` | Skip the confirmation prompt. |
+| `--purge` | `false` | Also delete the config dir (`~/.config/seamless`) and data dir (`~/.seamless`). |
+| `--settings` | `~/.claude/settings.json` | Claude Code settings file to remove hooks from. |
+| `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Codex hooks file to remove hooks from. |
+| `--url` | derived from the config addr | Base URL the hook entries were installed with. |
+| `--install-dir` | `$SEAMLESS_INSTALL_DIR`, else `~/.local/bin` | Directory the binaries were installed to. |
+| `--mcp` | `true` | Also deregister the MCP server (`claude`/`codex mcp remove`). |
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 

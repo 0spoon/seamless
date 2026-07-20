@@ -112,7 +112,8 @@ help:
 	@echo "  console-chrome  same, but force Google Chrome (for agent testing)"
 	@echo "  Deploy (snapshots to stable paths; this is also the iterate loop):"
 	@echo "    install            build + copy bin/config to $(PREFIX_BIN) + $(CONFIG_DIR),"
-	@echo "                       point the service + hooks there, and restart"
+	@echo "                       point the service, hooks, MCP + skills there, and restart"
+	@echo "                       (CLIENT=claude|codex|all selects the wired agent client)"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
 	@echo "    update             upgrade in place to the latest release (CHECK=1 only reports)"
@@ -123,9 +124,10 @@ help:
 	@echo "    logs               follow the service log ($(SVC_LOG))"
 	@echo "  install-git-hooks        enable .githooks/ (pre-commit runs check-fast)"
 	@echo "  uninstall-git-hooks      disable .githooks/"
-	@echo "  install-onboard-skill    install seam-onboard (CLIENT=claude|codex|all)"
+	@echo "  install-onboard-skill    install seam-onboard from the checkout (CLIENT=claude|codex|all;"
+	@echo "                           'make install' already installs the embedded copy)"
 	@echo "  uninstall-onboard-skill  remove seam-onboard for CLIENT (default: claude)"
-	@echo "  install-research-skill   install seam-research (CLIENT=claude|codex|all)"
+	@echo "  install-research-skill   install seam-research from the checkout (CLIENT=claude|codex|all)"
 	@echo "  uninstall-research-skill remove seam-research for CLIENT (default: claude)"
 	@echo "  clean      remove build artifacts"
 
@@ -362,7 +364,7 @@ install: build
 	        rm -f $$tmp; \
 	        $(MAKE) _reload-service; \
 	    fi
-	@SEAMLESS_CONFIG=$(CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --seam $(PREFIX_BIN)/$(CLI)
+	@SEAMLESS_CONFIG=$(CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --client $(CLIENT) --seam $(PREFIX_BIN)/$(CLI)
 	@$(MAKE) _wait-healthy
 	@$(PREFIX_BIN)/$(BINARY) install-summary --bin-dir $(PREFIX_BIN) --config $(CONFIG) --bins $(BINARY),$(CLI)
 

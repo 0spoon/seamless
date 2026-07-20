@@ -7,8 +7,10 @@ Seamless installs hooks for two clients. They are what makes sessions ambient: a
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-[Codex](#codex-cli-three-hooks) gets three. `seamlessd install-hooks` targets
-Claude Code by default; `--client codex` (or `--client all`) targets Codex.
+[Codex](#codex-cli-three-hooks) gets three. `seamlessd install-hooks --client
+<claude|codex|all>` selects the profile; run interactively with no `--client`
+it prompts for the client(s), and a non-interactive run without the flag
+defaults to Claude Code.
 
 ## Claude Code: six hooks
 
@@ -63,12 +65,13 @@ that lifecycle and the tool-call approval gate.
 
 **A hook must never block an agent.** Every handler in `internal/hooks` honors
 this: an internal error yields a 200 with empty `additionalContext` rather than a
-failure. Only a bad bearer key returns non-2xx (401).
+failure. Only a bad bearer key (401) or an unknown `?client=` discriminator
+(400) returns non-2xx - both are install bugs, not runtime conditions.
 
 The same contract runs client-side. `seam hook <event>` reports a failure to
 stderr and exits 0 - a server that is down, a config that will not load, an
-unreadable stdin, all produce exit 0. Only a misconfigured event name (an install
-bug, not a runtime condition) is a hard error.
+unreadable stdin, all produce exit 0. Only a misconfigured event name or
+`--client` value (an install bug, not a runtime condition) is a hard error.
 
 Plan and subagent capture are best-effort under the same rule: a capture problem
 is logged and the hook still acks 200.
