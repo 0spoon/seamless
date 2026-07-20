@@ -107,8 +107,8 @@ For Claude Code, `seamlessd doctor` looks in `~/.claude/settings.json` and then
 `./.claude/settings.json` and compares installed entries with the definitions the
 installer would write now. For Codex it separately reports exact
 current/stale/missing definitions, separately discoverable CLI/app runtime
-versions, trust (`unverified; inspect /hooks in Codex CLI`; desktop trust is not
-yet live-verified), recent
+versions, trust (`unverified; inspect /hooks in Codex CLI`; the desktop app does
+not expose that command), recent
 SessionStart/UserPromptSubmit activity (evidence only), and the machine-readable
 MCP state. It also checks the recorded binary and config targets exist. A machine
 with no Codex CLI, initialized home, or Seamless Codex configuration is one quiet

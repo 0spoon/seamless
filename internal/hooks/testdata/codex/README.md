@@ -10,12 +10,14 @@ replace an older directory when Codex changes.
 |---|---|---|---|---|---|
 | 0.144.5 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop | Parent events retained; non-firing SessionEnd came from then-current source | Exec fixtures; visibility observed in both frontends, no TUI payload set retained | Live skip/bypass behavior observed; private state is not an integration API | Not captured |
 | 0.144.6 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop | Exact release schemas SHA-pinned | Live inputs/outputs for every event in both | `/hooks` review contract; capture bypasses trust; no supported query assumed | Enabled/disabled stdio and Streamable HTTP captured |
+| 0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop live; subagent events not app-tested | Same bundled five-event contracts; no app payload fixture retained | Real Local app chats showed briefing, prompt recall, MCP read/write/read, and Stop harvest | `/hooks` is not intercepted in the app; execution observed, trust state uninspectable | Installed stdio bridge exercised live; direct HTTP not app-tested |
 | 0.144.6 / Windows amd64/arm64 | No live capture | Same release schemas; Seamless syntax tests only | Not live-verified | Not live-verified | Not live-verified |
 
 | Codex / platform | `commandWindows` | Direct HTTP | Output limit | Live Windows |
 |---|---|---|---|---|
 | 0.144.5 / Darwin arm64 | Schema/source only | Upstream capability only; not captured | Not captured | No |
 | 0.144.6 / Darwin arm64 | Both aliases accepted by the live macOS binary; Windows selection source-only | Streamable HTTP config/JSON captured; no live tool call | Approx. 2,500-token spill observed; Seamless caps at 2,400 before telemetry/response | No |
+| 0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64 | Not app-tested | Direct HTTP not app-tested; installed stdio bridge exercised live | Platform-independent Seamless cap; oversize app behavior not tested | No |
 | 0.144.6 / Windows amd64/arm64 | Generated quoting tested, not executed | Source/config contract only | Platform-independent Seamless cap, not observed live | **Not yet run** |
 
 The public rendering of this evidence lives at

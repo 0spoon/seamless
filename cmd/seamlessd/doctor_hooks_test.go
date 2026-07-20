@@ -111,7 +111,7 @@ func TestCodexChecksExactDefinitionsAndMCPStillWarnsTrust(t *testing.T) {
 	trustChk := findCheck(t, checks, "codex hook trust")
 	require.Equal(t, statusWarn, trustChk.status)
 	require.Contains(t, trustChk.detail, "trust unverified; inspect /hooks")
-	require.Contains(t, trustChk.detail, "desktop app trust flow is not yet live-verified")
+	require.Contains(t, trustChk.detail, "desktop app does not expose that command")
 	require.NotContains(t, trustChk.detail, "trusted_hash")
 
 	activityChk := findCheck(t, checks, "codex hook activity")

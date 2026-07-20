@@ -305,12 +305,12 @@ configured hooks need review.</li>
 <li><strong>Headless automation</strong>: pass <code>--dangerously-bypass-hook-trust</code>. As the flag
 name says, it is for automation that already vets its hook sources.</li>
 </ul>
-<p>The public hook documentation currently names <code>/hooks</code> in the CLI. Seamless has
-not yet live-verified an equivalent desktop trust UI, so an app-only install
-must not treat the presence of <code>hooks.json</code> as proof that hooks ran. Restart the
-app and confirm that a real repo chat receives <code>&lt;seam-briefing&gt;</code> before relying
-on ambient behavior; until that evidence is recorded, desktop hook trust remains
-beta.</p>
+<p>The public hook documentation names <code>/hooks</code> in the CLI, and Codex.app
+26.715.52143 confirmed the boundary: <code>/hooks</code> is not intercepted in a desktop
+chat and directs the user back to the CLI. A real repo-local app chat did receive
+<code>&lt;seam-briefing&gt;</code>, prompt recall, and Stop harvest, so Local app hook execution is
+live-verified for that build. Trust state is still not inspectable in the app,
+and the presence of <code>hooks.json</code> alone remains insufficient evidence.</p>
 <p>If a Codex session opens with no briefing, an untrusted hook is the first thing
 to check - it is the Codex-specific version of &quot;silence is the failure mode&quot;.
 Seamless does not read or write Codex's private trust hashes, and <code>doctor</code> never
@@ -412,12 +412,12 @@ then the <a href="../guides/troubleshooting/">Troubleshooting</a> guide.</p>
 <h2 id="compatibility-evidence">Compatibility evidence</h2>
 <p>The maintained <a href="../reference/codex-compatibility/">Codex compatibility matrix</a>
 records the exact frontend, Codex runtime version, and platform used for live
-TUI/exec hooks, MCP JSON, output-spill, and Windows-command evidence. Desktop
-support is not complete from a version check alone: a claimed app mode also
-needs a real app chat, hook trust, MCP read/write, Stop harvest, subagent,
-worktree-scope, doctor, secret, and uninstall run. The checked-in fixture harness
-documents how to recapture CLI contracts without touching the operator's
-<code>CODEX_HOME</code>.</p>
+TUI/exec/app hooks, MCP JSON, output-spill, and Windows-command evidence. The
+macOS Local app row now covers a real repo chat, MCP read/write/read, and Stop
+harvest; it does not silently widen that result to app-only setup, hook trust,
+subagents, managed worktrees, uninstall, or Windows. The checked-in fixture
+harness documents how to recapture CLI contracts without touching the
+operator's <code>CODEX_HOME</code>.</p>
 <p>Primary upstream contracts: <a href="https://learn.chatgpt.com/docs/hooks">Codex hooks</a>,
 <a href="https://learn.chatgpt.com/docs/extend/mcp">Codex MCP</a>, and
 <a href="https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7">UUIDv7</a>.</p>

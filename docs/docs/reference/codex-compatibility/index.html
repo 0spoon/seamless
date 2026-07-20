@@ -198,11 +198,11 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 </tr>
 <tr>
 <td>0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64</td>
-<td>No app-chat capture</td>
+<td>SessionStart, UserPromptSubmit, and Stop live in Local app chats; SubagentStart/SubagentStop not app-tested</td>
 <td>Bundled runtime contains the five current event and input/output contracts</td>
-<td>App compatibility runtime reads the same local host configuration as the separately installed 0.144.6 PATH CLI; no real app chat retained</td>
-<td><strong>Not live-verified in the app</strong></td>
-<td>Bundled runtime read the exact existing enabled Seamless stdio registration; no app tool call captured</td>
+<td>Real Local chats captured in a global app workspace and a repo workspace; briefing, prompt recall, and Stop harvest were model-visible</td>
+<td><code>/hooks</code> is not intercepted in the app and directs the user to the CLI; hook execution is observed, but trust state remains uninspectable</td>
+<td>Bundled runtime and PATH CLI read the same exact enabled stdio registration; app calls to project_list, session_start, memory_read, notes_create, and notes_read succeeded</td>
 </tr>
 <tr>
 <td>0.144.6 / Windows amd64 and arm64</td>
@@ -247,9 +247,9 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <tr>
 <td>0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64</td>
 <td>Not app-tested</td>
-<td>Shared config observed only for the existing stdio bridge</td>
-<td>Not app-tested</td>
-<td>Same platform-independent Seamless cap; no app model observation</td>
+<td>Direct HTTP not app-tested; the installed stdio bridge completed a live read/write/read round trip</td>
+<td>SessionStart/UserPromptSubmit context and Stop.last_assistant_message observed in real app chats</td>
+<td>Same platform-independent Seamless cap; oversize behavior not app-tested</td>
 <td>No</td>
 </tr>
 <tr>
@@ -266,6 +266,14 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <p>The absence of a live Windows row is intentional and visible. Cross-compiling a
 Windows binary, parsing <code>command_windows</code>, or testing quoting on macOS is not the
 same evidence as running Codex on Windows.</p>
+<p>The macOS Local app row is deliberately narrower than a general desktop-support
+claim. It proves repo-scoped briefing/recall, the installed stdio MCP bridge, an
+explicitly bound read/write/read note round trip, and Stop harvest. The tested
+machine also had a PATH Codex CLI, so app-only setup is still unverified. App
+subagents, managed-worktree scope, oversize output, idle reaping, uninstall
+preservation, Windows, and WSL remain open. The live app did not expose <code>/hooks</code>,
+so execution evidence cannot be promoted into a claim that the current hook
+definition is trusted.</p>
 <h2 id="what-seamless-relies-on">What Seamless relies on</h2>
 <ul>
 <li>The installed profile contains exactly the five current hook events above.

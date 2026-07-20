@@ -214,9 +214,10 @@ the override when you want a slug that is not the directory name; see
 <p>Restart the selected client once after installing so it reloads hooks, MCP, and
 skills. In Codex CLI, open <code>/hooks</code>, review the exact Seamless commands, and
 approve them; <code>seamlessd doctor</code> deliberately reports that trust as unverified.
-Desktop app hook trust is still beta, so confirm that a real repo chat receives
-<code>&lt;seam-briefing&gt;</code> before relying on it. See <a href="../claude-code/">Claude Code setup</a> or
-<a href="../codex-cli/">Codex local setup</a> for the client-specific behavior.</p>
+The desktop app does not expose <code>/hooks</code>, so confirm that a real repo chat
+receives <code>&lt;seam-briefing&gt;</code> before relying on it. See <a href="../claude-code/">Claude Code
+setup</a> or <a href="../codex-cli/">Codex local setup</a> for the client-specific
+behavior.</p>
 <h2 id="confirm-it-works">Confirm it works</h2>
 <p>That session's context now opens with an injected briefing:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;

@@ -215,7 +215,7 @@ func codexChecks(cfg config.Config, db *sql.DB) []check {
 	checks := codexRuntimeChecks()
 	checks = append(checks,
 		hooksChk,
-		check{statusWarn, "codex hook trust", "trust unverified; inspect /hooks in Codex CLI; the desktop app trust flow is not yet live-verified"},
+		check{statusWarn, "codex hook trust", "trust unverified; inspect /hooks in Codex CLI; the desktop app does not expose that command"},
 	)
 	if db != nil {
 		checks = append(checks, codexHookActivityCheck(db))

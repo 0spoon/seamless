@@ -142,12 +142,12 @@ that repairs a path or command can require approval again. Two supported paths:
 - **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
   name says, it is for automation that already vets its hook sources.
 
-The public hook documentation currently names `/hooks` in the CLI. Seamless has
-not yet live-verified an equivalent desktop trust UI, so an app-only install
-must not treat the presence of `hooks.json` as proof that hooks ran. Restart the
-app and confirm that a real repo chat receives `<seam-briefing>` before relying
-on ambient behavior; until that evidence is recorded, desktop hook trust remains
-beta.
+The public hook documentation names `/hooks` in the CLI, and Codex.app
+26.715.52143 confirmed the boundary: `/hooks` is not intercepted in a desktop
+chat and directs the user back to the CLI. A real repo-local app chat did receive
+`<seam-briefing>`, prompt recall, and Stop harvest, so Local app hook execution is
+live-verified for that build. Trust state is still not inspectable in the app,
+and the presence of `hooks.json` alone remains insufficient evidence.
 
 If a Codex session opens with no briefing, an untrusted hook is the first thing
 to check - it is the Codex-specific version of "silence is the failure mode".
@@ -276,12 +276,12 @@ then the [Troubleshooting](/guides/troubleshooting/) guide.
 
 The maintained [Codex compatibility matrix](/reference/codex-compatibility/)
 records the exact frontend, Codex runtime version, and platform used for live
-TUI/exec hooks, MCP JSON, output-spill, and Windows-command evidence. Desktop
-support is not complete from a version check alone: a claimed app mode also
-needs a real app chat, hook trust, MCP read/write, Stop harvest, subagent,
-worktree-scope, doctor, secret, and uninstall run. The checked-in fixture harness
-documents how to recapture CLI contracts without touching the operator's
-`CODEX_HOME`.
+TUI/exec/app hooks, MCP JSON, output-spill, and Windows-command evidence. The
+macOS Local app row now covers a real repo chat, MCP read/write/read, and Stop
+harvest; it does not silently widen that result to app-only setup, hook trust,
+subagents, managed worktrees, uninstall, or Windows. The checked-in fixture
+harness documents how to recapture CLI contracts without touching the
+operator's `CODEX_HOME`.
 
 Primary upstream contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
 [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), and

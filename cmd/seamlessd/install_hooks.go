@@ -468,10 +468,10 @@ func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPa
 	}
 	// Codex ignores hooks until the user trusts them; no config we write can do
 	// that on their behalf (see the codex-hook-contract memory), so flag both the
-	// verified CLI route and the app evidence gap instead of implying one UI.
+	// verified CLI route and the app's missing command instead of implying one UI.
 	fieldRow("trust", yellow("unverified"))
 	fmt.Printf("%s%s\n", fieldCont, dim("CLI: inspect and approve the current definitions with /hooks"))
-	fmt.Printf("%s%s\n", fieldCont, dim("desktop app: trust flow still requires live verification"))
+	fmt.Printf("%s%s\n", fieldCont, dim("desktop app: /hooks is not available; confirm a repo chat receives <seam-briefing>"))
 	fmt.Printf("%s%s\n", fieldCont, dim("headless: pass --dangerously-bypass-hook-trust"))
 	return nil
 }
