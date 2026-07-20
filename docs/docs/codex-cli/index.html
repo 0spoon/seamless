@@ -166,8 +166,9 @@ anything) - and one command installs both. Where Codex differs from Claude Code
 is in the details, and those details are what this page is about.</p>
 <h2 id="install-the-hooks-and-register-mcp">Install the hooks and register MCP</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client codex
-</span></span></code></pre><p><code>--client codex</code> is the switch. Without it, <code>install-hooks</code> targets Claude Code
-(the default, unchanged). The Codex profile:</p>
+</span></span></code></pre><p><code>--client codex</code> is the switch. Without it, an interactive <code>install-hooks</code> run
+prompts for the client(s) to wire; a non-interactive run defaults to Claude
+Code, unchanged. The Codex profile:</p>
 <ol>
 <li><strong>Merges three hooks</strong> - SessionStart, UserPromptSubmit, Stop - into
 <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code> when that is set), with the

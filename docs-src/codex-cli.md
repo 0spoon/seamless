@@ -15,8 +15,9 @@ is in the details, and those details are what this page is about.
 seamlessd install-hooks --client codex
 ```
 
-`--client codex` is the switch. Without it, `install-hooks` targets Claude Code
-(the default, unchanged). The Codex profile:
+`--client codex` is the switch. Without it, an interactive `install-hooks` run
+prompts for the client(s) to wire; a non-interactive run defaults to Claude
+Code, unchanged. The Codex profile:
 
 1. **Merges three hooks** - SessionStart, UserPromptSubmit, Stop - into
    `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json` when that is set), with the
