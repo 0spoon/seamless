@@ -63,7 +63,7 @@ time?
 ```bash
 go install github.com/0spoon/seamless/cmd/...@latest   # Go 1.25+; seamlessd + seam
 seamlessd serve                   # 127.0.0.1:8081; first run generates the API key
-seamlessd install-hooks           # Claude Code hooks + MCP registration
+seamlessd install-hooks           # selected client's hooks, MCP, and skills
 ```
 
 `install-hooks` registers the MCP server with `claude mcp add --scope user`. For
@@ -73,11 +73,12 @@ registers the `seam mcp-proxy` stdio bridge; other MCP clients register
 clone, `make build && make run` is the same daemon out of `./bin/`, and `make
 install` sets it up as a service.
 
-The curl installer drops a `/seam-onboard` Claude Code skill into
-`~/.claude/skills/`; run `/seam-onboard` once in Claude Code to write a
-Seamless-awareness block into a global or project `CLAUDE.md`, so agents know
-when to reach for it. From a clone, `make install-onboard-skill` (re)installs the
-same skill.
+The installer delivers portable `seam-onboard` and `seam-research` skills for
+the selected client: `~/.claude/skills/` for Claude Code and
+`${CODEX_HOME:-$HOME/.codex}/skills/` for Codex. Run `/seam-onboard` in Claude Code
+or `$seam-onboard` in Codex once to add a Seamless-awareness block to global or
+project instructions (`CLAUDE.md` or `AGENTS.md`). From a clone, use
+`make install-onboard-skill CLIENT=claude|codex|all`.
 
 Then: [Quickstart](https://thereisnospoon.org/docs/quickstart/) ·
 [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) ·

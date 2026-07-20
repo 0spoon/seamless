@@ -5,7 +5,7 @@
 //	seamlessd serve         start the HTTP server
 //	seamlessd doctor        run configuration + database self-checks
 //	seamlessd import        import a Seam v1 data directory
-//	seamlessd install-hooks install the Claude Code hooks + register MCP
+//	seamlessd install-hooks install agent hooks, MCP, and maintained skills
 //	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
 //	seamlessd update        upgrade in place to the latest release (re-runs the installer)
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
@@ -134,7 +134,7 @@ usage:
   seamlessd serve          start the HTTP server (127.0.0.1:8081)
   seamlessd doctor         run configuration + database self-checks
   seamlessd import         import a Seam v1 data directory (--from ~/.seam)
-  seamlessd install-hooks  install the Claude Code hooks + register the MCP server
+  seamlessd install-hooks  install Claude Code/Codex hooks, MCP, and maintained skills
   seamlessd uninstall      remove Seamless: service, hooks, MCP, skills, binaries
                            (--purge also deletes config + ~/.seamless; --dry-run to preview)
   seamlessd update         upgrade in place to the latest release by re-running the installer

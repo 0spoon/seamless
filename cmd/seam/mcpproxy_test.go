@@ -13,6 +13,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/agentguide"
 )
 
 // jsonRPCID pulls the id out of one relayed frame, so a test can assert the
@@ -77,7 +79,10 @@ func TestBridge_RoundTripPersistsSession(t *testing.T) {
 		require.NoError(t, json.NewEncoder(w).Encode(map[string]any{
 			"jsonrpc": "2.0",
 			"id":      msg.ID,
-			"result":  map[string]any{"method": msg.Method},
+			"result": map[string]any{
+				"method":       msg.Method,
+				"instructions": agentguide.MCPInstructions,
+			},
 		}))
 	}))
 	defer srv.Close()
@@ -99,6 +104,13 @@ func TestBridge_RoundTripPersistsSession(t *testing.T) {
 	require.Equal(t, float64(1), jsonRPCID(t, frames[0]))
 	require.Equal(t, float64(2), jsonRPCID(t, frames[1]))
 	require.Equal(t, float64(3), jsonRPCID(t, frames[2]))
+	var initialized struct {
+		Result struct {
+			Instructions string `json:"instructions"`
+		} `json:"result"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(frames[0]), &initialized))
+	require.Equal(t, agentguide.MCPInstructions, initialized.Result.Instructions)
 
 	// No session id on the first POST; minted on initialize and replayed on all
 	// three that follow.

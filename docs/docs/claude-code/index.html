@@ -217,9 +217,9 @@ project scope from their cwd - no <code>project</code> argument on any call.</p>
 unmapped writes are rejected rather than defaulted to global.</p>
 <h2 id="tell-your-agents-it-exists">Tell your agents it exists</h2>
 <p>Installing the tools does not mean an agent will use them well. Two things help.</p>
-<p>First, run <code>/seam-onboard</code>. The curl installer already drops this Claude Code
-skill into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-skill</code>
-(re)installs it:</p>
+<p>First, run <code>/seam-onboard</code>. The installer drops the portable Claude Code copy
+into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-skill</code>
+(re)installs it for the default <code>CLIENT=claude</code> profile:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill    <span class="c1"># (re)install the /seam-onboard skill from a clone</span>
 </span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
 writes a Seamless-awareness block into your <code>CLAUDE.md</code> before removing itself.</p>

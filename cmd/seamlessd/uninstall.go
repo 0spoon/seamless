@@ -13,6 +13,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
+	agentskills "github.com/0spoon/seamless/internal/skills"
 )
 
 // Service identifiers, duplicated on purpose from the three install surfaces that
@@ -102,7 +103,7 @@ func runUninstall(args []string) error {
 		}
 	}
 
-	removeSkills(*dryRun)
+	removeSkills(clients, *dryRun)
 	removeBinaries(installDir, runtime.GOOS, *dryRun)
 	if *purge {
 		purgeData(configDir, dataDir, *dryRun)
@@ -369,40 +370,45 @@ func deregisterMCP(cli string, dryRun bool) {
 	fieldRow("mcp", green("deregistered"))
 }
 
-// removeSkills removes the Claude Code skills the installers deliver, and the
-// seam-onboard delivered-marker (so a later reinstall can re-deliver it). Mirrors
-// scripts/uninstall-skill.sh's rm -rf and is safe when nothing is present.
-func removeSkills(dryRun bool) {
+// removeSkills removes only the selected clients' maintained packages and
+// delivered-once markers. Claude and Codex homes are independent, including a
+// custom CODEX_HOME, so --client=codex never disturbs Claude's skills.
+func removeSkills(clients []hooks.Client, dryRun bool) {
 	fmt.Printf("\n%s\n", bold("Skills"))
-	skills, err := expandHome("~/.claude/skills")
+	opts, err := agentskills.OptionsFromEnvironment()
 	if err != nil {
 		fieldRow("skills", dim("none installed"))
 		return
 	}
-	var found, done []string
-	for _, name := range []string{"seam-onboard", "seam-research"} {
-		p := filepath.Join(skills, name)
-		if _, statErr := os.Stat(p); statErr != nil {
+	for _, client := range clients {
+		label := "Claude Code"
+		if client == hooks.ClientCodex {
+			label = "Codex"
+		}
+		skillClient, clientErr := agentSkillClient(client)
+		if clientErr != nil {
+			fieldRow(label, yellow("could not resolve skill home"))
+			contDim(clientErr.Error())
 			continue
 		}
-		found = append(found, name)
-		if dryRun {
+		removed, removeErr := agentskills.Remove(skillClient, opts, dryRun)
+		if removeErr != nil {
+			fieldRow(label, yellow("could not remove skills"))
+			contDim(removeErr.Error())
 			continue
 		}
-		if os.RemoveAll(p) == nil {
-			done = append(done, name)
+		items := append([]string(nil), removed.Skills...)
+		if removed.Marker {
+			items = append(items, agentskills.OnboardMarker)
 		}
-	}
-	if !dryRun {
-		_ = os.Remove(filepath.Join(skills, ".seam-onboard-delivered"))
-	}
-	switch {
-	case len(found) == 0:
-		fieldRow("skills", dim("none installed"))
-	case dryRun:
-		fieldRow("skills", dim("would remove ")+dim(strings.Join(found, ", ")))
-	default:
-		fieldRow("skills", green("removed ")+dim(strings.Join(done, ", ")))
+		switch {
+		case len(items) == 0:
+			fieldRow(label, dim("none installed  · "+tildePath(removed.Root)))
+		case dryRun:
+			fieldRow(label, dim("would remove "+strings.Join(items, ", "))+dim("  · "+tildePath(removed.Root)))
+		default:
+			fieldRow(label, green("removed ")+dim(strings.Join(items, ", "))+dim("  · "+tildePath(removed.Root)))
+		}
 	}
 }
 

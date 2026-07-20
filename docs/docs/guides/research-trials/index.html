@@ -212,13 +212,16 @@ memory carries the conclusion. A briefing has a token budget, and twelve trials
 of a solved problem are not what an agent needs injected before it starts work.
 See <a href="../../guides/write-good-memories/">Write memories that get recalled</a>.</p>
 <h2 id="the-skill">The skill</h2>
-<p>The curl installer drops a <code>/seam-research</code> Claude Code skill into
-<code>~/.claude/skills/</code> (from a clone: <code>make install-research-skill</code>). It wraps
-this loop - open the lab, query before trying, predict before running, record
-once with the outcome, distill decisions into memory - and it is
-model-invocable: Claude activates it on its own when an investigation turns
-into repeated experiments. <code>/seam-research &lt;lab-name&gt; &lt;problem&gt;</code> starts or
-resumes one explicitly.</p>
+<p>The installer drops the portable <code>seam-research</code> package into the selected
+client's skill home. From a clone, use <code>make install-research-skill</code> for Claude
+Code or <code>make install-research-skill CLIENT=codex</code> for Codex. It wraps this loop</p>
+<ul>
+<li>open the lab, query before trying, predict before running, record once with
+the outcome, distill decisions into memory - and can activate when an
+investigation becomes repeated experiments. Start or resume one explicitly with
+<code>/seam-research &lt;lab-name&gt; &lt;problem&gt;</code> in Claude Code or
+<code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> in Codex.</li>
+</ul>
 <h2 id="the-tools">The tools</h2>
 <p><code>lab_open</code>, <code>trial_record</code>, and <code>trial_query</code> are documented in
 <a href="../../reference/mcp/lab-gardener-usage/">Lab, gardener &amp; usage</a>.</p>

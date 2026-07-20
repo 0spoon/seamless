@@ -179,10 +179,29 @@ up once before the first change.</li>
 That records a stdio server in <code>~/.codex/config.toml</code>; the
 <a href="#why-mcp-goes-through-a-bridge">mcp-proxy bridge</a> is why it is stdio and not a
 direct HTTP URL. An already-present entry is tolerated, not clobbered.</li>
+<li><strong>Installs two Codex skills</strong> under
+<code>${CODEX_HOME:-$HOME/.codex}/skills/</code>: the one-shot <code>$seam-onboard</code> workflow and
+the recurring <code>$seam-research</code> lab workflow. Claude's copies remain in
+<code>~/.claude/skills/</code>; their one-shot delivery markers are independent.</li>
 </ol>
 <p>The default (<code>--client claude</code>, or no flag) is byte-for-byte what it always was,
 so nothing about your Claude Code setup changes when you add Codex. Use
 <code>--client all</code> to install both in one pass.</p>
+<h2 id="teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</h2>
+<p>Every MCP initialize response carries concise server instructions. The first
+512 characters cover the baseline even before onboarding: recall before
+guessing, memory versus notes, explicit ambiguous scope, session handoff,
+<code>plan:&lt;slug&gt;</code> composition, and trusting each tool's <code>inputSchema</code> required
+fields and enums.</p>
+<p>For durable personal or project guidance, invoke <code>$seam-onboard</code>. It inspects
+the existing instructions, explains the marker-wrapped block it proposes, and
+asks whether to add it globally (<code>${CODEX_HOME:-$HOME/.codex}/AGENTS.md</code>) or to this
+project (<code>./AGENTS.md</code>). It never silently edits an instruction file and removes
+only its own skill directory after success. Reinstall it from a clone with:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>codex
+</span></span></code></pre><p><code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> opens or resumes the same structured,
+multi-agent research-lab workflow as Claude Code. It remains installed and is
+refreshed on upgrades.</p>
 <h2 id="the-three-hooks-and-what-they-inject">The three hooks, and what they inject</h2>
 <p>Codex installs three hooks against six for Claude Code. It has no plan-mode
 capture (Codex has no plan mode to capture) and <strong>no SessionEnd</strong> - Codex 0.144.5
@@ -314,7 +333,7 @@ then the <a href="../guides/troubleshooting/">Troubleshooting</a> guide.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#the-three-hooks-and-what-they-inject">The three hooks, and what they inject</a></li><li class="lvl-3"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</a></li><li class="lvl-2"><a href="#the-three-hooks-and-what-they-inject">The three hooks, and what they inject</a></li><li class="lvl-3"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
     </ul>
   </aside>
   

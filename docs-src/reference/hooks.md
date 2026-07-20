@@ -126,7 +126,7 @@ seamlessd install-hooks                        # default: ~/.claude/settings.jso
 seamlessd install-hooks --settings ./.claude/settings.json
 seamlessd install-hooks --url http://127.0.0.1:8081
 seamlessd install-hooks --seam /path/to/seam
-seamlessd install-hooks --client codex         # ~/.codex/hooks.json + codex mcp add
+seamlessd install-hooks --client codex         # hooks + codex mcp add + ~/.codex/skills
 seamlessd install-hooks --client all           # both clients in one pass
 ```
 

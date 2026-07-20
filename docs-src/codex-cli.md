@@ -28,10 +28,36 @@ seamlessd install-hooks --client codex
    That records a stdio server in `~/.codex/config.toml`; the
    [mcp-proxy bridge](#why-mcp-goes-through-a-bridge) is why it is stdio and not a
    direct HTTP URL. An already-present entry is tolerated, not clobbered.
+3. **Installs two Codex skills** under
+   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
+   the recurring `$seam-research` lab workflow. Claude's copies remain in
+   `~/.claude/skills/`; their one-shot delivery markers are independent.
 
 The default (`--client claude`, or no flag) is byte-for-byte what it always was,
 so nothing about your Claude Code setup changes when you add Codex. Use
 `--client all` to install both in one pass.
+
+## Teach Codex when to use Seamless
+
+Every MCP initialize response carries concise server instructions. The first
+512 characters cover the baseline even before onboarding: recall before
+guessing, memory versus notes, explicit ambiguous scope, session handoff,
+`plan:<slug>` composition, and trusting each tool's `inputSchema` required
+fields and enums.
+
+For durable personal or project guidance, invoke `$seam-onboard`. It inspects
+the existing instructions, explains the marker-wrapped block it proposes, and
+asks whether to add it globally (`${CODEX_HOME:-$HOME/.codex}/AGENTS.md`) or to this
+project (`./AGENTS.md`). It never silently edits an instruction file and removes
+only its own skill directory after success. Reinstall it from a clone with:
+
+```bash
+make install-onboard-skill CLIENT=codex
+```
+
+`$seam-research <lab-name> <problem>` opens or resumes the same structured,
+multi-agent research-lab workflow as Claude Code. It remains installed and is
+refreshed on upgrades.
 
 ## The three hooks, and what they inject
 

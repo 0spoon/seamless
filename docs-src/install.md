@@ -47,9 +47,11 @@ itself. No Go toolchain is involved. In order, it:
    `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
    `/healthz` until the daemon actually answers.
 
-Step 3 wires **Claude Code**. Codex CLI is a one-command opt-in on top -
-`seamlessd install-hooks --client codex` - not part of the curl install; see
-[Codex CLI setup](/codex-cli/).
+Step 3 detects **Claude Code**, **Codex**, or both and wires the detected set.
+That one client choice drives hooks, MCP registration, and the maintained
+`seam-onboard` / `seam-research` skills together. With neither client detected,
+the historical Claude Code default remains. Set `SEAMLESS_CLIENT` to make the
+choice explicit; see [Codex CLI setup](/codex-cli/) for Codex's trust gate.
 
 The Windows installer is per-user by the same principle as the others: it runs
 as **you**, never elevates, and registers the Scheduled Task under your own
@@ -66,9 +68,10 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 |---|---|
 | `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
 | `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
-| `SEAMLESS_NO_HOOKS=1` | skip the Claude Code hooks and MCP registration |
-| `SEAMLESS_NO_ONBOARD_SKILL=1` | skip dropping the `/seam-onboard` skill into `~/.claude/skills/` |
-| `SEAMLESS_NO_RESEARCH_SKILL=1` | skip dropping the `/seam-research` skill into `~/.claude/skills/` |
+| `SEAMLESS_CLIENT=claude\|codex\|all` | choose which agent client(s) receive hooks, MCP, and skills instead of auto-detection |
+| `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
+| `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
+| `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |
 | `SEAMLESS_NO_SERVICE=1` | install the binaries only; run `seamlessd serve` yourself |
 | `SEAMLESS_ALLOW_ROOT=1` | permit running as root (single-user containers) |
 

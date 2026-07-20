@@ -7,6 +7,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/agentguide"
+
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
@@ -80,6 +82,19 @@ func TestCatalogToolsAreDocumentable(t *testing.T) {
 		require.NotEmpty(t, tool.Description, "%s: description is the docs body", tool.Name)
 		require.False(t, seen[tool.Name], "duplicate tool name %q", tool.Name)
 		seen[tool.Name] = true
+	}
+}
+
+// Server-wide guidance must never teach a workflow around a tool that was
+// renamed or removed. The canonical names live with the guidance; Catalog is
+// the served/help-text surface that proves each one still exists.
+func TestAgentGuidanceNamesRealTools(t *testing.T) {
+	served := make(map[string]bool, len(Catalog()))
+	for _, tool := range Catalog() {
+		served[tool.Name] = true
+	}
+	for _, name := range agentguide.RequiredToolNames() {
+		require.True(t, served[name], "agent guidance names missing MCP tool %q", name)
 	}
 }
 

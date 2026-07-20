@@ -1,0 +1,11 @@
+interface:
+  display_name: "Seamless Research Lab"
+  short_description: "Run shared, evidence-driven engineering trials"
+  default_prompt: "Use $seam-research to open or resume a systematic investigation in Seamless."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "seamless"
+      description: "Shared Seamless research labs, memory, sessions, and tasks"
+policy:
+  allow_implicit_invocation: true

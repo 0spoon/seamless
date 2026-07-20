@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
-# Install a repo-bundled Claude Code skill into ~/.claude/skills/.
+# Install a repo-bundled Seamless skill for Claude Code, Codex, or both.
 #
-#   scripts/install-skill.sh <name>    # source: scripts/<name>-skill/SKILL.md
+#   scripts/install-skill.sh <name> [claude|codex|all]
+#   CLIENT=codex scripts/install-skill.sh <name>
 #
 # Invoke via the make targets (install-onboard-skill, install-research-skill).
-# Installing overwrites any prior copy at the destination, including the stale
-# Seam v1 skills that lived at the same paths.
+# Installing refreshes the maintained package at each selected client home.
 
 set -euo pipefail
 
@@ -21,29 +21,62 @@ if [ -z "$NAME" ]; then
     exit 1
 fi
 
-SRC_DIR="$REPO_ROOT/scripts/$NAME-skill"
-DST_DIR="$HOME/.claude/skills/$NAME"
+CLIENT="${2:-${CLIENT:-claude}}"
+SRC_DIR="$REPO_ROOT/internal/skills/assets/$NAME"
 
 if [ ! -f "$SRC_DIR/SKILL.md" ]; then
     err "Skill source not found at $SRC_DIR/SKILL.md"
     exit 1
 fi
 
-mkdir -p "$DST_DIR"
-cp "$SRC_DIR/SKILL.md" "$DST_DIR/SKILL.md"
+install_one() {
+    client=$1
+    case "$client" in
+    claude)
+        skills="$HOME/.claude/skills"
+        invoke="/$NAME"
+        ;;
+    codex)
+        skills="${CODEX_HOME:-$HOME/.codex}/skills"
+        invoke="\$$NAME"
+        ;;
+    *)
+        err "unknown client $client: valid values are claude, codex, all"
+        exit 1
+        ;;
+    esac
 
-ok "Installed /$NAME skill at $DST_DIR"
+    dst="$skills/$NAME"
+    mkdir -p "$dst"
+    cp -R "$SRC_DIR/." "$dst/"
+    if [ "$NAME" = seam-onboard ]; then
+        : >"$skills/.seam-onboard-delivered"
+    fi
+    ok "Installed $invoke skill at $dst"
+}
+
+case "$CLIENT" in
+claude | codex) install_one "$CLIENT" ;;
+all)
+    install_one claude
+    install_one codex
+    ;;
+*)
+    err "unknown client $CLIENT: valid values are claude, codex, all"
+    exit 1
+    ;;
+esac
 echo
 
 case "$NAME" in
 seam-onboard)
-    echo "  Run  /seam-onboard  in any Claude Code session to install"
-    echo "  Seamless awareness into a global or project CLAUDE.md."
+    echo "  Run  /seam-onboard  in Claude Code or  \$seam-onboard  in Codex"
+    echo "  to install awareness into global or project instructions."
     echo "  The skill removes itself after a successful onboarding."
     ;;
 seam-research)
-    echo "  Run  /seam-research <lab-name> <problem>  to open a research lab,"
-    echo "  or let Claude activate it on its own for systematic investigations."
+    echo "  Run  /seam-research  in Claude Code or  \$seam-research  in Codex"
+    echo "  to open or resume a systematic research lab."
     echo "  The skill persists; re-run this target to update it."
     ;;
 esac

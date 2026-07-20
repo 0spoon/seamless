@@ -40,10 +40,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 # One archive per platform holding both binaries, plus the files a fresh
-# install needs: the example config `make install` seeds from, and the Claude
-# Code skills the curl installer drops into ~/.claude/skills/ (bundled here so
-# a no-clone install can still deliver them -- each lands at <name>/SKILL.md in
-# the archive).
+# install needs: the example config `make install` seeds from, and the portable
+# Claude Code/Codex skills embedded by seamlessd. They are also bundled as
+# ordinary skill packages so a release archive is self-describing and supports
+# manual installation without a clone.
 archives:
   - formats: [tar.gz]
     # zip on Windows: the PowerShell installer (docs/install.ps1) uses
@@ -57,11 +57,17 @@ archives:
       - LICENSE
       - README.md
       - seamless.yaml.example
-      - src: scripts/seam-onboard-skill/SKILL.md
+      - src: internal/skills/assets/seam-onboard/SKILL.md
         dst: seam-onboard
         strip_parent: true
-      - src: scripts/seam-research-skill/SKILL.md
+      - src: internal/skills/assets/seam-onboard/agents/openai.yaml
+        dst: seam-onboard/agents
+        strip_parent: true
+      - src: internal/skills/assets/seam-research/SKILL.md
         dst: seam-research
+        strip_parent: true
+      - src: internal/skills/assets/seam-research/agents/openai.yaml
+        dst: seam-research/agents
         strip_parent: true
 
 checksum:

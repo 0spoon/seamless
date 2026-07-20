@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/hooks"
+	agentskills "github.com/0spoon/seamless/internal/skills"
 )
 
 // The Claude Code MCP registration names a headersHelper command instead of
@@ -142,4 +143,15 @@ func TestPromptInstallClients(t *testing.T) {
 func TestDetectedTag(t *testing.T) {
 	require.Equal(t, "(detected)", detectedTag(true))
 	require.Equal(t, "(not detected)", detectedTag(false))
+}
+
+func TestAgentSkillClient_FollowsHookSelection(t *testing.T) {
+	claude, err := agentSkillClient(hooks.ClientClaudeCode)
+	require.NoError(t, err)
+	require.Equal(t, agentskills.ClientClaude, claude)
+	codex, err := agentSkillClient(hooks.ClientCodex)
+	require.NoError(t, err)
+	require.Equal(t, agentskills.ClientCodex, codex)
+	_, err = agentSkillClient(hooks.Client("gemini"))
+	require.ErrorContains(t, err, "valid values are claude, codex")
 }

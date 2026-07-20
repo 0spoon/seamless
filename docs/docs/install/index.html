@@ -191,9 +191,11 @@ hooks, and registers the MCP server;</li>
 <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
 <code>/healthz</code> until the daemon actually answers.</li>
 </ol>
-<p>Step 3 wires <strong>Claude Code</strong>. Codex CLI is a one-command opt-in on top -
-<code>seamlessd install-hooks --client codex</code> - not part of the curl install; see
-<a href="../codex-cli/">Codex CLI setup</a>.</p>
+<p>Step 3 detects <strong>Claude Code</strong>, <strong>Codex</strong>, or both and wires the detected set.
+That one client choice drives hooks, MCP registration, and the maintained
+<code>seam-onboard</code> / <code>seam-research</code> skills together. With neither client detected,
+the historical Claude Code default remains. Set <code>SEAMLESS_CLIENT</code> to make the
+choice explicit; see <a href="../codex-cli/">Codex CLI setup</a> for Codex's trust gate.</p>
 <p>The Windows installer is per-user by the same principle as the others: it runs
 as <strong>you</strong>, never elevates, and registers the Scheduled Task under your own
 account (<code>LogonType Interactive</code>), so a single signed-in user is all it needs and
@@ -221,16 +223,20 @@ script</a> with no dependencies to audit.</p>
 <td>put the binaries somewhere else</td>
 </tr>
 <tr>
+<td><code>SEAMLESS_CLIENT=claude|codex|all</code></td>
+<td>choose which agent client(s) receive hooks, MCP, and skills instead of auto-detection</td>
+</tr>
+<tr>
 <td><code>SEAMLESS_NO_HOOKS=1</code></td>
-<td>skip the Claude Code hooks and MCP registration</td>
+<td>skip agent hooks, MCP registration, and skills</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_ONBOARD_SKILL=1</code></td>
-<td>skip dropping the <code>/seam-onboard</code> skill into <code>~/.claude/skills/</code></td>
+<td>skip the selected client(s)' one-shot onboarding skill</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_RESEARCH_SKILL=1</code></td>
-<td>skip dropping the <code>/seam-research</code> skill into <code>~/.claude/skills/</code></td>
+<td>skip the selected client(s)' recurring research skill</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_SERVICE=1</code></td>

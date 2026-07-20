@@ -1,0 +1,6 @@
+interface:
+  display_name: "Onboard Seamless"
+  short_description: "Teach Codex when to use shared Seamless knowledge"
+  default_prompt: "Use $seam-onboard to install Seamless awareness for Codex globally or in this project."
+policy:
+  allow_implicit_invocation: false

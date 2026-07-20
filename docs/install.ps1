@@ -9,8 +9,8 @@
 # scripts/: a script living at two paths is a script that drifts.
 #
 # What it does: fetch this platform's release zip from GitHub, verify its
-# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire Claude Code
-# (which generates the bearer key on first run), then run the daemon as a
+# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire the detected
+# agent client(s) (generating the bearer key on first run), then run the daemon as a
 # per-user Scheduled Task -- an at-logon task running as you, no admin. That is
 # the Windows analog of launchd / systemd --user: the whole install is per-user,
 # which is why it never elevates. Re-running it upgrades in place; the config and
@@ -20,9 +20,10 @@
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
 #   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
-#   $env:SEAMLESS_NO_HOOKS=1          skip the Claude Code hooks + MCP registration
-#   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip installing the /seam-onboard Claude Code skill
-#   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip installing the /seam-research Claude Code skill
+#   $env:SEAMLESS_CLIENT              claude|codex|all (default: detected clients, else claude)
+#   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and skills
+#   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip the one-shot seam-onboard skill
+#   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
 #   $env:SEAMLESS_NO_SERVICE=1        skip the service; install the binaries and stop
 
 $ErrorActionPreference = 'Stop'
@@ -55,6 +56,26 @@ function Say { param([string]$Message) Write-Host "  $Message" }
 function Step { param([string]$Key, [string]$Message) Write-Host ('  {0,-12} {1}' -f $Key, $Message) }
 function Warn { param([string]$Message) Write-Warning $Message }
 function Die { param([string]$Message) [Console]::Error.WriteLine("`nerror: $Message"); exit 1 }
+
+# A piped PowerShell installer has no interactive client menu. Resolve the same
+# detected set once and pass it explicitly to install-hooks, which installs the
+# matching hooks, MCP registration, and embedded skill packages together.
+function Resolve-AgentClient {
+    if ($env:SEAMLESS_CLIENT) {
+        switch ($env:SEAMLESS_CLIENT.ToLowerInvariant()) {
+            'claude' { return 'claude' }
+            'codex' { return 'codex' }
+            'all' { return 'all' }
+            default { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, codex, all)" }
+        }
+    }
+    $claude = (((Get-Command claude -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path (Join-Path $HOME '.claude')))
+    $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
+    $codex = (((Get-Command codex -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path $codexHome))
+    if ($claude -and $codex) { return 'all' }
+    if ($codex) { return 'codex' }
+    return 'claude'
+}
 
 # Map the process architecture onto goreleaser's vocabulary. PROCESSOR_ARCHITEW6432
 # is set when a 32-bit PowerShell runs on 64-bit Windows (WOW64); it names the real
@@ -189,7 +210,7 @@ function Install-Binaries {
 # otherwise bind the install to it. Missing claude/seam is a warning inside
 # install-hooks, not a failure, so a box without Claude Code still installs cleanly.
 function Invoke-WireHooks {
-    param([string]$Tmp, [string]$InstallDir)
+    param([string]$Tmp, [string]$InstallDir, [string]$AgentClient)
     if ($env:SEAMLESS_NO_HOOKS) { Step 'hooks' 'skipped (SEAMLESS_NO_HOOKS)'; return }
     $seamlessd = Join-Path $InstallDir 'seamlessd.exe'
     $seam = Join-Path $InstallDir 'seam.exe'
@@ -202,56 +223,12 @@ function Invoke-WireHooks {
             # EnsureAPIKey only writes it when the config resolves to nothing.
             Remove-Item Env:SEAMLESS_CONFIG -ErrorAction SilentlyContinue
         }
-        & $seamlessd install-hooks --seam $seam
+        & $seamlessd install-hooks --client $AgentClient --seam $seam
         if ($LASTEXITCODE -ne 0) { Die "install-hooks failed (exit $LASTEXITCODE)" }
     } finally {
         Pop-Location
         Remove-Item Env:SEAMLESS_CONFIG -ErrorAction SilentlyContinue
     }
-}
-
-# Drop the seam-onboard Claude Code skill into ~\.claude\skills\ from the copy
-# bundled in the release archive, so a no-clone install can still deliver it. The
-# skill self-removes after /seam-onboard runs, so a delivered-once marker keeps
-# re-runs (upgrades) from re-adding a skill the user already used up. Returns
-# whether the skill is freshly present, so the closing message only points at it
-# when it is actually there to run.
-function Install-OnboardSkill {
-    param([string]$Tmp)
-    if ($env:SEAMLESS_NO_ONBOARD_SKILL) { Step 'onboard' 'skipped (SEAMLESS_NO_ONBOARD_SKILL)'; return $false }
-    if ($env:SEAMLESS_NO_HOOKS) { return $false }
-    $src = Join-Path $Tmp 'seam-onboard\SKILL.md'
-    if (-not (Test-Path $src)) { return $false } # older/pinned release without the bundled skill
-
-    $skills = Join-Path $HOME '.claude\skills'
-    $dst = Join-Path $skills 'seam-onboard'
-    $marker = Join-Path $skills '.seam-onboard-delivered'
-    New-Item -ItemType Directory -Force -Path $skills | Out-Null
-
-    # Delivered before and now gone: the user ran /seam-onboard (which deletes the
-    # skill), so do not re-add it on this upgrade.
-    if (-not (Test-Path $dst) -and (Test-Path $marker)) { return $false }
-
-    New-Item -ItemType Directory -Force -Path $dst | Out-Null
-    Copy-Item -Path $src -Destination (Join-Path $dst 'SKILL.md') -Force
-    New-Item -ItemType File -Force -Path $marker -ErrorAction SilentlyContinue | Out-Null
-    Step 'onboard' '/seam-onboard skill installed'
-    return $true
-}
-
-# Drop the seam-research skill the same way. Unlike seam-onboard it is a recurring
-# workflow that never self-removes, so there is no marker: every run (re)installs
-# it, which is also how an upgrade refreshes a stale copy in place.
-function Install-ResearchSkill {
-    param([string]$Tmp)
-    if ($env:SEAMLESS_NO_RESEARCH_SKILL) { Step 'research' 'skipped (SEAMLESS_NO_RESEARCH_SKILL)'; return }
-    if ($env:SEAMLESS_NO_HOOKS) { return }
-    $src = Join-Path $Tmp 'seam-research\SKILL.md'
-    if (-not (Test-Path $src)) { return }
-    $dst = Join-Path $HOME '.claude\skills\seam-research'
-    New-Item -ItemType Directory -Force -Path $dst | Out-Null
-    Copy-Item -Path $src -Destination (Join-Path $dst 'SKILL.md') -Force
-    Step 'research' '/seam-research skill installed'
 }
 
 # Read the port back out of the config the way the Makefile and the sh installer
@@ -318,13 +295,13 @@ function Wait-Healthy {
 
 function Main {
     $InstallDir = if ($env:SEAMLESS_INSTALL_DIR) { $env:SEAMLESS_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+    $agentClient = Resolve-AgentClient
 
     $arch = Get-Arch
     $version = Resolve-Version
     Write-Host ''
     Write-Host ('  seamless {0}  windows/{1}' -f $version, $arch)
 
-    $onboardReady = $false
     $tmp = Join-Path ([IO.Path]::GetTempPath()) ('seamless-' + [Guid]::NewGuid().ToString('N'))
     New-Item -ItemType Directory -Force -Path $tmp | Out-Null
     try {
@@ -337,9 +314,7 @@ function Main {
         }
 
         Install-Binaries $zip $tmp $InstallDir
-        Invoke-WireHooks $tmp $InstallDir
-        $onboardReady = Install-OnboardSkill $tmp
-        Install-ResearchSkill $tmp
+        Invoke-WireHooks $tmp $InstallDir $agentClient
         $addr = Get-ConfiguredAddr
 
         if ($env:SEAMLESS_NO_SERVICE) {
@@ -366,12 +341,20 @@ function Main {
 
     Write-Host ''
     Say 'next:'
-    Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own'
+    switch ($agentClient) {
+        'claude' { Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' }
+        'codex' { Say '  open any git repo in Codex -- Seamless maps it to a project on its own' }
+        'all' { Say '  open any git repo in Claude Code or Codex -- Seamless maps it to a project on its own' }
+    }
     Say "  & `"$InstallDir\seamlessd.exe`" console-open   # open the console, already logged in"
     Write-Host ''
-    Say 'restart Claude Code so it picks up the hooks and the MCP server.'
-    if ($onboardReady) {
-        Say 'then run  /seam-onboard  once to teach your agents when to reach for Seamless.'
+    switch ($agentClient) {
+        'claude' { Say 'restart Claude Code, then run  /seam-onboard  once.' }
+        'codex' { Say 'restart Codex, approve the Seamless hooks, then run  $seam-onboard  once.' }
+        'all' {
+            Say 'restart both clients and approve the Seamless hooks in Codex.'
+            Say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
+        }
     }
     Write-Host ''
     Say "uninstall anytime: & `"$InstallDir\seamlessd.exe`" uninstall"
