@@ -8,9 +8,11 @@ agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
 [Codex](#codex-cli-three-hooks) gets three. `seamlessd install-hooks --client
-<claude|codex|all>` selects the profile; run interactively with no `--client`
-it prompts for the client(s), and a non-interactive run without the flag
-defaults to Claude Code.
+<claude|codex|all|detect>` selects the profile; run interactively with no
+`--client` it prompts for the client(s), and a non-interactive run without the
+flag resolves `detect`: the clients present on this machine (the `claude`/`codex`
+CLI or a `~/.claude`/`$CODEX_HOME` directory), falling back to Claude Code when
+neither is found. The curl installer and `make install` make the same choice.
 
 ## Claude Code: six hooks
 
@@ -125,7 +127,7 @@ the `http` hook. Command hooks read it from the config file at hook time.
 ## What install-hooks writes
 
 ```bash
-seamlessd install-hooks                        # default: ~/.claude/settings.json
+seamlessd install-hooks                        # default: --client detect
 seamlessd install-hooks --settings ./.claude/settings.json
 seamlessd install-hooks --url http://127.0.0.1:8081
 seamlessd install-hooks --seam /path/to/seam

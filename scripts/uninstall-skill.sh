@@ -2,10 +2,12 @@
 #
 # Remove a repo-bundled Seamless skill from Claude Code, Codex, or both.
 #
-#   scripts/uninstall-skill.sh <name> [claude|codex|all]
+#   scripts/uninstall-skill.sh <name> [claude|codex|all|detect]
 #
 # Counterpart to scripts/install-skill.sh. Safe to run when the skill is not
 # installed (e.g. seam-onboard already self-removed after a successful run).
+# detect (the default) resolves to the clients present on this machine, the
+# same selection docs/install makes.
 
 set -euo pipefail
 
@@ -27,7 +29,18 @@ case "$NAME" in
     ;;
 esac
 
-CLIENT="${2:-${CLIENT:-claude}}"
+CLIENT="${2:-${CLIENT:-detect}}"
+if [ "$CLIENT" = detect ]; then
+    DETECT_CLAUDE=0
+    DETECT_CODEX=0
+    if command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ]; then DETECT_CLAUDE=1; fi
+    if command -v codex >/dev/null 2>&1 || [ -d "${CODEX_HOME:-$HOME/.codex}" ]; then DETECT_CODEX=1; fi
+    case "$DETECT_CLAUDE:$DETECT_CODEX" in
+    1:1) CLIENT=all ;;
+    0:1) CLIENT=codex ;;
+    *) CLIENT=claude ;;
+    esac
+fi
 
 uninstall_one() {
     client=$1
@@ -35,7 +48,7 @@ uninstall_one() {
     claude) skills="$HOME/.claude/skills" ;;
     codex) skills="${CODEX_HOME:-$HOME/.codex}/skills" ;;
     *)
-        err "unknown client $client: valid values are claude, codex, all"
+        err "unknown client $client: valid values are claude, codex, all, detect"
         exit 1
         ;;
     esac
@@ -58,7 +71,7 @@ all)
     uninstall_one codex
     ;;
 *)
-    err "unknown client $CLIENT: valid values are claude, codex, all"
+    err "unknown client $CLIENT: valid values are claude, codex, all, detect"
     exit 1
     ;;
 esac

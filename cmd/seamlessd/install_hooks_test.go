@@ -121,23 +121,38 @@ func TestSplitBins(t *testing.T) {
 }
 
 func TestParseInstallClients(t *testing.T) {
+	cc := []hooks.Client{hooks.ClientClaudeCode}
+	cx := []hooks.Client{hooks.ClientCodex}
+	both := []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}
+
 	for _, tt := range []struct {
-		raw  string
-		want []hooks.Client
+		raw      string
+		claudeOK bool
+		codexOK  bool
+		want     []hooks.Client
 	}{
-		{"", []hooks.Client{hooks.ClientClaudeCode}},
-		{"claude", []hooks.Client{hooks.ClientClaudeCode}},
-		{"CC", []hooks.Client{hooks.ClientClaudeCode}},
-		{"codex", []hooks.Client{hooks.ClientCodex}},
-		{"all", []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}},
+		// Explicit values ignore detection entirely.
+		{"claude", false, true, cc},
+		{"CC", false, true, cc},
+		{"codex", true, false, cx},
+		{"all", false, false, both},
+		// detect (and its empty/auto spellings) follows the machine, matching
+		// the curl installer's select_agent_client.
+		{"detect", true, true, both},
+		{"detect", false, true, cx},
+		{"detect", true, false, cc},
+		{"detect", false, false, cc}, // neither found -> historical default
+		{"", false, true, cx},
+		{"auto", false, true, cx},
 	} {
-		got, err := parseInstallClients(tt.raw)
+		got, err := parseInstallClients(tt.raw, tt.claudeOK, tt.codexOK)
 		require.NoError(t, err, "raw %q", tt.raw)
-		require.Equal(t, tt.want, got, "raw %q", tt.raw)
+		require.Equal(t, tt.want, got, "raw %q claude=%v codex=%v", tt.raw, tt.claudeOK, tt.codexOK)
 	}
 
-	_, err := parseInstallClients("gemini")
+	_, err := parseInstallClients("gemini", true, true)
 	require.ErrorContains(t, err, "unknown --client")
+	require.ErrorContains(t, err, "detect")
 }
 
 func TestDefaultClientChoice(t *testing.T) {

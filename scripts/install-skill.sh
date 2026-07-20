@@ -2,11 +2,14 @@
 #
 # Install a repo-bundled Seamless skill for Claude Code, Codex, or both.
 #
-#   scripts/install-skill.sh <name> [claude|codex|all]
+#   scripts/install-skill.sh <name> [claude|codex|all|detect]
 #   CLIENT=codex scripts/install-skill.sh <name>
 #
 # Invoke via the make targets (install-onboard-skill, install-research-skill).
 # Installing refreshes the maintained package at each selected client home.
+# detect (the default) resolves to the clients present on this machine, the
+# same selection docs/install makes: both when both are found, else the one
+# found, else claude.
 
 set -euo pipefail
 
@@ -21,7 +24,18 @@ if [ -z "$NAME" ]; then
     exit 1
 fi
 
-CLIENT="${2:-${CLIENT:-claude}}"
+CLIENT="${2:-${CLIENT:-detect}}"
+if [ "$CLIENT" = detect ]; then
+    DETECT_CLAUDE=0
+    DETECT_CODEX=0
+    if command -v claude >/dev/null 2>&1 || [ -d "$HOME/.claude" ]; then DETECT_CLAUDE=1; fi
+    if command -v codex >/dev/null 2>&1 || [ -d "${CODEX_HOME:-$HOME/.codex}" ]; then DETECT_CODEX=1; fi
+    case "$DETECT_CLAUDE:$DETECT_CODEX" in
+    1:1) CLIENT=all ;;
+    0:1) CLIENT=codex ;;
+    *) CLIENT=claude ;;
+    esac
+fi
 SRC_DIR="$REPO_ROOT/internal/skills/assets/$NAME"
 
 if [ ! -f "$SRC_DIR/SKILL.md" ]; then
@@ -41,7 +55,7 @@ install_one() {
         invoke="\$$NAME"
         ;;
     *)
-        err "unknown client $client: valid values are claude, codex, all"
+        err "unknown client $client: valid values are claude, codex, all, detect"
         exit 1
         ;;
     esac
@@ -62,7 +76,7 @@ all)
     install_one codex
     ;;
 *)
-    err "unknown client $CLIENT: valid values are claude, codex, all"
+    err "unknown client $CLIENT: valid values are claude, codex, all, detect"
     exit 1
     ;;
 esac

@@ -163,9 +163,11 @@
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-<a href="#codex-cli-three-hooks">Codex</a> gets three. <code>seamlessd install-hooks --client &lt;claude|codex|all&gt;</code> selects the profile; run interactively with no <code>--client</code>
-it prompts for the client(s), and a non-interactive run without the flag
-defaults to Claude Code.</p>
+<a href="#codex-cli-three-hooks">Codex</a> gets three. <code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the profile; run interactively with no
+<code>--client</code> it prompts for the client(s), and a non-interactive run without the
+flag resolves <code>detect</code>: the clients present on this machine (the <code>claude</code>/<code>codex</code>
+CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory), falling back to Claude Code when
+neither is found. The curl installer and <code>make install</code> make the same choice.</p>
 <h2 id="claude-code-six-hooks">Claude Code: six hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
 install order:</p>
@@ -337,7 +339,7 @@ differs.</p>
 <p>One practical consequence: the bearer key is only written into settings.json for
 the <code>http</code> hook. Command hooks read it from the config file at hook time.</p>
 <h2 id="what-install-hooks-writes">What install-hooks writes</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks                        <span class="c1"># default: ~/.claude/settings.json</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks                        <span class="c1"># default: --client detect</span>
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --settings ./.claude/settings.json
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --url http://127.0.0.1:8081
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --seam /path/to/seam

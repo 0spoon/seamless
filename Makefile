@@ -37,7 +37,10 @@ PREFIX        ?= $(HOME)/.local
 PREFIX_BIN    := $(PREFIX)/bin
 CONFIG_DIR    := $(HOME)/.config/seamless
 CONFIG        := $(CONFIG_DIR)/seamless.yaml
-CLIENT        ?= claude
+# detect = the agent clients present on this machine (codex CLI or ~/.codex,
+# claude CLI or ~/.claude; Claude Code when neither is found), resolved by
+# `seamlessd install-hooks` -- the same selection the curl installer makes.
+CLIENT        ?= detect
 
 # gofmt over TRACKED files only. The go tool's ./... pattern skips dot-dirs, so
 # build/vet/test/lint never see .claude/worktrees/ (other agents' checkouts of
@@ -113,7 +116,8 @@ help:
 	@echo "  Deploy (snapshots to stable paths; this is also the iterate loop):"
 	@echo "    install            build + copy bin/config to $(PREFIX_BIN) + $(CONFIG_DIR),"
 	@echo "                       point the service, hooks, MCP + skills there, and restart"
-	@echo "                       (CLIENT=claude|codex|all selects the wired agent client)"
+	@echo "                       (CLIENT=claude|codex|all|detect selects the wired agent"
+	@echo "                       client; default detect = the clients on this machine)"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
 	@echo "    update             upgrade in place to the latest release (CHECK=1 only reports)"
@@ -124,11 +128,11 @@ help:
 	@echo "    logs               follow the service log ($(SVC_LOG))"
 	@echo "  install-git-hooks        enable .githooks/ (pre-commit runs check-fast)"
 	@echo "  uninstall-git-hooks      disable .githooks/"
-	@echo "  install-onboard-skill    install seam-onboard from the checkout (CLIENT=claude|codex|all;"
+	@echo "  install-onboard-skill    install seam-onboard from the checkout (CLIENT=claude|codex|all|detect;"
 	@echo "                           'make install' already installs the embedded copy)"
-	@echo "  uninstall-onboard-skill  remove seam-onboard for CLIENT (default: claude)"
-	@echo "  install-research-skill   install seam-research from the checkout (CLIENT=claude|codex|all)"
-	@echo "  uninstall-research-skill remove seam-research for CLIENT (default: claude)"
+	@echo "  uninstall-onboard-skill  remove seam-onboard for CLIENT (default: detect)"
+	@echo "  install-research-skill   install seam-research from the checkout (CLIENT=claude|codex|all|detect)"
+	@echo "  uninstall-research-skill remove seam-research for CLIENT (default: detect)"
 	@echo "  clean      remove build artifacts"
 
 build:

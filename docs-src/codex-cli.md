@@ -15,9 +15,10 @@ is in the details, and those details are what this page is about.
 seamlessd install-hooks --client codex
 ```
 
-`--client codex` is the switch. Without it, an interactive `install-hooks` run
-prompts for the client(s) to wire; a non-interactive run defaults to Claude
-Code, unchanged. The Codex profile:
+`--client codex` is the switch, but you rarely need it: without the flag, an
+interactive `install-hooks` run prompts for the client(s) to wire (defaulting to
+what it found on the machine), and a non-interactive run resolves `--client
+detect` - the clients actually present, Codex included. The Codex profile:
 
 1. **Merges three hooks** - SessionStart, UserPromptSubmit, Stop - into
    `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json` when that is set), with the
@@ -34,9 +35,11 @@ Code, unchanged. The Codex profile:
    the recurring `$seam-research` lab workflow. Claude's copies remain in
    `~/.claude/skills/`; their one-shot delivery markers are independent.
 
-The default (`--client claude`, or no flag) is byte-for-byte what it always was,
-so nothing about your Claude Code setup changes when you add Codex. Use
-`--client all` to install both in one pass.
+Passing `--client claude` explicitly is byte-for-byte what it always was, so
+nothing about your Claude Code setup changes when you add Codex. Use `--client
+all` to install both in one pass, or `--client detect` (the default) to let the
+machine decide. `make install` uses the same default, so a Codex-only machine
+gets the Codex profile without naming it.
 
 ## Teach Codex when to use Seamless
 

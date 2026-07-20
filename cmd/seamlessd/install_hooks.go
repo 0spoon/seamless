@@ -24,14 +24,15 @@ import (
 
 // runInstallHooks wires an agent client to Seamless in one command: it installs
 // the hooks into that client's config file and, unless --mcp=false, registers
-// the MCP server with the client's CLI. --client selects which: claude (default,
-// ~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
-// `codex mcp add ... seam mcp-proxy`), or all (both). The default is unchanged
-// Claude Code behavior. For the P2 dogfood, point --settings at THIS repo's
-// project-scoped .claude/settings.json so v2 hooks fire only here.
+// the MCP server with the client's CLI. --client selects which: claude
+// (~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
+// `codex mcp add ... seam mcp-proxy`), all (both), or detect (the default: the
+// clients present on this machine, the same selection the curl installer
+// makes). For the P2 dogfood, point --settings at THIS repo's project-scoped
+// .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
-	clientFlag := fs.String("client", "claude", "which agent client to install for: claude|codex|all")
+	clientFlag := fs.String("client", "detect", "which agent client to install for: claude|codex|all|detect")
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
@@ -211,18 +212,23 @@ func splitBins(raw string) []string {
 }
 
 // parseInstallClients maps the --client flag to the client profiles to install,
-// in a stable order (Claude Code before Codex for "all"). An empty value is the
-// default Claude Code, so an omitted flag keeps the pre-Codex behavior.
-func parseInstallClients(raw string) ([]hooks.Client, error) {
+// in a stable order (Claude Code before Codex for "all"). "detect" (also the
+// meaning of an empty value) resolves to the detected client set via the
+// claudeOK/codexOK arguments, falling back to Claude Code when neither is
+// present -- the same selection the curl installer's select_agent_client makes.
+func parseInstallClients(raw string, claudeOK, codexOK bool) ([]hooks.Client, error) {
 	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "claude", "claude-code", "cc":
+	case "", "detect", "auto":
+		clients, _ := clientsForChoice(defaultClientChoice(claudeOK, codexOK))
+		return clients, nil
+	case "claude", "claude-code", "cc":
 		return []hooks.Client{hooks.ClientClaudeCode}, nil
 	case "codex", "cx":
 		return []hooks.Client{hooks.ClientCodex}, nil
 	case "all", "both":
 		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, nil
 	default:
-		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, all", raw)
+		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, all, detect", raw)
 	}
 }
 
@@ -232,13 +238,15 @@ func parseInstallClients(raw string) ([]hooks.Client, error) {
 // --client was omitted AND stdin is a terminal, it prompts the user to pick
 // Claude Code, Codex, or both (annotating each with whether it was detected on
 // this machine). When --client was omitted and stdin is not a terminal, it
-// falls back to the flag default (Claude Code) with no prompt, so a redirected
-// or automated run never blocks.
+// falls back to the flag default (detect: the detected client set, Claude Code
+// when neither is present) with no prompt, so a redirected or automated run
+// never blocks and a codex-only machine still gets the right profile.
 func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, error) {
+	claudeOK, codexOK := claudeDetected(), codexDetected()
 	if clientSet || !stdinIsTerminal() {
-		return parseInstallClients(clientFlag)
+		return parseInstallClients(clientFlag, claudeOK, codexOK)
 	}
-	return promptInstallClients(os.Stdin, os.Stdout, claudeDetected(), codexDetected())
+	return promptInstallClients(os.Stdin, os.Stdout, claudeOK, codexOK)
 }
 
 // promptInstallClients asks an interactive user which client(s) to wire up. It

@@ -37,7 +37,7 @@ const (
 // failure, so uninstall is idempotent and safe to re-run.
 func runUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
-	clientFlag := fs.String("client", "all", "which agent client to remove hooks/MCP for: claude|codex|all")
+	clientFlag := fs.String("client", "all", "which agent client to remove hooks/MCP for: claude|codex|all|detect")
 	purge := fs.Bool("purge", false, "also delete the config dir (~/.config/seamless) and data dir (~/.seamless)")
 	dryRun := fs.Bool("dry-run", false, "print what would be removed and exit without changing anything")
 	yes := fs.Bool("yes", false, "skip the confirmation prompt")
@@ -49,7 +49,7 @@ func runUninstall(args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	clients, err := parseInstallClients(*clientFlag)
+	clients, err := parseInstallClients(*clientFlag, claudeDetected(), codexDetected())
 	if err != nil {
 		return fmt.Errorf("seamlessd.uninstall: %w", err)
 	}
