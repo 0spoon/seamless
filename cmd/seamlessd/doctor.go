@@ -110,7 +110,11 @@ func doctor(args []string) error {
 // with codexChecks, so a Codex-only user is not perpetually nagged to install a
 // client they do not run.
 func hooksCheck(cfg config.Config) check {
-	want := len(hooks.InstalledEvents(hooks.ClientClaudeCode))
+	installed, err := hooks.InstalledEvents(hooks.ClientClaudeCode)
+	if err != nil {
+		return check{statusWarn, "hooks", fmt.Sprintf("cannot select Claude Code hook profile: %v", err)}
+	}
+	want := len(installed)
 	baseURL := hookBaseURL(cfg.Addr)
 	var candidates []string
 	if home, err := expandHome("~/.claude/settings.json"); err == nil {
@@ -178,7 +182,11 @@ func codexChecks(cfg config.Config) []check {
 		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless hooks in ~/.codex)"}}
 	}
 
-	want := len(hooks.InstalledEvents(hooks.ClientCodex))
+	installed, installedErr := hooks.InstalledEvents(hooks.ClientCodex)
+	if installedErr != nil {
+		return []check{{statusWarn, "codex hooks", fmt.Sprintf("cannot select Codex hook profile: %v", installedErr)}}
+	}
+	want := len(installed)
 	var hooksChk check
 	switch {
 	case herr != nil:

@@ -2,8 +2,10 @@ package hooks
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 )
 
 // Codex's hook payloads differ from Claude Code's in a few field names (captured
@@ -17,22 +19,45 @@ import (
 // The client discriminator arrives OUT OF BAND, as the ?client= query param that
 // `seam hook --client` appends, not in the body: the body decode is itself
 // client-specific (Codex names the submitted prompt differently), so the handler
-// must know the client BEFORE it can decode. An absent or unknown value resolves
-// to Claude Code (normalizeClient), so every existing CC hook -- which sends no
-// client and no query param -- is byte-for-byte unchanged.
+// must know the client BEFORE it can decode. An absent value resolves to Claude
+// Code, so every existing CC hook -- which sends no client and no query param --
+// is byte-for-byte unchanged. A present unknown value is rejected before decode.
 
 // clientQueryParam is the query key `seam hook --client` sets on the forwarded
 // request. It is the sole transport for the discriminator -- the body never
 // carries it. cmd/seam keeps its own copy of this literal (it must not import
 // this package, which would drag SQLite into a binary whose job is one POST); the
-// two are trivially "client" and a mismatch just resolves to the Claude Code
-// default, so no downstream breakage hides behind drift.
+// two are test-pinned so drift cannot silently drop the discriminator.
 const clientQueryParam = "client"
 
 // clientFromRequest reads the client discriminator from the request's ?client=
-// query param, defaulting an absent or unknown value to Claude Code.
-func clientFromRequest(r *http.Request) Client {
-	return normalizeClient(r.URL.Query().Get(clientQueryParam))
+// query param. A missing key defaults to Claude Code; a present empty, duplicate,
+// or unknown value is invalid.
+func clientFromRequest(r *http.Request) (Client, error) {
+	query, err := url.ParseQuery(r.URL.RawQuery)
+	if err != nil {
+		return "", fmt.Errorf("invalid hook client query: %w; valid values are %s", err, hookClientNames())
+	}
+	values, present := query[clientQueryParam]
+	if !present {
+		return parseClient("", false)
+	}
+	if len(values) != 1 {
+		return "", fmt.Errorf("invalid hook client query: expected exactly one value; valid values are %s", hookClientNames())
+	}
+	return parseClient(values[0], true)
+}
+
+// requireRequestClient is the shared authenticated hook boundary. Every route
+// calls it before reading the body or mutating state, including Claude-only
+// routes that otherwise ignore the parsed client.
+func requireRequestClient(w http.ResponseWriter, r *http.Request) (Client, bool) {
+	client, err := clientFromRequest(r)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return "", false
+	}
+	return client, true
 }
 
 // readHookBody reads a hook request body under the shared size cap, tolerating a

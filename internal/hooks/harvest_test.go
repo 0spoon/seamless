@@ -86,9 +86,6 @@ func TestAmbientName(t *testing.T) {
 		{"claude-code short id plus digest", ClientClaudeCode, "short", "cc/short-f9b0078b5df596d2"},
 		{"codex readable prefix plus digest", ClientCodex, "ABC12345-6789-0000", "cx/abc12345-537a9f0416b71992"},
 		{"codex short id plus digest", ClientCodex, "short", "cx/short-f9b0078b5df596d2"},
-		{"empty client defaults to claude-code prefix", normalizeClient(""), "ABC12345-6789-0000", "cc/abc12345-537a9f0416b71992"},
-		{"unknown client falls back to claude-code prefix", normalizeClient("gemini"), "ABC12345", "cc/abc12345-2221aa193aea3b3f"},
-		{"codex via normalizeClient", normalizeClient("codex"), "DEADBEEF-1111", "cx/deadbeef-ec2a1e0a41675c24"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

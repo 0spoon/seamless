@@ -2,6 +2,7 @@ package hooks
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -71,17 +72,116 @@ func TestDecodePrompt_CodexFallbackDoesNotClobberUserPrompt(t *testing.T) {
 	require.Equal(t, "already", p.UserPrompt)
 }
 
-// The discriminator rides on ?client=, not the body. An absent or unknown value
-// resolves to Claude Code so any request that predates the flag is unchanged.
+// The discriminator rides on ?client=, not the body. Absence alone defaults to
+// Claude Code; every present value must be canonical.
 func TestClientFromRequest(t *testing.T) {
 	mk := func(query string) *http.Request {
 		return httptest.NewRequest(http.MethodPost, "/api/hooks/x"+query, nil)
 	}
-	require.Equal(t, ClientClaudeCode, clientFromRequest(mk("")))
-	require.Equal(t, ClientClaudeCode, clientFromRequest(mk("?client=claude-code")))
-	require.Equal(t, ClientCodex, clientFromRequest(mk("?client=codex")))
-	require.Equal(t, ClientClaudeCode, clientFromRequest(mk("?client=gemini")),
-		"an unknown client falls back to Claude Code, never fails the hook")
+
+	for _, tt := range []struct {
+		name  string
+		query string
+		want  Client
+	}{
+		{name: "missing defaults to Claude Code", want: ClientClaudeCode},
+		{name: "explicit Claude Code", query: "?client=claude-code", want: ClientClaudeCode},
+		{name: "explicit Codex", query: "?client=codex", want: ClientCodex},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := clientFromRequest(mk(tt.query))
+			require.NoError(t, err)
+			require.Equal(t, tt.want, got)
+		})
+	}
+
+	for _, query := range []string{
+		"?client=gemini",
+		"?client=",
+		"?client=codex&client=claude-code",
+		"?client=gemini;extra=x",
+	} {
+		t.Run(query, func(t *testing.T) {
+			_, err := clientFromRequest(mk(query))
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "valid values are claude-code, codex")
+		})
+	}
+}
+
+// Every authenticated hook route validates the discriminator before decoding
+// its body. Invalid requests therefore share one 400 contract and cannot create
+// the cc/ session the old fallback produced.
+func TestHookRoutes_InvalidClientReturnsBadRequestWithoutMutation(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	var changesBefore int64
+	require.NoError(t, db.QueryRowContext(context.Background(), `SELECT total_changes()`).Scan(&changesBefore))
+	paths := []string{
+		"session-start",
+		"user-prompt-submit",
+		"session-end",
+		"stop",
+		"post-tool-use",
+		"subagent-stop",
+		"permission-request",
+	}
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			resp, _ := post(t, ts.URL+"/api/hooks/"+path+"?client=gemini", testKey, map[string]any{
+				"session_id": "invalid-client-session", "cwd": "/work/invalid",
+				"prompt": "must not be discarded", "last_assistant_message": "must not be harvested",
+			})
+			require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+			body, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			require.Contains(t, string(body), `invalid hook client "gemini"`)
+			require.Contains(t, string(body), "valid values are claude-code, codex")
+		})
+	}
+
+	var sessions, hookEvents int
+	require.NoError(t, db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM sessions`).Scan(&sessions))
+	require.NoError(t, db.QueryRowContext(context.Background(), `SELECT COUNT(*) FROM events`).Scan(&hookEvents))
+	require.Zero(t, sessions, "invalid SessionStart must not create a Claude ambient row")
+	require.Zero(t, hookEvents, "invalid hook requests must not record events")
+	var changesAfter int64
+	require.NoError(t, db.QueryRowContext(context.Background(), `SELECT total_changes()`).Scan(&changesAfter))
+	require.Equal(t, changesBefore, changesAfter, "invalid hook requests must not mutate any database row")
+}
+
+// A typo beside a Codex-shaped prompt must fail visibly instead of selecting
+// Claude's adapter, dropping `prompt`, and returning an apparent empty success.
+// Stop is included to pin the no-heartbeat/model/findings-mutation side of the
+// same boundary.
+func TestInvalidClient_CodexPromptAndStopDoNotMutateSession(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	const sessionID = "019f7291-40f1-7311-8997-0d497579d27b"
+
+	resp, _ := post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": sessionID, "cwd": "/work/demo", "source": "startup", "model": "gpt-before",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	before := requireAmbientSession(t, db, ClientCodex, sessionID)
+	var eventsBefore int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&eventsBefore))
+
+	resp, _ = post(t, ts.URL+"/api/hooks/user-prompt-submit?client=codxe", testKey, map[string]any{
+		"session_id": sessionID, "cwd": "/work/demo", "prompt": "why does chroma fail",
+	})
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+	resp, _ = post(t, ts.URL+"/api/hooks/stop?client=codxe", testKey, map[string]any{
+		"session_id": sessionID, "model": "gpt-after", "last_assistant_message": "must not land",
+	})
+	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
+
+	after := requireAmbientSession(t, db, ClientCodex, sessionID)
+	require.Equal(t, before.UpdatedAt, after.UpdatedAt, "invalid requests must not heartbeat")
+	require.Equal(t, before.Model, after.Model, "invalid requests must not update model attribution")
+	require.Equal(t, before.Findings, after.Findings, "invalid Stop must not harvest findings")
+	var eventsAfter int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM events`).Scan(&eventsAfter))
+	require.Equal(t, eventsBefore, eventsAfter, "invalid requests must not record prompt or injection events")
 }
 
 // End to end through the real handler: a Codex SessionStart names a cx/ ambient

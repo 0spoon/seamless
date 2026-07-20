@@ -12,7 +12,9 @@ import (
 
 func hookSpecFor(t *testing.T, client Client, event string) hookSpec {
 	t.Helper()
-	for _, hs := range hookProfile(client) {
+	_, profile, err := resolveHookProfile(client)
+	require.NoError(t, err)
+	for _, hs := range profile {
 		if hs.Event == event {
 			return hs
 		}
@@ -107,7 +109,7 @@ func TestForeignHookDefinitionsSurviveInstallAndUninstall(t *testing.T) {
 
 	status, err := InstalledStatus(codexOpts(path))
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientCodex), status.Current)
+	require.Equal(t, installedEvents(t, ClientCodex), status.Current)
 	require.Empty(t, status.Stale)
 
 	uninstall, err := Uninstall(UninstallOptions{
@@ -197,7 +199,7 @@ func TestInstalledStatusCodexSeparatesCurrentFromStale(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, []string{"SessionStart", "UserPromptSubmit"}, status.Current)
 			require.Equal(t, []string{"Stop"}, status.Stale)
-			require.Equal(t, InstalledEvents(ClientCodex), status.Owned)
+			require.Equal(t, installedEvents(t, ClientCodex), status.Owned)
 		})
 	}
 }
@@ -226,7 +228,7 @@ func TestInstallMarkerStrippedCurrentDefinitionIsNoOp(t *testing.T) {
 
 	status, err := InstalledStatus(codexOpts(path))
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientCodex), status.Current)
+	require.Equal(t, installedEvents(t, ClientCodex), status.Current)
 	require.Empty(t, status.Stale)
 }
 
@@ -240,7 +242,7 @@ func TestCodexWindowsPathsClassifyAndRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	status, err := InstalledStatus(opts)
 	require.NoError(t, err)
-	require.Equal(t, InstalledEvents(ClientCodex), status.Current)
+	require.Equal(t, installedEvents(t, ClientCodex), status.Current)
 	require.Empty(t, status.Stale)
 
 	settings := readHookSettings(t, path)
