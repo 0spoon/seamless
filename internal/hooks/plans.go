@@ -57,7 +57,7 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if extra != "" {
-		writeHookResponse(w, "PostToolUse", extra)
+		writePreparedHookResponse(w, "PostToolUse", prepareHookContext(ClientClaudeCode, extra))
 		return
 	}
 	writeHookAck(w)

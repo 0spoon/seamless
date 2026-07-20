@@ -56,7 +56,7 @@ const ambientDigestBytes = 8
 // session-end harvest; Events may be nil (injection telemetry is then skipped);
 // Files may be nil (plan/subagent capture is then skipped). MaxEventChars caps
 // captured prompt/findings text (0 = unlimited); injected content is always
-// stored in full (it is already bounded by the briefing/recall budgets upstream).
+// stored in full (it is bounded by the client-aware context policy upstream).
 // PlansDir is where Claude Code writes plan-mode files; empty defaults to
 // ~/.claude/plans (tests override it).
 type Config struct {
@@ -213,7 +213,6 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		briefing, injectedIDs = "", nil // never block the agent
 	}
 	injected := briefing != ""
-
 	// Ambient session: create or resume the client/full-id identity so work is recorded
 	// without the agent calling session_start. Subagents share the parent's
 	// session, so they get no ambient session of their own. Best-effort: a failure
@@ -224,12 +223,10 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 			h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
 		}
 	}
-	// Record after the ambient line is appended so the stored content is exactly
-	// what the agent received. A SessionStart carries no user prompt (prompt="").
-	if injected {
-		h.recordInjection(ctx, "session-start", client, p.SessionID, "", briefing, injectedIDs)
-	}
-	writeHookResponse(w, "SessionStart", briefing)
+	// Cap after the ambient line is appended, then record and serialize the same
+	// prepared bytes. A SessionStart carries no user prompt (prompt="").
+	h.writeContextResponse(ctx, w, "SessionStart", "session-start", client,
+		p.SessionID, "", briefing, injected, injectedIDs)
 }
 
 func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
@@ -454,7 +451,8 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	client := clientFromRequest(r)
 	p := decodePrompt(client, readHookBody(w, r))
 	if p.UserPrompt == "" {
-		writeHookResponse(w, "UserPromptSubmit", "")
+		h.writeContextResponse(r.Context(), w, "UserPromptSubmit", "user-prompt-submit",
+			client, p.SessionID, "", "", false, nil)
 		return
 	}
 
@@ -469,14 +467,13 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 		h.logger.Warn("hooks: user-prompt-submit recall failed", "error", err)
 		out, injectedIDs = "", nil
 	}
-	if out != "" {
-		h.recordInjection(ctx, "user-prompt-submit", client, p.SessionID, p.UserPrompt, out, injectedIDs)
-	} else {
+	if out == "" {
 		// A recall miss: capture the prompt as its own hook.prompt event so the
 		// Interactions feed can show "why didn't recall fire?" cases.
 		h.recordHookPrompt(ctx, client, p.SessionID, p.UserPrompt)
 	}
-	writeHookResponse(w, "UserPromptSubmit", out)
+	h.writeContextResponse(ctx, w, "UserPromptSubmit", "user-prompt-submit", client,
+		p.SessionID, p.UserPrompt, out, out != "", injectedIDs)
 }
 
 // recordInjection logs a retrieval.injected event carrying the exact text that
@@ -487,16 +484,30 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 // ULID and project (best-effort) so the Interactions feed can group it under the
 // right agent; the Claude session id still rides in the payload. prompt (empty for
 // SessionStart) is the user turn that triggered a recall injection; content is the
-// full injected block, stored verbatim.
-func (h *Handler) recordInjection(ctx context.Context, hook string, client Client, claudeSessionID, prompt, content string, itemIDs []string) {
+// full emitted block, stored verbatim with bounded cap metadata.
+func (h *Handler) recordInjection(ctx context.Context, hook string, client Client, claudeSessionID, prompt string, prepared preparedHookContext, itemIDs []string) {
 	if h.events == nil {
 		return
+	}
+	// A post-assembly cap can remove memory lines without retaining a structured
+	// id-to-line map. Do not credit possibly dropped items as injected; the
+	// bounded metadata keeps that exceptional undercount explicit.
+	originalItemCount := len(itemIDs)
+	itemIDsExact := !prepared.truncated || originalItemCount == 0
+	if !itemIDsExact {
+		itemIDs = nil
 	}
 	sessionID, project := h.ambientRef(ctx, client, claudeSessionID)
 	payload := map[string]any{
 		"hook": hook, "claude_session_id": claudeSessionID,
-		"external_client": client.externalIdentity(),
-		"content":         content, "item_ids": itemIDs,
+		"external_client":           client.externalIdentity(),
+		"content":                   prepared.content,
+		"item_ids":                  itemIDs,
+		"item_ids_exact":            itemIDsExact,
+		"original_item_count":       originalItemCount,
+		"original_estimated_tokens": prepared.originalEstimatedTokens,
+		"emitted_estimated_tokens":  prepared.emittedEstimatedTokens,
+		"truncated":                 prepared.truncated,
 	}
 	if prompt != "" {
 		payload["prompt"] = events.Truncate(prompt, h.maxEventChars)
@@ -649,7 +660,7 @@ func (h *Handler) recordSession(ctx context.Context, kind core.EventKind, sess c
 	}
 }
 
-func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
+func writePreparedHookResponse(w http.ResponseWriter, event string, prepared preparedHookContext) {
 	w.Header().Set("Content-Type", "application/json")
 	//nolint:errcheck // the 200 is already committed; a failed write means the
 	// agent hung up and there is no second channel to report it on.
@@ -657,7 +668,7 @@ func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
 		Continue:       true,
 		SuppressOutput: true,
 		HookSpecificOutput: &hookSpecificOutput{
-			HookEventName: event, AdditionalContext: additionalContext,
+			HookEventName: event, AdditionalContext: prepared.content,
 		},
 	})
 }
@@ -667,7 +678,7 @@ func writeHookResponse(w http.ResponseWriter, event, additionalContext string) {
 // entirely, or Claude Code's schema validation rejects the whole response.
 func writeHookAck(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
-	//nolint:errcheck // see writeHookResponse: the response is already committed.
+	//nolint:errcheck // see writePreparedHookResponse: the response is already committed.
 	_ = json.NewEncoder(w).Encode(hookResponse{Continue: true, SuppressOutput: true})
 }
 

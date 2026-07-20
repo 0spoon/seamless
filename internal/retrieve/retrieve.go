@@ -73,9 +73,11 @@ func sanitizeField(s string, maxRunes int) string {
 	return s
 }
 
-// estTokens is a cheap token estimate (~4 chars/token) used to budget briefing
-// and recall output without a tokenizer dependency.
-func estTokens(s string) int { return (len(s) + 3) / 4 }
+// EstimateTokens is the repository-wide cheap token estimate (~4 bytes/token)
+// used to budget model-visible context without a tokenizer dependency.
+func EstimateTokens(s string) int { return (len(s) + 3) / 4 }
+
+func estTokens(s string) int { return EstimateTokens(s) }
 
 // humanAge renders how long ago t was, compactly (e.g. "3d", "5h", "just now").
 func humanAge(t time.Time) string {
