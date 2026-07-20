@@ -43,7 +43,7 @@ proposes. Nothing rewrites your knowledge behind your back.
 |---|---|
 | Get it running in ten minutes | [Quickstart](/quickstart/) |
 | Wire it into Claude Code | [Claude Code setup](/claude-code/) |
-| Wire it into Codex | [Codex CLI setup](/codex-cli/) |
+| Wire it into Codex | [Codex local setup (app, CLI, and IDE)](/codex-cli/) |
 | Understand the model before trusting it | [How Seamless works](/concepts/how-it-works/) |
 | Point another MCP agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
 | Make a fleet divide work without colliding | [Coordinate multiple agents](/guides/coordinate-agents/) |

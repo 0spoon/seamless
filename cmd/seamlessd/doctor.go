@@ -161,8 +161,9 @@ func hooksCheck(cfg config.Config) check {
 	return check{statusWarn, "hooks", "not installed (run: seamlessd install-hooks)"}
 }
 
-// codexChecks reports the Codex CLI integration: the hooks in
-// $CODEX_HOME/hooks.json and whether the seam mcp-proxy bridge is registered
+// codexChecks reports the shared local Codex host used by the desktop app, CLI,
+// and IDE extension: discoverable runtime versions, hooks in
+// $CODEX_HOME/hooks.json, and whether the seam mcp-proxy bridge is registered
 // with `codex mcp`. Definition validity, supported trust knowledge, observed
 // activity, and MCP runnability are deliberately separate results: none is a
 // proxy for another. It never FAILs -- Codex is an optional client -- so a
@@ -181,7 +182,7 @@ func codexChecks(cfg config.Config, db *sql.DB) []check {
 	// PATH: it may contain opted-in hook or MCP configuration that still needs a
 	// visible diagnosis. Only a genuinely absent, unconfigured client is quiet.
 	if !codexDetected() && herr == nil && statusErr == nil && len(status.Owned) == 0 {
-		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless Codex configuration)"}}
+		return []check{{statusOK, "codex", "not detected (no Codex CLI, initialized home, or Seamless configuration)"}}
 	}
 
 	installed, eventsErr := hooks.InstalledEvents(hooks.ClientCodex)
@@ -211,10 +212,11 @@ func codexChecks(cfg config.Config, db *sql.DB) []check {
 		}
 	}
 
-	checks := []check{
+	checks := codexRuntimeChecks()
+	checks = append(checks,
 		hooksChk,
-		{statusWarn, "codex hook trust", "trust unverified; inspect /hooks in Codex and approve the current Seamless definitions"},
-	}
+		check{statusWarn, "codex hook trust", "trust unverified; inspect /hooks in Codex CLI; the desktop app trust flow is not yet live-verified"},
+	)
 	if db != nil {
 		checks = append(checks, codexHookActivityCheck(db))
 	}
@@ -371,7 +373,8 @@ func codexMCPCheck(seamBin, configPath string) check {
 	codex, err := exec.LookPath("codex")
 	if err != nil {
 		return check{statusWarn, "codex mcp",
-			"codex CLI not found; install Codex, then run: seamlessd install-hooks --client codex"}
+			"management CLI not found; MCP state is unverified and automated setup is incomplete; " +
+				codexAppMCPSetupHint(seamBin, configPath)}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mcpCommandTimeout)
 	defer cancel()

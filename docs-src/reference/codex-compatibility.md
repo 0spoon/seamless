@@ -11,16 +11,18 @@ fixture version is the one named by `currentCodexFixtureVersion` in
 
 ## Maintained matrix
 
-| Codex / platform | Hook events captured | Schemas | Frontends | Trust behavior | `mcp get --json` |
+| Codex runtime / frontend / platform | Hook events captured | Schemas | Frontends | Trust behavior | `mcp get --json` |
 |---|---|---|---|---|---|
 | 0.144.5 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop | Parent-event schemas retained with the capture; SessionEnd came from then-current source and did not fire | Exec payloads committed; model visibility observed in exec and TUI, but no TUI payload set was retained | Untrusted command hooks were skipped; bypass flag observed. Historical private-state details are evidence only, not an integration API | Not captured |
 | 0.144.6 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop | Input and output schemas copied from release commit `5d1fbf26c43abc65a203928b2e31561cb039e06d` and SHA-256 pinned | Live exec and TUI inputs/outputs for all five events; wire fields match, with `permission_mode` differing as recorded | Current definitions require review through `/hooks`; the harness uses `--dangerously-bypass-hook-trust`. No supported trust-state query is assumed | Enabled/disabled stdio and Streamable HTTP shapes captured |
+| 0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64 | No app-chat capture | Bundled runtime contains the five current event and input/output contracts | App compatibility runtime reads the same local host configuration as the separately installed 0.144.6 PATH CLI; no real app chat retained | **Not live-verified in the app** | Bundled runtime read the exact existing enabled Seamless stdio registration; no app tool call captured |
 | 0.144.6 / Windows amd64 and arm64 | No live hook run | Same released schemas; Seamless's Windows command syntax is unit-tested | Not live-verified | Not live-verified | Not live-verified |
 
-| Codex / platform | `commandWindows` | Direct Streamable HTTP | Upstream hook-output behavior | Seamless ceiling | Live Windows status |
+| Codex runtime / frontend / platform | `commandWindows` | Direct Streamable HTTP | Upstream hook-output behavior | Seamless ceiling | Live Windows status |
 |---|---|---|---|---|---|
 | 0.144.5 / Darwin arm64 | Schema/source evidence only | Supported by upstream configuration; not fixture-captured | Not captured | Not present in the historical integration | No |
 | 0.144.6 / Darwin arm64 | Both `commandWindows` and `command_windows` parsed by the live macOS binary; Windows selection itself is source-only | Both enabled and disabled config shapes captured through `mcp get --json`; no direct-HTTP tool call was part of the capture | Approximate 2,500-token per-entry spill observed: a head/tail model preview plus a temporary full-output path | 2,400 estimated tokens, applied before response serialization and telemetry | No |
+| 0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64 | Not app-tested | Shared config observed only for the existing stdio bridge | Not app-tested | Same platform-independent Seamless cap; no app model observation | No |
 | 0.144.6 / Windows amd64 and arm64 | Generated command syntax and quoting are tested; execution is not | Capability is in the cross-platform released configuration contract; not live-verified on Windows | Source/schema only | Same platform-independent Seamless cap; no live Windows observation | **Not yet run** |
 
 The absence of a live Windows row is intentional and visible. Cross-compiling a
@@ -75,4 +77,3 @@ the primary harvest path even if its current shape happens to remain unchanged.
 Primary contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
 [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), and
 [UUIDv7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7).
-

@@ -280,7 +280,7 @@ func TestCodexDocumentation_HookTablesMatchCanonicalProfile(t *testing.T) {
 		},
 		{
 			path:  filepath.Join("..", "..", "docs-src", "reference", "hooks.md"),
-			start: "## Codex CLI: five hooks",
+			start: "## Codex local host: five hooks",
 			end:   "## The fail-open contract",
 		},
 	} {

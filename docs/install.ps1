@@ -81,7 +81,7 @@ function Read-ClientChoice {
     param([string]$DefaultChoice) # '' = no default: an explicit answer is required
     Write-Host 'Wire Seamless to which agent client?'
     Write-Host ('  [1] Claude Code {0}' -f $(if ($script:ClaudeDetected) { '(detected)' } else { '(not detected)' }))
-    Write-Host ('  [2] Codex {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host ('  [2] Codex (app/CLI/IDE) {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
     Write-Host '  [3] Both'
     while ($true) {
         $prompt = if ($DefaultChoice) { "Enter 1, 2, or 3 [$DefaultChoice]" } else { 'Enter 1, 2, or 3' }
@@ -428,16 +428,20 @@ function Main {
     Say 'next:'
     switch ($agentClient) {
         'claude' { Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' }
-        'codex' { Say '  open any git repo in Codex -- Seamless maps it to a project on its own' }
-        'all' { Say '  open any git repo in Claude Code or Codex -- Seamless maps it to a project on its own' }
+        'codex' { Say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
+        'all' { Say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
     }
     Say "  & `"$InstallDir\seamlessd.exe`" console-open   # open the console, already logged in"
     Write-Host ''
     switch ($agentClient) {
         'claude' { Say 'restart Claude Code, then run  /seam-onboard  once.' }
-        'codex' { Say 'restart Codex, review/approve Seamless in  /hooks, then run  $seam-onboard  once.' }
+        'codex' {
+            Say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
+            Say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
+        }
         'all' {
-            Say 'restart both clients and review/approve Seamless in Codex  /hooks.'
+            Say 'restart both clients. Codex CLI users: review/approve Seamless in  /hooks.'
+            Say 'Codex desktop app users: hook trust is beta; confirm a <seam-briefing>.'
             Say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
         }
     }

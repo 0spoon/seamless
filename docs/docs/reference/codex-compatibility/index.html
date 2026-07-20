@@ -57,7 +57,7 @@
         
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
-        <li><a href="../../codex-cli/">Codex CLI setup</a></li>
+        <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
       </ul>
     </div>
@@ -171,7 +171,7 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <table>
 <thead>
 <tr>
-<th>Codex / platform</th>
+<th>Codex runtime / frontend / platform</th>
 <th>Hook events captured</th>
 <th>Schemas</th>
 <th>Frontends</th>
@@ -197,6 +197,14 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <td>Enabled/disabled stdio and Streamable HTTP shapes captured</td>
 </tr>
 <tr>
+<td>0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64</td>
+<td>No app-chat capture</td>
+<td>Bundled runtime contains the five current event and input/output contracts</td>
+<td>App compatibility runtime reads the same local host configuration as the separately installed 0.144.6 PATH CLI; no real app chat retained</td>
+<td><strong>Not live-verified in the app</strong></td>
+<td>Bundled runtime read the exact existing enabled Seamless stdio registration; no app tool call captured</td>
+</tr>
+<tr>
 <td>0.144.6 / Windows amd64 and arm64</td>
 <td>No live hook run</td>
 <td>Same released schemas; Seamless's Windows command syntax is unit-tested</td>
@@ -211,7 +219,7 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <table>
 <thead>
 <tr>
-<th>Codex / platform</th>
+<th>Codex runtime / frontend / platform</th>
 <th><code>commandWindows</code></th>
 <th>Direct Streamable HTTP</th>
 <th>Upstream hook-output behavior</th>
@@ -234,6 +242,14 @@ fixture version is the one named by <code>currentCodexFixtureVersion</code> in
 <td>Both enabled and disabled config shapes captured through <code>mcp get --json</code>; no direct-HTTP tool call was part of the capture</td>
 <td>Approximate 2,500-token per-entry spill observed: a head/tail model preview plus a temporary full-output path</td>
 <td>2,400 estimated tokens, applied before response serialization and telemetry</td>
+<td>No</td>
+</tr>
+<tr>
+<td>0.145.0-alpha.18 / Codex.app 26.715.52143 / Darwin arm64</td>
+<td>Not app-tested</td>
+<td>Shared config observed only for the existing stdio bridge</td>
+<td>Not app-tested</td>
+<td>Same platform-independent Seamless cap; no app model observation</td>
 <td>No</td>
 </tr>
 <tr>

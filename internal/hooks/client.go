@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// Client identifies the agent CLI a hook request came from. It selects the
+// Client identifies the agent host a hook request came from. It selects the
 // ambient session-name prefix (cc/ vs cx/) so a Claude Code agent and a Codex
 // agent working the same machine get distinct, self-describing session names.
 type Client string
@@ -15,7 +15,8 @@ const (
 	// ClientClaudeCode is the default: Claude Code sends no discriminator, so an
 	// empty client resolves here and existing cc/ behavior is unchanged.
 	ClientClaudeCode Client = "claude-code"
-	// ClientCodex is the Codex CLI, whose ambient sessions are named cx/.
+	// ClientCodex is the shared local Codex app/CLI/IDE host, whose ambient
+	// sessions are named cx/.
 	ClientCodex Client = "codex"
 )
 

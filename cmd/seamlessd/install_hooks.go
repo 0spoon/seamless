@@ -24,7 +24,7 @@ import (
 
 // runInstallHooks wires an agent client to Seamless in one command: it installs
 // the hooks into that client's config file and, unless --mcp=false, registers
-// the MCP server with the client's CLI. --client selects which: claude
+// the MCP server through its management surface. --client selects which: claude
 // (~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
 // `codex mcp add ... seam mcp-proxy`), all (both), or detect (the default: the
 // clients present on this machine, the same selection the curl installer
@@ -38,7 +38,7 @@ func runInstallHooks(args []string) error {
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
-	mcpFlag := fs.Bool("mcp", true, "register the MCP server with the client's CLI (claude/codex mcp add)")
+	mcpFlag := fs.Bool("mcp", true, "register MCP through claude/codex mcp add (prints the Codex app fallback when the management CLI is absent)")
 	skillsFlag := fs.Bool("skills", true, "install the client's seam-onboard and seam-research skills")
 	if err := fs.Parse(args); err != nil {
 		return err
@@ -273,7 +273,7 @@ func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) (
 	def := defaultClientChoice(claudeOK, codexOK)
 	fmt.Fprintln(out, bold("Install Seamless hooks for which agent client?"))
 	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(claudeOK))
-	fmt.Fprintf(out, "  %s Codex %s\n", dim("[2]"), detectedColor(codexOK))
+	fmt.Fprintf(out, "  %s Codex (app/CLI/IDE) %s\n", dim("[2]"), detectedColor(codexOK))
 	fmt.Fprintf(out, "  %s Both\n", dim("[3]"))
 	for {
 		if def == "" {
@@ -438,10 +438,12 @@ func installClaudeHooks(cfg config.Config, settings, baseURL, seamBin, configPat
 	return nil
 }
 
-// installCodexHooks installs the Codex hook profile into $CODEX_HOME/hooks.json
-// and (unless doMCP is false) registers the seam mcp-proxy stdio bridge with the
-// codex CLI. It closes by pointing at Codex's hook trust gate, which no config we
-// write can satisfy on the user's behalf (see the codex-hook-contract memory).
+// installCodexHooks installs the shared local Codex host profile used by the
+// desktop app, CLI, and IDE extension into $CODEX_HOME/hooks.json. Unless doMCP
+// is false it registers the seam mcp-proxy stdio bridge through the Codex
+// management CLI, or prints the exact app-only settings fallback. It closes by
+// pointing at Codex's hook trust gate, which no config we write can satisfy on
+// the user's behalf (see the codex-hook-contract memory).
 func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPath string, doMCP bool) error {
 	target := codexHooks
 	if strings.TrimSpace(target) == "" {
@@ -458,15 +460,18 @@ func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPa
 	if err != nil {
 		return err
 	}
-	printClientBlock(res, "Codex", path)
+	printClientBlock(res, "Codex (app/CLI/IDE)", path)
 	if doMCP {
 		if err := registerCodexMCP(seamBin, configPath); err != nil {
 			return err
 		}
 	}
 	// Codex ignores hooks until the user trusts them; no config we write can do
-	// that on their behalf (see the codex-hook-contract memory), so flag it.
-	fieldRow("trust", yellow("approve hooks on the next `codex` run"))
+	// that on their behalf (see the codex-hook-contract memory), so flag both the
+	// verified CLI route and the app evidence gap instead of implying one UI.
+	fieldRow("trust", yellow("unverified"))
+	fmt.Printf("%s%s\n", fieldCont, dim("CLI: inspect and approve the current definitions with /hooks"))
+	fmt.Printf("%s%s\n", fieldCont, dim("desktop app: trust flow still requires live verification"))
 	fmt.Printf("%s%s\n", fieldCont, dim("headless: pass --dangerously-bypass-hook-trust"))
 	return nil
 }

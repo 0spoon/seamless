@@ -27,8 +27,23 @@ func TestCodexChecksNoCodexIsQuiet(t *testing.T) {
 	require.Equal(t, []check{{
 		status: statusOK,
 		name:   "codex",
-		detail: "not detected (no codex CLI or Seamless Codex configuration)",
+		detail: "not detected (no Codex CLI, initialized home, or Seamless configuration)",
 	}}, checks)
+}
+
+func TestCodexChecksAppOnlyMarksMCPSetupIncomplete(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	t.Setenv("PATH", t.TempDir())
+
+	checks := codexChecks(config.Defaults(), nil)
+	mcpChk := findCheck(t, checks, "codex mcp")
+	require.Equal(t, statusWarn, mcpChk.status)
+	require.Contains(t, mcpChk.detail, "management CLI not found")
+	require.Contains(t, mcpChk.detail, "automated setup is incomplete")
+	require.Contains(t, mcpChk.detail, "Settings > MCP servers > Add server > STDIO")
+	require.Contains(t, mcpChk.detail, `name "seamless"`)
+	require.Contains(t, mcpChk.detail, `arguments "mcp-proxy"`)
 }
 
 func TestDoctorClientChecksClaudeOnlyRemainDeterministic(t *testing.T) {
@@ -79,9 +94,13 @@ func TestCodexChecksExactDefinitionsAndMCPStillWarnsTrust(t *testing.T) {
 
 	checks := []check{hooksCheck(cfg)}
 	checks = append(checks, codexChecks(cfg, db)...)
-	require.Equal(t, []string{"hooks", "codex hooks", "codex hook trust", "codex hook activity", "codex mcp"},
+	require.Equal(t, []string{"hooks", "codex CLI runtime", "codex hooks", "codex hook trust", "codex hook activity", "codex mcp"},
 		checkNames(checks))
 	require.Equal(t, statusOK, findCheck(t, checks, "hooks").status)
+	runtimeChk := findCheck(t, checks, "codex CLI runtime")
+	require.Equal(t, statusOK, runtimeChk.status)
+	require.Contains(t, runtimeChk.detail, "codex-cli test-runtime")
+	require.Contains(t, runtimeChk.detail, fake.path)
 
 	hooksChk := findCheck(t, checks, "codex hooks")
 	require.Equal(t, statusOK, hooksChk.status)
@@ -92,6 +111,7 @@ func TestCodexChecksExactDefinitionsAndMCPStillWarnsTrust(t *testing.T) {
 	trustChk := findCheck(t, checks, "codex hook trust")
 	require.Equal(t, statusWarn, trustChk.status)
 	require.Contains(t, trustChk.detail, "trust unverified; inspect /hooks")
+	require.Contains(t, trustChk.detail, "desktop app trust flow is not yet live-verified")
 	require.NotContains(t, trustChk.detail, "trusted_hash")
 
 	activityChk := findCheck(t, checks, "codex hook activity")

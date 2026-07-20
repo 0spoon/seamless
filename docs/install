@@ -90,7 +90,7 @@ prompt_client_choice() {
 	{
 		printf 'Wire Seamless to which agent client?\n'
 		printf '  [1] Claude Code %s\n' "$([ "$SELECT_CLAUDE" = 1 ] && echo '(detected)' || echo '(not detected)')"
-		printf '  [2] Codex %s\n' "$([ "$SELECT_CODEX" = 1 ] && echo '(detected)' || echo '(not detected)')"
+		printf '  [2] Codex (app/CLI/IDE) %s\n' "$([ "$SELECT_CODEX" = 1 ] && echo '(detected)' || echo '(not detected)')"
 		printf '  [3] Both\n'
 	} >/dev/tty
 	while :; do
@@ -544,8 +544,8 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	say 'next:'
 	case $AGENT_CLIENT in
 	claude) say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' ;;
-	codex) say '  open any git repo in Codex -- Seamless maps it to a project on its own' ;;
-	all) say '  open any git repo in Claude Code or Codex -- Seamless maps it to a project on its own' ;;
+	codex) say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
+	all) say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
 	esac
 	say "  seamlessd console-open   # open the console, already logged in"
 	printf '\n'
@@ -554,10 +554,12 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 		say 'restart Claude Code, then run  /seam-onboard  once.'
 		;;
 	codex)
-		say 'restart Codex, review/approve Seamless in  /hooks, then run  $seam-onboard  once.'
+		say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
+		say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
 		;;
 	all)
-		say 'restart both clients and review/approve Seamless in Codex  /hooks.'
+		say 'restart both clients. Codex CLI users: review/approve Seamless in  /hooks.'
+		say 'Codex desktop app users: hook trust is beta; confirm a <seam-briefing>.'
 		say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
 		;;
 	esac

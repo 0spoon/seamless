@@ -2,8 +2,9 @@ package main
 
 // seam mcp-proxy -- a transport-thin stdio<->streamable-HTTP bridge, so an MCP
 // client that can only speak stdio reaches the same daemon /api/mcp endpoint the
-// HTTP-native clients (Claude Code, the seam CLI) already use. Codex CLI is the
-// first such client: `codex mcp add seamless -- <abs seam> mcp-proxy --config ...`.
+// HTTP-native clients (Claude Code, the seam CLI) already use. The local Codex
+// host is the first such client: `codex mcp add seamless -- <abs seam>
+// mcp-proxy --config ...` writes the config shared by its app, CLI, and IDE.
 //
 // Why a bridge rather than pointing Codex straight at the HTTP endpoint (design
 // decision D6):
@@ -63,7 +64,7 @@ HTTP endpoint with the bearer key from config, and relays the reply back to
 stdout, preserving Mcp-Session-Id so a session started over the bridge stays
 bound across calls.
 
-Register it with a stdio-only client, e.g. Codex CLI:
+Register it with a stdio client, e.g. the local Codex host:
 
   codex mcp add seamless -- <abs seam> mcp-proxy --config <abs seamless.yaml>
 

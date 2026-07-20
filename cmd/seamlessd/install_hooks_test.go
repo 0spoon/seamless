@@ -89,6 +89,17 @@ func TestCodexMCPAddArgs(t *testing.T) {
 	}, codexMCPAddArgs("/opt/seam", ""))
 }
 
+func TestCodexAppMCPSetupHint(t *testing.T) {
+	hint := codexAppMCPSetupHint("/opt/seam", "/etc/seamless.yaml")
+	require.Contains(t, hint, "Settings > MCP servers > Add server > STDIO")
+	require.Contains(t, hint, `name "seamless"`)
+	require.Contains(t, hint, `command "/opt/seam"`)
+	require.Contains(t, hint, `arguments "mcp-proxy" "--config" "/etc/seamless.yaml"`)
+	require.Contains(t, hint, "Save, then Restart")
+	require.NotContains(t, hint, "Bearer")
+	require.NotContains(t, hint, "api_key")
+}
+
 // summarizeActions runs with color disabled (stdout is not a tty under go
 // test), so counts and detail lines compare as plain text.
 func TestSummarizeActions(t *testing.T) {
@@ -197,8 +208,19 @@ func TestPromptInstallClients(t *testing.T) {
 			require.Equal(t, tt.want, got)
 			// The menu always renders all three options with a detection tag.
 			require.Contains(t, out.String(), "[1] Claude Code")
-			require.Contains(t, out.String(), "[2] Codex")
+			require.Contains(t, out.String(), "[2] Codex (app/CLI/IDE)")
 		})
+	}
+}
+
+func TestCodexSharedHostLabelStaysInInstallerMenus(t *testing.T) {
+	for _, path := range []string{
+		filepath.Join("..", "..", "docs", "install"),
+		filepath.Join("..", "..", "docs", "install.ps1"),
+	} {
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		require.Contains(t, string(raw), "[2] Codex (app/CLI/IDE)", path)
 	}
 }
 

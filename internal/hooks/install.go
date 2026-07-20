@@ -52,8 +52,9 @@ var seamlessHooks = []hookSpec{
 	{Event: "PermissionRequest", Matcher: "ExitPlanMode", Endpoint: "/api/hooks/permission-request", Timeout: 10, CLIArg: "permission-request"},
 }
 
-// codexHooks is the Codex CLI install profile (design decisions D4-D6). Codex
-// has no http hook type and (through 0.144.6) no SessionEnd event; its session
+// codexHooks is the shared local Codex app/CLI/IDE install profile (design
+// decisions D4-D6). Codex has no http hook type and (through 0.144.6) no
+// SessionEnd event; its session
 // end is reaper-driven off the per-turn Stop hook (D5). SubagentStart injects a
 // constraints-only briefing into a child, and SubagentStop performs only a safe
 // parent heartbeat. Neither enters Claude Code's durable plan-note capture: no

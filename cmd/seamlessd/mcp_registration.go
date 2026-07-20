@@ -483,8 +483,9 @@ func registerCodexMCP(seamBin, configPath string) error {
 	manual := "codex " + strings.Join(args, " ")
 	codex, err := exec.LookPath("codex")
 	if err != nil {
-		fieldRow("mcp", yellow("codex CLI not found"))
-		fmt.Printf("%s%s\n", fieldCont, dim(manual))
+		fieldRow("mcp", yellow("incomplete (management CLI not found)"))
+		fmt.Printf("%s%s\n", fieldCont, dim(codexAppMCPSetupHint(seamBin, configPath)))
+		fmt.Printf("%s%s\n", fieldCont, dim("CLI alternative: "+manual))
 		return nil
 	}
 
@@ -507,6 +508,24 @@ func registerCodexMCP(seamBin, configPath string) error {
 		fieldRow("mcp", green("registered")+dim(" (stdio bridge: seam mcp-proxy)"))
 	}
 	return nil
+}
+
+// codexAppMCPSetupHint is the app-only fallback when no `codex mcp` management
+// command is available. Hooks and skills can still be installed by writing the
+// shared Codex home, but MCP is not complete until the user adds this exact
+// stdio bridge in the desktop settings and restarts the app.
+func codexAppMCPSetupHint(seamBin, configPath string) string {
+	args := []string{"mcp-proxy"}
+	if configPath != "" {
+		args = append(args, "--config", configPath)
+	}
+	quotedArgs := make([]string, len(args))
+	for i, arg := range args {
+		quotedArgs[i] = fmt.Sprintf("%q", arg)
+	}
+	return fmt.Sprintf(
+		"in Codex app: Settings > MCP servers > Add server > STDIO; name %q; command %q; arguments %s; Save, then Restart",
+		seamlessMCPName, seamBin, strings.Join(quotedArgs, " "))
 }
 
 // codexMCPPathProblems checks the local paths that an exact registration will

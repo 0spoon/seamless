@@ -78,10 +78,11 @@ the override when you want a slug that is not the directory name; see
 [Projects & scope](/concepts/projects/) for the full precedence chain.
 
 Restart the selected client once after installing so it reloads hooks, MCP, and
-skills. In Codex, open `/hooks`, review the exact Seamless commands, and approve
-them; `seamlessd doctor` deliberately reports that trust as unverified until you
-inspect it yourself. See [Claude Code setup](/claude-code/) or [Codex CLI
-setup](/codex-cli/) for the client-specific behavior.
+skills. In Codex CLI, open `/hooks`, review the exact Seamless commands, and
+approve them; `seamlessd doctor` deliberately reports that trust as unverified.
+Desktop app hook trust is still beta, so confirm that a real repo chat receives
+`<seam-briefing>` before relying on it. See [Claude Code setup](/claude-code/) or
+[Codex local setup](/codex-cli/) for the client-specific behavior.
 
 ## Confirm it works
 

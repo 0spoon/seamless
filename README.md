@@ -43,8 +43,8 @@ That is the whole install. It needs `curl` and `tar` and nothing else -- no Go,
 no CGO toolchain, no database, no Node. It fetches the checksum-verified release
 archive for your platform (macOS, Linux, and Windows; amd64 and arm64), installs
 `seamlessd` and `seam` into `~/.local/bin`, generates the bearer key, installs
-hooks, MCP, and skills for the detected Claude Code/Codex clients, and runs the
-daemon as a per-user service -- launchd on macOS, systemd `--user` on Linux, an
+hooks, MCP, and skills for the detected Claude Code/Codex local hosts, and runs
+the daemon as a per-user service -- launchd on macOS, systemd `--user` on Linux, an
 at-logon Scheduled Task on Windows. Upgrade any time with `seamlessd update`
 (re-runs the installer for you; `--check` reports installed vs latest): your
 config and `~/.seamless` are never touched.
@@ -67,10 +67,10 @@ seamlessd install-hooks           # selected client's hooks, MCP, and skills
 ```
 
 `install-hooks` detects Claude Code, Codex, or both. Claude Code gets a
-user-scoped Streamable HTTP registration; Codex gets five hooks and the `seam
-mcp-proxy` stdio bridge. Current Codex supports direct Streamable HTTP too - the
-proxy is Seamless's default so the bearer key stays in the 0600 Seamless config,
-not a transport limitation. Other MCP clients register
+user-scoped Streamable HTTP registration; the shared Codex app/CLI/IDE host gets
+five hooks and the `seam mcp-proxy` stdio bridge. Current Codex supports direct
+Streamable HTTP too - the proxy is Seamless's default so the bearer key stays in
+the 0600 Seamless config, not a transport limitation. Other MCP clients register
 `http://127.0.0.1:8081/api/mcp` with `Authorization: Bearer <mcp.api_key>`. From
 a clone, `make build && make run` is the same daemon out of `./bin/`, and `make
 install` sets it up as a service.
@@ -84,7 +84,7 @@ project instructions (`CLAUDE.md` or `AGENTS.md`). From a clone, use
 
 Then: [Quickstart](https://thereisnospoon.org/docs/quickstart/) ·
 [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) ·
-[Codex CLI setup](https://thereisnospoon.org/docs/codex-cli/) ·
+[Codex local setup](https://thereisnospoon.org/docs/codex-cli/) ·
 [Install & deploy](https://thereisnospoon.org/docs/install/)
 
 ## Documentation

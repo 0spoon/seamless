@@ -7,7 +7,7 @@ Seamless installs hooks for two clients. They are what makes sessions ambient: a
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-[Codex](#codex-cli-five-hooks) gets five. `seamlessd install-hooks --client
+[Codex](#codex-local-host-five-hooks) gets five. `seamlessd install-hooks --client
 <claude|codex|all|detect>` selects the profile; run interactively with no
 `--client` it prompts for the client(s), and a non-interactive run without the
 flag resolves `detect`: the clients present on this machine (the `claude`/`codex`
@@ -38,13 +38,15 @@ cannot spend the whole hook budget.
 (`agent_type` set) share the parent's session and get no ambient session of their
 own.
 
-## Codex CLI: five hooks
+## Codex local host: five hooks
 
 `seamlessd install-hooks --client codex` installs five hooks into
 `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`) instead of the six above.
-Seamless has no verified Claude-style plan-file/`ExitPlanMode` surface to capture
-from Codex, and Codex emits no `SessionEnd` event in 0.144.6. The profile combines
-the three parent-session hooks with a deliberately bounded subagent lifecycle.
+The desktop app, CLI, and IDE extension share this profile for the same Codex
+host. Seamless has no verified Claude-style plan-file/`ExitPlanMode` surface to
+capture from Codex, and Codex emits no `SessionEnd` event in 0.144.6. The profile
+combines the three parent-session hooks with a deliberately bounded subagent
+lifecycle.
 
 | Event | Transport | Endpoint | Effect |
 |---|---|---|---|
@@ -65,7 +67,7 @@ same `/api/hooks/*` endpoints the daemon already serves; the daemon normalizes
 Codex's payload (its `prompt` field, its `Stop` `last_assistant_message`) into the
 shared shape. Omitting the flag means Claude Code - the endpoint URLs are
 identical. Because Codex never sends a `SessionEnd`, its sessions close through the
-idle reaper rather than a clean cascade; [Codex CLI setup](/codex-cli/) covers
+idle reaper rather than a clean cascade; [Codex local setup](/codex-cli/) covers
 that lifecycle and the tool-call approval gate.
 
 Codex limits each model-visible hook-output entry to roughly 2,500 tokens and
@@ -104,11 +106,13 @@ seam doctor        # server reachable, key accepted, tools/list count
 For Claude Code, `seamlessd doctor` looks in `~/.claude/settings.json` and then
 `./.claude/settings.json` and compares installed entries with the definitions the
 installer would write now. For Codex it separately reports exact
-current/stale/missing definitions, trust (`unverified; inspect /hooks`), recent
+current/stale/missing definitions, separately discoverable CLI/app runtime
+versions, trust (`unverified; inspect /hooks in Codex CLI`; desktop trust is not
+yet live-verified), recent
 SessionStart/UserPromptSubmit activity (evidence only), and the machine-readable
 MCP state. It also checks the recorded binary and config targets exist. A machine
-with no Codex CLI, home, or Seamless Codex configuration is one quiet `not
-detected` line, never a failure. `seam doctor` covers the other half: it hits
+with no Codex CLI, initialized home, or Seamless Codex configuration is one quiet
+`not detected` line, never a failure. `seam doctor` covers the other half: it hits
 `/healthz` and calls `tools/list`, which proves the endpoint and key are working.
 
 ## Why Claude Code uses two transports
@@ -285,7 +289,7 @@ looks vaguely Seamless-shaped.
   the hook URLs derive from, and the `briefing:` block that tunes what
   `SessionStart` injects.
 - [MCP API overview](/reference/mcp/) - the tool surface the same daemon serves.
-- [Claude Code setup](/claude-code/) and [Codex CLI setup](/codex-cli/) - the
+- [Claude Code setup](/claude-code/) and [Codex local setup](/codex-cli/) - the
   per-client walkthroughs these hooks come from.
 - [Codex compatibility matrix](/reference/codex-compatibility/) - versioned
   live/schema evidence and the recapture procedure.

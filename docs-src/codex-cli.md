@@ -1,13 +1,21 @@
 ---
-title: Codex CLI setup
-description: Wire OpenAI's Codex CLI into Seamless - install-hooks --client codex for ambient and subagent hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.
+title: Codex local setup (app, CLI, and IDE)
+description: Wire the shared local Codex host into Seamless - one app/CLI/IDE profile for hooks, the mcp-proxy tool bridge, skills, and reaper-driven session lifecycle.
 ---
 
-Codex is the second client Seamless supports directly. Wiring it up is the same
-two independent halves as [Claude Code](/claude-code/) - **the MCP endpoint**
-(what an agent can call) and **the hooks** (what happens without an agent calling
-anything) - and one command installs both. Where Codex differs from Claude Code
-is in the details, and those details are what this page is about.
+The Codex desktop app, CLI, and IDE extension share the same local configuration
+layers and MCP setup for a given Codex host. Seamless therefore treats them as
+one client profile named `codex`, not as three protocols. Wiring that host is the
+same two independent halves as [Claude Code](/claude-code/) - **the MCP
+endpoint** (what an agent can call) and **the hooks** (what happens without an
+agent calling anything) - and one command installs both when the Codex
+management CLI is available.
+
+CLI behavior is supported by the existing compatibility suite. The IDE extension
+shares the profile by upstream contract, while desktop app support is currently
+a local beta. Each non-CLI mode still needs the live hook-trust and chat evidence
+listed in [Compatibility evidence](#compatibility-evidence) before Seamless
+claims it as fully verified.
 
 ## Install the hooks and register MCP
 
@@ -38,6 +46,23 @@ detect` - the clients actually present, Codex included. The Codex profile:
    `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
    the recurring `$seam-research` lab workflow. Claude's copies remain in
    `~/.claude/skills/`; their one-shot delivery markers are independent.
+
+The `codex` executable is the supported management surface for automated MCP
+setup; it is not a different Seamless profile. On an app-only machine where
+`codex` is absent from `PATH`, hooks and skills still install into the shared
+Codex home, but the MCP row is explicitly marked **incomplete** and prints the
+desktop fallback:
+
+1. Open **Settings > MCP servers > Add server** in the Codex desktop app.
+2. Choose **STDIO** and name the server `seamless`.
+3. Use the printed absolute `seam` path as the command and the printed
+   `mcp-proxy --config <absolute seamless.yaml>` values as its arguments.
+4. Save, then restart the app.
+
+That path keeps the bearer key out of Codex configuration just like the
+automated registration. `doctor` still calls the MCP state unverified without a
+management CLI; reading and safely classifying shared TOML is a separate
+hardening step.
 
 Passing `--client claude` explicitly is byte-for-byte what it always was, so
 nothing about your Claude Code setup changes when you add Codex. Use `--client
@@ -111,11 +136,18 @@ Codex will not run a non-managed command hook until its **current definition** i
 trusted. New or changed definitions are skipped until reviewed, so a reinstall
 that repairs a path or command can require approval again. Two supported paths:
 
-- **Interactive** (the normal path): start `codex`, open `/hooks`, inspect the
+- **CLI** (the currently verified path): start `codex`, open `/hooks`, inspect the
   current Seamless commands, and approve them. Codex also warns at startup when
   configured hooks need review.
 - **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
   name says, it is for automation that already vets its hook sources.
+
+The public hook documentation currently names `/hooks` in the CLI. Seamless has
+not yet live-verified an equivalent desktop trust UI, so an app-only install
+must not treat the presence of `hooks.json` as proof that hooks ran. Restart the
+app and confirm that a real repo chat receives `<seam-briefing>` before relying
+on ambient behavior; until that evidence is recorded, desktop hook trust remains
+beta.
 
 If a Codex session opens with no briefing, an untrusted hook is the first thing
 to check - it is the Codex-specific version of "silence is the failure mode".
@@ -209,9 +241,12 @@ reaper runs), rather than the instant the window closes.
 seamlessd doctor    # config, database, tool count, hooks - now Codex-aware
 ```
 
-`doctor` reports four distinct Codex facts instead of rolling them into one
+`doctor` reports distinct Codex facts instead of rolling them into one
 plausible-looking success:
 
+- **runtime versions** - the PATH CLI and, on macOS when it belongs to the same
+  default Codex home, the desktop app's retained compatibility runtime are
+  reported separately because they can differ;
 - **hook definitions** - exact current, stale, and missing events, compared with
   the definitions `install-hooks` would write today, including binary/config
   targets;
@@ -221,7 +256,8 @@ plausible-looking success:
   any, as supporting evidence only, never proof that the current definitions are
   trusted; and
 - **MCP** - exact enabled stdio transport, ordered bridge arguments, and existing
-  executable/config paths, based on `codex mcp get seamless --json`.
+  executable/config paths, based on `codex mcp get seamless --json`; without the
+  management CLI it reports incomplete/unverified setup and the exact app path.
 
 Run `seamlessd install-hooks --client codex` to repair stale owned hooks and a
 disabled or drifted owned bridge. A foreign hook survives, and a foreign MCP
@@ -239,10 +275,13 @@ then the [Troubleshooting](/guides/troubleshooting/) guide.
 ## Compatibility evidence
 
 The maintained [Codex compatibility matrix](/reference/codex-compatibility/)
-records the exact Codex version and platform used for live TUI/exec hooks, MCP
-JSON, output-spill, and Windows-command evidence. The checked-in fixture harness
-documents how to recapture the contracts for the next Codex release without
-touching the operator's `CODEX_HOME`.
+records the exact frontend, Codex runtime version, and platform used for live
+TUI/exec hooks, MCP JSON, output-spill, and Windows-command evidence. Desktop
+support is not complete from a version check alone: a claimed app mode also
+needs a real app chat, hook trust, MCP read/write, Stop harvest, subagent,
+worktree-scope, doctor, secret, and uninstall run. The checked-in fixture harness
+documents how to recapture CLI contracts without touching the operator's
+`CODEX_HOME`.
 
 Primary upstream contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
 [Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), and

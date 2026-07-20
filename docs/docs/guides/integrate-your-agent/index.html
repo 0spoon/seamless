@@ -57,7 +57,7 @@
         
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
-        <li><a href="../../codex-cli/">Codex CLI setup</a></li>
+        <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
       </ul>
     </div>
@@ -193,7 +193,8 @@ survives:</p>
 </span></span></code></pre><p>Register it the way your client registers a stdio server. Codex supports both
 stdio and direct Streamable HTTP; Seamless deliberately installs the bridge with
 <code>codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml</code>,
-because this keeps the bearer key in Seamless's 0600 config. <code>seamlessd install-hooks --client codex</code> does that for you. See <a href="../../codex-cli/">Codex CLI setup</a>.
+because this keeps the bearer key in Seamless's 0600 config. <code>seamlessd install-hooks --client codex</code> does that for you. See <a href="../../codex-cli/">Codex local
+setup</a>.
 The rest of this page - session binding, scope, findings - applies to direct and
 bridged clients unchanged.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">KEY</span><span class="o">=</span>&lt;mcp.api_key&gt;

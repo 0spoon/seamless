@@ -49,7 +49,8 @@ Register it the way your client registers a stdio server. Codex supports both
 stdio and direct Streamable HTTP; Seamless deliberately installs the bridge with
 `codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml`,
 because this keeps the bearer key in Seamless's 0600 config. `seamlessd
-install-hooks --client codex` does that for you. See [Codex CLI setup](/codex-cli/).
+install-hooks --client codex` does that for you. See [Codex local
+setup](/codex-cli/).
 The rest of this page - session binding, scope, findings - applies to direct and
 bridged clients unchanged.
 

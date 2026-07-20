@@ -467,6 +467,10 @@ for fake_codex_arg in "$@"; do
   printf '|%s' "$fake_codex_arg" >> "$FAKE_CODEX_LOG"
 done
 printf '\n' >> "$FAKE_CODEX_LOG"
+if [ "$1" = --version ]; then
+  printf 'codex-cli test-runtime\n'
+  exit 0
+fi
 if [ "${FAKE_CODEX_MODE:-}" = timeout ]; then
   exec /bin/sleep 10
 fi
