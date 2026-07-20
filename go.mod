@@ -6,7 +6,7 @@ toolchain go1.25.12
 
 require (
 	github.com/alecthomas/chroma/v2 v2.27.0
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/mark3labs/mcp-go v0.45.0
 	github.com/microcosm-cc/bluemonday v1.0.27
 	github.com/oklog/ulid/v2 v2.1.1
