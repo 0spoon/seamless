@@ -482,11 +482,24 @@ func checkRange(prop map[string]any, v any, name string) error {
 	return nil
 }
 
-// numberBound reads a minimum/maximum bound. mcp.Min/mcp.Max store a float64;
-// a JSON-decoded schema also yields float64, so one case covers both.
+// numberBound reads a minimum/maximum bound. The stored type depends on how the
+// bound got there: a JSON-decoded schema yields float64, but mcp.Min/mcp.Max are
+// generic over int|int64|float64 and store whatever the call site wrote, so
+// mcp.Min(1) stores an int. Every case is handled because the miss is silent --
+// an unreadable bound drops the range check entirely rather than failing loudly.
 func numberBound(prop map[string]any, key string) (float64, bool) {
-	f, ok := prop[key].(float64)
-	return f, ok
+	switch v := prop[key].(type) {
+	case float64:
+		return v, true
+	case float32:
+		return float64(v), true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	default:
+		return 0, false
+	}
 }
 
 // formatNumber renders a bound or value the way an agent wrote it: 1, not 1.

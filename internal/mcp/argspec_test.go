@@ -394,6 +394,39 @@ func TestNormalizeArgs_Range(t *testing.T) {
 	require.EqualError(t, err, "invalid limit: must be >= 1")
 }
 
+// TestNormalizeArgs_RangeBoundStorageTypes pins the range check against every
+// type a declared bound can arrive as. mcp.Min/mcp.Max are generic over
+// int|int64|float64 and store exactly what the call site wrote, so mcp.Min(1)
+// stores an int while a JSON-decoded schema yields float64. Reading only one of
+// those is not a loud failure: an unreadable bound reports "no bound declared"
+// and the range check is skipped entirely, which is how a bump to mcp-go v0.56
+// silently dropped the limit floor on recall and trial_query.
+func TestNormalizeArgs_RangeBoundStorageTypes(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		min  any
+	}{
+		{"int", 1},
+		{"int64", int64(1)},
+		{"float64", float64(1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The bound is set directly rather than through mcp.Min, so the
+			// stored type is the subject of the test instead of whatever the
+			// current mcp-go infers from an untyped constant.
+			schema := schemaOf(mcp.WithNumber("limit",
+				func(s map[string]any) { s["minimum"] = tc.min }))
+
+			_, err := normalizeArgs(schema, map[string]any{"limit": float64(0)})
+			require.EqualError(t, err, "invalid limit: must be >= 1")
+
+			got, err := normalizeArgs(schema, map[string]any{"limit": float64(10)})
+			require.NoError(t, err)
+			require.Equal(t, float64(10), got["limit"])
+		})
+	}
+}
+
 // TestNormalizeArgs_NoOpinionAboutProject pins the boundary between this
 // validator and scope resolution: project has no enum, is never required, and ""
 // is not rejected here. resolveWriteScope already refuses to guess, and a second
