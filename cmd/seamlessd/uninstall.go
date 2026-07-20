@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -364,11 +365,13 @@ func deregisterMCP(cli string, dryRun bool) {
 		fieldRow("mcp", dim("would run "+cli+" "+strings.Join(mcpRemoveArgs(), " ")))
 		return
 	}
-	if exec.Command(bin, mcpGetArgs()...).Run() != nil {
+	runner := execMCPCommandRunner{client: cli, path: bin, timeout: mcpCommandTimeout}
+	ctx := context.Background()
+	if _, getErr := runner.Run(ctx, mcpGetArgs()...); getErr != nil {
 		fieldRow("mcp", dim("not registered"))
 		return
 	}
-	if out, aerr := exec.Command(bin, mcpRemoveArgs()...).CombinedOutput(); aerr != nil {
+	if out, aerr := runner.Run(ctx, mcpRemoveArgs()...); aerr != nil {
 		fieldRow("mcp", yellow("could not deregister"))
 		contDim(strings.TrimSpace(string(out)))
 		return

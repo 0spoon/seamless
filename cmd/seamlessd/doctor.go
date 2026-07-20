@@ -189,7 +189,7 @@ func codexChecks(cfg config.Config) []check {
 	default:
 		hooksChk = check{statusWarn, "codex hooks", "not installed (run: seamlessd install-hooks --client codex)"}
 	}
-	return []check{hooksChk, codexMCPCheck()}
+	return []check{hooksChk, codexMCPCheck(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))}
 }
 
 // doctorInstallOptions judges a settings file against the seam and config
@@ -222,21 +222,46 @@ func staleHookDetail(stale []string) string {
 	return " (stale: " + strings.Join(stale, ",") + ")"
 }
 
-// codexMCPCheck reports whether the Seamless MCP bridge is registered with the
-// Codex CLI (`codex mcp get seamless` exits 0). It is bounded by a short timeout
-// so a slow Codex startup cannot hang `doctor`, and it warns rather than fails
-// when Codex is missing or the server is not registered.
-func codexMCPCheck() check {
+// codexMCPCheck compares Codex's machine-readable registration with the same
+// desired state used by install-hooks. It is bounded by a short timeout and
+// warns rather than fails because Codex is an optional client.
+func codexMCPCheck(seamBin, configPath string) check {
 	codex, err := exec.LookPath("codex")
 	if err != nil {
 		return check{statusWarn, "codex mcp", "codex CLI not found (skipped)"}
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if exec.CommandContext(ctx, codex, "mcp", "get", "seamless").Run() == nil {
-		return check{statusOK, "codex mcp", "seamless registered (seam mcp-proxy stdio bridge)"}
+	return codexMCPCheckWithRunner(context.Background(), execMCPCommandRunner{
+		client: "codex", path: codex, timeout: mcpCommandTimeout,
+	}, seamBin, configPath)
+}
+
+func codexMCPCheckWithRunner(ctx context.Context, runner mcpCommandRunner, seamBin, configPath string) check {
+	want, err := desiredCodexMCPState(seamBin, configPath)
+	if err != nil {
+		return check{statusWarn, "codex mcp", "cannot build desired registration: " + err.Error()}
 	}
-	return check{statusWarn, "codex mcp", "seamless not registered (run: seamlessd install-hooks --client codex)"}
+	got, present, err := inspectCodexMCP(ctx, runner)
+	if err != nil {
+		return check{statusWarn, "codex mcp", "cannot inspect registration: " + err.Error()}
+	}
+	if !present {
+		return check{statusWarn, "codex mcp", "seamless not registered (run: seamlessd install-hooks --client codex)"}
+	}
+	class, drift := classifyCodexMCPState(got, want)
+	switch class {
+	case codexMCPIncompatible:
+		return check{statusWarn, "codex mcp", fmt.Sprintf(
+			"reserved name has an incompatible registration (%s); remove it explicitly before reinstalling",
+			strings.Join(drift, ", "))}
+	case codexMCPOwnedDrifted:
+		return check{statusWarn, "codex mcp", fmt.Sprintf(
+			"owned registration is stale (%s; run: seamlessd install-hooks --client codex)",
+			strings.Join(drift, ", "))}
+	}
+	if problems := codexMCPPathProblems(want); len(problems) > 0 {
+		return check{statusWarn, "codex mcp", "exact registration is not runnable (" + strings.Join(problems, ", ") + ")"}
+	}
+	return check{statusOK, "codex mcp", "exact enabled stdio bridge (seam mcp-proxy)"}
 }
 
 // gardenerCheck reports the gardener ticker configuration.

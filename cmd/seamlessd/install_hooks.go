@@ -2,7 +2,9 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -402,7 +404,9 @@ func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPa
 	}
 	printClientBlock(res, "Codex", path)
 	if doMCP {
-		registerCodexMCP(seamBin, configPath)
+		if err := registerCodexMCP(seamBin, configPath); err != nil {
+			return err
+		}
 	}
 	// Codex ignores hooks until the user trusts them; no config we write can do
 	// that on their behalf (see the codex-hook-contract memory), so flag it.
@@ -531,14 +535,21 @@ func registerClaudeMCP(baseURL, seamBin, configPath string) {
 		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
+	runner := execMCPCommandRunner{client: "claude", path: claude, timeout: mcpCommandTimeout}
+	ctx := context.Background()
 
+	// Claude Code 2.1.215 exposes no JSON flag for mcp get/list. Do not turn its
+	// human health report into a second brittle state parser: retain the narrow
+	// stored-Authorization migration below, then verify existence after add.
+	// Codex's machine-readable surface is reconciled exactly in
+	// reconcileCodexMCP.
 	// An existing registration is normally left alone -- except the one shape
 	// this change exists to retire. Installs predating the headersHelper switch
 	// stored the bearer key as a literal header in ~/.claude.json, and a plain
 	// "already registered" would leave it there forever, so the fix would only
 	// ever reach new users. Re-register those in place.
 	upgrade := false
-	if out, gerr := exec.Command(claude, "mcp", "get", "seamless").CombinedOutput(); gerr == nil {
+	if out, gerr := runner.Run(ctx, "mcp", "get", seamlessMCPName); gerr == nil {
 		if !strings.Contains(string(out), "Authorization") {
 			fieldRow("mcp", dim("already registered"))
 			return
@@ -547,17 +558,28 @@ func registerClaudeMCP(baseURL, seamBin, configPath string) {
 		// add-json refuses an existing name, so the old entry goes first. If the
 		// add below then fails, the manual command is printed -- which is why
 		// this is not attempted unless the claude CLI is known to work.
-		if out, rerr := exec.Command(claude, "mcp", "remove", "--scope", "user", "seamless").CombinedOutput(); rerr != nil {
+		if out, rerr := runner.Run(ctx, "mcp", "remove", "--scope", "user", seamlessMCPName); rerr != nil {
 			fieldRow("mcp", yellow("could not replace the stored-key registration"))
 			fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
 			fmt.Printf("%s%s\n", fieldCont, dim(manual))
 			return
 		}
+	} else if errors.Is(gerr, context.DeadlineExceeded) || errors.Is(gerr, context.Canceled) {
+		fieldRow("mcp", yellow("registration check timed out"))
+		fmt.Printf("%s%s\n", fieldCont, dim(gerr.Error()))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
+		return
 	}
 
-	if out, aerr := exec.Command(claude, args...).CombinedOutput(); aerr != nil {
+	if out, aerr := runner.Run(ctx, args...); aerr != nil {
 		fieldRow("mcp", yellow("registration failed"))
 		fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
+		fmt.Printf("%s%s\n", fieldCont, dim(manual))
+		return
+	}
+	if _, verr := runner.Run(ctx, "mcp", "get", seamlessMCPName); verr != nil {
+		fieldRow("mcp", yellow("registration could not be verified"))
+		fmt.Printf("%s%s\n", fieldCont, dim(verr.Error()))
 		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
@@ -582,31 +604,6 @@ func codexMCPAddArgs(seamBin, configPath string) []string {
 	return args
 }
 
-// registerCodexMCP registers the seam mcp-proxy stdio bridge with the Codex CLI.
-// Best-effort by design, symmetric with registerClaudeMCP: the hooks are already
-// installed, so a missing or failing codex CLI degrades to printing the manual
-// command rather than failing the install. An already-present entry is left as-is.
-func registerCodexMCP(seamBin, configPath string) {
-	manual := fmt.Sprintf("codex mcp add seamless -- %s mcp-proxy --config <abs seamless.yaml>", seamBin)
-	codex, err := exec.LookPath("codex")
-	if err != nil {
-		fieldRow("mcp", yellow("codex CLI not found"))
-		fmt.Printf("%s%s\n", fieldCont, dim(manual))
-		return
-	}
-	if exec.Command(codex, "mcp", "get", "seamless").Run() == nil {
-		fieldRow("mcp", dim("already registered"))
-		return
-	}
-	if out, aerr := exec.Command(codex, codexMCPAddArgs(seamBin, configPath)...).CombinedOutput(); aerr != nil {
-		fieldRow("mcp", yellow("registration failed"))
-		fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
-		fmt.Printf("%s%s\n", fieldCont, dim(manual))
-		return
-	}
-	fieldRow("mcp", green("registered")+dim(" (stdio bridge: seam mcp-proxy)"))
-}
-
 // absConfigPath makes the loaded config file absolute so it can be baked into
 // the SessionStart command hook as SEAMLESS_CONFIG (the hook fires from any cwd,
 // where a relative "seamless.yaml" would not resolve). "" (defaults+env, no
@@ -622,14 +619,25 @@ func absConfigPath(src string) string {
 }
 
 // resolveSeamBin picks the seam CLI path baked into the SessionStart command
-// hook. An explicit --seam wins; otherwise it prefers the seam binary sitting
-// next to this seamlessd (the normal `make build` layout) so the hook works
-// regardless of PATH, falling back to the bare binary name resolved at hook time.
-// The name carries .exe on Windows: exec-form command hooks spawn the binary
-// directly (no PATHEXT resolution of a bare name), and require a real .exe.
+// hook. An explicit --seam wins and is made absolute; otherwise it prefers the
+// seam binary sitting next to this seamlessd (the normal `make build` layout),
+// then resolves PATH. The final bare-name fallback is only for the preflight
+// warning/manual-repair path when seam is not installed. The name carries .exe
+// on Windows: exec-form command hooks require the real filename.
 func resolveSeamBin(override string) string {
-	if strings.TrimSpace(override) != "" {
-		return override
+	if candidate := strings.TrimSpace(override); candidate != "" {
+		if expanded, err := expandHome(candidate); err == nil {
+			candidate = expanded
+		}
+		if !strings.ContainsAny(candidate, `/\`) {
+			if found, err := exec.LookPath(candidate); err == nil {
+				candidate = found
+			}
+		}
+		if abs, err := filepath.Abs(candidate); err == nil {
+			return abs
+		}
+		return candidate
 	}
 	name := seamBinName()
 	if exe, err := os.Executable(); err == nil {
@@ -637,6 +645,12 @@ func resolveSeamBin(override string) string {
 		if info, err := os.Stat(cand); err == nil && !info.IsDir() {
 			return cand
 		}
+	}
+	if found, err := exec.LookPath(name); err == nil {
+		if abs, absErr := filepath.Abs(found); absErr == nil {
+			return abs
+		}
+		return found
 	}
 	return name
 }
