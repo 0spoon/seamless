@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -110,12 +111,8 @@ func doctor(args []string) error {
 // with codexChecks, so a Codex-only user is not perpetually nagged to install a
 // client they do not run.
 func hooksCheck(cfg config.Config) check {
-	installed, err := hooks.InstalledEvents(hooks.ClientClaudeCode)
-	if err != nil {
-		return check{statusWarn, "hooks", fmt.Sprintf("cannot select Claude Code hook profile: %v", err)}
-	}
+	installed, _ := hooks.InstalledEvents(hooks.ClientClaudeCode) //nolint:errcheck // the client is a package constant, always in HookClients
 	want := len(installed)
-	baseURL := hookBaseURL(cfg.Addr)
 	var candidates []string
 	if home, err := expandHome("~/.claude/settings.json"); err == nil {
 		candidates = append(candidates, home)
@@ -125,10 +122,7 @@ func hooksCheck(cfg config.Config) check {
 	var best check
 	found := false
 	for _, path := range candidates {
-		status, err := hooks.InstalledStatus(hooks.InstallOptions{
-			Client: hooks.ClientClaudeCode, SettingsPath: path, BaseURL: baseURL,
-			APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
-		})
+		status, err := hooks.InstalledStatus(doctorInstallOptions(hooks.ClientClaudeCode, path, cfg))
 		if err != nil {
 			if !found {
 				best = check{statusWarn, "hooks", fmt.Sprintf("cannot inspect %s: %v", path, err)}
@@ -170,10 +164,7 @@ func codexChecks(cfg config.Config) []check {
 	var status hooks.InstallStatus
 	var statusErr error
 	if herr == nil {
-		status, statusErr = hooks.InstalledStatus(hooks.InstallOptions{
-			Client: hooks.ClientCodex, SettingsPath: hooksPath, BaseURL: hookBaseURL(cfg.Addr),
-			APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
-		})
+		status, statusErr = hooks.InstalledStatus(doctorInstallOptions(hooks.ClientCodex, hooksPath, cfg))
 	}
 
 	// Nothing to report when Codex is neither on PATH nor has any Seamless hooks:
@@ -182,10 +173,7 @@ func codexChecks(cfg config.Config) []check {
 		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless hooks in ~/.codex)"}}
 	}
 
-	installed, installedErr := hooks.InstalledEvents(hooks.ClientCodex)
-	if installedErr != nil {
-		return []check{{statusWarn, "codex hooks", fmt.Sprintf("cannot select Codex hook profile: %v", installedErr)}}
-	}
+	installed, _ := hooks.InstalledEvents(hooks.ClientCodex) //nolint:errcheck // the client is a package constant, always in HookClients
 	want := len(installed)
 	var hooksChk check
 	switch {
@@ -202,6 +190,29 @@ func codexChecks(cfg config.Config) []check {
 		hooksChk = check{statusWarn, "codex hooks", "not installed (run: seamlessd install-hooks --client codex)"}
 	}
 	return []check{hooksChk, codexMCPCheck()}
+}
+
+// doctorInstallOptions judges a settings file against the seam and config
+// paths it actually records, falling back to the running binary's sibling only
+// when nothing usable is recorded or the recorded binary is gone. Without
+// this, `make doctor` from a repo checkout computes <repo>/bin/seam as desired
+// and reports every ~/.local/bin hook stale, pushing a needless reinstall.
+func doctorInstallOptions(client hooks.Client, settingsPath string, cfg config.Config) hooks.InstallOptions {
+	opts := hooks.InstallOptions{
+		Client: client, SettingsPath: settingsPath, BaseURL: hookBaseURL(cfg.Addr),
+		APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
+	}
+	seamBin, configPath, ok := hooks.RecordedCommandPaths(client, settingsPath)
+	if !ok || (configPath != "" && !filepath.IsAbs(configPath)) {
+		return opts
+	}
+	if resolved, err := expandHome(seamBin); err == nil {
+		if info, statErr := os.Stat(resolved); statErr == nil && !info.IsDir() {
+			opts.SeamBin = seamBin
+			opts.ConfigPath = configPath
+		}
+	}
+	return opts
 }
 
 func staleHookDetail(stale []string) string {

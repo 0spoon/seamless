@@ -263,6 +263,95 @@ func InstalledStatus(opts InstallOptions) (InstallStatus, error) {
 	return status, nil
 }
 
+// RecordedCommandPaths returns the seam binary and config path recorded in the
+// first seam-shaped command hook of the client's profile in settingsPath.
+// Doctor uses it to judge an install against the paths it was installed with
+// rather than against the running binary's siblings: `make doctor` from a repo
+// checkout must not report a ~/.local/bin install stale. ok is false when the
+// file cannot be read or no command hook runs a seam executable.
+func RecordedCommandPaths(clientName Client, settingsPath string) (seamBin, configPath string, ok bool) {
+	_, profile, err := resolveHookProfile(clientName)
+	if err != nil {
+		return "", "", false
+	}
+	settings, _, err := loadSettings(settingsPath)
+	if err != nil {
+		return "", "", false
+	}
+	hooksObj := nestedObject(settings, "hooks")
+	for _, hs := range profile {
+		if hs.CLIArg == "" {
+			continue
+		}
+		for _, entry := range entryArray(hooksObj, hs.Event) {
+			entryMap, isMap := entry.(map[string]any)
+			if !isMap {
+				continue
+			}
+			handlers, isArr := entryMap["hooks"].([]any)
+			if !isArr {
+				continue
+			}
+			for _, h := range handlers {
+				handler, isHandler := h.(map[string]any)
+				if !isHandler || handler["type"] != "command" {
+					continue
+				}
+				if bin, config, found := commandHookPaths(handler); found {
+					return bin, config, true
+				}
+			}
+		}
+	}
+	return "", "", false
+}
+
+// commandHookPaths extracts the executable and --config value from one command
+// handler, in both shapes the installer has ever written: exec form (bare
+// `command` plus an `args` array) and shell-string form (the whole invocation
+// in `command`, optionally behind a legacy SEAMLESS_CONFIG= prefix). Only a
+// seam-named executable is accepted, so foreign hooks are never read.
+func commandHookPaths(handler map[string]any) (seamBin, configPath string, ok bool) {
+	command, isStr := handler["command"].(string)
+	if !isStr {
+		return "", "", false
+	}
+	if rawArgs, hasArgs := handler["args"]; hasArgs {
+		args, argsOK := hookStringArgs(rawArgs)
+		if !argsOK || !isSeamExecutable(command) {
+			return "", "", false
+		}
+		return command, flagValue(args, "--config"), true
+	}
+	words, splitOK := splitHookCommand(command)
+	if !splitOK || len(words) == 0 {
+		return "", "", false
+	}
+	var envConfig string
+	if v, found := strings.CutPrefix(words[0], "SEAMLESS_CONFIG="); found {
+		envConfig = v
+		words = words[1:]
+	}
+	if len(words) == 0 || !isSeamExecutable(words[0]) {
+		return "", "", false
+	}
+	config := flagValue(words[1:], "--config")
+	if config == "" {
+		config = envConfig
+	}
+	return words[0], config, true
+}
+
+// flagValue returns the token following the given flag, or "".
+func flagValue(args []string, flag string) string {
+	for i, arg := range args {
+		if arg == flag && i+1 < len(args) {
+			return args[i+1]
+		}
+	}
+	return ""
+}
+
 // loadSettings decodes settings.json into a generic map (preserving unknown
 // keys) and returns the file mode to preserve. A missing file yields an empty
 // map and 0o600 (the file holds a bearer key).

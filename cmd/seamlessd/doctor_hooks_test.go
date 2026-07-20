@@ -45,3 +45,49 @@ func TestCodexChecksMissingClientIsStale(t *testing.T) {
 	require.Contains(t, checks[0].detail, "2/3 current")
 	require.Contains(t, checks[0].detail, "stale: Stop")
 }
+
+func TestDoctorInstallOptionsPrefersRecordedPaths(t *testing.T) {
+	dir := t.TempDir()
+	seam := filepath.Join(dir, "seam")
+	require.NoError(t, os.WriteFile(seam, []byte("#!/bin/sh\n"), 0o755))
+	yaml := filepath.Join(dir, "seamless.yaml")
+	path := filepath.Join(dir, "hooks.json")
+
+	cfg := config.Defaults()
+	cfg.MCP.APIKey = "k"
+	_, err := hooks.Install(hooks.InstallOptions{
+		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: hookBaseURL(cfg.Addr),
+		APIKey: cfg.MCP.APIKey, SeamBin: seam, ConfigPath: yaml,
+	})
+	require.NoError(t, err)
+
+	// The doctor binary's sibling seam is a different path from the recorded
+	// one; judging against the recorded paths keeps the install current.
+	opts := doctorInstallOptions(hooks.ClientCodex, path, cfg)
+	require.Equal(t, seam, opts.SeamBin)
+	require.Equal(t, yaml, opts.ConfigPath)
+
+	status, err := hooks.InstalledStatus(opts)
+	require.NoError(t, err)
+	events, err := hooks.InstalledEvents(hooks.ClientCodex)
+	require.NoError(t, err)
+	require.ElementsMatch(t, events, status.Current)
+	require.Empty(t, status.Stale)
+}
+
+func TestDoctorInstallOptionsFallsBackWhenRecordedBinaryMissing(t *testing.T) {
+	dir := t.TempDir()
+	gone := filepath.Join(dir, "seam")
+	path := filepath.Join(dir, "hooks.json")
+
+	cfg := config.Defaults()
+	cfg.MCP.APIKey = "k"
+	_, err := hooks.Install(hooks.InstallOptions{
+		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: hookBaseURL(cfg.Addr),
+		APIKey: cfg.MCP.APIKey, SeamBin: gone,
+	})
+	require.NoError(t, err)
+
+	opts := doctorInstallOptions(hooks.ClientCodex, path, cfg)
+	require.Equal(t, resolveSeamBin(""), opts.SeamBin)
+}
