@@ -19,6 +19,10 @@ import (
 // under an old binary, verification fails closed and a fresh install (whose
 // installer still works, per its own cosign fallback rules) recovers.
 //
+// Refresh the snapshot with:
+//
+//	cosign trusted-root create --with-default-services --out cmd/seamlessd/sigstore_trusted_root.json
+//
 //go:embed sigstore_trusted_root.json
 var sigstoreTrustedRootJSON []byte
 

@@ -37,8 +37,17 @@ jobs:
           cache: true
 
       # goreleaser's `signs:` stage and the installer-signing step below both
-      # shell out to this binary.
+      # shell out to this binary. The version is pinned to the v2 line: the
+      # action's default (cosign v3) refuses to emit the detached .sig/.pem
+      # pair that goreleaser's `signs:` stage produces for checksums.txt and
+      # that docs/install + docs/install.ps1 verify (v3 only writes bundles).
+      # v2 also supports --new-bundle-format, so the installer-script bundles
+      # below are byte-compatible either way. Lifting this pin means moving
+      # checksums.txt signing to bundle output and teaching both installers
+      # to verify bundles first.
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: "v2.6.4"
 
       # Sign the two canonical installer scripts as Sigstore bundles (protobuf
       # bundle format: signature + Fulcio certificate + Rekor entry in one
