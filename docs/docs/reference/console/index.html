@@ -292,14 +292,14 @@ cookie to the browser they can actually see. (<code>--browser</code> is macOS-on
 JSON and not HTML. This is how <code>seam</code> reads the console's data.</li>
 <li><strong>An HTML fragment</strong> for entity details when the caller passes <code>?peek=1</code> - the
 detail pane loads it without a page navigation - or <code>?reader=1</code>, the richer
-reader fragment the library screens (memories, notes, tasks, plans) swap in
-place.</li>
+reader fragment the library screens (memories, notes, tasks, plans, labs,
+trials) swap in place.</li>
 </ul>
 <p>The event page composes its full page from the same <code>detail-body</code> block its
 peek fragment renders, so the two cannot drift. Session and project
 deliberately do not: their fragments are compact summaries of much richer
-bespoke pages. Memory, note, task, and plan detail URLs render their library
-screen with that entity open in the reader.</p>
+bespoke pages. Memory, note, task, plan, lab, and trial detail URLs render
+their library screen with that entity open in the reader.</p>
 <p>Strictly-validated query params (<code>?sort</code>, <code>?scope</code>, <code>?tab</code>, <code>?w</code>) return a 400
 naming the bad param and listing the valid values, rather than silently falling
 back to a default - so an agent driving the console by URL sees the fix.</p>
@@ -342,14 +342,13 @@ arguments. Session lifecycle twins are kept on purpose, as feed markers.</p>
 <p><code>/console/search</code></p>
 <p>One query across every entity the console can link to. Memories and notes come
 through the same fused FTS + semantic retrieval that <a href="../../concepts/recall/">recall</a>
-uses, with snippets; tasks, plans, projects, and sessions have no FTS mirror and
-match by <code>LIKE</code>.</p>
+uses, with snippets; tasks, plans, trials, projects, and sessions have no FTS
+mirror and match by <code>LIKE</code>.</p>
 <p>The command palette (⌘K, available on every page) fetches this same route with
 <code>?format=json&amp;fast=1</code>, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.</p>
-<p>Coverage is deliberately partial. Trials are excluded because the console has no
-trial surface for a hit to link to; events are excluded because the telemetry
-stream has its own Interactions surface and would flood results.</p>
+<p>Coverage is deliberately partial in one place: events are excluded because the
+telemetry stream has its own Interactions surface and would flood results.</p>
 <h2 id="projects">Projects</h2>
 <p><code>/console/projects</code></p>
 <p>The board: one row per project, with live sessions, total sessions, open and
@@ -459,6 +458,32 @@ fields.</li>
 the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). <strong>Approve</strong> appears here, for
 captures only.</p>
+<h2 id="labs">Labs</h2>
+<p><code>/console/labs</code>, <code>/console/labs/{name}</code></p>
+<p>The research-lab surface (the console twin of <code>lab_open</code> / <code>trial_record</code> /
+<code>trial_query</code>). A lab is not a stored entity - it is the label its trials carry,
+a stable name for one line of investigation - so this screen is an aggregation
+over the trials table and there is nothing to write.</p>
+<p>The same library shape: a rail of labs, most recently active first, each with
+its trial count and pass/fail tallies. The reader shows one lab's whole
+identity - outcome tallies (pass, fail, partial, inconclusive, and <em>other</em> for
+free-form or empty outcomes), the projects and sessions its trials touched,
+first and last activity - and its trial history, newest first, each entry
+linking into the Trials screen. Long histories cap at 100 with a pointer to the
+uncapped, filterable view.</p>
+<h2 id="trials">Trials</h2>
+<p><code>/console/trials</code>, <code>/console/trials/{id}</code></p>
+<p>The flat, filterable view over every recorded trial - the console twin of the
+<code>trial_query</code> MCP tool. The rail groups trials by lab (a group sits where its
+newest trial does) and filters by <code>?lab=</code> and <code>?outcome=</code>. Outcomes are
+free-form by design, so <code>?outcome=</code> is an exact-match filter rather than a
+validated enum; the seg offers the conventional values (<code>pass</code>, <code>fail</code>,
+<code>partial</code>, <code>inconclusive</code>).</p>
+<p>The reader shows one trial's full record: what changed, <strong>expected vs actual</strong>
+side by side (the actual pane tinted by outcome), the structured metrics
+<code>trial_record</code> captured, and its provenance - lab, project, and the recording
+session, each linked. Trial hits also surface in <a href="#search">search</a> and the
+command palette, and a session's page lists the trials it recorded.</p>
 <h2 id="relations">Relations</h2>
 <p><code>/console/relations</code></p>
 <p>The dependency spine a flat list cannot show: a plan expands into its steps, each
@@ -534,7 +559,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#relations">Relations</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#relations">Relations</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

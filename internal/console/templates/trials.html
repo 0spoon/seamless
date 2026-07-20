@@ -1,0 +1,106 @@
+{{define "content"}}
+{{with .Data}}
+{{$sel := .Selected}}
+{{$qs := .QS}}
+<div class="topbar">
+  <div>
+    <h1>Trials</h1>
+    <div class="sub">{{.Count}} trial{{if ne .Count 1}}s{{end}}{{if .Lab}} &middot; lab <span class="mono">{{.Lab}}</span>{{end}}{{if .Outcome}} &middot; {{.Outcome}}{{end}}</div>
+  </div>
+</div>
+
+{{if or .Groups .Lab .Outcome}}
+<div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/trials/{{.Selected.ID}}{{$qs}}"{{end}}>
+  <nav class="lib-rail" aria-label="Trials">
+    <div class="rail-tools">
+      {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
+      <div class="seg">
+        {{$lab := .Lab}}
+        {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
+      </div>
+      {{if .Lab}}
+      <div class="rail-filter-note">lab <span class="mono">{{.Lab}}</span> &middot; <a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}">clear</a></div>
+      {{end}}
+    </div>
+    <div class="rail-scroll">
+    {{if .Groups}}
+    <div class="rail-groups">
+      {{range .Groups}}
+      <section class="rail-group" id="rg-lab-{{.Lab}}">
+        <header class="rail-group-hd"><span class="hd-label">{{.Lab}}</span> <span class="n">{{.Count}}</span></header>
+        <div class="rail-items">
+          {{range .Trials}}
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/trials/{{.ID}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-meta">{{if .Outcome}}<span class="t-{{outcomeTone .Outcome}}">{{.Outcome}}</span> &middot; {{end}}{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Metrics}} &middot; {{.Metrics}} metric{{if ne .Metrics 1}}s{{end}}{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
+          </a>
+          {{end}}
+        </div>
+      </section>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="rail-none">No trials match this filter.</div>
+    {{end}}
+    </div><!-- .rail-scroll -->
+  </nav>
+  <section class="lib-reader" id="lib-reader" data-base="/console/trials" aria-live="polite" aria-label="Trial">
+    {{if .Selected}}{{template "trial-reader" .Selected}}{{else}}
+    <div class="reader-empty dotgrid"><span class="empty-ico">{{icon "test-tube"}}</span><div>Select a trial to inspect it here.</div></div>
+    {{end}}
+  </section>
+</div>
+{{else}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "test-tube"}}</span><div>No trials yet &mdash; record one expected-vs-actual experiment with trial_record and it appears here.</div></div>
+{{end}}
+{{end}}
+{{end}}
+
+{{define "trial-reader"}}
+<article class="reader-sheet">
+  <header class="reader-head">
+    <div class="reader-eyebrow">
+      <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}}
+      {{if .Outcome}}<span class="badge {{outcomeTone .Outcome}}">{{.Outcome}}</span>{{end}}
+      <a class="kind" href="{{labPath .Lab}}">lab:{{.Lab}}</a>
+      {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
+    </div>
+    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}</h2>
+    <div class="reader-facts">
+      <span class="fact" title="{{ts .Created}}">recorded {{ago .Created}}</span>
+      {{if .SessionID}}<span class="fact">by <a href="/console/sessions/{{.SessionID}}">{{if .SessionName}}<span class="mono">{{.SessionName}}</span>{{else}}session {{shortID .SessionID}}{{end}}</a></span>{{end}}
+    </div>
+  </header>
+  {{if .Changes}}
+  <section class="trial-section">
+    <h3>What changed</h3>
+    <div class="prose doc">{{.Changes}}</div>
+  </section>
+  {{end}}
+  {{if or .Expected .Actual}}
+  <section class="trial-section">
+    <div class="trial-cmp">
+      <div class="trial-cell">
+        <h3>Expected</h3>
+        {{if .Expected}}<div class="prose doc">{{.Expected}}</div>{{else}}<div class="peek-note">Not recorded</div>{{end}}
+      </div>
+      <div class="trial-cell {{outcomeTone .Outcome}}">
+        <h3>Actual</h3>
+        {{if .Actual}}<div class="prose doc">{{.Actual}}</div>{{else}}<div class="peek-note">Not recorded</div>{{end}}
+      </div>
+    </div>
+  </section>
+  {{end}}
+  {{if .Metrics}}
+  <section class="trial-section">
+    <h3>Metrics <span class="count">{{len .Metrics}}</span></h3>
+    <dl class="peek-kv">
+      {{range .Metrics}}<dt class="mono">{{.Key}}</dt><dd class="mono">{{.Value}}</dd>{{end}}
+    </dl>
+  </section>
+  {{end}}
+  {{if not (or .Changes .Expected .Actual .Metrics)}}
+  <div class="peek-note">Only the title and outcome were recorded for this trial.</div>
+  {{end}}
+</article>
+{{end}}

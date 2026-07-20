@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
@@ -22,6 +25,7 @@ type TrialFilter struct {
 	Lab           string
 	Outcome       string
 	Project       string
+	SessionID     string
 	MetricsEquals map[string]any
 	Limit         int
 }
@@ -66,6 +70,10 @@ func QueryTrials(ctx context.Context, db *sql.DB, f TrialFilter) ([]core.Trial, 
 		query += ` AND project_slug = ?`
 		args = append(args, f.Project)
 	}
+	if f.SessionID != "" {
+		query += ` AND session_id = ?`
+		args = append(args, f.SessionID)
+	}
 	// Over-fetch when filtering metrics in Go so the limit still returns enough
 	// matches; the metrics filter runs after the SQL cut.
 	sqlLimit := limit
@@ -94,6 +102,92 @@ func QueryTrials(ctx context.Context, db *sql.DB, f TrialFilter) ([]core.Trial, 
 		if len(out) >= limit {
 			break
 		}
+	}
+	return out, rows.Err()
+}
+
+// TrialByID loads one trial. found=false means no such trial.
+func TrialByID(ctx context.Context, db *sql.DB, id string) (core.Trial, bool, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+trialCols+` FROM trials WHERE id = ?`, id)
+	if err != nil {
+		return core.Trial{}, false, fmt.Errorf("store.TrialByID: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return core.Trial{}, false, fmt.Errorf("store.TrialByID: %w", err)
+		}
+		return core.Trial{}, false, nil
+	}
+	tr, err := scanTrial(rows)
+	if err != nil {
+		return core.Trial{}, false, fmt.Errorf("store.TrialByID: %w", err)
+	}
+	return tr, true, rows.Err()
+}
+
+// LabSummary aggregates one lab's trials for the console: outcome tallies over
+// the conventional values (anything else -- including an empty outcome -- lands
+// in Other), the distinct projects and sessions its trials touched, and the
+// first/last trial stamps. A lab exists only as the label its trials carry, so
+// this is the lab's whole identity.
+type LabSummary struct {
+	Lab          string    `json:"lab"`
+	Trials       int       `json:"trials"`
+	Pass         int       `json:"pass"`
+	Fail         int       `json:"fail"`
+	Partial      int       `json:"partial"`
+	Inconclusive int       `json:"inconclusive"`
+	Other        int       `json:"other"`
+	Projects     []string  `json:"projects"` // distinct project slugs ("" = global), sorted
+	Sessions     int       `json:"sessions"` // distinct recording sessions
+	FirstAt      time.Time `json:"firstAt"`
+	LastAt       time.Time `json:"lastAt"`
+}
+
+// ListLabs returns every lab with its aggregate summary, most recently active
+// first (ties broken by name). Labs are few -- one per line of investigation --
+// so this is a single GROUP BY over trials with no pagination.
+func ListLabs(ctx context.Context, db *sql.DB) ([]LabSummary, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT lab, COUNT(*),
+			SUM(CASE WHEN outcome = 'pass' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN outcome = 'fail' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN outcome = 'partial' THEN 1 ELSE 0 END),
+			SUM(CASE WHEN outcome = 'inconclusive' THEN 1 ELSE 0 END),
+			COUNT(DISTINCT CASE WHEN session_id <> '' THEN session_id END),
+			GROUP_CONCAT(DISTINCT project_slug),
+			MIN(created_at), MAX(created_at)
+		FROM trials GROUP BY lab
+		ORDER BY MAX(created_at) DESC, lab ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("store.ListLabs: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []LabSummary
+	for rows.Next() {
+		var (
+			l               LabSummary
+			projects        sql.NullString
+			firstAt, lastAt string
+		)
+		if err := rows.Scan(&l.Lab, &l.Trials, &l.Pass, &l.Fail, &l.Partial,
+			&l.Inconclusive, &l.Sessions, &projects, &firstAt, &lastAt); err != nil {
+			return nil, fmt.Errorf("store.ListLabs: scan: %w", err)
+		}
+		l.Other = l.Trials - l.Pass - l.Fail - l.Partial - l.Inconclusive
+		// GROUP_CONCAT joins with "," and slugs cannot contain one
+		// (validate.Name); "" survives the split as the global scope.
+		l.Projects = strings.Split(projects.String, ",")
+		sort.Strings(l.Projects)
+		if l.FirstAt, err = core.ParseTime(firstAt); err != nil {
+			return nil, fmt.Errorf("store.ListLabs: first_at: %w", err)
+		}
+		if l.LastAt, err = core.ParseTime(lastAt); err != nil {
+			return nil, fmt.Errorf("store.ListLabs: last_at: %w", err)
+		}
+		out = append(out, l)
 	}
 	return out, rows.Err()
 }

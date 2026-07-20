@@ -37,13 +37,13 @@ var faviconSVG []byte
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
 	"login", "overview", "search", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
-	"memories", "notes", "retrieval", "tasks", "plans", "gardener", "settings", "event", "error",
+	"memories", "notes", "retrieval", "tasks", "plans", "labs", "trials", "gardener", "settings", "event", "error",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
 // defines a "peek-body" block (the standalone ?peek=1 fragment) wrapping a
 // "detail-body" block (the entity's one body source).
-var peekNames = []string{"memory", "note", "task", "project", "session", "event", "plan"}
+var peekNames = []string{"memory", "note", "task", "project", "session", "event", "plan", "trial"}
 
 // entityPeekPages are the entities whose bespoke full page composes the shared
 // "detail-body" block from templates/peek_<name>.html, so the peek fragment and
@@ -90,6 +90,9 @@ var funcs = template.FuncMap{
 	"evtIcon":       evtIcon,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
+	"outcomeTone":   outcomeTone,
+	"outcomeSegs":   outcomeSegs,
+	"labPath":       labPath,
 	"phaseRows":     phaseRows,
 	"icon":          icon,
 	"kindLegend":    kindLegend,

@@ -198,6 +198,7 @@ type sessionDetail struct {
 	ByKind       []kindCount      `json:"eventsByKind"`
 	ClaimedTasks []claimedTaskVM  `json:"claimedTasks"`
 	Memories     []sessMemVM      `json:"memoriesWritten"`
+	Trials       []sessTrialVM    `json:"trialsRecorded"`
 }
 
 // claimedTaskVM is a task the session currently holds (a live claim), shown on
@@ -215,6 +216,15 @@ type sessMemVM struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 	Kind string `json:"kind"`
+}
+
+// sessTrialVM is a trial the session recorded, shown on the session detail's
+// "Trials recorded" list.
+type sessTrialVM struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Lab     string `json:"lab"`
+	Outcome string `json:"outcome,omitempty"`
 }
 
 func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
@@ -331,6 +341,15 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		s.logger.Warn("console: session memories written", "session", sess.ID, "error", merr)
+	}
+	if trials, terr := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{SessionID: sess.ID, Limit: 50}); terr == nil {
+		for _, tr := range trials {
+			data.Trials = append(data.Trials, sessTrialVM{
+				ID: tr.ID, Title: tr.Title, Lab: tr.Lab, Outcome: string(tr.Outcome),
+			})
+		}
+	} else {
+		s.logger.Warn("console: session trials recorded", "session", sess.ID, "error", terr)
 	}
 
 	s.renderDetail(w, r, "session", pageData{

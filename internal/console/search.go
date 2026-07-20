@@ -9,10 +9,10 @@ package console
 // contract and is CLI-visible, so its field names are stable surface.
 //
 // Coverage is deliberately partial. Memories and notes come through
-// retrieve.Search (fused, snippeted); tasks, plans, projects, and sessions have
-// no FTS mirror and match by LIKE (store.Search*). Trials are excluded because
-// the console has no trial surface for a hit to link to, and events because the
-// telemetry stream has its own Interactions surface and would flood results.
+// retrieve.Search (fused, snippeted); tasks, plans, trials, projects, and
+// sessions have no FTS mirror and match by LIKE (store.Search*). Events are
+// excluded because the telemetry stream has its own Interactions surface and
+// would flood results.
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 
 // searchScopes are the accepted ?scope values: "all", the two knowledge kinds
 // retrieve.Search understands, and one per structured entity.
-var searchScopes = []string{"all", "memories", "notes", "tasks", "plans", "projects", "sessions"}
+var searchScopes = []string{"all", "memories", "notes", "tasks", "plans", "trials", "projects", "sessions"}
 
 // searchQueryMax caps the query length. Longer input is truncated rather than
 // rejected: a paste is a clumsy search, not an error.
@@ -217,6 +217,26 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		add("plans", "Plans", rows)
 	}
 
+	if data.wants("trials") {
+		trials, err := store.SearchTrials(ctx, s.cfg.DB, data.Query, limit)
+		if err != nil {
+			return nil, err
+		}
+		rows := make([]searchRow, 0, len(trials))
+		for _, tr := range trials {
+			desc := "lab " + tr.Lab
+			if tr.Outcome != "" {
+				desc += " · " + string(tr.Outcome)
+			}
+			rows = append(rows, searchRow{
+				Kind: "trial", ID: tr.ID, Title: tr.Title, Project: tr.ProjectSlug,
+				Age: ago(tr.CreatedAt), Href: "/console/trials/" + tr.ID,
+				Description: desc, Peek: true,
+			})
+		}
+		add("trials", "Trials", rows)
+	}
+
 	if data.wants("projects") {
 		projects, err := store.SearchProjects(ctx, s.cfg.DB, data.Query, limit)
 		if err != nil {
@@ -282,7 +302,7 @@ type searchScope struct {
 func searchScopeOptions(active string) []searchScope {
 	labels := map[string]string{
 		"all": "All", "memories": "Memories", "notes": "Notes", "tasks": "Tasks",
-		"plans": "Plans", "projects": "Projects", "sessions": "Sessions",
+		"plans": "Plans", "trials": "Trials", "projects": "Projects", "sessions": "Sessions",
 	}
 	out := make([]searchScope, 0, len(searchScopes))
 	for _, k := range searchScopes {

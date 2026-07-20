@@ -1588,6 +1588,25 @@ a.kind:hover { color: var(--brand); border-color: var(--border-strong); text-dec
   border: 1px dashed var(--border-strong); border-radius: var(--radius-lg); padding: 30px;
 }
 
+/* Labs / Trials: outcome accents in rail metadata, the lab reader's tally row,
+   and the trial reader's expected-vs-actual comparison. */
+.t-ok { color: var(--ok); }
+.t-danger { color: var(--danger); }
+.t-warn { color: var(--warn); }
+.outcome-tally { margin-top: 10px; }
+.rail-filter-note { flex: 1 1 100%; font-size: var(--text-xs); color: var(--muted); }
+.trial-section { margin-top: 20px; }
+.trial-section h3 { font-family: var(--font-display); font-size: var(--text-sm); margin: 0 0 8px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.trial-section h3 .count { font-size: var(--text-xs); color: var(--muted); font-weight: 500; }
+.trial-section .peek-kv { max-width: 480px; }
+.trial-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.trial-cell { border: 1px solid var(--border); border-radius: var(--radius-md); padding: 12px 14px; background: var(--surface); min-width: 0; }
+.trial-cell h3 { margin: 0 0 8px; }
+.trial-cell .prose.doc { font-size: var(--text-sm); }
+.trial-cell.ok { border-color: color-mix(in srgb, var(--ok) 35%, var(--border)); }
+.trial-cell.danger { border-color: color-mix(in srgb, var(--danger) 35%, var(--border)); }
+.trial-cell.warn { border-color: color-mix(in srgb, var(--warn) 35%, var(--border)); }
+
 /* Narrow: stack -- the rail becomes a boxed, capped list above the reader. */
 @media (max-width: 900px) {
   .lib-layout { grid-template-columns: 1fr; gap: 16px; }
@@ -1598,4 +1617,5 @@ a.kind:hover { color: var(--brand); border-color: var(--border-strong); text-dec
     --rail-bg: var(--surface);
   }
   .reader-sheet { max-width: none; }
+  .trial-cmp { grid-template-columns: 1fr; }
 }

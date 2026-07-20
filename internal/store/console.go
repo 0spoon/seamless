@@ -19,6 +19,8 @@ type NavCounts struct {
 	PendingProposals int // pending gardener proposals
 	Projects         int // registered projects
 	Plans            int // distinct plan:<slug> compositions (captures + composed)
+	Labs             int // distinct trial labs
+	Trials           int // all recorded trials
 }
 
 // GetNavCounts computes the sidebar counts.
@@ -56,6 +58,12 @@ func GetNavCounts(ctx context.Context, db *sql.DB) (NavCounts, error) {
 	// badge that as one and disagree with the page it links to. Prefix matches
 	// internal/plans slugTagPrefix.
 	if err := scalar(&n.Plans, `SELECT COUNT(*) FROM (SELECT DISTINCT n.project, je.value FROM notes_index n, json_each(n.tags) je WHERE je.value LIKE 'plan:%')`); err != nil {
+		return n, err
+	}
+	if err := scalar(&n.Labs, `SELECT COUNT(DISTINCT lab) FROM trials`); err != nil {
+		return n, err
+	}
+	if err := scalar(&n.Trials, `SELECT COUNT(*) FROM trials`); err != nil {
 		return n, err
 	}
 	return n, nil

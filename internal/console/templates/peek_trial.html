@@ -1,0 +1,48 @@
+{{define "peek-body"}}
+<article class="peek-entity">
+  <header class="peek-head">
+    <span class="mono-id">{{shortID .ID}}</span>{{copyBtn .ID}}
+    {{if .Outcome}}<span class="badge {{outcomeTone .Outcome}}">{{.Outcome}}</span>{{end}}
+    <span class="kind">lab:{{.Lab}}</span>
+  </header>
+  <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
+  {{template "detail-body" .}}
+</article>
+{{end}}
+
+{{define "detail-body"}}
+  {{if .Changes}}
+  <section class="peek-section">
+    <h3>What changed</h3>
+    <div class="prose">{{.Changes}}</div>
+  </section>
+  {{end}}
+  {{if .Expected}}
+  <section class="peek-section">
+    <h3>Expected</h3>
+    <div class="prose">{{.Expected}}</div>
+  </section>
+  {{end}}
+  {{if .Actual}}
+  <section class="peek-section">
+    <h3>Actual</h3>
+    <div class="prose">{{.Actual}}</div>
+  </section>
+  {{end}}
+
+  <dl class="peek-kv">
+    <dt>Lab</dt><dd class="mono"><a href="{{labPath .Lab}}">{{.Lab}}</a></dd>
+    <dt>Project</dt><dd>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</dd>
+    {{if .SessionID}}<dt>Session</dt><dd class="mono"><a href="/console/sessions/{{.SessionID}}">{{if .SessionName}}{{.SessionName}}{{else}}{{shortID .SessionID}}{{end}}</a></dd>{{end}}
+    <dt>Recorded</dt><dd title="{{ts .Created}}">{{ago .Created}}</dd>
+  </dl>
+
+  {{if .Metrics}}
+  <section class="peek-section">
+    <h3>Metrics <span class="count">{{len .Metrics}}</span></h3>
+    <dl class="peek-kv">
+      {{range .Metrics}}<dt class="mono">{{.Key}}</dt><dd class="mono">{{.Value}}</dd>{{end}}
+    </dl>
+  </section>
+  {{end}}
+{{end}}

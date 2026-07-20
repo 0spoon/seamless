@@ -91,14 +91,14 @@ Every route answers in the shape the caller asked for:
   JSON and not HTML. This is how `seam` reads the console's data.
 - **An HTML fragment** for entity details when the caller passes `?peek=1` - the
   detail pane loads it without a page navigation - or `?reader=1`, the richer
-  reader fragment the library screens (memories, notes, tasks, plans) swap in
-  place.
+  reader fragment the library screens (memories, notes, tasks, plans, labs,
+  trials) swap in place.
 
 The event page composes its full page from the same `detail-body` block its
 peek fragment renders, so the two cannot drift. Session and project
 deliberately do not: their fragments are compact summaries of much richer
-bespoke pages. Memory, note, task, and plan detail URLs render their library
-screen with that entity open in the reader.
+bespoke pages. Memory, note, task, plan, lab, and trial detail URLs render
+their library screen with that entity open in the reader.
 
 Strictly-validated query params (`?sort`, `?scope`, `?tab`, `?w`) return a 400
 naming the bad param and listing the valid values, rather than silently falling
@@ -153,16 +153,15 @@ arguments. Session lifecycle twins are kept on purpose, as feed markers.
 
 One query across every entity the console can link to. Memories and notes come
 through the same fused FTS + semantic retrieval that [recall](/concepts/recall/)
-uses, with snippets; tasks, plans, projects, and sessions have no FTS mirror and
-match by `LIKE`.
+uses, with snippets; tasks, plans, trials, projects, and sessions have no FTS
+mirror and match by `LIKE`.
 
 The command palette (⌘K, available on every page) fetches this same route with
 `?format=json&fast=1`, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.
 
-Coverage is deliberately partial. Trials are excluded because the console has no
-trial surface for a hit to link to; events are excluded because the telemetry
-stream has its own Interactions surface and would flood results.
+Coverage is deliberately partial in one place: events are excluded because the
+telemetry stream has its own Interactions surface and would flood results.
 
 ## Projects
 
@@ -265,6 +264,40 @@ A capture owns its slug; composed plans fill only the rest. The reader shows
 the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). **Approve** appears here, for
 captures only.
+
+## Labs
+
+`/console/labs`, `/console/labs/{name}`
+
+The research-lab surface (the console twin of `lab_open` / `trial_record` /
+`trial_query`). A lab is not a stored entity - it is the label its trials carry,
+a stable name for one line of investigation - so this screen is an aggregation
+over the trials table and there is nothing to write.
+
+The same library shape: a rail of labs, most recently active first, each with
+its trial count and pass/fail tallies. The reader shows one lab's whole
+identity - outcome tallies (pass, fail, partial, inconclusive, and *other* for
+free-form or empty outcomes), the projects and sessions its trials touched,
+first and last activity - and its trial history, newest first, each entry
+linking into the Trials screen. Long histories cap at 100 with a pointer to the
+uncapped, filterable view.
+
+## Trials
+
+`/console/trials`, `/console/trials/{id}`
+
+The flat, filterable view over every recorded trial - the console twin of the
+`trial_query` MCP tool. The rail groups trials by lab (a group sits where its
+newest trial does) and filters by `?lab=` and `?outcome=`. Outcomes are
+free-form by design, so `?outcome=` is an exact-match filter rather than a
+validated enum; the seg offers the conventional values (`pass`, `fail`,
+`partial`, `inconclusive`).
+
+The reader shows one trial's full record: what changed, **expected vs actual**
+side by side (the actual pane tinted by outcome), the structured metrics
+`trial_record` captured, and its provenance - lab, project, and the recording
+session, each linked. Trial hits also surface in [search](#search) and the
+command palette, and a session's page lists the trials it recorded.
 
 ## Relations
 

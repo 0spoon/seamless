@@ -118,6 +118,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/plans", s.auth(s.plansList))
 	handle("GET /console/plans/{slug}", s.auth(s.planDetail))
 	handle("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
+	handle("GET /console/labs", s.auth(s.labsList))
+	handle("GET /console/labs/{name...}", s.auth(s.labDetail))
+	handle("GET /console/trials", s.auth(s.trialsList))
+	handle("GET /console/trials/{id}", s.auth(s.trialDetail))
 	handle("GET /console/projects", s.auth(s.projectsList))
 	handle("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	handle("GET /console/relations", s.auth(s.relations))
@@ -540,6 +544,8 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 		Proposals: n.PendingProposals,
 		Projects:  n.Projects,
 		Plans:     n.Plans,
+		Labs:      n.Labs,
+		Trials:    n.Trials,
 	}
 }
 
@@ -552,4 +558,6 @@ type navCounts struct {
 	Proposals int
 	Projects  int
 	Plans     int
+	Labs      int
+	Trials    int
 }

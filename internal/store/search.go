@@ -1,9 +1,10 @@
 // Free-text search over the structured entities -- tasks, sessions, projects,
-// plans. Memories and notes are not here: they are indexed in the fts table and
-// searched through FTSSearch (fused with semantic hits by internal/retrieve).
-// These four have no FTS mirror, so they match with LIKE over the one or two
-// columns a human would search by (a task's title, a session's name, a project's
-// slug/name). That is a deliberate floor, not a stopgap: they are short,
+// plans, trials. Memories and notes are not here: they are indexed in the fts
+// table and searched through FTSSearch (fused with semantic hits by
+// internal/retrieve). These five have no FTS mirror, so they match with LIKE
+// over the one or two columns a human would search by (a task's title, a
+// session's name, a project's slug/name). That is a deliberate floor, not a
+// stopgap: they are short,
 // low-cardinality labels where substring matching is what the observer expects,
 // and mirroring them into fts would mean maintaining index rows for high-churn
 // state the files layer does not own.
@@ -103,6 +104,32 @@ func SearchProjects(ctx context.Context, db *sql.DB, q string, limit int) ([]cor
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store.SearchProjects: %w", err)
+	}
+	return out, nil
+}
+
+// SearchTrials returns trials whose title or lab contains q, newest first. An
+// exact id also matches, so pasting a trial id from a log finds its trial.
+func SearchTrials(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Trial, error) {
+	needle := likeContains(q)
+	rows, err := db.QueryContext(ctx, `SELECT `+trialCols+` FROM trials
+		WHERE title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR id = ?
+		ORDER BY created_at DESC, id DESC LIMIT ?`,
+		needle, needle, q, searchLimit(limit))
+	if err != nil {
+		return nil, fmt.Errorf("store.SearchTrials: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []core.Trial
+	for rows.Next() {
+		tr, err := scanTrial(rows)
+		if err != nil {
+			return nil, fmt.Errorf("store.SearchTrials: scan: %w", err)
+		}
+		out = append(out, tr)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.SearchTrials: %w", err)
 	}
 	return out, nil
 }

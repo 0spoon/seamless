@@ -110,6 +110,15 @@
       </div>
       {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">Nothing durable yet &mdash; findings are harvested on session end.</div>{{end}}
     </div>
+
+    {{if .Trials}}
+    <div class="card">
+      <h2>Trials recorded <span class="h2-meta">{{len .Trials}}</span></h2>
+      <div class="rail-list">
+        {{range .Trials}}<div id="{{.ID}}" class="row"><a href="/console/trials/{{.ID}}">{{.Title}}</a><span class="kind">{{.Lab}}</span>{{if .Outcome}}<span class="badge {{outcomeTone .Outcome}}">{{.Outcome}}</span>{{end}}</div>{{end}}
+      </div>
+    </div>
+    {{end}}
   </div>
 </div>
 {{end}}
