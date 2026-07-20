@@ -120,12 +120,9 @@ func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T)
 				"</seam-recall>",
 		},
 		{
-			// Subagent briefings arrive on /api/hooks/session-start with
-			// AgentType set -- there is no SubagentStart hook or route. This
-			// case pins the cap for that constraint-heavy briefing shape.
-			name:  "subagent briefing via session-start",
-			event: "SessionStart",
-			hook:  "session-start",
+			name:  "subagent-start constraints",
+			event: "SubagentStart",
+			hook:  "subagent-start",
 			content: "<seam-briefing>\nCONSTRAINT: child-scope: keep constraints\n" +
 				strings.Repeat("CONSTRAINT: bounded-child: 界界界\n", 1200) +
 				"</seam-briefing>",
@@ -237,6 +234,51 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	// do not accumulate a null last_injected_at and become archive proposals.
 	require.NotEmpty(t, injected[0].Payload["item_ids"])
 	require.Greater(t, injected[0].Payload["original_estimated_tokens"].(float64),
+		float64(codexContextMaxTokens))
+}
+
+func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	const parentID = "019f8000-0000-7000-8000-000000000001"
+
+	for i := range 80 {
+		insertMemory(t, db, fmt.Sprintf("01S%03d", i), "constraint",
+			fmt.Sprintf("subagent-constraint-%03d", i), strings.Repeat("bounded child detail ", 12), "demo")
+	}
+	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": parentID, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent",
+	})
+
+	resp, out := post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": parentID, "turn_id": "turn-1", "agent_id": "child-1",
+		"agent_type": "default", "cwd": "/work/demo", "model": "gpt-child",
+		"permission_mode": "default", "hook_event_name": "SubagentStart",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	hso := out["hookSpecificOutput"].(map[string]any)
+	require.Equal(t, "SubagentStart", hso["hookEventName"])
+	emitted := additionalContext(t, out)
+	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
+	require.Contains(t, emitted, "CONSTRAINT: subagent-constraint-")
+	require.Contains(t, emitted, contextTruncationMarker)
+	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
+	require.NotContains(t, emitted, "Seam session:")
+
+	var injection core.Event
+	for _, event := range eventsOfKind(t, events.NewRecorder(db), core.EventInjected) {
+		if event.Payload["hook"] == "subagent-start" {
+			injection = event
+			break
+		}
+	}
+	require.NotEmpty(t, injection.ID)
+	require.Equal(t, emitted, injection.Payload["content"])
+	require.Equal(t, string(ClientCodex), injection.Payload["external_client"])
+	require.Equal(t, true, injection.Payload["truncated"])
+	require.Equal(t, false, injection.Payload["item_ids_exact"])
+	require.Greater(t, injection.Payload["original_estimated_tokens"].(float64),
+		float64(codexContextMaxTokens))
+	require.LessOrEqual(t, injection.Payload["emitted_estimated_tokens"].(float64),
 		float64(codexContextMaxTokens))
 }
 

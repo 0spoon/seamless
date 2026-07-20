@@ -1,11 +1,11 @@
 package main
 
-// seam hook -- forward a Claude Code hook payload (stdin) to seamlessd and copy
-// the JSON response back (stdout), so a `command` hook can drive the same server
-// logic an `http` hook would. Claude Code runs only command/mcp_tool hooks for
-// SessionStart, so this is how the briefing and the ambient session get injected.
+// seam hook -- forward an agent-client hook payload (stdin) to seamlessd and
+// copy the JSON response back (stdout), so a `command` hook can drive the same
+// server logic an `http` hook would. Claude Code requires command/mcp_tool hooks
+// for SessionStart; Codex uses command hooks for its entire Seamless profile.
 //
-// Claude Code invokes this command; the owner does not. That one fact shapes
+// Agent clients invoke this command; the owner does not. That one fact shapes
 // every decision in this file: a hook must never block the session it serves.
 
 import (
@@ -39,6 +39,7 @@ var hookEvents = []struct{ event, endpoint string }{
 	{"user-prompt-submit", "/api/hooks/user-prompt-submit"},
 	{"session-end", "/api/hooks/session-end"},
 	{"post-tool-use", "/api/hooks/post-tool-use"},
+	{"subagent-start", "/api/hooks/subagent-start"},
 	{"subagent-stop", "/api/hooks/subagent-stop"},
 	{"permission-request", "/api/hooks/permission-request"},
 	// Codex-only: its per-turn end signal (heartbeat + provisional harvest). Codex

@@ -1,13 +1,13 @@
 ---
 title: Hooks
-description: The hooks Seamless installs per client - six for Claude Code, three for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
+description: The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
 ---
 
 Seamless installs hooks for two clients. They are what makes sessions ambient: an
 agent gets a briefing, its prompts get matched against stored memories, and its
 findings get harvested - without the agent calling a single MCP tool. The profile
 depends on the client: Claude Code gets six hooks (including plan-mode capture);
-[Codex](#codex-cli-three-hooks) gets three. `seamlessd install-hooks --client
+[Codex](#codex-cli-five-hooks) gets five. `seamlessd install-hooks --client
 <claude|codex|all|detect>` selects the profile; run interactively with no
 `--client` it prompts for the client(s), and a non-interactive run without the
 flag resolves `detect`: the clients present on this machine (the `claude`/`codex`
@@ -36,20 +36,23 @@ cannot spend the whole hook budget.
 (`agent_type` set) share the parent's session and get no ambient session of their
 own.
 
-## Codex CLI: three hooks
+## Codex CLI: five hooks
 
-`seamlessd install-hooks --client codex` installs three hooks into
+`seamlessd install-hooks --client codex` installs five hooks into
 `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`) instead of the six above.
-Codex has no plan mode to capture and emits no `SessionEnd` event in 0.144.5, so
-the profile is just SessionStart, UserPromptSubmit, and Stop.
+Seamless has no verified Claude-style plan-file/`ExitPlanMode` surface to capture
+from Codex, and Codex emits no `SessionEnd` event in 0.144.6. The profile combines
+the three parent-session hooks with a deliberately bounded subagent lifecycle.
 
 | Event | Transport | Endpoint | Effect |
 |---|---|---|---|
 | `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes the ambient `cx/{prefix}-{digest}` session. |
 | `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
 | `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
+| `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects a constraints-only briefing under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
+| `SubagentStop` | command (`seam hook subagent-stop --client codex`) | `/api/hooks/subagent-stop` | Heartbeats the parent only. It does not apply the child's model/final message to parent state or create Claude-style plan notes. |
 
-All three are `command` hooks, and for one reason: Codex only runs
+All five are `command` hooks, and for one reason: Codex only runs
 `command`/`mcp_tool` hooks, and every command hook passes through Codex's **trust
 gate**. An untrusted hook is silently skipped, so a fresh install shows no
 briefing until the hooks are trusted - interactively at the Codex TUI startup
@@ -100,7 +103,7 @@ endpoint the hooks post to is actually answering.
 ## Why Claude Code uses two transports
 
 Five of the Claude Code hooks are `command`, one is `http`. (Codex, above, uses
-`command` for all three - its trust gate applies only to command hooks.) The
+`command` for all five - its trust gate applies only to command hooks.) The
 split is not stylistic:
 
 - **`SessionStart` must be a command hook.** Claude Code only runs

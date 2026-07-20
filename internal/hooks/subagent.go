@@ -1,10 +1,13 @@
 package hooks
 
-// Planning-subagent capture. SubagentStop fires when an Agent-tool subagent
-// completes; during plan-mode activity its transcript (first user message =
-// the prompt, last assistant text = the final report) is cached as a
-// cc-agent-<agent_id> note tagged into the session's plan composition, so an
-// implementing agent inherits the exploration without re-running it.
+// Subagent lifecycle handling. Codex SubagentStart receives the same
+// constraints-only briefing as a Claude Code child SessionStart while sharing
+// its parent's ambient session. Codex SubagentStop is deliberately limited to a
+// parent heartbeat: it never harvests child output into the parent's findings or
+// creates durable notes. Claude Code's established planning-subagent capture is
+// kept separate and unchanged: during plan-mode activity its transcript (first
+// user message = prompt, last assistant text = final report) is cached as a
+// cc-agent-<agent_id> note in the session's plan composition.
 
 import (
 	"bufio"
@@ -22,22 +25,74 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/plans"
+	"github.com/0spoon/seamless/internal/retrieve"
 )
 
 // maxAgentTitleRunes caps the prompt-derived part of an agent-cache note title.
 const maxAgentTitleRunes = 120
+
+// subagentStart injects project constraints into a child without running any
+// ambient-session ensure/reactivation path. The captured Codex contract proves
+// that session_id is the parent id, so a heartbeat is safe; model attribution is
+// intentionally not updated because a child may run a different model.
+func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
+	if !verifyBearer(r, h.apiKey) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	client, ok := requireRequestClient(w, r)
+	if !ok {
+		return
+	}
+	p := decodeSubagentStart(client, readHookBody(w, r))
+
+	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
+	defer cancel()
+
+	// The released contract requires these fields. A malformed request gets an
+	// empty, correctly shaped response; never guess a parent, child, or scope.
+	if strings.TrimSpace(p.ParentSessionID) == "" || strings.TrimSpace(p.AgentID) == "" ||
+		strings.TrimSpace(p.AgentType) == "" || strings.TrimSpace(p.CWD) == "" {
+		h.writeContextResponse(ctx, w, "SubagentStart", "subagent-start", client,
+			p.ParentSessionID, "", "", false, nil)
+		return
+	}
+	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
+		CWD: p.CWD, AgentType: p.AgentType,
+	})
+	if err != nil {
+		h.logger.Warn("hooks: subagent-start briefing failed", "error", err)
+		briefing, injectedIDs = "", nil
+	}
+
+	// This is the only parent-session mutation: no ensure, project registration,
+	// re-scope, rename, model update, findings harvest, or completion occurs here.
+	h.touchAmbient(ctx, client, p.ParentSessionID)
+	h.writeContextResponse(ctx, w, "SubagentStart", "subagent-start", client,
+		p.ParentSessionID, "", briefing, briefing != "", injectedIDs)
+}
 
 func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 	if !verifyBearer(r, h.apiKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
 		return
 	}
-	if _, ok := requireRequestClient(w, r); !ok {
+	client, ok := requireRequestClient(w, r)
+	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
-	var p toolPayload
-	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no agent id -> no capture)
+	p := decodeSubagentStop(client, readHookBody(w, r))
+
+	if client == ClientCodex {
+		// The Codex contract shares the parent session_id. Keep it alive, but do
+		// not apply the child model/final message to the parent and do not enter
+		// Claude's plan-note capture path.
+		ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
+		h.touchAmbient(ctx, client, p.ParentSessionID)
+		cancel()
+		writeHookAck(w)
+		return
+	}
 
 	if h.captureEnabled() {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
@@ -47,14 +102,15 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 	writeHookAck(w)
 }
 
-// captureSubagent caches a completed subagent's prompt and report as a note.
+// captureSubagent caches a completed Claude Code subagent's prompt and report as
+// a note.
 // Gate: only while the session has an unapproved plan capture or is in plan
 // mode -- otherwise every subagent machine-wide would produce a note.
-func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
+func (h *Handler) captureSubagent(ctx context.Context, p subagentPayload) {
 	if p.AgentID == "" {
 		return
 	}
-	meta, hasMeta := h.sessionPlanMeta(ctx, p.SessionID)
+	meta, hasMeta := h.sessionPlanMeta(ctx, p.ParentSessionID)
 	planning := hasMeta && (meta.Status == plans.StatusDraft || meta.Status == plans.StatusPresented)
 	if !planning && p.PermissionMode != "plan" {
 		return
@@ -81,7 +137,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 	note.Title = agentNoteTitle(p.AgentType, prompt)
 	note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
 	note.Body = agentStamp(
-		h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
+		h.ambientDisplayName(ctx, ClientClaudeCode, p.ParentSessionID),
 		p.AgentID, gitHead(p.CWD), now,
 	) +
 		"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
@@ -98,9 +154,9 @@ func (h *Handler) captureSubagent(ctx context.Context, p toolPayload) {
 	// plan capture adopts it into the composition.
 	if meta.PlanSlug == "" && !slices.Contains(meta.PendingAgents, noteSlug) {
 		meta.PendingAgents = append(meta.PendingAgents, noteSlug)
-		h.setSessionPlanMeta(ctx, p.SessionID, meta)
+		h.setSessionPlanMeta(ctx, p.ParentSessionID, meta)
 	}
-	h.recordPlanEvent(ctx, core.EventSubagentCaptured, p.SessionID, written.ID, map[string]any{
+	h.recordPlanEvent(ctx, core.EventSubagentCaptured, p.ParentSessionID, written.ID, map[string]any{
 		"content":  report, // verbatim, unbounded by design
 		"prompt":   events.Truncate(prompt, h.maxEventChars),
 		"agent_id": p.AgentID, "agent_type": p.AgentType, "plan_slug": meta.PlanSlug,
@@ -150,7 +206,7 @@ func agentStamp(sessionName, agentID, head string, now time.Time) string {
 // <proj-dir>/<session-id>/subagents/agent-<agent_id>.jsonl). An agent id
 // carrying path separators or ".." is rejected rather than joined into the
 // path -- it is a filename fragment, never a path.
-func subagentTranscriptPath(p toolPayload) string {
+func subagentTranscriptPath(p subagentPayload) string {
 	if p.TranscriptPath == "" {
 		return ""
 	}

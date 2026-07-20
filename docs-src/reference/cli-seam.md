@@ -323,16 +323,16 @@ questions.
 ## Hooks
 
 ```bash
-seam hook session-start|user-prompt-submit|session-end
-seam hook post-tool-use|subagent-stop|permission-request
+seam hook session-start|user-prompt-submit|session-end|stop
+seam hook subagent-start|subagent-stop|post-tool-use|permission-request
 ```
 
-Invoked by Claude Code, not by hand. Each reads the hook payload from stdin,
+Invoked by Claude Code or Codex, not by hand. Each reads the hook payload from stdin,
 forwards it to the matching `/api/hooks/...` endpoint with the bearer key, and
 copies the JSON response to stdout - so a `command` hook drives the same server
-logic an `http` hook would. This exists because Claude Code only runs
-command-type hooks for SessionStart, which is how the briefing and the ambient
-session get injected at all.
+logic an `http` hook would. Claude Code requires a command hook for SessionStart;
+Codex's profile uses command hooks throughout and passes `--client codex` so the
+daemon selects its payload adapter.
 
 Two behaviours matter if you are debugging a hook:
 

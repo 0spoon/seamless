@@ -1,16 +1,20 @@
 package hooks
 
 import (
+	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/plans"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // placeSubagentTranscript copies the fixture transcript into the verified
@@ -166,11 +170,58 @@ func TestSubagentCaptureMissingTranscriptFailsOpen(t *testing.T) {
 	require.Empty(t, eventsOfKind(t, e.rec, core.EventSubagentCaptured))
 }
 
+// Codex SubagentStop shares the parent session_id but is not a Claude planning
+// capture. Even a plan permission mode and a readable child transcript must not
+// create a cc-agent note or overwrite the main-turn findings/model.
+func TestCodexSubagentStop_OnlyHeartbeatsParent(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
+	const parentID = "019f8000-0000-7000-8000-000000000001"
+
+	resp, _ := post(t, e.ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": parentID, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	resp, _ = post(t, e.ts.URL+"/api/hooks/stop?client=codex", testKey, map[string]any{
+		"session_id": parentID, "cwd": "/work/demo", "model": "gpt-parent",
+		"last_assistant_message": "parent main-turn findings",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.NoError(t, store.TouchAmbientSession(context.Background(), e.db,
+		ClientCodex.externalIdentity(), parentID, time.Now().UTC().Add(-time.Hour)))
+	before := requireAmbientSession(t, e.db, ClientCodex, parentID)
+
+	main := placeSubagentTranscript(t, "codex-child")
+	child := filepath.Join(strings.TrimSuffix(main, ".jsonl"), "subagents", "agent-codex-child.jsonl")
+	resp, out := post(t, e.ts.URL+"/api/hooks/subagent-stop?client=codex", testKey, map[string]any{
+		"session_id": parentID, "turn_id": "turn-1", "cwd": "/work/demo",
+		"transcript_path": main, "agent_transcript_path": child,
+		"permission_mode": "plan", "hook_event_name": "SubagentStop",
+		"model": "gpt-child", "agent_id": "codex-child", "agent_type": "default",
+		"last_assistant_message": "child report must not become parent findings",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Equal(t, true, out["continue"])
+	require.Nil(t, out["hookSpecificOutput"], "SubagentStop cannot inject")
+
+	after := requireAmbientSession(t, e.db, ClientCodex, parentID)
+	require.Equal(t, before.Name, after.Name)
+	require.Equal(t, before.ProjectSlug, after.ProjectSlug)
+	require.Equal(t, before.Model, after.Model, "a child model must not re-attribute the parent")
+	require.Equal(t, before.Findings, after.Findings)
+	require.True(t, after.UpdatedAt.After(before.UpdatedAt), "SubagentStop heartbeats the proven parent id")
+	require.Equal(t, "(auto-harvested) parent main-turn findings", after.Findings)
+	require.NotContains(t, after.Findings, "child report")
+
+	_, found := e.loadNote(t, "cc-agent-codex-child")
+	require.False(t, found, "generic Codex workers must not create durable plan notes")
+	require.Empty(t, eventsOfKind(t, e.rec, core.EventSubagentCaptured))
+}
+
 // TestSubagentTranscriptPathRejectsTraversalAgentID pins the agent-id guard:
 // the id is a filename fragment, so one carrying separators or ".." must not be
 // joined into the transcript path (it could point the read anywhere on disk).
 func TestSubagentTranscriptPathRejectsTraversalAgentID(t *testing.T) {
-	base := toolPayload{TranscriptPath: "/tmp/sess.jsonl"}
+	base := subagentPayload{TranscriptPath: "/tmp/sess.jsonl"}
 
 	for _, id := range []string{"../../../etc/passwd", "a/b", `a\b`, "a..b"} {
 		p := base

@@ -46,9 +46,9 @@ func requireCodexCommandHook(t *testing.T, hooksObj map[string]any, event, cliAr
 	t.Fatalf("no Codex command hook running `hook %s` found for %s", cliArg, event)
 }
 
-// A fresh Codex install writes exactly the three-hook profile as shell-string
-// command hooks, no plan-capture or SessionEnd hooks (D7 / D5), and re-installing
-// is a clean no-op.
+// A fresh Codex install writes the ambient plus safe subagent profile as
+// shell-string command hooks, no Claude plan-capture or SessionEnd hooks (D6 /
+// D5), and re-installing is a clean no-op.
 func TestInstallCodexProfile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".codex", "hooks.json")
@@ -70,15 +70,17 @@ func TestInstallCodexProfile(t *testing.T) {
 	requireCodexCommandHook(t, hooksObj, "SessionStart", "session-start")
 	requireCodexCommandHook(t, hooksObj, "UserPromptSubmit", "user-prompt-submit")
 	requireCodexCommandHook(t, hooksObj, "Stop", "stop")
+	requireCodexCommandHook(t, hooksObj, "SubagentStart", "subagent-start")
+	requireCodexCommandHook(t, hooksObj, "SubagentStop", "subagent-stop")
 
-	// SessionStart keeps its source matcher; UserPromptSubmit and Stop have none.
+	// SessionStart keeps its source matcher; the turn/subagent hooks have none.
 	require.Equal(t, "startup|resume|clear|compact",
 		hooksObj["SessionStart"].([]any)[0].(map[string]any)["matcher"])
 	require.Nil(t, hooksObj["UserPromptSubmit"].([]any)[0].(map[string]any)["matcher"])
 
-	// No Claude Code / plan-capture hooks leak into the Codex file (D7), and no
+	// No Claude Code plan-file capture hooks leak into the Codex file, and no
 	// SessionEnd (Codex through 0.144.6 does not fire it -- D5).
-	for _, absent := range []string{"SessionEnd", "PostToolUse", "SubagentStop", "PermissionRequest"} {
+	for _, absent := range []string{"SessionEnd", "PostToolUse", "PermissionRequest"} {
 		require.NotContains(t, hooksObj, absent, "%s must not be installed for Codex", absent)
 	}
 
@@ -195,7 +197,7 @@ func TestInstalledStatusCodex(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, installedEvents(t, ClientCodex), status.Current)
 	require.Empty(t, status.Stale)
-	require.Len(t, status.Current, 3)
+	require.Len(t, status.Current, len(installedEvents(t, ClientCodex)))
 }
 
 // topKeys returns the sorted top-level keys of a decoded JSON object.

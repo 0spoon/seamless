@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,7 +43,9 @@ func TestCodexChecksMissingClientIsStale(t *testing.T) {
 	checks := codexChecks(cfg)
 	require.NotEmpty(t, checks)
 	require.Equal(t, statusWarn, checks[0].status)
-	require.Contains(t, checks[0].detail, "2/3 current")
+	events, eventsErr := hooks.InstalledEvents(hooks.ClientCodex)
+	require.NoError(t, eventsErr)
+	require.Contains(t, checks[0].detail, fmt.Sprintf("%d/%d current", len(events)-1, len(events)))
 	require.Contains(t, checks[0].detail, "stale: Stop")
 }
 

@@ -201,6 +201,12 @@ func TestInstalledStatusCodexSeparatesCurrentFromStale(t *testing.T) {
 			},
 		},
 	}
+	wantCurrent := make([]string, 0, len(installedEvents(t, ClientCodex))-1)
+	for _, event := range installedEvents(t, ClientCodex) {
+		if event != "Stop" {
+			wantCurrent = append(wantCurrent, event)
+		}
+	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -215,7 +221,7 @@ func TestInstalledStatusCodexSeparatesCurrentFromStale(t *testing.T) {
 
 			status, err := InstalledStatus(codexOpts(path))
 			require.NoError(t, err)
-			require.Equal(t, []string{"SessionStart", "UserPromptSubmit"}, status.Current)
+			require.Equal(t, wantCurrent, status.Current)
 			require.Equal(t, []string{"Stop"}, status.Stale)
 			require.Equal(t, installedEvents(t, ClientCodex), status.Owned)
 		})

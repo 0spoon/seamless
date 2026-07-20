@@ -355,14 +355,14 @@ expect. A mismatch means the running daemon is a different build.</li>
 credentials on the server side; they are different commands answering different
 questions.</p>
 <h2 id="hooks">Hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seam hook session-start<span class="p">|</span>user-prompt-submit<span class="p">|</span>session-end
-</span></span><span class="line"><span class="cl">seam hook post-tool-use<span class="p">|</span>subagent-stop<span class="p">|</span>permission-request
-</span></span></code></pre><p>Invoked by Claude Code, not by hand. Each reads the hook payload from stdin,
+<pre class="chroma"><code><span class="line"><span class="cl">seam hook session-start<span class="p">|</span>user-prompt-submit<span class="p">|</span>session-end<span class="p">|</span>stop
+</span></span><span class="line"><span class="cl">seam hook subagent-start<span class="p">|</span>subagent-stop<span class="p">|</span>post-tool-use<span class="p">|</span>permission-request
+</span></span></code></pre><p>Invoked by Claude Code or Codex, not by hand. Each reads the hook payload from stdin,
 forwards it to the matching <code>/api/hooks/...</code> endpoint with the bearer key, and
 copies the JSON response to stdout - so a <code>command</code> hook drives the same server
-logic an <code>http</code> hook would. This exists because Claude Code only runs
-command-type hooks for SessionStart, which is how the briefing and the ambient
-session get injected at all.</p>
+logic an <code>http</code> hook would. Claude Code requires a command hook for SessionStart;
+Codex's profile uses command hooks throughout and passes <code>--client codex</code> so the
+daemon selects its payload adapter.</p>
 <p>Two behaviours matter if you are debugging a hook:</p>
 <ul>
 <li><strong>Failures do not block the session.</strong> A missing config, an unreachable

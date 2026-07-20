@@ -164,7 +164,7 @@ func TestUninstallIdempotentAndMissingFile(t *testing.T) {
 	}
 }
 
-// The Codex profile's three command hooks round-trip the same way.
+// The complete Codex command-hook profile round-trips as one owned set.
 func TestUninstallCodexClient(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "hooks.json")
@@ -172,12 +172,13 @@ func TestUninstallCodexClient(t *testing.T) {
 	_, err := Install(InstallOptions{Client: ClientCodex, SettingsPath: path, BaseURL: base, APIKey: "k"})
 	require.NoError(t, err)
 	status := readInstallStatus(t, ClientCodex, path, base)
-	require.Len(t, status.Current, 3)
+	want := len(installedEvents(t, ClientCodex))
+	require.Len(t, status.Current, want)
 
 	res, err := Uninstall(UninstallOptions{Client: ClientCodex, SettingsPath: path, BaseURL: base})
 	require.NoError(t, err)
 	require.True(t, res.Changed)
-	require.Len(t, removedActions(res.Actions), 3)
+	require.Len(t, removedActions(res.Actions), want)
 
 	status = readInstallStatus(t, ClientCodex, path, base)
 	require.Empty(t, status.Owned)

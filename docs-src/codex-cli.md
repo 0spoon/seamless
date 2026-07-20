@@ -1,6 +1,6 @@
 ---
 title: Codex CLI setup
-description: Wire OpenAI's Codex CLI into Seamless - install-hooks --client codex for the three ambient hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.
+description: Wire OpenAI's Codex CLI into Seamless - install-hooks --client codex for ambient and subagent hooks, the mcp-proxy stdio bridge for tools, and the reaper-driven session lifecycle.
 ---
 
 Codex is the second client Seamless supports directly. Wiring it up is the same
@@ -20,8 +20,9 @@ interactive `install-hooks` run prompts for the client(s) to wire (defaulting to
 what it found on the machine), and a non-interactive run resolves `--client
 detect` - the clients actually present, Codex included. The Codex profile:
 
-1. **Merges three hooks** - SessionStart, UserPromptSubmit, Stop - into
-   `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json` when that is set), with the
+1. **Merges five hooks** - SessionStart, UserPromptSubmit, Stop, SubagentStart,
+   and SubagentStop - into `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`
+   when that is set), with the
    same guarantees as the Claude Code installer: unknown entries are preserved,
    each managed group carries a `seamless_managed` marker, and the file is backed
    up once before the first change.
@@ -63,25 +64,28 @@ make install-onboard-skill CLIENT=codex
 multi-agent research-lab workflow as Claude Code. It remains installed and is
 refreshed on upgrades.
 
-## The three hooks, and what they inject
+## The five hooks, and what they inject
 
-Codex installs three hooks against six for Claude Code. It has no plan-mode
-capture (Codex has no plan mode to capture) and **no SessionEnd** - Codex 0.144.5
-does not emit that event, so the lifecycle closes differently (see
-[below](#no-sessionend-the-reaper-closes-sessions)).
+Codex installs five hooks against six for Claude Code. Seamless has no verified
+Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
+0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
+[below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide
+constraints and lifecycle safety without creating Codex plan notes.
 
 | Event | Injects | Effect |
 |---|---|---|
 | `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes the ambient `cx/{prefix}-{digest}` session. |
 | `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
 | `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
+| `SubagentStart` | constraints-only `<seam-briefing>` | Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
+| `SubagentStop` | nothing | Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes. |
 
 Codex delivers a hook's `additionalContext` to the model on both SessionStart and
-UserPromptSubmit, in **both** the interactive TUI and headless `codex exec` -
-there is no headless recall-injection gap of the kind `claude -p` has. The
-briefing and recall blocks reach the model either way.
+UserPromptSubmit, and on SubagentStart, in **both** the interactive TUI and
+headless `codex exec` - there is no headless recall-injection gap of the kind
+`claude -p` has. The briefing and recall blocks reach the model either way.
 
-All three are **command** hooks - `seam hook <event> --config <yaml> --client
+All five are **command** hooks - `seam hook <event> --config <yaml> --client
 codex` - never http. Codex only runs command and `mcp_tool` hooks, so an http
 hook would be silently skipped; and every command hook is subject to Codex's
 trust gate, covered next. See [the hooks reference](/reference/hooks/) for the
@@ -147,7 +151,7 @@ the default.
 ## No SessionEnd: the reaper closes sessions
 
 Claude Code harvests findings and completes its session on SessionEnd. Codex
-0.144.5 emits no such event, so the lifecycle is built around **Stop** and the
+0.144.6 emits no such event, so the lifecycle is built around **Stop** and the
 **idle reaper** instead:
 
 - **Every turn**, the Stop hook heartbeats the session and re-harvests the

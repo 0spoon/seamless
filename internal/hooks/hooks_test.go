@@ -144,6 +144,92 @@ func TestSessionStartHook(t *testing.T) {
 	require.Equal(t, 1, gotchaStat.InjectCount)
 }
 
+// Codex has a distinct SubagentStart event. It reuses the constraints-only
+// briefing path but the event's session_id is the parent identity, so it must
+// never run SessionStart's create/reactivate/re-scope behavior.
+func TestCodexSubagentStart_ConstraintsOnlyAndParentIdentityIsReadOnly(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	const (
+		parentA = "019f8000-0000-7000-8000-000000000001"
+		parentB = "019f8000-0010-7000-8000-000000000011"
+		unknown = "019f8000-0020-7000-8000-000000000021"
+	)
+
+	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": parentA, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent-a",
+	})
+	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": parentB, "cwd": "/work/other", "source": "startup", "model": "gpt-parent-b",
+	})
+	require.NoError(t, store.TouchAmbientSession(ctx, db, ClientCodex.externalIdentity(), parentA,
+		time.Now().UTC().Add(-time.Hour)))
+	beforeA := requireAmbientSession(t, db, ClientCodex, parentA)
+	beforeB := requireAmbientSession(t, db, ClientCodex, parentB)
+
+	resp, out := post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": parentA, "turn_id": "turn-1", "agent_id": "child-1",
+		"agent_type": "default", "cwd": "/work/demo", "model": "gpt-child",
+		"permission_mode": "default", "hook_event_name": "SubagentStart",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	hso, ok := out["hookSpecificOutput"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "SubagentStart", hso["hookEventName"])
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.NotContains(t, ac, "chroma-boot-race", "children receive constraints, not the full memory index")
+	require.NotContains(t, ac, "Seam session:", "a child gets no independent ambient identity")
+
+	// A malformed event missing a required identity field is acknowledged with
+	// empty context; it cannot fall back to a full parent/global briefing.
+	_, out = post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": parentA, "agent_id": "child-malformed", "cwd": "/work/demo",
+		"hook_event_name": "SubagentStart",
+	})
+	require.Empty(t, additionalContext(t, out))
+
+	// A child CWD that differs from its parent may affect retrieval scope, but it
+	// cannot re-scope either ambient row. An unknown parent may receive scoped
+	// constraints, but it must not create a row.
+	_, _ = post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": parentA, "agent_id": "child-2", "agent_type": "default", "cwd": "/work/other",
+	})
+	_, _ = post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": unknown, "agent_id": "child-3", "agent_type": "default", "cwd": "/work/demo",
+	})
+	afterA := requireAmbientSession(t, db, ClientCodex, parentA)
+	afterB := requireAmbientSession(t, db, ClientCodex, parentB)
+	require.Equal(t, beforeA.Name, afterA.Name)
+	require.Equal(t, beforeA.ProjectSlug, afterA.ProjectSlug)
+	require.Equal(t, beforeA.Model, afterA.Model, "the child model must not re-attribute its parent")
+	require.True(t, afterA.UpdatedAt.After(beforeA.UpdatedAt), "SubagentStart heartbeats the proven parent id")
+	require.Equal(t, beforeB.Name, afterB.Name)
+	require.Equal(t, beforeB.ProjectSlug, afterB.ProjectSlug)
+	require.Equal(t, beforeB.Model, afterB.Model)
+	require.Equal(t, beforeB.UpdatedAt, afterB.UpdatedAt, "another parent must not be heartbeated")
+	_, found, err := store.AmbientSessionByExternalIdentity(
+		ctx, db, ClientCodex.externalIdentity(), unknown)
+	require.NoError(t, err)
+	require.False(t, found, "SubagentStart must not create an ambient row")
+	var sessionCount int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&sessionCount))
+	require.Equal(t, 2, sessionCount)
+
+	// The emitted child context is ordinary injection telemetry, stamped on the
+	// parent with the correct client and hook event.
+	var foundParentInjection bool
+	for _, event := range eventsOfKind(t, events.NewRecorder(db), core.EventInjected) {
+		if event.Payload["hook"] != "subagent-start" || event.SessionID != afterA.ID {
+			continue
+		}
+		foundParentInjection = true
+		require.Equal(t, string(ClientCodex), event.Payload["external_client"])
+		require.Equal(t, parentA, event.Payload["claude_session_id"])
+	}
+	require.True(t, foundParentInjection, "SubagentStart injection must be attributed to its parent")
+}
+
 func TestUserPromptSubmitHook(t *testing.T) {
 	ts, _ := newHandlerServer(t)
 	url := ts.URL + "/api/hooks/user-prompt-submit"

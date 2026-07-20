@@ -92,6 +92,77 @@ func TestDecodePrompt_CodexFallbackDoesNotClobberUserPrompt(t *testing.T) {
 	require.Equal(t, "already", p.UserPrompt)
 }
 
+// The current Codex fixtures prove that both subagent events carry the parent
+// session_id plus a distinct child agent_id. The adapter retains the turn/model/
+// permission fields, the event-specific rollout paths, and Stop's stable final
+// message without inferring anything from Claude Code payloads.
+func TestDecodeSubagent_CodexFixtures(t *testing.T) {
+	for _, tt := range []struct {
+		frontend       string
+		parentID       string
+		turnID         string
+		agentID        string
+		permissionMode string
+	}{
+		{
+			frontend: "exec", parentID: "019f8000-0000-7000-8000-000000000001",
+			turnID:  "019f8000-0003-7000-8000-000000000004",
+			agentID: "019f8000-0002-7000-8000-000000000003", permissionMode: "bypassPermissions",
+		},
+		{
+			frontend: "tui", parentID: "019f8000-0010-7000-8000-000000000011",
+			turnID:  "019f8000-0013-7000-8000-000000000014",
+			agentID: "019f8000-0012-7000-8000-000000000013", permissionMode: "default",
+		},
+	} {
+		t.Run(tt.frontend, func(t *testing.T) {
+			start := decodeSubagentStart(ClientCodex,
+				codexFixture(t, tt.frontend, "subagent-start.input.json"))
+			require.Equal(t, tt.parentID, start.ParentSessionID)
+			require.Equal(t, tt.turnID, start.TurnID)
+			require.Equal(t, tt.agentID, start.AgentID)
+			require.Equal(t, "default", start.AgentType)
+			require.Equal(t, "/Users/dev/myrepo", start.CWD)
+			require.Equal(t, "gpt-5.6-sol", start.Model)
+			require.Equal(t, tt.permissionMode, start.PermissionMode)
+			require.Equal(t, "SubagentStart", start.HookEventName)
+			require.Contains(t, start.TranscriptPath, tt.agentID,
+				"SubagentStart transcript_path is the child rollout")
+
+			stop := decodeSubagentStop(ClientCodex,
+				codexFixture(t, tt.frontend, "subagent-stop.input.json"))
+			require.Equal(t, tt.parentID, stop.ParentSessionID)
+			require.Equal(t, tt.turnID, stop.TurnID)
+			require.Equal(t, tt.agentID, stop.AgentID)
+			require.Equal(t, "default", stop.AgentType)
+			require.Equal(t, "/Users/dev/myrepo", stop.CWD)
+			require.Equal(t, "gpt-5.6-sol", stop.Model)
+			require.Equal(t, tt.permissionMode, stop.PermissionMode)
+			require.Equal(t, "SubagentStop", stop.HookEventName)
+			require.NotEqual(t, stop.TranscriptPath, stop.AgentTranscriptPath)
+			require.Equal(t, start.TranscriptPath, stop.AgentTranscriptPath,
+				"SubagentStop explicitly names the child rollout")
+			require.Equal(t, "SUBAGENT_CONTRACT_DONE", stop.LastAssistantMessage)
+			require.False(t, stop.StopHookActive)
+		})
+	}
+}
+
+func TestDecodeSubagentStop_ClaudeCodeKeepsPlanCaptureFields(t *testing.T) {
+	p := decodeSubagentStop(ClientClaudeCode, []byte(`{
+  "session_id":"cc-parent","transcript_path":"/tmp/parent.jsonl","cwd":"/work/demo",
+  "permission_mode":"plan","hook_event_name":"SubagentStop",
+  "agent_id":"child-1","agent_type":"Explore"
+}`))
+	require.Equal(t, "cc-parent", p.ParentSessionID)
+	require.Equal(t, "/tmp/parent.jsonl", p.TranscriptPath)
+	require.Equal(t, "plan", p.PermissionMode)
+	require.Equal(t, "child-1", p.AgentID)
+	require.Equal(t, "Explore", p.AgentType)
+	require.Empty(t, p.AgentTranscriptPath)
+	require.Empty(t, p.LastAssistantMessage)
+}
+
 // The discriminator rides on ?client=, not the body. Absence alone defaults to
 // Claude Code; every present value must be canonical.
 func TestClientFromRequest(t *testing.T) {
@@ -141,6 +212,7 @@ func TestHookRoutes_InvalidClientReturnsBadRequestWithoutMutation(t *testing.T) 
 		"user-prompt-submit",
 		"session-end",
 		"stop",
+		"subagent-start",
 		"post-tool-use",
 		"subagent-stop",
 		"permission-request",
