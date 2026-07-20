@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/hooks"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/mcp"
@@ -22,6 +25,7 @@ type checkStatus int
 
 const (
 	statusOK checkStatus = iota
+	statusInfo
 	statusWarn
 	statusFail
 )
@@ -30,10 +34,14 @@ func (s checkStatus) label() string {
 	switch s {
 	case statusOK:
 		return "ok"
+	case statusInfo:
+		return "info"
 	case statusWarn:
 		return "warn"
-	default:
+	case statusFail:
 		return "fail"
+	default:
+		return "unknown"
 	}
 }
 
@@ -93,7 +101,7 @@ func doctor(args []string) error {
 	}
 
 	checks = append(checks, mcpToolsCheck(), hooksCheck(cfg))
-	checks = append(checks, codexChecks(cfg)...)
+	checks = append(checks, codexChecks(cfg, db)...)
 	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
@@ -111,8 +119,10 @@ func doctor(args []string) error {
 // with codexChecks, so a Codex-only user is not perpetually nagged to install a
 // client they do not run.
 func hooksCheck(cfg config.Config) check {
-	installed, _ := hooks.InstalledEvents(hooks.ClientClaudeCode) //nolint:errcheck // the client is a package constant, always in HookClients
-	want := len(installed)
+	installed, err := hooks.InstalledEvents(hooks.ClientClaudeCode)
+	if err != nil {
+		return check{statusFail, "hooks", "cannot build desired Claude Code definitions: " + err.Error()}
+	}
 	var candidates []string
 	if home, err := expandHome("~/.claude/settings.json"); err == nil {
 		candidates = append(candidates, home)
@@ -133,12 +143,12 @@ func hooksCheck(cfg config.Config) check {
 		if len(status.Owned) == 0 {
 			continue
 		}
-		if len(status.Current) == want && len(status.Stale) == 0 {
-			return check{statusOK, "hooks", fmt.Sprintf("%d/%d current in %s", want, want, path)}
+		if hookDefinitionsCurrent(installed, status) {
+			return check{statusOK, "hooks", hookDefinitionDetail(path, installed, status)}
 		}
 		if !found {
 			best = check{statusWarn, "hooks",
-				fmt.Sprintf("%d/%d current in %s%s", len(status.Current), want, path, staleHookDetail(status.Stale))}
+				hookDefinitionDetail(path, installed, status) + "; run: seamlessd install-hooks --client claude"}
 			found = true
 		}
 	}
@@ -153,73 +163,205 @@ func hooksCheck(cfg config.Config) check {
 
 // codexChecks reports the Codex CLI integration: the hooks in
 // $CODEX_HOME/hooks.json and whether the seam mcp-proxy bridge is registered
-// with `codex mcp`. It never FAILs -- a machine with no Codex install must not
-// break `doctor` for a Claude Code user -- so an absent Codex resolves to a
-// single OK "not detected" line, and every other outcome is OK or a warning.
-func codexChecks(cfg config.Config) []check {
+// with `codex mcp`. Definition validity, supported trust knowledge, observed
+// activity, and MCP runnability are deliberately separate results: none is a
+// proxy for another. It never FAILs -- Codex is an optional client -- so a
+// machine with no Codex install/config resolves to one quiet OK line.
+func codexChecks(cfg config.Config, db *sql.DB) []check {
 	hooksPath, herr := expandHome(defaultCodexHooksPath())
-	_, codexErr := exec.LookPath("codex")
-	codexOnPath := codexErr == nil
 
 	var status hooks.InstallStatus
 	var statusErr error
 	if herr == nil {
-		status, statusErr = hooks.InstalledStatus(doctorInstallOptions(hooks.ClientCodex, hooksPath, cfg))
+		status, statusErr = hooks.InstalledStatus(
+			doctorInstallOptions(hooks.ClientCodex, hooksPath, cfg))
 	}
 
-	// Nothing to report when Codex is neither on PATH nor has any Seamless hooks:
-	// the common Claude-Code-only machine gets one quiet line, not two warnings.
-	if !codexOnPath && herr == nil && statusErr == nil && len(status.Owned) == 0 {
-		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless hooks in ~/.codex)"}}
+	// A CODEX_HOME/~/.codex directory counts as detection even without a CLI on
+	// PATH: it may contain opted-in hook or MCP configuration that still needs a
+	// visible diagnosis. Only a genuinely absent, unconfigured client is quiet.
+	if !codexDetected() && herr == nil && statusErr == nil && len(status.Owned) == 0 {
+		return []check{{statusOK, "codex", "not detected (no codex CLI or Seamless Codex configuration)"}}
 	}
 
-	installed, _ := hooks.InstalledEvents(hooks.ClientCodex) //nolint:errcheck // the client is a package constant, always in HookClients
-	want := len(installed)
+	installed, eventsErr := hooks.InstalledEvents(hooks.ClientCodex)
 	var hooksChk check
 	switch {
 	case herr != nil:
-		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf("cannot resolve hooks path: %v", herr)}
+		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf(
+			"cannot resolve hooks path: %v; set HOME/CODEX_HOME, then run: seamlessd install-hooks --client codex", herr)}
+	case eventsErr != nil:
+		hooksChk = check{statusWarn, "codex hooks", "cannot build desired definitions: " + eventsErr.Error() +
+			"; run: seamlessd install-hooks --client codex"}
 	case statusErr != nil:
-		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf("cannot inspect %s: %v", hooksPath, statusErr)}
-	case len(status.Current) == want && len(status.Stale) == 0:
-		hooksChk = check{statusOK, "codex hooks", fmt.Sprintf("%d/%d current in %s", want, want, hooksPath)}
-	case len(status.Owned) > 0:
-		hooksChk = check{statusWarn, "codex hooks",
-			fmt.Sprintf("%d/%d current in %s%s", len(status.Current), want, hooksPath, staleHookDetail(status.Stale))}
+		hooksChk = check{statusWarn, "codex hooks", fmt.Sprintf(
+			"cannot inspect %s: %v; fix or restore the JSON, then run: seamlessd install-hooks --client codex",
+			hooksPath, statusErr)}
 	default:
-		hooksChk = check{statusWarn, "codex hooks", "not installed (run: seamlessd install-hooks --client codex)"}
+		detail := hookDefinitionDetail(hooksPath, installed, status)
+		problems := recordedHookPathProblems(hooks.ClientCodex, hooksPath)
+		if len(problems) > 0 {
+			detail += "; not runnable: " + strings.Join(problems, ", ")
+		}
+		if hookDefinitionsCurrent(installed, status) && len(problems) == 0 {
+			hooksChk = check{statusOK, "codex hooks", detail}
+		} else {
+			hooksChk = check{statusWarn, "codex hooks",
+				detail + "; run: seamlessd install-hooks --client codex"}
+		}
 	}
-	return []check{hooksChk, codexMCPCheck(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))}
+
+	checks := []check{
+		hooksChk,
+		{statusWarn, "codex hook trust", "trust unverified; inspect /hooks in Codex and approve the current Seamless definitions"},
+	}
+	if db != nil {
+		checks = append(checks, codexHookActivityCheck(db))
+	}
+	checks = append(checks, codexMCPCheck(resolveSeamBin(""), absConfigPath(cfg.SourcePath())))
+	return checks
 }
 
-// doctorInstallOptions judges a settings file against the seam and config
-// paths it actually records, falling back to the running binary's sibling only
-// when nothing usable is recorded or the recorded binary is gone. Without
-// this, `make doctor` from a repo checkout computes <repo>/bin/seam as desired
-// and reports every ~/.local/bin hook stale, pushing a needless reinstall.
+// doctorInstallOptions builds the same desired definition install-hooks would
+// write now. It must not recover the desired binary/config from the existing
+// hook: comparing an old definition with paths read from itself makes uniform
+// drift tautologically current.
 func doctorInstallOptions(client hooks.Client, settingsPath string, cfg config.Config) hooks.InstallOptions {
-	opts := hooks.InstallOptions{
+	return hooks.InstallOptions{
 		Client: client, SettingsPath: settingsPath, BaseURL: hookBaseURL(cfg.Addr),
 		APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
 	}
-	seamBin, configPath, ok := hooks.RecordedCommandPaths(client, settingsPath)
-	if !ok || (configPath != "" && !filepath.IsAbs(configPath)) {
-		return opts
-	}
-	if resolved, err := expandHome(seamBin); err == nil {
-		if info, statErr := os.Stat(resolved); statErr == nil && !info.IsDir() {
-			opts.SeamBin = seamBin
-			opts.ConfigPath = configPath
-		}
-	}
-	return opts
 }
 
-func staleHookDetail(stale []string) string {
-	if len(stale) == 0 {
-		return ""
+func hookDefinitionsCurrent(want []string, status hooks.InstallStatus) bool {
+	if len(status.Current) != len(want) || len(status.Stale) != 0 {
+		return false
 	}
-	return " (stale: " + strings.Join(stale, ",") + ")"
+	current := make(map[string]struct{}, len(status.Current))
+	for _, event := range status.Current {
+		current[event] = struct{}{}
+	}
+	for _, event := range want {
+		if _, ok := current[event]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func hookDefinitionDetail(path string, want []string, status hooks.InstallStatus) string {
+	current := make(map[string]struct{}, len(status.Current))
+	stale := make(map[string]struct{}, len(status.Stale))
+	for _, event := range status.Current {
+		current[event] = struct{}{}
+	}
+	for _, event := range status.Stale {
+		stale[event] = struct{}{}
+	}
+
+	var currentNames, staleNames, missingNames []string
+	for _, event := range want {
+		switch {
+		case hasHookEvent(current, event):
+			currentNames = append(currentNames, event)
+		case hasHookEvent(stale, event):
+			staleNames = append(staleNames, event)
+		default:
+			missingNames = append(missingNames, event)
+		}
+	}
+	return fmt.Sprintf("definitions in %s (current: %s; stale: %s; missing: %s)",
+		path, hookEventNames(currentNames), hookEventNames(staleNames), hookEventNames(missingNames))
+}
+
+func hasHookEvent(set map[string]struct{}, event string) bool {
+	_, ok := set[event]
+	return ok
+}
+
+func hookEventNames(events []string) string {
+	if len(events) == 0 {
+		return "none"
+	}
+	return strings.Join(events, ", ")
+}
+
+// recordedHookPathProblems checks what Codex will actually execute, separately
+// from desired-definition comparison. A definition can have the right shape
+// and still be non-operational because its target was deleted after install.
+func recordedHookPathProblems(client hooks.Client, settingsPath string) []string {
+	seamBin, configPath, ok := hooks.RecordedCommandPaths(client, settingsPath)
+	if !ok {
+		return nil
+	}
+	if expanded, err := expandHome(seamBin); err == nil {
+		seamBin = expanded
+	}
+	var problems []string
+	if !commandPathExists(seamBin) {
+		problems = append(problems, fmt.Sprintf("hook executable %q is missing", seamBin))
+	}
+	if configPath != "" {
+		if expanded, err := expandHome(configPath); err == nil {
+			configPath = expanded
+		}
+		if info, err := os.Stat(configPath); err != nil || info.IsDir() {
+			problems = append(problems, fmt.Sprintf("hook config %q is missing", configPath))
+		}
+	}
+	return problems
+}
+
+const codexActivityTimeout = 2 * time.Second
+
+func codexHookActivityCheck(db *sql.DB) check {
+	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
+	defer cancel()
+	event, observedAt, ok, err := latestCodexHookObservation(ctx, db)
+	if err != nil {
+		return check{statusWarn, "codex hook activity",
+			"cannot read recent observations: " + err.Error() + "; inspect /hooks in Codex"}
+	}
+	if !ok {
+		return check{statusInfo, "codex hook activity",
+			"no SessionStart/UserPromptSubmit observation recorded; trust remains unverified"}
+	}
+	return check{statusInfo, "codex hook activity", fmt.Sprintf(
+		"last observed %s at %s; supporting evidence only, not proof that current definitions are trusted",
+		event, observedAt.UTC().Format(time.RFC3339))}
+}
+
+func latestCodexHookObservation(ctx context.Context, db *sql.DB) (string, time.Time, bool, error) {
+	row := db.QueryRowContext(ctx, `
+		SELECT ts, json_extract(payload, '$.hook')
+		FROM events
+		WHERE kind IN (?, ?)
+		  AND CASE WHEN json_valid(payload) THEN
+			json_extract(payload, '$.external_client') = ?
+			AND json_extract(payload, '$.hook') IN (?, ?)
+		  ELSE 0 END
+		ORDER BY ts DESC, id DESC
+		LIMIT 1`,
+		string(core.EventInjected), string(core.EventHookPrompt), string(hooks.ClientCodex),
+		"session-start", "user-prompt-submit")
+	var tsText, hook string
+	if err := row.Scan(&tsText, &hook); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", time.Time{}, false, nil
+		}
+		return "", time.Time{}, false, fmt.Errorf("query Codex hook activity: %w", err)
+	}
+	observedAt, err := core.ParseTime(tsText)
+	if err != nil {
+		return "", time.Time{}, false, fmt.Errorf("parse Codex hook activity timestamp: %w", err)
+	}
+	switch hook {
+	case "session-start":
+		hook = "SessionStart"
+	case "user-prompt-submit":
+		hook = "UserPromptSubmit"
+	}
+	return hook, observedAt, true, nil
 }
 
 // codexMCPCheck compares Codex's machine-readable registration with the same
@@ -228,9 +370,12 @@ func staleHookDetail(stale []string) string {
 func codexMCPCheck(seamBin, configPath string) check {
 	codex, err := exec.LookPath("codex")
 	if err != nil {
-		return check{statusWarn, "codex mcp", "codex CLI not found (skipped)"}
+		return check{statusWarn, "codex mcp",
+			"codex CLI not found; install Codex, then run: seamlessd install-hooks --client codex"}
 	}
-	return codexMCPCheckWithRunner(context.Background(), execMCPCommandRunner{
+	ctx, cancel := context.WithTimeout(context.Background(), mcpCommandTimeout)
+	defer cancel()
+	return codexMCPCheckWithRunner(ctx, execMCPCommandRunner{
 		client: "codex", path: codex, timeout: mcpCommandTimeout,
 	}, seamBin, configPath)
 }
@@ -238,11 +383,13 @@ func codexMCPCheck(seamBin, configPath string) check {
 func codexMCPCheckWithRunner(ctx context.Context, runner mcpCommandRunner, seamBin, configPath string) check {
 	want, err := desiredCodexMCPState(seamBin, configPath)
 	if err != nil {
-		return check{statusWarn, "codex mcp", "cannot build desired registration: " + err.Error()}
+		return check{statusWarn, "codex mcp", "cannot build desired registration: " + err.Error() +
+			"; install the seam CLI, then run: seamlessd install-hooks --client codex"}
 	}
 	got, present, err := inspectCodexMCP(ctx, runner)
 	if err != nil {
-		return check{statusWarn, "codex mcp", "cannot inspect registration: " + err.Error()}
+		return check{statusWarn, "codex mcp", "cannot inspect registration: " + err.Error() +
+			"; run: codex mcp get seamless --json"}
 	}
 	if !present {
 		return check{statusWarn, "codex mcp", "seamless not registered (run: seamlessd install-hooks --client codex)"}
@@ -251,17 +398,24 @@ func codexMCPCheckWithRunner(ctx context.Context, runner mcpCommandRunner, seamB
 	switch class {
 	case codexMCPIncompatible:
 		return check{statusWarn, "codex mcp", fmt.Sprintf(
-			"reserved name has an incompatible registration (%s); remove it explicitly before reinstalling",
+			"reserved name has an incompatible registration (%s); run: codex mcp remove seamless; then seamlessd install-hooks --client codex",
 			strings.Join(drift, ", "))}
 	case codexMCPOwnedDrifted:
 		return check{statusWarn, "codex mcp", fmt.Sprintf(
 			"owned registration is stale (%s; run: seamlessd install-hooks --client codex)",
 			strings.Join(drift, ", "))}
+	case codexMCPExact:
+		// Continue to the local target checks below.
+	default:
+		return check{statusWarn, "codex mcp",
+			"registration has an unknown classification; run: codex mcp get seamless --json"}
 	}
 	if problems := codexMCPPathProblems(want); len(problems) > 0 {
-		return check{statusWarn, "codex mcp", "exact registration is not runnable (" + strings.Join(problems, ", ") + ")"}
+		return check{statusWarn, "codex mcp", fmt.Sprintf(
+			"exact registration is not runnable (%s; repair the targets, then run: seamlessd install-hooks --client codex)",
+			strings.Join(problems, ", "))}
 	}
-	return check{statusOK, "codex mcp", "exact enabled stdio bridge (seam mcp-proxy)"}
+	return check{statusOK, "codex mcp", "exact enabled stdio bridge (seam mcp-proxy); target paths exist"}
 }
 
 // gardenerCheck reports the gardener ticker configuration.

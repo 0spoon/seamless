@@ -293,6 +293,97 @@ func TestCodexMCPDoctorUsesExactComparatorAndChecksPaths(t *testing.T) {
 	require.Contains(t, chk.detail, "bridge executable is missing")
 }
 
+func TestCodexMCPDoctorReportsOperationalFailures(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the isolated fake Codex executable is a POSIX script")
+	}
+	tests := []struct {
+		name          string
+		mode          string
+		mutate        func(*codexMCPState)
+		raw           []byte
+		missingBin    bool
+		missingConfig bool
+		wantDetail    []string
+	}{
+		{
+			name: "disabled registration",
+			mutate: func(state *codexMCPState) {
+				state.Enabled = false
+			},
+			wantDetail: []string{"owned registration is stale", "registration is disabled", "seamlessd install-hooks --client codex"},
+		},
+		{
+			name: "wrong transport",
+			mutate: func(state *codexMCPState) {
+				state.Transport = codexMCPTransport{
+					Type: "streamable_http", URL: "https://example.invalid/api/mcp",
+				}
+			},
+			wantDetail: []string{"incompatible registration", "transport type differs", "codex mcp remove seamless"},
+		},
+		{
+			name:       "malformed get json",
+			raw:        []byte(`{"name":`),
+			wantDetail: []string{"parse Codex MCP JSON", "codex mcp get seamless --json"},
+		},
+		{
+			name:       "missing target executable",
+			missingBin: true,
+			wantDetail: []string{"exact registration is not runnable", "bridge executable is missing", "seamlessd install-hooks --client codex"},
+		},
+		{
+			name:          "missing target config",
+			missingConfig: true,
+			wantDetail:    []string{"exact registration is not runnable", "config path is missing", "seamlessd install-hooks --client codex"},
+		},
+		{
+			name:       "subprocess timeout",
+			mode:       "timeout",
+			wantDetail: []string{"deadline exceeded", "codex mcp get seamless --json"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			seamBin := filepath.Join(dir, "seam")
+			if tt.missingBin {
+				seamBin = filepath.Join(dir, "missing", "seam")
+			} else {
+				require.NoError(t, os.WriteFile(seamBin, []byte("#!/bin/sh\n"), 0o755))
+			}
+			configPath := filepath.Join(dir, "seamless.yaml")
+			if !tt.missingConfig {
+				require.NoError(t, os.WriteFile(configPath, []byte("mcp: {}\n"), 0o600))
+			}
+			want, err := desiredCodexMCPState(seamBin, configPath)
+			require.NoError(t, err)
+
+			got := cloneCodexMCPState(want)
+			if tt.mutate != nil {
+				tt.mutate(&got)
+			}
+			raw := tt.raw
+			if raw == nil {
+				raw = marshalCodexMCPState(t, got)
+			}
+			fake := newFakeCodex(t, raw, nil, tt.mode)
+			timeout := 2 * time.Second
+			if tt.mode == "timeout" {
+				timeout = 25 * time.Millisecond
+			}
+			chk := codexMCPCheckWithRunner(context.Background(), execMCPCommandRunner{
+				client: "codex", path: fake.path, timeout: timeout,
+			}, seamBin, configPath)
+			require.Equal(t, statusWarn, chk.status)
+			for _, detail := range tt.wantDetail {
+				require.Contains(t, chk.detail, detail)
+			}
+		})
+	}
+}
+
 func TestInstallCodexHooks_FailedReconciliationReturnsError(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the isolated fake Codex executable is a POSIX script")
