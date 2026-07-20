@@ -66,13 +66,19 @@ func TestDistributionSurfacesCarryBothClientPackages(t *testing.T) {
 	installer := readRepoFile(t, repo, "docs", "install")
 	require.Contains(t, installer, "SEAMLESS_CLIENT")
 	require.Contains(t, installer, "${CODEX_HOME:-$HOME/.codex}")
-	require.Contains(t, installer, `install-hooks --client "$AGENT_CLIENT"`)
+	// The selected client reaches install-hooks, which is what delivers the
+	// skills. It rides in a variable rather than inline because --client only
+	// exists from v0.3.3 and the installer probes the pinned binary for it.
+	require.Contains(t, installer, `CLIENT_ARGS="--client $AGENT_CLIENT"`)
+	require.Contains(t, installer, "install-hooks $CLIENT_ARGS")
+	require.Contains(t, installer, "supports_client_flag")
 	require.NotContains(t, installer, "install_onboard_skill")
 
 	powershell := readRepoFile(t, repo, "docs", "install.ps1")
 	require.Contains(t, powershell, "$env:SEAMLESS_CLIENT")
 	require.Contains(t, powershell, "$env:CODEX_HOME")
-	require.Contains(t, powershell, "install-hooks --client $AgentClient")
+	require.Contains(t, powershell, "$clientArgs = @('--client', $AgentClient)")
+	require.Contains(t, powershell, "install-hooks @clientArgs")
 	require.NotContains(t, powershell, "Install-OnboardSkill")
 
 	makefile := readRepoFile(t, repo, "Makefile")

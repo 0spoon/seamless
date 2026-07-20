@@ -236,17 +236,45 @@ unpack() {
 # The cd is not decoration: ./seamless.yaml is the last entry in the config
 # search path, so running from a clone would otherwise bind the install to
 # whatever config happened to be in the user's cwd.
+# install-hooks --client first shipped in v0.3.3, but this script is always
+# fetched from main and can install any pinned SEAMLESS_VERSION. Ask the binary
+# we just unpacked rather than assuming: an unknown flag fails flag parsing, and
+# under `set -eu` that aborts main() before the service is ever registered --
+# leaving new binaries with no config, no key, no hooks, and no daemon.
+# -h parses flags and returns before any config load, so the probe is side-effect free.
+supports_client_flag() {
+	probe=$("$INSTALL_DIR/seamlessd" install-hooks -h 2>&1 || true)
+	# A probe that printed nothing failed to run; it did not prove the flag is
+	# absent. Assume the modern binary rather than silently downgrading a current
+	# install to Claude-Code-only.
+	[ -n "$probe" ] || return 0
+	printf '%s' "$probe" | grep -q -- '-client'
+}
+
 wire_hooks() {
 	if [ -n "${SEAMLESS_NO_HOOKS:-}" ]; then
 		step hooks "skipped (SEAMLESS_NO_HOOKS)"
 		return 0
 	fi
+	# Unquoted on purpose: this must split into two words, and AGENT_CLIENT is a
+	# validated enum (claude|codex|all), never free text.
+	CLIENT_ARGS="--client $AGENT_CLIENT"
+	if ! supports_client_flag; then
+		[ "$AGENT_CLIENT" = claude ] ||
+			die "seamless $VERSION predates --client and cannot wire $AGENT_CLIENT; rerun with SEAMLESS_CLIENT=claude, or drop SEAMLESS_VERSION to get the latest"
+		# Pre-0.3.3 is Claude-Code-only and bundles no skills; the old installer
+		# passed no --client here, so this is byte-for-byte its behavior.
+		warn "seamless $VERSION predates --client and the bundled skills; wiring Claude Code only"
+		CLIENT_ARGS=""
+	fi
 	if [ -f "$CONFIG" ]; then
-		(cd "$TMP" && SEAMLESS_CONFIG="$CONFIG" "$INSTALL_DIR/seamlessd" install-hooks --client "$AGENT_CLIENT" --seam "$INSTALL_DIR/seam")
+		# shellcheck disable=SC2086
+		(cd "$TMP" && SEAMLESS_CONFIG="$CONFIG" "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS --seam "$INSTALL_DIR/seam")
 	else
 		# Unset, not pointed at $CONFIG: the file does not exist yet, and
 		# EnsureAPIKey only writes it when the config resolves to nothing.
-		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks --client "$AGENT_CLIENT" --seam "$INSTALL_DIR/seam")
+		# shellcheck disable=SC2086
+		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS --seam "$INSTALL_DIR/seam")
 	fi
 }
 
