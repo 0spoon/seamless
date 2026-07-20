@@ -127,7 +127,7 @@ func (s *Service) treeSession(ctx context.Context, sess core.Session) treeNode {
 	} else {
 		node.Cap = template.HTML(template.HTMLEscapeString(sess.Source) + " &middot; closed " + ago(sess.UpdatedAt))
 	}
-	mems, err := store.MemoriesForSession(ctx, s.cfg.DB, sess.Name)
+	mems, err := store.MemoriesForSession(ctx, s.cfg.DB, sess)
 	if err != nil {
 		return node
 	}

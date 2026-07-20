@@ -219,7 +219,12 @@
   }
 
   function agentPill(harness, model) {
-    var a = AGENTS[harness] || (harness ? { cls: '', label: harness, full: harness } : null);
+    // hasOwnProperty guard: a harness value like 'constructor' or '__proto__'
+    // must fall through to the neutral pass-through, not hit Object.prototype
+    // and render with the label silently missing (agent.go: a future harness
+    // must render, not vanish).
+    var known = Object.prototype.hasOwnProperty.call(AGENTS, harness) ? AGENTS[harness] : null;
+    var a = known || (harness ? { cls: '', label: harness, full: harness } : null);
     var text = [], title = [];
     if (a) { text.push(a.label); title.push(a.full); }
     var m = modelShort(model);
