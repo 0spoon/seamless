@@ -18,7 +18,7 @@ const (
 	groupTasks         = "tasks"
 	groupPlans         = "captured plans (Claude Code plan mode)"
 	groupObservability = "observability"
-	groupHooks         = "hooks (invoked by Claude Code, not by hand)"
+	groupHooks         = "hooks (invoked by your agent client, not by hand)"
 	groupBridge        = "mcp bridge (invoked by an MCP client, not by hand)"
 )
 

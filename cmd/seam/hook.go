@@ -105,7 +105,8 @@ var hookCmd = spec("hook", groupHooks, "forward the stdin hook payload to seamle
 	atLeast(0, "EVENT"), bindHook, runHook).
 	withLong("events: " + hookEventNames() + `
 
-Claude Code invokes this; it is not run by hand. post-tool-use fires machine-wide
+Your agent client (Claude Code or Codex) invokes this; it is not run by hand.
+post-tool-use is Claude Code only and fires machine-wide
 on every Write/Edit, so it is pre-filtered locally: a non-plan file never reaches
 the network.
 
