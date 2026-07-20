@@ -290,6 +290,41 @@ func TestInstallRejectsAmbiguousDefinitionPaths(t *testing.T) {
 	require.ErrorContains(t, err, "config path must be absolute")
 }
 
+func TestRecordedCommandPaths(t *testing.T) {
+	t.Run("codex shell form", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "hooks.json")
+		_, err := Install(codexOpts(path))
+		require.NoError(t, err)
+		bin, config, ok := RecordedCommandPaths(ClientCodex, path)
+		require.True(t, ok)
+		require.Equal(t, "/opt/seam", bin)
+		require.Equal(t, "/etc/seamless.yaml", config)
+	})
+	t.Run("claude exec form", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "settings.json")
+		_, err := Install(InstallOptions{
+			Client: ClientClaudeCode, SettingsPath: path, BaseURL: "http://127.0.0.1:8081",
+			APIKey: "k", SeamBin: "/opt/seam", ConfigPath: "/etc/seamless.yaml",
+		})
+		require.NoError(t, err)
+		bin, config, ok := RecordedCommandPaths(ClientClaudeCode, path)
+		require.True(t, ok)
+		require.Equal(t, "/opt/seam", bin)
+		require.Equal(t, "/etc/seamless.yaml", config)
+	})
+	t.Run("foreign hooks are never read", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), "hooks.json")
+		initial := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"/usr/local/bin/guard hook stop --config /etc/guard.yaml","timeout":10}]}]}}`
+		require.NoError(t, os.WriteFile(path, []byte(initial), 0o600))
+		_, _, ok := RecordedCommandPaths(ClientCodex, path)
+		require.False(t, ok)
+	})
+	t.Run("missing file", func(t *testing.T) {
+		_, _, ok := RecordedCommandPaths(ClientCodex, filepath.Join(t.TempDir(), "none.json"))
+		require.False(t, ok)
+	})
+}
+
 func onlyHookHandler(entry map[string]any) map[string]any {
 	return entry["hooks"].([]any)[0].(map[string]any)
 }
