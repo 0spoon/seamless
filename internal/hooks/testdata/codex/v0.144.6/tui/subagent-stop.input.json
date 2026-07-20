@@ -1,0 +1,14 @@
+{
+  "session_id": "019f8000-0010-7000-8000-000000000011",
+  "turn_id": "019f8000-0013-7000-8000-000000000014",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/19/rollout-2026-07-19T00-10-00-019f8000-0010-7000-8000-000000000011.jsonl",
+  "agent_transcript_path": "/Users/dev/.codex/sessions/2026/07/19/rollout-2026-07-19T00-10-01-019f8000-0012-7000-8000-000000000013.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "SubagentStop",
+  "model": "gpt-5.6-sol",
+  "permission_mode": "default",
+  "stop_hook_active": false,
+  "agent_id": "019f8000-0012-7000-8000-000000000013",
+  "agent_type": "default",
+  "last_assistant_message": "SUBAGENT_CONTRACT_DONE"
+}

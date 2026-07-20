@@ -1,0 +1,35 @@
+{
+  "name": "seamless",
+  "enabled": false,
+  "disabled_reason": null,
+  "transport": {
+    "type": "stdio",
+    "command": "/opt/seam/bin/seam",
+    "args": [
+      "mcp-proxy",
+      "--config",
+      "/Users/dev/.config/seamless/seamless.yaml"
+    ],
+    "env": {
+      "SEAMLESS_FIXTURE_ALPHA": "red",
+      "SEAMLESS_FIXTURE_BETA": "blue"
+    },
+    "env_vars": [
+      "PATH",
+      {
+        "name": "SEAMLESS_RUNTIME",
+        "source": "local"
+      }
+    ],
+    "cwd": "/Users/dev/myrepo"
+  },
+  "enabled_tools": [
+    "recall",
+    "memory_read"
+  ],
+  "disabled_tools": [
+    "memory_delete"
+  ],
+  "startup_timeout_sec": 12.5,
+  "tool_timeout_sec": 45.0
+}

@@ -1,0 +1,10 @@
+{
+  "session_id": "019f8000-0010-7000-8000-000000000011",
+  "turn_id": "019f8000-0011-7000-8000-000000000012",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/19/rollout-2026-07-19T00-10-00-019f8000-0010-7000-8000-000000000011.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "UserPromptSubmit",
+  "model": "gpt-5.6-sol",
+  "permission_mode": "default",
+  "prompt": "Contract capture only. Report every SEAMLESS_CONTRACT_* value visible to you. Then spawn exactly one general-purpose subagent and ask it to return exactly SUBAGENT_CONTRACT_DONE. Wait for it. Finish with CONTRACT_CAPTURE_DONE and the sentinel values, without inspecting or changing files."
+}

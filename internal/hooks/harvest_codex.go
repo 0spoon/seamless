@@ -18,12 +18,12 @@ const maxRolloutTailBytes = 256 * 1024
 // codexStopFindings is the findings text for one Codex Stop: the last agent
 // message, prefixed and capped like the CC harvest ([[harvest.go]]) so the console
 // and briefing read the two clients' findings the same way. It prefers the
-// last_assistant_message the Stop payload carries (the common case in codex-cli
-// 0.144.5) and falls back to tail-parsing the rollout file only when the payload
-// omits it (an older Codex, or a turn that ended without one). It returns "" when
-// there is nothing to harvest, so the caller leaves any prior turn's findings
-// intact rather than blanking them -- Stop fires every turn, and only a turn with
-// real assistant text should move the provisional summary.
+// last_assistant_message the Stop payload carries (live-verified through
+// codex-cli 0.144.6) and falls back to tail-parsing the rollout file only when
+// the payload omits it (an older Codex, or a turn that ended without one). It
+// returns "" when there is nothing to harvest, so the caller leaves any prior
+// turn's findings intact rather than blanking them -- Stop fires every turn, and
+// only a turn with real assistant text should move the provisional summary.
 func codexStopFindings(lastAssistantMessage, transcriptPath string) string {
 	msg := strings.TrimSpace(lastAssistantMessage)
 	if msg == "" {
@@ -95,8 +95,8 @@ type codexRolloutEvent struct {
 //   - event_msg / agent_message -> payload.message (phase "final_answer")
 //   - response_item / message, role assistant -> payload.content[].output_text.text
 //
-// Verified against internal/hooks/testdata/codex/rollout.jsonl and pinned in the
-// codex-hook-contract-0-144-5 memory. Tolerant: a malformed or unrelated line is "".
+// Verified against the versioned v0.144.5 rollout fixture. Tolerant: a malformed
+// or unrelated line is "".
 func codexRolloutLineMessage(line []byte) string {
 	if len(bytes.TrimSpace(line)) == 0 {
 		return ""
