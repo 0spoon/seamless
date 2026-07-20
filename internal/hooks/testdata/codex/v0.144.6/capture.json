@@ -1,0 +1,58 @@
+{
+  "capture_date": "2026-07-19",
+  "codex_version": "codex-cli 0.144.6",
+  "release_tag": "rust-v0.144.6",
+  "release_tag_object": "1e66aaa95b5ab39d3ef3057cd50bdecd576a8356",
+  "source_revision": "5d1fbf26c43abc65a203928b2e31561cb039e06d",
+  "platform": {
+    "os": "Darwin",
+    "arch": "arm64",
+    "distribution": "Homebrew cask release asset codex-aarch64-apple-darwin",
+    "binary_sha256": "80a3933d11a9d13ef806aa24f7bb8afc9169cfe4e9b09d6da6a92922cbde9cff",
+    "archive_sha256": "023590f828bc9507ac61132ee35e74d3c5d33fb5ba3e1ca4fc2e013a2f71a3d7"
+  },
+  "schema_sha256": {
+    "session-start.command.input.schema.json": "690c0eef7c9f3ddcd41e24207b81b362101a300b4abec076b990a1cd79a66e20",
+    "session-start.command.output.schema.json": "f375e6de1c59ecbabd8c1aff05a67976d0f3aa2ef061808838de4c7c20be1c71",
+    "stop.command.input.schema.json": "7db4793c404b5c46b230c27b9507eb1a558fd958689d8715221c5dd81351a06a",
+    "stop.command.output.schema.json": "dc2b30e84c97beca5825aa64ca46e1337e402781dc5a9142b67111d10523f15c",
+    "subagent-start.command.input.schema.json": "ce7dc9b5ae8826d1e0c59ffcea793e558aebceb7917a2eb9bb2edd8a7ac37aa9",
+    "subagent-start.command.output.schema.json": "34e8ec95393d2aa930d7932a34c3fb29a5e5f90c264fdbcc581393c5838b4660",
+    "subagent-stop.command.input.schema.json": "94dc8df29f4691195ac2338ae6de876230e5100a10b94ef48df4e732424b5df5",
+    "subagent-stop.command.output.schema.json": "8ba2cd7899ae4544193764e67e988235edebe984abe5788634d123bbf13e3e3a",
+    "user-prompt-submit.command.input.schema.json": "e6b923bc519896197c44c4fc267a9d115cef24ac418dde9c27db699f4e3b65fd",
+    "user-prompt-submit.command.output.schema.json": "5e290303db710f3ccc12f4a2744e8586e7749b3ca2b6bf9f57781ed75bf17b2b"
+  },
+  "capture_method": {
+    "harness": "../capture.sh",
+    "home": "isolated temporary CODEX_HOME",
+    "repository": "throwaway git repository",
+    "exec": "one synthetic sentinel turn with exactly one default subagent",
+    "tui": "one synthetic sentinel turn with exactly one default subagent",
+    "mcp": "codex mcp get seamless --json against four isolated config homes",
+    "oversize": "codex exec with a generated 3000-marker SessionStart output"
+  },
+  "sanitized": [
+    "cwd",
+    "transcript_path",
+    "agent_transcript_path",
+    "session_id",
+    "turn_id",
+    "agent_id",
+    "subagent nickname and path",
+    "timestamps"
+  ],
+  "live_tested": [
+    "SessionStart, UserPromptSubmit, Stop, SubagentStart, and SubagentStop in exec and TUI",
+    "additionalContext visibility for SessionStart, UserPromptSubmit, and SubagentStart",
+    "last_assistant_message on Stop and SubagentStop",
+    "commandWindows and command_windows parsing on macOS",
+    "2500 approximate-token spill preview and full-output path",
+    "enabled and disabled stdio and streamable_http MCP JSON"
+  ],
+  "source_or_schema_only": [
+    "Windows command override selection and execution",
+    "JSON output fields not exercised by the sentinel outputs",
+    "hook behavior on non-Darwin platforms"
+  ]
+}

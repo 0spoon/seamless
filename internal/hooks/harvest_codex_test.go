@@ -10,8 +10,11 @@ import (
 )
 
 // rolloutPath is the committed Codex rollout fixture (a real full-turn session
-// file, trimmed and path-sanitized -- see testdata/codex/README).
-func rolloutPath() string { return filepath.Join("testdata", "codex", "rollout.jsonl") }
+// file, trimmed and path-sanitized). Rollout parsing remains pinned to the
+// historical 0.144.5 file because payload harvesting is primary in 0.144.6.
+func rolloutPath() string {
+	return filepath.Join("testdata", "codex", "v0.144.5", "rollout.jsonl")
+}
 
 // The sentinel final answer the fixture turn produced, present in all three
 // agent-message shapes (task_complete, agent_message, assistant response_item).
@@ -101,11 +104,26 @@ func TestTailCodexRollout_MissingOrBlank(t *testing.T) {
 }
 
 // codexStopFindings prefers the Stop payload's last_assistant_message (the common
-// path in codex-cli 0.144.5) and formats it like the CC harvest.
+// path live-verified through codex-cli 0.144.6) and formats it like the CC harvest.
 func TestCodexStopFindings_PrefersPayload(t *testing.T) {
 	got := codexStopFindings("  the answer  ", rolloutPath())
 	require.Equal(t, "(auto-harvested) the answer", got,
 		"payload wins over the rollout and is trimmed + prefixed")
+}
+
+// The current live Stop fixture carries the final answer directly. It must win
+// over the intentionally older rollout fixture, whose line shapes are only a
+// fallback because rollout locations and layouts are not a stable API.
+func TestCodexStopFindings_CurrentFixturesWinOverHistoricalRollout(t *testing.T) {
+	for _, frontend := range []string{"exec", "tui"} {
+		t.Run(frontend, func(t *testing.T) {
+			p := decodeStop(ClientCodex, codexFixture(t, frontend, "stop.input.json"))
+			require.Equal(t, "gpt-5.6-sol", p.Model)
+			got := codexStopFindings(p.LastAssistantMessage, rolloutPath())
+			require.Contains(t, got, "CONTRACT_CAPTURE_DONE")
+			require.NotContains(t, got, "SEAMLESS_SENTINEL_SESSIONSTART")
+		})
+	}
 }
 
 // With no payload message, it falls back to tail-parsing the rollout file.

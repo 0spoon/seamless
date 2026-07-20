@@ -16,41 +16,61 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// codexFixture reads a committed Codex hook-contract fixture. These are the
-// ground truth captured live from codex-cli 0.144.5 (see testdata/codex/README);
-// the adapter is built and pinned against them, not hand-written JSON.
-func codexFixture(t *testing.T, name string) []byte {
+const currentCodexFixtureVersion = "v0.144.6"
+
+// codexFixture reads a committed Codex hook-contract fixture. The adapter is
+// pinned to the current live capture, not hand-written JSON; older contracts stay
+// versioned beside it for traceability.
+func codexFixture(t *testing.T, frontend, name string) []byte {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("testdata", "codex", name))
+	b, err := os.ReadFile(filepath.Join("testdata", "codex", currentCodexFixtureVersion, frontend, name))
 	require.NoError(t, err)
 	return b
 }
 
 // The Codex SessionStart payload shares every field this hook reads with Claude
 // Code, so the identity decode must surface them and yield the cx/ ambient name.
-func TestDecodeSessionStart_CodexFixture(t *testing.T) {
-	p := decodeSessionStart(ClientCodex, codexFixture(t, "session-start.input.json"))
+func TestDecodeSessionStart_CodexFixtures(t *testing.T) {
+	for frontend, wantID := range map[string]string{
+		"exec": "019f8000-0000-7000-8000-000000000001",
+		"tui":  "019f8000-0010-7000-8000-000000000011",
+	} {
+		t.Run(frontend, func(t *testing.T) {
+			p := decodeSessionStart(ClientCodex, codexFixture(t, frontend, "session-start.input.json"))
 
-	require.Equal(t, "019f7291-40f1-7311-8997-0d497579d27b", p.SessionID)
-	require.Equal(t, "/Users/dev/myrepo", p.CWD)
-	require.Equal(t, "startup", p.Source)
-	require.Contains(t, p.TranscriptPath, "rollout-2026-07-17")
-	require.Empty(t, p.AgentType, "a top-level Codex session is not a subagent")
+			require.Equal(t, wantID, p.SessionID)
+			require.Equal(t, "/Users/dev/myrepo", p.CWD)
+			require.Equal(t, "startup", p.Source)
+			require.Equal(t, "gpt-5.6-sol", p.Model)
+			require.Contains(t, p.TranscriptPath, "rollout-2026-07-19")
+			require.Empty(t, p.AgentType, "a top-level Codex session is not a subagent")
+		})
+	}
 
-	require.Equal(t, "cx/019f7291-46ec71e628fd86c6", ambientName(ClientCodex, p.SessionID),
+	require.Equal(t, "cx/019f8000-6f2e1e624e1ad9fa",
+		ambientName(ClientCodex, "019f8000-0000-7000-8000-000000000001"),
 		"Codex ambient display names keep a readable prefix plus a full-id digest")
 }
 
 // The whole reason the adapter exists: Codex names the submitted prompt `prompt`,
 // Claude Code names it `user_prompt`. decodePrompt must normalize the Codex
 // fixture into the internal UserPrompt field so downstream recall is shared code.
-func TestDecodePrompt_CodexFixtureNormalizesPromptField(t *testing.T) {
-	p := decodePrompt(ClientCodex, codexFixture(t, "user-prompt-submit.input.json"))
+func TestDecodePrompt_CodexFixturesNormalizePromptField(t *testing.T) {
+	for frontend, wantID := range map[string]string{
+		"exec": "019f8000-0000-7000-8000-000000000001",
+		"tui":  "019f8000-0010-7000-8000-000000000011",
+	} {
+		t.Run(frontend, func(t *testing.T) {
+			p := decodePrompt(ClientCodex, codexFixture(t, frontend, "user-prompt-submit.input.json"))
 
-	require.Contains(t, p.UserPrompt, "SEAMLESS_SENTINEL_",
-		"Codex `prompt` must land in UserPrompt")
-	require.Equal(t, "019f7291-40f1-7311-8997-0d497579d27b", p.SessionID)
-	require.Equal(t, "/Users/dev/myrepo", p.CWD)
+			require.Contains(t, p.UserPrompt, "SEAMLESS_CONTRACT_",
+				"Codex `prompt` must land in UserPrompt")
+			require.Equal(t, wantID, p.SessionID)
+			require.Equal(t, "/Users/dev/myrepo", p.CWD)
+			require.Equal(t, "UserPromptSubmit", p.HookEventName)
+			require.Equal(t, "gpt-5.6-sol", p.Model)
+		})
+	}
 }
 
 // Claude Code bodies already carry `user_prompt`; the Codex normalization must

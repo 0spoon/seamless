@@ -1,0 +1,25 @@
+{
+  "name": "seamless",
+  "enabled": true,
+  "disabled_reason": null,
+  "transport": {
+    "type": "streamable_http",
+    "url": "https://mcp.example.invalid/api/mcp",
+    "bearer_token_env_var": "SEAMLESS_FIXTURE_TOKEN",
+    "http_headers": {
+      "X-Fixture": "contract"
+    },
+    "env_http_headers": {
+      "X-Runtime-Token": "SEAMLESS_RUNTIME_TOKEN"
+    }
+  },
+  "enabled_tools": [
+    "recall",
+    "memory_read"
+  ],
+  "disabled_tools": [
+    "memory_delete"
+  ],
+  "startup_timeout_sec": 12.5,
+  "tool_timeout_sec": 45.0
+}

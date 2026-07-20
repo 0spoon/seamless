@@ -1,93 +1,79 @@
-# Codex CLI hook-contract fixtures
+# Codex CLI contract fixtures
 
-Captured live from **codex-cli 0.144.5** (macOS, 2026-07-17) for `plan:codex-support`
-step 1. These are the ground truth the Codex payload adapter and Stop-harvest
-parser are built and tested against. Do not hand-edit the `*.input.json` values;
-recapture instead (see "How these were captured").
+These fixtures pin the external Codex contracts used by Seamless's hook adapter,
+installer, doctor, and MCP registration logic. Each capture is versioned; never
+replace an older directory when Codex changes.
 
-## What is here
+## Version matrix
 
-| File | What it is |
-|---|---|
-| `session-start.input.json` | Real stdin payload piped to a `SessionStart` command hook (exec run) |
-| `user-prompt-submit.input.json` | Real stdin payload piped to a `UserPromptSubmit` command hook |
-| `stop.input.json` | Real stdin payload piped to a `Stop` command hook |
-| `rollout.jsonl` | A full-turn Codex rollout session file (`~/.codex/sessions/**/rollout-*.jsonl`), trimmed + path-sanitized. Source of the tail-harvest parser tests |
-| `schema/*.schema.json` | Codex's own canonical JSON Schemas for the command hook inputs/outputs (vendored from `openai/codex` `codex-rs/hooks/schema/generated`) |
+| Codex | Capture | Coverage | Status |
+|---|---|---|---|
+| 0.144.5 | `v0.144.5/` | Live `codex exec` SessionStart, UserPromptSubmit, Stop, a sanitized rollout, and the then-current schemas | Historical baseline |
+| 0.144.6 | `v0.144.6/` | Live exec + TUI payloads and outputs for SessionStart, UserPromptSubmit, Stop, SubagentStart, and SubagentStop; MCP JSON shapes; released schemas; oversized-output observation | Current contract |
 
-Machine-specific absolute paths were rewritten to `/Users/dev/...`; session UUIDs,
-field names, and structure are verbatim.
+The 0.144.6 release tag `rust-v0.144.6` resolves to source commit
+`5d1fbf26c43abc65a203928b2e31561cb039e06d`. The vendored schemas are exact
+copies from that commit's `codex-rs/hooks/schema/generated/` directory. See
+`v0.144.6/capture.json` for binary and platform provenance.
 
-## The contract (what the adapter must normalize)
+## Reproducible capture
 
-**`hooks.json` shape** (`$CODEX_HOME/hooks.json`, or `.codex/hooks.json` per repo):
-event names nest under a top-level `hooks` key, and the file struct is
-`deny_unknown_fields` -- event names at the top level are rejected.
+`capture.sh` creates every mutable Codex artifact under a new caller-selected
+absolute path. It never reads or writes the active Codex home unless an auth file
+is explicitly passed as the second `setup` argument; that file is copied with
+mode 0600 into the isolated home and removed by `clean-auth`. Raw output must stay
+outside the repository until it has been inspected and sanitized.
 
-```json
-{
-  "description": "optional",
-  "hooks": {
-    "SessionStart":     [ { "hooks": [ { "type": "command", "command": "<shell string>" } ] } ],
-    "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "..." } ] } ],
-    "Stop":             [ { "hooks": [ { "type": "command", "command": "..." } ] } ]
-  }
-}
+```bash
+capture_parent=$(mktemp -d "${TMPDIR:-/tmp}/seamless-codex-contract.XXXXXX")
+capture_root="$capture_parent/run"
+./internal/hooks/testdata/codex/capture.sh setup "$capture_root" "$HOME/.codex/auth.json"
+./internal/hooks/testdata/codex/capture.sh mcp "$capture_root"
+./internal/hooks/testdata/codex/capture.sh exec "$capture_root"
+./internal/hooks/testdata/codex/capture.sh tui "$capture_root"
+./internal/hooks/testdata/codex/capture.sh oversize "$capture_root"
+./internal/hooks/testdata/codex/capture.sh clean-auth "$capture_root"
 ```
 
-A command handler is `{ "type": "command", "command": <shell string>,
-"commandWindows"? (alias "command_windows"), "timeout"? (seconds, NOT `timeoutSec`),
-"async"? (unsupported -- skipped), "statusMessage"? }`. Matcher group is
-`{ "matcher"?, "hooks": [...] }`. Hook commands are **shell strings**, not exec-form
-argv (opposite of what Seamless just did for CC in 504982c).
+The TUI asks whether to trust the throwaway repository. Choosing yes changes only
+the isolated config. After the sentinel turn completes, enter `/exit`. Both live
+runs use `--dangerously-bypass-hook-trust` solely for the generated logging hook;
+the harness does not create or interpret Codex's private `hooks.state` hashes.
 
-**Payload field names vs Claude Code** (this is the whole reason for an adapter):
+Before committing a recapture:
 
-| Concept | Claude Code | Codex |
-|---|---|---|
-| the submitted prompt | `user_prompt` | `prompt` |
-| SessionStart trigger | `source`: startup/resume/clear/compact | `source`: **same** enum |
-| last agent text at end | (not in payload; parse transcript) | `last_assistant_message` **in the Stop payload** |
-| permission mode values | plan/default/acceptEdits/... | default/acceptEdits/plan/dontAsk/bypassPermissions |
+1. Confirm `clean-auth` succeeded and no `auth.json`, token, real repository path,
+   or non-sentinel transcript text is in the candidate files.
+2. Rewrite the throwaway root to `/Users/dev/myrepo`, the isolated Codex home to
+   `/Users/dev/.codex`, and UUIDv7 values to stable fixture IDs.
+3. Keep the model/version and wire field names verbatim. Format JSON with `jq`.
+4. Copy schemas from the exact release commit, update `capture.json`, and run the
+   fixture integrity and adapter tests.
 
-Shared with CC (no change downstream): `session_id`, `cwd`, `transcript_path`,
-`hook_event_name`, `model`, plus `turn_id` on turn-scoped events. The response
-envelope is the **same** CC-style shape -- `{"hookSpecificOutput":
-{"hookEventName": "...", "additionalContext": "..."}}` injects model-visible
-context on SessionStart and UserPromptSubmit. Stop has no `hookSpecificOutput`
-(it can only `continue`/`decision:block`/`systemMessage`), so Stop cannot inject.
+## 0.144.6 findings
 
-## Verified behavior (resolves the design-note open questions)
+- Exec and TUI emitted the same fields for all five events. The live frontend
+  difference was `permission_mode`: `bypassPermissions` for `codex exec` and
+  `default` for the TUI capture.
+- `SubagentStart.transcript_path` named the child rollout. `SubagentStop` named
+  the parent rollout in `transcript_path` and the child in
+  `agent_transcript_path`. Those paths and rollout layouts are diagnostic and
+  unstable; Stop's `last_assistant_message` remains the primary harvest source.
+- Both `commandWindows` and its `command_windows` alias were accepted by the
+  live macOS binary while their POSIX `command` ran. Selection of the Windows
+  override is pinned by the released source and existing syntax tests, but this
+  capture did not execute a Windows binary.
+- The released implementation uses an approximate 2,500-token per-entry hook
+  output limit. The live oversized sentinel became a 10,107-byte model-visible
+  head/tail preview containing a full-output path; `v0.144.6/oversize.json`
+  records the bounded observation without committing the raw 3,000-marker body
+  or its temporary path.
+- `codex mcp get seamless --json` exposes enabled state, a nullable
+  `disabled_reason`, transport-specific data, enabled/disabled tool lists, and
+  timeouts. Stdio includes ordered args, env, inherited env-var descriptors, and
+  cwd. Streamable HTTP includes URL, bearer-token env-var name, literal headers,
+  and env-backed header names.
 
-- **`additionalContext` reaches the model in BOTH `codex exec` (headless) and the
-  TUI.** Unlike `claude -p` (which skips UserPromptSubmit -- see
-  `headless-cc-p-skips-userpromptsubmit-hook`), Codex `exec` delivers *both*
-  SessionStart and UserPromptSubmit `additionalContext`. Proof: injected context
-  is recorded in the rollout as `role:"developer"` `input_text` messages, and the
-  model echoed the injected sentinel values in both modes.
-- **No `SessionEnd` event fires in 0.144.5.** A registered `SessionEnd` command
-  hook never runs (the installed binary embeds no `session-end.command.input`
-  schema). Session end must be reaper-driven off `Stop` (design decision D5).
-  Note: repo `main` *does* ship a `session-end.command.input` schema, so a future
-  Codex may emit it -- treat SessionEnd as "not available in 0.144.5", not "never".
-- **Stop fires every turn** with `stop_hook_active` and `last_assistant_message`.
-  The harvester can read `last_assistant_message` straight from the Stop payload;
-  the rollout tail-parse (below) is only the fallback when it is absent.
-- **Rollout tail-parse target:** last agent message = the last `event_msg` whose
-  `payload.type` is `task_complete` (`payload.last_agent_message`) or
-  `agent_message` (`payload.message`, `phase:"final_answer"`). `session_meta`
-  (first line) carries `source` (`exec` vs `cli`) and `originator`
-  (`codex_exec` vs `codex-tui`) to tell the front-end apart.
-- **Hook trust gate:** Codex only runs hooks whose `trusted_hash` is recorded (or
-  in the interactive TUI trust review). Headless automation must pass
-  `--dangerously-bypass-hook-trust` (a global flag, "intended only for automation
-  that already vets hook sources") or pre-seed `hooks.state."<key>".trusted_hash`.
-  The Seamless installer / E2E path must account for this.
-
-## How these were captured
-
-Isolated `CODEX_HOME` (never touched the user's real `~/.codex`) with a logging
-hook that tees each event's stdin to a file and emits a sentinel
-`additionalContext`, then `codex exec ... --dangerously-bypass-hook-trust` and a
-pty-driven TUI run, both asking the model to echo the sentinel. See the session
-memory `codex-hook-contract-0-144-5` for the full method and findings.
+The output fixtures are the exact JSON emitted by the logging hook. The input
+fixtures are sanitized copies of real stdin payloads. `rollout-meta.json` keeps
+only non-conversational session metadata needed to distinguish exec from TUI.

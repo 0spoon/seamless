@@ -1,0 +1,6 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SubagentStart",
+    "additionalContext": "SEAMLESS_CONTRACT_SUBAGENT_START=otter-3184"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "session_id": "019f8000-0000-7000-8000-000000000001",
+  "turn_id": "019f8000-0003-7000-8000-000000000004",
+  "transcript_path": "/Users/dev/.codex/sessions/2026/07/19/rollout-2026-07-19T00-00-01-019f8000-0002-7000-8000-000000000003.jsonl",
+  "cwd": "/Users/dev/myrepo",
+  "hook_event_name": "SubagentStart",
+  "model": "gpt-5.6-sol",
+  "permission_mode": "bypassPermissions",
+  "agent_id": "019f8000-0002-7000-8000-000000000003",
+  "agent_type": "default"
+}

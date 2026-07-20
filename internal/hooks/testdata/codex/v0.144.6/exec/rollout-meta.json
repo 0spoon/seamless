@@ -1,0 +1,28 @@
+{
+  "parent": {
+    "session_id": "019f8000-0000-7000-8000-000000000001",
+    "originator": "codex_exec",
+    "cli_version": "0.144.6",
+    "source": "exec",
+    "thread_source": "user",
+    "model_provider": "openai"
+  },
+  "subagent": {
+    "session_id": "019f8000-0000-7000-8000-000000000001",
+    "originator": "codex_exec",
+    "cli_version": "0.144.6",
+    "source": {
+      "subagent": {
+        "thread_spawn": {
+          "parent_thread_id": "019f8000-0000-7000-8000-000000000001",
+          "depth": 1,
+          "agent_path": "/root/contract_capture",
+          "agent_nickname": "FixtureAgent",
+          "agent_role": null
+        }
+      }
+    },
+    "thread_source": "subagent",
+    "model_provider": "openai"
+  }
+}

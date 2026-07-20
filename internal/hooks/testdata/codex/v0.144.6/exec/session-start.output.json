@@ -1,0 +1,6 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "SessionStart",
+    "additionalContext": "SEAMLESS_CONTRACT_SESSION_START=zebra-4417"
+  }
+}

@@ -9,8 +9,8 @@ import (
 )
 
 // Codex's hook payloads differ from Claude Code's in a few field names (captured
-// live in internal/hooks/testdata/codex and the codex-hook-contract-0-144-5
-// memory). A per-client adapter decodes each raw hook body into the single
+// live and versioned in internal/hooks/testdata/codex). A per-client adapter
+// decodes each raw hook body into the single
 // internal struct the handlers already use, so project registration, briefing
 // assembly, ambient sessions, and recall stay shared code with no per-client
 // branches downstream. Claude Code is the identity adapter -- its payloads already
@@ -103,11 +103,11 @@ func decodePrompt(client Client, body []byte) promptPayload {
 	return p
 }
 
-// decodeSessionEnd decodes a SessionEnd body into endPayload. Codex 0.144.5 fires
-// no SessionEnd (session end is reaper-driven off Stop -- design decision D5), so
-// this path is Claude Code-only in practice; the decode is client-agnostic and the
-// parameter is kept for the uniform adapter surface. Tolerant: a decode error
-// leaves the zero payload (no session id -> no-op).
+// decodeSessionEnd decodes a SessionEnd body into endPayload. Codex through
+// 0.144.6 fires no SessionEnd (session end is reaper-driven off Stop -- design
+// decision D5), so this path is Claude Code-only in practice; the decode is
+// client-agnostic and the parameter is kept for the uniform adapter surface.
+// Tolerant: a decode error leaves the zero payload (no session id -> no-op).
 func decodeSessionEnd(_ Client, body []byte) endPayload {
 	var p endPayload
 	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero

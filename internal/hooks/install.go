@@ -53,7 +53,7 @@ var seamlessHooks = []hookSpec{
 }
 
 // codexHooks is the Codex CLI install profile (design decision D4). Codex has no
-// http hook type and (as of 0.144.5) no SessionEnd event; its session end is
+// http hook type and (through 0.144.6) no SessionEnd event; its session end is
 // reaper-driven off the per-turn Stop hook (D5). So the set is three command
 // hooks -- SessionStart (briefing), UserPromptSubmit (recall), Stop (heartbeat +
 // provisional harvest) -- and no plan-capture hooks: Codex has no plan-mode
@@ -308,7 +308,7 @@ func buildEntry(client Client, hs hookSpec, baseURL, apiKey, seamBin, configPath
 	switch {
 	case client == ClientCodex:
 		// Codex command hooks are SHELL STRINGS, not exec-form argv (its config
-		// schema has no `args` field -- see the codex-hook-contract-0-144-5 memory).
+		// schema has no `args` field -- see the versioned Codex contract fixtures).
 		// The whole invocation is one `command` string, plus a `command_windows`
 		// variant carrying Windows quoting for a Windows install. Both run the same
 		// `<seam> hook <event> --config <yaml> --client codex`: no bearer key is

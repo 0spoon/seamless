@@ -77,7 +77,7 @@ func TestInstallCodexProfile(t *testing.T) {
 	require.Nil(t, hooksObj["UserPromptSubmit"].([]any)[0].(map[string]any)["matcher"])
 
 	// No Claude Code / plan-capture hooks leak into the Codex file (D7), and no
-	// SessionEnd (Codex 0.144.5 does not fire it -- D5).
+	// SessionEnd (Codex through 0.144.6 does not fire it -- D5).
 	for _, absent := range []string{"SessionEnd", "PostToolUse", "SubagentStop", "PermissionRequest"} {
 		require.NotContains(t, hooksObj, absent, "%s must not be installed for Codex", absent)
 	}

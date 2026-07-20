@@ -1,0 +1,6 @@
+{
+  "hookSpecificOutput": {
+    "hookEventName": "UserPromptSubmit",
+    "additionalContext": "SEAMLESS_CONTRACT_USER_PROMPT_SUBMIT=falcon-9928"
+  }
+}

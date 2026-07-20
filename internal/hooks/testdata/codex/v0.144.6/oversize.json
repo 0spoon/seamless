@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "SessionStart",
+  "generated_markers": 3000,
+  "codex_approx_token_limit": 2500,
+  "model_visible_preview_bytes": 10107,
+  "preview_contains_first_marker": true,
+  "preview_contains_last_marker": true,
+  "preview_names_saved_full_output": true,
+  "model_confirmed_last_marker": true,
+  "model_confirmed_saved_output_path": true,
+  "raw_output_committed": false,
+  "source_file": "codex-rs/hooks/src/output_spill.rs",
+  "source_revision": "5d1fbf26c43abc65a203928b2e31561cb039e06d"
+}
