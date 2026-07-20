@@ -46,6 +46,21 @@ func TestClassifyHookDefinition_ExactOwnershipStates(t *testing.T) {
 			"type": "command", "command": `"\\server\share\seam.exe" hook stop --config "\\server\share\seamless.yaml"`, "timeout": 10,
 		}},
 	}
+	legacyTilde := map[string]any{
+		"hooks": []any{map[string]any{
+			"type": "command", "command": "~/.local/bin/seam hook stop --config ~/.config/seamless/seamless.yaml --client codex", "timeout": 10,
+		}},
+	}
+	foreignTilde := map[string]any{
+		"hooks": []any{map[string]any{
+			"type": "command", "command": "~/bin/guard hook stop", "timeout": 10,
+		}},
+	}
+	foreignRelativeConfig := map[string]any{
+		"hooks": []any{map[string]any{
+			"type": "command", "command": "~/.local/bin/seam hook stop --config seamless.yaml", "timeout": 10,
+		}},
+	}
 	foreignExec := map[string]any{
 		"hooks": []any{map[string]any{
 			"type": "command", "command": "/usr/local/bin/guard", "args": []any{"hook", "stop"}, "timeout": 10,
@@ -68,6 +83,9 @@ func TestClassifyHookDefinition_ExactOwnershipStates(t *testing.T) {
 		{name: "known marker stripped shell is legacy", entry: legacy, want: hookDefinitionLegacy},
 		{name: "known Windows shell is legacy", entry: legacyWindows, want: hookDefinitionLegacy},
 		{name: "known Windows UNC shell is legacy", entry: legacyWindowsUNC, want: hookDefinitionLegacy},
+		{name: "hand-written tilde command is legacy", entry: legacyTilde, want: hookDefinitionLegacy},
+		{name: "tilde non-seam executable is foreign", entry: foreignTilde, want: hookDefinitionForeign},
+		{name: "relative config path is foreign", entry: foreignRelativeConfig, want: hookDefinitionForeign},
 		{name: "foreign executable with matching args", entry: foreignExec, want: hookDefinitionForeign},
 		{name: "foreign shell with matching text", entry: foreignShell, want: hookDefinitionForeign},
 		{name: "wrong input type", entry: "hook stop", want: hookDefinitionForeign},
