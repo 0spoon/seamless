@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -308,7 +309,7 @@ func installClaudeHooks(cfg config.Config, settings, baseURL, seamBin, configPat
 	}
 	printClientBlock(res, "Claude Code", path)
 	if doMCP {
-		registerClaudeMCP(baseURL, cfg.MCP.APIKey)
+		registerClaudeMCP(baseURL, seamBin, configPath)
 	}
 	return nil
 }
@@ -414,38 +415,91 @@ func defaultCodexHooksPath() string {
 	return "~/.codex/hooks.json"
 }
 
+// claudeHeadersHelper builds the command line Claude Code runs at connect time
+// to obtain the Authorization header (see `seam mcp-headers`). --config is baked
+// in for the same reason the command hooks and the codex bridge bake it in: the
+// client records this line with no environment, so it must resolve config from
+// any cwd on its own.
+func claudeHeadersHelper(seamBin, configPath string) string {
+	helper := seamBin + " mcp-headers"
+	if configPath != "" {
+		helper += " --config " + configPath
+	}
+	return helper
+}
+
 // claudeMCPAddArgs builds the claude CLI argv that registers the Seamless MCP
-// server. --scope user is deliberate: the default local scope ties the
-// registration to the directory it ran from, and the tools then vanish in
-// every other repo.
-func claudeMCPAddArgs(baseURL, key string) []string {
-	return []string{"mcp", "add", "--scope", "user", "--transport", "http", "seamless",
-		baseURL + "/api/mcp", "--header", "Authorization: Bearer " + key}
+// server.
+//
+// It registers via `mcp add-json` with a headersHelper rather than `mcp add
+// --header "Authorization: Bearer <key>"`, because that form put the daemon's
+// sole credential into this subprocess's argv, readable by any local account
+// via `ps auxww` for as long as the call ran (audit L4). Nothing in this argv
+// is secret now: it names a command, and the key is read from the 0600 config
+// by that command at connection time. This is the same trade the Codex
+// registration already makes with the mcp-proxy bridge.
+//
+// --scope user is deliberate: the default local scope ties the registration to
+// the directory it ran from, and the tools then vanish in every other repo.
+func claudeMCPAddArgs(baseURL, seamBin, configPath string) []string {
+	spec := map[string]any{
+		"type":          "http",
+		"url":           baseURL + "/api/mcp",
+		"headersHelper": claudeHeadersHelper(seamBin, configPath),
+	}
+	// A map with fixed keys and string values cannot fail to marshal.
+	blob, _ := json.Marshal(spec) //nolint:errcheck // static map of strings; marshal cannot fail
+	return []string{"mcp", "add-json", "--scope", "user", "seamless", string(blob)}
 }
 
 // registerClaudeMCP registers /api/mcp with the Claude Code CLI so hooks and
 // MCP tools land in one command. Best-effort by design: the hooks are already
 // installed at this point, so a missing or failing claude CLI degrades to
 // printing the manual command rather than failing the install.
-func registerClaudeMCP(baseURL, key string) {
-	manual := fmt.Sprintf("claude mcp add --scope user --transport http seamless %s/api/mcp --header \"Authorization: Bearer <mcp.api_key>\"", baseURL)
+func registerClaudeMCP(baseURL, seamBin, configPath string) {
+	args := claudeMCPAddArgs(baseURL, seamBin, configPath)
+	manual := "claude " + strings.Join(args, " ")
 	claude, err := exec.LookPath("claude")
 	if err != nil {
 		fieldRow("mcp", yellow("claude CLI not found"))
 		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
-	if exec.Command(claude, "mcp", "get", "seamless").Run() == nil {
-		fieldRow("mcp", dim("already registered"))
-		return
+
+	// An existing registration is normally left alone -- except the one shape
+	// this change exists to retire. Installs predating the headersHelper switch
+	// stored the bearer key as a literal header in ~/.claude.json, and a plain
+	// "already registered" would leave it there forever, so the fix would only
+	// ever reach new users. Re-register those in place.
+	upgrade := false
+	if out, gerr := exec.Command(claude, "mcp", "get", "seamless").CombinedOutput(); gerr == nil {
+		if !strings.Contains(string(out), "Authorization") {
+			fieldRow("mcp", dim("already registered"))
+			return
+		}
+		upgrade = true
+		// add-json refuses an existing name, so the old entry goes first. If the
+		// add below then fails, the manual command is printed -- which is why
+		// this is not attempted unless the claude CLI is known to work.
+		if out, rerr := exec.Command(claude, "mcp", "remove", "--scope", "user", "seamless").CombinedOutput(); rerr != nil {
+			fieldRow("mcp", yellow("could not replace the stored-key registration"))
+			fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
+			fmt.Printf("%s%s\n", fieldCont, dim(manual))
+			return
+		}
 	}
-	if out, aerr := exec.Command(claude, claudeMCPAddArgs(baseURL, key)...).CombinedOutput(); aerr != nil {
+
+	if out, aerr := exec.Command(claude, args...).CombinedOutput(); aerr != nil {
 		fieldRow("mcp", yellow("registration failed"))
 		fmt.Printf("%s%s\n", fieldCont, dim(strings.TrimSpace(string(out))))
 		fmt.Printf("%s%s\n", fieldCont, dim(manual))
 		return
 	}
-	fieldRow("mcp", green("registered")+dim(" (--scope user)"))
+	if upgrade {
+		fieldRow("mcp", green("re-registered")+dim(" (--scope user; bearer key moved out of ~/.claude.json)"))
+		return
+	}
+	fieldRow("mcp", green("registered")+dim(" (--scope user, key via headersHelper)"))
 }
 
 // codexMCPAddArgs builds the codex CLI argv that registers the Seamless MCP

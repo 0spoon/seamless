@@ -293,7 +293,10 @@ func runServe(args []string) error {
 	hooksH.Register(mux)
 	consoleSrv.Register(mux)
 
-	srv := newHTTPServer(ctx, bind, mux)
+	// Host allowlist outermost, so a rebound request is refused before it can
+	// reach even an unauthenticated route (see netguard.go).
+	srv := newHTTPServer(ctx, bind, hostGuard(bind, mux))
+	warnNonLoopbackBind(bind)
 
 	errCh := make(chan error, 1)
 	go func() {
@@ -366,11 +369,28 @@ func applyServeEnv(cfgPath, logFile string) (func(), error) {
 // base context, so cancelling it (the shutdown signal) also cancels in-flight
 // request contexts -- without this, the console's open SSE streams never end and
 // every Shutdown stalls for its full deadline, then fails.
+//
+// The timeouts are chosen around the one long-lived response this server has,
+// the console's SSE stream (audit L7):
+//
+//   - ReadHeaderTimeout / ReadTimeout bound the request side. ReadTimeout is
+//     safe here only because it is *per request* and the SSE handler explicitly
+//     clears its own read deadline (see console.sse); left in place it would
+//     expire mid-stream, and Go's background read would then cancel the request
+//     context and kill the feed.
+//   - WriteTimeout stays omitted for the same reason -- it has no per-handler
+//     escape hatch, so any value at all would cap how long a feed may stay open.
+//   - IdleTimeout bounds keep-alive connections between requests, which is the
+//     half ReadHeaderTimeout never covered: without it a client can hold open
+//     connections (and their goroutines) indefinitely by simply saying nothing.
 func newHTTPServer(ctx context.Context, bind string, h http.Handler) *http.Server {
 	return &http.Server{
 		Addr:              bind,
 		Handler:           h,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 20, // 1 MiB; Go's default, made explicit
 		BaseContext:       func(net.Listener) context.Context { return ctx },
 	}
 }

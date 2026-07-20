@@ -21,9 +21,14 @@ jobs:
       # test-race needs real history for nothing, but `make build` stamps the
       # binary with `git rev-parse --short HEAD` and `make fmt-check` lists
       # tracked files with `git ls-files`; both need the checkout's .git.
-      - uses: actions/checkout@v7
+      # Pinned to full commit SHAs (see release.yml) so a retagged upstream
+      # action cannot change what runs here; the comment is the readable
+      # version and dependabot bumps both together.
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
-      - uses: actions/setup-go@v6
+      # go-version-file reads go.mod's `toolchain` line, so the security
+      # toolchain floor (go1.25.12, audit M1) is set in exactly one place.
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version-file: go.mod
           cache: true
@@ -37,7 +42,16 @@ jobs:
           go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.8
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
-      # build + vet + fmt-check + lint + test-race. CGO stays enabled (the default
+      # `make vulncheck` requires the binary rather than skipping when it is
+      # absent, so this install is what makes the known-vulnerability gate real
+      # in CI. Pinned to the version developers run locally, same as
+      # golangci-lint above; `pkg@version` resolves outside the module, so it
+      # cannot touch go.mod/go.sum. Findings track the live vuln.go.dev DB, not
+      # this pin, so a new advisory still turns CI red without a bump here.
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      # build + vet + fmt-check + lint + vulncheck + test-race. CGO stays enabled (the default
       # on this runner) because -race requires it; the no-CGO rule is about the
       # shipped binary's deps, not the test toolchain.
       - name: make check

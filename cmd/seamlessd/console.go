@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -70,18 +71,29 @@ func runConsoleOpen(args []string) error {
 	if err != nil {
 		return fmt.Errorf("seamlessd.console-open: %w", err)
 	}
-	f, err := os.CreateTemp("", "seamless-console-*.html")
+	// Anything an earlier run left behind (a crash, a kill between launch and
+	// cleanup) is a copy of the bearer key sitting in a shared /tmp, so sweep
+	// before adding another one.
+	sweepStaleLoginPages()
+
+	f, err := os.CreateTemp("", consoleLoginPattern)
 	if err != nil {
 		return fmt.Errorf("seamlessd.console-open: temp file: %w", err)
 	}
 	// CreateTemp makes the file 0600, so the embedded key stays owner-readable.
 	if _, err := f.WriteString(page); err != nil {
 		_ = f.Close()
+		_ = os.Remove(f.Name())
 		return fmt.Errorf("seamlessd.console-open: write login page: %w", err)
 	}
 	if err := f.Close(); err != nil {
+		_ = os.Remove(f.Name())
 		return fmt.Errorf("seamlessd.console-open: close login page: %w", err)
 	}
+	// From here the file exists on disk with the key in it, so every exit path
+	// has to erase it -- including the browser-launch failure below.
+	defer removeAfterBrowserRead(f.Name())
+
 	if err := openInBrowser(f.Name(), *browser); err != nil {
 		return fmt.Errorf("seamlessd.console-open: open browser: %w", err)
 	}
@@ -91,6 +103,51 @@ func runConsoleOpen(args []string) error {
 	}
 	fmt.Printf("opened pre-authenticated console at http://%s/console/ in %s\n", host, where)
 	return nil
+}
+
+// consoleLoginPattern names the temp login pages, and is also what the sweep
+// matches -- one constant so the two cannot drift apart.
+const consoleLoginPattern = "seamless-console-*.html"
+
+// loginPageGrace is how long the page stays on disk after the browser is
+// launched. The browser reads the file asynchronously (`open`/`xdg-open`
+// returns as soon as it has handed the URL over), so deleting immediately would
+// race a cold browser start. Long enough for one, short enough that the key is
+// not sitting in /tmp for the rest of the session.
+const loginPageGrace = 8 * time.Second
+
+// removeAfterBrowserRead deletes the login page once the browser has had time to
+// read it. It blocks, deliberately: this runs as the last thing `console-open`
+// does, after its success line is printed, and a background goroutine would die
+// with the process before it ever fired.
+func removeAfterBrowserRead(path string) {
+	// Not synchronization: nothing here is waiting on a goroutine or a channel.
+	// This is a wall-clock grace period for an external process (the browser)
+	// that gives us no completion signal at all -- `open`/`xdg-open` return
+	// immediately and never report when the page was actually loaded.
+	//nolint:forbidigo // wall-clock grace for an external process, not inter-goroutine sync
+	time.Sleep(loginPageGrace)
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "warning: could not remove %s (it contains your API key): %v\n", path, err)
+	}
+}
+
+// sweepStaleLoginPages removes login pages left by earlier runs. Best-effort:
+// on a shared /tmp another user's file of the same shape is not ours to delete,
+// and the Remove simply fails, so errors are ignored. The age floor keeps a
+// concurrent console-open's live page out of the sweep.
+func sweepStaleLoginPages() {
+	matches, err := filepath.Glob(filepath.Join(os.TempDir(), consoleLoginPattern))
+	if err != nil {
+		return
+	}
+	for _, m := range matches {
+		info, serr := os.Stat(m)
+		if serr != nil || time.Since(info.ModTime()) < 2*loginPageGrace {
+			continue
+		}
+		_ = os.Remove(m)
+	}
 }
 
 // renderConsoleLoginPage returns the self-submitting login HTML for addr+key.

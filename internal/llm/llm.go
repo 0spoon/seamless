@@ -9,8 +9,10 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 
 	"github.com/0spoon/seamless/internal/config"
@@ -95,6 +97,24 @@ func NewEmbedder(cfg config.LLM) (Embedder, error) {
 	default:
 		return nil, fmt.Errorf("llm.NewEmbedder: unknown provider %q", cfg.Provider)
 	}
+}
+
+// maxResponseBytes caps how much of a provider response is read into memory.
+//
+// The largest legitimate body here is a chat completion bounded by max_tokens
+// or an embedding vector of a few thousand floats -- both far under a megabyte,
+// so 32 MiB is unreachable in normal operation and exists purely as a ceiling.
+// Without one, a mis-set llm.base_url, a proxy returning something that is not
+// an API response, or a compromised endpoint can stream unbounded bytes into a
+// json.Decoder and exhaust the daemon's memory. The capture path already caps
+// its reads at 2 MB; this closes the same gap on the LLM path. (Audit I7.)
+const maxResponseBytes = 32 << 20
+
+// decodeJSONResponse decodes a provider response body into v, reading no more
+// than maxResponseBytes. A body that exceeds the cap fails to decode (it is
+// truncated mid-JSON) rather than being silently accepted in part.
+func decodeJSONResponse(body io.Reader, v any) error {
+	return json.NewDecoder(io.LimitReader(body, maxResponseBytes)).Decode(v)
 }
 
 // toFloat32 narrows an API-returned float64 vector to the float32 form stored in

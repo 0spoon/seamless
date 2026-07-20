@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -105,9 +106,10 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	for _, tree := range []string{memoryTree, notesTree} {
 		dir := filepath.Join(m.store.DataDir(), tree)
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, dirMode); err != nil {
 			return fmt.Errorf("files.Start: mkdir %s: %w", dir, err)
 		}
+		m.hardenTree(dir)
 		if err := m.watcher.watchTree(dir); err != nil {
 			return fmt.Errorf("files.Start: watch %s: %w", dir, err)
 		}
@@ -123,6 +125,50 @@ func (m *Manager) Start(ctx context.Context) error {
 		}
 	}()
 	return nil
+}
+
+// hardenTree narrows any group- or world-accessible permission bits under root
+// to owner-only, in place.
+//
+// Tightening the modes new files are written with (fileMode/dirMode) only helps
+// files written from now on; a corpus that predates that change would stay
+// world-readable forever, which is most of the exposure the change was for.
+// This is the one-time catch-up, and it is idempotent -- after the first run
+// nothing matches, so it costs a walk over a few hundred small files at startup.
+//
+// Best-effort throughout: a file another process owns, or a tree on a
+// filesystem with no meaningful permission model, must not stop the daemon from
+// starting. Failures are counted and logged once rather than per file.
+func (m *Manager) hardenTree(root string) {
+	var tightened, failed int
+	// The walk error is deliberately ignored per-entry (below) and in total: a
+	// partially-hardened tree is still better than an unhardened one, and the
+	// only way this returns non-nil is if the callback does, which it never does.
+	//nolint:errcheck // hardening is best-effort; a walk failure must not block startup
+	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.Type()&fs.ModeSymlink != 0 {
+			return nil //nolint:nilerr // an unreadable entry is skipped, not fatal
+		}
+		info, ierr := d.Info()
+		if ierr != nil {
+			return nil
+		}
+		perm := info.Mode().Perm()
+		if perm&0o077 == 0 {
+			return nil
+		}
+		want := perm &^ 0o077
+		if cerr := os.Chmod(path, want); cerr != nil {
+			failed++
+			return nil
+		}
+		tightened++
+		return nil
+	})
+	if tightened > 0 || failed > 0 {
+		m.logger.Info("files: narrowed corpus permissions to owner-only",
+			"root", root, "tightened", tightened, "failed", failed)
+	}
 }
 
 // Close stops the watcher and drains its work: after Close returns, no debounce

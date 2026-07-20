@@ -13,6 +13,7 @@ import (
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/lifecycle"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 const maxDescriptionRunes = 150
@@ -30,7 +31,10 @@ func memoryWriteTool() mcp.Tool {
 }
 
 func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name := argString(req, "name")
+	name, err := memoryName(argString(req, "name"))
+	if err != nil {
+		return errResult("memory_write", err)
+	}
 	kindStr := argString(req, "kind")
 	desc := argString(req, "description")
 	body := argRaw(req, "body")
@@ -106,7 +110,13 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if similar != nil {
 		resp["similar"] = *similar
 	}
-	if supersedes := argString(req, "supersedes"); supersedes != "" {
+	// Canonicalized like every other name, so `supersedes: "My Old Note"`
+	// resolves to the same memory `memory_write name: "my-old-note"` created.
+	supersedes, serr := memoryName(argString(req, "supersedes"))
+	if serr != nil {
+		return errResult("memory_write", serr)
+	}
+	if supersedes != "" {
 		superseded, serr := s.supersedeMemory(ctx, project, supersedes, written, now)
 		if serr != nil {
 			// Partial failure: the new memory is kept -- its content is valid
@@ -183,7 +193,10 @@ func memoryAppendTool() mcp.Tool {
 }
 
 func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name := argString(req, "name")
+	name, err := memoryName(argString(req, "name"))
+	if err != nil {
+		return errResult("memory_append", err)
+	}
 	content := argRaw(req, "body")
 	if name == "" || strings.TrimSpace(content) == "" {
 		return errResult("memory_append", errors.New("name and a non-empty body are required (body aliases: content, text)"))
@@ -225,7 +238,10 @@ func memoryReadTool() mcp.Tool {
 }
 
 func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name := argString(req, "name")
+	name, err := memoryName(argString(req, "name"))
+	if err != nil {
+		return errResult("memory_read", err)
+	}
 	if name == "" {
 		return errResult("memory_read", errors.New("name is required (memory_read reads one memory by exact name; to search text use recall)"))
 	}
@@ -310,7 +326,10 @@ func memoryDeleteTool() mcp.Tool {
 }
 
 func (s *Server) handleMemoryDelete(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name := argString(req, "name")
+	name, err := memoryName(argString(req, "name"))
+	if err != nil {
+		return errResult("memory_delete", err)
+	}
 	if name == "" {
 		return errResult("memory_delete", errors.New("name is required"))
 	}
@@ -342,6 +361,35 @@ func scopedNotFound(kind, project, name string) error {
 		return fmt.Errorf("no %s named %q in the global scope", kind, name)
 	}
 	return fmt.Errorf("no %s named %q in project %q (also searched global)", kind, name, project)
+}
+
+// memoryName canonicalizes a caller-supplied memory name to the kebab-case form
+// the corpus stores, and rejects what cannot be a filename.
+//
+// Two problems, one place. First, consistency: notes_create runs its title
+// through core.Slugify, but memory_write took `name` verbatim -- so an agent
+// writing "My Gotcha" got a memory it could never read back with the name it
+// had just used, and a corpus that disagreed with itself about capitalization.
+// Every memory tool routes through here, so write and lookup canonicalize
+// identically and the two forms are the same memory. Second, errors: the
+// filesystem layer already refuses unsafe names before anything reaches disk
+// (so this is hygiene, not a hole), but it refuses them deep in a write path,
+// which surfaces to the agent as a confusing failure rather than "that name is
+// not allowed". Validating at the tool boundary says so plainly. (Audit I12.)
+//
+// Slugify handles most of it; the validate.Name pass catches what slugging
+// cannot fix -- notably a Windows reserved device name like "con", which is
+// already lowercase and dash-free and so survives slugging untouched.
+func memoryName(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return "", nil
+	}
+	name := core.Slugify(trimmed)
+	if err := validate.Name(name); err != nil {
+		return "", fmt.Errorf("invalid memory name %q: %w", raw, err)
+	}
+	return name, nil
 }
 
 // resolveMemory finds an active memory by (project, name); when globalFallback

@@ -48,7 +48,15 @@ const (
 	notesTree       = "notes"
 	memoryGlobalDir = "_global" // memory/{_global} holds project-less memories
 	notesGlobalDir  = "_global" // notes/{_global} holds project-less notes
-	fileMode        = 0o644
+
+	// Owner-only, because these files are the corpus: memory and note bodies
+	// hold whatever an agent decided was worth persisting -- host details,
+	// architectural decisions, credentials it was handed. World-readable was
+	// only ever safe on a machine with one account and a 0750 home; the
+	// download audience includes shared boxes where neither holds. dirMode
+	// drops o+x too, so the tree cannot even be walked. (Audit L5.)
+	fileMode = 0o600
+	dirMode  = 0o700
 )
 
 // notesLegacyGlobalDir is what notesGlobalDir used to be called. Project-less
@@ -366,7 +374,7 @@ func (s *Store) writeFile(relPath, content string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(abs), dirMode); err != nil {
 		return fmt.Errorf("files: mkdir: %w", err)
 	}
 	return AtomicWrite(abs, []byte(content), fileMode)

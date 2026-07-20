@@ -198,9 +198,12 @@ seamlessd update           # fetch the latest release and swap it in
 
 It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
 update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
-Under the hood it fetches [the installer](https://thereisnospoon.org/install)
-(the PowerShell one on Windows) and runs it, which is exactly the same as doing
-it by hand:
+Under the hood it fetches the installer script (the PowerShell one on Windows)
+from the latest release's assets together with the Sigstore bundle the release
+workflow signed it with, verifies the signature in-process - the script must
+have been produced by this repository's release workflow on a version tag, or
+update refuses to run it - and then runs it. That is the same script as doing
+it by hand, minus the signature check:
 
 ```bash
 curl -fsSL https://thereisnospoon.org/install | sh

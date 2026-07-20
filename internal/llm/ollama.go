@@ -74,7 +74,7 @@ func (c *OllamaEmbedder) Embed(ctx context.Context, text string) ([]float32, err
 	}
 
 	var out ollamaEmbedResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeJSONResponse(resp.Body, &out); err != nil {
 		return nil, fmt.Errorf("llm.Ollama.Embed: decode: %w", err)
 	}
 	if len(out.Embeddings) == 0 || len(out.Embeddings[0]) == 0 {

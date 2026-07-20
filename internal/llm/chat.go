@@ -136,7 +136,7 @@ func (c *openAIChat) Complete(ctx context.Context, system, user string) (string,
 	}
 
 	var out openAIChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeJSONResponse(resp.Body, &out); err != nil {
 		return "", fmt.Errorf("llm.OpenAI.Complete: decode: %w", err)
 	}
 	// Empty visible text is a real failure mode (a reasoning model can spend the
@@ -209,7 +209,7 @@ func (c *ollamaChat) Complete(ctx context.Context, system, user string) (string,
 	}
 
 	var out ollamaChatResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeJSONResponse(resp.Body, &out); err != nil {
 		return "", fmt.Errorf("llm.Ollama.Complete: decode: %w", err)
 	}
 	if out.Message.Content == "" {
@@ -284,7 +284,7 @@ func (c *anthropicChat) Complete(ctx context.Context, system, user string) (stri
 	}
 
 	var out anthropicResponse
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	if err := decodeJSONResponse(resp.Body, &out); err != nil {
 		return "", fmt.Errorf("llm.Anthropic.Complete: decode: %w", err)
 	}
 	for _, block := range out.Content {

@@ -83,49 +83,56 @@ func New(cfg Config) (*Service, error) {
 
 // Register mounts the console routes on mux under /console. Public routes are the
 // login page and the stylesheet; everything else requires the key.
+//
+// Every route -- public included -- is registered through `secured`, which
+// attaches the console's security response headers. Going through one helper
+// rather than each handler setting its own is what makes that coverage
+// structural: a route added later cannot forget.
 func (s *Service) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /console/static/console.css", s.serveCSS)
-	mux.HandleFunc("GET /console/static/interactions.js", s.serveJS)
-	mux.HandleFunc("GET /console/static/search.js", s.serveSearchJS)
-	mux.HandleFunc("GET /console/static/library.js", s.serveLibraryJS)
-	mux.HandleFunc("GET /console/static/charts.js", s.serveChartsJS)
-	mux.HandleFunc("GET /console/static/favicon.svg", s.serveFavicon)
-	mux.HandleFunc("GET /console/login", s.loginForm)
-	mux.HandleFunc("POST /console/login", s.loginSubmit)
-	mux.HandleFunc("POST /console/logout", s.logout)
+	handle := func(pattern string, h http.HandlerFunc) { mux.HandleFunc(pattern, secured(h)) }
 
-	mux.HandleFunc("GET /console/{$}", s.auth(s.overview))
-	mux.HandleFunc("GET /console/search", s.auth(s.searchPage))
-	mux.HandleFunc("GET /console/interactions", s.auth(s.interactions))
-	mux.HandleFunc("GET /console/sessions", s.auth(s.sessionsList))
-	mux.HandleFunc("GET /console/sessions/{id}", s.auth(s.sessionDetail))
-	mux.HandleFunc("GET /console/memories", s.auth(s.memoriesList))
-	mux.HandleFunc("GET /console/memories/{id}", s.auth(s.memoryDetail))
-	mux.HandleFunc("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
-	mux.HandleFunc("GET /console/notes", s.auth(s.notesList))
-	mux.HandleFunc("GET /console/notes/{id}", s.auth(s.noteDetail))
-	mux.HandleFunc("GET /console/retrieval", s.auth(s.retrieval))
-	mux.HandleFunc("GET /console/tasks", s.auth(s.tasks))
-	mux.HandleFunc("GET /console/tasks/{id}", s.auth(s.taskDetail))
-	mux.HandleFunc("POST /console/tasks/{id}/release", s.auth(s.taskRelease))
-	mux.HandleFunc("GET /console/plans", s.auth(s.plansList))
-	mux.HandleFunc("GET /console/plans/{slug}", s.auth(s.planDetail))
-	mux.HandleFunc("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
-	mux.HandleFunc("GET /console/projects", s.auth(s.projectsList))
-	mux.HandleFunc("GET /console/projects/{slug}", s.auth(s.projectDetail))
-	mux.HandleFunc("GET /console/relations", s.auth(s.relations))
-	mux.HandleFunc("GET /console/gardener", s.auth(s.gardenerPage))
-	mux.HandleFunc("POST /console/gardener/request", s.auth(s.gardenerRequest))
-	mux.HandleFunc("POST /console/gardener/split", s.auth(s.gardenerSplit))
-	mux.HandleFunc("POST /console/gardener/plan/{slug}/apply", s.auth(s.gardenerApplyPlan))
-	mux.HandleFunc("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
-	mux.HandleFunc("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
-	mux.HandleFunc("POST /console/gardener/{id}/retarget", s.auth(s.gardenerRetarget))
-	mux.HandleFunc("GET /console/settings", s.auth(s.settings))
-	mux.HandleFunc("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
-	mux.HandleFunc("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
-	mux.HandleFunc("GET /console/events", s.auth(s.sse))
-	mux.HandleFunc("GET /console/events/{id}", s.auth(s.eventDetail))
+	handle("GET /console/static/console.css", s.serveCSS)
+	handle("GET /console/static/interactions.js", s.serveJS)
+	handle("GET /console/static/search.js", s.serveSearchJS)
+	handle("GET /console/static/library.js", s.serveLibraryJS)
+	handle("GET /console/static/charts.js", s.serveChartsJS)
+	handle("GET /console/static/favicon.svg", s.serveFavicon)
+	handle("GET /console/login", s.loginForm)
+	handle("POST /console/login", s.loginSubmit)
+	handle("POST /console/logout", s.logout)
+
+	handle("GET /console/{$}", s.auth(s.overview))
+	handle("GET /console/search", s.auth(s.searchPage))
+	handle("GET /console/interactions", s.auth(s.interactions))
+	handle("GET /console/sessions", s.auth(s.sessionsList))
+	handle("GET /console/sessions/{id}", s.auth(s.sessionDetail))
+	handle("GET /console/memories", s.auth(s.memoriesList))
+	handle("GET /console/memories/{id}", s.auth(s.memoryDetail))
+	handle("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
+	handle("GET /console/notes", s.auth(s.notesList))
+	handle("GET /console/notes/{id}", s.auth(s.noteDetail))
+	handle("GET /console/retrieval", s.auth(s.retrieval))
+	handle("GET /console/tasks", s.auth(s.tasks))
+	handle("GET /console/tasks/{id}", s.auth(s.taskDetail))
+	handle("POST /console/tasks/{id}/release", s.auth(s.taskRelease))
+	handle("GET /console/plans", s.auth(s.plansList))
+	handle("GET /console/plans/{slug}", s.auth(s.planDetail))
+	handle("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
+	handle("GET /console/projects", s.auth(s.projectsList))
+	handle("GET /console/projects/{slug}", s.auth(s.projectDetail))
+	handle("GET /console/relations", s.auth(s.relations))
+	handle("GET /console/gardener", s.auth(s.gardenerPage))
+	handle("POST /console/gardener/request", s.auth(s.gardenerRequest))
+	handle("POST /console/gardener/split", s.auth(s.gardenerSplit))
+	handle("POST /console/gardener/plan/{slug}/apply", s.auth(s.gardenerApplyPlan))
+	handle("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
+	handle("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
+	handle("POST /console/gardener/{id}/retarget", s.auth(s.gardenerRetarget))
+	handle("GET /console/settings", s.auth(s.settings))
+	handle("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
+	handle("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
+	handle("GET /console/events", s.auth(s.sse))
+	handle("GET /console/events/{id}", s.auth(s.eventDetail))
 }
 
 // ---------------------------------------------------------------------------
@@ -135,36 +142,51 @@ func (s *Service) Register(mux *http.ServeMux) {
 // auth wraps a handler so it runs only for an authenticated request: a valid
 // console cookie (browser) or the static bearer key (CLI). Unauthenticated
 // browsers are redirected to the login page; JSON callers get a 401.
+//
+// Cookie-authenticated writes additionally have to prove they came from this
+// origin (see sameOriginRequest). The bearer path skips that check: a header
+// the caller had to set by hand is not something a browser attaches on its own,
+// so it cannot be forged by a page the operator merely visited.
 func (s *Service) auth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.authed(r) {
+		switch s.classify(r) {
+		case credBearer:
 			next(w, r)
-			return
+		case credCookie:
+			if !safeMethod(r.Method) && !sameOriginRequest(r) {
+				s.logger.Warn("console: rejected cross-origin state-changing request",
+					"path", r.URL.Path, "origin", r.Header.Get("Origin"),
+					"sec_fetch_site", r.Header.Get("Sec-Fetch-Site"))
+				http.Error(w, "forbidden: cross-origin request", http.StatusForbidden)
+				return
+			}
+			next(w, r)
+		default:
+			if wantsJSON(r) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized: bearer key required"})
+				return
+			}
+			http.Redirect(w, r, "/console/login?next="+safeNext(r.URL.RequestURI()), http.StatusSeeOther)
 		}
-		if wantsJSON(r) {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized: bearer key required"})
-			return
-		}
-		http.Redirect(w, r, "/console/login?next="+safeNext(r.URL.RequestURI()), http.StatusSeeOther)
 	}
 }
 
-// authed reports whether the request carries a valid credential.
+// authed reports whether the request carries a valid credential, ignoring which
+// one. Callers that only need "is this the owner" -- the login page deciding
+// whether to redirect -- use this; the write path uses classify instead.
 func (s *Service) authed(r *http.Request) bool {
-	key := s.cfg.APIKey
-	if key == "" {
+	return s.classify(r) != credNone
+}
+
+// cookieEquals constant-time-compares the request's console cookie to the token
+// derived from key.
+func cookieEquals(r *http.Request, key string) bool {
+	c, err := r.Cookie(cookieName)
+	if err != nil {
 		return false
 	}
-	if bearerEquals(r, key) {
-		return true
-	}
-	if c, err := r.Cookie(cookieName); err == nil {
-		want := consoleToken(key)
-		if subtle.ConstantTimeCompare([]byte(c.Value), []byte(want)) == 1 {
-			return true
-		}
-	}
-	return false
+	want := consoleToken(key)
+	return subtle.ConstantTimeCompare([]byte(c.Value), []byte(want)) == 1
 }
 
 // consoleToken derives the cookie value from the static key, so the raw key is

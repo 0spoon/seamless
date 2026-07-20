@@ -140,6 +140,50 @@ check the version at https://github.com/$REPO/releases"
   expected $want
   got      $got"
 	step checksum ok
+
+	verify_signature "$base"
+}
+
+# A matching checksum proves the archive is the one checksums.txt describes. It
+# does NOT prove checksums.txt came from us: it is fetched from the same origin
+# as the archive, so whoever could tamper with one could tamper with both. The
+# signature is what closes that (audit M3).
+#
+# Keyless Sigstore, so the check that matters is the IDENTITY, not merely "a
+# valid signature exists" -- anyone can sign anything with their own identity.
+# Pinning to this repo's release workflow on a v* tag is what makes the
+# signature mean "built and published by the Seamless release pipeline".
+#
+# cosign is not a prerequisite of installing Seamless, so its absence warns
+# rather than fails: requiring users to install a signing tool first would be
+# real friction, and this first install is trust-on-first-use over TLS either
+# way. But if cosign IS present, a failed verification is fatal -- at that point
+# we have positive evidence something is wrong.
+verify_signature() {
+	base=$1
+	if ! have cosign; then
+		warn "cosign not found -- archive verified by checksum only.
+    For signature verification: https://docs.sigstore.dev/system_config/installation/"
+		return 0
+	fi
+	# Missing signature files are the expected case for releases cut before
+	# signing existed, so the fetcher's own 404 noise is suppressed -- the
+	# warning below is the message worth showing.
+	fetch_to "$base/checksums.txt.sig" "$TMP/checksums.txt.sig" 2>/dev/null &&
+		fetch_to "$base/checksums.txt.pem" "$TMP/checksums.txt.pem" 2>/dev/null || {
+		warn "this release predates artifact signing -- checksum only"
+		return 0
+	}
+	cosign verify-blob "$TMP/checksums.txt" \
+		--signature "$TMP/checksums.txt.sig" \
+		--certificate "$TMP/checksums.txt.pem" \
+		--certificate-identity-regexp "^https://github.com/$REPO/\.github/workflows/release\.yml@refs/tags/v" \
+		--certificate-oidc-issuer https://token.actions.githubusercontent.com \
+		>/dev/null 2>&1 ||
+		die "SIGNATURE VERIFICATION FAILED for checksums.txt.
+  The release artifacts are not signed by the $REPO release workflow.
+  Do not install. Please report this at https://github.com/$REPO/security"
+	step signature "ok (sigstore)"
 }
 
 # Install via a temp name + rename: a plain copy over the live seamlessd fails
