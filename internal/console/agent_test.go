@@ -1,7 +1,6 @@
 package console
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -37,6 +36,10 @@ func TestModelShort(t *testing.T) {
 		{"", ""},
 		// A degenerate id that shortens to nothing stays verbatim.
 		{"claude-", "claude-"},
+		// Pins the Go fallback for a bare build-date id. interactions.js
+		// deliberately diverges here (it drops the model half); neither input
+		// is reachable today, so parity is pinned per side, not unified.
+		{"-20251001", "-20251001"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -58,10 +61,9 @@ func TestAgentPill(t *testing.T) {
 		require.Contains(t, got, "cx · gpt-5.5")
 	})
 	t.Run("model only stays neutral", func(t *testing.T) {
-		got := string(agentPill("", "claude-fable-5"))
-		require.Contains(t, got, `class="agent-pill"`)
-		require.NotContains(t, got, "cc")
-		require.Contains(t, got, "fable-5")
+		require.Equal(t,
+			`<span class="agent-pill" title="claude-fable-5">fable-5</span>`,
+			string(agentPill("", "claude-fable-5")))
 	})
 	t.Run("unknown client passes through neutral", func(t *testing.T) {
 		got := string(agentPill("gemini-cli", "gemini-3"))
@@ -72,8 +74,11 @@ func TestAgentPill(t *testing.T) {
 		require.Empty(t, string(agentPill("", "")))
 	})
 	t.Run("escapes html in stored strings", func(t *testing.T) {
-		got := string(agentPill("", `<script>"x"</script>`))
-		require.NotContains(t, got, "<script>")
-		require.True(t, strings.HasPrefix(got, "<span"))
+		// Exact output pins BOTH contexts: the double-quoted title attribute
+		// (quotes must be escaped, or the payload breaks out of the attribute)
+		// and the element text.
+		require.Equal(t,
+			`<span class="agent-pill" title="&lt;script&gt;&#34;x&#34;&lt;/script&gt;">&lt;script&gt;&#34;x&#34;&lt;/script&gt;</span>`,
+			string(agentPill("", `<script>"x"</script>`)))
 	})
 }

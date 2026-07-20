@@ -34,6 +34,13 @@ func TestPrepareHookContext_ClientAwareThreshold(t *testing.T) {
 			content: strings.Repeat("a", (codexContextMaxTokens-1)*4),
 		},
 		{
+			// The exact boundary: 9600 bytes estimate to exactly the cap, and
+			// the cap is inclusive -- only content strictly above it truncates.
+			name:    "codex exactly at the cap",
+			client:  ClientCodex,
+			content: strings.Repeat("a", codexContextMaxTokens*4),
+		},
+		{
 			name:      "codex just above",
 			client:    ClientCodex,
 			content:   strings.Repeat("a", codexContextMaxTokens*4+1),
@@ -91,11 +98,13 @@ func TestPrepareHookContext_PreservesPriorityUTF8AndTags(t *testing.T) {
 
 func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T) {
 	tests := []struct {
+		name    string
 		event   string
 		hook    string
 		content string
 	}{
 		{
+			name:  "session-start briefing",
 			event: "SessionStart",
 			hook:  "session-start",
 			content: "<seam-briefing>\nCONSTRAINT: keep-me: pinned\n" +
@@ -103,6 +112,7 @@ func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T)
 				"Seam session: cx/019f7291-46ec71e628fd86c6 (ambient)\n</seam-briefing>",
 		},
 		{
+			name:  "user-prompt-submit recall",
 			event: "UserPromptSubmit",
 			hook:  "user-prompt-submit",
 			content: "<seam-recall>possibly relevant:\n" +
@@ -110,8 +120,12 @@ func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T)
 				"</seam-recall>",
 		},
 		{
-			event: "SubagentStart",
-			hook:  "subagent-start",
+			// Subagent briefings arrive on /api/hooks/session-start with
+			// AgentType set -- there is no SubagentStart hook or route. This
+			// case pins the cap for that constraint-heavy briefing shape.
+			name:  "subagent briefing via session-start",
+			event: "SessionStart",
+			hook:  "session-start",
 			content: "<seam-briefing>\nCONSTRAINT: child-scope: keep constraints\n" +
 				strings.Repeat("CONSTRAINT: bounded-child: 界界界\n", 1200) +
 				"</seam-briefing>",
@@ -119,7 +133,7 @@ func TestWriteContextResponse_CodexEventsShareCapAndExactTelemetry(t *testing.T)
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.event, func(t *testing.T) {
+		t.Run(tt.name, func(t *testing.T) {
 			db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, db.Close()) })
@@ -224,4 +238,70 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	require.NotEmpty(t, injected[0].Payload["item_ids"])
 	require.Greater(t, injected[0].Payload["original_estimated_tokens"].(float64),
 		float64(codexContextMaxTokens))
+}
+
+// The cap is Codex-only: the same oversized briefing on a Claude Code
+// SessionStart must be emitted whole, byte-for-byte, with no truncation
+// telemetry.
+func TestSessionStart_ClaudeEmitsOversizedBriefingUncapped(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db,
+		store.SettingRepoProjectMap, `{"/work/demo":"demo"}`))
+
+	for i := range 25 {
+		insertMemory(t, db, fmt.Sprintf("01C%03d", i), "constraint",
+			fmt.Sprintf("pinned-constraint-%03d", i), strings.Repeat("bounded pinned detail ", 12), "demo")
+	}
+	now := time.Now().UTC()
+	for i := range 80 {
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID:          fmt.Sprintf("01T%03d", i),
+			ProjectSlug: "demo",
+			Title:       fmt.Sprintf("plan step %03d", i),
+			Status:      core.TaskOpen,
+			PlanSlug:    fmt.Sprintf("claude-context-plan-%03d-%s", i, strings.Repeat("x", 32)),
+			CreatedAt:   now,
+			UpdatedAt:   now,
+		}))
+	}
+
+	ret := retrieve.New(db, nil, config.Budgets{
+		MaxBriefingTokens:  1500,
+		RecallBudgetTokens: 1000,
+	}, nil)
+	h := NewHandler(Config{
+		DB: db, Retrieve: ret, Events: events.NewRecorder(db), APIKey: testKey,
+	})
+	mux := http.NewServeMux()
+	h.Register(mux)
+	body, err := json.Marshal(map[string]any{
+		"session_id": "019f7291-40f1-7311-8997-0d497579d27b",
+		"cwd":        "/work/demo",
+		"source":     "startup",
+	})
+	require.NoError(t, err)
+	req := httptest.NewRequest(http.MethodPost,
+		"/api/hooks/session-start", strings.NewReader(string(body)))
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+
+	require.Equal(t, http.StatusOK, rr.Code)
+	var response hookResponse
+	require.NoError(t, json.NewDecoder(rr.Body).Decode(&response))
+	require.NotNil(t, response.HookSpecificOutput)
+	emitted := response.HookSpecificOutput.AdditionalContext
+	require.Greater(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens,
+		"the seeded briefing must exceed the Codex cap for this test to prove anything")
+	require.NotContains(t, emitted, contextTruncationMarker)
+
+	injected := eventsOfKind(t, events.NewRecorder(db), core.EventInjected)
+	require.Len(t, injected, 1)
+	require.Equal(t, emitted, injected[0].Payload["content"])
+	require.Equal(t, false, injected[0].Payload["truncated"])
+	require.Equal(t, injected[0].Payload["original_estimated_tokens"],
+		injected[0].Payload["emitted_estimated_tokens"])
 }

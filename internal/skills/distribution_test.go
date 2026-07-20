@@ -18,7 +18,15 @@ func TestSkillFrontmatterAndCodexMetadata(t *testing.T) {
 		front := frontmatter(t, skill)
 		require.Equal(t, name, front["name"])
 		require.NotEmpty(t, front["description"])
-		require.ElementsMatch(t, []string{"name", "description"}, mapKeys(front))
+		if name == OnboardName {
+			// Claude Code honors the key; Codex ignores it (verified against
+			// codex-cli 0.144.6) and enforces the same guard through
+			// agents/openai.yaml's allow_implicit_invocation below.
+			require.Equal(t, true, front["disable-model-invocation"])
+			require.ElementsMatch(t, []string{"name", "description", "disable-model-invocation"}, mapKeys(front))
+		} else {
+			require.ElementsMatch(t, []string{"name", "description"}, mapKeys(front))
+		}
 
 		var metadata struct {
 			Interface struct {

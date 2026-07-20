@@ -1,6 +1,7 @@
 ---
 name: seam-onboard
 description: "Install Seamless awareness for the current agent client. Use only when the user explicitly asks to onboard Seamless or invokes this skill. Configure the client's hooks and MCP server if needed, ask whether guidance belongs globally or in this project, append a marker-wrapped block to AGENTS.md for Codex or CLAUDE.md for Claude Code, then self-remove."
+disable-model-invocation: true
 ---
 
 # Onboard Seamless

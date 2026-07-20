@@ -252,6 +252,12 @@ function Invoke-WireHooks {
             Warn "seamless $Version predates --client and the bundled skills; wiring Claude Code only"
             $clientArgs = @()
         }
+        # The embedded skills shipped together with the --skills flag: a pinned
+        # v0.3.3-v0.3.6 binary accepts --client but bundles no skills, so the
+        # closing seam-onboard advice would name a skill that was never installed.
+        if ($probe -and $probe -match '-client' -and $probe -notmatch '-skills') {
+            Warn "seamless $Version predates the bundled skills; the seam-onboard/seam-research skills will not be installed (drop SEAMLESS_VERSION to get the latest)"
+        }
         & $seamlessd install-hooks @clientArgs --seam $seam
         if ($LASTEXITCODE -ne 0) { Die "install-hooks failed (exit $LASTEXITCODE)" }
     } finally {

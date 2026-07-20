@@ -59,21 +59,25 @@ func ListSessionsForProject(ctx context.Context, db *sql.DB, project string, sta
 }
 
 // MemoriesForSession returns the memories a session produced -- the index rows
-// whose source_session matches the session NAME -- newest-updated first.
-// Memory.SourceSession stores the session name (e.g. "cc/ab12cd34"), never its
-// ULID, so callers must pass the name.
-//
-// GUARD: if the argument looks like a bare session ULID (no '/', 26 chars, and
-// parses as a ULID) it is almost certainly a mis-keyed id that would silently
-// match nothing; the call is rejected with a message pointing at SessionByID to
-// resolve the name.
-func MemoriesForSession(ctx context.Context, db *sql.DB, sessionName string) ([]core.Memory, error) {
-	if looksLikeSessionULID(sessionName) {
-		return nil, errors.New("store.MemoriesForSession: expected a session NAME (e.g. cc/ab12cd34 or cx/ab12cd34); got what looks like a session ULID -- resolve it via SessionByID(...).Name first")
+// whose source_session matches the session -- newest-updated first.
+// Memory.SourceSession holds the session NAME for ambient stamps
+// (cc/ab12cd34) but the session ULID for bound stamps (see the
+// source-session-stamps memory), so the query matches either spelling and
+// callers pass the whole session.
+func MemoriesForSession(ctx context.Context, db *sql.DB, sess core.Session) ([]core.Memory, error) {
+	stamps := make([]any, 0, 2)
+	for _, s := range []string{sess.Name, sess.ID} {
+		if s != "" {
+			stamps = append(stamps, s)
+		}
 	}
+	if len(stamps) == 0 {
+		return nil, nil
+	}
+	placeholders := strings.Repeat("?, ", len(stamps)-1) + "?"
 	rows, err := db.QueryContext(ctx, `SELECT `+memoryCols+`
-		FROM memories_index WHERE source_session = ?
-		ORDER BY updated_at DESC, id DESC`, sessionName)
+		FROM memories_index WHERE source_session IN (`+placeholders+`)
+		ORDER BY updated_at DESC, id DESC`, stamps...)
 	if err != nil {
 		return nil, fmt.Errorf("store.MemoriesForSession: %w", err)
 	}
@@ -95,7 +99,7 @@ func MemoriesForSession(ctx context.Context, db *sql.DB, sessionName string) ([]
 // almost certainly a session name that would silently match nothing; the call is
 // rejected with a message pointing at SessionByName to resolve the id.
 func TasksClaimedBy(ctx context.Context, db *sql.DB, sessionID string) ([]core.Task, error) {
-	if !looksLikeSessionULID(sessionID) {
+	if !LooksLikeSessionULID(sessionID) {
 		return nil, errors.New("store.TasksClaimedBy: expected a session ULID; resolve the name via SessionByName(...).ID first")
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks
@@ -186,10 +190,12 @@ func ProjectsByParent(ctx context.Context, db *sql.DB, parent string) ([]core.Pr
 	return out, rows.Err()
 }
 
-// looksLikeSessionULID reports whether s has the shape of a bare session ULID: no
+// LooksLikeSessionULID reports whether s has the shape of a bare session ULID: no
 // '/' (session names always contain one), exactly 26 chars, and a valid ULID
-// encoding. It disambiguates the session-name vs session-id relation guards.
-func looksLikeSessionULID(s string) bool {
+// encoding. It disambiguates the session-name vs session-id relation guards, and
+// lets provenance consumers pick the right lookup for a source_session stamp
+// (name for ambient stamps, ULID for bound stamps) without a doomed first query.
+func LooksLikeSessionULID(s string) bool {
 	if strings.Contains(s, "/") || len(s) != 26 {
 		return false
 	}

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	"github.com/0spoon/seamless/internal/core"
 )
 
 // ssePingInterval keeps the stream and any intermediary connections alive during
@@ -53,10 +51,6 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 	// full request/response bodies, instead of the default summary rows every
 	// page's layout EventSource consumes.
 	interactions := r.URL.Query().Get("feed") == "interactions"
-	var namer func(string) core.Session
-	if interactions {
-		namer = s.sessionNamer(ctx)
-	}
 
 	fmt.Fprint(w, ": connected\n\n")
 	flusher.Flush()
@@ -81,7 +75,12 @@ func (s *Service) sse(w http.ResponseWriter, r *http.Request) {
 				if !isInteraction(e) || skipInteraction(e) {
 					continue
 				}
-				payload, err = json.Marshal(toInteractionRow(e, namer))
+				// A fresh resolver per event, not one memo per connection:
+				// Session.Model is mutable (ambient sessions start without one
+				// and /model switches change it mid-session), so a
+				// connection-lifetime cache would pin stale pills that disagree
+				// with gap-filled rows built from fresh lookups.
+				payload, err = json.Marshal(toInteractionRow(e, s.sessionNamer(ctx)))
 			} else {
 				payload, err = json.Marshal(toEventRow(e))
 			}

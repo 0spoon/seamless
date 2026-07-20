@@ -325,14 +325,12 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.logger.Warn("console: session claimed tasks", "session", sess.ID, "error", herr)
 	}
-	if sess.Name != "" {
-		if mems, merr := store.MemoriesForSession(ctx, s.cfg.DB, sess.Name); merr == nil {
-			for _, m := range mems {
-				data.Memories = append(data.Memories, sessMemVM{ID: m.ID, Name: m.Name, Kind: string(m.Kind)})
-			}
-		} else {
-			s.logger.Warn("console: session memories written", "session", sess.Name, "error", merr)
+	if mems, merr := store.MemoriesForSession(ctx, s.cfg.DB, sess); merr == nil {
+		for _, m := range mems {
+			data.Memories = append(data.Memories, sessMemVM{ID: m.ID, Name: m.Name, Kind: string(m.Kind)})
 		}
+	} else {
+		s.logger.Warn("console: session memories written", "session", sess.ID, "error", merr)
 	}
 
 	s.renderDetail(w, r, "session", pageData{

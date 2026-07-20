@@ -2,7 +2,9 @@
 // endpoints and installs/removes their entries in a settings.json. Both handlers
 // authenticate the same static bearer key as MCP, and both fail open: any
 // internal error yields a 200 with empty additionalContext so a broken briefing
-// can never block an agent. Only a bad key returns non-2xx (401).
+// can never block an agent. Only a bad key (401) or an unknown ?client=
+// discriminator (400, an install bug rather than a runtime condition) returns
+// non-2xx.
 package hooks
 
 import (

@@ -18,6 +18,14 @@ if [ -z "$NAME" ]; then
     err "usage: $0 <skill-name>"
     exit 1
 fi
+# The name lands in rm -rf "$skills/$NAME"; a separator or dot-prefixed name
+# could point that at a directory outside the skill root.
+case "$NAME" in
+*/* | *\\* | .*)
+    err "invalid skill name $NAME: must be a plain directory name"
+    exit 1
+    ;;
+esac
 
 CLIENT="${2:-${CLIENT:-claude}}"
 
