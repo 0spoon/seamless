@@ -147,6 +147,32 @@ func TestCodexMCPComparator_ClassifiesExactOwnedDriftAndForeign(t *testing.T) {
 	}
 }
 
+func TestExecMCPCommandRunner_SeparatesStdoutAndStderr(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the isolated fake MCP client is a POSIX script")
+	}
+	path := filepath.Join(t.TempDir(), "codex")
+	require.NoError(t, os.WriteFile(path, []byte(`#!/bin/sh
+printf '{"ok":true}\n'
+printf 'benign warning\n' >&2
+if [ "${1:-}" = fail ]; then
+  exit 2
+fi
+`), 0o755))
+
+	runner := execMCPCommandRunner{client: "codex", path: path, timeout: 2 * time.Second}
+	out, err := runner.Run(context.Background(), "success")
+	require.NoError(t, err)
+	require.JSONEq(t, `{"ok":true}`, string(out),
+		"successful machine-readable output must not be corrupted by stderr warnings")
+
+	out, err = runner.Run(context.Background(), "fail")
+	require.ErrorContains(t, err, "codex fail")
+	require.Contains(t, string(out), `{"ok":true}`)
+	require.Contains(t, string(out), "benign warning",
+		"failed commands must retain stderr for actionable diagnostics")
+}
+
 func TestReconcileCodexMCP_StateMachine(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("the isolated fake Codex executable is a POSIX script")

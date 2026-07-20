@@ -326,7 +326,21 @@ func (r execMCPCommandRunner) Run(ctx context.Context, args ...string) ([]byte, 
 	}
 	commandCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
-	out, err := exec.CommandContext(commandCtx, r.path, args...).CombinedOutput()
+	cmd := exec.CommandContext(commandCtx, r.path, args...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	// Machine-readable MCP commands own stdout. A successful CLI may still emit
+	// benign diagnostics on stderr (Codex prints a PATH-alias warning in a
+	// restricted environment); mixing that text into JSON makes an exact,
+	// healthy registration look malformed. On failure retain stderr beside any
+	// partial stdout so installer/doctor diagnostics stay actionable.
+	if err != nil && stderr.Len() > 0 {
+		if len(out) > 0 && out[len(out)-1] != '\n' {
+			out = append(out, '\n')
+		}
+		out = append(out, stderr.Bytes()...)
+	}
 	op := strings.TrimSpace(r.client + " " + strings.Join(args, " "))
 	if commandCtx.Err() != nil {
 		return out, fmt.Errorf("%s: %w", op, commandCtx.Err())
