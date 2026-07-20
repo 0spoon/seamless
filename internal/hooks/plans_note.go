@@ -200,19 +200,21 @@ const relatedPlanHits = 5
 // relatedPlanContext builds the additionalContext block returned on a
 // session's first captured plan iteration: top recall hits for the plan title
 // (prior plans, constraints, related notes), so the planning agent sees prior
-// art before the plan is finalized. Returns "" when recall is unavailable,
-// errors, or finds nothing beyond the plan's own note; a non-empty block is
-// also recorded as a retrieval.injected event.
-func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note core.Note) string {
+// art before the plan is finalized. Returns the zero value when recall is
+// unavailable, errors, or finds nothing beyond the plan's own note; a
+// non-empty block is recorded as a retrieval.injected event and returned as
+// the SAME prepared value the caller must emit, so response and telemetry
+// cannot drift apart.
+func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note core.Note) preparedHookContext {
 	if h.retrieve == nil || strings.TrimSpace(note.Title) == "" {
-		return ""
+		return preparedHookContext{}
 	}
 	hits, err := h.retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: note.Title, Project: note.Project, Limit: relatedPlanHits + 1,
 	})
 	if err != nil {
 		h.logger.Warn("hooks: related plan recall", "error", err)
-		return ""
+		return preparedHookContext{}
 	}
 	var b strings.Builder
 	ids := make([]string, 0, len(hits))
@@ -231,14 +233,14 @@ func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note co
 		ids = append(ids, hit.ID)
 	}
 	if len(ids) == 0 {
-		return ""
+		return preparedHookContext{}
 	}
 	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
 		b.String() + "\n</seam-plan-context>"
 	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "",
-		prepareHookContext(ClientClaudeCode, block), ids)
-	return block
+	prepared := prepareHookContext(ClientClaudeCode, block)
+	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", prepared, ids)
+	return prepared
 }
 
 // recordPlanEvent appends a plan-capture event, attributed to the ambient
