@@ -1,6 +1,6 @@
 ---
 title: Quickstart
-description: Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.
+description: Install Seamless with one command, start Claude Code or Codex in a repo, and confirm the first briefing lands.
 ---
 
 This is the one happy path: install, start a session, and watch it open with a
@@ -24,11 +24,12 @@ irm https://thereisnospoon.org/install.ps1 | iex
 
 One command does the lot: it fetches the checksum-verified release archive for
 your platform (macOS, Linux, and Windows; amd64 and arm64), installs `seamlessd`
-and `seam` into `~/.local/bin`, generates the bearer key, wires Claude Code, and
-starts the daemon as a per-user service on `127.0.0.1:8081` with data in
-`~/.seamless` - launchd on macOS, systemd `--user` on Linux, an at-logon
-Scheduled Task on Windows. Re-run it to upgrade. [Install & deploy](/install/)
-has the overrides, the service details, and how to remove it.
+and `seam` into `~/.local/bin`, generates the bearer key, wires the detected
+Claude Code/Codex clients (hooks, MCP, and skills), and starts the daemon as a
+per-user service on `127.0.0.1:8081` with data in `~/.seamless` - launchd on
+macOS, systemd `--user` on Linux, an at-logon Scheduled Task on Windows. Re-run
+it to upgrade. [Install & deploy](/install/) has the overrides, service details,
+and removal procedure.
 
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install), and every other route to the
@@ -51,20 +52,21 @@ daemon will start.
 
 ## Wire your agents
 
-The installer already ran `install-hooks` for you, so there is no second step:
-start Claude Code in any git repo.
+The installer already ran `install-hooks` for you, so there is no second setup
+step. Start either detected client in any git repo:
 
 ```bash
-cd ~/code/myrepo && claude
+cd ~/code/myrepo && claude    # Claude Code
+cd ~/code/myrepo && codex     # Codex
 ```
 
-`install-hooks` does both halves of the Claude Code wiring: it installs the
-hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
-SessionEnd) and registers the MCP server via `claude mcp add --scope user`. If
-the `claude` CLI is not on your PATH it prints the command to run yourself -
-see [Claude Code setup](/claude-code/) for the by-hand version and why
-`--scope user` matters. Installed by hand? Run `seamlessd install-hooks`
-yourself first.
+`install-hooks` selects the installed clients by default. For Claude Code it
+installs six hooks and registers Streamable HTTP through `claude mcp add-json
+--scope user`. For Codex it installs five hooks and registers the maintained
+`seam mcp-proxy` stdio policy; Codex itself also supports direct Streamable HTTP.
+Both profiles receive `seam-onboard` and `seam-research`. Installed by hand? Run
+`seamlessd install-hooks` yourself first, or select explicitly with `--client
+claude|codex|all`.
 
 The hooks are what make sessions *ambient*: an agent gets a briefing without
 calling a tool. They also register the repo. On the first session inside a git
@@ -75,14 +77,11 @@ a project first. `seamlessd map-repo --path ~/code/myrepo --project myrepo` is
 the override when you want a slug that is not the directory name; see
 [Projects & scope](/concepts/projects/) for the full precedence chain.
 
-Restart Claude Code once after installing so it loads the hooks and the MCP
-server.
-
-Using **Codex CLI** instead of (or alongside) Claude Code? The curl installer
-wires Claude Code only; add Codex with one command -
-`seamlessd install-hooks --client codex` - then trust the hooks at the Codex
-startup review. [Codex CLI setup](/codex-cli/) has the details, including the
-mcp-proxy bridge and why Codex sessions close through the idle reaper.
+Restart the selected client once after installing so it reloads hooks, MCP, and
+skills. In Codex, open `/hooks`, review the exact Seamless commands, and approve
+them; `seamlessd doctor` deliberately reports that trust as unverified until you
+inspect it yourself. See [Claude Code setup](/claude-code/) or [Codex CLI
+setup](/codex-cli/) for the client-specific behavior.
 
 ## Confirm it works
 
@@ -114,5 +113,5 @@ seamlessd console-open                               # opens pre-authenticated
   `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once to write a
   Seamless-awareness block into global or project instructions (`CLAUDE.md` or
   `AGENTS.md`). From a clone, `make install-onboard-skill CLIENT=codex`
-  installs the Codex copy; `CLIENT=claude` is the default.
+  installs the Codex copy; the default is `CLIENT=detect`.
 - Look up any tool, key, or command in the [Reference](/reference/).

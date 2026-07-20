@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -165,6 +167,28 @@
 </span></span><span class="line"><span class="cl">Authorization: Bearer &lt;mcp.api_key&gt;
 </span></span></code></pre><p><code>GET /healthz</code> needs no auth and reports the running build - the fastest way to
 tell whether a daemon is up and which version it is.</p>
+<h2 id="client-transports-and-key-handling">Client transports and key handling</h2>
+<p>The daemon endpoint is always Streamable HTTP. A client can reach it in either
+of two ways:</p>
+<ul>
+<li><strong>Direct HTTP</strong> - configure the URL and an <code>Authorization: Bearer</code> header.
+Current Codex, Claude Code, and other HTTP-capable MCP clients support this
+shape.</li>
+<li><strong>A stdio bridge</strong> - register <code>seam mcp-proxy --config &lt;absolute yaml&gt;</code> as a
+local stdio MCP server. The bridge forwards the protocol unchanged and keeps
+<code>Mcp-Session-Id</code> stable across HTTP calls.</li>
+</ul>
+<p>Seamless installs the bridge for Codex by policy even though Codex supports both
+stdio and Streamable HTTP. The bridge reads the bearer key from Seamless's 0600
+config, avoiding a literal secret in <code>~/.codex/config.toml</code> or an environment
+dependency. Claude Code's default direct-HTTP registration uses <code>seam mcp-headers</code> as <code>headersHelper</code> for the same reason: the bearer value stays out
+of client config and process argv.</p>
+<p>The MCP initialize response also carries concise server instructions. Their
+first 512 characters contain the essential cross-tool workflow: recall before
+guessing, memory versus note, explicit scope when ambiguous, session handoff,
+<code>plan:&lt;slug&gt;</code> composition, and treating <code>inputSchema</code> required fields/enums as
+authoritative. That guidance is available even before a user runs the optional
+onboarding skill.</p>
 <h2 id="scope-resolution">Scope resolution</h2>
 <p>Almost no call passes <code>project</code>. Scope is resolved once, in this order, and
 inherited by everything after it:</p>
@@ -234,7 +258,7 @@ own registration, so they cannot drift from what the daemon accepts.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#scope-resolution">Scope resolution</a></li><li class="lvl-2"><a href="#conventions">Conventions</a></li><li class="lvl-2"><a href="#the-tool-surface">The tool surface</a></li>
+      <li class="lvl-2"><a href="#client-transports-and-key-handling">Client transports and key handling</a></li><li class="lvl-2"><a href="#scope-resolution">Scope resolution</a></li><li class="lvl-2"><a href="#conventions">Conventions</a></li><li class="lvl-2"><a href="#the-tool-surface">The tool surface</a></li>
     </ul>
   </aside>
   

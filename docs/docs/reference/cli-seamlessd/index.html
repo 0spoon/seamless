@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -246,7 +248,23 @@ config or the database cannot be loaded at all.</p>
 </tr>
 <tr>
 <td><code>hooks</code></td>
-<td>How many hook events are installed, and where. Partial or absent is a warning.</td>
+<td>Claude Code definitions compared with today's desired profile.</td>
+</tr>
+<tr>
+<td><code>codex hooks</code></td>
+<td>Codex current, stale, and missing definitions, including command targets.</td>
+</tr>
+<tr>
+<td><code>codex hook trust</code></td>
+<td>Always warns that trust is unverified and directs you to Codex <code>/hooks</code>; no private trust state is read.</td>
+</tr>
+<tr>
+<td><code>codex hook activity</code></td>
+<td>Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust.</td>
+</tr>
+<tr>
+<td><code>codex mcp</code></td>
+<td>Exact enabled stdio bridge state from <code>codex mcp get seamless --json</code>, plus executable/config target existence.</td>
 </tr>
 <tr>
 <td><code>gardener</code></td>
@@ -255,10 +273,12 @@ config or the database cannot be loaded at all.</p>
 </tbody>
 </table>
 </div>
-<p>The hooks check looks at <code>~/.claude/settings.json</code> and then
-<code>./.claude/settings.json</code>, matching by hook URL or command rather than by the
-managed marker - Claude Code strips that marker when it rewrites the file, and a
-hook that still fires must still count as installed.</p>
+<p>The definition checks compare current desired state, not mere existence. The
+shared classifier recognizes exact current definitions, marked stale entries,
+and only unmistakable legacy Seamless shapes; arbitrary foreign hooks survive.
+Codex trust is a separate fact because Codex exposes no supported query for the
+current trust decision. A recent hook observation cannot make a changed command
+healthy.</p>
 <p>Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.</p>
 <h2 id="seamlessd_import">seamlessd import</h2>
@@ -299,7 +319,7 @@ a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
 prints a report even when the import ends in an error. With <code>--embed</code> on and no
 usable embedder, it warns and imports without vectors rather than failing.</p>
 <h2 id="seamlessd_install_hooks">seamlessd install-hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
 </span></span></code></pre><p>Wires the selected agent client(s) to Seamless: merges the hook entries into
 each client's hook file (Claude Code <code>settings.json</code>, Codex <code>hooks.json</code>),
 registers the MCP server with the client's CLI, and installs the embedded
@@ -316,8 +336,8 @@ registers the MCP server with the client's CLI, and installs the embedded
 <tbody>
 <tr>
 <td><code>--client</code></td>
-<td><code>claude</code></td>
-<td>Which client(s) to wire: <code>claude</code>, <code>codex</code>, or <code>all</code>. Run interactively with the flag omitted, it prompts (annotating which clients were detected); non-interactive runs take the default with no prompt.</td>
+<td><code>detect</code></td>
+<td>Which client(s) to wire: <code>claude</code>, <code>codex</code>, <code>all</code>, or <code>detect</code>. With the flag omitted on a terminal, it prompts and defaults to the detected set; non-interactive runs detect without prompting. If neither client exists, detection falls back to Claude Code.</td>
 </tr>
 <tr>
 <td><code>--settings</code></td>
@@ -342,7 +362,7 @@ registers the MCP server with the client's CLI, and installs the embedded
 <tr>
 <td><code>--mcp</code></td>
 <td><code>true</code></td>
-<td>Register the MCP server via the client CLI (<code>claude mcp add --scope user</code> / <code>codex mcp add</code>).</td>
+<td>Register the MCP server via the client CLI (<code>claude mcp add-json --scope user</code> / <code>codex mcp add</code>).</td>
 </tr>
 <tr>
 <td><code>--skills</code></td>
@@ -355,18 +375,23 @@ registers the MCP server with the client's CLI, and installs the embedded
 <p>It generates <code>mcp.api_key</code> on a true first run under the same rule as <code>serve</code>,
 and refuses to run when an existing config leaves the key empty, since the key
 is what the hooks authenticate with. The loaded config path is made absolute
-and baked into the command hooks as <code>SEAMLESS_CONFIG</code>, so they resolve config
-from any working directory. A <code>--seam</code> binary that cannot be found is a printed
-warning, not an error - the hooks would fail at fire time, so it says so now.</p>
-<p>The MCP registration is best-effort: the hooks land regardless, and a missing
-<code>claude</code> CLI or a failed <code>claude mcp add</code> prints the exact command to run
-yourself. An already-registered <code>seamless</code> server is left alone.</p>
-<p>The merge preserves unknown keys, replaces existing Seamless-managed entries in
-place, adopts unmarked entries that point at the same hook URL or run the same
-<code>seam hook &lt;event&gt;</code> command (this is what stops re-installs from duplicating
-hooks), and backs the file up once before the first change. It is idempotent:
-an already-current file is reported as up to date and left untouched. Each hook
-is reported as added, updated, or unchanged.</p>
+and passed to command hooks as <code>--config</code>, so they resolve config from any
+working directory. A <code>--seam</code> binary that cannot be found is a printed warning,
+not an error - the hooks would fail at fire time, so it says so now.</p>
+<p>The hook file is written before MCP registration. Claude Code registration stays
+best-effort because its current CLI exposes no machine-readable state: a missing
+CLI or failed <code>mcp add-json</code> prints the exact command to run yourself. Codex is
+stricter. It decodes <code>codex mcp get seamless --json</code>, leaves an exact enabled
+stdio bridge unchanged, repairs an owned disabled/stale bridge with <code>mcp add</code>,
+and re-reads it before reporting success. A direct-HTTP or other incompatible
+entry under <code>seamless</code> is not overwritten; remove it explicitly or rerun with
+<code>--mcp=false</code> to keep that manual transport.</p>
+<p>The hook merge preserves unknown keys and foreign entries, replaces marked stale
+definitions, adopts only recognizable legacy Seamless URLs/commands, deduplicates
+owned entries, and backs the file up once before the first change. An arbitrary
+executable merely containing <code>hook &lt;event&gt;</code> is foreign. An already-current file
+is reported as up to date and left untouched. Each event reports <code>added</code>,
+<code>updated</code>, <code>adopted</code>, <code>deduped</code>, or <code>unchanged</code>.</p>
 <p>For Claude Code, six events are installed together: <code>SessionStart</code>,
 <code>UserPromptSubmit</code>, <code>SessionEnd</code>, <code>PostToolUse</code>, <code>SubagentStop</code>, and
 <code>PermissionRequest</code>. All are command hooks that run <code>seam hook &lt;event&gt;</code> (exec
@@ -377,7 +402,7 @@ often be lost. The Codex profile is five shell-string command hooks, including
 safe constraint injection and parent-only lifecycle handling for subagents; the
 <a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
 <h2 id="seamlessd_uninstall">seamlessd uninstall</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
 </span></span></code></pre><p>Reverses a full install on any supported OS: stops and removes the per-user
 service, strips the Seamless hook entries, deregisters the MCP server, removes
 the installed skills, and deletes the binaries. Config and the data dir
@@ -385,6 +410,10 @@ the installed skills, and deletes the binaries. Config and the data dir
 kept unless <code>--purge</code> is passed. Every external step is best-effort: an
 already-gone file or a missing client CLI is a note, never a failure, so
 uninstall is idempotent and safe to re-run.</p>
+<p>Hook removal uses the installer's same classifier: current, marked-stale, and
+recognizable legacy Seamless definitions are removed; foreign definitions are
+preserved. Skill removal is scoped to <code>seam-onboard</code>, <code>seam-research</code>, and the
+one-shot delivery marker in each selected client's skill root.</p>
 <div class="table-wrap">
 <table>
 <thead>

@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -354,6 +356,22 @@ expect. A mismatch means the running daemon is a different build.</li>
 <p>This is the client-side view. <code>seamlessd doctor</code> checks config, database, and
 credentials on the server side; they are different commands answering different
 questions.</p>
+<h2 id="mcp-bridge-and-auth-helper">MCP bridge and auth helper</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy <span class="o">[</span>--config PATH<span class="o">]</span>
+</span></span><span class="line"><span class="cl">seam mcp-headers <span class="o">[</span>--config PATH<span class="o">]</span>
+</span></span></code></pre><p>These are client-launched helpers, not interactive commands.</p>
+<ul>
+<li><code>mcp-proxy</code> speaks MCP over stdio to its parent and forwards frames to
+Seamless's Streamable HTTP <code>/api/mcp</code>, preserving <code>Mcp-Session-Id</code>. The Codex
+installer registers it as Seamless's default policy so the bearer key remains
+in the 0600 Seamless config. Current Codex also supports direct Streamable
+HTTP; the bridge is a key-handling choice, not a Codex transport requirement.</li>
+<li><code>mcp-headers</code> prints the current Authorization header as a JSON object for
+Claude Code's <code>headersHelper</code>. That keeps the key out of <code>claude mcp add</code>
+argv and stored client configuration.</li>
+</ul>
+<p><code>--config</code> selects the exact <code>seamless.yaml</code> both helpers read. Installers bake
+an absolute path into the client registration so it works from every repository.</p>
 <h2 id="hooks">Hooks</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seam hook session-start<span class="p">|</span>user-prompt-submit<span class="p">|</span>session-end<span class="p">|</span>stop
 </span></span><span class="line"><span class="cl">seam hook subagent-start<span class="p">|</span>subagent-stop<span class="p">|</span>post-tool-use<span class="p">|</span>permission-request
@@ -366,8 +384,9 @@ daemon selects its payload adapter.</p>
 <p>Two behaviours matter if you are debugging a hook:</p>
 <ul>
 <li><strong>Failures do not block the session.</strong> A missing config, an unreachable
-daemon, or an unreadable stdin is reported on stderr and exits 0. Only an
-unknown event name - an install bug, not a runtime hiccup - is a hard error.</li>
+daemon, or an unreadable stdin is reported on stderr and exits 0. An unknown
+event name or present-but-invalid <code>--client</code> value is an install/configuration
+bug and exits 1; it never silently becomes Claude Code.</li>
 <li><strong><code>post-tool-use</code> pre-filters locally.</strong> It fires machine-wide on every
 <code>Write</code>/<code>Edit</code>, so the CLI drops everything that is not an <code>ExitPlanMode</code>
 approval or a write to a file directly under <code>~/.claude/plans</code> before loading
@@ -390,7 +409,7 @@ config or touching the network. The daemon re-validates the path anyway.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
+      <li class="lvl-2"><a href="#flags-and-positionals">Flags and positionals</a></li><li class="lvl-2"><a href="#agent-loop">Agent loop</a></li><li class="lvl-3"><a href="#seam_prime">seam prime</a></li><li class="lvl-3"><a href="#seam_remember">seam remember</a></li><li class="lvl-3"><a href="#seam_recall">seam recall</a></li><li class="lvl-3"><a href="#seam_capture">seam capture</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-3"><a href="#seam_ready">seam ready</a></li><li class="lvl-3"><a href="#seam_task_list">seam task list</a></li><li class="lvl-3"><a href="#seam_task_add">seam task add</a></li><li class="lvl-3"><a href="#seam_task_transition">seam task done|start|drop|reopen</a></li><li class="lvl-3"><a href="#seam_task_claim">seam task claim</a></li><li class="lvl-3"><a href="#seam_task_heartbeat">seam task heartbeat</a></li><li class="lvl-3"><a href="#seam_task_release">seam task release</a></li><li class="lvl-2"><a href="#captured-plans">Captured plans</a></li><li class="lvl-3"><a href="#seam_plan_list">seam plan list</a></li><li class="lvl-3"><a href="#seam_plan_show">seam plan show</a></li><li class="lvl-3"><a href="#seam_plan_check">seam plan check</a></li><li class="lvl-3"><a href="#seam_plan_approve">seam plan approve</a></li><li class="lvl-2"><a href="#observability">Observability</a></li><li class="lvl-3"><a href="#seam_status">seam status</a></li><li class="lvl-3"><a href="#seam_sessions">seam sessions</a></li><li class="lvl-3"><a href="#seam_usage">seam usage</a></li><li class="lvl-3"><a href="#seam_doctor">seam doctor</a></li><li class="lvl-2"><a href="#mcp-bridge-and-auth-helper">MCP bridge and auth helper</a></li><li class="lvl-2"><a href="#hooks">Hooks</a></li>
     </ul>
   </aside>
   

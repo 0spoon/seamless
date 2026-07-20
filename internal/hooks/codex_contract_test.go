@@ -16,16 +16,18 @@ import (
 
 const codexFixtureSourceRevision = "5d1fbf26c43abc65a203928b2e31561cb039e06d"
 
-var codexContractEvents = []struct {
+type codexContractEvent struct {
 	file  string
 	event string
-}{
-	{file: "session-start", event: "SessionStart"},
-	{file: "user-prompt-submit", event: "UserPromptSubmit"},
-	{file: "stop", event: "Stop"},
-	{file: "subagent-start", event: "SubagentStart"},
-	{file: "subagent-stop", event: "SubagentStop"},
 }
+
+var codexContractEvents = func() []codexContractEvent {
+	out := make([]codexContractEvent, len(codexHooks))
+	for i, spec := range codexHooks {
+		out[i] = codexContractEvent{file: spec.CLIArg, event: spec.Event}
+	}
+	return out
+}()
 
 func codexContractRoot(parts ...string) string {
 	return filepath.Join(append([]string{"testdata", "codex", currentCodexFixtureVersion}, parts...)...)
@@ -260,4 +262,59 @@ func TestCodexContractCaptureHarness_IsolatedAndCoversAliases(t *testing.T) {
 	require.Contains(t, text, "command_windows")
 	require.Contains(t, text, "--dangerously-bypass-hook-trust")
 	require.Contains(t, text, "clean-auth")
+}
+
+func TestCodexDocumentation_HookTablesMatchCanonicalProfile(t *testing.T) {
+	want, err := InstalledEvents(ClientCodex)
+	require.NoError(t, err)
+
+	for _, doc := range []struct {
+		path  string
+		start string
+		end   string
+	}{
+		{
+			path:  filepath.Join("..", "..", "docs-src", "codex-cli.md"),
+			start: "## The five hooks, and what they inject",
+			end:   "### The model-visible output ceiling",
+		},
+		{
+			path:  filepath.Join("..", "..", "docs-src", "reference", "hooks.md"),
+			start: "## Codex CLI: five hooks",
+			end:   "## The fail-open contract",
+		},
+	} {
+		require.Equal(t, want, documentedHookEvents(t, doc.path, doc.start, doc.end), doc.path)
+	}
+
+	compatibility, err := os.ReadFile(filepath.Join("..", "..", "docs-src", "reference", "codex-compatibility.md"))
+	require.NoError(t, err)
+	require.Contains(t, string(compatibility), strings.Join(want, ", "),
+		"the current compatibility row must name the canonical Codex profile in order")
+}
+
+func documentedHookEvents(t *testing.T, path, startHeading, endHeading string) []string {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	text := string(raw)
+	start := strings.Index(text, startHeading)
+	require.NotEqual(t, -1, start, path)
+	text = text[start+len(startHeading):]
+	end := strings.Index(text, endHeading)
+	require.NotEqual(t, -1, end, path)
+	text = text[:end]
+
+	var events []string
+	for line := range strings.SplitSeq(text, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "| `") {
+			continue
+		}
+		name := strings.TrimPrefix(line, "| `")
+		if i := strings.Index(name, "` |"); i >= 0 {
+			events = append(events, name[:i])
+		}
+	}
+	return events
 }

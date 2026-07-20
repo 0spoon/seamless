@@ -22,15 +22,18 @@ detect` - the clients actually present, Codex included. The Codex profile:
 
 1. **Merges five hooks** - SessionStart, UserPromptSubmit, Stop, SubagentStart,
    and SubagentStop - into `~/.codex/hooks.json` (or `$CODEX_HOME/hooks.json`
-   when that is set), with the
-   same guarantees as the Claude Code installer: unknown entries are preserved,
-   each managed group carries a `seamless_managed` marker, and the file is backed
-   up once before the first change.
+   when that is set). It replaces exact or stale Seamless definitions, adopts
+   only recognizable legacy Seamless commands, preserves foreign hooks, and
+   backs the file up once before the first change.
 2. **Registers the MCP server** by shelling out to Codex itself:
    `codex mcp add seamless -- <abs seam> mcp-proxy --config <abs seamless.yaml>`.
-   That records a stdio server in `~/.codex/config.toml`; the
-   [mcp-proxy bridge](#why-mcp-goes-through-a-bridge) is why it is stdio and not a
-   direct HTTP URL. An already-present entry is tolerated, not clobbered.
+   Current Codex supports both stdio and Streamable HTTP. Seamless deliberately
+   installs the [mcp-proxy bridge](#why-mcp-goes-through-a-bridge) as its default
+   secret-handling policy, not because Codex requires stdio. The installer reads
+   `codex mcp get seamless --json`, leaves an exact enabled bridge alone, repairs
+   a disabled or stale Seamless bridge, and verifies the written state before it
+   reports success. A direct-HTTP or otherwise foreign entry under the reserved
+   `seamless` name is never overwritten implicitly.
 3. **Installs two Codex skills** under
    `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
    the recurring `$seam-research` lab workflow. Claude's copies remain in
@@ -74,7 +77,7 @@ constraints and lifecycle safety without creating Codex plan notes.
 
 | Event | Injects | Effect |
 |---|---|---|
-| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes the ambient `cx/{prefix}-{digest}` session. |
+| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes an opaque `cx/...` ambient session keyed by the full external ID. |
 | `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
 | `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
 | `SubagentStart` | constraints-only `<seam-briefing>` | Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
@@ -86,39 +89,53 @@ headless `codex exec` - there is no headless recall-injection gap of the kind
 `claude -p` has. The briefing and recall blocks reach the model either way.
 
 All five are **command** hooks - `seam hook <event> --config <yaml> --client
-codex` - never http. Codex only runs command and `mcp_tool` hooks, so an http
-hook would be silently skipped; and every command hook is subject to Codex's
-trust gate, covered next. See [the hooks reference](/reference/hooks/) for the
-full per-client table and transports.
+codex`. Codex's hook schema currently executes command handlers; this is
+independent of MCP transport, where both stdio and Streamable HTTP are supported.
+Every command hook is subject to Codex's trust gate, covered next. See [the hooks
+reference](/reference/hooks/) for the full per-client table and transports.
+
+### The model-visible output ceiling
+
+Codex spills a model-visible hook-output entry above roughly 2,500 estimated
+tokens to a temporary file and gives the model a head-and-tail preview. That
+would make Seamless's injection telemetry describe more text than the model saw.
+Seamless therefore caps every Codex `additionalContext` response at **2,400
+estimated tokens** before both serialization and telemetry. This applies to
+SessionStart briefings, UserPromptSubmit recall, and SubagentStart constraints;
+generated closing tags and the ambient-session line are preserved. Claude Code
+output is not given this Codex-specific cap.
 
 ### Trust the hooks once
 
-Codex will not run a command hook until it is **trusted**. Untrusted hooks are
-silently skipped - no error, the briefing and recall simply never fire. Two ways
-to clear the gate:
+Codex will not run a non-managed command hook until its **current definition** is
+trusted. New or changed definitions are skipped until reviewed, so a reinstall
+that repairs a path or command can require approval again. Two supported paths:
 
-- **Interactive** (the normal path): start `codex` in a TUI and approve the
-  Seamless hooks at the startup trust review. Codex records the trust in
-  `config.toml` and later `codex exec` runs honor it.
+- **Interactive** (the normal path): start `codex`, open `/hooks`, inspect the
+  current Seamless commands, and approve them. Codex also warns at startup when
+  configured hooks need review.
 - **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
   name says, it is for automation that already vets its hook sources.
 
 If a Codex session opens with no briefing, an untrusted hook is the first thing
 to check - it is the Codex-specific version of "silence is the failure mode".
+Seamless does not read or write Codex's private trust hashes, and `doctor` never
+claims trust is healthy from a recent observation alone.
 
 ## Why MCP goes through a bridge
 
-Seamless serves MCP over streamable HTTP. Codex speaks MCP to a server it
-launches over **stdio**, not by POSTing to a URL you hand it. `seam mcp-proxy`
-bridges the two: Codex launches it as a stdio server, and it forwards each
+Seamless serves MCP over Streamable HTTP, and current Codex can connect to that
+URL directly **or** launch a local MCP server over stdio. Seamless chooses the
+second form by default: Codex launches `seam mcp-proxy`, which forwards each
 JSON-RPC frame to the daemon's `/api/mcp` endpoint with the bearer key from your
-config, preserving the `Mcp-Session-Id` across calls so session binding keeps
+config and preserves `Mcp-Session-Id` across calls so session binding keeps
 working.
 
 The bridge is transport-thin - no tool knowledge, no caching - and it is what the
 installer registers. It exists so the key stays in `~/.config/seamless/seamless.yaml`
 and never has to be copied into `~/.codex/config.toml` or exported into Codex's
-environment.
+environment. In other words, the proxy is Seamless's maintained default and
+secret-handling boundary, not a Codex capability workaround.
 
 One Codex-specific wrinkle for headless use: `codex exec` **cancels every MCP
 tool call client-side** unless you also pass `--dangerously-bypass-approvals-and-sandbox`.
@@ -130,8 +147,8 @@ safe path. Fully headless automation of the Seamless loop needs **both**
 
 ### Registering MCP by hand
 
-If you prefer a direct HTTP server over the stdio bridge - or `install-hooks`
-could not find the `codex` CLI - add it to `~/.codex/config.toml` yourself:
+If you prefer direct Streamable HTTP over the stdio bridge, add it to
+`~/.codex/config.toml` yourself:
 
 ```toml
 [mcp_servers.seamless]
@@ -147,6 +164,23 @@ bridge exists to avoid. `codex mcp add seamless --url http://127.0.0.1:8081/api/
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
 the default.
+
+The name `seamless` is the installer's desired-state boundary. If you keep a
+manual direct-HTTP entry under that name, run `seamlessd install-hooks --client
+codex --mcp=false` for hook and skill updates. With MCP reconciliation enabled,
+the installer reports the foreign transport and asks you to remove it explicitly
+rather than silently replacing a configuration that may contain credentials.
+
+## Session identity and provenance
+
+A current Codex ambient session has a display handle shaped like
+`cx/<first-8>-<16-hex-digest>`. The suffix is 64 stable SHA-256 bits derived from
+the **full** external session ID; the readable prefix alone is not unique for
+time-ordered UUIDv7 values. Seamless keys lifecycle updates by the full external
+ID plus client, not by this label. Treat the handle as opaque: do not parse it or
+construct one yourself. Historical `cx/<first-8>` rows keep their names when
+they resume. See [Sessions & briefings](/concepts/sessions/) and the
+[UUIDv7 layout](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7).
 
 ## No SessionEnd: the reaper closes sessions
 
@@ -175,10 +209,25 @@ reaper runs), rather than the instant the window closes.
 seamlessd doctor    # config, database, tool count, hooks - now Codex-aware
 ```
 
-`doctor` inspects `~/.codex/hooks.json` and reports the Codex MCP registration
-alongside the Claude Code checks. It never fails a machine that has no Codex
-install - a missing Codex is reported as a single OK line, and a present-but-
-unconfigured Codex is a warning, not an error.
+`doctor` reports four distinct Codex facts instead of rolling them into one
+plausible-looking success:
+
+- **hook definitions** - exact current, stale, and missing events, compared with
+  the definitions `install-hooks` would write today, including binary/config
+  targets;
+- **hook trust** - always `trust unverified` because Codex exposes no supported
+  query for the current trust decision; inspect `/hooks`;
+- **hook activity** - the last observed SessionStart/UserPromptSubmit event, if
+  any, as supporting evidence only, never proof that the current definitions are
+  trusted; and
+- **MCP** - exact enabled stdio transport, ordered bridge arguments, and existing
+  executable/config paths, based on `codex mcp get seamless --json`.
+
+Run `seamlessd install-hooks --client codex` to repair stale owned hooks and a
+disabled or drifted owned bridge. A foreign hook survives, and a foreign MCP
+entry requires explicit removal. `doctor` never fails a machine that has no
+Codex install: no CLI, home, or Seamless Codex configuration is one quiet
+`not detected` line; a detected but incomplete setup is a warning.
 
 Then start a Codex session in a mapped repo and look for the injected
 `<seam-briefing>` block, exactly as you would for Claude Code. If it is there, the
@@ -186,3 +235,15 @@ loop is closed: the hook resolved your cwd to a project, the daemon assembled a
 briefing, and Codex started already knowing what you know. If it is **not** there,
 the hooks fail open by design - start with `seamlessd doctor` and the trust gate,
 then the [Troubleshooting](/guides/troubleshooting/) guide.
+
+## Compatibility evidence
+
+The maintained [Codex compatibility matrix](/reference/codex-compatibility/)
+records the exact Codex version and platform used for live TUI/exec hooks, MCP
+JSON, output-spill, and Windows-command evidence. The checked-in fixture harness
+documents how to recapture the contracts for the next Codex release without
+touching the operator's `CODEX_HOME`.
+
+Primary upstream contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
+[Codex MCP](https://learn.chatgpt.com/docs/extend/mcp), and
+[UUIDv7](https://www.rfc-editor.org/rfc/rfc9562.html#section-5.7).

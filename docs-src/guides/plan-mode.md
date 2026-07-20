@@ -7,6 +7,12 @@ Claude Code's plan mode produces exactly the artifact that usually evaporates: a
 considered design, written down, immediately before the work starts and gone
 immediately after it. Seamless captures it without you doing anything.
 
+Codex also has a Plan mode, but this automatic artifact capture is
+Claude-Code-specific. Seamless has no verified Claude-style plan-file and
+`ExitPlanMode` surface to capture from Codex; Codex SubagentStart/Stop hooks
+provide bounded constraints and parent heartbeats, not plan notes. A Codex agent
+can still compose durable plans explicitly with a `plan:<slug>` note plus tasks.
+
 The result is a [plan composition](/concepts/tasks-and-plans/) - narrative,
 supporting context, and steps - built for you as you plan.
 

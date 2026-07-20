@@ -14,6 +14,32 @@ Authorization: Bearer <mcp.api_key>
 `GET /healthz` needs no auth and reports the running build - the fastest way to
 tell whether a daemon is up and which version it is.
 
+## Client transports and key handling
+
+The daemon endpoint is always Streamable HTTP. A client can reach it in either
+of two ways:
+
+- **Direct HTTP** - configure the URL and an `Authorization: Bearer` header.
+  Current Codex, Claude Code, and other HTTP-capable MCP clients support this
+  shape.
+- **A stdio bridge** - register `seam mcp-proxy --config <absolute yaml>` as a
+  local stdio MCP server. The bridge forwards the protocol unchanged and keeps
+  `Mcp-Session-Id` stable across HTTP calls.
+
+Seamless installs the bridge for Codex by policy even though Codex supports both
+stdio and Streamable HTTP. The bridge reads the bearer key from Seamless's 0600
+config, avoiding a literal secret in `~/.codex/config.toml` or an environment
+dependency. Claude Code's default direct-HTTP registration uses `seam
+mcp-headers` as `headersHelper` for the same reason: the bearer value stays out
+of client config and process argv.
+
+The MCP initialize response also carries concise server instructions. Their
+first 512 characters contain the essential cross-tool workflow: recall before
+guessing, memory versus note, explicit scope when ambiguous, session handoff,
+`plan:<slug>` composition, and treating `inputSchema` required fields/enums as
+authoritative. That guidance is available even before a user runs the optional
+onboarding skill.
+
 ## Scope resolution
 
 Almost no call passes `project`. Scope is resolved once, in this order, and

@@ -74,8 +74,9 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 ## The skill
 
 The installer drops the portable `seam-research` package into the selected
-client's skill home. From a clone, use `make install-research-skill` for Claude
-Code or `make install-research-skill CLIENT=codex` for Codex. It wraps this loop
+client's skill home. From a clone, use `make install-research-skill
+CLIENT=claude` for Claude Code or `make install-research-skill CLIENT=codex` for
+Codex (`CLIENT=detect` is the default). It wraps this loop
 - open the lab, query before trying, predict before running, record once with
 the outcome, distill decisions into memory - and can activate when an
 investigation becomes repeated experiments. Start or resume one explicitly with

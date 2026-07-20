@@ -4,12 +4,22 @@ These fixtures pin the external Codex contracts used by Seamless's hook adapter,
 installer, doctor, and MCP registration logic. Each capture is versioned; never
 replace an older directory when Codex changes.
 
-## Version matrix
+## Maintained compatibility matrix
 
-| Codex | Capture | Coverage | Status |
-|---|---|---|---|
-| 0.144.5 | `v0.144.5/` | Live `codex exec` SessionStart, UserPromptSubmit, Stop, a sanitized rollout, and the then-current schemas | Historical baseline |
-| 0.144.6 | `v0.144.6/` | Live exec + TUI payloads and outputs for SessionStart, UserPromptSubmit, Stop, SubagentStart, and SubagentStop; MCP JSON shapes; released schemas; oversized-output observation | Current contract |
+| Codex / platform | Events | Schemas | Exec / TUI | Trust | `mcp get --json` |
+|---|---|---|---|---|---|
+| 0.144.5 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop | Parent events retained; non-firing SessionEnd came from then-current source | Exec fixtures; visibility observed in both frontends, no TUI payload set retained | Live skip/bypass behavior observed; private state is not an integration API | Not captured |
+| 0.144.6 / Darwin arm64 | SessionStart, UserPromptSubmit, Stop, SubagentStart, SubagentStop | Exact release schemas SHA-pinned | Live inputs/outputs for every event in both | `/hooks` review contract; capture bypasses trust; no supported query assumed | Enabled/disabled stdio and Streamable HTTP captured |
+| 0.144.6 / Windows amd64/arm64 | No live capture | Same release schemas; Seamless syntax tests only | Not live-verified | Not live-verified | Not live-verified |
+
+| Codex / platform | `commandWindows` | Direct HTTP | Output limit | Live Windows |
+|---|---|---|---|---|
+| 0.144.5 / Darwin arm64 | Schema/source only | Upstream capability only; not captured | Not captured | No |
+| 0.144.6 / Darwin arm64 | Both aliases accepted by the live macOS binary; Windows selection source-only | Streamable HTTP config/JSON captured; no live tool call | Approx. 2,500-token spill observed; Seamless caps at 2,400 before telemetry/response | No |
+| 0.144.6 / Windows amd64/arm64 | Generated quoting tested, not executed | Source/config contract only | Platform-independent Seamless cap, not observed live | **Not yet run** |
+
+The public rendering of this evidence lives at
+`docs-src/reference/codex-compatibility.md`. Update both in the same change.
 
 The 0.144.6 release tag `rust-v0.144.6` resolves to source commit
 `5d1fbf26c43abc65a203928b2e31561cb039e06d`. The vendored schemas are exact
@@ -42,13 +52,23 @@ the harness does not create or interpret Codex's private `hooks.state` hashes.
 
 Before committing a recapture:
 
-1. Confirm `clean-auth` succeeded and no `auth.json`, token, real repository path,
-   or non-sentinel transcript text is in the candidate files.
-2. Rewrite the throwaway root to `/Users/dev/myrepo`, the isolated Codex home to
+1. Record the exact version, release tag/object, source revision,
+   platform/architecture, distribution, and binary/archive SHA-256 values.
+2. Create a new `v<version>/` directory; never overwrite an older capture.
+3. Confirm `clean-auth` succeeded and no `auth.json`, token, private hook-trust
+   state, real repository path, temporary output path, or non-sentinel transcript
+   text is in the candidate files.
+4. Rewrite the throwaway root to `/Users/dev/myrepo`, the isolated Codex home to
    `/Users/dev/.codex`, and UUIDv7 values to stable fixture IDs.
-3. Keep the model/version and wire field names verbatim. Format JSON with `jq`.
-4. Copy schemas from the exact release commit, update `capture.json`, and run the
-   fixture integrity and adapter tests.
+5. Keep the model/version and wire field names verbatim. Format JSON with `jq`.
+6. Copy schemas from the exact release commit, update `capture.json`, advance
+   `currentCodexFixtureVersion`, and compare exec/TUI field sets, subagent
+   transcript roles, both MCP transports/states, both Windows command aliases,
+   trust behavior, and the spill boundary.
+7. Update both compatibility matrices. A source inspection or cross-compiled
+   binary never upgrades the Windows row to “live”; that requires a real Windows
+   Codex run.
+8. Run `go test ./internal/hooks`, `make docs`, and the full `make check` gate.
 
 ## 0.144.6 findings
 
@@ -58,7 +78,8 @@ Before committing a recapture:
 - `SubagentStart.transcript_path` named the child rollout. `SubagentStop` named
   the parent rollout in `transcript_path` and the child in
   `agent_transcript_path`. Those paths and rollout layouts are diagnostic and
-  unstable; Stop's `last_assistant_message` remains the primary harvest source.
+  unstable; transcript JSONL is a fallback contract, never a supported Codex
+  API. Stop's `last_assistant_message` remains the primary harvest source.
 - Both `commandWindows` and its `command_windows` alias were accepted by the
   live macOS binary while their POSIX `command` ran. Selection of the Windows
   override is pinned by the released source and existing syntax tests, but this

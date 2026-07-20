@@ -16,8 +16,8 @@ nothing in Seamless requires you to be in the loop for agents to use it.
 
 - **Memory with a lifecycle.** Not an append-only log: memories are superseded,
   archived, and arbitrated, so what an agent recalls is what is currently true.
-- **Ambient sessions.** Claude Code hooks open a session per agent, inject a
-  budgeted briefing at startup, and harvest findings at the end. No tool calls
+- **Ambient sessions.** Claude Code and Codex hooks open a session per agent,
+  inject a budgeted briefing at startup, and harvest findings. No tool calls are
   required from the agent.
 - **A ready-queue.** Dependency-aware tasks with atomic lease-based claiming, so
   parallel agents divide work without stepping on each other.
@@ -43,8 +43,9 @@ proposes. Nothing rewrites your knowledge behind your back.
 |---|---|
 | Get it running in ten minutes | [Quickstart](/quickstart/) |
 | Wire it into Claude Code | [Claude Code setup](/claude-code/) |
+| Wire it into Codex | [Codex CLI setup](/codex-cli/) |
 | Understand the model before trusting it | [How Seamless works](/concepts/how-it-works/) |
-| Point a non-Claude-Code agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
+| Point another MCP agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
 | Make a fleet divide work without colliding | [Coordinate multiple agents](/guides/coordinate-agents/) |
 | Look up a tool, key, or command | [Reference](/reference/) |
 | Fix something that is silently not working | [Troubleshooting](/guides/troubleshooting/) |

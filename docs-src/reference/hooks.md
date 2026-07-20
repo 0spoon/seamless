@@ -21,7 +21,7 @@ install order:
 
 | Event | Matcher | Transport | Timeout | Endpoint | Effect |
 |---|---|---|---|---|---|
-| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes the ambient `cc/{prefix}-{digest}` session. |
+| `SessionStart` | `startup\|resume\|clear\|compact` | command (`seam hook session-start`) | 10s | `/api/hooks/session-start` | Registers the agent's cwd in the repo→project map, assembles the `<seam-briefing>`, and creates or resumes an opaque `cc/<prefix>-<digest>` ambient handle keyed by the full external ID. |
 | `UserPromptSubmit` | none | http | 5s | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. A miss is logged as a `hook.prompt` event. |
 | `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
 | `PostToolUse` | `Write\|Edit\|MultiEdit\|ExitPlanMode` | command (`seam hook post-tool-use`) | 10s | `/api/hooks/post-tool-use` | Heartbeats the ambient session. Captures plan-file iterations (`Write`/`Edit`/`MultiEdit` under the plans dir) and plan approvals (`ExitPlanMode`). |
@@ -46,17 +46,17 @@ the three parent-session hooks with a deliberately bounded subagent lifecycle.
 
 | Event | Transport | Endpoint | Effect |
 |---|---|---|---|
-| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes the ambient `cx/{prefix}-{digest}` session. |
+| `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID. |
 | `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
 | `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
 | `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects a constraints-only briefing under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
 | `SubagentStop` | command (`seam hook subagent-stop --client codex`) | `/api/hooks/subagent-stop` | Heartbeats the parent only. It does not apply the child's model/final message to parent state or create Claude-style plan notes. |
 
-All five are `command` hooks, and for one reason: Codex only runs
-`command`/`mcp_tool` hooks, and every command hook passes through Codex's **trust
-gate**. An untrusted hook is silently skipped, so a fresh install shows no
-briefing until the hooks are trusted - interactively at the Codex TUI startup
-review, or with `--dangerously-bypass-hook-trust` for headless runs.
+All five are `command` hooks. Codex's current hook schema executes command
+handlers, and every non-managed command hook passes through Codex's **trust
+gate**. An untrusted or changed definition is skipped, so a fresh install can
+show no briefing until the current commands are reviewed in `/hooks`. The
+`--dangerously-bypass-hook-trust` flag is the automation-only alternative.
 
 The `--client codex` discriminator rides as a `?client=codex` query param on the
 same `/api/hooks/*` endpoints the daemon already serves; the daemon normalizes
@@ -65,6 +65,13 @@ shared shape. Omitting the flag means Claude Code - the endpoint URLs are
 identical. Because Codex never sends a `SessionEnd`, its sessions close through the
 idle reaper rather than a clean cascade; [Codex CLI setup](/codex-cli/) covers
 that lifecycle and the tool-call approval gate.
+
+Codex limits each model-visible hook-output entry to roughly 2,500 tokens and
+spills larger values to a temporary file. Seamless caps every Codex
+`additionalContext` response at 2,400 estimated tokens before it records
+injection telemetry or serializes the response. That covers SessionStart,
+UserPromptSubmit, and SubagentStart, and keeps the emitted bytes equal to the
+recorded bytes.
 
 ## The fail-open contract
 
@@ -88,17 +95,19 @@ will see. Work simply proceeds without a briefing, and nothing announces it.
 So troubleshooting starts with the doctor checks, not with looking for an error:
 
 ```bash
-seamlessd doctor   # includes the hooks check: N/N installed in <settings path>
+seamlessd doctor   # desired definitions, Codex trust/activity, and MCP state
 seam doctor        # server reachable, key accepted, tools/list count
 ```
 
-`seamlessd doctor`'s hooks check looks in `~/.claude/settings.json` and then
-`./.claude/settings.json`, reporting the first location that has all of them, and
-warning when they are partial or absent. When Codex is installed it also inspects
-`~/.codex/hooks.json` and reports the Codex MCP registration - a machine with no
-Codex is a single OK line, never a failure. `seam doctor` covers the other half:
-it hits `/healthz` and calls `tools/list`, which is what tells you whether the
-endpoint the hooks post to is actually answering.
+For Claude Code, `seamlessd doctor` looks in `~/.claude/settings.json` and then
+`./.claude/settings.json` and compares installed entries with the definitions the
+installer would write now. For Codex it separately reports exact
+current/stale/missing definitions, trust (`unverified; inspect /hooks`), recent
+SessionStart/UserPromptSubmit activity (evidence only), and the machine-readable
+MCP state. It also checks the recorded binary and config targets exist. A machine
+with no Codex CLI, home, or Seamless Codex configuration is one quiet `not
+detected` line, never a failure. `seam doctor` covers the other half: it hits
+`/healthz` and calls `tools/list`, which proves the endpoint and key are working.
 
 ## Why Claude Code uses two transports
 
@@ -233,44 +242,40 @@ Install behavior:
 
 - **Unknown keys are preserved.** The file is decoded into a generic map, so
   everything Seamless does not own survives.
-- **Backed up once.** The first time Seamless changes the file it copies it to
-  `settings.json.seamless-bak-<timestamp>`. Later installs skip the backup, so
-  the true original is never overwritten with a modified copy.
+- **Backed up once.** The first time Seamless changes a hook file it copies it to
+  `<file>.seamless-bak-<timestamp>`. Later installs skip the backup, so the true
+  original is never overwritten with a modified copy.
 - **Idempotent.** An already-current file is left untouched - no rewrite, no
   backup. Per-hook actions are reported as `added`, `updated`, `adopted`,
   `deduped`, or `unchanged`.
 - **Written atomically**, sorted-key indented, preserving the file mode (0600 for
   a file Seamless creates, since it may hold a bearer key).
 
-### Why detection does not use the marker
+### Exact definitions, legacy adoption, and foreign hooks
 
-Entries are tagged `seamless_managed: true`, but **that key cannot be trusted for
-detection**. Claude Code re-serializes settings.json through its own schema
-whenever the owner edits config or permissions, which drops the unknown
-`seamless_managed` key while keeping the functional hook entries. Those hooks are
-still firing, so they must still count as installed.
+Entries are tagged `seamless_managed: true`, but the marker alone cannot prove a
+definition is healthy. It can name an old binary or config, and Claude Code may
+strip the unknown marker while preserving a still-valid hook. Install, doctor,
+and uninstall therefore share one four-way classifier:
 
-Both `Install` and `InstalledStatus` therefore treat an entry as Seamless-owned
-if any of these hold:
+| Class | Meaning | Install | Uninstall |
+|---|---|---|---|
+| current | Exactly the definition Seamless would write today | Leave byte-for-byte alone | Remove |
+| managed-stale | Carries Seamless's marker but differs from desired state | Replace | Remove |
+| recognizable legacy | Marker-free, but unmistakably a documented Seamless URL or `seam`/`seam.exe hook <event>` layout | Adopt and replace | Remove |
+| foreign | Anything else, even if arbitrary arguments happen to contain `hook <event>` | Preserve | Preserve |
 
-1. It carries the `seamless_managed` marker; or
-2. it is an http entry whose `url` matches the hook's URL under the base URL
-   (trailing slash ignored); or
-3. it is a command entry whose `command` runs ` hook <event>` as a token -
-   followed by a space or the end of the string, whatever binary path, env prefix,
-   or trailing flags it carries. (The token match, rather than a suffix match, is
-   what lets it recognize Codex's `... hook session-start --config ... --client
-   codex`, where the event is not the last word.)
+For Codex, “current” includes the event, command handler type, `seam` or
+`seam.exe` executable, hook argv, `--client codex`, expected absolute config
+path, timeout, and both OS command forms. A missing discriminator or an old
+binary is stale, not healthy. Recognizable legacy matching is deliberately
+narrow: arbitrary executables, extra shell operators, malformed quoting, and a
+v1 `seam_managed` entry at another URL remain foreign.
 
-Rules 2 and 3 are what make re-installs adopt an existing entry in place rather
-than appending a duplicate beside it. When several owned entries exist for one
-event, the first is replaced with the canonical form and the rest are dropped
-(`deduped`).
-
-The marker value is deliberately `seamless_managed`, distinct from Seam v1's
-`seam_managed`, so the two never match and clobber each other. A v1 entry
-pointing at a different URL is not matched by any of the three rules and is left
-untouched.
+This classifier is why re-install can repair owned drift without swallowing a
+neighboring user's hook, why duplicates collapse to one canonical entry, and why
+doctor compares current **desired state** rather than counting anything that
+looks vaguely Seamless-shaped.
 
 ## Related
 
@@ -280,4 +285,6 @@ untouched.
 - [MCP API overview](/reference/mcp/) - the tool surface the same daemon serves.
 - [Claude Code setup](/claude-code/) and [Codex CLI setup](/codex-cli/) - the
   per-client walkthroughs these hooks come from.
+- [Codex compatibility matrix](/reference/codex-compatibility/) - versioned
+  live/schema evidence and the recapture procedure.
 - [Quickstart](/quickstart/) - install order for a working setup.

@@ -45,7 +45,7 @@ updated: 2026-07-10T18:00:00Z
 valid_from: 2026-07-10T18:00:00Z
 invalid_at: null
 superseded_by: null
-source_session: cc/ab12cd34
+source_session: cc/019f7291-7ccbc0d8f16e51a4
 model: claude-fable-5
 tags: [x, y]
 ---
@@ -66,7 +66,7 @@ Field by field:
 | `valid_from` | system | RFC3339. Start of the validity window. |
 | `invalid_at` | **system only** | RFC3339 or `null`. `null` means active. Set on supersession or archive; a memory with it set leaves every active index. |
 | `superseded_by` | **system only** | ULID of the replacement, or `null`. |
-| `source_session` | system | Provenance - the session that wrote it, e.g. `cc/ab12cd34`. |
+| `source_session` | system | Provenance - an ambient session name such as `cc/019f7291-7ccbc0d8f16e51a4`, or the ULID of a bound explicit session. Consumers resolve both; treat names as opaque. |
 | `model` | system | The model that produced the content, verbatim as the provider names it (`claude-fable-5`, `gpt-5.5`). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown. |
 | `tags` | author | Flow-style list. Omitted when empty. Also the `plan:<slug>` composition key. |
 

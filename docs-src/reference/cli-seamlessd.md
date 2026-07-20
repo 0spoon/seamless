@@ -72,13 +72,19 @@ config or the database cannot be loaded at all.
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
-| `hooks` | How many hook events are installed, and where. Partial or absent is a warning. |
+| `hooks` | Claude Code definitions compared with today's desired profile. |
+| `codex hooks` | Codex current, stale, and missing definitions, including command targets. |
+| `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
+| `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
+| `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
 
-The hooks check looks at `~/.claude/settings.json` and then
-`./.claude/settings.json`, matching by hook URL or command rather than by the
-managed marker - Claude Code strips that marker when it rewrites the file, and a
-hook that still fires must still count as installed.
+The definition checks compare current desired state, not mere existence. The
+shared classifier recognizes exact current definitions, marked stale entries,
+and only unmistakable legacy Seamless shapes; arbitrary foreign hooks survive.
+Codex trust is a separate fact because Codex exposes no supported query for the
+current trust decision. A recent hook observation cannot make a changed command
+healthy.
 
 Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.
@@ -107,7 +113,7 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--client claude|codex|all] [--settings PATH] [--codex-hooks PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
+seamlessd install-hooks [--client claude|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
 Wires the selected agent client(s) to Seamless: merges the hook entries into
@@ -117,31 +123,36 @@ registers the MCP server with the client's CLI, and installs the embedded
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--client` | `claude` | Which client(s) to wire: `claude`, `codex`, or `all`. Run interactively with the flag omitted, it prompts (annotating which clients were detected); non-interactive runs take the default with no prompt. |
+| `--client` | `detect` | Which client(s) to wire: `claude`, `codex`, `all`, or `detect`. With the flag omitted on a terminal, it prompts and defaults to the detected set; non-interactive runs detect without prompting. If neither client exists, detection falls back to Claude Code. |
 | `--settings` | `~/.claude/settings.json` | Target Claude Code settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Target Codex hooks file, created if absent. |
 | `--url` | derived from the config addr | Base URL of the daemon. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
-| `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add --scope user` / `codex mcp add`). |
+| `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add-json --scope user` / `codex mcp add`). |
 | `--skills` | `true` | Install the embedded skills for each wired client. A failure here degrades to a warning - skills must not cost the daemon bootstrap. |
 
 It generates `mcp.api_key` on a true first run under the same rule as `serve`,
 and refuses to run when an existing config leaves the key empty, since the key
 is what the hooks authenticate with. The loaded config path is made absolute
-and baked into the command hooks as `SEAMLESS_CONFIG`, so they resolve config
-from any working directory. A `--seam` binary that cannot be found is a printed
-warning, not an error - the hooks would fail at fire time, so it says so now.
+and passed to command hooks as `--config`, so they resolve config from any
+working directory. A `--seam` binary that cannot be found is a printed warning,
+not an error - the hooks would fail at fire time, so it says so now.
 
-The MCP registration is best-effort: the hooks land regardless, and a missing
-`claude` CLI or a failed `claude mcp add` prints the exact command to run
-yourself. An already-registered `seamless` server is left alone.
+The hook file is written before MCP registration. Claude Code registration stays
+best-effort because its current CLI exposes no machine-readable state: a missing
+CLI or failed `mcp add-json` prints the exact command to run yourself. Codex is
+stricter. It decodes `codex mcp get seamless --json`, leaves an exact enabled
+stdio bridge unchanged, repairs an owned disabled/stale bridge with `mcp add`,
+and re-reads it before reporting success. A direct-HTTP or other incompatible
+entry under `seamless` is not overwritten; remove it explicitly or rerun with
+`--mcp=false` to keep that manual transport.
 
-The merge preserves unknown keys, replaces existing Seamless-managed entries in
-place, adopts unmarked entries that point at the same hook URL or run the same
-`seam hook <event>` command (this is what stops re-installs from duplicating
-hooks), and backs the file up once before the first change. It is idempotent:
-an already-current file is reported as up to date and left untouched. Each hook
-is reported as added, updated, or unchanged.
+The hook merge preserves unknown keys and foreign entries, replaces marked stale
+definitions, adopts only recognizable legacy Seamless URLs/commands, deduplicates
+owned entries, and backs the file up once before the first change. An arbitrary
+executable merely containing `hook <event>` is foreign. An already-current file
+is reported as up to date and left untouched. Each event reports `added`,
+`updated`, `adopted`, `deduped`, or `unchanged`.
 
 For Claude Code, six events are installed together: `SessionStart`,
 `UserPromptSubmit`, `SessionEnd`, `PostToolUse`, `SubagentStop`, and
@@ -156,7 +167,7 @@ safe constraint injection and parent-only lifecycle handling for subagents; the
 ## seamlessd uninstall {#seamlessd_uninstall}
 
 ```bash
-seamlessd uninstall [--client claude|codex|all] [--dry-run] [--yes] [--purge]
+seamlessd uninstall [--client claude|codex|all|detect] [--dry-run] [--yes] [--purge]
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user
@@ -166,6 +177,11 @@ the installed skills, and deletes the binaries. Config and the data dir
 kept unless `--purge` is passed. Every external step is best-effort: an
 already-gone file or a missing client CLI is a note, never a failure, so
 uninstall is idempotent and safe to re-run.
+
+Hook removal uses the installer's same classifier: current, marked-stale, and
+recognizable legacy Seamless definitions are removed; foreign definitions are
+preserved. Skill removal is scoped to `seam-onboard`, `seam-research`, and the
+one-shot delivery marker in each selected client's skill root.
 
 | Flag | Default | Meaning |
 |---|---|---|

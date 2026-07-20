@@ -129,6 +129,8 @@
         
         <li><a href="reference/hooks/">Hooks</a></li>
         
+        <li><a href="reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="reference/console/">Console</a></li>
         
         <li><a href="reference/storage/">Storage and file formats</a></li>
@@ -169,8 +171,8 @@ nothing in Seamless requires you to be in the loop for agents to use it.</p>
 <ul>
 <li><strong>Memory with a lifecycle.</strong> Not an append-only log: memories are superseded,
 archived, and arbitrated, so what an agent recalls is what is currently true.</li>
-<li><strong>Ambient sessions.</strong> Claude Code hooks open a session per agent, inject a
-budgeted briefing at startup, and harvest findings at the end. No tool calls
+<li><strong>Ambient sessions.</strong> Claude Code and Codex hooks open a session per agent,
+inject a budgeted briefing at startup, and harvest findings. No tool calls are
 required from the agent.</li>
 <li><strong>A ready-queue.</strong> Dependency-aware tasks with atomic lease-based claiming, so
 parallel agents divide work without stepping on each other.</li>
@@ -205,11 +207,15 @@ proposes. Nothing rewrites your knowledge behind your back.</p>
 <td><a href="claude-code/">Claude Code setup</a></td>
 </tr>
 <tr>
+<td>Wire it into Codex</td>
+<td><a href="codex-cli/">Codex CLI setup</a></td>
+</tr>
+<tr>
 <td>Understand the model before trusting it</td>
 <td><a href="concepts/how-it-works/">How Seamless works</a></td>
 </tr>
 <tr>
-<td>Point a non-Claude-Code agent at it</td>
+<td>Point another MCP agent at it</td>
 <td><a href="guides/integrate-your-agent/">Integrate your agent</a></td>
 </tr>
 <tr>

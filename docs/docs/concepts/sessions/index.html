@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -199,13 +201,19 @@ into the agent's context. The agent begins already knowing your constraints.</p>
 adds 64 stable SHA-256 bits. Seamless resolves lifecycle activity by the full
 external ID plus client, so two UUIDv7 sessions sharing a timestamp prefix never
 share scope, findings, or provenance. Pre-upgrade handles keep their old names
-when resumed.</p>
+when resumed. The handle is a display label, not an API: treat <code>cc/...</code> and
+<code>cx/...</code> as opaque and never parse or construct them.</p>
 <p>They are not two competing sessions. <code>session_start</code> <strong>adopts</strong> the sole ambient
 session for the same working directory rather than opening a second one - that
 adoption rule exists because the alternative was double-counting every agent.</p>
 <p>Call <code>session_start</code> when the work is non-trivial: it returns the full briefing
 (the injected one is deliberately shorter), and it binds the connection so
 everything afterward inherits the project scope.</p>
+<p>That distinction also appears in knowledge provenance. A write attributed by an
+ambient hook stores the session's <code>cc/...</code> or <code>cx/...</code> <strong>name</strong> in
+<code>source_session</code>; a write made through a bound MCP connection stores the
+session's ULID. Readers resolve both forms. Do not infer client, scope, or
+liveness from the spelling of <code>source_session</code>.</p>
 <h2 id="an-actual-briefing-annotated">An actual briefing, annotated</h2>
 <p>This is a real briefing, in the order the assembler packs it:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
@@ -264,15 +272,26 @@ counts only the findings that actually rendered.</p>
 stored in the database and win over both the file and the environment, applying
 from the next session start without a daemon restart. If a briefing setting seems
 to be ignored, check the console before you check the YAML.</p>
+<p>Codex adds one client-specific safety ceiling after this packing step: every
+model-visible Seamless hook context is capped at 2,400 estimated tokens, below
+Codex's approximate 2,500-token temporary-file spill threshold. The cap runs
+before telemetry is recorded and preserves generated closing tags and the
+ambient handle. Claude Code does not use this additional cap.</p>
 <h2 id="liveness">Liveness</h2>
 <p>Sessions heartbeat. A session that ends cleanly cascades immediately; one that is
 abandoned is caught by an idle reaper after <code>gardener.session_idle_minutes</code> and
 marked <code>expired</code>. The TTL only applies when there was no end signal at all - a
 crashed agent's session does not sit &quot;live&quot; forever, and a slow one is not
 reaped out from under itself.</p>
-<p><code>session_end</code> is where findings come from. Keep them tight - briefings show a
-short preview - but they are stored in full, not rejected, so a long finding is
-fine when it earns it.</p>
+<p><code>session_end</code> is the explicit findings path. Claude Code's SessionEnd hook calls
+the same lifecycle. Codex 0.144.6 has no SessionEnd event, so each <code>Stop</code> hook
+updates provisional findings from <code>last_assistant_message</code> and the reaper later
+marks the idle ambient session <code>expired</code>; those expired ambient findings still
+surface in future briefings. Keep findings tight - briefings show a short preview</p>
+<ul>
+<li>but they are stored in full, not rejected, so a long finding is fine when it
+earns it.</li>
+</ul>
 
 </article>
 

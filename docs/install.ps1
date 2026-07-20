@@ -9,9 +9,12 @@
 # scripts/: a script living at two paths is a script that drifts.
 #
 # What it does: fetch this platform's release zip from GitHub, verify its
-# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire the detected
-# agent client(s) (generating the bearer key on first run), then run the daemon as a
-# per-user Scheduled Task -- an at-logon task running as you, no admin. That is
+# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire hooks + MCP
+# + maintained skills for the detected Claude Code/Codex client(s) (generating
+# the bearer key on first run), then run the daemon as a per-user Scheduled Task
+# -- an at-logon task running as you, no admin. Codex gets the secret-preserving
+# stdio proxy by default; direct HTTP remains a supported manual Codex
+# configuration. That is
 # the Windows analog of launchd / systemd --user: the whole install is per-user,
 # which is why it never elevates. Re-running it upgrades in place; the config and
 # ~\.seamless are never touched. Uninstall anytime with `seamlessd.exe uninstall`
@@ -385,9 +388,9 @@ function Main {
     Write-Host ''
     switch ($agentClient) {
         'claude' { Say 'restart Claude Code, then run  /seam-onboard  once.' }
-        'codex' { Say 'restart Codex, approve the Seamless hooks, then run  $seam-onboard  once.' }
+        'codex' { Say 'restart Codex, review/approve Seamless in  /hooks, then run  $seam-onboard  once.' }
         'all' {
-            Say 'restart both clients and approve the Seamless hooks in Codex.'
+            Say 'restart both clients and review/approve Seamless in Codex  /hooks.'
             Say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
         }
     }

@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -213,8 +215,8 @@ of a solved problem are not what an agent needs injected before it starts work.
 See <a href="../../guides/write-good-memories/">Write memories that get recalled</a>.</p>
 <h2 id="the-skill">The skill</h2>
 <p>The installer drops the portable <code>seam-research</code> package into the selected
-client's skill home. From a clone, use <code>make install-research-skill</code> for Claude
-Code or <code>make install-research-skill CLIENT=codex</code> for Codex. It wraps this loop</p>
+client's skill home. From a clone, use <code>make install-research-skill CLIENT=claude</code> for Claude Code or <code>make install-research-skill CLIENT=codex</code> for
+Codex (<code>CLIENT=detect</code> is the default). It wraps this loop</p>
 <ul>
 <li>open the lab, query before trying, predict before running, record once with
 the outcome, distill decisions into memory - and can activate when an

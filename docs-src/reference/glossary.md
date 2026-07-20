@@ -10,8 +10,10 @@ things.
 
 ## A–Z
 
-**Ambient session** - a session opened automatically by the SessionStart hook,
-named `cc/<id>`, without the agent asking. Contrast *explicit session*.
+**Ambient session** - a session opened automatically by a Claude Code or Codex
+SessionStart hook, displayed with an opaque `cc/...` or `cx/...` handle, without
+the agent asking. Lifecycle identity uses the full external session ID plus
+client, not the display handle. Contrast *explicit session*.
 
 **Arbitration** - deciding which of several competing memories wins when they
 disagree. Part of the memory lifecycle, alongside supersession and provenance.

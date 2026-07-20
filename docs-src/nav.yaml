@@ -10,7 +10,7 @@
 sections:
   - title: Getting started
     slug: ""
-    description: Install Seamless, wire it to Claude Code, and watch the first briefing land.
+    description: Install Seamless, wire it to Claude Code or Codex, and watch the first briefing land.
     pages:
       - index.md
       - quickstart.md
@@ -55,6 +55,7 @@ sections:
       - cli-seamlessd.md
       - configuration.md
       - hooks.md
+      - codex-compatibility.md
       - console.md
       - storage.md
       - glossary.md

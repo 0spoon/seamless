@@ -5,7 +5,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Quickstart - Seamless docs</title>
-<meta name="description" content="Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.">
+<meta name="description" content="Install Seamless with one command, start Claude Code or Codex in a repo, and confirm the first briefing lands.">
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
@@ -129,6 +129,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../reference/console/">Console</a></li>
         
         <li><a href="../reference/storage/">Storage and file formats</a></li>
@@ -158,7 +160,7 @@
     <article class="prose">
   <p class="eyebrow">Getting started</p>
   <h1>Quickstart</h1>
-  <p class="lede">Install Seamless with one command, start Claude Code in a repo, and confirm the first briefing lands.</p>
+  <p class="lede">Install Seamless with one command, start Claude Code or Codex in a repo, and confirm the first briefing lands.</p>
   <p>This is the one happy path: install, start a session, and watch it open with a
 briefing. It is one command and a check - everything between them is automatic.
 Every fork in the road is a link, not a branch in these steps.</p>
@@ -170,11 +172,12 @@ Every fork in the road is a link, not a branch in these steps.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
 </span></span></span></code></pre><p>One command does the lot: it fetches the checksum-verified release archive for
 your platform (macOS, Linux, and Windows; amd64 and arm64), installs <code>seamlessd</code>
-and <code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires Claude Code, and
-starts the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in
-<code>~/.seamless</code> - launchd on macOS, systemd <code>--user</code> on Linux, an at-logon
-Scheduled Task on Windows. Re-run it to upgrade. <a href="../install/">Install &amp; deploy</a>
-has the overrides, the service details, and how to remove it.</p>
+and <code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires the detected
+Claude Code/Codex clients (hooks, MCP, and skills), and starts the daemon as a
+per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code> - launchd on
+macOS, systemd <code>--user</code> on Linux, an at-logon Scheduled Task on Windows. Re-run
+it to upgrade. <a href="../install/">Install &amp; deploy</a> has the overrides, service details,
+and removal procedure.</p>
 <p>Piping a stranger's script into a shell deserves a read first - it is
 <a href="https://thereisnospoon.org/install">one file</a>, and every other route to the
 same place is on that page: prebuilt archives from
@@ -191,16 +194,15 @@ when you want semantic recall.</p>
 database, applies migrations, and asserts the tool count. If it is green, the
 daemon will start.</p>
 <h2 id="wire-your-agents">Wire your agents</h2>
-<p>The installer already ran <code>install-hooks</code> for you, so there is no second step:
-start Claude Code in any git repo.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude
-</span></span></code></pre><p><code>install-hooks</code> does both halves of the Claude Code wiring: it installs the
-hooks (briefing on SessionStart, recall on UserPromptSubmit, harvest on
-SessionEnd) and registers the MCP server via <code>claude mcp add --scope user</code>. If
-the <code>claude</code> CLI is not on your PATH it prints the command to run yourself -
-see <a href="../claude-code/">Claude Code setup</a> for the by-hand version and why
-<code>--scope user</code> matters. Installed by hand? Run <code>seamlessd install-hooks</code>
-yourself first.</p>
+<p>The installer already ran <code>install-hooks</code> for you, so there is no second setup
+step. Start either detected client in any git repo:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude    <span class="c1"># Claude Code</span>
+</span></span><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex     <span class="c1"># Codex</span>
+</span></span></code></pre><p><code>install-hooks</code> selects the installed clients by default. For Claude Code it
+installs six hooks and registers Streamable HTTP through <code>claude mcp add-json --scope user</code>. For Codex it installs five hooks and registers the maintained
+<code>seam mcp-proxy</code> stdio policy; Codex itself also supports direct Streamable HTTP.
+Both profiles receive <code>seam-onboard</code> and <code>seam-research</code>. Installed by hand? Run
+<code>seamlessd install-hooks</code> yourself first, or select explicitly with <code>--client claude|codex|all</code>.</p>
 <p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
 calling a tool. They also register the repo. On the first session inside a git
 repo, the SessionStart hook resolves your cwd to its git root, derives a project
@@ -209,13 +211,11 @@ project scope without passing <code>project</code> on every call, and without yo
 a project first. <code>seamlessd map-repo --path ~/code/myrepo --project myrepo</code> is
 the override when you want a slug that is not the directory name; see
 <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain.</p>
-<p>Restart Claude Code once after installing so it loads the hooks and the MCP
-server.</p>
-<p>Using <strong>Codex CLI</strong> instead of (or alongside) Claude Code? The curl installer
-wires Claude Code only; add Codex with one command -
-<code>seamlessd install-hooks --client codex</code> - then trust the hooks at the Codex
-startup review. <a href="../codex-cli/">Codex CLI setup</a> has the details, including the
-mcp-proxy bridge and why Codex sessions close through the idle reaper.</p>
+<p>Restart the selected client once after installing so it reloads hooks, MCP, and
+skills. In Codex, open <code>/hooks</code>, review the exact Seamless commands, and approve
+them; <code>seamlessd doctor</code> deliberately reports that trust as unverified until you
+inspect it yourself. See <a href="../claude-code/">Claude Code setup</a> or <a href="../codex-cli/">Codex CLI
+setup</a> for the client-specific behavior.</p>
 <h2 id="confirm-it-works">Confirm it works</h2>
 <p>That session's context now opens with an injected briefing:</p>
 <pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
@@ -236,7 +236,7 @@ reboots instead of a foreground process.</li>
 <code>/seam-onboard</code> in Claude Code or <code>$seam-onboard</code> in Codex once to write a
 Seamless-awareness block into global or project instructions (<code>CLAUDE.md</code> or
 <code>AGENTS.md</code>). From a clone, <code>make install-onboard-skill CLIENT=codex</code>
-installs the Codex copy; <code>CLIENT=claude</code> is the default.</li>
+installs the Codex copy; the default is <code>CLIENT=detect</code>.</li>
 <li>Look up any tool, key, or command in the <a href="../reference/">Reference</a>.</li>
 </ul>
 

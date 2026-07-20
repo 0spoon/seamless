@@ -129,6 +129,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
+        
         <li><a href="../../reference/console/">Console</a></li>
         
         <li><a href="../../reference/storage/">Storage and file formats</a></li>
@@ -210,10 +212,15 @@ one way to learn that recall has quietly gone keyword-only.</p>
 daemon up, key valid - is broken, and every link in it fails silently by design.</p>
 <p><strong>Fix.</strong> Walk the chain in order:</p>
 <ol>
-<li><code>seamlessd doctor</code> → the <code>hooks</code> line. It reports <code>N/N installed in &lt;path&gt;</code>,
-looking at <code>~/.claude/settings.json</code> and then <code>./.claude/settings.json</code>. Not
-installed, or partial, is a warning - which does <strong>not</strong> fail the run, so read
-it rather than trusting the exit code. Fix with <code>seamlessd install-hooks</code>.</li>
+<li><code>seamlessd doctor</code> → read the client-specific definition line. Claude Code
+checks <code>~/.claude/settings.json</code> and then <code>./.claude/settings.json</code>; Codex
+names exact <code>current</code>, <code>stale</code>, and <code>missing</code> events in its hooks file. A
+warning does <strong>not</strong> fail the run, so read it rather than trusting the exit
+code. Repair owned drift with <code>seamlessd install-hooks</code>.</li>
+<li><strong>Codex only:</strong> read <code>codex hook trust</code>. <code>trust unverified</code> is honest, not a
+failed probe - open <code>/hooks</code>, inspect the current commands, and approve them.
+A recent activity timestamp is supporting evidence only; it cannot prove a
+newly changed definition is trusted.</li>
 <li><code>seam doctor</code> → is the daemon actually up and is the key accepted? An empty
 <code>mcp.api_key</code> makes the daemon reject every MCP and hook request while looking
 perfectly healthy on <code>/healthz</code>.</li>
@@ -223,12 +230,32 @@ working tree. If you moved the install prefix or wired the hooks up by hand
 against some other path, re-run <code>make install</code>.</li>
 <li>Check the hook's <strong>type</strong> if you hand-edited settings.json. Claude Code
 silently ignores an <code>http</code> hook for <code>SessionStart</code> - it must be a <code>command</code>
-hook. This is why <code>install-hooks</code> writes it that way.</li>
+hook. Codex's Seamless profile uses command handlers for all five events.</li>
 </ol>
-<p>Detection matches by hook URL or command, <strong>not</strong> by the <code>seamless_managed</code>
-marker, because Claude Code strips unknown keys when it rewrites settings.json.
-So a hook that lost its marker still counts as installed, and a re-install adopts
-it in place rather than appending a duplicate.</p>
+<p>Definition classification is stricter than “contains <code>hook &lt;event&gt;</code>.” A current
+entry must match the desired event, paths, arguments, client discriminator,
+timeout, and OS command shape. The installer can adopt a marker-free entry only
+when it is unmistakably a documented Seamless URL or <code>seam</code>/<code>seam.exe</code> command;
+foreign entries survive install and uninstall.</p>
+<h2 id="codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says <code>trust unverified</code></h2>
+<p><strong>What is happening.</strong> Definition validity and trust are different facts. Codex
+does not expose a supported command that tells Seamless whether the current hook
+hash is trusted, and Seamless deliberately does not parse or pre-seed private
+trust state.</p>
+<p><strong>Fix.</strong> Open <code>/hooks</code> inside Codex. Review and approve the current Seamless
+definitions. This warning remains honest even after approval; use a real session
+briefing as the end-to-end check. <code>codex hook activity</code> can tell you when
+SessionStart/UserPromptSubmit last reached the daemon, but it is not proof for a
+definition that may have changed since then.</p>
+<h2 id="codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</h2>
+<p><strong>What is happening.</strong> <code>seamlessd doctor</code> compares <code>codex mcp get seamless --json</code> with the exact enabled stdio bridge the installer wants, including the
+absolute <code>seam</code> path, ordered <code>mcp-proxy --config ...</code> arguments, and target-file
+existence. Mere registration is not enough.</p>
+<p><strong>Fix.</strong> Run <code>seamlessd install-hooks --client codex</code>. A disabled or drifted
+owned stdio bridge is replaced in place and verified. A direct-HTTP or arbitrary
+foreign entry under the reserved <code>seamless</code> name is not overwritten: either keep
+it and use <code>--mcp=false</code> for future hook/skill refreshes, or explicitly run
+<code>codex mcp remove seamless</code> before reinstalling the maintained proxy.</p>
 <h2 id="a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</h2>
 <p><strong>What is happening.</strong> The hook fired and the daemon answered - this is not a
 plumbing problem. The cwd resolved to a project you did not expect, or to none.</p>
@@ -383,6 +410,10 @@ own pid, or by its port.</li>
 <li><strong>Tools missing in some repos?</strong> That is not a daemon problem. <code>claude mcp add</code>
 defaults to <code>local</code> scope, tying the registration to the directory you ran it
 from. Register with <code>--scope user</code>.</li>
+<li><strong>Codex tools missing?</strong> Run <code>codex mcp get seamless --json</code>, then
+<code>seamlessd doctor</code>. The maintained registration is an enabled user-level stdio
+bridge; a disabled entry, stale binary/config path, or project override is a
+client-configuration problem even while <code>/healthz</code> is green.</li>
 </ul>
 <h2 id="memory-write-says-the-name-is-held-by-a-superseded-memory"><code>memory_write</code> says the name is held by a superseded memory</h2>
 <p><strong>What is happening.</strong> A superseded or archived memory leaves every index but
@@ -417,7 +448,7 @@ name is a lossless in-place update, so retrying is safe.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
     </ul>
   </aside>
   
