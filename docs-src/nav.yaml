@@ -33,6 +33,10 @@ sections:
       - tasks-and-plans.md
       - projects.md
       - gardener.md
+      - memory-supersession.md
+      - lease-based-task-claiming.md
+      - reciprocal-rank-fusion.md
+      - coordination-substrate.md
 
   - title: Guides
     slug: guides

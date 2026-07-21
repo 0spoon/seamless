@@ -1,12 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://thereisnospoon.org/</loc></url>
+  <url><loc>https://thereisnospoon.org/compare/</loc></url>
+  <url><loc>https://thereisnospoon.org/scenarios/cold-start/</loc></url>
+  <url><loc>https://thereisnospoon.org/scenarios/constraint-violation/</loc></url>
+  <url><loc>https://thereisnospoon.org/scenarios/token-safety/</loc></url>
+  <url><loc>https://thereisnospoon.org/scenarios/task-collision/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/quickstart/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/install/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/claude-code/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/claude-app/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/codex-cli/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/changelog/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/how-it-works/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/memory/</loc></url>
@@ -15,6 +21,10 @@
   <url><loc>https://thereisnospoon.org/docs/concepts/tasks-and-plans/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/projects/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/gardener/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/concepts/memory-supersession/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/concepts/lease-based-task-claiming/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/concepts/reciprocal-rank-fusion/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/concepts/coordination-substrate/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/guides/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/guides/integrate-your-agent/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/guides/mcp-clients/</loc></url>

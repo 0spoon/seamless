@@ -74,6 +74,8 @@
         
         <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
+        <li><a href="../../changelog/">Changelog</a></li>
+        
       </ul>
     </div>
     
@@ -95,6 +97,14 @@
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
+        
+        <li><a href="../../concepts/memory-supersession/">Memory supersession</a></li>
+        
+        <li><a href="../../concepts/lease-based-task-claiming/">Lease-based task claiming</a></li>
+        
+        <li><a href="../../concepts/reciprocal-rank-fusion/">Reciprocal rank fusion for agent recall</a></li>
+        
+        <li><a href="../../concepts/coordination-substrate/">What is a coordination substrate?</a></li>
         
       </ul>
     </div>
@@ -209,7 +219,9 @@ you don't know its name.</li>
 </ul>
 <p>Their results are combined with <strong>reciprocal rank fusion</strong>: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets
-a veto, which matters because each is confidently wrong in a different way.</p>
+a veto, which matters because each is confidently wrong in a different way.
+(<a href="../../concepts/reciprocal-rank-fusion/">RRF for agent recall</a> defines the method
+and the constant.)</p>
 <p>The result set is then packed into <code>budgets.recall_budget_tokens</code>.</p>
 <h3 id="about-that-brute-force-scan">About that brute-force scan</h3>
 <p>Cosine similarity is computed by scanning every candidate vector. No ANN index,

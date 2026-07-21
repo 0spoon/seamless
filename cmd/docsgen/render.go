@@ -54,7 +54,7 @@ func renderPages(site *Site) error {
 			}
 			md = strings.TrimRight(md, "\n") + "\n\n" + extra
 		}
-		out, err := renderMarkdown(md, p.DocsRoot)
+		out, err := renderMarkdown(md, p.DocsRoot, p.Root)
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Src, err)
 		}
@@ -69,9 +69,14 @@ func renderPages(site *Site) error {
 // it just goes nowhere -- so nothing but a build error catches it before a
 // reader does.
 func checkLinks(site *Site) error {
-	pages := make(map[string]bool, len(site.Pages))
+	pages := make(map[string]bool, len(site.Pages)+len(site.Scenarios))
 	for _, p := range site.Pages {
 		pages["/"+p.URL] = true
+	}
+	// Scenario pages are linkable from docs prose as /scenarios/<slug>/ -- the
+	// site-root carve-out in rewriteDocLinks.
+	for _, s := range site.Scenarios {
+		pages["/"+s.URL()] = true
 	}
 	var broken []string
 	for _, p := range site.Pages {

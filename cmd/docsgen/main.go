@@ -54,16 +54,31 @@ func run(src, out, siteDir, serveAddr string) error {
 	if err != nil {
 		return err
 	}
+	scenes, err := loadScenes(scenesPath)
+	if err != nil {
+		return err
+	}
+	site.Scenarios, err = loadScenarios(src, scenes)
+	if err != nil {
+		return err
+	}
 	if err := renderPages(site); err != nil {
+		return err
+	}
+	if err := renderScenarios(site); err != nil {
 		return err
 	}
 	if err := writeSite(out, site); err != nil {
 		return err
 	}
+	if err := writeScenarios(siteDir, site); err != nil {
+		return err
+	}
 	if err := writeSiteRoot(siteDir, site); err != nil {
 		return err
 	}
-	fmt.Printf("docsgen: wrote %d pages to %s, crawler files to %s\n", len(site.Pages), out, siteDir)
+	fmt.Printf("docsgen: wrote %d pages to %s, %d scenario pages and the crawler files to %s\n",
+		len(site.Pages), out, len(site.Scenarios), siteDir)
 
 	if serveAddr != "" {
 		// The docs live at <root>/docs/, so serve the parent: the same relative

@@ -107,11 +107,12 @@ type rendered struct {
 // renderMarkdown converts an authored body to HTML, extracts its h2/h3 outline
 // for the table of contents, and reports the internal links it made.
 //
-// docsRoot is the page's relative prefix to the docs root; see rewriteDocLinks.
-func renderMarkdown(src, docsRoot string) (rendered, error) {
+// docsRoot is the page's relative prefix to the docs root and siteRoot its
+// prefix to the site root; see rewriteDocLinks.
+func renderMarkdown(src, docsRoot, siteRoot string) (rendered, error) {
 	source := []byte(src)
 	doc := docsMD.Parser().Parse(text.NewReader(source))
-	links, err := rewriteDocLinks(doc, docsRoot)
+	links, err := rewriteDocLinks(doc, docsRoot, siteRoot)
 	if err != nil {
 		return rendered{}, err
 	}
@@ -142,7 +143,13 @@ func renderMarkdown(src, docsRoot string) (rendered, error) {
 // fragments, and already-relative links pass through untouched.
 // It also reports every same-site path it rewrote, so checkLinks can prove each
 // one resolves to a page that exists.
-func rewriteDocLinks(doc ast.Node, docsRoot string) ([]string, error) {
+//
+// One carve-out: paths under /scenarios/ are the generated scenario pages at
+// the SITE root, not docs pages, so they rewrite against siteRoot instead. (A
+// docs page can never claim that URL space; the scenario generator owns it.)
+// Scenario framing markdown passes the same prefix for both roots, since all
+// of its links are site-root-absolute already.
+func rewriteDocLinks(doc ast.Node, docsRoot, siteRoot string) ([]string, error) {
 	var links []string
 	err := ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -162,7 +169,11 @@ func rewriteDocLinks(doc ast.Node, docsRoot string) ([]string, error) {
 			return ast.WalkContinue, nil
 		}
 		links = append(links, s)
-		*dest = []byte(docsRoot + strings.TrimPrefix(s, "/"))
+		root := docsRoot
+		if strings.HasPrefix(s, "/"+scenariosDirName+"/") {
+			root = siteRoot
+		}
+		*dest = []byte(root + strings.TrimPrefix(s, "/"))
 		return ast.WalkContinue, nil
 	})
 	return links, err

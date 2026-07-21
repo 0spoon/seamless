@@ -74,6 +74,8 @@
         
         <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
+        <li><a href="../../changelog/">Changelog</a></li>
+        
       </ul>
     </div>
     
@@ -95,6 +97,14 @@
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
+        
+        <li><a href="../../concepts/memory-supersession/">Memory supersession</a></li>
+        
+        <li><a href="../../concepts/lease-based-task-claiming/">Lease-based task claiming</a></li>
+        
+        <li><a href="../../concepts/reciprocal-rank-fusion/">Reciprocal rank fusion for agent recall</a></li>
+        
+        <li><a href="../../concepts/coordination-substrate/">What is a coordination substrate?</a></li>
         
       </ul>
     </div>
@@ -309,7 +319,9 @@ replaced it. That is provenance: the store can tell you not just what it believe
 but what it used to believe and what changed its mind.</p>
 <p>Contrast the two failure modes this avoids. <strong>Append-only</strong> means recall returns
 three contradictory answers and the agent picks one. <strong>Destructive overwrite</strong>
-means the reasoning is gone and the same argument happens again in six weeks.</p>
+means the reasoning is gone and the same argument happens again in six weeks.
+<a href="../../concepts/memory-supersession/">Memory supersession</a> defines the idea on its
+own and contrasts it with decay-style forgetting as well.</p>
 <h2 id="update-append-supersede-or-delete">Update, append, supersede, or delete</h2>
 <div class="table-wrap">
 <table>

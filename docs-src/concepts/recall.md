@@ -29,6 +29,8 @@ Two retrievers run over the store and their rankings are fused:
 Their results are combined with **reciprocal rank fusion**: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets
 a veto, which matters because each is confidently wrong in a different way.
+([RRF for agent recall](/concepts/reciprocal-rank-fusion/) defines the method
+and the constant.)
 
 The result set is then packed into `budgets.recall_budget_tokens`.
 

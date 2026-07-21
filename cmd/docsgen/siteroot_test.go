@@ -97,8 +97,7 @@ func TestLlmsTxtListsEveryPage(t *testing.T) {
 func TestLlmsFullTxtIsUntruncated(t *testing.T) {
 	repoRoot(t)
 
-	site, err := loadSite("docs-src")
-	require.NoError(t, err)
+	site := loadRepoSite(t)
 	require.NoError(t, renderPages(site))
 
 	full := string(llmsFullTxt(site))

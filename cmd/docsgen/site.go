@@ -43,6 +43,10 @@ type Site struct {
 	// walks, and the search index uses. Deterministic by construction.
 	Pages []*Page
 	Home  *Page
+	// Scenarios are the /scenarios/ pages, in their authored order. They are
+	// not docs pages -- they publish at the site root -- but the sitemap and
+	// llms.txt must name them, so the Site carries them. See scenarios.go.
+	Scenarios []*Scenario
 }
 
 // Section is one sidebar group.

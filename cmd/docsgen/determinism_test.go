@@ -19,28 +19,33 @@ func renderRepoSite(t *testing.T) map[string]string {
 	dir := t.TempDir()
 	out := filepath.Join(dir, "docs")
 
-	site, err := loadSite("docs-src")
-	require.NoError(t, err)
+	site := loadRepoSite(t)
 	require.NoError(t, renderPages(site))
+	require.NoError(t, renderScenarios(site))
 	require.NoError(t, writeSite(out, site))
+	require.NoError(t, writeScenarios(dir, site))
 	require.NoError(t, writeSiteRoot(dir, site))
 
 	files := make(map[string]string)
-	require.NoError(t, filepath.WalkDir(out, func(p string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		rel, err := filepath.Rel(out, p)
-		if err != nil {
-			return err
-		}
-		raw, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		files[filepath.ToSlash(rel)] = string(raw)
-		return nil
-	}))
+	collect := func(root, prefix string) {
+		require.NoError(t, filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return err
+			}
+			rel, err := filepath.Rel(root, p)
+			if err != nil {
+				return err
+			}
+			raw, err := os.ReadFile(p)
+			if err != nil {
+				return err
+			}
+			files[prefix+filepath.ToSlash(rel)] = string(raw)
+			return nil
+		}))
+	}
+	collect(out, "")
+	collect(filepath.Join(dir, "scenarios"), "scenarios/")
 	for _, name := range []string{"sitemap.xml", "robots.txt", "llms.txt", "llms-full.txt"} {
 		raw, err := os.ReadFile(filepath.Join(dir, name))
 		require.NoError(t, err)

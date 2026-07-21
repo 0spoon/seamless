@@ -274,6 +274,7 @@
                 <dd>The briefing hands it step 5 and the rate-limit-not-in-memory gotcha. Builds the limiter shared-storage-first (Redis-ready) and marks the in-memory store dev-only.</dd>
               </div>
             </dl>
+            <p><a href="scenarios/cold-start/">Read the full transcript &rarr;</a></p>
           </div>
         </div>
         <div class="term-scene" data-scene="hardening-trap">
@@ -293,6 +294,7 @@
                 <dd>The briefing's pinned constraint says the opposite. Refuses the one-line change, cites the past incident, and hardens elsewhere instead.</dd>
               </div>
             </dl>
+            <p><a href="scenarios/constraint-violation/">Read the full transcript &rarr;</a></p>
           </div>
         </div>
         <div class="term-scene" data-scene="token-safety">
@@ -312,6 +314,7 @@
                 <dd>Sees persist-refresh-tokens in the briefing, reads it at the moment of persisting, and stores only a SHA-256 hash. A stolen DB snapshot is useless.</dd>
               </div>
             </dl>
+            <p><a href="scenarios/token-safety/">Read the full transcript &rarr;</a></p>
           </div>
         </div>
         <div class="term-scene" data-scene="coordination">
@@ -331,12 +334,13 @@
                 <dd>Reaches for the same step — the queue says it is already held. Pivots to the metrics step without being told.</dd>
               </div>
             </dl>
+            <p><a href="scenarios/task-collision/">Read the full transcript &rarr;</a></p>
           </div>
         </div>
       </div>
       <noscript><p class="console-note"># with JavaScript off the transcripts don't animate; the summaries above are each scene's real outcome, and the full verbatim transcripts ship with the page as a plain script asset anyone can read.</p></noscript>
     </div>
-    <p class="console-note"># real sessions against a seeded demo instance &mdash; transcripts verbatim, only the typing is animated.</p>
+    <p class="console-note"># real sessions against a seeded demo instance &mdash; transcripts verbatim, only the typing is animated. prefer to read? every scene has a full-transcript page: <a href="scenarios/cold-start/">cold start</a> &middot; <a href="scenarios/constraint-violation/">the hardening trap</a> &middot; <a href="scenarios/token-safety/">token safety</a> &middot; <a href="scenarios/task-collision/">two agents</a>.</p>
   </div>
 </section>
 

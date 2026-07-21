@@ -20,6 +20,11 @@ var assetFS embed.FS
 // file and stamp the same token the landing page's `make site-stamp` does.
 const landingCSSPath = "docs/static/site.css"
 
+// landingJSPath is the landing page's script (theme toggle, copy buttons). The
+// docs pages do not load it, but the generated scenario pages do -- they share
+// the landing page's shell -- so it is hashed here for the same reason.
+const landingJSPath = "docs/static/site.js"
+
 // assetVersions holds the "?v=<hash>" cache-buster suffix for each mutable asset
 // the layout links. The docs pages sit behind the same CDN edge cache as the
 // landing page, which caches static/ for hours while passing HTML through, so a
@@ -28,6 +33,7 @@ const landingCSSPath = "docs/static/site.css"
 // changed asset a new URL the edge never cached.
 type assetVersions struct {
 	SiteCSS string // shared landing stylesheet (via Root)
+	SiteJS  string // shared landing script (scenario pages only)
 	DocsCSS string // docs-only stylesheet (via DocsRoot)
 	DocsJS  string // docs-only script (via DocsRoot)
 }
@@ -60,8 +66,13 @@ func loadAssetVersions() (assetVersions, error) {
 	if err != nil {
 		return assetVersions{}, fmt.Errorf("read %s (docsgen must run from the repo root): %w", landingCSSPath, err)
 	}
+	siteJS, err := os.ReadFile(landingJSPath)
+	if err != nil {
+		return assetVersions{}, fmt.Errorf("read %s (docsgen must run from the repo root): %w", landingJSPath, err)
+	}
 	return assetVersions{
 		SiteCSS: assetVersion(siteCSS),
+		SiteJS:  assetVersion(siteJS),
 		DocsCSS: assetVersion(docsCSS),
 		DocsJS:  assetVersion(docsJS),
 	}, nil

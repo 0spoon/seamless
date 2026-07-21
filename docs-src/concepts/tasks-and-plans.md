@@ -58,6 +58,10 @@ Four rules carry the whole model:
 4. **Closing frees it.** `tasks_release`, `tasks_update` to `done`/`dropped`, or
    `session_end` (which releases all of a session's claims).
 
+([Lease-based task claiming](/concepts/lease-based-task-claiming/) defines the
+primitive on its own; the
+[two-agents scenario](/scenarios/task-collision/) shows a live claim collision.)
+
 ### The two clocks
 
 When an agent dies holding a task, two different timers matter, and conflating

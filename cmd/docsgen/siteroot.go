@@ -31,12 +31,16 @@ var xmlEscaper = strings.NewReplacer(
 	"&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;", "'", "&apos;",
 )
 
-// sitemapLocs is every published URL: the site-root pages first, then the docs
-// pages in nav order (deterministic by construction).
+// sitemapLocs is every published URL: the site-root pages first, then the
+// generated scenario pages, then the docs pages in nav order (deterministic by
+// construction).
 func sitemapLocs(site *Site) []string {
-	locs := make([]string, 0, len(rootURLs)+len(site.Pages))
+	locs := make([]string, 0, len(rootURLs)+len(site.Scenarios)+len(site.Pages))
 	for _, u := range rootURLs {
 		locs = append(locs, siteBaseURL+u)
+	}
+	for _, s := range site.Scenarios {
+		locs = append(locs, s.Canonical())
 	}
 	for _, p := range site.Pages {
 		locs = append(locs, p.Canonical())
@@ -77,6 +81,12 @@ func llmsTxt(site *Site) []byte {
 		b.WriteString("\n## " + sec.Title + "\n\n")
 		for _, p := range sectionPages(sec) {
 			b.WriteString("- [" + p.Title + "](" + p.Canonical() + "): " + p.Description + "\n")
+		}
+	}
+	if len(site.Scenarios) > 0 {
+		b.WriteString("\n## Scenarios\n\n")
+		for _, s := range site.Scenarios {
+			b.WriteString("- [" + s.Title + "](" + s.Canonical() + "): " + s.Description + "\n")
 		}
 	}
 	return []byte(b.String())

@@ -103,6 +103,8 @@ but what it used to believe and what changed its mind.
 Contrast the two failure modes this avoids. **Append-only** means recall returns
 three contradictory answers and the agent picks one. **Destructive overwrite**
 means the reasoning is gone and the same argument happens again in six weeks.
+[Memory supersession](/concepts/memory-supersession/) defines the idea on its
+own and contrasts it with decay-style forgetting as well.
 
 ## Update, append, supersede, or delete
 

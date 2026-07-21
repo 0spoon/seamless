@@ -17,6 +17,7 @@ robots.txt              GENERATED (docsgen): crawl policy + the sitemap pointer
 llms.txt                GENERATED (docsgen): the nav as a linked outline for LLMs
 llms-full.txt           GENERATED (docsgen): every page's full source markdown
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
+scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
 static/favicon.svg      the 0spoon mark (an empty set)
@@ -48,6 +49,16 @@ make docs           # regenerate docs/docs/ from docs-src/
 make docs-serve     # regenerate and serve at 127.0.0.1:8899/docs/
 make docs-check     # fail if the committed output is stale (part of `make check`)
 ```
+
+docsgen also renders `docs/scenarios/` -- one crawlable, answer-first page per
+landing-page terminal scene, at `/scenarios/<slug>/`. The transcripts come from
+`docs/static/scenes.js` (the same single source of truth the scene player and
+the landing-page fallbacks use; no line is ever re-typed) and the framing prose
+is authored in `docs-src/_scenarios/<slug>.md`, split by a
+`<!-- transcript -->` marker into the opener and the closing sections. The two
+must stay in lockstep: a scene without a framing file, or a framing file naming
+a ghost scene, fails the build. The output is committed and diffed by
+`make docs-check` like the docs tree.
 
 docsgen also writes the crawler files at the site root: `sitemap.xml` (the
 landing page plus every docs page, no lastmod -- there is no deterministic date

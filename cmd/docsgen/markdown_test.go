@@ -24,7 +24,7 @@ more
 ## tasks_claim {#tasks_claim}
 
 text
-`, "")
+`, "", "")
 	require.NoError(t, err)
 
 	require.Equal(t, []Heading{
@@ -43,17 +43,17 @@ text
 // auto-id algorithm rewrites tasks_claim to "tasks-claim", so generated pages
 // pin ids explicitly. Published anchors are a promise; this is what keeps it.
 func TestRenderMarkdownExplicitHeadingID(t *testing.T) {
-	auto, err := renderMarkdown("## tasks_claim\n", "")
+	auto, err := renderMarkdown("## tasks_claim\n", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "tasks-claim", auto.Headings[0].ID, "auto ids mangle underscores (the reason we pin them)")
 
-	pinned, err := renderMarkdown("## tasks_claim {#tasks_claim}\n", "")
+	pinned, err := renderMarkdown("## tasks_claim {#tasks_claim}\n", "", "")
 	require.NoError(t, err)
 	require.Equal(t, "tasks_claim", pinned.Headings[0].ID)
 }
 
 func TestRenderMarkdownChromaClasses(t *testing.T) {
-	out, err := renderMarkdown("```go\nfunc main() { // hi\n}\n```\n", "")
+	out, err := renderMarkdown("```go\nfunc main() { // hi\n}\n```\n", "", "")
 	require.NoError(t, err)
 	html := string(out.HTML)
 	require.Contains(t, html, `<span class="kd">func</span>`, "keywords are highlighted at build time")
@@ -63,7 +63,7 @@ func TestRenderMarkdownChromaClasses(t *testing.T) {
 }
 
 func TestRenderMarkdownGFMTable(t *testing.T) {
-	out, err := renderMarkdown("| A | B |\n|---|---|\n| 1 | 2 |\n", "")
+	out, err := renderMarkdown("| A | B |\n|---|---|\n| 1 | 2 |\n", "", "")
 	require.NoError(t, err)
 	html := string(out.HTML)
 	require.Contains(t, html, "<table>")
@@ -77,7 +77,7 @@ func TestRenderMarkdownGFMTable(t *testing.T) {
 // flag in it. Lose the wrapper and that layout bug comes back silently, so assert
 // the tag order rather than mere presence.
 func TestRenderMarkdownTableIsWrapped(t *testing.T) {
-	out, err := renderMarkdown("| Flag | Meaning |\n|---|---|\n| `--url` | base URL |\n", "")
+	out, err := renderMarkdown("| Flag | Meaning |\n|---|---|\n| `--url` | base URL |\n", "", "")
 	require.NoError(t, err)
 	html := string(out.HTML)
 	require.Contains(t, html, `<div class="table-wrap">`)
@@ -91,7 +91,7 @@ func TestRenderMarkdownTableIsWrapped(t *testing.T) {
 // repo-authored, so raw HTML passes through. internal/markdown.Render, which
 // handles agent-authored content from the store, must keep doing the opposite.
 func TestRenderMarkdownAllowsRawHTML(t *testing.T) {
-	out, err := renderMarkdown(`<div class="sketch">hi</div>`, "")
+	out, err := renderMarkdown(`<div class="sketch">hi</div>`, "", "")
 	require.NoError(t, err)
 	require.Contains(t, string(out.HTML), `<div class="sketch">`)
 }
@@ -101,15 +101,18 @@ func TestRenderMarkdownAllowsRawHTML(t *testing.T) {
 func TestRewriteDocLinks(t *testing.T) {
 	const src = `[memory](/concepts/memory/) [anchor](/reference/mcp/tasks/#tasks_claim)
 [external](https://example.com/x) [scheme-rel](//example.com/x)
-[relative](quickstart/) [frag](#top) ![shot](/static/shot.png)`
+[relative](quickstart/) [frag](#top) ![shot](/static/shot.png)
+[scene](/scenarios/task-collision/)`
 
-	deep, err := renderMarkdown(src, "../../")
+	deep, err := renderMarkdown(src, "../../", "../../../")
 	require.NoError(t, err)
 	require.Contains(t, string(deep.HTML), `href="../../concepts/memory/"`)
 	require.Contains(t, string(deep.HTML), `href="../../reference/mcp/tasks/#tasks_claim"`)
 	require.Contains(t, string(deep.HTML), `src="../../static/shot.png"`)
+	require.Contains(t, string(deep.HTML), `href="../../../scenarios/task-collision/"`,
+		"/scenarios/ paths are site-root pages and rewrite against the site root")
 
-	home, err := renderMarkdown(src, "")
+	home, err := renderMarkdown(src, "", "")
 	require.NoError(t, err)
 	require.Contains(t, string(home.HTML), `href="concepts/memory/"`)
 
@@ -128,6 +131,7 @@ func TestRewriteDocLinks(t *testing.T) {
 		"/concepts/memory/",
 		"/reference/mcp/tasks/#tasks_claim",
 		"/static/shot.png",
+		"/scenarios/task-collision/",
 	}, deep.Links)
 }
 

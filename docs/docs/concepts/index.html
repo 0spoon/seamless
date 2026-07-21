@@ -74,6 +74,8 @@
         
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
+        <li><a href="../changelog/">Changelog</a></li>
+        
       </ul>
     </div>
     
@@ -95,6 +97,14 @@
         <li><a href="../concepts/projects/">Projects &amp; scope</a></li>
         
         <li><a href="../concepts/gardener/">The gardener</a></li>
+        
+        <li><a href="../concepts/memory-supersession/">Memory supersession</a></li>
+        
+        <li><a href="../concepts/lease-based-task-claiming/">Lease-based task claiming</a></li>
+        
+        <li><a href="../concepts/reciprocal-rank-fusion/">Reciprocal rank fusion for agent recall</a></li>
+        
+        <li><a href="../concepts/coordination-substrate/">What is a coordination substrate?</a></li>
         
       </ul>
     </div>
@@ -254,13 +264,33 @@ nothing in Seamless rewrites your knowledge behind your back.</p>
     <p>The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.</p>
   </a>
   
+  <a class="doc-card" href="../concepts/memory-supersession/">
+    <h2>Memory supersession</h2>
+    <p>How an agent memory store stays true instead of just growing - new knowledge explicitly replaces old, with provenance, unlike decay scores or append-only logs.</p>
+  </a>
+  
+  <a class="doc-card" href="../concepts/lease-based-task-claiming/">
+    <h2>Lease-based task claiming</h2>
+    <p>The coordination primitive that lets parallel AI agents share one task queue - an atomic claim with an expiry, so two agents never work the same task and a crashed agent never strands one.</p>
+  </a>
+  
+  <a class="doc-card" href="../concepts/reciprocal-rank-fusion/">
+    <h2>Reciprocal rank fusion for agent recall</h2>
+    <p>How RRF merges keyword and vector search into one ranked list by rank, not score - and how Seamless runs both legs in a single SQLite file with no vector database.</p>
+  </a>
+  
+  <a class="doc-card" href="../concepts/coordination-substrate/">
+    <h2>What is a coordination substrate?</h2>
+    <p>A definition - the durable, shared layer underneath a fleet of AI agents where memory, tasks, and plans live, so agents in different processes, sessions, and clients can act like one team.</p>
+  </a>
+  
 </div>
 
 
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../codex-cli/"><span class="dir">Previous</span><span class="t">Codex local setup (app, CLI, and IDE)</span></a>
+      <a class="prev" href="../changelog/"><span class="dir">Previous</span><span class="t">Changelog</span></a>
       <a class="next" href="../concepts/how-it-works/"><span class="dir">Next</span><span class="t">How Seamless works</span></a>
     </nav>
     

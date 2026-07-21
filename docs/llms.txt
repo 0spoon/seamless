@@ -10,6 +10,7 @@
 - [Claude Code setup](https://thereisnospoon.org/docs/claude-code/): Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.
 - [Claude app chat setup](https://thereisnospoon.org/docs/claude-app/): Register the seam mcp-proxy bridge in claude_desktop_config.json, restart the app, and run the session loop explicitly - a chat has no hooks and no cwd.
 - [Codex local setup (app, CLI, and IDE)](https://thereisnospoon.org/docs/codex-cli/): Wire the shared local Codex host into Seamless - one app/CLI/IDE profile for hooks, the mcp-proxy tool bridge, skills, and reaper-driven session lifecycle.
+- [Changelog](https://thereisnospoon.org/docs/changelog/): Every Seamless release, newest first - what shipped and when, regenerated from the git tags at each release.
 
 ## Concepts
 
@@ -21,6 +22,10 @@
 - [Tasks & plans](https://thereisnospoon.org/docs/concepts/tasks-and-plans/): The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.
 - [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/): How Seamless decides which project a call belongs to - the precedence chain, the fail-closed rule, and project families.
 - [The gardener](https://thereisnospoon.org/docs/concepts/gardener/): The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.
+- [Memory supersession](https://thereisnospoon.org/docs/concepts/memory-supersession/): How an agent memory store stays true instead of just growing - new knowledge explicitly replaces old, with provenance, unlike decay scores or append-only logs.
+- [Lease-based task claiming](https://thereisnospoon.org/docs/concepts/lease-based-task-claiming/): The coordination primitive that lets parallel AI agents share one task queue - an atomic claim with an expiry, so two agents never work the same task and a crashed agent never strands one.
+- [Reciprocal rank fusion for agent recall](https://thereisnospoon.org/docs/concepts/reciprocal-rank-fusion/): How RRF merges keyword and vector search into one ranked list by rank, not score - and how Seamless runs both legs in a single SQLite file with no vector database.
+- [What is a coordination substrate?](https://thereisnospoon.org/docs/concepts/coordination-substrate/): A definition - the durable, shared layer underneath a fleet of AI agents where memory, tasks, and plans live, so agents in different processes, sessions, and clients can act like one team.
 
 ## Guides
 
@@ -58,3 +63,10 @@
 - [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
 - [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
 - [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.
+
+## Scenarios
+
+- [Your agent starts every session from zero. Here's what it costs](https://thereisnospoon.org/scenarios/cold-start/): Two real Claude Code sessions, same repo, same prompt - one continues yesterday's plan from a briefing, one re-derives the work from a TODO and re-ships a known bug.
+- [“Tighten the auth cookies”: when your agent breaks a rule you already wrote down](https://thereisnospoon.org/scenarios/constraint-violation/): A security scanner demands SameSite=Strict. The team already learned Strict breaks external-link logins. Two real sessions - one ships the regression anyway, one refuses and cites the constraint.
+- [“Persist the refresh tokens”: why one agent stored them raw and one hashed them](https://thereisnospoon.org/scenarios/token-safety/): Two real sessions given the same persistence task. One mirrors an in-memory map into a raw-token SQL column; one reads a recorded rule first and stores only SHA-256 hashes.
+- [Two agents, one plan step, no collision: what a lease actually buys you](https://thereisnospoon.org/scenarios/task-collision/): Two live Claude Code agents race for the same plan step. One claim wins, one bounces with the holder's name, and the second agent pivots to the next ready step - no duplicate work, no referee.

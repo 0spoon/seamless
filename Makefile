@@ -215,8 +215,9 @@ docs-check:
 	    trap 'rm -rf "$$tmp"' EXIT; \
 	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" -site "$$tmp" >/dev/null || exit 1; \
 	    ( diff -r "$$tmp/docs" $(DOCS_OUT) && \
+	      diff -r "$$tmp/scenarios" $(SITE_ROOT)/scenarios && \
 	      for f in $(SITE_FILES); do diff "$$tmp/$$f" $(SITE_ROOT)/$$f || exit 1; done ) > "$$tmp/diff" 2>&1 \
-	        || { echo "docs drift: $(DOCS_OUT) or the site-root crawler files do not match $(DOCS_SRC) (run 'make docs' and commit)"; \
+	        || { echo "docs drift: $(DOCS_OUT), $(SITE_ROOT)/scenarios, or the site-root crawler files do not match $(DOCS_SRC) (run 'make docs' and commit)"; \
 	             head -40 "$$tmp/diff"; exit 1; }
 
 docs-serve: docs

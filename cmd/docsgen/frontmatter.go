@@ -30,15 +30,31 @@ var frontmatterFence = []byte("---")
 // a missing fence is a build error rather than a silently untitled page.
 func splitFrontmatter(src []byte) (pageMeta, string, error) {
 	var meta pageMeta
+	yamlSrc, body, err := splitFrontmatterRaw(src)
+	if err != nil {
+		return meta, "", err
+	}
+	if err := yaml.Unmarshal(yamlSrc, &meta); err != nil {
+		return meta, "", fmt.Errorf("frontmatter: %w", err)
+	}
+	if strings.TrimSpace(meta.Title) == "" {
+		return meta, "", fmt.Errorf("frontmatter: title is required")
+	}
+	return meta, body, nil
+}
 
+// splitFrontmatterRaw does the fence surgery without committing to a meta type,
+// so page frontmatter and the scenario framing frontmatter (scenarios.go) share
+// one parser.
+func splitFrontmatterRaw(src []byte) ([]byte, string, error) {
 	rest, ok := bytes.CutPrefix(src, frontmatterFence)
 	if !ok || (len(rest) > 0 && rest[0] != '\n' && rest[0] != '\r') {
-		return meta, "", fmt.Errorf("missing frontmatter: file must start with a --- fenced YAML block")
+		return nil, "", fmt.Errorf("missing frontmatter: file must start with a --- fenced YAML block")
 	}
 	// Find the closing fence at the start of a line.
 	end := bytes.Index(rest, []byte("\n---"))
 	if end < 0 {
-		return meta, "", fmt.Errorf("unterminated frontmatter: no closing --- fence")
+		return nil, "", fmt.Errorf("unterminated frontmatter: no closing --- fence")
 	}
 	yamlSrc := rest[:end]
 	body := rest[end+len("\n---"):]
@@ -48,12 +64,5 @@ func splitFrontmatter(src []byte) (pageMeta, string, error) {
 	} else {
 		body = nil
 	}
-
-	if err := yaml.Unmarshal(yamlSrc, &meta); err != nil {
-		return meta, "", fmt.Errorf("frontmatter: %w", err)
-	}
-	if strings.TrimSpace(meta.Title) == "" {
-		return meta, "", fmt.Errorf("frontmatter: title is required")
-	}
-	return meta, string(body), nil
+	return yamlSrc, string(body), nil
 }
