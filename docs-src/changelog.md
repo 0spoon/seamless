@@ -15,6 +15,25 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.0 {#v0-4-0}
+
+Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.0)
+
+### Features
+
+- feat(site): expand the README as the highest-authority search surface
+- feat(release): publish a Homebrew cask to 0spoon/homebrew-tap on release
+- feat(site): crawlable /scenarios/ pages and four definition pages
+- feat(site): release-time /docs/changelog/ generated from git tags
+- feat(site): hand-written /compare/ hub and the Agent Teams FAQ entry
+- feat(site): answer-first openers for the pages that map to a real query
+- feat(site): one honest MCP-clients guide for Cursor, Cline, Windsurf and Zed
+- feat(site): manual IndexNow ping and a make metrics target
+- feat(site): crawlable scenes, authored section landings, unpublish SITE.md
+- feat(site): JSON-LD structured data plus the gates that keep it honest
+- feat(docsgen): add canonical, robots and Open Graph head tags to every docs page
+- feat(console): redesign Retrieval as a four-zone circulation report
+
 ## v0.3.9 {#v0-3-9}
 
 Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.3.9)
