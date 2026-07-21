@@ -1,23 +1,34 @@
 {{define "content"}}
 {{with .Data}}
 {{$sel := .Selected}}
-<div class="topbar">
-  <div>
+<div class="lib-page" data-library="labs">
+<header class="lib-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "flask-conical"}} Research library</div>
     <h1>Labs</h1>
-    <div class="sub">{{.Count}} lab{{if ne .Count 1}}s{{end}} &middot; {{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}}</div>
+    <div class="sub">Stable lines of investigation, with outcomes and experiment history gathered in one place.</div>
   </div>
-</div>
+  <div class="lib-total" aria-label="{{.Count}} labs">
+    <strong>{{.Count}}</strong><span>lab{{if ne .Count 1}}s{{end}}</span>
+    <small>{{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}}</small>
+  </div>
+</header>
 
 {{if .Rows}}
+<section class="lib-controlbar lib-statusbar" aria-label="Lab organization">
+  <div class="lib-control-note lib-control-lead"><strong>Most recently active first</strong><span>A lab appears when its first trial is recorded.</span></div>
+  <a class="btn small lib-open-related" href="/console/trials">{{icon "test-tube"}} Browse every trial</a>
+</section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="{{labPath .Selected.Row.Lab}}"{{end}}>
   <nav class="lib-rail" aria-label="Labs">
+    <div class="rail-overview"><span>Research map</span><span>{{.Count}} labs</span></div>
     <div class="rail-scroll">
     <div class="rail-groups">
       <section class="rail-group" id="rg-labs">
         <header class="rail-group-hd">labs <span class="n">{{.Count}}</span></header>
         <div class="rail-items">
           {{range .Rows}}
-          <a class="rail-item{{if and $sel (eq .Lab $sel.Row.Lab)}} selected{{end}}" id="ri-lab-{{.Lab}}" href="{{labPath .Lab}}" data-title="{{.Lab}}"{{if and $sel (eq .Lab $sel.Row.Lab)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .Lab $sel.Row.Lab)}} selected{{end}}" id="ri-lab-{{.Lab}}" href="{{labPath .Lab}}" data-title="{{.Lab}}" data-context="Most recently active"{{if and $sel (eq .Lab $sel.Row.Lab)}} aria-current="page"{{end}}>
             <span class="ri-title mono">{{.Lab}}</span>
             <span class="ri-meta">{{.Trials}} trial{{if ne .Trials 1}}s{{end}}{{if .Pass}} &middot; <span class="t-ok">{{.Pass}} pass</span>{{end}}{{if .Fail}} &middot; <span class="t-danger">{{.Fail}} fail</span>{{end}}{{if .Partial}} &middot; {{.Partial}} partial{{end}}{{if .Inconclusive}} &middot; {{.Inconclusive}} inconclusive{{end}} &middot; <span title="{{ts .Last}}">{{ago .Last}}</span></span>
           </a>
@@ -36,6 +47,7 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "flask-conical"}}</span><div>No labs yet &mdash; a lab is a label for a line of investigation; open one with lab_open and it appears here on its first trial_record.</div></div>
 {{end}}
+</div><!-- .lib-page -->
 {{end}}
 {{end}}
 

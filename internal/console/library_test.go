@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -12,9 +13,58 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// The library screens (Notes / Memories / Tasks) render one unified page: a
-// grouped rail plus a reader. These tests cover the reader-specific behavior;
-// the JSON list payloads and ?peek=1 fragments are covered in peek_test.go.
+// The library screens (Memories / Notes / Tasks / Plans / Labs / Trials) render
+// one unified page: orientation chrome, a grouped rail, and a reader. These
+// tests cover the reader-specific behavior; the JSON list payloads and ?peek=1
+// fragments are covered in the entity and peek tests.
+
+func TestLibraryScreens_ShareOrientationChrome(t *testing.T) {
+	_, mux := newConsole(t)
+	for _, tc := range []struct {
+		path string
+		kind string
+	}{
+		{path: "/console/memories", kind: "memories"},
+		{path: "/console/notes", kind: "notes"},
+		{path: "/console/tasks", kind: "tasks"},
+		{path: "/console/plans", kind: "plans"},
+		{path: "/console/labs", kind: "labs"},
+		{path: "/console/trials", kind: "trials"},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			html := getPeek(t, mux, tc.path)
+			require.Equal(t, http.StatusOK, html.Code)
+			body := html.Body.String()
+			require.Contains(t, body, `class="lib-page" data-library="`+tc.kind+`"`)
+			require.Contains(t, body, `class="lib-hero"`)
+			require.Contains(t, body, `class="lib-total"`)
+		})
+	}
+}
+
+func TestLibraryReaderStyles_FillAvailableColumn(t *testing.T) {
+	css := string(consoleCSS)
+	rule := func(selector string) string {
+		t.Helper()
+		start := strings.Index(css, selector+" {")
+		require.NotEqual(t, -1, start, "missing %s rule", selector)
+		end := strings.Index(css[start:], "}")
+		require.NotEqual(t, -1, end, "unterminated %s rule", selector)
+		return css[start : start+end]
+	}
+
+	// The shared reader contract keeps the navigation, sheet, and rendered
+	// document aligned to the right edge of every library page. In particular,
+	// none of these may regress to the legacy 900px / 72ch caps.
+	for _, selector := range []string{".lib-reader", ".reader-nav", ".reader-sheet"} {
+		got := rule(selector)
+		require.Contains(t, got, `width: 100%`)
+		require.NotContains(t, got, `max-width`)
+	}
+	doc := rule(".prose.doc")
+	require.Contains(t, doc, `width: 100%`)
+	require.Contains(t, doc, `max-width: none`)
+}
 
 func TestNotesLibrary_AutoSelectsNewest(t *testing.T) {
 	_, mgr, mux := newConsoleWithFiles(t)
@@ -69,6 +119,10 @@ func TestMemoriesLibrary_DetailAndReaderFragment(t *testing.T) {
 	require.Contains(t, body, `id="lib-reader"`)
 	require.Contains(t, body, "body of lib-mem")
 	require.Contains(t, body, `aria-current="page"`)
+	require.Contains(t, body, `class="rail-subgroup-hd"`, "memory kind boundaries are explicit")
+	require.Contains(t, body, `data-context="seamless / gotcha"`)
+	require.Contains(t, body, `class="reader-sheet" data-memory-kind="gotcha"`)
+	require.Contains(t, body, "Sort within kind", "the control names the sort boundary")
 
 	frag := getPeek(t, mux, "/console/memories/"+m.ID+"?reader=1")
 	require.Equal(t, http.StatusOK, frag.Code)

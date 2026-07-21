@@ -1,16 +1,36 @@
 {{define "content"}}
 {{with .Data}}
 {{$sel := .Selected}}
-<div class="topbar">
-  <div>
+{{$open := add (add (len .Ready) (len .InProgress)) (len .Blocked)}}
+<div class="lib-page" data-library="tasks">
+<header class="lib-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "list-checks"}} Work queue</div>
     <h1>Tasks</h1>
-    <div class="sub">{{len .Ready}} ready &middot; {{len .InProgress}} in progress &middot; {{len .Blocked}} blocked</div>
+    <div class="sub">Ready work, live claims, and dependency blockers across every project.</div>
   </div>
-</div>
+  <div class="lib-total" aria-label="{{$open}} open tasks">
+    <strong>{{$open}}</strong><span>open</span>
+    {{if .Closed}}<small>{{add (len .Closed) .ClosedMore}} recently closed</small>{{end}}
+  </div>
+</header>
 
 {{if or .Ready .InProgress .Blocked .Closed}}
+<nav class="lib-controlbar lib-statusbar" aria-label="Task queue summary">
+  <div class="lib-control">
+    <span class="lib-control-label">Queue state</span>
+    <div class="lib-summary-pills">
+      {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{len .InProgress}} in progress</a>{{end}}
+      <a class="status-ready" href="#rg-ready">{{len .Ready}} ready</a>
+      {{if .Blocked}}<a class="status-blocked" href="#rg-blocked">{{len .Blocked}} blocked</a>{{end}}
+      {{if .Closed}}<a href="#rg-closed">{{add (len .Closed) .ClosedMore}} closed</a>{{end}}
+    </div>
+  </div>
+  <div class="lib-control-note"><strong>Queue order</strong><span>In progress &rarr; ready &rarr; blocked</span></div>
+</nav>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/tasks/{{.Selected.ID}}"{{end}}>
   <nav class="lib-rail" aria-label="Tasks">
+    <div class="rail-overview"><span>Queue map</span><span>{{$open}} open</span></div>
     <div class="rail-scroll">
     <div class="rail-groups">
       {{if .InProgress}}
@@ -18,7 +38,7 @@
         <header class="rail-group-hd"><span class="hd-label"><span class="live-dot"></span>in progress</span> <span class="n">{{len .InProgress}}</span></header>
         <div class="rail-items">
           {{range .InProgress}}
-          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
@@ -31,7 +51,7 @@
         {{if .Ready}}
         <div class="rail-items">
           {{range .Ready}}
-          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Deps}} &middot; {{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
@@ -46,7 +66,7 @@
         <header class="rail-group-hd">blocked <span class="n">{{len .Blocked}}</span></header>
         <div class="rail-items">
           {{range .Blocked}}
-          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Blocked"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; blocked by {{len .Blockers}}</span>
           </a>
@@ -59,7 +79,7 @@
         <summary class="rail-group-hd">recently closed <span class="n">{{len .Closed}}{{if .ClosedMore}} of {{add (len .Closed) .ClosedMore}}{{end}}</span></summary>
         <div class="rail-items">
           {{range .Closed}}
-          <a class="rail-item dim{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item dim{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Recently closed"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta">{{.Status}} &middot; {{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Closed}} &middot; <span title="{{ts .Closed}}">{{ago .Closed}}</span>{{end}}</span>
           </a>
@@ -79,6 +99,7 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "list-checks"}}</span><div>No tasks yet &mdash; add work with tasks_add; a task appears in the ready queue once its blockers clear.</div></div>
 {{end}}
+</div><!-- .lib-page -->
 {{end}}
 {{end}}
 

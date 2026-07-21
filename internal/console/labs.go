@@ -3,7 +3,7 @@ package console
 // The Labs screen surfaces the research labs (the lab_open / trial_record /
 // trial_query surface): one row per lab -- a stable label for a line of
 // investigation -- with its outcome tallies and trial history. It is a library
-// screen like Notes/Memories/Tasks/Plans: a rail beside a reader. A lab is not
+// screen like the other library entities: a rail beside a reader. A lab is not
 // a stored entity, only the label its trials carry, so everything here is an
 // aggregation over the trials table and there is nothing to write.
 

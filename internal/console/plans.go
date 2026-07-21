@@ -2,8 +2,8 @@ package console
 
 // The Plans screen surfaces captured Claude Code plans (cc-plan notes): their
 // lifecycle status, iteration count, cached subagent runs, and tracking tasks.
-// It is a library screen like Notes/Memories/Tasks: a phase-grouped rail beside
-// a reader, windowed by ?w=. It also carries the owner escape hatch for Claude
+// It is one of the shared library screens: a phase-grouped rail beside a reader,
+// windowed by ?w=. It also carries the owner escape hatch for Claude
 // Code bug #20397 (an approval whose PostToolUse never fired): POST
 // /console/plans/{slug}/approve flips the note to approved and creates the
 // tracking task, exactly as the hook would have.

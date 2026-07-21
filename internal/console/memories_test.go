@@ -91,4 +91,10 @@ func TestMemoriesPage_GroupsAndArchive(t *testing.T) {
 	require.Equal(t, 1, after.InactiveCount)
 	require.Equal(t, "archived", after.Inactive[0].Status)
 	require.Equal(t, "watcher-race", after.Inactive[0].Name)
+
+	// A historical memory cannot be mistaken for current guidance in the reader.
+	page := getPeek(t, mux, "/console/memories/"+m1.ID)
+	require.Equal(t, http.StatusOK, page.Code)
+	require.Contains(t, page.Body.String(), "This memory is archived.")
+	require.Contains(t, page.Body.String(), "It no longer enters agent context.")
 }

@@ -15,8 +15,8 @@ import (
 
 // The detail handlers here serve a single entity four ways: JSON for the CLI,
 // an HTML fragment for the in-page detail pane (?peek=1), a reader fragment
-// for the library screens' in-place swap (?reader=1, notes/memories/tasks --
-// plans do the same from plans.go), and -- by default -- the entity's library
+// for the library screens' in-place swap (?reader=1), and -- by default -- the
+// entity's library
 // page with that entity open in the reader (a shareable, no-JS URL). Entity
 // references across the console link to these routes; on split list screens
 // (sessions) a data-peek link loads the ?peek=1 fragment into the pane without

@@ -2,22 +2,38 @@
 {{with .Data}}
 {{$sel := .Selected}}
 {{$qs := .QS}}
-<div class="topbar">
-  <div>
+<div class="lib-page" data-library="plans">
+<header class="lib-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "map"}} Plan library</div>
     <h1>Plans</h1>
-    <div class="sub">{{.Total}} plan{{if ne .Total 1}}s{{end}} &middot; {{if eq .Window "all"}}all time{{else}}{{.Count}} in {{.WindowLabel}}{{end}}</div>
+    <div class="sub">Captured and composed plans, organized by execution state and connected to their steps.</div>
   </div>
-</div>
+  <div class="lib-total" aria-label="{{.Total}} plans">
+    <strong>{{.Total}}</strong><span>plan{{if ne .Total 1}}s{{end}}</span>
+    <small>{{if eq .Window "all"}}all time{{else}}{{.Count}} in {{.WindowLabel}}{{end}}</small>
+  </div>
+</header>
 
 {{if or .Total .Selected}}
+<section class="lib-controlbar lib-statusbar" aria-label="Plan time window">
+  {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
+  <div class="lib-control">
+    <span class="lib-control-label">Updated</span>
+    <div class="seg">
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+  <div class="lib-summary-pills lib-phase-summary">
+    {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{.InProgress}} in progress</a>{{end}}
+    {{if .Ready}}<a class="status-ready" href="#rg-ready">{{.Ready}} ready</a>{{end}}
+    {{if .Done}}<a href="#rg-done">{{.Done}} done</a>{{end}}
+  </div>
+  <div class="lib-control-note"><strong>Browse structure</strong><span>Phase &rarr; plan</span></div>
+</section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/plans/{{.Selected.Row.Slug}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Plans">
-    <div class="rail-tools">
-      {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
-      <div class="seg">
-        {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
-      </div>
-    </div>
+    <div class="rail-overview"><span>Plan map</span><span>{{.Count}} shown</span></div>
     <div class="rail-scroll">
     {{if .Rows}}
     <div class="rail-groups">
@@ -26,7 +42,7 @@
         <header class="rail-group-hd"><span class="hd-label"><span class="live-dot"></span>in progress</span> <span class="n">{{.InProgress}}</span></header>
         <div class="rail-items">
           {{range phaseRows .Rows "in_progress"}}
-          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
@@ -39,7 +55,7 @@
         <header class="rail-group-hd">ready <span class="n">{{.Ready}}</span></header>
         <div class="rail-items">
           {{range phaseRows .Rows "ready"}}
-          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
@@ -52,7 +68,7 @@
         <header class="rail-group-hd">done <span class="n">{{.Done}}</span></header>
         <div class="rail-items">
           {{range phaseRows .Rows "done"}}
-          <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+          <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
@@ -75,6 +91,7 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "map"}}</span><div>No plans yet &mdash; Claude Code plan-mode captures and plan:&lt;slug&gt; compositions land here.</div></div>
 {{end}}
+</div><!-- .lib-page -->
 {{end}}
 {{end}}
 

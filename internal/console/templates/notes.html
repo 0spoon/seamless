@@ -2,39 +2,51 @@
 {{with .Data}}
 {{$sel := .Selected}}
 {{$qs := .QS}}
-<div class="topbar">
-  <div>
+<div class="lib-page" data-library="notes">
+<header class="lib-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "file-text"}} Working knowledge</div>
     <h1>Notes</h1>
-    <div class="sub">{{if .Query}}{{.Count}} matching &ldquo;{{.Query}}&rdquo;{{else}}{{.Count}} note{{if ne .Count 1}}s{{end}} across {{len .Groups}} project{{if ne (len .Groups) 1}}s{{end}}{{end}}</div>
+    <div class="sub">Research, meeting context, plans, and long-form artifacts kept for later work.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
   </div>
-</div>
+  <div class="lib-total" aria-label="{{.Count}} notes">
+    <strong>{{.Count}}</strong><span>note{{if ne .Count 1}}s{{end}}</span>
+    {{if .Groups}}<small>{{len .Groups}} scope{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
+  </div>
+</header>
 
 {{if or .Groups .Query}}
+<section class="lib-controlbar" aria-label="Note filters and sorting">
+  <form class="search lib-query" method="get" action="/console/notes">
+    {{icon "search"}}
+    <input name="q" aria-label="Filter notes by title, description, or tag" placeholder="Filter titles, descriptions, and tags&hellip;" value="{{.Query}}">
+    {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+  </form>
+  {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
+  <div class="lib-control">
+    <span class="lib-control-label">Sort within project</span>
+    <div class="seg">
+      <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
+    </div>
+  </div>
+  <div class="lib-control-note"><strong>Browse structure</strong><span>Scope &rarr; note</span></div>
+</section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/notes/{{.Selected.ID}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Notes">
-    <div class="rail-tools">
-      <form class="search" method="get" action="/console/notes">
-        {{icon "search"}}
-        <input name="q" aria-label="Search notes by title, description, or tag" placeholder="Search notes&hellip;" value="{{.Query}}">
-        {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
-      </form>
-      {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
-      <div class="seg">
-        <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
-        <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
-      </div>
-    </div>
+    <div class="rail-overview"><span>Note map</span><span>{{.Count}} shown</span></div>
     <div class="rail-scroll">
     {{if .Groups}}
     <div class="rail-groups">
       {{range .Groups}}
       <section class="rail-group" id="rg-{{if .Project}}{{.Project}}{{else}}global{{end}}">
-        <header class="rail-group-hd">{{if .Project}}{{.Project}}{{else}}global{{end}} <span class="n">{{.Count}}</span></header>
+        <header class="rail-group-hd"><span class="hd-label">{{if .Project}}{{icon "folder-tree"}}{{.Project}}{{else}}{{icon "folder-open"}}Global inbox{{end}}</span> <span class="n">{{.Count}}</span></header>
         <div class="rail-items">
           {{range .Notes}}
-          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/notes/{{.ID}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/notes/{{.ID}}{{$qs}}" data-title="{{.Title}}" data-context="{{if .Project}}{{.Project}}{{else}}Global inbox{{end}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
-            <span class="ri-meta"><span title="{{ts .Updated}}">{{ago .Updated}}</span>{{with agentPill "" .Model}} {{.}}{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</span>
+            {{if .Description}}<span class="ri-desc">{{.Description}}</span>{{end}}
+            <span class="ri-meta"><span title="{{ts .Updated}}">updated {{ago .Updated}}</span>{{with agentPill "" .Model}} {{.}}{{end}}</span>
           </a>
           {{end}}
         </div>
@@ -55,6 +67,7 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "file-text"}}</span><div>No notes yet &mdash; agents capture research, decisions, and summaries here with notes_create.</div></div>
 {{end}}
+</div><!-- .lib-page -->
 {{end}}
 {{end}}
 

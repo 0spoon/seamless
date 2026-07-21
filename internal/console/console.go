@@ -292,7 +292,7 @@ func (s *Service) serveSearchJS(w http.ResponseWriter, _ *http.Request) {
 }
 
 // serveLibraryJS serves the library-screen client (rail selection + in-place
-// reader swap on Notes/Memories/Tasks/Plans), loaded on every page and inert
+// reader swap on the six library screens), loaded on every page and inert
 // without a #lib-reader.
 func (s *Service) serveLibraryJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")

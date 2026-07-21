@@ -2,26 +2,37 @@
 {{with .Data}}
 {{$sel := .Selected}}
 {{$qs := .QS}}
-<div class="topbar">
-  <div>
+<div class="lib-page" data-library="trials">
+<header class="lib-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "test-tube"}} Experiment log</div>
     <h1>Trials</h1>
-    <div class="sub">{{.Count}} trial{{if ne .Count 1}}s{{end}}{{if .Lab}} &middot; lab <span class="mono">{{.Lab}}</span>{{end}}{{if .Outcome}} &middot; {{.Outcome}}{{end}}</div>
+    <div class="sub">Expected-versus-actual records, outcomes, and structured metrics.{{if .Lab}} Filtered to lab <span class="mono">{{.Lab}}</span>.{{end}}{{if .Outcome}} Showing {{.Outcome}} outcomes.{{end}}</div>
   </div>
-</div>
+  <div class="lib-total" aria-label="{{.Count}} trials">
+    <strong>{{.Count}}</strong><span>trial{{if ne .Count 1}}s{{end}}</span>
+    {{if .Groups}}<small>{{len .Groups}} lab{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
+  </div>
+</header>
 
 {{if or .Groups .Lab .Outcome}}
+<section class="lib-controlbar" aria-label="Trial filters">
+  {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
+  <div class="lib-control">
+    <span class="lib-control-label">Outcome</span>
+    <div class="seg">
+      {{$lab := .Lab}}
+      {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+  {{if .Lab}}
+  <div class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}">Clear</a></div>
+  {{end}}
+  <div class="lib-control-note"><strong>Order</strong><span>Newest first, grouped by lab</span></div>
+</section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/trials/{{.Selected.ID}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Trials">
-    <div class="rail-tools">
-      {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
-      <div class="seg">
-        {{$lab := .Lab}}
-        {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
-      </div>
-      {{if .Lab}}
-      <div class="rail-filter-note">lab <span class="mono">{{.Lab}}</span> &middot; <a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}">clear</a></div>
-      {{end}}
-    </div>
+    <div class="rail-overview"><span>Trial map</span><span>{{.Count}} shown</span></div>
     <div class="rail-scroll">
     {{if .Groups}}
     <div class="rail-groups">
@@ -30,7 +41,7 @@
         <header class="rail-group-hd"><span class="hd-label">{{.Lab}}</span> <span class="n">{{.Count}}</span></header>
         <div class="rail-items">
           {{range .Trials}}
-          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/trials/{{.ID}}{{$qs}}" data-title="{{.Title}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
+          <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/trials/{{.ID}}{{$qs}}" data-title="{{.Title}}" data-context="Lab / {{.Lab}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{.Title}}</span>
             <span class="ri-meta">{{if .Outcome}}<span class="t-{{outcomeTone .Outcome}}">{{.Outcome}}</span> &middot; {{end}}{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Metrics}} &middot; {{.Metrics}} metric{{if ne .Metrics 1}}s{{end}}{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
@@ -53,6 +64,7 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "test-tube"}}</span><div>No trials yet &mdash; record one expected-vs-actual experiment with trial_record and it appears here.</div></div>
 {{end}}
+</div><!-- .lib-page -->
 {{end}}
 {{end}}
 
