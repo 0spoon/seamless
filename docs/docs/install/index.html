@@ -324,6 +324,18 @@ Windows task is per-user by construction, so there is no root case to allow).</l
 <code>~/.seamless</code>, a user service - so run it as yourself. Under <code>curl | sudo sh</code> it
 would all land in root's home where your agents will never look, which is why
 the script refuses root unless you insist.</p>
+<h2 id="homebrew">Homebrew</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">brew install 0spoon/tap/seamless
+</span></span></code></pre><p>Every release publishes a cask to the <code>0spoon/homebrew-tap</code> tap, on macOS and
+Linux alike. It delivers the <strong>binaries only</strong> - <code>seamlessd</code> and <code>seam</code> on your
+PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
+binaries are unsigned). It does not wire clients or register a service, so
+finish with the two commands the cask's caveats print:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks   <span class="c1"># bearer key on first run, hooks, MCP, skills</span>
+</span></span><span class="line"><span class="cl">seamlessd serve           <span class="c1"># or set up the service yourself</span>
+</span></span></code></pre><p><code>brew upgrade</code> moves you to the latest release. The hooks keep working - they
+resolve <code>seam</code> through brew's stable bin path - but restart the daemon
+yourself so it runs the new build.</p>
 <h2 id="install-from-a-clone">Install from a clone</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
 </span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
@@ -338,7 +350,7 @@ what the running daemon and every agent's hooks execute. Swapping them is <code>
 searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
 It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.</p>
-<p>The other two routes end up in the same place with less done for you:
+<p>The remaining routes end up in the same place with less done for you:
 <code>go install github.com/0spoon/seamless/cmd/...@latest</code> needs Go 1.25+, and the
 <a href="https://github.com/0spoon/seamless/releases">GitHub releases</a> carry the same
 prebuilt archives the installer fetches. From a bare binary, <code>seamlessd serve</code>
@@ -501,7 +513,7 @@ on loopback.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#install-from-a-clone">Install from a clone</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#homebrew">Homebrew</a></li><li class="lvl-2"><a href="#install-from-a-clone">Install from a clone</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
     </ul>
   </aside>
   

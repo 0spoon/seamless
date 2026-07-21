@@ -33,8 +33,8 @@ and removal procedure.
 
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install), and every other route to the
-same place is on that page: prebuilt archives from
-[GitHub releases](https://github.com/0spoon/seamless/releases),
+same place is on that page: `brew install 0spoon/tap/seamless`, prebuilt
+archives from [GitHub releases](https://github.com/0spoon/seamless/releases),
 `go install github.com/0spoon/seamless/cmd/...@latest`, or `make install` from
 a clone.
 

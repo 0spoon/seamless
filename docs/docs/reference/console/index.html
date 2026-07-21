@@ -233,6 +233,11 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>The escape hatch for a Claude Code approval whose <code>PostToolUse</code> never fired: flips the <code>cc-plan</code> note to <code>plan-status:approved</code> and creates the tracking task, exactly as the hook would have. Only applies to a CC capture.</td>
 </tr>
 <tr>
+<td>Star / unstar an entity</td>
+<td><code>POST /console/favorites/{kind}/{id}</code></td>
+<td>Toggles the same starred flag the <code>favorite_set</code> MCP tool sets: a starred memory pins into briefings and gets a post-fusion recall boost. For memories and notes the star lives in frontmatter; it never bumps <code>updated</code>.</td>
+</tr>
+<tr>
 <td>Ask the gardener for proposals</td>
 <td><code>POST /console/gardener/request</code></td>
 <td>Interprets a natural-language maintenance request into <strong>pending proposals</strong>. It never mutates a memory.</td>
@@ -273,6 +278,16 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>Clears the override row, reverting to the file/env configuration.</td>
 </tr>
 <tr>
+<td>Save a project family</td>
+<td><code>POST /console/settings/families/save</code></td>
+<td>Creates a family or replaces one family's name and member set - the same <code>project_families</code> setting <code>seamlessd family</code> manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member.</td>
+</tr>
+<tr>
+<td>Delete a project family</td>
+<td><code>POST /console/settings/families/delete</code></td>
+<td>Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes.</td>
+</tr>
+<tr>
 <td>Sign in / sign out</td>
 <td><code>POST /console/login</code>, <code>POST /console/logout</code></td>
 <td>Sets or clears the console cookie. Touches no data.</td>
@@ -281,10 +296,12 @@ is not how Seamless is driven; it is how you watch it.</p>
 </table>
 </div>
 <p>Read the shape of that list. There is no &quot;create memory&quot;, no &quot;edit note&quot;, no
-&quot;delete&quot;, no &quot;add task&quot;, no &quot;start session&quot;. The two direct writes to knowledge
-state are <strong>archive a memory</strong> and <strong>approve a captured plan</strong>; the rest either
-manage gardener proposals - which are themselves proposals, reviewed before they
-do anything - or free a lock, or set a display-time knob.</p>
+&quot;delete&quot;, no &quot;add task&quot;, no &quot;start session&quot;. The direct writes to knowledge
+state are <strong>archive a memory</strong>, <strong>approve a captured plan</strong>, and the <strong>star</strong>
+flag; the rest either manage gardener proposals - which are themselves
+proposals, reviewed before they do anything - or free a lock, or set a
+configuration knob (briefing overrides, project families) that shapes future
+briefings without touching any memory's content.</p>
 <p>This is deliberate, and it is the same principle as
 <a href="../../concepts/gardener/">the gardener's</a> propose-only contract. The store is written
 by agents doing work, with provenance attached. A console that could quietly edit
@@ -457,7 +474,7 @@ their lease countdowns, and the memories it produced.</p>
 <p><code>/console/memories</code>, <code>/console/memories/{id}</code></p>
 <p>A two-pane library: a rail of memories grouped by project (global first, kinds
 in canonical order, each dot colored by kind) beside a full-height reader.
-Sortable by name, recency, or reach; filterable by a substring of name,
+Sortable by name, recency, reach, or starred; filterable by a substring of name,
 description, kind, or tag. Inactive memories collapse into an
 archived-and-superseded group at the rail's end, each carrying its status and,
 when superseded, what replaced it.</p>
@@ -465,8 +482,9 @@ when superseded, what replaced it.</p>
 disabled and a sanitizer on the output), the metadata - kind, project, tags,
 timestamps, the session that produced it - its reach counts, the <code>vscode://</code>
 link straight to the file, and its supersession neighbors in <strong>both</strong>
-directions: what replaced it, and what it replaced. <strong>Archive</strong> is the one
-action here.</p>
+directions: what replaced it, and what it replaced. The actions here are
+<strong>star</strong> - the flag that pins it into briefings and boosts recall - and
+<strong>archive</strong>.</p>
 <p>Opening <code>/console/memories</code> auto-opens the most recently updated match; a
 memory's own URL opens the same screen with it selected. Clicking rail items
 swaps the reader in place (real URLs, browser Back works), and <code>j</code> / <code>k</code> step
@@ -474,7 +492,8 @@ through the rail.</p>
 <h2 id="notes">Notes</h2>
 <p><code>/console/notes</code>, <code>/console/notes/{id}</code></p>
 <p>The same library shape for notes: a project-grouped rail (global <code>&quot;&quot;</code> first),
-sortable by recency or title, filterable by title, description, or tag. The
+sortable by recency, title, or starred, filterable by title, description, or
+tag. The
 reader renders the note as a document - uncapped body in a measured reading
 column, description, tags, word count, source URL, and the file path with an
 editor link.</p>
@@ -543,12 +562,25 @@ and preserves its query string.</p>
 <p>Reachable from the Projects board.</p>
 <h2 id="retrieval">Retrieval</h2>
 <p><code>/console/retrieval</code></p>
-<p>The reach funnel in detail, over a selectable window: injections, memories
-surfaced, active memories, reach rate, sessions reached, reach broken down by kind
-and by project, the injection trend, and the most-injected memories.</p>
-<p>Plus <strong>stale memories</strong> - active memories not updated, injected, or read in 90
-days, mirroring the gardener's default staleness horizon. Unlike everything else
-on the page, this list is window-independent.</p>
+<p>The circulation report: is stored knowledge actually reaching agents, and at
+what cost? The hero pairs the <strong>reach ring</strong> (distinct active memories that
+surfaced, over all active memories) with the window's volume and cost -
+injections, sessions reached, and <strong>estimated tokens injected</strong>. Everything
+except the last zone follows the selectable observation window.</p>
+<p>Four zones below it:</p>
+<ol>
+<li><strong>Delivery path</strong> - the funnel as a flow: injections → distinct memories →
+sessions reached, ending in the knowledge-base coverage meter (how many
+active memories are still waiting to surface).</li>
+<li><strong>Circulation pattern</strong> - the injection trend chart and the traffic-by-kind
+mix.</li>
+<li><strong>Scope coverage</strong> - reach per project scope (global first), each row with
+its own reach rate and injection count.</li>
+<li><strong>Knowledge pressure</strong> - the most-injected memories against <strong>quiet
+knowledge</strong>: active memories not updated, injected, or read in 90 days,
+mirroring the gardener's default staleness horizon. Unlike everything else
+on the page, the stale list is all-time, not windowed.</li>
+</ol>
 <p>Reachable from the Overview's retrieval-health card.</p>
 <h2 id="gardener">Gardener</h2>
 <p><code>/console/gardener</code></p>
@@ -568,16 +600,21 @@ asks you to pick the project and plans the split from there; nothing is retyped.
 <h2 id="settings">Settings</h2>
 <p><code>/console/settings</code></p>
 <p>A read-only view of the running configuration - data dir, budgets, gardener
-settings, the registered projects, the repo→project map, and the project families</p>
-<ul>
-<li>with <strong>one editable block</strong>: briefing injection.</li>
-</ul>
-<p>Saving writes a runtime override row in the DB. It layers over the file/env values
-and wins until reset, and it applies from the next session start - no daemon
-restart. It never touches your config file, so <code>seamless.yaml</code> stays the thing you
-wrote. <strong>Reset</strong> clears the override and reverts to file/env.</p>
-<p>The form validates: a non-numeric knob or a value that fails <code>Briefing.Validate()</code>
-comes back as an error flash, not a silently-dropped save.</p>
+settings, the registered projects, and the repo→project map - with <strong>two
+editable blocks</strong>: briefing injection and project families.</p>
+<p><strong>Briefing injection</strong>: saving writes a runtime override row in the DB. It
+layers over the file/env values and wins until reset, and it applies from the
+next session start - no daemon restart. It never touches your config file, so
+<code>seamless.yaml</code> stays the thing you wrote. <strong>Reset</strong> clears the override and
+reverts to file/env. The form validates: a non-numeric knob or a value that
+fails <code>Briefing.Validate()</code> comes back as an error flash, not a
+silently-dropped save.</p>
+<p><strong>Project families</strong>: create, rename, edit, or delete the named groupings that
+<a href="../../reference/cli-seamlessd/#seamlessd_family"><code>seamlessd family</code></a> manages from
+the CLI - the same <code>project_families</code> setting, so a change on either surface
+shows up on the other. Members are chosen from a closed picker of registered
+projects; the CLI is the route for pre-registering a slug that does not exist
+yet.</p>
 <p>See <a href="../../reference/configuration/">Configuration</a> for what each knob does, and
 <a href="../../concepts/sessions/">Sessions &amp; briefings</a> for what they tune.</p>
 <h2 id="event-detail">Event detail</h2>

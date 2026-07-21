@@ -19,6 +19,7 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Archive a memory | `POST /console/memories/{id}/archive` | Routes through `lifecycle.Archive`: the memory is stamped invalid and leaves every index, its file stays on disk with a tombstone. |
 | Force-release a task claim | `POST /console/tasks/{id}/release` | The owner override: releases a claimed task's lock regardless of who holds it, reopening it for any agent. Not reachable from the agent MCP tools. |
 | Approve a captured plan | `POST /console/plans/{slug}/approve` | The escape hatch for a Claude Code approval whose `PostToolUse` never fired: flips the `cc-plan` note to `plan-status:approved` and creates the tracking task, exactly as the hook would have. Only applies to a CC capture. |
+| Star / unstar an entity | `POST /console/favorites/{kind}/{id}` | Toggles the same starred flag the `favorite_set` MCP tool sets: a starred memory pins into briefings and gets a post-fusion recall boost. For memories and notes the star lives in frontmatter; it never bumps `updated`. |
 | Ask the gardener for proposals | `POST /console/gardener/request` | Interprets a natural-language maintenance request into **pending proposals**. It never mutates a memory. |
 | Plan a project split | `POST /console/gardener/split` | Interprets a split request into a plan batch of **pending proposals** (one split setup plus one reproject per memory). Also never mutates a memory. |
 | Apply one proposal | `POST /console/gardener/{id}/apply` | Carries out that proposal's effect. |
@@ -27,13 +28,17 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
+| Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
 
 Read the shape of that list. There is no "create memory", no "edit note", no
-"delete", no "add task", no "start session". The two direct writes to knowledge
-state are **archive a memory** and **approve a captured plan**; the rest either
-manage gardener proposals - which are themselves proposals, reviewed before they
-do anything - or free a lock, or set a display-time knob.
+"delete", no "add task", no "start session". The direct writes to knowledge
+state are **archive a memory**, **approve a captured plan**, and the **star**
+flag; the rest either manage gardener proposals - which are themselves
+proposals, reviewed before they do anything - or free a lock, or set a
+configuration knob (briefing overrides, project families) that shapes future
+briefings without touching any memory's content.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -217,7 +222,7 @@ their lease countdowns, and the memories it produced.
 
 A two-pane library: a rail of memories grouped by project (global first, kinds
 in canonical order, each dot colored by kind) beside a full-height reader.
-Sortable by name, recency, or reach; filterable by a substring of name,
+Sortable by name, recency, reach, or starred; filterable by a substring of name,
 description, kind, or tag. Inactive memories collapse into an
 archived-and-superseded group at the rail's end, each carrying its status and,
 when superseded, what replaced it.
@@ -226,8 +231,9 @@ The reader renders the body uncapped (through the markdown layer, with raw HTML
 disabled and a sanitizer on the output), the metadata - kind, project, tags,
 timestamps, the session that produced it - its reach counts, the `vscode://`
 link straight to the file, and its supersession neighbors in **both**
-directions: what replaced it, and what it replaced. **Archive** is the one
-action here.
+directions: what replaced it, and what it replaced. The actions here are
+**star** - the flag that pins it into briefings and boosts recall - and
+**archive**.
 
 Opening `/console/memories` auto-opens the most recently updated match; a
 memory's own URL opens the same screen with it selected. Clicking rail items
@@ -239,7 +245,8 @@ through the rail.
 `/console/notes`, `/console/notes/{id}`
 
 The same library shape for notes: a project-grouped rail (global `""` first),
-sortable by recency or title, filterable by title, description, or tag. The
+sortable by recency, title, or starred, filterable by title, description, or
+tag. The
 reader renders the note as a document - uncapped body in a measured reading
 column, description, tags, word count, source URL, and the file path with an
 editor link.
@@ -330,13 +337,25 @@ Reachable from the Projects board.
 
 `/console/retrieval`
 
-The reach funnel in detail, over a selectable window: injections, memories
-surfaced, active memories, reach rate, sessions reached, reach broken down by kind
-and by project, the injection trend, and the most-injected memories.
+The circulation report: is stored knowledge actually reaching agents, and at
+what cost? The hero pairs the **reach ring** (distinct active memories that
+surfaced, over all active memories) with the window's volume and cost -
+injections, sessions reached, and **estimated tokens injected**. Everything
+except the last zone follows the selectable observation window.
 
-Plus **stale memories** - active memories not updated, injected, or read in 90
-days, mirroring the gardener's default staleness horizon. Unlike everything else
-on the page, this list is window-independent.
+Four zones below it:
+
+1. **Delivery path** - the funnel as a flow: injections → distinct memories →
+   sessions reached, ending in the knowledge-base coverage meter (how many
+   active memories are still waiting to surface).
+2. **Circulation pattern** - the injection trend chart and the traffic-by-kind
+   mix.
+3. **Scope coverage** - reach per project scope (global first), each row with
+   its own reach rate and injection count.
+4. **Knowledge pressure** - the most-injected memories against **quiet
+   knowledge**: active memories not updated, injected, or read in 90 days,
+   mirroring the gardener's default staleness horizon. Unlike everything else
+   on the page, the stale list is all-time, not windowed.
 
 Reachable from the Overview's retrieval-health card.
 
@@ -366,16 +385,23 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 `/console/settings`
 
 A read-only view of the running configuration - data dir, budgets, gardener
-settings, the registered projects, the repo→project map, and the project families
-- with **one editable block**: briefing injection.
+settings, the registered projects, and the repo→project map - with **two
+editable blocks**: briefing injection and project families.
 
-Saving writes a runtime override row in the DB. It layers over the file/env values
-and wins until reset, and it applies from the next session start - no daemon
-restart. It never touches your config file, so `seamless.yaml` stays the thing you
-wrote. **Reset** clears the override and reverts to file/env.
+**Briefing injection**: saving writes a runtime override row in the DB. It
+layers over the file/env values and wins until reset, and it applies from the
+next session start - no daemon restart. It never touches your config file, so
+`seamless.yaml` stays the thing you wrote. **Reset** clears the override and
+reverts to file/env. The form validates: a non-numeric knob or a value that
+fails `Briefing.Validate()` comes back as an error flash, not a
+silently-dropped save.
 
-The form validates: a non-numeric knob or a value that fails `Briefing.Validate()`
-comes back as an error flash, not a silently-dropped save.
+**Project families**: create, rename, edit, or delete the named groupings that
+[`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
+the CLI - the same `project_families` setting, so a change on either surface
+shows up on the other. Members are chosen from a closed picker of registered
+projects; the CLI is the route for pre-registering a slug that does not exist
+yet.
 
 See [Configuration](/reference/configuration/) for what each knob does, and
 [Sessions & briefings](/concepts/sessions/) for what they tune.

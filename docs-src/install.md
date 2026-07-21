@@ -114,6 +114,27 @@ Everything here is per-user by construction - `~/.local/bin`, `~/.config`,
 would all land in root's home where your agents will never look, which is why
 the script refuses root unless you insist.
 
+## Homebrew
+
+```bash
+brew install 0spoon/tap/seamless
+```
+
+Every release publishes a cask to the `0spoon/homebrew-tap` tap, on macOS and
+Linux alike. It delivers the **binaries only** - `seamlessd` and `seam` on your
+PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
+binaries are unsigned). It does not wire clients or register a service, so
+finish with the two commands the cask's caveats print:
+
+```bash
+seamlessd install-hooks   # bearer key on first run, hooks, MCP, skills
+seamlessd serve           # or set up the service yourself
+```
+
+`brew upgrade` moves you to the latest release. The hooks keep working - they
+resolve `seam` through brew's stable bin path - but restart the daemon
+yourself so it runs the new build.
+
 ## Install from a clone
 
 ```bash
@@ -135,7 +156,7 @@ searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
 It is seeded **only when absent** - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.
 
-The other two routes end up in the same place with less done for you:
+The remaining routes end up in the same place with less done for you:
 `go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.25+, and the
 [GitHub releases](https://github.com/0spoon/seamless/releases) carry the same
 prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`

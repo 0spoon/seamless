@@ -170,7 +170,8 @@ make test       # unit tests
 make test-race  # unit tests under the race detector
 make bench      # hot-path benchmarks (recall, briefing, matcher, event fan-out)
 make lint       # golangci-lint
-make check      # the full gate: build + vet + fmt-check + docs-check + lint + test-race
+make check      # the full gate: build + vet + fmt-check + docs-check +
+                # installer-check + site-check + lint + vulncheck + test-race
 make doctor     # config + database self-checks
 make run        # serve on 127.0.0.1:8081
 

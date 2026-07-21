@@ -1,6 +1,6 @@
 ---
 title: seamlessd CLI
-description: The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.
+description: The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
 ---
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
@@ -216,6 +216,37 @@ one-shot delivery marker in each selected client's skill root.
 | `--url` | derived from the config addr | Base URL the hook entries were installed with. |
 | `--install-dir` | `$SEAMLESS_INSTALL_DIR`, else `~/.local/bin` | Directory the binaries were installed to. |
 | `--mcp` | `true` | Also deregister the MCP server (`claude`/`codex mcp remove`). |
+
+## seamlessd update {#seamlessd_update}
+
+```bash
+seamlessd update [--check] [--dry-run] [--url URL]
+```
+
+Upgrades Seamless in place to the latest published release by re-running the
+canonical installer for this OS - the same script a fresh
+`curl ... | sh` / `irm ... | iex` install runs, fetched from the latest GitHub
+release's assets. There is deliberately no second upgrade implementation:
+after verification, `update` pipes that script to `sh` (or `powershell`), so
+binaries are swapped by rename, the service restarts on the new build, and
+hooks are reconciled exactly as [Install & deploy](/install/) describes for a
+re-run.
+
+Before anything executes, the fetched script is verified against the
+**Sigstore bundle** published alongside it - proof the bytes came out of this
+repository's release workflow on a version tag, not merely from the right
+host. Verification failure is fatal, with no fallback. The fetch is
+HTTPS-only, including every redirect hop.
+
+| Flag | Default | Meaning |
+|---|---|---|
+| `--check` | `false` | Report installed vs latest release version and exit without changing anything. |
+| `--dry-run` | `false` | Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing. |
+| `--url` | the latest release's installer asset | Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning. |
+
+The installer's env knobs pass through: `SEAMLESS_VERSION=0.3.0 seamlessd
+update` pins a version, `SEAMLESS_INSTALL_DIR=...` retargets, exactly as the
+curl installer does.
 
 ## seamlessd map-repo {#seamlessd_map_repo}
 

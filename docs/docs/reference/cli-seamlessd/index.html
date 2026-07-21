@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seamlessd CLI - Seamless docs</title>
-<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.">
+<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/cli-seamlessd/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/cli-seamlessd/">
 <meta property="og:title" content="seamlessd CLI - Seamless docs">
-<meta property="og:description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.">
+<meta property="og:description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"seamlessd CLI","item":"https://thereisnospoon.org/docs/reference/cli-seamlessd/"}]},{"@type":"TechArticle","headline":"seamlessd CLI - Seamless docs","description":"The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.","url":"https://thereisnospoon.org/docs/reference/cli-seamlessd/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"seamlessd CLI","item":"https://thereisnospoon.org/docs/reference/cli-seamlessd/"}]},{"@type":"TechArticle","headline":"seamlessd CLI - Seamless docs","description":"The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.","url":"https://thereisnospoon.org/docs/reference/cli-seamlessd/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -196,7 +196,7 @@
 </nav>
 
   <h1>seamlessd CLI</h1>
-  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.</p>
+  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.</p>
   <p><code>seamlessd</code> is both the server and the operator CLI. <code>serve</code> runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
 directly, without going through a running server. That means most of them work
@@ -546,6 +546,51 @@ one-shot delivery marker in each selected client's skill root.</p>
 </tbody>
 </table>
 </div>
+<h2 id="seamlessd_update">seamlessd update</h2>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd update <span class="o">[</span>--check<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--url URL<span class="o">]</span>
+</span></span></code></pre><p>Upgrades Seamless in place to the latest published release by re-running the
+canonical installer for this OS - the same script a fresh
+<code>curl ... | sh</code> / <code>irm ... | iex</code> install runs, fetched from the latest GitHub
+release's assets. There is deliberately no second upgrade implementation:
+after verification, <code>update</code> pipes that script to <code>sh</code> (or <code>powershell</code>), so
+binaries are swapped by rename, the service restarts on the new build, and
+hooks are reconciled exactly as <a href="../../install/">Install &amp; deploy</a> describes for a
+re-run.</p>
+<p>Before anything executes, the fetched script is verified against the
+<strong>Sigstore bundle</strong> published alongside it - proof the bytes came out of this
+repository's release workflow on a version tag, not merely from the right
+host. Verification failure is fatal, with no fallback. The fetch is
+HTTPS-only, including every redirect hop.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--check</code></td>
+<td><code>false</code></td>
+<td>Report installed vs latest release version and exit without changing anything.</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td><code>false</code></td>
+<td>Print the source URL, signature status, and the equivalent hand-run one-liner, without fetching or executing.</td>
+</tr>
+<tr>
+<td><code>--url</code></td>
+<td>the latest release's installer asset</td>
+<td>Override the installer URL. A custom URL carries no Sigstore bundle, so it runs TLS-only with a printed warning.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The installer's env knobs pass through: <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version, <code>SEAMLESS_INSTALL_DIR=...</code> retargets, exactly as the
+curl installer does.</p>
 <h2 id="seamlessd_map_repo">seamlessd map-repo</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
 </span></span></code></pre><p>Adds an entry to the <code>repo_project_map</code> setting, so an agent whose working
@@ -623,7 +668,7 @@ daemon is running older code than what you just built.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
+      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_update">seamlessd update</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
     </ul>
   </aside>
   

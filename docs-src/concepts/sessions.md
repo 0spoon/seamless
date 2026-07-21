@@ -132,3 +132,9 @@ marks the idle ambient session `expired`; those expired ambient findings still
 surface in future briefings. Keep findings tight - briefings show a short preview
 - but they are stored in full, not rejected, so a long finding is fine when it
 earns it.
+
+The end of a session also harvests **real model token usage** - input, cached,
+cache-creation, and output counts read from the client's own transcript
+(Claude Code) or rollout file (Codex), not estimated from injected bytes. The
+session's console page shows them as its "Model tokens" panel; a session whose
+client exposes no transcript simply records none.
