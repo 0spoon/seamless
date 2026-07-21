@@ -7,7 +7,7 @@ conventions see `AGENTS.md`.
 
 Seamless is a local-first agent memory and coordination substrate. Its clients are
 AI agents (Claude Code and friends); the human is an observer/editor. It provides
-persistent memory with a lifecycle (supersession, provenance, arbitration, a
+persistent memory with a lifecycle (supersession, provenance, archival, a
 gardener), ambient sessions via Claude Code hooks, a dependency-aware task
 ready-queue, research trials, hybrid recall, and a read-mostly observability
 console. Go backend, no CGO, single binary + CLI.
@@ -36,7 +36,7 @@ internal/markdown/ agent markdown -> sanitized console HTML (goldmark + bluemond
 internal/llm/      OpenAI (default), Ollama, Anthropic chat + embeddings   [P1]
 internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF),
                    console search                                          [P2/P4]
-internal/lifecycle/ supersession, arbitration, provenance                  [P3]
+internal/lifecycle/ supersession, archival, provenance                     [P3]
 # (the dependency-aware ready-queue + lease-based claiming live in
 #  internal/store/tasks*.go -- there is no internal/tasks package)
 internal/gardener/ dedup / staleness / digest / stale-plan passes, plus the

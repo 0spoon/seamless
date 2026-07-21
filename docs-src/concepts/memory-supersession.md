@@ -47,10 +47,11 @@ the writer, and every later reader inherits the verdict.
 
 Supersession requires the writer to *notice* the contradiction - an agent that
 writes a new memory without realizing an old one disagrees leaves both live.
-Seamless backstops this two ways: the arbiter ranks conflicting memories when
-they collide at retrieval, and the [gardener](/concepts/gardener/) runs
-dedup and staleness passes that *propose* supersessions - it never applies
-them. A related kind, `refuted`, preserves beliefs that turned out wrong as
+Seamless backstops this two ways: `memory_write` answers with a similarity
+hint when the new memory closely resembles an existing one, so the writer is
+told about the likely collision while it can still pass `supersedes`, and the
+[gardener](/concepts/gardener/) runs dedup and staleness passes that *propose*
+supersessions - it never applies them. A related kind, `refuted`, preserves beliefs that turned out wrong as
 standing warnings rather than deleting them. The full lifecycle - archive
 versus supersede versus delete - is in
 [memory & notes](/concepts/memory/).

@@ -18,8 +18,8 @@ hosted team knowledge base.
 
 ## What it gives a fleet
 
-- **Memory with a lifecycle.** Not an append-only log: memories are superseded,
-  archived, and arbitrated, so what an agent recalls is what is currently true.
+- **Memory with a lifecycle.** Not an append-only log: memories are superseded
+  and archived, so what an agent recalls is what is currently true.
 - **Ambient sessions.** Claude Code and Codex hooks open a session per agent,
   inject a budgeted briefing at startup, and harvest findings. No tool calls are
   required from the agent.

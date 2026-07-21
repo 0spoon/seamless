@@ -22,7 +22,7 @@ about it.
 |---|---|---|
 | Answers | "What is true about this project?" | "What did we produce?" |
 | Length | One idea, one line of `description` | However long the artifact is |
-| Lifecycle | Superseded, archived, arbitrated | Written, occasionally updated |
+| Lifecycle | Superseded and archived | Written, occasionally updated |
 | Reaches a briefing | Yes - this is what agents get injected | No; found via `recall` |
 | Good examples | A constraint, a gotcha, a decision | Research findings, a meeting summary, a design record |
 

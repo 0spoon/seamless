@@ -15,10 +15,6 @@ or Codex SessionStart hook, without the agent asking, displayed with an opaque
 `cc/...` or `cx/...` handle. Lifecycle identity uses the full external session
 ID plus client, not the display handle. Contrast *explicit session*.
 
-**Arbitration** - the Seamless lifecycle step that decides which of several
-competing memories wins when they disagree, alongside supersession and
-provenance.
-
 **Archive** - marking a Seamless memory invalid because it is no longer
 relevant: it leaves the indexes and stays readable. Proposed by the gardener's
 staleness pass, never done to a `constraint` or a pinned `stage`.
