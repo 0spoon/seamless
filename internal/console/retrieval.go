@@ -18,6 +18,7 @@ const staleWindowDays = 90
 // window-independent.
 type retrievalData struct {
 	Injections       int                  `json:"injections"`
+	InjectedTokens   int                  `json:"injectedTokens"`
 	MemoriesSurfaced int                  `json:"memoriesSurfaced"`
 	ActiveMemories   int                  `json:"activeMemories"`
 	ReachRate        int                  `json:"reachRate"`
@@ -63,8 +64,9 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		Title:  "Retrieval",
 		Active: "retrieval",
 		Data: retrievalData{
-			Injections: report.Injected, MemoriesSurfaced: report.MemoriesSurfaced,
-			ActiveMemories: report.ActiveMemories, ReachRate: report.ReachRate,
+			Injections: report.Injected, InjectedTokens: report.InjectedTokens,
+			MemoriesSurfaced: report.MemoriesSurfaced,
+			ActiveMemories:   report.ActiveMemories, ReachRate: report.ReachRate,
 			SessionsReached: report.SessionsReached,
 			Window:          win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			ByKind: report.ByKind, ByProject: report.ByProject, Trend: report.Trend, TrendMax: trendMax,

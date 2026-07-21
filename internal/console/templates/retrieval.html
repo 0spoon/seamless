@@ -1,116 +1,206 @@
 {{define "content"}}
 {{with .Data}}
-<div class="crumb"><a href="/console/">Overview</a> <span class="faint">/</span> <b>Retrieval</b></div>
-<div class="topbar">
-  <div>
-    <h1>Retrieval</h1>
-    <div class="sub">How memories reach agents, and whether they get read</div>
-  </div>
-</div>
-
-<div class="win-tabs win-tabs-page" data-seam-query>
-  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
-</div>
-
-<div class="card section">
-  <h2>Memory reach <span class="h2-meta">{{.WindowLabel}}</span></h2>
-  {{if .Injections}}
-  <div class="funnel">
-    <div class="step"><span class="v">{{.Injections}}</span><span class="l">Injections</span></div>
-    <div class="arrow">&rarr;</div>
-    <div class="step"><span class="v brand">{{.MemoriesSurfaced}}</span><span class="l">Memories surfaced</span></div>
-    <div class="funnel-bar">
-      <div class="track"><span style="width:{{.ReachRate}}%"></span></div>
-      <span class="cap">{{.ReachRate}}% of {{.ActiveMemories}} active memories surfaced &middot; {{.SessionsReached}} sessions reached</span>
+<div class="retrieval-page" data-retrieval>
+  <header class="retrieval-hero">
+    <div class="retrieval-hero-copy">
+      <div class="retrieval-eyebrow">{{icon "brain"}} Context circulation</div>
+      <h1>Retrieval</h1>
+      <div class="sub">See which durable knowledge reached active agent sessions, what that context cost, and where the knowledge base is going quiet.</div>
+      <div class="retrieval-hero-tags" aria-label="Retrieval report status">
+        <span>{{icon "timer"}}{{.WindowLabel}} activity</span>
+        <span>{{icon "folder-tree"}}{{len .ByProject}} knowledge base{{if ne (len .ByProject) 1}}s{{end}} measured</span>
+        {{if .Stale}}<span class="warn">{{icon "triangle-alert"}}{{len .Stale}} stale memor{{if eq (len .Stale) 1}}y{{else}}ies{{end}}</span>{{else}}<span class="ok">{{icon "check"}}No stale knowledge</span>{{end}}
+      </div>
     </div>
-  </div>
-  {{else}}<div class="empty">No injections in this window</div>{{end}}
-</div>
 
-<div class="grid-2 section">
-  <div class="card">
-    <h2>By kind <span class="h2-meta">injections &middot; memories</span></h2>
-    {{if .ByKind}}{{kindBars .ByKind}}{{else}}<div class="empty">No retrieval activity yet</div>{{end}}
-  </div>
+    <div class="retrieval-instrument" aria-label="{{if .ActiveMemories}}{{.ReachRate}} percent knowledge reach in the {{.WindowLabel}} window{{else}}No active memories to measure{{end}}">
+      <div class="retrieval-reach-ring" style="--reach:{{.ReachRate}}">
+        <div class="retrieval-reach-core"><strong>{{if .ActiveMemories}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><span>reach</span></div>
+      </div>
+      <div class="retrieval-instrument-copy">
+        <span>Window reach</span>
+        {{if .ActiveMemories}}<strong>{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
+        <small>{{.WindowLabel}} observation window</small>
+      </div>
+      <div class="retrieval-hero-metrics" aria-label="Retrieval volume and cost">
+        <div><strong>{{.Injections}}</strong><span>memory injections</span></div>
+        <div><strong>{{.SessionsReached}}</strong><span>sessions reached</span></div>
+        <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
+      </div>
+    </div>
+  </header>
 
-  <div class="card">
-    <h2>Injection trend &middot; {{.WindowLabel}}{{if .TrendMax}} <span class="h2-meta">peak {{.TrendMax}}</span>{{end}}</h2>
-    {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
-  </div>
-</div>
+  <nav class="retrieval-windowbar" aria-label="Retrieval observation window">
+    <div class="retrieval-window-copy">
+      <span>Observation window</span>
+      <strong>{{.WindowLabel}}</strong>
+      <small>Reach, volume, trend, kinds, projects, and hot memories follow this window.</small>
+    </div>
+    <div class="retrieval-window-tabs" data-seam-query>
+      {{range .Windows}}<a class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="page"{{end}} href="/console/retrieval?w={{.Key}}">{{.Label}}</a>{{end}}
+    </div>
+  </nav>
 
-<div class="section">
-  <div class="card">
-    <h2>Reach by project <span class="h2-meta">surfaced / active memories</span></h2>
+  <section class="retrieval-zone" aria-labelledby="retrieval-delivery-title">
+    <header class="retrieval-zone-head">
+      <div class="retrieval-zone-index">01</div>
+      <div>
+        <div class="retrieval-zone-kicker">Delivery path</div>
+        <h2 id="retrieval-delivery-title">How context moved</h2>
+        <p>Volume narrows into distinct knowledge, then lands in agent sessions.</p>
+      </div>
+      <span class="retrieval-zone-meta">{{.WindowLabel}}</span>
+    </header>
+
+    <article class="retrieval-flow-panel">
+      <ol class="retrieval-flow" aria-label="Retrieval delivery path">
+        <li class="injections">
+          <div class="retrieval-flow-top"><span class="retrieval-flow-icon">{{icon "arrow-down-to-line"}}</span><small>01</small></div>
+          <strong>{{.Injections}}</strong>
+          <h3>Memory injections</h3>
+          <p>Item-level context placements delivered during the window.</p>
+        </li>
+        <li class="memories">
+          <div class="retrieval-flow-top"><span class="retrieval-flow-icon">{{icon "brain"}}</span><small>02</small></div>
+          <strong>{{.MemoriesSurfaced}}</strong>
+          <h3>Distinct memories</h3>
+          <p>Active memories that surfaced at least once.</p>
+        </li>
+        <li class="sessions">
+          <div class="retrieval-flow-top"><span class="retrieval-flow-icon">{{icon "terminal"}}</span><small>03</small></div>
+          <strong>{{.SessionsReached}}</strong>
+          <h3>Sessions reached</h3>
+          <p>Agent sessions that received retrieved memory.</p>
+        </li>
+      </ol>
+      <div class="retrieval-coverage">
+        <div class="retrieval-coverage-copy">
+          <span>Knowledge-base coverage</span>
+          {{if .ActiveMemories}}<strong>{{.ReachRate}}%</strong><small>{{sub .ActiveMemories .MemoriesSurfaced}} active memor{{if eq (sub .ActiveMemories .MemoriesSurfaced) 1}}y is{{else}}ies are{{end}} still waiting to surface</small>{{else}}<strong>&mdash;</strong><small>Add active memories to establish a reach baseline</small>{{end}}
+        </div>
+        <div class="retrieval-coverage-meter" role="img" aria-label="{{if .ActiveMemories}}{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced{{else}}No active memories{{end}}"><span style="width:{{.ReachRate}}%"></span></div>
+        <div class="retrieval-coverage-end"><strong>{{.ActiveMemories}}</strong><span>active total</span></div>
+      </div>
+    </article>
+  </section>
+
+  <section class="retrieval-zone" aria-labelledby="retrieval-pattern-title">
+    <header class="retrieval-zone-head">
+      <div class="retrieval-zone-index">02</div>
+      <div>
+        <div class="retrieval-zone-kicker">Windowed behavior</div>
+        <h2 id="retrieval-pattern-title">Circulation pattern</h2>
+        <p>Read the rhythm of retrieval over time and the kinds of memory carrying it.</p>
+      </div>
+      <span class="retrieval-zone-meta">{{.Injections}} injection{{if ne .Injections 1}}s{{end}}</span>
+    </header>
+
+    <div class="retrieval-analysis-grid">
+      <article class="retrieval-panel retrieval-trend-panel">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon brand">{{icon "activity"}}</span>
+          <div><span>Injection cadence</span><h3>Context traffic</h3></div>
+          {{if .TrendMax}}<small>Peak bucket <strong>{{.TrendMax}}</strong></small>{{end}}
+        </header>
+        {{if .Trend}}<div class="retrieval-chart">{{areaChart .Trend}}</div>{{else}}<div class="retrieval-panel-empty"><span>{{icon "activity"}}</span><strong>No traffic in this window</strong><small>Injection activity will draw the circulation curve.</small></div>{{end}}
+      </article>
+
+      <article class="retrieval-panel retrieval-kind-panel">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon pop">{{icon "database"}}</span>
+          <div><span>Memory mix</span><h3>Traffic by kind</h3></div>
+          <small>injections &middot; distinct memory</small>
+        </header>
+        {{if .ByKind}}{{kindBars .ByKind}}{{else}}<div class="retrieval-panel-empty"><span>{{icon "database"}}</span><strong>No kinds surfaced</strong><small>The first retrieved memory will establish the mix.</small></div>{{end}}
+      </article>
+    </div>
+  </section>
+
+  <section class="retrieval-zone" aria-labelledby="retrieval-scopes-title">
+    <header class="retrieval-zone-head">
+      <div class="retrieval-zone-index">03</div>
+      <div>
+        <div class="retrieval-zone-kicker">Scope coverage</div>
+        <h2 id="retrieval-scopes-title">Where knowledge reached</h2>
+        <p>Compare each project&rsquo;s surfaced memories with its active knowledge base.</p>
+      </div>
+      <span class="retrieval-zone-meta">{{len .ByProject}} scope{{if ne (len .ByProject) 1}}s{{end}}</span>
+    </header>
+
     {{if .ByProject}}
-    <table>
-      <thead><tr><th>Project</th><th>Reach</th><th class="num">Surfaced</th><th class="num">Active</th><th class="num">Inj</th></tr></thead>
-      <tbody>
-        {{range .ByProject}}
-        <tr>
-          <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<span class="muted">global</span>{{end}}</td>
-          <td>
-            <div class="reach-cell">
-              <div class="track"><span style="width:{{.ReachRate}}%"></span></div>
-              <span class="rp">{{.ReachRate}}%</span>
-            </div>
-          </td>
-          <td class="num">{{.Surfaced}}</td>
-          <td class="num">{{.Active}}</td>
-          <td class="num">{{.Injects}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}<div class="empty">No active memories</div>{{end}}
-  </div>
-</div>
+    <div class="retrieval-scope-list">
+      {{range .ByProject}}
+      <article class="retrieval-scope-row">
+        <div class="retrieval-scope-identity">
+          <span class="retrieval-scope-icon">{{if .Project}}{{icon "box"}}{{else}}{{icon "database"}}{{end}}</span>
+          <div>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}<small>{{.Surfaced}} of {{.Active}} active memories surfaced</small></div>
+        </div>
+        <div class="retrieval-scope-reach">
+          <div><strong>{{.ReachRate}}%</strong><span>reach</span></div>
+          <div class="retrieval-scope-meter" role="img" aria-label="{{.ReachRate}} percent reach"><span style="width:{{.ReachRate}}%"></span></div>
+        </div>
+        <div class="retrieval-scope-volume"><strong>{{.Injects}}</strong><span>injections</span></div>
+      </article>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="retrieval-wide-empty"><span>{{icon "folder-tree"}}</span><strong>No active knowledge bases</strong><small>Project reach appears after an active memory is indexed.</small></div>
+    {{end}}
+  </section>
 
-<div class="section">
-  <div class="card">
-    <h2>Most injected</h2>
-    {{if .TopInjected}}
-    <table>
-      <thead><tr><th>Memory</th><th>Kind</th><th class="num">Inj</th><th class="num">Sessions</th></tr></thead>
-      <tbody>
-        {{range .TopInjected}}
-        <tr>
-          <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
-          <td><span class="kind">{{.Kind}}</span></td>
-          <td class="num">{{.Injects}}</td>
-          <td class="num">{{.Sessions}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-    {{else}}<div class="empty">No injections recorded</div>{{end}}
-  </div>
-</div>
+  <section class="retrieval-zone retrieval-pressure-zone" aria-labelledby="retrieval-pressure-title">
+    <header class="retrieval-zone-head">
+      <div class="retrieval-zone-index">04</div>
+      <div>
+        <div class="retrieval-zone-kicker">Knowledge pressure</div>
+        <h2 id="retrieval-pressure-title">What is hot &mdash; and what is quiet</h2>
+        <p>Frequent retrieval reveals trusted context; long silence marks knowledge worth reviewing.</p>
+      </div>
+      <span class="retrieval-zone-meta">stale = no activity in {{.StaleDays}}d</span>
+    </header>
 
-{{if .Stale}}
-<div class="section">
-  <div class="card">
-    <h2>Stale <span class="h2-meta">no activity in {{.StaleDays}}d</span></h2>
-    <table>
-      <thead><tr><th>Memory</th><th>Kind</th><th>Updated</th></tr></thead>
-      <tbody>
-        {{range .Stale}}
-        <tr>
-          <td><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></td>
-          <td><span class="kind">{{.Kind}}</span></td>
-          <td class="muted" title="{{ts .Updated}}">{{ago .Updated}}</td>
-        </tr>
+    <div class="retrieval-pressure-grid">
+      <article class="retrieval-panel retrieval-hot-panel">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon pop">{{icon "brain"}}</span>
+          <div><span>{{.WindowLabel}}</span><h3>Most injected</h3></div>
+          <small>{{len .TopInjected}} memor{{if eq (len .TopInjected) 1}}y{{else}}ies{{end}}</small>
+        </header>
+        {{if .TopInjected}}
+        <ol class="retrieval-memory-list">
+          {{range $index, $memory := .TopInjected}}
+          <li>
+            <span class="retrieval-memory-rank">{{add $index 1}}</span>
+            <div class="retrieval-memory-copy"><a href="/console/memories/{{$memory.ID}}" data-peek>{{$memory.Name}}</a><span><i class="kind">{{$memory.Kind}}</i>{{if $memory.Project}}<a href="/console/projects/{{$memory.Project}}" data-peek>{{$memory.Project}}</a>{{else}}global{{end}}</span></div>
+            <div class="retrieval-memory-metrics"><strong>{{$memory.Injects}}</strong><span>inj</span><strong>{{$memory.Sessions}}</strong><span>sessions</span></div>
+          </li>
+          {{end}}
+        </ol>
+        {{else}}<div class="retrieval-panel-empty"><span>{{icon "brain"}}</span><strong>No frequently returned memory yet</strong><small>This list grows as knowledge circulates.</small></div>{{end}}
+      </article>
+
+      <article class="retrieval-panel retrieval-stale-panel{{if not .Stale}} healthy{{end}}">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon {{if .Stale}}warn{{else}}ok{{end}}">{{if .Stale}}{{icon "triangle-alert"}}{{else}}{{icon "check"}}{{end}}</span>
+          <div><span>All-time hygiene</span><h3>{{if .Stale}}Quiet knowledge{{else}}Knowledge is current{{end}}</h3></div>
+          <small>{{if .Stale}}{{len .Stale}} need{{if eq (len .Stale) 1}}s{{end}} review{{else}}0 stale{{end}}</small>
+        </header>
+        {{if .Stale}}
+        <div class="retrieval-stale-list">
+          {{range .Stale}}
+          <div class="retrieval-stale-row">
+            <span class="retrieval-stale-mark"></span>
+            <div class="retrieval-memory-copy"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span><i class="kind">{{.Kind}}</i>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></div>
+            <time title="{{ts .Updated}}">updated {{ago .Updated}}</time>
+          </div>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="retrieval-healthy-state"><span class="retrieval-healthy-mark">{{icon "check"}}</span><strong>Everything has been touched recently.</strong><p>No active memory has gone {{.StaleDays}} days without an update, injection, or read.</p></div>
         {{end}}
-      </tbody>
-    </table>
-  </div>
+      </article>
+    </div>
+  </section>
 </div>
-{{else}}
-<div class="stale-strip section">
-  <span class="lab">Stale &middot; no activity in {{.StaleDays}}d</span>
-  <span class="okdot"></span>
-  <span>No stale memories &mdash; everything has been touched recently.</span>
-</div>
-{{end}}
 {{end}}
 {{end}}

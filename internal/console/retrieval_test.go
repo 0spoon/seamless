@@ -21,15 +21,16 @@ func TestRetrievalPage_RatesAndLists(t *testing.T) {
 	// The panel measures reach: how many distinct memories are surfaced, across how
 	// many sessions. One memory surfaced in two sessions -> 2 injections, 1 memory
 	// reached, 2 sessions.
-	_, err := rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessA", Payload: map[string]any{"item_ids": []any{m.ID}}})
+	_, err := rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessA", Payload: map[string]any{"item_ids": []any{m.ID}, "emitted_estimated_tokens": 120}})
 	require.NoError(t, err)
-	_, err = rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessB", Payload: map[string]any{"item_ids": []any{m.ID}}})
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessB", Payload: map[string]any{"item_ids": []any{m.ID}, "emitted_estimated_tokens": 80}})
 	require.NoError(t, err)
 
 	var data retrievalData
 	getJSON(t, mux, "/console/retrieval?format=json", &data)
 
 	require.Equal(t, 2, data.Injections)
+	require.Equal(t, 200, data.InjectedTokens)
 	require.Equal(t, 1, data.MemoriesSurfaced)
 	require.Equal(t, 2, data.SessionsReached)
 	require.Len(t, data.ByKind, 1)
