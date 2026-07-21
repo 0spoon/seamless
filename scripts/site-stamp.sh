@@ -17,9 +17,10 @@
 
 set -eu
 
-# Every local script/stylesheet the landing page loads by name. Fonts and images
-# are omitted: they change by getting a new filename, not by mutating in place.
-PAGE=docs/index.html
+# Every local script/stylesheet the hand-written pages load by name. Fonts and
+# images are omitted: they change by getting a new filename, not by mutating in
+# place.
+PAGES="docs/index.html docs/compare/index.html"
 DIR=docs/static
 ASSETS="site.css site.js scenes.js scenes-player.js"
 
@@ -35,9 +36,12 @@ sha8() {
 for asset in $ASSETS; do
 	h=$(sha8 "$DIR/$asset")
 	esc=$(printf '%s' "$asset" | sed 's/\./\\./g')
-	tmp=$(mktemp)
-	# Rewrite static/<asset> or static/<asset>?v=xxxx -> static/<asset>?v=<h>.
-	sed -E "s|(static/$esc)(\?v=[0-9a-f]+)?|\1?v=$h|g" "$PAGE" >"$tmp"
-	mv "$tmp" "$PAGE"
+	for page in $PAGES; do
+		tmp=$(mktemp)
+		# Rewrite static/<asset> or static/<asset>?v=xxxx -> static/<asset>?v=<h>.
+		# Matches ../static/ references too: the pattern is unanchored.
+		sed -E "s|(static/$esc)(\?v=[0-9a-f]+)?|\1?v=$h|g" "$page" >"$tmp"
+		mv "$tmp" "$page"
+	done
 	echo "site-stamp: static/$asset?v=$h"
 done

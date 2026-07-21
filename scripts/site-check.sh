@@ -16,8 +16,9 @@
 #   2. every surface that teaches installing teaches the SAME two commands
 #   3. every `seamlessd <sub>` the page names in a command context is real
 #   4. each copy button copies the command it visibly shows
-#   5. each static asset carries a content-hash ?v= cache-buster that matches
-#   6. the head is complete and the canonical matches docs/CNAME
+#   5. each static asset on the hand-written pages (the landing page and the
+#      /compare/ hub) carries a content-hash ?v= cache-buster that matches
+#   6. the head is complete and the canonicals match docs/CNAME
 #   7. exactly one JSON-LD block, braces balanced, with the required types
 #   8. the JSON-LD FAQPage mirrors the visible #faq section
 #   9. every scene outcome in scenes.js appears verbatim in the SSR fallbacks
@@ -28,6 +29,7 @@
 set -eu
 
 PAGE=docs/index.html
+COMPARE=docs/compare/index.html
 MAIN=cmd/seamlessd/main.go
 
 # The canonical install commands, and the single place they are written down.
@@ -109,16 +111,22 @@ sha8() {
 		shasum -a 256 "$1" | cut -c1-8
 	fi
 }
-for asset in site.css site.js scenes.js scenes-player.js; do
-	want=$(sha8 "docs/static/$asset")
-	esc=$(printf '%s' "$asset" | sed 's/\./\\./g')
-	got=$(grep -oE "static/$esc\?v=[0-9a-f]+" "$PAGE" | head -1 | sed -E 's|.*\?v=||')
-	if [ -z "$got" ]; then
-		err "$PAGE references static/$asset without a ?v= cache-buster (run 'make site-stamp')"
-	elif [ "$got" != "$want" ]; then
-		err "$PAGE has static/$asset?v=$got but the file hashes to $want (run 'make site-stamp')"
-	fi
-done
+stamped() {
+	page=$1
+	shift
+	for asset in "$@"; do
+		want=$(sha8 "docs/static/$asset")
+		esc=$(printf '%s' "$asset" | sed 's/\./\\./g')
+		got=$(grep -oE "static/$esc\?v=[0-9a-f]+" "$page" | head -1 | sed -E 's|.*\?v=||')
+		if [ -z "$got" ]; then
+			err "$page references static/$asset without a ?v= cache-buster (run 'make site-stamp')"
+		elif [ "$got" != "$want" ]; then
+			err "$page has static/$asset?v=$got but the file hashes to $want (run 'make site-stamp')"
+		fi
+	done
+}
+stamped "$PAGE" site.css site.js scenes.js scenes-player.js
+stamped "$COMPARE" site.css site.js
 
 # 6. Head completeness. The docs pages get their head from docsgen and
 #    cmd/docsgen/seo_test.go gates them; the landing page head is hand-written,
@@ -127,6 +135,8 @@ done
 canon_host="https://$(tr -d '[:space:]' <docs/CNAME)/"
 grep -qF "<link rel=\"canonical\" href=\"$canon_host\">" "$PAGE" ||
 	err "$PAGE canonical does not match docs/CNAME [$canon_host]"
+grep -qF "<link rel=\"canonical\" href=\"${canon_host}compare/\">" "$COMPARE" ||
+	err "$COMPARE canonical does not match docs/CNAME [${canon_host}compare/]"
 for tag in \
 	'<meta name="description" content="' \
 	'<meta name="robots" content="max-image-preview:large, max-snippet:-1">' \

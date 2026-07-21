@@ -6,10 +6,10 @@ import (
 )
 
 // rootURLs are the site-root pages docsgen does not render but the sitemap must
-// still name -- today just the hand-written landing page. Deliberately a
-// constant rather than a directory scan, which would sweep in install,
-// install.ps1, SECURITY.md, and static assets.
-var rootURLs = []string{"/"}
+// still name -- the hand-written landing page and the hand-written comparison
+// hub. Deliberately a constant rather than a directory scan, which would sweep
+// in install, install.ps1, SECURITY.md, and static assets.
+var rootURLs = []string{"/", "/compare/"}
 
 // robotsTxt is written verbatim to the site root. The marker line is
 // load-bearing: the live host sits behind Cloudflare, which can serve its own

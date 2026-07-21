@@ -87,6 +87,14 @@
         },
         {
           "@type": "Question",
+          "name": "Why not just use Claude Code's Agent Teams?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Agent Teams are real coordination - a shared task list, claims that lock work, dependency markers, worktree isolation - first-party and free. But that state lives inside one team, for the life of that team: close it and the claims, the ordering, and the context are gone. Seamless is the layer underneath. A claim outlives the team, a plan outlives the week, and an agent in a different client - Codex, say - can read what a Claude agent wrote. Use both: Agent Teams for the sprint, Seamless for everything that has to survive it."
+          }
+        },
+        {
+          "@type": "Question",
           "name": "Why not just use agentmemory?",
           "acceptedAnswer": {
             "@type": "Answer",
@@ -550,6 +558,7 @@
     <div class="section-head">
       <p class="kicker">fair questions</p>
       <h2>&ldquo;Why not just use&hellip;&rdquo;</h2>
+      <p>Short answers here. The <a href="compare/">full comparison</a> - seven axes, every close alternative, and when to choose them instead - is a page of its own.</p>
     </div>
     <div class="faq">
       <details class="rv">
@@ -563,6 +572,10 @@
       <details class="rv">
         <summary>&hellip;Anthropic's built-in memory?</summary>
         <div class="a"><p>Claude's managed memory is a per-agent directory in a sandbox: one tool's silo. Seamless is shared ground across every agent you run - plus tasks, plans, atomic claiming, and a console. And it's yours: files on your disk, not files in someone's sandbox.</p></div>
+      </details>
+      <details class="rv">
+        <summary>&hellip;Claude Code's Agent Teams?</summary>
+        <div class="a"><p>Agent Teams are real coordination - a shared task list, claims that lock work, dependency markers, worktree isolation - first-party and free. But that state lives inside <em>one team</em>, for the life of that team: close it and the claims, the ordering, and the context are gone. Seamless is the layer underneath. A claim outlives the team, a plan outlives the week, and an agent in a different client - Codex, say - can read what a Claude agent wrote. Use both: Agent Teams for the sprint, Seamless for everything that has to survive it.</p></div>
       </details>
       <details class="rv">
         <summary>&hellip;agentmemory?</summary>
@@ -608,6 +621,7 @@
       <div>
         <b>project</b>
         <a href="docs/">Docs</a>
+        <a href="compare/">Compare</a>
         <a href="https://github.com/0spoon/seamless">GitHub</a>
         <a href="https://github.com/0spoon/seamless#readme">README</a>
         <a href="https://github.com/0spoon/seamless/issues">Issues</a>
