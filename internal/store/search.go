@@ -39,19 +39,42 @@ func searchLimit(limit int) int {
 	return limit
 }
 
+// addSearchSince appends an inclusive timestamp predicate for a trusted column
+// name. Callers pass only schema constants from this file; user input remains a
+// bound argument.
+func addSearchSince(sqlStr string, args []any, column string, since time.Time) (string, []any) {
+	if since.IsZero() {
+		return sqlStr, args
+	}
+	return sqlStr + " AND " + column + " >= ?", append(args, core.FormatTime(since.UTC()))
+}
+
 // SearchTasks returns tasks whose title contains q, newest-updated first. An
 // exact id also matches, so pasting a task id from a log finds its task.
 func SearchTasks(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Task, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+taskCols+` FROM tasks
-		WHERE title LIKE ? ESCAPE '\' OR id = ?
-		ORDER BY updated_at DESC, id DESC LIMIT ?`,
-		likeContains(q), q, searchLimit(limit))
+	return searchTasksSince(ctx, db, q, time.Time{}, limit, "store.SearchTasks")
+}
+
+// SearchTasksSince is SearchTasks restricted to tasks updated at or after
+// since. A zero since keeps the all-time behavior.
+func SearchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int) ([]core.Task, error) {
+	return searchTasksSince(ctx, db, q, since, limit, "store.SearchTasksSince")
+}
+
+func searchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Task, error) {
+	sqlStr := `SELECT ` + taskCols + ` FROM tasks
+		WHERE (title LIKE ? ESCAPE '\' OR id = ?)`
+	args := []any{likeContains(q), q}
+	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
+	sqlStr += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	args = append(args, searchLimit(limit))
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchTasks: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	tasks, err := scanTasksWithDeps(ctx, db, rows)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchTasks: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return tasks, nil
 }
@@ -59,24 +82,37 @@ func SearchTasks(ctx context.Context, db *sql.DB, q string, limit int) ([]core.T
 // SearchSessions returns sessions whose name contains q, newest-updated first.
 // An exact id also matches.
 func SearchSessions(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Session, error) {
-	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+` FROM sessions
-		WHERE name LIKE ? ESCAPE '\' OR id = ?
-		ORDER BY updated_at DESC, id DESC LIMIT ?`,
-		likeContains(q), q, searchLimit(limit))
+	return searchSessionsSince(ctx, db, q, time.Time{}, limit, "store.SearchSessions")
+}
+
+// SearchSessionsSince is SearchSessions restricted to sessions updated at or
+// after since. A zero since keeps the all-time behavior.
+func SearchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int) ([]core.Session, error) {
+	return searchSessionsSince(ctx, db, q, since, limit, "store.SearchSessionsSince")
+}
+
+func searchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Session, error) {
+	sqlStr := `SELECT ` + sessionCols + ` FROM sessions
+		WHERE (name LIKE ? ESCAPE '\' OR id = ?)`
+	args := []any{likeContains(q), q}
+	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
+	sqlStr += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	args = append(args, searchLimit(limit))
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchSessions: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []core.Session
 	for rows.Next() {
 		s, err := scanSession(rows)
 		if err != nil {
-			return nil, fmt.Errorf("store.SearchSessions: scan: %w", err)
+			return nil, fmt.Errorf("%s: scan: %w", op, err)
 		}
 		out = append(out, s)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.SearchSessions: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return out, nil
 }
@@ -85,25 +121,38 @@ func SearchSessions(ctx context.Context, db *sql.DB, q string, limit int) ([]cor
 // alphabetically by slug (projects are few and stable, so a name order reads
 // better than a recency one).
 func SearchProjects(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Project, error) {
+	return searchProjectsSince(ctx, db, q, time.Time{}, limit, "store.SearchProjects")
+}
+
+// SearchProjectsSince is SearchProjects restricted to projects updated at or
+// after since. A zero since keeps the all-time behavior.
+func SearchProjectsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int) ([]core.Project, error) {
+	return searchProjectsSince(ctx, db, q, since, limit, "store.SearchProjectsSince")
+}
+
+func searchProjectsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Project, error) {
 	needle := likeContains(q)
-	rows, err := db.QueryContext(ctx, `SELECT `+projectCols+` FROM projects
-		WHERE slug LIKE ? ESCAPE '\' OR name LIKE ? ESCAPE '\'
-		ORDER BY slug LIMIT ?`,
-		needle, needle, searchLimit(limit))
+	sqlStr := `SELECT ` + projectCols + ` FROM projects
+		WHERE (slug LIKE ? ESCAPE '\' OR name LIKE ? ESCAPE '\')`
+	args := []any{needle, needle}
+	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
+	sqlStr += ` ORDER BY slug LIMIT ?`
+	args = append(args, searchLimit(limit))
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchProjects: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []core.Project
 	for rows.Next() {
 		p, err := scanProject(rows)
 		if err != nil {
-			return nil, fmt.Errorf("store.SearchProjects: scan: %w", err)
+			return nil, fmt.Errorf("%s: scan: %w", op, err)
 		}
 		out = append(out, p)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.SearchProjects: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return out, nil
 }
@@ -111,25 +160,38 @@ func SearchProjects(ctx context.Context, db *sql.DB, q string, limit int) ([]cor
 // SearchTrials returns trials whose title or lab contains q, newest first. An
 // exact id also matches, so pasting a trial id from a log finds its trial.
 func SearchTrials(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Trial, error) {
+	return searchTrialsSince(ctx, db, q, time.Time{}, limit, "store.SearchTrials")
+}
+
+// SearchTrialsSince is SearchTrials restricted to trials created at or after
+// since. A zero since keeps the all-time behavior.
+func SearchTrialsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int) ([]core.Trial, error) {
+	return searchTrialsSince(ctx, db, q, since, limit, "store.SearchTrialsSince")
+}
+
+func searchTrialsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Trial, error) {
 	needle := likeContains(q)
-	rows, err := db.QueryContext(ctx, `SELECT `+trialCols+` FROM trials
-		WHERE title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR id = ?
-		ORDER BY created_at DESC, id DESC LIMIT ?`,
-		needle, needle, q, searchLimit(limit))
+	sqlStr := `SELECT ` + trialCols + ` FROM trials
+		WHERE (title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR id = ?)`
+	args := []any{needle, needle, q}
+	sqlStr, args = addSearchSince(sqlStr, args, "created_at", since)
+	sqlStr += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	args = append(args, searchLimit(limit))
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchTrials: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	defer func() { _ = rows.Close() }()
 	var out []core.Trial
 	for rows.Next() {
 		tr, err := scanTrial(rows)
 		if err != nil {
-			return nil, fmt.Errorf("store.SearchTrials: scan: %w", err)
+			return nil, fmt.Errorf("%s: scan: %w", op, err)
 		}
 		out = append(out, tr)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.SearchTrials: %w", err)
+		return nil, fmt.Errorf("%s: %w", op, err)
 	}
 	return out, nil
 }
@@ -154,6 +216,17 @@ type PlanSearchRow struct {
 // title over the slug fallback -- the same merge the Plans screen does, done
 // here so a search hit cannot disagree with the page it links to.
 func SearchPlans(ctx context.Context, db *sql.DB, q string, limit int) ([]PlanSearchRow, error) {
+	return searchPlansSince(ctx, db, q, time.Time{}, limit, "store.SearchPlans")
+}
+
+// SearchPlansSince is SearchPlans restricted to matching plan sources updated
+// at or after since. Plans are merged before the bound is applied, so either a
+// matching narrative or matching task can keep the composition in-window.
+func SearchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int) ([]PlanSearchRow, error) {
+	return searchPlansSince(ctx, db, q, since, limit, "store.SearchPlansSince")
+}
+
+func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]PlanSearchRow, error) {
 	lim := searchLimit(limit)
 	needle := likeContains(q)
 
@@ -167,7 +240,7 @@ func SearchPlans(ctx context.Context, db *sql.DB, q string, limit int) ([]PlanSe
 		ORDER BY n.updated_at DESC, n.id DESC`,
 		needle, needle)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchPlans: notes: %w", err)
+		return nil, fmt.Errorf("%s: notes: %w", op, err)
 	}
 	byKey := make(map[string]*PlanSearchRow)
 	var order []string
@@ -210,7 +283,7 @@ func SearchPlans(ctx context.Context, db *sql.DB, q string, limit int) ([]PlanSe
 		return noteRows.Err()
 	}()
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchPlans: notes: %w", err)
+		return nil, fmt.Errorf("%s: notes: %w", op, err)
 	}
 
 	// Tasks: the plan_slug column itself.
@@ -219,7 +292,7 @@ func SearchPlans(ctx context.Context, db *sql.DB, q string, limit int) ([]PlanSe
 		WHERE plan_slug != '' AND plan_slug LIKE ? ESCAPE '\'
 		GROUP BY plan_slug, project_slug`, needle)
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchPlans: tasks: %w", err)
+		return nil, fmt.Errorf("%s: tasks: %w", op, err)
 	}
 	err = func() error {
 		defer func() { _ = taskRows.Close() }()
@@ -237,12 +310,16 @@ func SearchPlans(ctx context.Context, db *sql.DB, q string, limit int) ([]PlanSe
 		return taskRows.Err()
 	}()
 	if err != nil {
-		return nil, fmt.Errorf("store.SearchPlans: tasks: %w", err)
+		return nil, fmt.Errorf("%s: tasks: %w", op, err)
 	}
 
 	out := make([]PlanSearchRow, 0, len(order))
 	for _, key := range order {
-		out = append(out, *byKey[key])
+		row := *byKey[key]
+		if !since.IsZero() && row.Updated.Before(since) {
+			continue
+		}
+		out = append(out, row)
 	}
 	sortPlanSearchRows(out)
 	if len(out) > lim {

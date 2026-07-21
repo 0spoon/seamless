@@ -91,6 +91,28 @@ func TestFTSSearchScoped_ProjectAndGlobal(t *testing.T) {
 	require.Empty(t, hits)
 }
 
+// The time bound belongs inside the candidate query, before LIMIT. The old row
+// wins the unbounded tie by id; once the window is applied, the recent row must
+// still surface rather than leaving an empty top-1 result.
+func TestFTSSearchSince_FiltersBeforeLimit(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	old := core.FormatTime(now.Add(-48 * time.Hour))
+	recent := core.FormatTime(now.Add(-time.Hour))
+
+	insertMemory(t, db, "01AOLD", "gotcha", "old-match", "windowed search topic", "seam", "same body", old, "")
+	insertMemory(t, db, "01ZNEW", "gotcha", "new-match", "windowed search topic", "seam", "same body", recent, "")
+
+	all, err := FTSSearch(ctx, db, "windowed search topic", nil, nil, 1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"01AOLD"}, hitIDs(all), "the fixture must make the old row occupy unbounded top-1")
+
+	hits, err := FTSSearchSince(ctx, db, "windowed search topic", nil, nil, now.Add(-24*time.Hour), 1)
+	require.NoError(t, err)
+	require.Equal(t, []string{"01ZNEW"}, hitIDs(hits))
+}
+
 func hitIDs(hits []SearchHit) []string {
 	ids := make([]string, len(hits))
 	for i, h := range hits {

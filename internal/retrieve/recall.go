@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/llm"
@@ -48,6 +49,10 @@ type Hit struct {
 	// it zero, so omitempty keeps the MCP recall payload unchanged. A lexical-only
 	// hit has no vector distance to report and also omits it.
 	Similarity float64 `json:"similarity,omitempty"`
+	// Updated is carried internally so the human search page can sort and
+	// window hydrated hits. It is deliberately excluded from Recall's JSON
+	// contract, whose payload predates console Search and must remain stable.
+	Updated time.Time `json:"-"`
 }
 
 // RecallScopes lists every valid RecallInput.Scope value. An empty Scope is a
@@ -90,7 +95,7 @@ type fusedItem struct {
 // which rows return or in what order (pinned by
 // store.TestFTSSearch_SnippetVariantMatchesPlainOrdering), so Recall paying for
 // a snippet it discards is cheaper than two divergent query paths.
-func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
+func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, since time.Time, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
 	acc := make(map[string]*fusedItem)
 	add := func(itemID, kind string, rank int, isSemantic bool, snippet string, cosine float64) {
 		f := acc[itemID]
@@ -129,7 +134,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 			// embedderCheck is where the owner sees this standing condition.
 			s.logger.Warn(who+": embed failed, FTS only", "error", err)
 		default:
-			hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, depth)
+			hits, err := store.CosineSearchSince(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, since, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -138,7 +143,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 			}
 		}
 	}
-	ftsHits, err := store.FTSSearchSnippets(ctx, s.db, query, kinds, projects, depth)
+	ftsHits, err := store.FTSSearchSnippetsSince(ctx, s.db, query, kinds, projects, since, depth)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +195,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		projects = append(projects, in.Project)
 	}
 
-	acc, err := s.candidates(ctx, in.Query, kinds, projects, recallSourceDepth, true, "retrieve.Recall")
+	acc, err := s.candidates(ctx, in.Query, kinds, projects, time.Time{}, recallSourceDepth, true, "retrieve.Recall")
 	if err != nil {
 		return nil, err
 	}
@@ -298,7 +303,7 @@ func memoryHit(m core.Memory) Hit {
 	return Hit{
 		Kind: "memory", ID: m.ID, Name: m.Name, Title: m.Name,
 		Description: sanitizeField(m.Description, 200), Project: m.Project,
-		Age: humanAge(m.Updated),
+		Age: humanAge(m.Updated), Updated: m.Updated,
 	}
 }
 
@@ -306,7 +311,7 @@ func noteHit(n core.Note) Hit {
 	return Hit{
 		Kind: "note", ID: n.ID, Name: n.Slug, Title: n.Title,
 		Description: sanitizeField(n.Description, 200), Project: n.Project,
-		Age: humanAge(n.Updated),
+		Age: humanAge(n.Updated), Updated: n.Updated,
 	}
 }
 

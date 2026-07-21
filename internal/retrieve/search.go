@@ -2,6 +2,7 @@ package retrieve
 
 import (
 	"context"
+	"time"
 )
 
 // searchSourceDepth is how many candidates each leg contributes before fusion.
@@ -18,10 +19,11 @@ const searchSourceDepth = 60
 // keystroke and must not pay a remote embedding round-trip each time.
 type SearchInput struct {
 	Query    string
-	Scope    string   // all | memories | notes
-	Projects []string // nil = every project
-	Limit    int      // default 20
-	Semantic bool     // false = FTS-only (the palette's fast path)
+	Scope    string    // all | memories | notes
+	Projects []string  // nil = every project
+	Limit    int       // default 20
+	Semantic bool      // false = FTS-only (the palette's fast path)
+	Since    time.Time // zero = all time; otherwise updated at/after this instant
 }
 
 // Search finds memories and notes for a human searching the console. It shares
@@ -59,7 +61,7 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		limit = 20
 	}
 
-	acc, err := s.candidates(ctx, in.Query, kinds, in.Projects, searchSourceDepth, in.Semantic, "retrieve.Search")
+	acc, err := s.candidates(ctx, in.Query, kinds, in.Projects, in.Since, searchSourceDepth, in.Semantic, "retrieve.Search")
 	if err != nil {
 		return nil, err
 	}

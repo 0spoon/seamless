@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -47,8 +48,13 @@ func newSemanticConsole(t *testing.T, vec []float32) (*sql.DB, *http.ServeMux) {
 // seedSearchMemory inserts a memory index row plus its fts row.
 func seedSearchMemory(t *testing.T, db *sql.DB, id, name, desc, project, body string) {
 	t.Helper()
+	seedSearchMemoryAt(t, db, id, name, desc, project, body, time.Now().UTC())
+}
+
+func seedSearchMemoryAt(t *testing.T, db *sql.DB, id, name, desc, project, body string, updated time.Time) {
+	t.Helper()
 	ctx := context.Background()
-	stamp := core.FormatTime(time.Now().UTC())
+	stamp := core.FormatTime(updated.UTC())
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO memories_index
 		    (id, kind, name, description, project, file_path, tags, valid_from,
@@ -64,7 +70,12 @@ func seedSearchMemory(t *testing.T, db *sql.DB, id, name, desc, project, body st
 
 func seedSearchTask(t *testing.T, db *sql.DB, id, project, title, planSlug string) {
 	t.Helper()
-	stamp := core.FormatTime(time.Now().UTC())
+	seedSearchTaskAt(t, db, id, project, title, planSlug, time.Now().UTC())
+}
+
+func seedSearchTaskAt(t *testing.T, db *sql.DB, id, project, title, planSlug string, updated time.Time) {
+	t.Helper()
+	stamp := core.FormatTime(updated.UTC())
 	_, err := db.ExecContext(context.Background(), `
 		INSERT INTO tasks (id, project_slug, title, body, status, created_by,
 		    plan_slug, claimed_by, lease_expires_at, created_at, updated_at, closed_at)
@@ -117,6 +128,29 @@ func TestSearch_BadFastIsRejected(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "invalid fast")
 }
 
+func TestSearch_InvalidOrAmbiguousControlsAreRejected(t *testing.T) {
+	mux := newTestMux(t)
+	for _, tc := range []struct {
+		name string
+		path string
+		want string
+	}{
+		{"empty scope", "/console/search?q=chroma&scope=", "invalid scope"},
+		{"bad window", "/console/search?q=chroma&w=yesterday", "invalid w"},
+		{"bad sort", "/console/search?q=chroma&sort=popular", "invalid sort"},
+		{"empty fast", "/console/search?q=chroma&fast=", "invalid fast"},
+		{"misspelled parameter", "/console/search?q=chroma&srot=newest", "invalid parameter"},
+		{"duplicate sort", "/console/search?q=chroma&sort=newest&sort=oldest", "exactly once"},
+		{"bad format", "/console/search?q=chroma&format=xml", "invalid format"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rr := getSearch(t, mux, tc.path)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			require.Contains(t, rr.Body.String(), tc.want)
+		})
+	}
+}
+
 func TestSearch_JSONGroupsAcrossEntities(t *testing.T) {
 	db, mux := newConsole(t)
 	ctx := context.Background()
@@ -160,6 +194,50 @@ func TestSearch_ScopeNarrowsToOneGroup(t *testing.T) {
 
 	require.Len(t, data.Groups, 1)
 	require.Equal(t, "tasks", data.Groups[0].Kind)
+}
+
+func TestSearch_TimeWindowFiltersKnowledgeAndStructuredRows(t *testing.T) {
+	db, mux := newConsole(t)
+	now := time.Now().UTC()
+	seedSearchMemoryAt(t, db, "01MEMOLD", "window-memory-old", "window topic", "seam", "window topic", now.Add(-48*time.Hour))
+	seedSearchMemoryAt(t, db, "01MEMNEW", "window-memory-new", "window topic", "seam", "window topic", now.Add(-time.Hour))
+	seedSearchTaskAt(t, db, "01TASKOLD", "seam", "window task old", "", now.Add(-48*time.Hour))
+	seedSearchTaskAt(t, db, "01TASKNEW", "seam", "window task new", "", now.Add(-time.Hour))
+
+	var data searchData
+	getJSON(t, mux, "/console/search?format=json&q=window&w=24h", &data)
+	require.Equal(t, "24h", data.Window)
+	require.Equal(t, "past 24 hours", data.WindowLabel)
+
+	ids := map[string]bool{}
+	for _, group := range data.Groups {
+		for _, row := range group.Rows {
+			ids[row.ID] = true
+		}
+	}
+	require.True(t, ids["01MEMNEW"])
+	require.True(t, ids["01TASKNEW"])
+	require.False(t, ids["01MEMOLD"])
+	require.False(t, ids["01TASKOLD"])
+}
+
+func TestSearch_PageSortsAcrossEntityGroups(t *testing.T) {
+	db, mux := newConsole(t)
+	now := time.Now().UTC()
+	seedSearchMemoryAt(t, db, "01MEM", "chronology-memory-old", "chronology topic", "alpha", "chronology topic", now.Add(-48*time.Hour))
+	seedSearchTaskAt(t, db, "01TASK", "zeta", "chronology task newest", "", now.Add(-time.Hour))
+
+	rr := getSearch(t, mux, "/console/search?q=chronology&sort=newest")
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	taskAt, memoryAt := strings.Index(body, "chronology task newest"), strings.Index(body, "chronology-memory-old")
+	require.NotEqual(t, -1, taskAt)
+	require.NotEqual(t, -1, memoryAt)
+	require.Less(t, taskAt, memoryAt,
+		"newest sort must cross the old kind-group boundary")
+	require.Contains(t, body, "search-filterbar")
+	require.Contains(t, body, ">1 year</a>")
+	require.Contains(t, body, ">Confidence</option>")
 }
 
 // A query below the FTS floor must render the empty state, not run a query that
@@ -229,7 +307,11 @@ func TestSearch_SemanticHitCarriesSimilarityPercent(t *testing.T) {
 
 	rr := getSearch(t, mux, "/console/search?q=quantum+flux&scope=memories")
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), "60%")
+	body := rr.Body.String()
+	require.Contains(t, body, "60%")
+	require.Contains(t, body, `class="search-score good"`)
+	require.Contains(t, body, `<meter min="0" max="100" value="60">`)
+	require.Contains(t, body, "Match")
 }
 
 // A lexical-only hit has no vector distance: its row must omit the similarity
@@ -246,6 +328,40 @@ func TestSearch_LexicalHitOmitsSimilarity(t *testing.T) {
 	rr := getSearch(t, mux, "/console/search?q=chroma&scope=memories")
 	require.NotContains(t, rr.Body.String(), "semantic similarity",
 		"a lexical-only page must not render the similarity tooltip span")
+	require.Contains(t, rr.Body.String(), "Text match")
+}
+
+func TestSortSearchRows(t *testing.T) {
+	base := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	original := []searchRow{
+		{ID: "text", Title: "Text", Project: "zeta", Updated: base.Add(-2 * time.Hour), Lexical: true},
+		{ID: "low", Title: "Low", Project: "alpha", Updated: base.Add(-time.Hour), Similarity: 41},
+		{ID: "high", Title: "High", Project: "beta", Updated: base, Similarity: 82},
+	}
+	ids := func(rows []searchRow) []string {
+		out := make([]string, len(rows))
+		for i, row := range rows {
+			out[i] = row.ID
+		}
+		return out
+	}
+	clone := func() []searchRow { return append([]searchRow(nil), original...) }
+
+	rows := clone()
+	sortSearchRows(rows, "newest")
+	require.Equal(t, []string{"high", "low", "text"}, ids(rows))
+
+	rows = clone()
+	sortSearchRows(rows, "oldest")
+	require.Equal(t, []string{"text", "low", "high"}, ids(rows))
+
+	rows = clone()
+	sortSearchRows(rows, "project")
+	require.Equal(t, []string{"low", "high", "text"}, ids(rows))
+
+	rows = clone()
+	sortSearchRows(rows, "confidence")
+	require.Equal(t, []string{"high", "low", "text"}, ids(rows))
 }
 
 // The palette script loads on every page including the login screen, so its

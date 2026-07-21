@@ -73,6 +73,30 @@ func TestUpsertAndCosineSearch(t *testing.T) {
 	require.Equal(t, "c", hits[0].ItemID)
 }
 
+// A high-scoring old vector must be removed before the top-K window is built,
+// leaving room for a weaker but in-window neighbor.
+func TestCosineSearchSince_FiltersBeforeTopK(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	insertMemory(t, db, "old", "gotcha", "old", "d", "seam", "b",
+		core.FormatTime(now.Add(-48*time.Hour)), "")
+	insertMemory(t, db, "new", "gotcha", "new", "d", "seam", "b",
+		core.FormatTime(now.Add(-time.Hour)), "")
+	require.NoError(t, UpsertEmbedding(ctx, db, "old", "memory", "m1", []float32{1, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "new", "memory", "m1", []float32{0.8, 0.2}))
+
+	all, err := CosineSearch(ctx, db, []float32{1, 0}, "m1", nil, nil, 1)
+	require.NoError(t, err)
+	require.Equal(t, "old", all[0].ItemID)
+
+	hits, err := CosineSearchSince(ctx, db, []float32{1, 0}, "m1", nil, nil, now.Add(-24*time.Hour), 1)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "new", hits[0].ItemID)
+}
+
 // A vector stored under a different model is invisible to a search for m1.
 func TestCosineSearchModelScope(t *testing.T) {
 	db := newEmbedDB(t)

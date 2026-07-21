@@ -1,58 +1,101 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
+{{$query := .Query}}{{$scope := .Scope}}{{$window := .Window}}{{$sort := .Sort}}
+<header class="search-hero">
+  <div class="search-hero-copy">
+    <div class="search-eyebrow">{{icon "brain"}} Knowledge explorer</div>
     <h1>Search</h1>
     <div class="sub">
-      {{if .Query}}{{.Total}} result{{if ne .Total 1}}s{{end}} for &ldquo;{{.Query}}&rdquo;{{else}}Everything the console can link to, in one query{{end}}
+      {{if .Query}}{{.Total}} result{{if ne .Total 1}}s{{end}} for &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}{{else}}Everything the console can link to, in one query{{end}}
     </div>
   </div>
-</div>
+  {{if .Query}}<div class="search-total" aria-label="{{.Total}} results"><strong>{{.Total}}</strong><span>matches</span></div>{{end}}
+</header>
 
-<div class="proj-toolbar">
-  <form class="search" method="get" action="/console/search">
-    {{icon "search"}}
-    <input name="q" aria-label="Search memories, notes, tasks, plans, trials, projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
+<form class="search search-query" method="get" action="/console/search">
+  {{icon "search"}}
+  <input name="q" aria-label="Search memories, notes, tasks, plans, trials, projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
+  <input type="hidden" name="scope" value="{{.Scope}}">
+  <input type="hidden" name="w" value="{{.Window}}">
+  <input type="hidden" name="sort" value="{{.Sort}}">
+  <button class="search-submit" type="submit">Search</button>
+</form>
+
+<section class="search-filterbar" aria-label="Search filters and sorting">
+  <div class="search-control search-control-types">
+    <span class="search-control-label">Type</span>
+    <div class="search-pills" role="list" aria-label="Result type">
+      {{range .Scopes}}
+      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{.Key}}&amp;w={{$window}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+      {{end}}
+    </div>
+  </div>
+  <div class="search-control">
+    <span class="search-control-label">Updated</span>
+    <div class="search-pills search-time-pills" role="list" aria-label="Time window">
+      {{range .Windows}}
+      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+      {{end}}
+    </div>
+  </div>
+  <form class="search-sort" method="get" action="/console/search">
+    <input type="hidden" name="q" value="{{.Query}}">
     <input type="hidden" name="scope" value="{{.Scope}}">
+    <input type="hidden" name="w" value="{{.Window}}">
+    <label for="search-sort">Sort</label>
+    <select id="search-sort" name="sort" onchange="this.form.submit()">
+      {{range .Sorts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+    <button class="btn small search-sort-apply" type="submit">Apply</button>
   </form>
-  <div class="seg">
-    {{range .Scopes}}
-    <a class="{{if .Active}}on{{end}}" href="/console/search?scope={{.Key}}&amp;q={{$.Data.Query}}">{{.Label}}</a>
-    {{end}}
-  </div>
-</div>
-
-<div class="list-detail-split">
-  <div class="list-pane">
-{{if .Groups}}
-{{range .Groups}}
-<section class="card">
-  <h2>{{.Label}} <span class="h2-meta">{{.Count}}</span></h2>
-  <div class="table-wrap">
-    <table>
-      <tbody>
-        {{range .Rows}}
-        <tr class="row-link" data-href="{{.Href}}"{{if .Peek}} data-peek{{end}}>
-          <td class="mem-name">
-            <strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
-            {{if .SnippetHTML}}<div class="desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="desc">{{.Description}}</div>{{end}}
-          </td>
-          <td class="num muted">{{if .Similarity}}<span title="semantic similarity to the query">{{.Similarity}}%</span>{{end}}</td>
-          <td><span class="kind">{{.Kind}}</span></td>
-          <td class="muted">{{if .Project}}{{.Project}}{{else}}global{{end}}</td>
-          <td class="muted">{{.Age}}</td>
-        </tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
 </section>
-{{end}}
+
+<div class="list-detail-split search-split">
+  <div class="list-pane">
+{{if .Rows}}
+    <div class="search-results-head">
+      <div class="search-breakdown" aria-label="Result counts by type">
+        {{range .Groups}}<span data-search-kind="{{.Kind}}"><b>{{.Count}}</b> {{.Label}}</span>{{end}}
+      </div>
+      <span class="search-order-note">{{if eq .Sort "relevance"}}Best matches first{{else}}Sorted by {{.Sort}}{{end}}</span>
+    </div>
+    <section class="search-results" aria-label="Search results">
+      {{range .Rows}}
+      <article class="search-result row-link" data-search-kind="{{.Kind}}" data-href="{{.Href}}"{{if .Peek}} data-peek{{end}}>
+        <div class="search-result-body">
+          <div class="search-result-titleline">
+            <strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
+          </div>
+          {{if .SnippetHTML}}<div class="search-result-desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="search-result-desc">{{.Description}}</div>{{end}}
+          <div class="search-result-meta">
+            <span class="search-kind">{{.Kind}}</span>
+            <span class="search-project">{{icon "folder-tree"}}{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
+            <span class="search-age">{{icon "timer"}}updated {{.Age}}</span>
+          </div>
+        </div>
+        <div class="search-match">
+          {{if .Similarity}}
+          <div class="search-score {{.ScoreTone}}" title="Semantic similarity to the query; this is match strength, not model certainty">
+            <div class="search-score-value"><span>Match</span><strong>{{.Similarity}}%</strong></div>
+            <meter min="0" max="100" value="{{.Similarity}}">{{.Similarity}}%</meter>
+            <small>{{if .Lexical}}Text + semantic{{else}}Semantic{{end}}</small>
+          </div>
+          {{else if .Lexical}}
+          <div class="search-text-match" title="The query appears in this result">
+            {{icon "search"}}<span><strong>Text match</strong><small>Keyword</small></span>
+          </div>
+          {{else}}
+          <div class="search-related"><strong>Related</strong><small>Semantic</small></div>
+          {{end}}
+        </div>
+      </article>
+      {{end}}
+    </section>
 {{else}}
 {{if .Query}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo;.</div></div>
+    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}.</div><a href="/console/search?scope={{.Scope}}&amp;w=all&amp;sort={{.Sort}}&amp;q={{.Query}}">Search all time</a></div>
 {{else}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
+    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
 {{end}}
 {{end}}
   </div><!-- .list-pane -->

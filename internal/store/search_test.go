@@ -109,6 +109,20 @@ func TestSearchTasks_LimitAndOrder(t *testing.T) {
 	require.Equal(t, "01NEW", got[0].ID)
 }
 
+func TestSearchTasksSince_FiltersBeforeLimit(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	insertSearchTask(t, db, "01OLD", "seam", "window search old", "", core.FormatTime(now.Add(-48*time.Hour)))
+	insertSearchTask(t, db, "01NEW", "seam", "window search new", "", core.FormatTime(now.Add(-time.Hour)))
+
+	got, err := SearchTasksSince(ctx, db, "window search", now.Add(-24*time.Hour), 1)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "01NEW", got[0].ID)
+}
+
 func TestSearchSessions_NameAndID(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

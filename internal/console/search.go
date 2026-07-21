@@ -19,8 +19,11 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"net/url"
 	"slices"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
@@ -29,6 +32,14 @@ import (
 // searchScopes are the accepted ?scope values: "all", the two knowledge kinds
 // retrieve.Search understands, and one per structured entity.
 var searchScopes = []string{"all", "memories", "notes", "tasks", "plans", "trials", "projects", "sessions"}
+
+// searchWindowKeys / searchSortKeys are the strict URL enums for the search
+// controls. Search defaults to all time so adding the window control does not
+// silently hide results that the page exposed before it existed.
+var (
+	searchWindowKeys = []string{"24h", "7d", "30d", "1y", "all"}
+	searchSortKeys   = []string{"relevance", "newest", "oldest", "project", "confidence"}
+)
 
 // searchQueryMax caps the query length. Longer input is truncated rather than
 // rejected: a paste is a clumsy search, not an error.
@@ -59,12 +70,15 @@ type searchRow struct {
 	Href        string        `json:"href"`
 	Description string        `json:"description,omitempty"`
 	SnippetHTML template.HTML `json:"snippetHtml,omitempty"`
+	Updated     time.Time     `json:"updated"`
+	Lexical     bool          `json:"lexical,omitempty"`
 	// Similarity is the semantic leg's cosine similarity as a percentage
 	// (1-100), so the observer can see where relevance falls off. Zero for a
 	// lexical-only hit -- an FTS match has a highlighted snippet instead of a
 	// distance -- and for the structured-entity groups, which match by LIKE.
-	Similarity int  `json:"similarity,omitempty"`
-	Peek       bool `json:"peek"`
+	Similarity int    `json:"similarity,omitempty"`
+	ScoreTone  string `json:"-"`
+	Peek       bool   `json:"peek"`
 }
 
 // searchGroup is one entity kind's results.
@@ -77,12 +91,19 @@ type searchGroup struct {
 
 // searchData is the page/JSON payload.
 type searchData struct {
-	Query  string        `json:"query"`
-	Scope  string        `json:"scope"`
-	Fast   bool          `json:"fast"`
-	Groups []searchGroup `json:"groups"`
-	Total  int           `json:"total"`
-	Scopes []searchScope `json:"-"` // the page's scope selector; not part of the JSON contract
+	Query       string               `json:"query"`
+	Scope       string               `json:"scope"`
+	Sort        string               `json:"sort"`
+	Window      string               `json:"window"`
+	WindowLabel string               `json:"windowLabel"`
+	Fast        bool                 `json:"fast"`
+	Groups      []searchGroup        `json:"groups"`
+	Total       int                  `json:"total"`
+	Rows        []searchRow          `json:"-"` // unified, globally sorted page projection
+	Since       time.Time            `json:"-"`
+	Scopes      []searchScope        `json:"-"`
+	Windows     []searchWindowOption `json:"-"`
+	Sorts       []searchSortOption   `json:"-"`
 }
 
 // highlightSnippet renders an FTS snippet as safe HTML with the matched terms
@@ -106,29 +127,82 @@ func highlightSnippet(raw string) template.HTML {
 // wants reports whether scope selects the given kind.
 func (d searchData) wants(kind string) bool { return d.Scope == "all" || d.Scope == kind }
 
+var searchParamNames = []string{"q", "scope", "w", "sort", "fast", "format"}
+
+// validateSearchParams rejects misspelled and ambiguous query parameters. The
+// search controls are bookmarkable API inputs: silently ignoring ?srot=project
+// would render a plausible relevance-ordered page that the caller cannot tell
+// from success.
+func validateSearchParams(values url.Values) error {
+	for key, vals := range values {
+		if !slices.Contains(searchParamNames, key) {
+			return fmt.Errorf("invalid parameter %q: valid parameters are %s", key, strings.Join(searchParamNames, ", "))
+		}
+		if len(vals) != 1 {
+			return fmt.Errorf("parameter %q must be provided exactly once", key)
+		}
+	}
+	if format, ok := values["format"]; ok && format[0] != "json" {
+		return fmt.Errorf("invalid format %q: valid value is json (or omit)", format[0])
+	}
+	return nil
+}
+
+// searchEnumParam applies a default only when the key is absent. An explicitly
+// empty or unknown value is an error, matching the console's no-silent-fallback
+// boundary contract.
+func searchEnumParam(values url.Values, key, fallback string, valid []string) (string, error) {
+	vals, ok := values[key]
+	if !ok {
+		return fallback, nil
+	}
+	value := vals[0]
+	if !slices.Contains(valid, value) {
+		return "", fmt.Errorf("invalid %s %q: valid values are %s", key, value, strings.Join(valid, ", "))
+	}
+	return value, nil
+}
+
 func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	values := r.URL.Query()
+	if err := validateSearchParams(values); err != nil {
+		s.badRequest(w, r, err.Error())
+		return
+	}
+	q := strings.TrimSpace(values.Get("q"))
 	if n := []rune(q); len(n) > searchQueryMax {
 		q = strings.TrimSpace(string(n[:searchQueryMax]))
 	}
-	scope := r.URL.Query().Get("scope")
-	if scope == "" {
-		scope = "all"
-	}
-	if !slices.Contains(searchScopes, scope) {
-		s.badRequest(w, r, fmt.Sprintf("invalid scope %q: valid values are %s",
-			scope, strings.Join(searchScopes, ", ")))
+	scope, err := searchEnumParam(values, "scope", "all", searchScopes)
+	if err != nil {
+		s.badRequest(w, r, err.Error())
 		return
 	}
-	fastParam := r.URL.Query().Get("fast")
-	if fastParam != "" && fastParam != "1" {
+	sortKey, err := searchEnumParam(values, "sort", "relevance", searchSortKeys)
+	if err != nil {
+		s.badRequest(w, r, err.Error())
+		return
+	}
+	windowKey, err := searchEnumParam(values, "w", "all", searchWindowKeys)
+	if err != nil {
+		s.badRequest(w, r, err.Error())
+		return
+	}
+	fastParam := values.Get("fast")
+	if _, present := values["fast"]; present && fastParam != "1" {
 		s.badRequest(w, r, fmt.Sprintf("invalid fast %q: valid values are 1 (or omit)", fastParam))
 		return
 	}
 	fast := fastParam == "1"
+	window := resolveSearchWindow(windowKey, time.Now().UTC())
 
-	data := searchData{Query: q, Scope: scope, Fast: fast, Scopes: searchScopeOptions(scope)}
+	data := searchData{
+		Query: q, Scope: scope, Sort: sortKey,
+		Window: window.Key, WindowLabel: window.Label, Since: window.Since,
+		Fast: fast, Scopes: searchScopeOptions(scope),
+		Windows: searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
+	}
 	if len([]rune(q)) < searchQueryMin {
 		// Too short to match anything: render the empty state rather than a
 		// query that would promise results it cannot find.
@@ -151,7 +225,9 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	data.Groups = groups
 	for _, g := range groups {
 		data.Total += g.Count
+		data.Rows = append(data.Rows, g.Rows...)
 	}
+	sortSearchRows(data.Rows, data.Sort)
 	s.render(w, r, "search", pageData{Title: "Search", Active: "search", Data: data})
 }
 
@@ -173,7 +249,7 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			scope = data.Scope
 		}
 		hits, err := s.cfg.Retrieve.Search(ctx, retrieve.SearchInput{
-			Query: data.Query, Scope: scope, Limit: limit, Semantic: !data.Fast,
+			Query: data.Query, Scope: scope, Limit: limit, Semantic: !data.Fast, Since: data.Since,
 		})
 		if err != nil {
 			return nil, err
@@ -192,7 +268,7 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 	}
 
 	if data.wants("tasks") {
-		tasks, err := store.SearchTasks(ctx, s.cfg.DB, data.Query, limit)
+		tasks, err := store.SearchTasksSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -201,14 +277,14 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "task", ID: t.ID, Title: t.Title, Project: t.ProjectSlug,
 				Age: ago(t.UpdatedAt), Href: "/console/tasks/" + t.ID,
-				Description: string(t.Status), Peek: true,
+				Description: string(t.Status), Updated: t.UpdatedAt, Lexical: true, Peek: true,
 			})
 		}
 		add("tasks", "Tasks", rows)
 	}
 
 	if data.wants("plans") {
-		plans, err := store.SearchPlans(ctx, s.cfg.DB, data.Query, limit)
+		plans, err := store.SearchPlansSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -216,14 +292,15 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		for _, p := range plans {
 			rows = append(rows, searchRow{
 				Kind: "plan", ID: p.Slug, Title: p.Title, Project: p.Project,
-				Age: ago(p.Updated), Href: "/console/plans/" + p.Slug, Peek: true,
+				Age: ago(p.Updated), Updated: p.Updated, Href: "/console/plans/" + p.Slug,
+				Lexical: true, Peek: true,
 			})
 		}
 		add("plans", "Plans", rows)
 	}
 
 	if data.wants("trials") {
-		trials, err := store.SearchTrials(ctx, s.cfg.DB, data.Query, limit)
+		trials, err := store.SearchTrialsSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -236,29 +313,30 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "trial", ID: tr.ID, Title: tr.Title, Project: tr.ProjectSlug,
 				Age: ago(tr.CreatedAt), Href: "/console/trials/" + tr.ID,
-				Description: desc, Peek: true,
+				Description: desc, Updated: tr.CreatedAt, Lexical: true, Peek: true,
 			})
 		}
 		add("trials", "Trials", rows)
 	}
 
 	if data.wants("projects") {
-		projects, err := store.SearchProjects(ctx, s.cfg.DB, data.Query, limit)
+		projects, err := store.SearchProjectsSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
 		}
 		rows := make([]searchRow, 0, len(projects))
 		for _, p := range projects {
 			rows = append(rows, searchRow{
-				Kind: "project", ID: p.Slug, Title: p.Slug, Age: ago(p.UpdatedAt),
-				Href: "/console/projects/" + p.Slug, Description: p.Name, Peek: true,
+				Kind: "project", ID: p.Slug, Title: p.Slug, Project: p.Slug, Age: ago(p.UpdatedAt),
+				Href: "/console/projects/" + p.Slug, Description: p.Name,
+				Updated: p.UpdatedAt, Lexical: true, Peek: true,
 			})
 		}
 		add("projects", "Projects", rows)
 	}
 
 	if data.wants("sessions") {
-		sessions, err := store.SearchSessions(ctx, s.cfg.DB, data.Query, limit)
+		sessions, err := store.SearchSessionsSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -267,7 +345,7 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "session", ID: sess.ID, Title: sess.Name, Project: sess.ProjectSlug,
 				Age: ago(sess.UpdatedAt), Href: "/console/sessions/" + sess.ID,
-				Description: string(sess.Status), Peek: true,
+				Description: string(sess.Status), Updated: sess.UpdatedAt, Lexical: true, Peek: true,
 			})
 		}
 		add("sessions", "Sessions", rows)
@@ -282,10 +360,11 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 func hitRow(h retrieve.Hit) searchRow {
 	row := searchRow{
 		Kind: h.Kind, ID: h.ID, Title: h.Title, Project: h.Project,
-		Age: h.Age, Description: h.Description, Peek: true,
+		Age: h.Age, Description: h.Description, Updated: h.Updated, Peek: true,
 	}
 	if h.Similarity > 0 {
 		row.Similarity = min(int(h.Similarity*100+0.5), 100)
+		row.ScoreTone = similarityTone(row.Similarity)
 	}
 	if h.Kind == "note" {
 		row.Href = "/console/notes/" + h.ID
@@ -294,8 +373,115 @@ func hitRow(h retrieve.Hit) searchRow {
 	}
 	if h.Snippet != "" {
 		row.SnippetHTML = highlightSnippet(h.Snippet)
+		row.Lexical = true
 	}
 	return row
+}
+
+func similarityTone(score int) string {
+	switch {
+	case score >= 70:
+		return "strong"
+	case score >= 45:
+		return "good"
+	default:
+		return "related"
+	}
+}
+
+// sortSearchRows orders the unified page projection. Relevance deliberately
+// preserves the grouped retrieval order: knowledge is fused-ranked, while the
+// structured stores provide their own deterministic defaults.
+func sortSearchRows(rows []searchRow, sortKey string) {
+	if sortKey == "relevance" {
+		return
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		a, b := rows[i], rows[j]
+		switch sortKey {
+		case "newest":
+			return a.Updated.After(b.Updated)
+		case "oldest":
+			return a.Updated.Before(b.Updated)
+		case "project":
+			ap, bp := strings.ToLower(a.Project), strings.ToLower(b.Project)
+			if ap != bp {
+				return ap < bp // global (empty) sorts first
+			}
+			if !a.Updated.Equal(b.Updated) {
+				return a.Updated.After(b.Updated)
+			}
+			return strings.ToLower(a.Title) < strings.ToLower(b.Title)
+		case "confidence":
+			aScored, bScored := a.Similarity > 0, b.Similarity > 0
+			if aScored != bScored {
+				return aScored
+			}
+			if a.Similarity != b.Similarity {
+				return a.Similarity > b.Similarity
+			}
+			if a.Lexical != b.Lexical {
+				return a.Lexical
+			}
+			return false
+		default:
+			return false // validated at the HTTP boundary
+		}
+	})
+}
+
+type searchWindow struct {
+	Key   string
+	Label string
+	Since time.Time
+}
+
+type searchWindowOption struct {
+	Key    string
+	Label  string
+	Active bool
+}
+
+func resolveSearchWindow(key string, now time.Time) searchWindow {
+	switch key {
+	case "24h":
+		return searchWindow{Key: key, Label: "past 24 hours", Since: now.Add(-24 * time.Hour)}
+	case "7d":
+		return searchWindow{Key: key, Label: "past 7 days", Since: now.AddDate(0, 0, -7)}
+	case "30d":
+		return searchWindow{Key: key, Label: "past 30 days", Since: now.AddDate(0, 0, -30)}
+	case "1y":
+		return searchWindow{Key: key, Label: "past year", Since: now.AddDate(-1, 0, 0)}
+	default:
+		return searchWindow{Key: "all", Label: "all time"}
+	}
+}
+
+func searchWindowOptions(active string) []searchWindowOption {
+	labels := map[string]string{"24h": "24h", "7d": "7 days", "30d": "30 days", "1y": "1 year", "all": "All"}
+	out := make([]searchWindowOption, 0, len(searchWindowKeys))
+	for _, key := range searchWindowKeys {
+		out = append(out, searchWindowOption{Key: key, Label: labels[key], Active: key == active})
+	}
+	return out
+}
+
+type searchSortOption struct {
+	Key      string
+	Label    string
+	Selected bool
+}
+
+func searchSortOptions(active string) []searchSortOption {
+	labels := map[string]string{
+		"relevance": "Relevance", "newest": "Newest first", "oldest": "Oldest first",
+		"project": "Project", "confidence": "Confidence",
+	}
+	out := make([]searchSortOption, 0, len(searchSortKeys))
+	for _, key := range searchSortKeys {
+		out = append(out, searchSortOption{Key: key, Label: labels[key], Selected: key == active})
+	}
+	return out
 }
 
 // searchScope is one entry in the page's scope selector.

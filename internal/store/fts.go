@@ -5,7 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // Snippet marks wrap the matched terms inside a SnippetHit.Snippet. They are
@@ -52,7 +55,26 @@ type SnippetHit struct {
 // with no index row (notes, or an orphan) has nothing to invalidate it and is
 // kept.
 func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
-	hits, err := ftsSearch(ctx, db, query, kinds, projects, limit, false)
+	hits, err := ftsSearch(ctx, db, query, kinds, projects, time.Time{}, limit, false)
+	if err != nil {
+		return nil, err
+	}
+	if hits == nil {
+		return nil, nil
+	}
+	out := make([]SearchHit, len(hits))
+	for i, h := range hits {
+		out[i] = h.SearchHit
+	}
+	return out, nil
+}
+
+// FTSSearchSince is FTSSearch restricted to index rows updated at or after
+// since. A zero since keeps the unbounded behavior. The predicate lives before
+// LIMIT so old, highly-ranked rows cannot crowd in-window matches out of the
+// candidate set.
+func FTSSearchSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int) ([]SearchHit, error) {
+	hits, err := ftsSearch(ctx, db, query, kinds, projects, since, limit, false)
 	if err != nil {
 		return nil, err
 	}
@@ -72,12 +94,18 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 // ordering cannot drift between the snippet and no-snippet paths -- callers rely
 // on both returning identical hits for identical inputs.
 func FTSSearchSnippets(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SnippetHit, error) {
-	return ftsSearch(ctx, db, query, kinds, projects, limit, true)
+	return ftsSearch(ctx, db, query, kinds, projects, time.Time{}, limit, true)
+}
+
+// FTSSearchSnippetsSince is the windowed form of FTSSearchSnippets. See
+// FTSSearchSince for why the time predicate is part of the candidate query.
+func FTSSearchSnippetsSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int) ([]SnippetHit, error) {
+	return ftsSearch(ctx, db, query, kinds, projects, since, limit, true)
 }
 
 // ftsSearch is the shared body of both FTS entry points. withSnippet adds the
 // snippet() projection; everything else about the query is identical.
-func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int, withSnippet bool) ([]SnippetHit, error) {
+func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -96,6 +124,7 @@ func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 	}
 	sqlStr := `SELECT ` + sel + ` FROM fts
 		LEFT JOIN memories_index mi ON mi.id = fts.item_id
+		LEFT JOIN notes_index ni ON ni.id = fts.item_id
 		WHERE fts MATCH ? AND (mi.id IS NULL OR mi.invalid_at IS NULL)`
 	args = append(args, match)
 	if len(kinds) > 0 {
@@ -109,6 +138,10 @@ func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 		for _, p := range projects {
 			args = append(args, p)
 		}
+	}
+	if !since.IsZero() {
+		sqlStr += ` AND COALESCE(mi.updated_at, ni.updated_at) >= ?`
+		args = append(args, core.FormatTime(since.UTC()))
 	}
 	// item_id is a deterministic tiebreak: equal-bm25 rows would otherwise come
 	// back in an undefined order that can flip between runs and destabilize
