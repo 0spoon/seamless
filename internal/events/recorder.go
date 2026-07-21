@@ -243,16 +243,20 @@ func (r *Recorder) ByKindsSince(ctx context.Context, kinds []core.EventKind, sin
 	return scanEvents(rows)
 }
 
-// KindTick is one event's timestamp and kind -- the minimal projection the
-// console buckets into the interaction-volume histogram.
+// KindTick is one event's id, timestamp, and kind -- the minimal projection the
+// console buckets into the interaction-volume histogram. ID lets an interactive
+// bucket link back to its newest represented event without fetching wide event
+// payloads for the chart.
 type KindTick struct {
+	ID   string
 	TS   time.Time
 	Kind string
 }
 
-// KindTimeline returns the (ts, kind) of every event of the given kinds at or
-// after sinceTS, newest first and capped at limit. project scopes to one project
-// slug when non-empty. Only two columns are read, so a wide window stays cheap.
+// KindTimeline returns the (id, ts, kind) of every event of the given kinds at
+// or after sinceTS, newest first and capped at limit. project scopes to one
+// project slug when non-empty. Only three narrow columns are read, so a wide
+// window stays cheap.
 // An empty sinceTS spans all history (bounded by limit); an empty kinds slice or
 // non-positive limit returns nil.
 func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, project, sinceTS string, limit int) ([]KindTick, error) {
@@ -260,7 +264,7 @@ func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, pro
 	if ph == "" || limit <= 0 {
 		return nil, nil
 	}
-	q := `SELECT ts, kind FROM events WHERE kind IN (` + ph + `)`
+	q := `SELECT id, ts, kind FROM events WHERE kind IN (` + ph + `)`
 	if project != "" {
 		q += ` AND project_slug = ?`
 		args = append(args, project)
@@ -278,15 +282,15 @@ func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, pro
 	defer rows.Close()
 	var out []KindTick
 	for rows.Next() {
-		var tsStr, kind string
-		if err := rows.Scan(&tsStr, &kind); err != nil {
+		var id, tsStr, kind string
+		if err := rows.Scan(&id, &tsStr, &kind); err != nil {
 			return nil, fmt.Errorf("events.KindTimeline scan: %w", err)
 		}
 		ts, err := core.ParseTime(tsStr)
 		if err != nil {
 			return nil, fmt.Errorf("events.KindTimeline time: %w", err)
 		}
-		out = append(out, KindTick{TS: ts, Kind: kind})
+		out = append(out, KindTick{ID: id, TS: ts, Kind: kind})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("events.KindTimeline: %w", err)

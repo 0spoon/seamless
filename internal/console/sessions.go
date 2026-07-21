@@ -292,7 +292,7 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			interactions = append(interactions, toInteractionRow(e, namer))
-			ticks = append(ticks, events.KindTick{TS: e.TS, Kind: string(e.Kind)})
+			ticks = append(ticks, events.KindTick{ID: e.ID, TS: e.TS, Kind: string(e.Kind)})
 		}
 		if len(ticks) > 0 {
 			// Span the session's own activity (first -> last event), not up to now,

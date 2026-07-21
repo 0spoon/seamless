@@ -1,11 +1,12 @@
 /* Shared Interactions client module (window.IX).
  *
- * Both Interactions surfaces use it: the live feed (/console/interactions) builds
- * rows from JSON via IX.buildRow, and the project-detail tab upgrades its
- * server-rendered rows via IX.enhance. One value renderer (JSON pretty-print +
- * syntax highlight + escape decode + line clamp), one section builder (with a
- * copy button wired to the global .copy-btn handler), one highlights strip, and
- * one volume-histogram renderer -- so the two surfaces stay visually identical.
+ * All Interactions surfaces use it: the live feed (/console/interactions) builds
+ * rows from JSON via IX.buildRow, while the project and session detail pages
+ * upgrade their server-rendered rows via IX.enhance. One value renderer (JSON
+ * pretty-print + syntax highlight + escape decode + line clamp), one section
+ * builder (with a copy button wired to the global .copy-btn handler), one
+ * highlights strip, and one volume-histogram renderer keep the three surfaces
+ * visually and behaviorally aligned.
  *
  * All dynamic text enters the DOM via textContent (never innerHTML), so
  * highlighting stays XSS-safe. The only innerHTML use is for static, trusted
@@ -317,17 +318,91 @@
 
   // ---- volume histogram ------------------------------------------------------
   var VOL_CATS = ['tool', 'inject', 'prompt', 'session', 'plan'];
+  var VOL_META = {
+    tool: 'Tools',
+    inject: 'Injections',
+    prompt: 'Prompts',
+    session: 'Sessions',
+    plan: 'Plans'
+  };
+  var volTipSeq = 0;
 
-  function fmtClock(ts) {
+  function fmtClock(ts, seconds) {
     var t = Date.parse(ts);
     if (isNaN(t)) return '';
-    try { return new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); }
+    var opts = { hour: 'numeric', minute: '2-digit' };
+    if (seconds) opts.second = '2-digit';
+    try { return new Date(t).toLocaleTimeString([], opts); }
     catch (e) { return ''; }
   }
 
+  function fmtDay(ms) {
+    var d = new Date(ms);
+    var opts = { month: 'short', day: 'numeric' };
+    if (d.getFullYear() !== new Date().getFullYear()) opts.year = 'numeric';
+    try { return d.toLocaleDateString([], opts); }
+    catch (e) { return ''; }
+  }
+
+  function sameDay(a, b) {
+    var x = new Date(a), y = new Date(b);
+    return x.getFullYear() === y.getFullYear() &&
+      x.getMonth() === y.getMonth() && x.getDate() === y.getDate();
+  }
+
+  function fmtRange(from, to, sliceMs) {
+    if (isNaN(from) || isNaN(to)) return '';
+    var seconds = sliceMs < 60000;
+    if (sameDay(from, to)) {
+      return fmtDay(from) + ', ' + fmtClock(from, seconds) + '\u2013' + fmtClock(to, seconds);
+    }
+    return fmtDay(from) + ', ' + fmtClock(from, false) + ' \u2013 ' +
+      fmtDay(to) + ', ' + fmtClock(to, false);
+  }
+
+  function bucketAria(b, range, action) {
+    var parts = [range, b.n + ' interaction' + (b.n === 1 ? '' : 's')];
+    VOL_CATS.forEach(function (cat) {
+      if (b[cat]) parts.push(VOL_META[cat] + ' ' + b[cat]);
+    });
+    if (action === 'filter') parts.push('Activate to isolate this time slice');
+    if (action === 'open') parts.push('Activate to open the latest event');
+    return parts.filter(Boolean).join('. ');
+  }
+
+  function fillVolumeTip(tip, b, range, action) {
+    tip.textContent = '';
+    tip.appendChild(el('div', 'ix-vol-tip-time', range));
+    tip.appendChild(el('div', 'ix-vol-tip-total', b.n + ' interaction' + (b.n === 1 ? '' : 's')));
+    var list = el('div', 'ix-vol-tip-list');
+    VOL_CATS.forEach(function (cat) {
+      if (!b[cat]) return;
+      var row = el('div', 'ix-vol-tip-row');
+      row.appendChild(el('span', 'ix-vol-tip-dot ' + cat));
+      row.appendChild(el('span', 'ix-vol-tip-label', VOL_META[cat]));
+      row.appendChild(el('strong', 'ix-vol-tip-n', b[cat]));
+      list.appendChild(row);
+    });
+    tip.appendChild(list);
+    if (action === 'filter') tip.appendChild(el('div', 'ix-vol-tip-action', 'Click to isolate this time slice'));
+    if (action === 'open') tip.appendChild(el('div', 'ix-vol-tip-action', 'Open the latest event in this bucket'));
+  }
+
+  function placeVolumeTip(mount, tip, bar) {
+    var mr = mount.getBoundingClientRect(), br = bar.getBoundingClientRect();
+    var left = br.left - mr.left + br.width / 2 - tip.offsetWidth / 2;
+    left = Math.max(6, Math.min(left, mount.clientWidth - tip.offsetWidth - 6));
+    var top = br.top - mr.top - tip.offsetHeight - 10;
+    if (mr.top + top < 8) top = br.bottom - mr.top + 10;
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
   // renderVolume draws bucketed interaction volume as a stacked bar chart into
-  // mount. opts.onSelect(fromMs, toMs, index, barEl) wires click-to-filter; when
-  // omitted the bars are hover-only. Returns the bar elements (for selection UI).
+  // mount. Every non-empty bucket gets a visible hover/focus breakdown. An
+  // opts.onSelect(fromMs, toMs, index, barEl) callback makes buckets filter the
+  // current feed; otherwise latestId makes them link to the newest event in the
+  // bucket. Returns the bar elements for selection state on the live feed.
   function renderVolume(buckets, mount, opts) {
     opts = opts || {};
     mount.textContent = '';
@@ -339,10 +414,17 @@
 
     var H = 46;
     var sliceMs = buckets.length > 1 ? (Date.parse(buckets[1].t) - Date.parse(buckets[0].t)) : 60000;
+    if (!isFinite(sliceMs) || sliceMs <= 0) sliceMs = 60000;
     var track = el('div', 'ix-vol-track');
+    var tip = el('div', 'ix-vol-tip');
+    tip.id = 'ix-vol-tip-' + (++volTipSeq);
+    tip.setAttribute('role', 'tooltip');
+    tip.hidden = true;
     var bars = [];
     buckets.forEach(function (b, i) {
-      var bar = el('div', 'ix-vbar');
+      var from = Date.parse(b.t), to = from + sliceMs;
+      var action = opts.onSelect && b.n > 0 ? 'filter' : (b.latestId && b.n > 0 ? 'open' : '');
+      var bar = el(action === 'filter' ? 'button' : (action === 'open' ? 'a' : 'div'), 'ix-vbar');
       var barPx = b.n > 0 ? Math.max(2, Math.round(b.n / maxN * H)) : 0;
       bar.style.height = barPx + 'px';
       VOL_CATS.forEach(function (cat) {
@@ -352,13 +434,32 @@
         seg.style.height = Math.max(1, Math.round(cnt / b.n * barPx)) + 'px';
         bar.appendChild(seg);
       });
-      bar.title = b.n + ' event' + (b.n === 1 ? '' : 's') + (b.t ? ' · ' + fmtClock(b.t) : '');
-      if (opts.onSelect && b.n > 0) {
-        var from = Date.parse(b.t);
+      bar.setAttribute('data-from', String(from));
+      bar.setAttribute('data-to', String(to));
+      if (b.n > 0) {
+        var range = fmtRange(from, to, sliceMs);
+        bar.classList.add('has-data');
+        bar.setAttribute('aria-label', bucketAria(b, range, action));
+        bar.setAttribute('aria-describedby', tip.id);
+        bar.onpointerenter = function () {
+          fillVolumeTip(tip, b, range, action);
+          tip.hidden = false;
+          placeVolumeTip(mount, tip, bar);
+        };
+        bar.onpointerleave = function () { tip.hidden = true; };
+        bar.onfocus = bar.onpointerenter;
+        bar.onblur = bar.onpointerleave;
+      }
+      if (action === 'filter') {
+        bar.type = 'button';
         bar.classList.add('clickable');
         bar.onclick = (function (f, idx, elBar) {
           return function () { opts.onSelect(f, f + sliceMs, idx, elBar); };
         })(from, i, bar);
+        bar.setAttribute('aria-pressed', 'false');
+      } else if (action === 'open') {
+        bar.href = '/console/events/' + encodeURIComponent(b.latestId);
+        bar.classList.add('clickable');
       }
       track.appendChild(bar);
       bars.push(bar);
@@ -366,10 +467,11 @@
     mount.appendChild(track);
 
     var axis = el('div', 'ix-vol-axis');
-    axis.appendChild(el('span', 'ix-vol-t', fmtClock(buckets[0].t)));
+    axis.appendChild(el('span', 'ix-vol-t', fmtClock(buckets[0].t, false)));
     axis.appendChild(el('span', 'ix-vol-total', total + ' interactions'));
     axis.appendChild(el('span', 'ix-vol-t', 'now'));
     mount.appendChild(axis);
+    mount.appendChild(tip);
     return bars;
   }
 
@@ -409,7 +511,8 @@
   }
 
   // mountVolume renders the histogram a server embedded as JSON in el's data-vol
-  // attribute (static, hover-only). Used by the project- and session-detail pages.
+  // attribute. Its non-empty buckets link to their latest event; the live feed
+  // calls renderVolume directly with click-to-filter instead.
   function mountVolume(el) {
     if (!el) return;
     var buckets;

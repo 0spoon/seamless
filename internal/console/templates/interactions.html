@@ -303,12 +303,18 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   // --- Volume histogram ---
   function highlightSel() {
     for (var i = 0; i < volBars.length; i++) {
-      volBars[i].classList.toggle('sel', !!timeSel && timeSel.idx === i);
+      var selected = !!timeSel &&
+        Number(volBars[i].getAttribute('data-from')) === timeSel.from &&
+        Number(volBars[i].getAttribute('data-to')) === timeSel.to;
+      volBars[i].classList.toggle('sel', selected);
+      if (volBars[i].hasAttribute('aria-pressed')) {
+        volBars[i].setAttribute('aria-pressed', selected ? 'true' : 'false');
+      }
     }
   }
 
   function onBarSelect(from, to, idx) {
-    if (timeSel && timeSel.idx === idx) timeSel = null; // toggle off
+    if (timeSel && timeSel.from === from && timeSel.to === to) timeSel = null; // toggle off
     else timeSel = { from: from, to: to, idx: idx };
     applyAll();
     highlightSel();

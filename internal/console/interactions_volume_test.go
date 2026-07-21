@@ -54,17 +54,17 @@ func TestInteractionsVolumeWindowParsing(t *testing.T) {
 
 func TestBuildVolume(t *testing.T) {
 	now := time.Date(2026, 7, 14, 12, 0, 0, 0, time.UTC)
-	mk := func(secAgo int, kind core.EventKind) events.KindTick {
-		return events.KindTick{TS: now.Add(-time.Duration(secAgo) * time.Second), Kind: string(kind)}
+	mk := func(id string, secAgo int, kind core.EventKind) events.KindTick {
+		return events.KindTick{ID: id, TS: now.Add(-time.Duration(secAgo) * time.Second), Kind: string(kind)}
 	}
 	// Newest-first (as KindTimeline returns). The 1h-old plan tick sits outside a
 	// 5-minute window and must be dropped.
 	ticks := []events.KindTick{
-		mk(1, core.EventToolCall),
-		mk(2, core.EventInjected),
-		mk(3, core.EventHookPrompt),
-		mk(30, core.EventSessionStarted),
-		mk(3600, core.EventPlanApproved),
+		mk("01TOOL", 1, core.EventToolCall),
+		mk("01INJECT", 2, core.EventInjected),
+		mk("01PROMPT", 3, core.EventHookPrompt),
+		mk("01SESSION", 30, core.EventSessionStarted),
+		mk("01PLAN", 3600, core.EventPlanApproved),
 	}
 
 	buckets := buildVolume(ticks, 300*time.Second, now)
@@ -86,6 +86,7 @@ func TestBuildVolume(t *testing.T) {
 	require.Equal(t, 1, session)
 	require.Equal(t, 0, plan)
 	require.Positive(t, buckets[volBuckets-1].N, "the most recent ticks land in the last bucket")
+	require.Equal(t, "01TOOL", buckets[volBuckets-1].LatestID, "the newest event becomes the bucket click target")
 
 	require.Nil(t, buildVolume(nil, 300*time.Second, now), "empty input yields nil")
 }
@@ -103,6 +104,21 @@ func TestInteractions_VolumeEndpoint(t *testing.T) {
 	var total int
 	for _, b := range data.Volume {
 		total += b.N
+		if b.N > 0 {
+			require.NotEmpty(t, b.LatestID, "every non-empty bucket exposes an event detail target")
+		}
 	}
 	require.Equal(t, 7, total)
+}
+
+// The shared renderer powers the live Interactions chart and the embedded
+// project/session timelines. Pin the interaction affordances in one place so a
+// later visual refactor cannot silently return the embedded charts to title-only
+// hover or remove their event-detail action.
+func TestInteractionsVolumeClient_InteractiveContract(t *testing.T) {
+	js := string(interactionsJS)
+	require.Contains(t, js, "fillVolumeTip(tip, b, range, action)", "non-empty buckets render a visible breakdown")
+	require.Contains(t, js, "bar.onfocus = bar.onpointerenter", "keyboard focus gets the same readout as pointer hover")
+	require.Contains(t, js, "'/console/events/' + encodeURIComponent(b.latestId)", "embedded charts link to the represented event")
+	require.Contains(t, js, "bar.setAttribute('aria-pressed', 'false')", "live-feed filter bars expose their toggle state")
 }

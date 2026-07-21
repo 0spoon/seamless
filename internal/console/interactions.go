@@ -174,13 +174,14 @@ type interactionsData struct {
 // its total plus a per-category split, so the bar can stack tool/injection/
 // session/plan/prompt hues like Sentry's events-over-time chart.
 type volBucket struct {
-	T       string `json:"t"` // bucket start (canonical ts), for the tooltip
-	N       int    `json:"n"` // total events in the bucket
-	Tool    int    `json:"tool,omitempty"`
-	Inject  int    `json:"inject,omitempty"`
-	Session int    `json:"session,omitempty"`
-	Plan    int    `json:"plan,omitempty"`
-	Prompt  int    `json:"prompt,omitempty"`
+	T        string `json:"t"`                  // bucket start (canonical ts), for the tooltip
+	N        int    `json:"n"`                  // total events in the bucket
+	LatestID string `json:"latestId,omitempty"` // newest event represented by this bucket
+	Tool     int    `json:"tool,omitempty"`
+	Inject   int    `json:"inject,omitempty"`
+	Session  int    `json:"session,omitempty"`
+	Plan     int    `json:"plan,omitempty"`
+	Prompt   int    `json:"prompt,omitempty"`
 }
 
 // interactionsPageLimit bounds one page / gap-fill batch of the feed.
@@ -241,6 +242,11 @@ func buildVolume(ticks []events.KindTick, window time.Duration, now time.Time) [
 		}
 		b := &out[idx]
 		b.N++
+		// KindTimeline and the session-detail caller both supply newest-first
+		// ticks, so the first id placed in a bucket is its honest click target.
+		if b.LatestID == "" {
+			b.LatestID = tk.ID
+		}
 		switch volCategory(tk.Kind) {
 		case "tool":
 			b.Tool++

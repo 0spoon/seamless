@@ -411,6 +411,7 @@ func TestKindTimeline_KindProjectAndSinceWindow(t *testing.T) {
 	all, err := r.KindTimeline(ctx, testInteractionKinds, "", "", 10)
 	require.NoError(t, err)
 	require.Len(t, all, 3)
+	require.Equal(t, "01C", all[0].ID)
 	require.True(t, all[0].TS.Equal(base.Add(2*time.Hour)), "newest first")
 	require.Equal(t, string(core.EventToolCall), all[0].Kind)
 	require.True(t, all[2].TS.Equal(base), "oldest last")

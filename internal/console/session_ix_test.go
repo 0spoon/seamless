@@ -70,4 +70,5 @@ func TestSessionDetail_InteractionsSurface(t *testing.T) {
 	require.Contains(t, body, `data-ix-title="Request"`, "tool args/prompt become a copyable IX section")
 	require.Contains(t, body, "memory_write", "the tool label shows on its row")
 	require.Contains(t, body, `data-vol="[`, "embeds the session-scoped volume buckets as JSON")
+	require.Contains(t, body, `latestId`, "volume buckets carry an event-detail click target")
 }

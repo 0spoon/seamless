@@ -65,8 +65,8 @@
     return build(area, raw);
   }
 
-  // px maps viewBox units to page pixels. The svg carries a viewBox at width:100%
-  // and height:auto, so it scales uniformly -- one factor covers both axes.
+  // px maps viewBox units to page pixels. The svg carries a viewBox and is sized
+  // width:100%/height:auto in CSS, so it scales uniformly -- one factor covers both axes.
   function px(l) {
     var r = l.svg.getBoundingClientRect();
     return { k: r.width / l.data.w || 1, left: r.left, top: r.top };

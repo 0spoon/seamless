@@ -255,7 +255,7 @@ func areaChart(points []store.TrendBucket) template.HTML {
 	alt := fmt.Sprintf("Injection trend across %d periods; peak %d at %s", n, points[peak].Count, points[peak].Label)
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div class="area"%s>`, hoverAttr(w, h, padT, padT+ph, hov))
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--brand)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="area-svg" style="color:var(--brand)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
 	b.WriteString(`<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
 	// baseline gridlines
 	for _, g := range []float64{0.25, 0.5, 0.75, 1} {
@@ -381,7 +381,7 @@ func coverageTrend(buckets []store.CoverageBucket) template.HTML {
 	alt := fmt.Sprintf("Session coverage trend across %d periods; %d%% of %d sessions left a durable artifact", n, rate, tot)
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div class="area"%s>`, hoverAttr(w, h, padT, padT+ph, hov))
-	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" width="100%%" height="auto" class="area-svg" style="color:var(--ok)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
+	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="area-svg" style="color:var(--ok)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
 	b.WriteString(`<defs><linearGradient id="covGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
 	// horizontal gridlines with % axis labels at 100 / 50 / 0
 	for _, g := range []struct {

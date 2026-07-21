@@ -670,7 +670,7 @@ details > summary { font-family: var(--font-display); }
 
 /* Area chart -- injection trend */
 .area { padding: 6px 0 2px; position: relative; } /* positions the hover tooltip */
-.area-svg { display: block; overflow: visible; width: 100%; }
+.area-svg { display: block; overflow: visible; width: 100%; height: auto; }
 .area-svg:focus { outline: none; }
 .area-svg:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: var(--radius-xs); }
 .area-ticks { display: flex; justify-content: space-between; margin-top: 8px; font-size: var(--text-2xs); color: var(--muted); font-family: var(--font-mono); }
@@ -1396,13 +1396,20 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-seg .dot.err { background: var(--danger); }
 
 /* Volume histogram: bucketed interaction counts, category-stacked bars. */
-.ix-volume { margin: 0 0 14px; padding: 11px 13px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.ix-volume { position: relative; margin: 0 0 14px; padding: 11px 13px 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .ix-volume.empty { display: none; }
 .ix-vol-track { display: flex; align-items: flex-end; gap: 2px; height: 46px; border-bottom: 1px solid var(--border); }
-.ix-vbar { flex: 1 1 0; min-width: 2px; display: flex; flex-direction: column-reverse; border-radius: 2px 2px 0 0; overflow: hidden; }
+.ix-vbar {
+  flex: 1 1 0; min-width: 2px; display: flex; flex-direction: column-reverse; padding: 0;
+  color: inherit; background: transparent; border: 0; border-radius: 2px 2px 0 0;
+  overflow: hidden; appearance: none; text-decoration: none; transform-origin: bottom;
+  transition: filter var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
 .ix-vbar.clickable { cursor: pointer; }
-.ix-vbar.clickable:hover { outline: 1px solid var(--border-strong); outline-offset: 0; }
-.ix-vbar.sel { outline: 2px solid var(--brand); }
+.ix-vbar.has-data:hover { filter: brightness(1.13); transform: translateY(-2px); box-shadow: 0 0 0 1px var(--border-strong); }
+.ix-vbar:focus { outline: none; }
+.ix-vbar:focus-visible { position: relative; z-index: 1; filter: brightness(1.13); transform: translateY(-2px); box-shadow: 0 0 0 2px var(--brand); }
+.ix-vbar.sel { position: relative; z-index: 1; box-shadow: 0 0 0 2px var(--brand); }
 .ix-vseg { width: 100%; }
 .ix-vseg.tool { background: var(--ink-2); }
 .ix-vseg.inject { background: var(--brand); }
@@ -1411,6 +1418,25 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-vseg.plan { background: var(--pop); }
 .ix-vol-axis { display: flex; justify-content: space-between; margin-top: 6px; font-size: var(--text-2xs); color: var(--faint); font-variant-numeric: tabular-nums; }
 .ix-vol-total { color: var(--muted); }
+.ix-vol-tip {
+  position: absolute; z-index: 8; width: max-content; min-width: 190px; max-width: min(250px, calc(100% - 12px));
+  padding: 9px 11px; pointer-events: none; color: var(--ink-2); background: var(--surface);
+  border: 1px solid var(--border-strong); border-radius: var(--radius-sm); box-shadow: var(--shadow-md);
+  animation: seam-pop var(--dur-fast) var(--ease-out) both;
+}
+.ix-vol-tip[hidden] { display: none; }
+.ix-vol-tip-time { color: var(--muted); font-family: var(--font-mono); font-size: var(--text-2xs); white-space: nowrap; }
+.ix-vol-tip-total { margin-top: 2px; color: var(--ink); font-family: var(--font-display); font-size: var(--text-md); font-weight: 650; font-variant-numeric: tabular-nums; }
+.ix-vol-tip-list { display: grid; gap: 3px; margin-top: 7px; }
+.ix-vol-tip-row { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 7px; color: var(--muted); font-size: var(--text-xs); }
+.ix-vol-tip-row strong { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.ix-vol-tip-dot { width: 7px; height: 7px; border-radius: 2px; background: var(--muted); }
+.ix-vol-tip-dot.tool { background: var(--ink-2); }
+.ix-vol-tip-dot.inject { background: var(--brand); }
+.ix-vol-tip-dot.prompt { background: var(--warn); }
+.ix-vol-tip-dot.session { background: var(--ok); }
+.ix-vol-tip-dot.plan { background: var(--pop); }
+.ix-vol-tip-action { margin-top: 8px; padding-top: 7px; color: var(--brand); border-top: 1px solid var(--border); font-size: var(--text-2xs); font-weight: 650; }
 
 .ix-feed { display: flex; flex-direction: column; gap: 6px; }
 .ix-row { background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: var(--radius-md); overflow: hidden; }
