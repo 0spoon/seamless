@@ -1175,6 +1175,20 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.1 {#v0-4-1}
+
+Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.1)
+
+### Features
+
+- feat(console): semantic index and storage panel on Settings
+- feat(gardener): recall-miss ledger and memory-wanted proposals
+- feat(console): session review workspace and recency-first list order
+- feat(retrieval): closed-loop utility ranking for briefings and recall
+- feat(console): redesign the login page around getting in, not locked out
+- feat(console): show memory churn on the Retrieval report
+- feat(mcp): add registry server.json for io.github.0spoon/seamless
+
 ## v0.4.0 {#v0-4-0}
 
 Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.0)
