@@ -39,10 +39,12 @@ PREFIX_BIN    := $(PREFIX)/bin
 CONFIG_DIR    := $(HOME)/.config/seamless
 CONFIG        := $(CONFIG_DIR)/seamless.yaml
 # detect = the agent clients present on this machine (codex CLI or ~/.codex,
-# claude CLI or ~/.claude), resolved by `seamlessd install-hooks` -- the same
-# selection the curl installer makes. When neither is found, install-hooks asks
-# on a terminal (defaulting to no) and errors otherwise; there is no silent
-# Claude Code fallback. Pass CLIENT=claude|codex|all to choose explicitly.
+# claude CLI or ~/.claude, the Claude app bundle or its desktop config),
+# resolved by `seamlessd install-hooks` -- the same selection the curl
+# installer makes. When nothing is found, install-hooks asks on a terminal
+# (defaulting to no) and errors otherwise; there is no silent Claude Code
+# fallback. Pass CLIENT=claude|codex|claude-desktop|all (or a comma list) to
+# choose explicitly.
 CLIENT        ?= detect
 
 # gofmt over TRACKED files only. The go tool's ./... pattern skips dot-dirs, so
@@ -124,7 +126,8 @@ help:
 	@echo "  Deploy (snapshots to stable paths; this is also the iterate loop):"
 	@echo "    install            build + copy bin/config to $(PREFIX_BIN) + $(CONFIG_DIR),"
 	@echo "                       point the service, hooks, MCP + skills there, and restart"
-	@echo "                       (CLIENT=claude|codex|all|detect selects the wired agent"
+	@echo "                       (CLIENT=claude|codex|claude-desktop|all|detect, or a comma"
+	@echo "                       list, selects the wired agent"
 	@echo "                       client; default detect = the clients on this machine)"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"

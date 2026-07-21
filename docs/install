@@ -10,20 +10,23 @@
 # script that drifts.
 #
 # What it does: fetch this platform's release archive from GitHub, verify its
-# checksum, install seamlessd + seam into ~/.local/bin, wire hooks + MCP +
-# maintained skills for the detected Claude Code/Codex client(s) (generating the
-# bearer key on first run), then run the daemon as a per-user service -- launchd
-# on macOS, systemd --user on Linux. Codex gets the secret-preserving stdio proxy
-# by default; direct HTTP remains a supported manual Codex configuration. Re-running it upgrades
+# checksum, install seamlessd + seam into ~/.local/bin, wire the detected agent
+# clients -- hooks + MCP + maintained skills for Claude Code/Codex, and the MCP
+# bridge for the Claude app chat surface (macOS; it has no hooks or skills) --
+# generating the bearer key on first run, then run the daemon as a per-user
+# service: launchd on macOS, systemd --user on Linux. Codex gets the
+# secret-preserving stdio proxy by default; direct HTTP remains a supported
+# manual Codex configuration. Re-running it upgrades
 # in place; the config and ~/.seamless are never touched. Uninstall anytime with
 # `seamlessd uninstall` (add --purge to also delete the config and data).
 #
 # Overrides:
 #   SEAMLESS_VERSION            version to install (default: latest release)
 #   SEAMLESS_INSTALL_DIR        where the binaries go (default: ~/.local/bin)
-#   SEAMLESS_CLIENT             claude|codex|all (default: the detected clients;
-#                               prompts on the terminal when both or neither are
-#                               found, and aborts when neither is found and no
+#   SEAMLESS_CLIENT             claude|codex|claude-desktop|all, or a comma list
+#                               of targets (default: the detected clients;
+#                               prompts on the terminal when several or none are
+#                               found, and aborts when none is found and no
 #                               terminal is attached -- never a silent default)
 #   SEAMLESS_NO_HOOKS=1         skip agent hooks, MCP registration, and skills
 #   SEAMLESS_NO_ONBOARD_SKILL=1 skip the one-shot seam-onboard skill
@@ -62,14 +65,16 @@ die()  { printf '\nerror: %s\n' "$*" >&2; exit 1; }
 
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# Choose the same client set that install-hooks would offer interactively. A
-# curl|sh install has non-terminal stdin (the pipe carries this script), so
-# prompts read /dev/tty instead: with a terminal attached, both clients
-# detected asks which to wire (default both) and neither detected asks whether
-# to install at all (default no, then which client -- no default). Headless,
-# both resolves to all and neither aborts with guidance; there is deliberately
-# no silent Claude Code fallback. The resolved value is passed explicitly to
-# install-hooks, and the embedded skills follow that same choice.
+# Choose the same target set that install-hooks would offer interactively: the
+# two hook clients plus, on macOS, the Claude app chat surface (MCP bridge
+# only). A curl|sh install has non-terminal stdin (the pipe carries this
+# script), so prompts read /dev/tty instead: with a terminal attached, several
+# targets detected asks which to wire (default: the detected set) and none
+# detected asks whether to install at all (default no, then which target -- no
+# default). Headless, several resolves to the detected set and none aborts with
+# guidance; there is deliberately no silent Claude Code fallback. The resolved
+# comma list is passed explicitly to install-hooks, and the embedded skills
+# follow the hook clients in that choice.
 
 # tty_available: a readable+writable controlling terminal exists. The explicit
 # redirection probe matters: /dev/tty can exist yet fail to open (CI, cron).
@@ -82,67 +87,136 @@ ask_tty() {
 	IFS= read -r REPLY </dev/tty
 }
 
-# prompt_client_choice <default|""> : the install-hooks client menu over
-# /dev/tty. An empty default (nothing detected) requires an explicit answer;
-# EOF aborts, since there is no detected set to fall back on.
+# client_has <list> <target>: comma-safe membership test -- a substring match
+# would find "claude" inside "claude-desktop".
+client_has() { case ",$1," in *,"$2",*) return 0 ;; *) return 1 ;; esac }
+
+# all_targets: what "all" and menu choice 4 expand to on this platform. There
+# is no Linux build of the Claude app, so its chat surface only exists on
+# darwin; keep in step with seamlessd's detectedTargets.allTargets.
+all_targets() {
+	if [ "$OS" = darwin ]; then echo 'claude,codex,claude-desktop'; else echo 'claude,codex'; fi
+}
+
+# compose_clients <claude01> <codex01> <desktop01>: canonical comma list in the
+# stable install order, empty when nothing is selected.
+compose_clients() {
+	CC_LIST=
+	if [ "$1" = 1 ]; then CC_LIST=claude; fi
+	if [ "$2" = 1 ]; then CC_LIST=${CC_LIST:+$CC_LIST,}codex; fi
+	if [ "$3" = 1 ]; then CC_LIST=${CC_LIST:+$CC_LIST,}claude-desktop; fi
+	echo "$CC_LIST"
+}
+
+# parse_client_choice <answer>: map a menu/env answer -- numbers or target
+# words, singly or comma-separated -- to AGENT_CLIENT (canonical comma list).
+# Returns non-zero on any unrecognized token so callers can re-prompt or die.
+parse_client_choice() {
+	PC_CLAUDE=0
+	PC_CODEX=0
+	PC_DESKTOP=0
+	PC_ANY=0
+	PC_IN=$(printf '%s' "$1" | tr 'A-Z' 'a-z' | tr ', ' '\n\n')
+	[ -n "$PC_IN" ] || return 1
+	for PC_TOK in $PC_IN; do
+		case $PC_TOK in
+		1 | claude | claude-code | cc) PC_CLAUDE=1 ;;
+		2 | codex | cx) PC_CODEX=1 ;;
+		3 | claude-desktop | desktop) PC_DESKTOP=1 ;;
+		4 | all)
+			PC_CLAUDE=1
+			PC_CODEX=1
+			if client_has "$(all_targets)" claude-desktop; then PC_DESKTOP=1; fi
+			;;
+		both)
+			PC_CLAUDE=1
+			PC_CODEX=1
+			;;
+		*) return 1 ;;
+		esac
+		PC_ANY=1
+	done
+	[ "$PC_ANY" = 1 ] || return 1
+	AGENT_CLIENT=$(compose_clients "$PC_CLAUDE" "$PC_CODEX" "$PC_DESKTOP")
+}
+
+# prompt_client_choice <default|""> : the install-hooks target menu over
+# /dev/tty; multi-select, so an answer is one or more numbers/names separated
+# by commas. An empty default (nothing detected) requires an explicit answer;
+# EOF aborts, since there is no detected set to fall back on. Keep the entry
+# labels in step with install_hooks.go and install.ps1 (a Go test pins them).
 prompt_client_choice() {
 	PCC_DEF=$1
 	{
 		printf 'Wire Seamless to which agent client?\n'
 		printf '  [1] Claude Code %s\n' "$([ "$SELECT_CLAUDE" = 1 ] && echo '(detected)' || echo '(not detected)')"
 		printf '  [2] Codex (app/CLI/IDE) %s\n' "$([ "$SELECT_CODEX" = 1 ] && echo '(detected)' || echo '(not detected)')"
-		printf '  [3] Both\n'
+		if [ "$OS" = darwin ]; then
+			printf '  [3] Claude app (chat) %s\n' "$([ "$SELECT_DESKTOP" = 1 ] && echo '(detected)' || echo '(not detected)')"
+		else
+			printf '  [3] Claude app (chat) (not supported on %s)\n' "$OS"
+		fi
+		printf '  [4] All\n'
 	} >/dev/tty
 	while :; do
 		if [ -n "$PCC_DEF" ]; then
-			ask_tty "Enter 1, 2, or 3 [$PCC_DEF]: " || REPLY=$PCC_DEF
+			ask_tty "Enter choices like 1 or 1,3 [$PCC_DEF]: " || REPLY=$PCC_DEF
 		else
-			ask_tty 'Enter 1, 2, or 3: ' || die 'aborted: no agent client selected'
+			ask_tty 'Enter choices like 1 or 1,3: ' || die 'aborted: no agent client selected'
 		fi
 		[ -n "$REPLY" ] || REPLY=$PCC_DEF
-		case $REPLY in
-		1 | claude) AGENT_CLIENT=claude; return 0 ;;
-		2 | codex) AGENT_CLIENT=codex; return 0 ;;
-		3 | both | all) AGENT_CLIENT=all; return 0 ;;
-		esac
-		printf '  please enter 1, 2, or 3\n' >/dev/tty
+		if parse_client_choice "$REPLY"; then return 0; fi
+		printf '  please enter numbers 1-4, comma-separated for several\n' >/dev/tty
 	done
 }
 
 select_agent_client() {
 	if [ -n "${SEAMLESS_CLIENT:-}" ]; then
-		case $SEAMLESS_CLIENT in
-		claude | codex | all) AGENT_CLIENT=$SEAMLESS_CLIENT ;;
-		*) die "invalid SEAMLESS_CLIENT=$SEAMLESS_CLIENT (valid values: claude, codex, all)" ;;
-		esac
+		parse_client_choice "$SEAMLESS_CLIENT" ||
+			die "invalid SEAMLESS_CLIENT=$SEAMLESS_CLIENT (valid values: claude, codex, claude-desktop, all, or a comma list)"
 		return 0
 	fi
 
 	SELECT_CLAUDE=0
 	SELECT_CODEX=0
+	SELECT_DESKTOP=0
 	if have claude || [ -d "$HOME/.claude" ]; then SELECT_CLAUDE=1; fi
 	SELECT_CODEX_HOME=${CODEX_HOME:-$HOME/.codex}
 	if have codex || [ -d "$SELECT_CODEX_HOME" ]; then SELECT_CODEX=1; fi
-	case "$SELECT_CLAUDE:$SELECT_CODEX" in
-	1:0) AGENT_CLIENT=claude ;;
-	0:1) AGENT_CLIENT=codex ;;
-	1:1)
-		if tty_available; then
-			prompt_client_choice 3
-		else
-			AGENT_CLIENT=all
+	# The chat surface: the app bundle, or an existing desktop config (the same
+	# gating seamlessd's claudeDesktopSurfaceDetected uses).
+	if [ "$OS" = darwin ]; then
+		if [ -d /Applications/Claude.app ] || [ -f "$HOME/Library/Application Support/Claude/claude_desktop_config.json" ]; then
+			SELECT_DESKTOP=1
 		fi
-		;;
-	*)
-		tty_available || die 'neither Claude Code nor Codex was detected on this machine
-set SEAMLESS_CLIENT=claude|codex|all to install anyway'
-		warn 'neither Claude Code nor Codex was detected on this machine'
+	fi
+	DETECTED=$(compose_clients "$SELECT_CLAUDE" "$SELECT_CODEX" "$SELECT_DESKTOP")
+	case $DETECTED in
+	'')
+		tty_available || die 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app)
+set SEAMLESS_CLIENT=claude|codex|claude-desktop|all to install anyway'
+		warn 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app)'
 		ask_tty 'Install anyway? [y/N]: ' || REPLY=
 		case $REPLY in
 		y | Y | yes | YES) prompt_client_choice '' ;;
-		*) die 'aborted: no agent client detected (set SEAMLESS_CLIENT=claude|codex|all to force)' ;;
+		*) die 'aborted: no agent client detected (set SEAMLESS_CLIENT=claude|codex|claude-desktop|all to force)' ;;
 		esac
 		;;
+	*,*)
+		if tty_available; then
+			# The menu default is the detected set as numbers, collapsed to 4
+			# (All) when everything this platform can host was detected.
+			if [ "$DETECTED" = "$(all_targets)" ]; then
+				DEF=4
+			else
+				DEF=$(printf '%s' "$DETECTED" | sed 's/claude-desktop/3/;s/claude/1/;s/codex/2/')
+			fi
+			prompt_client_choice "$DEF"
+		else
+			AGENT_CLIENT=$DETECTED
+		fi
+		;;
+	*) AGENT_CLIENT=$DETECTED ;;
 	esac
 }
 
@@ -326,14 +400,37 @@ supports_skills_flag() {
 	printf '%s' "$probe" | grep -q -- '-skills'
 }
 
+# The claude-desktop target and comma-separated --client lists shipped in the
+# same release, so one probe covers both: a help text that names claude-desktop
+# is a binary that also parses lists.
+supports_desktop_client() {
+	probe=$("$INSTALL_DIR/seamlessd" install-hooks -h 2>&1 || true)
+	[ -n "$probe" ] || return 0
+	printf '%s' "$probe" | grep -q -- 'claude-desktop'
+}
+
 wire_hooks() {
 	if [ -n "${SEAMLESS_NO_HOOKS:-}" ]; then
 		step hooks "skipped (SEAMLESS_NO_HOOKS)"
 		return 0
 	fi
-	# Unquoted on purpose: this must split into two words, and AGENT_CLIENT is a
-	# validated enum (claude|codex|all), never free text.
-	CLIENT_ARGS="--client $AGENT_CLIENT"
+	if ! supports_desktop_client && client_has "$AGENT_CLIENT" claude-desktop; then
+		# A pinned pre-chat-surface binary: drop the desktop target visibly (the
+		# closing advice must not then mention the app, so AGENT_CLIENT itself
+		# shrinks) and fall back to that binary's vocabulary for what remains.
+		warn "seamless $VERSION predates the Claude app chat surface; skipping claude-desktop (drop SEAMLESS_VERSION to get the latest)"
+		AGENT_CLIENT=$(printf '%s' "$AGENT_CLIENT" | sed 's/claude-desktop//;s/,,/,/;s/^,//;s/,$//')
+		[ -n "$AGENT_CLIENT" ] ||
+			die "seamless $VERSION cannot wire the Claude app chat surface; rerun with SEAMLESS_CLIENT=claude|codex|all, or drop SEAMLESS_VERSION to get the latest"
+	fi
+	CLIENT_VALUE=$AGENT_CLIENT
+	if ! supports_desktop_client; then
+		# Pre-list binaries only understand single words and "all".
+		case $CLIENT_VALUE in claude,codex) CLIENT_VALUE=all ;; esac
+	fi
+	# Unquoted on purpose: this must split into two words, and CLIENT_VALUE is a
+	# validated comma list of targets, never free text.
+	CLIENT_ARGS="--client $CLIENT_VALUE"
 	if ! supports_client_flag; then
 		[ "$AGENT_CLIENT" = claude ] ||
 			die "seamless $VERSION predates --client and cannot wire $AGENT_CLIENT; rerun with SEAMLESS_CLIENT=claude, or drop SEAMLESS_VERSION to get the latest"
@@ -542,27 +639,33 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 		;;
 	esac
 	say 'next:'
-	case $AGENT_CLIENT in
-	claude) say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' ;;
-	codex) say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
-	all) say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
+	case ",$AGENT_CLIENT," in
+	*,claude,*)
+		case ",$AGENT_CLIENT," in
+		*,codex,*) say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
+		*) say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' ;;
+		esac
+		;;
+	*,codex,*) say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' ;;
 	esac
+	if client_has "$AGENT_CLIENT" claude-desktop; then
+		say '  chat in the Claude app -- the seamless MCP tools load after an app restart'
+	fi
 	say "  seamlessd console-open   # open the console, already logged in"
 	printf '\n'
-	case $AGENT_CLIENT in
-	claude)
-		say 'restart Claude Code, then run  /seam-onboard  once.'
-		;;
-	codex)
-		say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
-		say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
-		;;
-	all)
+	if client_has "$AGENT_CLIENT" claude && client_has "$AGENT_CLIENT" codex; then
 		say 'restart both clients. Codex CLI users: review/approve Seamless in  /hooks.'
 		say 'Codex desktop app users: hook trust is beta; confirm a <seam-briefing>.'
 		say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
-		;;
-	esac
+	elif client_has "$AGENT_CLIENT" claude; then
+		say 'restart Claude Code, then run  /seam-onboard  once.'
+	elif client_has "$AGENT_CLIENT" codex; then
+		say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
+		say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
+	fi
+	if client_has "$AGENT_CLIENT" claude-desktop; then
+		say 'restart the Claude app to load the chat-surface MCP bridge (it reads its config at startup).'
+	fi
 	printf '\n'
 	say "uninstall anytime:  $INSTALL_DIR/seamlessd uninstall"
 	say "docs: $DOCS"

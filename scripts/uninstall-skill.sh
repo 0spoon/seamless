@@ -8,7 +8,8 @@
 # installed (e.g. seam-onboard already self-removed after a successful run).
 # detect (the default) resolves to the clients present on this machine, the
 # same selection docs/install makes; with neither found there is nothing to
-# remove from, so it exits cleanly.
+# remove from, so it exits cleanly. The Claude app chat surface loads no
+# skills, so it is deliberately not a client here (see install-skill.sh).
 
 set -euo pipefail
 

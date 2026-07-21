@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/config"
@@ -37,7 +38,7 @@ const (
 // failure, so uninstall is idempotent and safe to re-run.
 func runUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
-	clientFlag := fs.String("client", "all", "which agent client to remove hooks/MCP for: claude|codex|claude-desktop|all|detect")
+	clientFlag := fs.String("client", "all", "which agent client(s) to remove hooks/MCP for: claude|codex|claude-desktop, a comma list of those, or all|detect")
 	purge := fs.Bool("purge", false, "also delete the config dir (~/.config/seamless) and data dir (~/.seamless)")
 	dryRun := fs.Bool("dry-run", false, "print what would be removed and exit without changing anything")
 	yes := fs.Bool("yes", false, "skip the confirmation prompt")
@@ -53,19 +54,15 @@ func runUninstall(args []string) error {
 	// The Claude app chat surface is uninstalled by removing its desktop-config
 	// entry -- no hooks, no skills, no client CLI. --client claude-desktop scopes
 	// the client step to that alone; "all" (the default) includes it after the
-	// hook clients, so a full uninstall never leaves the app pointed at a deleted
-	// bridge binary. An absent file or entry stays a quiet note.
-	rawClient := strings.ToLower(strings.TrimSpace(*clientFlag))
-	desktopOnly := isClaudeDesktopSelector(rawClient)
-	includeDesktop := desktopOnly || rawClient == "all" || rawClient == "both"
-	var clients []hooks.Client
-	if !desktopOnly {
-		var err error
-		clients, err = parseInstallClients(*clientFlag, claudeDetected(), codexDetected())
-		if err != nil {
-			return fmt.Errorf("seamlessd.uninstall: %w", err)
-		}
+	// hook clients on any platform that can host it, so a full uninstall never
+	// leaves the app pointed at a deleted bridge binary. An absent file or entry
+	// stays a quiet note.
+	targets, err := parseInstallTargets(*clientFlag, detectInstallTargets())
+	if err != nil {
+		return fmt.Errorf("seamlessd.uninstall: %w", err)
 	}
+	includeDesktop := slices.Contains(targets, targetClaudeDesktop)
+	clients := hookClientsFor(targets)
 
 	// Config is best-effort: uninstall must work when the config is broken or
 	// gone, and must NEVER mint a key file (no EnsureAPIKey). A load failure falls
@@ -89,11 +86,7 @@ func runUninstall(args []string) error {
 	}
 	dataDir := cfg.DataDir
 
-	names := clientNames(clients)
-	if includeDesktop {
-		names = append(names, "Claude app (chat)")
-	}
-	printUninstallPreamble(names, installDir, configDir, dataDir, *purge, *dryRun)
+	printUninstallPreamble(targetNames(targets), installDir, configDir, dataDir, *purge, *dryRun)
 
 	if !*dryRun && !*yes && stdinIsTerminal() && !confirmUninstall(os.Stdin, os.Stdout) {
 		fmt.Println(dim("aborted -- nothing was changed"))
@@ -156,19 +149,6 @@ func printUninstallPreamble(names []string, installDir, configDir, dataDir strin
 	} else {
 		fieldRow("keep", dim(tildePath(configDir)+", "+tildePath(dataDir)+" (use --purge to delete)"))
 	}
-}
-
-// clientNames maps client profiles to their display labels, in order.
-func clientNames(clients []hooks.Client) []string {
-	out := make([]string, len(clients))
-	for i, c := range clients {
-		if c == hooks.ClientCodex {
-			out[i] = "Codex"
-		} else {
-			out[i] = "Claude Code"
-		}
-	}
-	return out
 }
 
 // confirmUninstall asks for confirmation, defaulting to No so a stray Enter is

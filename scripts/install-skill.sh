@@ -11,6 +11,10 @@
 # same selection docs/install makes: both when both are found, else the one
 # found. With neither found it errors instead of assuming claude -- pass the
 # client explicitly to install for one that is not there yet.
+#
+# The Claude app chat surface (claude-desktop elsewhere in the installers) is
+# deliberately absent here: it loads no skills, so the skill scripts keep the
+# two-client vocabulary while install/uninstall/doctor speak three targets.
 
 set -euo pipefail
 

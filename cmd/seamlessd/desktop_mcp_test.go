@@ -341,15 +341,6 @@ func TestClaudeDesktopMCPSetupHint(t *testing.T) {
 	require.Contains(t, claudeDesktopMCPSetupHint("/opt/seam", ""), `"args": ["mcp-proxy"]`)
 }
 
-func TestIsClaudeDesktopSelector(t *testing.T) {
-	for _, yes := range []string{"claude-desktop", "desktop", " Claude-Desktop "} {
-		require.True(t, isClaudeDesktopSelector(yes), yes)
-	}
-	for _, no := range []string{"", "claude", "codex", "all", "detect", "claude-code"} {
-		require.False(t, isClaudeDesktopSelector(no), no)
-	}
-}
-
 // --client claude-desktop wires only the chat surface's MCP bridge: the desktop
 // config gains the stdio entry and neither hook file is created -- the surface
 // has no hooks and no skills.
@@ -394,12 +385,41 @@ func TestRunInstallHooks_ClaudeDesktopRequiresMCP(t *testing.T) {
 	require.ErrorContains(t, err, "leaves nothing to install")
 }
 
-// parseInstallClients still rejects the desktop selector: it can only yield
-// hooks.Client values, and the chat surface deliberately is not one. Both
-// commands resolve claude-desktop before calling it.
-func TestParseInstallClients_RejectsClaudeDesktop(t *testing.T) {
-	_, err := parseInstallClients("claude-desktop", true, true)
-	require.ErrorContains(t, err, "valid values are claude, codex, claude-desktop, all, detect")
+// A mixed selection naming the chat surface beside a hook client wires both in
+// one run: the hook file lands AND the desktop config gains the bridge entry,
+// with --mcp left on for neither being an error.
+func TestRunInstallHooks_MixedSelectionIncludesDesktop(t *testing.T) {
+	home := t.TempDir()
+	tmp := t.TempDir()
+	cfgPath := filepath.Join(tmp, "seamless.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte("mcp:\n  api_key: \"test-key\"\n"), 0o600))
+	t.Setenv("SEAMLESS_CONFIG", cfgPath)
+	t.Setenv("HOME", home)
+	// No claude CLI on PATH: the second run (MCP on) must degrade to printing
+	// the manual `claude mcp` command, never invoke the real client CLI.
+	t.Setenv("PATH", tmp)
+
+	settings := filepath.Join(tmp, "settings.json")
+	desktopConfig := filepath.Join(tmp, "claude_desktop_config.json")
+	err := runInstallHooks([]string{
+		"--client", "claude,claude-desktop", "--settings", settings,
+		"--desktop-config", desktopConfig, "--mcp=false", "--skills=false",
+		"--seam", "/opt/seam", "--url", "http://127.0.0.1:8081",
+	})
+	require.NoError(t, err)
+
+	// The hook client installed; the MCP-only chat surface skipped visibly
+	// (--mcp=false) rather than erroring or writing a bridge entry.
+	require.FileExists(t, settings)
+	require.NoFileExists(t, desktopConfig)
+
+	err = runInstallHooks([]string{
+		"--client", "claude,claude-desktop", "--settings", settings,
+		"--desktop-config", desktopConfig, "--skills=false",
+		"--seam", "/opt/seam", "--url", "http://127.0.0.1:8081",
+	})
+	require.NoError(t, err)
+	require.FileExists(t, desktopConfig)
 }
 
 func TestReconcileClaudeDesktopMCP_RejectsRelativePaths(t *testing.T) {

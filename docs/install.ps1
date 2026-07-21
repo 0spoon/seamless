@@ -9,9 +9,11 @@
 # scripts/: a script living at two paths is a script that drifts.
 #
 # What it does: fetch this platform's release zip from GitHub, verify its
-# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire hooks + MCP
-# + maintained skills for the detected Claude Code/Codex client(s) (generating
-# the bearer key on first run), then run the daemon as a per-user Scheduled Task
+# checksum, install seamlessd.exe + seam.exe into ~\.local\bin, wire the
+# detected agent clients -- hooks + MCP + maintained skills for Claude
+# Code/Codex, and the MCP bridge for the Claude app chat surface (it has no
+# hooks or skills) -- generating the bearer key on first run, then run the
+# daemon as a per-user Scheduled Task
 # -- an at-logon task running as you, no admin. Codex gets the secret-preserving
 # stdio proxy by default; direct HTTP remains a supported manual Codex
 # configuration. That is
@@ -23,9 +25,10 @@
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
 #   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
-#   $env:SEAMLESS_CLIENT              claude|codex|all (default: the detected
-#                                     clients; prompts when both or neither are
-#                                     found, and aborts when neither is found and
+#   $env:SEAMLESS_CLIENT              claude|codex|claude-desktop|all, or a comma
+#                                     list of targets (default: the detected
+#                                     clients; prompts when several or none are
+#                                     found, and aborts when none is found and
 #                                     the session is non-interactive -- never a
 #                                     silent default)
 #   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and skills
@@ -64,65 +67,111 @@ function Step { param([string]$Key, [string]$Message) Write-Host ('  {0,-12} {1}
 function Warn { param([string]$Message) Write-Warning $Message }
 function Die { param([string]$Message) [Console]::Error.WriteLine("`nerror: $Message"); exit 1 }
 
-# Client selection, kept in step with docs/install and the interactive
-# `seamlessd install-hooks` menu. Unlike the POSIX curl|sh pipe, `irm | iex`
-# runs in the caller's session, so stdin is still the console and Read-Host
-# works: with both clients detected the installer confirms which to wire
-# (default both); with neither it asks whether to install at all (default no),
-# then which client (no default). Non-interactively, both resolves to all and
-# neither aborts with guidance -- there is deliberately no silent Claude Code
-# fallback. The resolved value is passed explicitly to install-hooks, which
-# installs the matching hooks, MCP registration, and skill packages together.
+# Target selection, kept in step with docs/install and the interactive
+# `seamlessd install-hooks` menu: the two hook clients plus the Claude app chat
+# surface (MCP bridge only, no hooks or skills). Unlike the POSIX curl|sh pipe,
+# `irm | iex` runs in the caller's session, so stdin is still the console and
+# Read-Host works: with several targets detected the installer confirms which
+# to wire (default: the detected set, multi-select via a comma list); with none
+# it asks whether to install at all (default no), then which target (no
+# default). Non-interactively, several resolves to the detected set and none
+# aborts with guidance -- there is deliberately no silent Claude Code fallback.
+# The resolved comma list is passed explicitly to install-hooks, which installs
+# the matching hooks, MCP registrations, and skill packages together.
 function Test-Interactive {
     return ([Environment]::UserInteractive -and -not [Console]::IsInputRedirected)
 }
 
+# ConvertTo-ClientList: map an answer -- numbers or target words, singly or
+# comma-separated -- to the canonical comma list (claude, codex, claude-desktop
+# in stable order). $null for any unrecognized token, so callers can re-prompt
+# or die instead of guessing.
+function ConvertTo-ClientList {
+    param([string]$Raw)
+    $claude = $false; $codex = $false; $desktop = $false; $any = $false
+    foreach ($tok in ($Raw -split '[,\s]+')) {
+        $t = $tok.ToLowerInvariant()
+        if ($t -eq '') { continue }
+        switch ($t) {
+            { $_ -in '1', 'claude', 'claude-code', 'cc' } { $claude = $true; break }
+            { $_ -in '2', 'codex', 'cx' } { $codex = $true; break }
+            { $_ -in '3', 'claude-desktop', 'desktop' } { $desktop = $true; break }
+            { $_ -in '4', 'all' } { $claude = $true; $codex = $true; $desktop = $true; break }
+            'both' { $claude = $true; $codex = $true; break }
+            default { return $null }
+        }
+        $any = $true
+    }
+    if (-not $any) { return $null }
+    $targets = @()
+    if ($claude) { $targets += 'claude' }
+    if ($codex) { $targets += 'codex' }
+    if ($desktop) { $targets += 'claude-desktop' }
+    return ($targets -join ',')
+}
+
+function Test-ClientHas {
+    param([string]$List, [string]$Target)
+    return (($List -split ',') -contains $Target)
+}
+
 function Read-ClientChoice {
     param([string]$DefaultChoice) # '' = no default: an explicit answer is required
+    # Keep the entry labels in step with install_hooks.go and docs/install (a
+    # Go test pins them).
     Write-Host 'Wire Seamless to which agent client?'
     Write-Host ('  [1] Claude Code {0}' -f $(if ($script:ClaudeDetected) { '(detected)' } else { '(not detected)' }))
     Write-Host ('  [2] Codex (app/CLI/IDE) {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
-    Write-Host '  [3] Both'
+    Write-Host ('  [3] Claude app (chat) {0}' -f $(if ($script:DesktopDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host '  [4] All'
     while ($true) {
-        $prompt = if ($DefaultChoice) { "Enter 1, 2, or 3 [$DefaultChoice]" } else { 'Enter 1, 2, or 3' }
+        $prompt = if ($DefaultChoice) { "Enter choices like 1 or 1,3 [$DefaultChoice]" } else { 'Enter choices like 1 or 1,3' }
         $answer = Read-Host $prompt
         if (-not $answer) { $answer = $DefaultChoice }
-        switch -Regex ($answer) {
-            '^(1|claude)$' { return 'claude' }
-            '^(2|codex)$' { return 'codex' }
-            '^(3|both|all)$' { return 'all' }
-        }
-        Write-Host '  please enter 1, 2, or 3'
+        $list = ConvertTo-ClientList $answer
+        if ($list) { return $list }
+        Write-Host '  please enter numbers 1-4, comma-separated for several'
     }
 }
 
 function Resolve-AgentClient {
     if ($env:SEAMLESS_CLIENT) {
-        switch ($env:SEAMLESS_CLIENT.ToLowerInvariant()) {
-            'claude' { return 'claude' }
-            'codex' { return 'codex' }
-            'all' { return 'all' }
-            default { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, codex, all)" }
-        }
+        $list = ConvertTo-ClientList $env:SEAMLESS_CLIENT
+        if (-not $list) { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, codex, claude-desktop, all, or a comma list)" }
+        return $list
     }
     $claude = (((Get-Command claude -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path (Join-Path $HOME '.claude')))
     $codexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME '.codex' }
     $codex = (((Get-Command codex -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path $codexHome))
+    # The chat surface: an existing desktop config is the only portable signal
+    # on Windows (no documented app-install path to guess) -- the same gating
+    # seamlessd's claudeDesktopSurfaceDetected uses.
+    $desktop = ($env:APPDATA -and (Test-Path (Join-Path $env:APPDATA 'Claude\claude_desktop_config.json')))
     $script:ClaudeDetected = $claude
     $script:CodexDetected = $codex
-    if ($claude -and -not $codex) { return 'claude' }
-    if ($codex -and -not $claude) { return 'codex' }
-    if ($claude -and $codex) {
-        if (Test-Interactive) { return Read-ClientChoice '3' }
-        return 'all'
+    $script:DesktopDetected = $desktop
+    $targets = @()
+    if ($claude) { $targets += 'claude' }
+    if ($codex) { $targets += 'codex' }
+    if ($desktop) { $targets += 'claude-desktop' }
+    if ($targets.Count -eq 1) { return $targets[0] }
+    if ($targets.Count -gt 1) {
+        $detected = $targets -join ','
+        if (-not (Test-Interactive)) { return $detected }
+        # The menu default is the detected set as numbers, collapsed to 4 (All)
+        # when every target was detected.
+        $default = if ($targets.Count -eq 3) { '4' } else {
+            (($targets | ForEach-Object { @{ 'claude' = '1'; 'codex' = '2'; 'claude-desktop' = '3' }[$_] }) -join ',')
+        }
+        return Read-ClientChoice $default
     }
     if (-not (Test-Interactive)) {
-        Die 'neither Claude Code nor Codex was detected on this machine; set $env:SEAMLESS_CLIENT=claude|codex|all to install anyway'
+        Die 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app); set $env:SEAMLESS_CLIENT=claude|codex|claude-desktop|all to install anyway'
     }
-    Warn 'neither Claude Code nor Codex was detected on this machine'
+    Warn 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app)'
     $answer = Read-Host 'Install anyway? [y/N]'
     if ($answer -notmatch '^(y|yes)$') {
-        Die 'aborted: no agent client detected (set $env:SEAMLESS_CLIENT=claude|codex|all to force)'
+        Die 'aborted: no agent client detected (set $env:SEAMLESS_CLIENT=claude|codex|claude-desktop|all to force)'
     }
     return Read-ClientChoice ''
 }
@@ -290,7 +339,25 @@ function Invoke-WireHooks {
         } finally {
             $ErrorActionPreference = $prevEap
         }
-        $clientArgs = @('--client', $AgentClient)
+        # The claude-desktop target and comma-separated --client lists shipped
+        # in the same release, so one probe covers both. A pinned older binary:
+        # drop the desktop target visibly (the closing advice keys off
+        # $script:WiredClient, so it must not then mention the app) and fall
+        # back to that binary's own vocabulary for what remains.
+        if ($probe -and $probe -notmatch 'claude-desktop' -and (Test-ClientHas $AgentClient 'claude-desktop')) {
+            Warn "seamless $Version predates the Claude app chat surface; skipping claude-desktop (drop SEAMLESS_VERSION to get the latest)"
+            $AgentClient = ((($AgentClient -split ',') | Where-Object { $_ -ne 'claude-desktop' }) -join ',')
+            if (-not $AgentClient) {
+                Die "seamless $Version cannot wire the Claude app chat surface; rerun with `$env:SEAMLESS_CLIENT='claude|codex|all', or drop SEAMLESS_VERSION to get the latest"
+            }
+        }
+        $script:WiredClient = $AgentClient
+        $clientValue = $AgentClient
+        if ($probe -and $probe -notmatch 'claude-desktop' -and $clientValue -eq 'claude,codex') {
+            # Pre-list binaries only understand single words and "all".
+            $clientValue = 'all'
+        }
+        $clientArgs = @('--client', $clientValue)
         # An empty probe failed to run; it did not prove the flag is absent. Assume
         # the modern binary rather than silently downgrading a current install.
         if ($probe -and $probe -notmatch '-client') {
@@ -381,6 +448,9 @@ function Wait-Healthy {
 function Main {
     $InstallDir = if ($env:SEAMLESS_INSTALL_DIR) { $env:SEAMLESS_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
     $agentClient = Resolve-AgentClient
+    # What actually got wired; Invoke-WireHooks narrows it when a pinned old
+    # binary cannot carry the chat surface, so the closing advice stays honest.
+    $script:WiredClient = $agentClient
 
     $arch = Get-Arch
     $version = Resolve-Version
@@ -426,24 +496,28 @@ function Main {
 
     Write-Host ''
     Say 'next:'
-    switch ($agentClient) {
-        'claude' { Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' }
-        'codex' { Say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
-        'all' { Say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
-    }
+    $wired = $script:WiredClient
+    $hasClaude = Test-ClientHas $wired 'claude'
+    $hasCodex = Test-ClientHas $wired 'codex'
+    $hasDesktop = Test-ClientHas $wired 'claude-desktop'
+    if ($hasClaude -and $hasCodex) { Say '  open any git repo in Claude Code or the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
+    elseif ($hasClaude) { Say '  open any git repo in Claude Code -- Seamless maps it to a project on its own' }
+    elseif ($hasCodex) { Say '  open any git repo in the Codex app, CLI, or IDE -- Seamless maps it to a project on its own' }
+    if ($hasDesktop) { Say '  chat in the Claude app -- the seamless MCP tools load after an app restart' }
     Say "  & `"$InstallDir\seamlessd.exe`" console-open   # open the console, already logged in"
     Write-Host ''
-    switch ($agentClient) {
-        'claude' { Say 'restart Claude Code, then run  /seam-onboard  once.' }
-        'codex' {
-            Say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
-            Say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
-        }
-        'all' {
-            Say 'restart both clients. Codex CLI users: review/approve Seamless in  /hooks.'
-            Say 'Codex desktop app users: hook trust is beta; confirm a <seam-briefing>.'
-            Say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
-        }
+    if ($hasClaude -and $hasCodex) {
+        Say 'restart both clients. Codex CLI users: review/approve Seamless in  /hooks.'
+        Say 'Codex desktop app users: hook trust is beta; confirm a <seam-briefing>.'
+        Say 'then run  /seam-onboard  in Claude Code or  $seam-onboard  in Codex.'
+    } elseif ($hasClaude) {
+        Say 'restart Claude Code, then run  /seam-onboard  once.'
+    } elseif ($hasCodex) {
+        Say 'restart Codex. CLI users: review/approve Seamless in  /hooks.'
+        Say 'desktop app users: hook trust is beta; confirm a <seam-briefing>, then run  $seam-onboard  once.'
+    }
+    if ($hasDesktop) {
+        Say 'restart the Claude app to load the chat-surface MCP bridge (it reads its config at startup).'
     }
     Write-Host ''
     Say "uninstall anytime: & `"$InstallDir\seamlessd.exe`" uninstall"

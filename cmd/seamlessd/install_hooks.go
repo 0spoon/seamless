@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"golang.org/x/term"
@@ -26,14 +27,16 @@ import (
 // the hooks into that client's config file and, unless --mcp=false, registers
 // the MCP server through its management surface. --client selects which: claude
 // (~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
-// `codex mcp add ... seam mcp-proxy`), all (both), or detect (the default: the
-// clients present on this machine, the same selection the curl installer
+// `codex mcp add ... seam mcp-proxy`), claude-desktop (the Claude app chat
+// surface -- desktop-config MCP bridge only, no hooks or skills), a comma list
+// of those, all (every target this platform can host), or detect (the default:
+// the targets present on this machine, the same selection the curl installer
 // makes; an error when none are, so nothing is wired without an explicit
 // choice). For the P2 dogfood, point --settings at THIS repo's project-scoped
 // .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
-	clientFlag := fs.String("client", "detect", "which agent client to install for: claude|codex|claude-desktop|all|detect (claude-desktop wires only the Claude app chat surface's MCP bridge)")
+	clientFlag := fs.String("client", "detect", "which agent client(s) to install for: claude|codex|claude-desktop, a comma list of those, or all|detect (claude-desktop wires only the Claude app chat surface's MCP bridge)")
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	desktopConfigFlag := fs.String("desktop-config", "", "Claude desktop app claude_desktop_config.json to register the MCP bridge in (default: the app's per-OS location)")
@@ -50,20 +53,16 @@ func runInstallHooks(args []string) error {
 			clientSet = true
 		}
 	})
-	// The Claude app chat surface is an install target with no hooks.Client
-	// behind it (see the claude-chat-surface-client-model decision): it gets no
-	// hooks and no skills, only the desktop-config MCP registration, so it is
-	// resolved before the hook-client selection. It is explicit-only for now --
-	// detect and the interactive menu still offer the two hook clients; wiring
-	// it into detection is the four-synced-copies change tracked separately.
-	desktopOnly := isClaudeDesktopSelector(*clientFlag)
-	var clients []hooks.Client
-	if !desktopOnly {
-		var err error
-		clients, err = resolveInstallClients(*clientFlag, clientSet)
-		if err != nil {
-			return fmt.Errorf("seamlessd.install-hooks: %w", err)
-		}
+	targets, err := resolveInstallTargets(*clientFlag, clientSet)
+	if err != nil {
+		return fmt.Errorf("seamlessd.install-hooks: %w", err)
+	}
+	// The chat surface is MCP-only, so selecting only it with --mcp=false
+	// leaves nothing this run could install; present-but-contradictory flags
+	// are an error, never a silent no-op. In a wider selection the hook
+	// clients still have work, so the desktop block just notes the skip.
+	if !*mcpFlag && len(targets) == 1 && targets[0] == targetClaudeDesktop {
+		return errors.New("seamlessd.install-hooks: --client claude-desktop with --mcp=false leaves nothing to install (the Claude app chat surface has no hooks or skills)")
 	}
 
 	cfg, err := config.Load()
@@ -96,35 +95,39 @@ func runInstallHooks(args []string) error {
 	}
 	configPath := absConfigPath(cfg.SourcePath())
 
-	if desktopOnly {
-		// The chat surface is MCP-only, so --mcp=false leaves nothing this
-		// selection could install; present-but-contradictory flags are an error,
-		// never a silent no-op.
-		if !*mcpFlag {
-			return errors.New("seamlessd.install-hooks: --client claude-desktop with --mcp=false leaves nothing to install (the Claude app chat surface has no hooks or skills)")
-		}
-		fmt.Printf("\n%s\n", bold("Claude app (chat)"))
-		if err := registerClaudeDesktopMCP(*desktopConfigFlag, seamBin, configPath); err != nil {
-			return fmt.Errorf("seamlessd.install-hooks: %w", err)
-		}
-		return nil
-	}
-
+	// The chat surface installs no skills, so its options load only when a hook
+	// client is in the selection -- a desktop-only run must not depend on them.
 	var skillOpts agentskills.Options
-	if *skillsFlag {
+	if *skillsFlag && len(hookClientsFor(targets)) > 0 {
 		skillOpts, err = agentskills.OptionsFromEnvironment()
 		if err != nil {
 			return fmt.Errorf("seamlessd.install-hooks: %w", err)
 		}
 	}
 
-	for _, client := range clients {
-		switch client {
-		case hooks.ClientCodex:
+	for _, target := range targets {
+		var client hooks.Client
+		switch target {
+		case targetClaudeDesktop:
+			// No hooks.Client behind this target (see the
+			// claude-chat-surface-client-model decision): only the
+			// desktop-config MCP registration, and no skills below.
+			fmt.Printf("\n%s\n", bold("Claude app (chat)"))
+			if !*mcpFlag {
+				fieldRow("mcp", dim("skipped (--mcp=false); the chat surface has nothing else to install"))
+				continue
+			}
+			if err := registerClaudeDesktopMCP(*desktopConfigFlag, seamBin, configPath); err != nil {
+				return fmt.Errorf("seamlessd.install-hooks: %w", err)
+			}
+			continue
+		case targetCodex:
+			client = hooks.ClientCodex
 			if err := installCodexHooks(cfg, *codexHooksFlag, baseURL, seamBin, configPath, *mcpFlag); err != nil {
 				return fmt.Errorf("seamlessd.install-hooks: %w", err)
 			}
 		default:
+			client = hooks.ClientClaudeCode
 			if err := installClaudeHooks(cfg, *settings, baseURL, seamBin, configPath, *mcpFlag); err != nil {
 				return fmt.Errorf("seamlessd.install-hooks: %w", err)
 			}
@@ -239,94 +242,196 @@ func splitBins(raw string) []string {
 	return out
 }
 
-// parseInstallClients maps the --client flag to the client profiles to install,
-// in a stable order (Claude Code before Codex for "all"). "detect" (also the
-// meaning of an empty value) resolves to the detected client set via the
-// claudeOK/codexOK arguments -- the same selection the curl installer's
-// select_agent_client makes. With neither client present, detect is an error,
-// never a silent Claude Code default: wiring a client the user does not run
-// creates its config directory and makes doctor report a phantom install.
-func parseInstallClients(raw string, claudeOK, codexOK bool) ([]hooks.Client, error) {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "", "detect", "auto":
-		def := defaultClientChoice(claudeOK, codexOK)
-		if def == "" {
-			return nil, errors.New("neither Claude Code nor Codex was detected on this machine; pass --client claude|codex|all to install anyway")
+// installTarget is the installer's selection currency: what --client, the
+// interactive menu, and the curl installers choose between. It is deliberately
+// NOT hooks.Client (see the claude-chat-surface-client-model decision): the
+// Claude app chat surface is an install target with no hook client behind it,
+// and widening hooks.Client to carry the menu would widen the hook-request
+// parse boundary to a client that can never legitimately send a hook.
+type installTarget string
+
+const (
+	targetClaudeCode    installTarget = "claude"
+	targetCodex         installTarget = "codex"
+	targetClaudeDesktop installTarget = "claude-desktop"
+)
+
+// detectedTargets is one machine probe handed to the selection functions, so
+// parsing and prompting stay pure and table-testable.
+type detectedTargets struct {
+	claude, codex, desktop bool
+	// desktopSupported: this platform has a Claude desktop config location at
+	// all (macOS/Windows). It gates what "all" expands to -- a Linux --client
+	// all must not fail on a chat surface that cannot exist there.
+	desktopSupported bool
+}
+
+func detectInstallTargets() detectedTargets {
+	return detectedTargets{
+		claude:           claudeDetected(),
+		codex:            codexDetected(),
+		desktop:          claudeDesktopSurfaceDetected(),
+		desktopSupported: claudeDesktopSupported(),
+	}
+}
+
+// detected returns the detected targets in canonical order.
+func (d detectedTargets) detected() []installTarget {
+	return orderedTargets(d.claude, d.codex, d.desktop)
+}
+
+// allTargets returns what an explicit "all" wires: both hook clients always,
+// plus the chat surface where the platform can host it.
+func (d detectedTargets) allTargets() []installTarget {
+	return orderedTargets(true, true, d.desktopSupported)
+}
+
+// orderedTargets composes a selection in the stable install order: Claude Code,
+// Codex, Claude app chat surface.
+func orderedTargets(claude, codex, desktop bool) []installTarget {
+	var out []installTarget
+	if claude {
+		out = append(out, targetClaudeCode)
+	}
+	if codex {
+		out = append(out, targetCodex)
+	}
+	if desktop {
+		out = append(out, targetClaudeDesktop)
+	}
+	return out
+}
+
+// hookClientsFor filters an install-target selection down to the hook clients
+// it contains -- the chat surface installs no hooks and no skills.
+func hookClientsFor(targets []installTarget) []hooks.Client {
+	var out []hooks.Client
+	for _, t := range targets {
+		switch t {
+		case targetClaudeCode:
+			out = append(out, hooks.ClientClaudeCode)
+		case targetCodex:
+			out = append(out, hooks.ClientCodex)
 		}
-		clients, _ := clientsForChoice(def)
-		return clients, nil
-	case "claude", "claude-code", "cc":
-		return []hooks.Client{hooks.ClientClaudeCode}, nil
-	case "codex", "cx":
-		return []hooks.Client{hooks.ClientCodex}, nil
-	case "all", "both":
-		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, nil
-	default:
-		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, claude-desktop, all, detect", raw)
 	}
+	return out
 }
 
-// isClaudeDesktopSelector reports whether a --client value names the Claude app
-// chat surface. That surface is an install/uninstall target but deliberately
-// NOT a hooks.Client (it can never send a hook), so both commands resolve it
-// before the hook-client parsing, which would otherwise reject it.
-func isClaudeDesktopSelector(raw string) bool {
-	switch strings.ToLower(strings.TrimSpace(raw)) {
-	case "claude-desktop", "desktop":
-		return true
+// targetNames maps install targets to their display labels, in order.
+func targetNames(targets []installTarget) []string {
+	out := make([]string, len(targets))
+	for i, t := range targets {
+		switch t {
+		case targetCodex:
+			out[i] = "Codex"
+		case targetClaudeDesktop:
+			out[i] = "Claude app (chat)"
+		default:
+			out[i] = "Claude Code"
+		}
 	}
-	return false
+	return out
 }
 
-// resolveInstallClients decides which client profiles to install for. An
-// explicit --client always wins and drives every non-interactive path, so
-// scripts, CI, and any piped invocation keep their exact prior behavior. When
-// --client was omitted AND stdin is a terminal, it prompts the user to pick
-// Claude Code, Codex, or both (annotating each with whether it was detected on
-// this machine). When --client was omitted and stdin is not a terminal, it
-// falls back to the flag default (detect: the detected client set, an error
-// when neither is present) with no prompt, so a redirected or automated run
-// never blocks and a codex-only machine still gets the right profile.
-func resolveInstallClients(clientFlag string, clientSet bool) ([]hooks.Client, error) {
-	claudeOK, codexOK := claudeDetected(), codexDetected()
+// parseInstallTargets maps the --client flag to install targets in a stable
+// order. The value is one target or a comma list of targets -- claude, codex,
+// claude-desktop (the Claude app chat surface: MCP bridge only, no hooks or
+// skills) -- or a selector: "all" is every target this platform can host
+// (naming claude-desktop explicitly still works anywhere, for --desktop-config
+// overrides), "both" remains the two hook clients, and "detect" (also the
+// meaning of an empty value) resolves to the detected set -- the same
+// selection the curl installer's select_agent_client makes. With nothing
+// detected, detect is an error, never a silent Claude Code default: wiring a
+// client the user does not run creates its config directory and makes doctor
+// report a phantom install.
+func parseInstallTargets(raw string, det detectedTargets) ([]installTarget, error) {
+	if trimmed := strings.ToLower(strings.TrimSpace(raw)); trimmed == "" || trimmed == "detect" || trimmed == "auto" {
+		targets := det.detected()
+		if len(targets) == 0 {
+			return nil, errors.New("no agent client was detected on this machine (Claude Code, Codex, or the Claude app); pass --client claude|codex|claude-desktop|all to select one anyway")
+		}
+		return targets, nil
+	}
+	var claude, codex, desktop bool
+	for tok := range strings.SplitSeq(strings.ToLower(raw), ",") {
+		switch strings.TrimSpace(tok) {
+		case "":
+			// a stray comma selects nothing
+		case "claude", "claude-code", "cc":
+			claude = true
+		case "codex", "cx":
+			codex = true
+		case "claude-desktop", "desktop":
+			desktop = true
+		case "all":
+			claude, codex = true, true
+			desktop = desktop || det.desktopSupported
+		case "both":
+			claude, codex = true, true
+		case "detect", "auto":
+			return nil, fmt.Errorf("--client %q: detect cannot be combined with named targets", raw)
+		default:
+			return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, claude-desktop, all, detect, or a comma list of targets", raw)
+		}
+	}
+	targets := orderedTargets(claude, codex, desktop)
+	if len(targets) == 0 {
+		return nil, fmt.Errorf("--client %q selects no target: valid values are claude, codex, claude-desktop, all, detect, or a comma list of targets", raw)
+	}
+	return targets, nil
+}
+
+// resolveInstallTargets decides which targets to install for. An explicit
+// --client always wins and drives every non-interactive path, so scripts, CI,
+// and any piped invocation keep their exact prior behavior. When --client was
+// omitted AND stdin is a terminal, it prompts the user to pick from the three
+// targets (annotating each with whether it was detected on this machine). When
+// --client was omitted and stdin is not a terminal, it falls back to the flag
+// default (detect: the detected set, an error when nothing is present) with no
+// prompt, so a redirected or automated run never blocks and a codex-only
+// machine still gets the right profile.
+func resolveInstallTargets(clientFlag string, clientSet bool) ([]installTarget, error) {
+	det := detectInstallTargets()
 	if clientSet || !stdinIsTerminal() {
-		return parseInstallClients(clientFlag, claudeOK, codexOK)
+		return parseInstallTargets(clientFlag, det)
 	}
-	return promptInstallClients(os.Stdin, os.Stdout, claudeOK, codexOK)
+	return promptInstallTargets(os.Stdin, os.Stdout, det)
 }
 
-// promptInstallClients asks an interactive user which client(s) to wire up. It
-// annotates each option with whether that client was detected, defaults to the
-// detected set, re-prompts on an unrecognized answer, and takes the default on
-// EOF so a closed stdin cannot loop forever. When neither client was detected
-// it first warns and asks whether to install at all (default no), then offers
-// the menu with no default -- the user must name the client they are opting
-// into, because there is no detected set to fall back on.
-func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) ([]hooks.Client, error) {
+// promptInstallTargets asks an interactive user which target(s) to wire up.
+// The menu is multi-select -- with three targets the detected set can be any
+// subset, so an answer is one or more numbers/names separated by commas. It
+// defaults to the detected set, re-prompts on an unrecognized answer, and
+// takes the default on EOF so a closed stdin cannot loop forever. When nothing
+// was detected it first warns and asks whether to install at all (default no),
+// then offers the menu with no default -- the user must name the target they
+// are opting into, because there is no detected set to fall back on.
+func promptInstallTargets(in io.Reader, out io.Writer, det detectedTargets) ([]installTarget, error) {
 	reader := bufio.NewReader(in)
-	if !claudeOK && !codexOK {
+	if len(det.detected()) == 0 {
 		if err := confirmInstallWithoutClients(reader, out); err != nil {
 			return nil, err
 		}
 	}
-	def := defaultClientChoice(claudeOK, codexOK)
-	fmt.Fprintln(out, bold("Install Seamless hooks for which agent client?"))
-	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(claudeOK))
-	fmt.Fprintf(out, "  %s Codex (app/CLI/IDE) %s\n", dim("[2]"), detectedColor(codexOK))
-	fmt.Fprintf(out, "  %s Both\n", dim("[3]"))
+	def := defaultTargetChoice(det)
+	fmt.Fprintln(out, bold("Install Seamless for which agent client?"))
+	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(det.claude))
+	fmt.Fprintf(out, "  %s Codex (app/CLI/IDE) %s\n", dim("[2]"), detectedColor(det.codex))
+	fmt.Fprintf(out, "  %s Claude app (chat) %s\n", dim("[3]"), desktopMenuTag(det))
+	fmt.Fprintf(out, "  %s All\n", dim("[4]"))
 	for {
 		if def == "" {
-			fmt.Fprint(out, "Enter 1, 2, or 3: ")
+			fmt.Fprint(out, "Enter choices like 1 or 1,3: ")
 		} else {
-			fmt.Fprintf(out, "Enter 1, 2, or 3 [%s]: ", def)
+			fmt.Fprintf(out, "Enter choices like 1 or 1,3 [%s]: ", def)
 		}
 		line, err := reader.ReadString('\n')
 		choice := strings.TrimSpace(line)
 		if choice == "" {
 			choice = def
 		}
-		if clients, ok := clientsForChoice(choice); ok {
-			return clients, nil
+		if targets, ok := targetsForChoice(choice, det); ok {
+			return targets, nil
 		}
 		if err != nil {
 			// EOF/read error with an unusable answer: take the default rather
@@ -335,11 +440,22 @@ func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) (
 			if def == "" {
 				return nil, errors.New("no agent client selected")
 			}
-			clients, _ := clientsForChoice(def)
-			return clients, nil
+			targets, _ := targetsForChoice(def, det)
+			return targets, nil
 		}
-		fmt.Fprintln(out, "  please enter 1, 2, or 3")
+		fmt.Fprintln(out, "  please enter numbers 1-4, comma-separated for several")
 	}
+}
+
+// desktopMenuTag annotates the chat-surface menu entry: the usual detection
+// tag where the platform can host it, an explicit unsupported note where it
+// cannot -- choosing it there still parses, and registration then names the
+// real constraint instead of the menu hiding the option.
+func desktopMenuTag(det detectedTargets) string {
+	if !det.desktopSupported {
+		return dim("(not supported on this OS)")
+	}
+	return detectedColor(det.desktop)
 }
 
 // confirmInstallWithoutClients gates the interactive install when no agent
@@ -347,53 +463,79 @@ func promptInstallClients(in io.Reader, out io.Writer, claudeOK, codexOK bool) (
 // on an empty answer or EOF, so pressing Enter (or a closed stdin) aborts
 // rather than wiring a client that is not there.
 func confirmInstallWithoutClients(reader *bufio.Reader, out io.Writer) error {
-	fmt.Fprintf(out, "%s neither Claude Code nor Codex was detected on this machine\n", yellow("warning:"))
+	fmt.Fprintf(out, "%s no agent client was detected on this machine (Claude Code, Codex, or the Claude app)\n", yellow("warning:"))
 	for {
-		fmt.Fprint(out, "Install hooks anyway? [y/N]: ")
+		fmt.Fprint(out, "Install anyway? [y/N]: ")
 		line, err := reader.ReadString('\n')
 		switch strings.ToLower(strings.TrimSpace(line)) {
 		case "y", "yes":
 			return nil
 		case "", "n", "no":
-			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|all)")
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|claude-desktop|all)")
 		}
 		if err != nil {
-			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|all)")
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|claude-desktop|all)")
 		}
 		fmt.Fprintln(out, "  please answer y or n")
 	}
 }
 
-// clientsForChoice maps a menu answer (number or client word) to its profiles.
-// The second return is false for an unrecognized answer, so the caller can
-// re-prompt.
-func clientsForChoice(s string) ([]hooks.Client, bool) {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "1", "claude", "cc":
-		return []hooks.Client{hooks.ClientClaudeCode}, true
-	case "2", "codex", "cx":
-		return []hooks.Client{hooks.ClientCodex}, true
-	case "3", "both", "all":
-		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, true
+// targetsForChoice maps a menu answer -- numbers or target words, singly or as
+// a comma list -- to install targets. The second return is false for any
+// unrecognized token, so the caller can re-prompt.
+func targetsForChoice(s string, det detectedTargets) ([]installTarget, bool) {
+	var claude, codex, desktop, any bool
+	for tok := range strings.SplitSeq(strings.ToLower(s), ",") {
+		switch strings.TrimSpace(tok) {
+		case "":
+			continue
+		case "1", "claude", "claude-code", "cc":
+			claude = true
+		case "2", "codex", "cx":
+			codex = true
+		case "3", "claude-desktop", "desktop":
+			desktop = true
+		case "4", "all":
+			claude, codex = true, true
+			desktop = desktop || det.desktopSupported
+		case "both":
+			claude, codex = true, true
+		default:
+			return nil, false
+		}
+		any = true
 	}
-	return nil, false
+	if !any {
+		return nil, false
+	}
+	return orderedTargets(claude, codex, desktop), true
 }
 
-// defaultClientChoice is the menu default: the detected set, empty when
-// nothing is detected -- there is deliberately no Claude Code fallback, so
-// callers must either ask the user or fail, never silently wire a client
-// that is not installed.
-func defaultClientChoice(claudeOK, codexOK bool) string {
-	switch {
-	case claudeOK && codexOK:
-		return "3"
-	case codexOK:
-		return "2"
-	case claudeOK:
-		return "1"
-	default:
+// defaultTargetChoice is the menu default: the detected set as menu numbers
+// ("1,3"), collapsed to "4" when everything this platform can host was
+// detected. Empty when nothing is detected -- there is deliberately no Claude
+// Code fallback, so callers must either ask the user or fail, never silently
+// wire a client that is not installed.
+func defaultTargetChoice(det detectedTargets) string {
+	detected := det.detected()
+	if len(detected) == 0 {
 		return ""
 	}
+	if len(detected) > 1 && slices.Equal(detected, det.allTargets()) {
+		return "4"
+	}
+	nums := make([]string, 0, len(detected))
+	for _, t := range detected {
+		switch t {
+		case targetCodex:
+			nums = append(nums, "2")
+		case targetClaudeDesktop:
+			nums = append(nums, "3")
+		default:
+			nums = append(nums, "1")
+		}
+	}
+	return strings.Join(nums, ",")
 }
 
 func detectedTag(ok bool) string {
@@ -454,6 +596,29 @@ func codexDetected() bool {
 		}
 	}
 	return false
+}
+
+// claudeDesktopSupported reports whether this platform has a Claude desktop
+// config location at all -- the Claude app ships for macOS and Windows only.
+func claudeDesktopSupported() bool {
+	_, err := defaultClaudeDesktopConfigPath()
+	return err == nil
+}
+
+// claudeDesktopSurfaceDetected reports whether the Claude app chat surface
+// appears present: the app bundle (macOS), or an existing desktop config file
+// -- the only portable signal on Windows, and the same gating doctor's chat
+// check uses. Symmetric with claudeDetected/codexDetected.
+func claudeDesktopSurfaceDetected() bool {
+	if claudeDesktopAppDetected() {
+		return true
+	}
+	path, err := defaultClaudeDesktopConfigPath()
+	if err != nil {
+		return false
+	}
+	info, statErr := os.Stat(path)
+	return statErr == nil && !info.IsDir()
 }
 
 // installClaudeHooks installs the Claude Code hook profile into settings.json and
