@@ -3,14 +3,17 @@ title: Sessions & briefings
 description: How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.
 ---
 
-A **session** is one agent's stretch of work. A **briefing** is what that agent
-gets handed at the start of it, before it has called a single tool.
+A Seamless **session** is one agent's stretch of work. A **briefing** is what
+that agent gets handed at the start of it, before it has called a single tool:
+a SessionStart hook - installed for [Claude Code](/claude-code/) or
+[Codex](/codex-cli/) - resolves the working directory to a project, assembles
+constraints, plan rollups, and recent findings inside a token budget, and
+injects the result into the agent's context. A client without hooks gets a
+briefing only by calling `session_start` itself.
 
 This is the mechanism that makes Seamless ambient rather than opt-in. An agent
-does not have to remember to ask what it knows; a SessionStart hook - installed
-for [Claude Code](/claude-code/) or [Codex](/codex-cli/) - resolves the working
-directory to a project, assembles a briefing inside a token budget, and injects it
-into the agent's context. The agent begins already knowing your constraints.
+does not have to remember to ask what it knows; it begins already knowing your
+constraints.
 
 ## Ambient vs. explicit sessions
 

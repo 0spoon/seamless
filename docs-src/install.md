@@ -3,8 +3,12 @@ title: Install & deploy
 description: The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.
 ---
 
-The [Quickstart](/quickstart/) gets Seamless running in one command. This page is
-what that command did, and what to do when you want to steer it yourself.
+Installing Seamless is one command: a script downloads a single Go binary for
+macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
+service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
+no database server, no Go toolchain. The [Quickstart](/quickstart/) runs that
+command and moves on; this page is what it did, and what to do when you want to
+steer it yourself.
 
 ## One instance per machine
 

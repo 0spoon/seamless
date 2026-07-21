@@ -3,12 +3,17 @@ title: Integrate your agent
 description: Wire another agent into the loop - the MCP handshake, stdio bridge, session binding, scope discipline, and seam CLI fallback.
 ---
 
+Any MCP client can be wired into Seamless: the daemon serves streamable-HTTP
+MCP at `http://127.0.0.1:8081/api/mcp` behind a static bearer key, with a stdio
+bridge (`seam mcp-proxy`) for clients that only speak stdio. What a client
+without hooks gives up is the ambient layer - no injected briefing at session
+start, no prompt-matched recall injection, no automatic harvest of findings -
+so the agent has to run that loop itself.
+
 [Claude Code](/claude-code/) and [Codex](/codex-cli/) get Seamless mostly for
 free: [hooks](/reference/hooks/) open a session, inject a briefing, and harvest
-findings without the agent deciding to. Any other client has no hooks. It has to
-run the loop itself.
-
-This page is that loop, for a client you are wiring up by hand.
+findings without the agent deciding to. Any other client is wired up by hand.
+This page is that loop.
 
 ## The loop
 

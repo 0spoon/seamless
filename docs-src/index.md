@@ -3,14 +3,18 @@ title: What is Seamless?
 description: A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
 ---
 
-Seamless gives the coding agents you run a **shared, persistent brain**: memory
-that survives the end of a conversation, tasks they can hand off to each other,
-and plans they can execute together. It stores all of it as markdown files in a
-directory you own, indexes it in one SQLite database, and serves it to agents
-over MCP from a single Go binary on your machine.
+Seamless is a local-first memory and coordination system for coding agents -
+a **shared, persistent brain** for Claude Code, Codex, and any other MCP client
+you run. Memory survives the end of a conversation, tasks can be handed from one
+agent to another, and plans get executed together. All of it is stored as
+markdown files in a directory you own, indexed by one SQLite database, and
+served over MCP by a single Go binary on your machine - no cloud service, no
+external vector database, no account.
 
 Its clients are agents. You are the observer and editor - there is a console, but
-nothing in Seamless requires you to be in the loop for agents to use it.
+nothing in Seamless requires you to be in the loop for agents to use it. And it
+is one instance on one machine, bound to loopback: a personal substrate, not a
+hosted team knowledge base.
 
 ## What it gives a fleet
 

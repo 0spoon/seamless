@@ -3,12 +3,13 @@ title: Codex local setup (app, CLI, and IDE)
 description: Wire the shared local Codex host into Seamless - one app/CLI/IDE profile for hooks, the mcp-proxy tool bridge, skills, and reaper-driven session lifecycle.
 ---
 
-The Codex desktop app, CLI, and IDE extension share the same local configuration
-layers and MCP setup for a given Codex host. Seamless therefore treats them as
-one client profile named `codex`, not as three protocols. Wiring that host is the
+Seamless supports Codex - the CLI, desktop app, and IDE extension - as one
+client profile named `codex`, because the three share the same local
+configuration layers and MCP setup on a given host. Wiring that host is the
 same two independent halves as [Claude Code](/claude-code/) - **the MCP
-endpoint** (what an agent can call) and **the hooks** (what happens without an
-agent calling anything) - and one command installs both when the Codex
+endpoint** (what an agent can call, installed as the `seam mcp-proxy` stdio
+bridge) and **the hooks** (five of them, which brief and harvest an agent
+without it calling anything) - and one command installs both when the Codex
 management CLI is available.
 
 CLI behavior is supported by the existing compatibility suite. The IDE extension

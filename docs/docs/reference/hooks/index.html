@@ -187,11 +187,15 @@
 
   <h1>Hooks</h1>
   <p class="lede">The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.</p>
-  <p>Seamless installs hooks for two clients. They are what makes sessions ambient: an
-agent gets a briefing, its prompts get matched against stored memories, and its
-findings get harvested - without the agent calling a single MCP tool. The profile
-depends on the client: Claude Code gets six hooks (including plan-mode capture);
-<a href="#codex-local-host-five-hooks">Codex</a> gets five. <code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the profile; run interactively with no
+  <p>Seamless installs hooks for two clients: six for Claude Code (including
+plan-mode capture) and five for <a href="#codex-local-host-five-hooks">Codex</a>. The
+hooks are what makes sessions ambient - an agent gets a briefing at session
+start, its prompts get matched against stored memories, and its findings get
+harvested, all without the agent calling a single MCP tool. Every hook fails
+open: an internal error still returns success, so a broken daemon never blocks
+the agent - see <a href="#the-fail-open-contract">the fail-open contract</a> for the cost.</p>
+<p><code>seamlessd install-hooks --client &lt;claude|codex|all|detect&gt;</code> selects the
+profile; run interactively with no
 <code>--client</code> it prompts for the client(s), and a non-interactive run without the
 flag resolves <code>detect</code>: the clients present on this machine (the <code>claude</code>/<code>codex</code>
 CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory). When neither is found, an

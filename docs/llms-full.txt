@@ -9,14 +9,18 @@
 URL: https://thereisnospoon.org/docs/
 
 
-Seamless gives the coding agents you run a **shared, persistent brain**: memory
-that survives the end of a conversation, tasks they can hand off to each other,
-and plans they can execute together. It stores all of it as markdown files in a
-directory you own, indexes it in one SQLite database, and serves it to agents
-over MCP from a single Go binary on your machine.
+Seamless is a local-first memory and coordination system for coding agents -
+a **shared, persistent brain** for Claude Code, Codex, and any other MCP client
+you run. Memory survives the end of a conversation, tasks can be handed from one
+agent to another, and plans get executed together. All of it is stored as
+markdown files in a directory you own, indexed by one SQLite database, and
+served over MCP by a single Go binary on your machine - no cloud service, no
+external vector database, no account.
 
 Its clients are agents. You are the observer and editor - there is a console, but
-nothing in Seamless requires you to be in the loop for agents to use it.
+nothing in Seamless requires you to be in the loop for agents to use it. And it
+is one instance on one machine, bound to loopback: a personal substrate, not a
+hosted team knowledge base.
 
 ## What it gives a fleet
 
@@ -185,8 +189,12 @@ seamlessd console-open                               # opens pre-authenticated
 URL: https://thereisnospoon.org/docs/install/
 
 
-The [Quickstart](/quickstart/) gets Seamless running in one command. This page is
-what that command did, and what to do when you want to steer it yourself.
+Installing Seamless is one command: a script downloads a single Go binary for
+macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
+service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
+no database server, no Go toolchain. The [Quickstart](/quickstart/) runs that
+command and moves on; this page is what it did, and what to do when you want to
+steer it yourself.
 
 ## One instance per machine
 
@@ -842,12 +850,13 @@ tool calls, and the scope gotchas above - is recorded in the
 URL: https://thereisnospoon.org/docs/codex-cli/
 
 
-The Codex desktop app, CLI, and IDE extension share the same local configuration
-layers and MCP setup for a given Codex host. Seamless therefore treats them as
-one client profile named `codex`, not as three protocols. Wiring that host is the
+Seamless supports Codex - the CLI, desktop app, and IDE extension - as one
+client profile named `codex`, because the three share the same local
+configuration layers and MCP setup on a given host. Wiring that host is the
 same two independent halves as [Claude Code](/claude-code/) - **the MCP
-endpoint** (what an agent can call) and **the hooks** (what happens without an
-agent calling anything) - and one command installs both when the Codex
+endpoint** (what an agent can call, installed as the `seam mcp-proxy` stdio
+bridge) and **the hooks** (five of them, which brief and harvest an agent
+without it calling anything) - and one command installs both when the Codex
 management CLI is available.
 
 CLI behavior is supported by the existing compatibility suite. The IDE extension
@@ -1171,9 +1180,13 @@ nothing in Seamless rewrites your knowledge behind your back.
 URL: https://thereisnospoon.org/docs/concepts/how-it-works/
 
 
-Seamless is one Go binary holding one SQLite database and one directory of
-markdown files, bound to loopback on your machine. Everything below follows from
-that.
+Seamless is a local-first memory and coordination system for coding agents,
+built as one Go binary holding one SQLite database and one directory of
+markdown files, bound to loopback on your machine. Agents reach it over MCP,
+hooks make sessions ambient for Claude Code and Codex, and you watch through a
+read-mostly console. It is deliberately not a distributed system - one
+instance, one port, one data directory per machine. Everything below follows
+from that.
 
 ## One daemon, three surfaces
 
@@ -1264,9 +1277,16 @@ All three are covered in [Recall](/concepts/recall/) and
 URL: https://thereisnospoon.org/docs/concepts/memory/
 
 
-A memory is a markdown file with frontmatter. That is not an implementation
-detail - it is the design. You can read it, `grep` it, edit it, and put it in
-git, and no part of the system needs your permission to be inspected.
+In Seamless, a memory is one markdown file with YAML frontmatter holding one
+durable piece of knowledge an agent should not have to rediscover. The files
+are the source of truth - the SQLite database is a rebuildable index over them -
+and the frontmatter carries a lifecycle: a memory can be superseded or archived,
+and an invalid memory leaves every index while staying readable. A memory is for
+what is *true*; work artifacts belong in [notes](#memory-or-note) instead.
+
+That the store is plain markdown is not an implementation detail - it is the
+design. You can read it, `grep` it, edit it, and put it in git, and no part of
+the system needs your permission to be inspected.
 
 ```yaml
 ---
@@ -1409,14 +1429,17 @@ the global scope. Pass `project: global` to mean it on purpose. See
 URL: https://thereisnospoon.org/docs/concepts/sessions/
 
 
-A **session** is one agent's stretch of work. A **briefing** is what that agent
-gets handed at the start of it, before it has called a single tool.
+A Seamless **session** is one agent's stretch of work. A **briefing** is what
+that agent gets handed at the start of it, before it has called a single tool:
+a SessionStart hook - installed for [Claude Code](/claude-code/) or
+[Codex](/codex-cli/) - resolves the working directory to a project, assembles
+constraints, plan rollups, and recent findings inside a token budget, and
+injects the result into the agent's context. A client without hooks gets a
+briefing only by calling `session_start` itself.
 
 This is the mechanism that makes Seamless ambient rather than opt-in. An agent
-does not have to remember to ask what it knows; a SessionStart hook - installed
-for [Claude Code](/claude-code/) or [Codex](/codex-cli/) - resolves the working
-directory to a project, assembles a briefing inside a token budget, and injects it
-into the agent's context. The agent begins already knowing your constraints.
+does not have to remember to ask what it knows; it begins already knowing your
+constraints.
 
 ## Ambient vs. explicit sessions
 
@@ -1543,7 +1566,15 @@ earns it.
 URL: https://thereisnospoon.org/docs/concepts/recall/
 
 
-`recall` is the only search tool. There is no separate keyword search, no
+In Seamless, `recall` is the single search entry point an agent calls to
+retrieve durable knowledge - memories and notes - from the store. It fuses
+SQLite FTS5 keyword matching with float32 cosine vector similarity using
+reciprocal rank fusion, all inside one SQLite file with no external vector
+database. With no embedding provider configured, recall runs keyword-only
+rather than failing; when a configured provider is merely unreachable, it
+degrades the same way instead of erroring.
+
+`recall` is also the *only* search tool. There is no separate keyword search, no
 separate semantic search, no "advanced" variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.
 
@@ -1624,6 +1655,13 @@ retrieval surface - see [Memory & notes](/concepts/memory/).
 
 URL: https://thereisnospoon.org/docs/concepts/tasks-and-plans/
 
+
+Seamless gives coding agents a shared task queue that is dependency-aware and
+claimed under leases: a task becomes ready when its `depends_on` blockers
+finish, `tasks_claim` takes it atomically so two parallel agents never work the
+same task, and a crashed agent's lease expires instead of stranding the work.
+A plan is deliberately not a primitive - it is a composition of a narrative
+note and step tasks keyed by `plan:<slug>`.
 
 Tasks are how agents hand work to each other. Plans are how a design survives the
 agent that wrote it.
@@ -1882,6 +1920,12 @@ The symptom is almost always "the agent wrote it somewhere I can't find it" or
 URL: https://thereisnospoon.org/docs/concepts/gardener/
 
 
+The Seamless gardener is the background pass that keeps an agent-written memory
+store from rotting: it detects near-duplicate memories by embedding similarity,
+memories gone stale, and plans abandoned with steps still open, and files each
+finding as a proposal. Nothing is applied until you approve it with
+`gardener_apply` - the gardener has no write path of its own.
+
 Any store that agents write to accumulates cruft: two memories saying the same
 thing in different words, a runbook for a system that no longer exists, a plan
 abandoned three weeks ago with its steps still open.
@@ -2006,12 +2050,17 @@ silence, not an error message.
 URL: https://thereisnospoon.org/docs/guides/integrate-your-agent/
 
 
+Any MCP client can be wired into Seamless: the daemon serves streamable-HTTP
+MCP at `http://127.0.0.1:8081/api/mcp` behind a static bearer key, with a stdio
+bridge (`seam mcp-proxy`) for clients that only speak stdio. What a client
+without hooks gives up is the ambient layer - no injected briefing at session
+start, no prompt-matched recall injection, no automatic harvest of findings -
+so the agent has to run that loop itself.
+
 [Claude Code](/claude-code/) and [Codex](/codex-cli/) get Seamless mostly for
 free: [hooks](/reference/hooks/) open a session, inject a briefing, and harvest
-findings without the agent deciding to. Any other client has no hooks. It has to
-run the loop itself.
-
-This page is that loop, for a client you are wiring up by hand.
+findings without the agent deciding to. Any other client is wired up by hand.
+This page is that loop.
 
 ## The loop
 
@@ -2650,6 +2699,13 @@ will ever see.
 
 URL: https://thereisnospoon.org/docs/guides/coordinate-agents/
 
+
+Coordinating multiple coding agents with Seamless means pointing N workers -
+Claude Code, Codex, or any MCP client - at one shared, dependency-aware task
+queue with atomic lease-based claiming: every worker runs the same claim loop,
+exactly one wins each task, and a dead worker's lease expires instead of
+stranding its work. There is no scheduler process and no orchestrator - the
+coordination is the workers cooperating over the queue.
 
 One agent with memory is a better agent. Several agents with *shared* memory and
 no coordination is a worse outcome than one - they duplicate work, contradict each
@@ -5201,12 +5257,16 @@ plan_capture:
 URL: https://thereisnospoon.org/docs/reference/hooks/
 
 
-Seamless installs hooks for two clients. They are what makes sessions ambient: an
-agent gets a briefing, its prompts get matched against stored memories, and its
-findings get harvested - without the agent calling a single MCP tool. The profile
-depends on the client: Claude Code gets six hooks (including plan-mode capture);
-[Codex](#codex-local-host-five-hooks) gets five. `seamlessd install-hooks --client
-<claude|codex|all|detect>` selects the profile; run interactively with no
+Seamless installs hooks for two clients: six for Claude Code (including
+plan-mode capture) and five for [Codex](#codex-local-host-five-hooks). The
+hooks are what makes sessions ambient - an agent gets a briefing at session
+start, its prompts get matched against stored memories, and its findings get
+harvested, all without the agent calling a single MCP tool. Every hook fails
+open: an internal error still returns success, so a broken daemon never blocks
+the agent - see [the fail-open contract](#the-fail-open-contract) for the cost.
+
+`seamlessd install-hooks --client <claude|codex|all|detect>` selects the
+profile; run interactively with no
 `--client` it prompts for the client(s), and a non-interactive run without the
 flag resolves `detect`: the clients present on this machine (the `claude`/`codex`
 CLI or a `~/.claude`/`$CODEX_HOME` directory). When neither is found, an
@@ -6312,126 +6372,135 @@ things.
 
 ## A–Z
 
-**Ambient session** - a session opened automatically by a Claude Code or Codex
-SessionStart hook, displayed with an opaque `cc/...` or `cx/...` handle, without
-the agent asking. Lifecycle identity uses the full external session ID plus
-client, not the display handle. Contrast *explicit session*.
+**Ambient session** - a Seamless session opened automatically by a Claude Code
+or Codex SessionStart hook, without the agent asking, displayed with an opaque
+`cc/...` or `cx/...` handle. Lifecycle identity uses the full external session
+ID plus client, not the display handle. Contrast *explicit session*.
 
-**Arbitration** - deciding which of several competing memories wins when they
-disagree. Part of the memory lifecycle, alongside supersession and provenance.
+**Arbitration** - the Seamless lifecycle step that decides which of several
+competing memories wins when they disagree, alongside supersession and
+provenance.
 
-**Archive** - marking a memory invalid because it is no longer relevant. It
-leaves the indexes and stays readable. Proposed by the gardener's staleness pass,
-never done to a `constraint` or a pinned `stage`.
+**Archive** - marking a Seamless memory invalid because it is no longer
+relevant: it leaves the indexes and stays readable. Proposed by the gardener's
+staleness pass, never done to a `constraint` or a pinned `stage`.
 
-**Binding** - the association between an MCP connection and a session, set by
-`session_start`. Everything on that connection inherits the bound session's
-project.
+**Binding** - the association between an MCP connection and a Seamless session,
+set by `session_start`; everything on that connection inherits the bound
+session's project.
 
-**Briefing** - the `<seam-briefing>` block injected into an agent's context at
-session start: constraints, pinned stages, plan rollups, the memory index, recent
-findings. Assembled inside a token budget. See [Sessions &
+**Briefing** - the `<seam-briefing>` context block Seamless injects into an
+agent at session start - constraints, pinned stages, plan rollups, the memory
+index, recent findings - assembled inside a token budget. See [Sessions &
 briefings](/concepts/sessions/).
 
-**Claim** - an atomic, leased hold on a task, taken with `tasks_claim`. Exactly
-one agent can hold a live claim.
+**Claim** - an atomic, leased hold on a Seamless task, taken with `tasks_claim`;
+exactly one agent can hold a live claim.
 
-**Console** - the read-mostly web UI at `/console`. An observability surface for
-you; agents use MCP.
+**Console** - Seamless's read-mostly web UI at `/console`, an observability
+surface for the human owner; agents use MCP.
 
-**Constraint** - a memory kind: a rule the project cannot violate. Pinned into
-every briefing, never dropped for budget, never staleness-archived.
+**Constraint** - the Seamless memory kind for a rule the project cannot
+violate; pinned into every briefing, never dropped for budget, never
+staleness-archived.
 
-**Description** - the one-line summary in a memory's frontmatter. The **only**
-text shown in any index, and therefore the entire retrieval surface. See [Write
-memories that get recalled](/guides/write-good-memories/).
+**Description** - the one-line summary in a Seamless memory's frontmatter, the
+**only** text shown in any index and therefore the entire retrieval surface.
+See [Write memories that get recalled](/guides/write-good-memories/).
 
-**Digest** - a note summarizing recent activity, proposed by the gardener.
+**Digest** - a note summarizing a Seamless project's recent activity, proposed
+by the gardener.
 
-**Explicit session** - a session opened by calling `session_start`. It adopts the
-ambient session for the same working directory rather than opening a second one.
+**Explicit session** - a Seamless session opened by calling `session_start`; it
+adopts the ambient session for the same working directory rather than opening a
+second one.
 
-**Family** - a set of projects related by parent/child, so a child's briefing can
-carry the parent's memories and a sibling's recent findings.
+**Family** - a set of Seamless projects related by parent/child, so a child's
+briefing can carry the parent's memories and a sibling's recent findings.
 
-**Fail closed** - the rule that a durable write with no resolvable scope is
-rejected rather than defaulted to global. See [Projects &
+**Fail closed** - the Seamless rule that a durable write with no resolvable
+scope is rejected rather than defaulted to global. See [Projects &
 scope](/concepts/projects/).
 
-**Fail open** - the rule that a hook never blocks an agent: an internal error
-still returns success. The cost is that failure is silent.
+**Fail open** - the Seamless rule that a hook never blocks an agent: an
+internal error still returns success. The cost is that failure is silent.
 
-**Finding** - what a session learned, passed to `session_end` and surfaced in
-later briefings. Not a memory: a finding is what *happened*, a memory is what is
-*true*.
+**Finding** - what a Seamless session learned, passed to `session_end` and
+surfaced in later briefings. Not a memory: a finding is what *happened*, a
+memory is what is *true*.
 
-**FTS5** - SQLite's full-text search, the keyword half of recall.
+**FTS5** - SQLite's built-in full-text search engine, the keyword half of
+Seamless recall.
 
-**Gardener** - the periodic pass that finds duplicates, staleness, and drift and
-**proposes** fixes. It never acts on its own. See [The
+**Gardener** - the Seamless background pass that finds duplicates, staleness,
+and drift and **proposes** fixes; it never acts on its own. See [The
 gardener](/concepts/gardener/).
 
-**Global** - the scope with no project: visible to every agent in every repo.
-Reached only by passing `project: global` deliberately.
+**Global** - the Seamless scope with no project, visible to every agent in
+every repo; reached only by passing `project: global` deliberately.
 
-**Kind** - a memory's type: `constraint`, `runbook`, `protocol`, `gotcha`,
-`decision`, `refuted`, `reference`, or `stage`. See [Memory &
+**Kind** - a Seamless memory's type: `constraint`, `runbook`, `protocol`,
+`gotcha`, `decision`, `refuted`, `reference`, or `stage`. See [Memory &
 notes](/concepts/memory/).
 
-**Lab** - a shared workspace for a systematic investigation, holding trials.
-Opened with `lab_open`.
+**Lab** - a shared Seamless workspace for a systematic investigation, holding
+trials; opened with `lab_open`.
 
-**Lease** - the expiry on a claim (default 900 seconds). Re-claiming refreshes
-it; an expired lease is reclaimable, so a crashed agent does not strand a task.
+**Lease** - the expiry on a Seamless task claim (default 900 seconds).
+Re-claiming refreshes it; an expired lease is reclaimable, so a crashed agent
+does not strand a task.
 
-**Memory** - a markdown file with frontmatter holding one durable piece of
-knowledge. The unit that reaches briefings.
+**Memory** - in Seamless, a markdown file with YAML frontmatter holding one
+durable piece of knowledge; the unit that reaches briefings.
 
-**Note** - a markdown file holding a work artifact: research findings, a meeting
-summary, a design record. Found via recall; never injected into a briefing.
+**Note** - in Seamless, a markdown file holding a work artifact - research
+findings, a meeting summary, a design record; found via recall, never injected
+into a briefing.
 
-**Plan** - not a primitive. A composition keyed by `plan:<slug>`: a narrative
-note, supporting notes, and step tasks. See [Tasks &
+**Plan** - in Seamless, not a primitive but a composition keyed by
+`plan:<slug>`: a narrative note, supporting notes, and step tasks. See [Tasks &
 plans](/concepts/tasks-and-plans/).
 
-**Project** - the scope memories, notes, tasks, and sessions belong to. Resolved
-from an explicit argument, a bound session, or the agent's cwd.
+**Project** - the scope a Seamless memory, note, task, or session belongs to;
+resolved from an explicit argument, a bound session, or the agent's cwd.
 
-**Proposal** - the gardener's output. A suggestion for you to review, applied
-only with `gardener_apply`.
+**Proposal** - the Seamless gardener's output: a suggestion for the owner to
+review, applied only with `gardener_apply`.
 
-**Provenance** - the record of where knowledge came from and what replaced it:
-`source_session`, `superseded_by`, `invalid_at`.
+**Provenance** - the Seamless record of where knowledge came from and what
+replaced it: `source_session`, `superseded_by`, `invalid_at`.
 
-**Ready** - a task with no unfinished blocker. `tasks_ready` returns exactly
-those.
+**Ready** - a Seamless task with no unfinished blocker; `tasks_ready` returns
+exactly those.
 
-**Recall** - the single search entry point, fusing FTS5 and vector similarity
-with RRF. Also, loosely, the `<seam-recall>` block injected on prompt match -
-see the disambiguation below.
+**Recall** - Seamless's single search entry point, fusing FTS5 keyword matching
+and vector similarity with RRF. Also, loosely, the `<seam-recall>` block
+injected on prompt match - see the disambiguation below.
 
-**Reproject** - moving a memory to a different project that **already exists**.
-Moving it to one that does not is a *split*.
+**Reproject** - moving a Seamless memory to a different project that **already
+exists**; moving it to one that does not is a *split*.
 
-**RRF (reciprocal rank fusion)** - how recall combines the keyword and vector
-rankings so neither retriever gets a veto.
+**RRF (reciprocal rank fusion)** - the method Seamless recall uses to combine
+the keyword and vector rankings so neither retriever gets a veto.
 
-**Session** - one agent's stretch of work. Heartbeats; an idle one is reaped and
-marked `expired`.
+**Session** - one agent's stretch of work in Seamless. Sessions heartbeat; an
+idle one is reaped and marked `expired`.
 
-**Split** - dividing one project into new child projects, creating them and a
-shared parent. Planned as a unit by `gardener_split`.
+**Split** - dividing one Seamless project into new child projects, creating
+them and a shared parent; planned as a unit by `gardener_split`.
 
-**Stage** - a memory kind recording where multi-session work stands. Pinned into
-briefings like a constraint.
+**Stage** - the Seamless memory kind recording where multi-session work stands;
+pinned into briefings like a constraint.
 
-**Supersede** - replacing an outdated memory with a new one. The old is marked
-invalid, leaves the indexes, and stays readable pointing at its replacement.
+**Supersede** - replacing an outdated Seamless memory with a new one: the old
+is marked invalid, leaves the indexes, and stays readable pointing at its
+replacement.
 
-**Trial** - one attempt recorded in a lab: what was tried, what was expected,
-what happened.
+**Trial** - one attempt recorded in a Seamless lab: what was tried, what was
+expected, what happened.
 
-**ULID** - the id format, sortable by creation time. Never UUID.
+**ULID** - the id format Seamless uses everywhere, sortable by creation time.
+Never UUID.
 
 ## Four distinctions worth getting right
 

@@ -192,90 +192,99 @@ know them are the four <strong>disambiguation</strong> entries at the end: each 
 people routinely use interchangeably, and each pair means genuinely different
 things.</p>
 <h2 id="az">A–Z</h2>
-<p><strong>Ambient session</strong> - a session opened automatically by a Claude Code or Codex
-SessionStart hook, displayed with an opaque <code>cc/...</code> or <code>cx/...</code> handle, without
-the agent asking. Lifecycle identity uses the full external session ID plus
-client, not the display handle. Contrast <em>explicit session</em>.</p>
-<p><strong>Arbitration</strong> - deciding which of several competing memories wins when they
-disagree. Part of the memory lifecycle, alongside supersession and provenance.</p>
-<p><strong>Archive</strong> - marking a memory invalid because it is no longer relevant. It
-leaves the indexes and stays readable. Proposed by the gardener's staleness pass,
-never done to a <code>constraint</code> or a pinned <code>stage</code>.</p>
-<p><strong>Binding</strong> - the association between an MCP connection and a session, set by
-<code>session_start</code>. Everything on that connection inherits the bound session's
-project.</p>
-<p><strong>Briefing</strong> - the <code>&lt;seam-briefing&gt;</code> block injected into an agent's context at
-session start: constraints, pinned stages, plan rollups, the memory index, recent
-findings. Assembled inside a token budget. See <a href="../../concepts/sessions/">Sessions &amp;
+<p><strong>Ambient session</strong> - a Seamless session opened automatically by a Claude Code
+or Codex SessionStart hook, without the agent asking, displayed with an opaque
+<code>cc/...</code> or <code>cx/...</code> handle. Lifecycle identity uses the full external session
+ID plus client, not the display handle. Contrast <em>explicit session</em>.</p>
+<p><strong>Arbitration</strong> - the Seamless lifecycle step that decides which of several
+competing memories wins when they disagree, alongside supersession and
+provenance.</p>
+<p><strong>Archive</strong> - marking a Seamless memory invalid because it is no longer
+relevant: it leaves the indexes and stays readable. Proposed by the gardener's
+staleness pass, never done to a <code>constraint</code> or a pinned <code>stage</code>.</p>
+<p><strong>Binding</strong> - the association between an MCP connection and a Seamless session,
+set by <code>session_start</code>; everything on that connection inherits the bound
+session's project.</p>
+<p><strong>Briefing</strong> - the <code>&lt;seam-briefing&gt;</code> context block Seamless injects into an
+agent at session start - constraints, pinned stages, plan rollups, the memory
+index, recent findings - assembled inside a token budget. See <a href="../../concepts/sessions/">Sessions &amp;
 briefings</a>.</p>
-<p><strong>Claim</strong> - an atomic, leased hold on a task, taken with <code>tasks_claim</code>. Exactly
-one agent can hold a live claim.</p>
-<p><strong>Console</strong> - the read-mostly web UI at <code>/console</code>. An observability surface for
-you; agents use MCP.</p>
-<p><strong>Constraint</strong> - a memory kind: a rule the project cannot violate. Pinned into
-every briefing, never dropped for budget, never staleness-archived.</p>
-<p><strong>Description</strong> - the one-line summary in a memory's frontmatter. The <strong>only</strong>
-text shown in any index, and therefore the entire retrieval surface. See <a href="../../guides/write-good-memories/">Write
-memories that get recalled</a>.</p>
-<p><strong>Digest</strong> - a note summarizing recent activity, proposed by the gardener.</p>
-<p><strong>Explicit session</strong> - a session opened by calling <code>session_start</code>. It adopts the
-ambient session for the same working directory rather than opening a second one.</p>
-<p><strong>Family</strong> - a set of projects related by parent/child, so a child's briefing can
-carry the parent's memories and a sibling's recent findings.</p>
-<p><strong>Fail closed</strong> - the rule that a durable write with no resolvable scope is
-rejected rather than defaulted to global. See <a href="../../concepts/projects/">Projects &amp;
+<p><strong>Claim</strong> - an atomic, leased hold on a Seamless task, taken with <code>tasks_claim</code>;
+exactly one agent can hold a live claim.</p>
+<p><strong>Console</strong> - Seamless's read-mostly web UI at <code>/console</code>, an observability
+surface for the human owner; agents use MCP.</p>
+<p><strong>Constraint</strong> - the Seamless memory kind for a rule the project cannot
+violate; pinned into every briefing, never dropped for budget, never
+staleness-archived.</p>
+<p><strong>Description</strong> - the one-line summary in a Seamless memory's frontmatter, the
+<strong>only</strong> text shown in any index and therefore the entire retrieval surface.
+See <a href="../../guides/write-good-memories/">Write memories that get recalled</a>.</p>
+<p><strong>Digest</strong> - a note summarizing a Seamless project's recent activity, proposed
+by the gardener.</p>
+<p><strong>Explicit session</strong> - a Seamless session opened by calling <code>session_start</code>; it
+adopts the ambient session for the same working directory rather than opening a
+second one.</p>
+<p><strong>Family</strong> - a set of Seamless projects related by parent/child, so a child's
+briefing can carry the parent's memories and a sibling's recent findings.</p>
+<p><strong>Fail closed</strong> - the Seamless rule that a durable write with no resolvable
+scope is rejected rather than defaulted to global. See <a href="../../concepts/projects/">Projects &amp;
 scope</a>.</p>
-<p><strong>Fail open</strong> - the rule that a hook never blocks an agent: an internal error
-still returns success. The cost is that failure is silent.</p>
-<p><strong>Finding</strong> - what a session learned, passed to <code>session_end</code> and surfaced in
-later briefings. Not a memory: a finding is what <em>happened</em>, a memory is what is
-<em>true</em>.</p>
-<p><strong>FTS5</strong> - SQLite's full-text search, the keyword half of recall.</p>
-<p><strong>Gardener</strong> - the periodic pass that finds duplicates, staleness, and drift and
-<strong>proposes</strong> fixes. It never acts on its own. See <a href="../../concepts/gardener/">The
+<p><strong>Fail open</strong> - the Seamless rule that a hook never blocks an agent: an
+internal error still returns success. The cost is that failure is silent.</p>
+<p><strong>Finding</strong> - what a Seamless session learned, passed to <code>session_end</code> and
+surfaced in later briefings. Not a memory: a finding is what <em>happened</em>, a
+memory is what is <em>true</em>.</p>
+<p><strong>FTS5</strong> - SQLite's built-in full-text search engine, the keyword half of
+Seamless recall.</p>
+<p><strong>Gardener</strong> - the Seamless background pass that finds duplicates, staleness,
+and drift and <strong>proposes</strong> fixes; it never acts on its own. See <a href="../../concepts/gardener/">The
 gardener</a>.</p>
-<p><strong>Global</strong> - the scope with no project: visible to every agent in every repo.
-Reached only by passing <code>project: global</code> deliberately.</p>
-<p><strong>Kind</strong> - a memory's type: <code>constraint</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>,
-<code>decision</code>, <code>refuted</code>, <code>reference</code>, or <code>stage</code>. See <a href="../../concepts/memory/">Memory &amp;
+<p><strong>Global</strong> - the Seamless scope with no project, visible to every agent in
+every repo; reached only by passing <code>project: global</code> deliberately.</p>
+<p><strong>Kind</strong> - a Seamless memory's type: <code>constraint</code>, <code>runbook</code>, <code>protocol</code>,
+<code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, or <code>stage</code>. See <a href="../../concepts/memory/">Memory &amp;
 notes</a>.</p>
-<p><strong>Lab</strong> - a shared workspace for a systematic investigation, holding trials.
-Opened with <code>lab_open</code>.</p>
-<p><strong>Lease</strong> - the expiry on a claim (default 900 seconds). Re-claiming refreshes
-it; an expired lease is reclaimable, so a crashed agent does not strand a task.</p>
-<p><strong>Memory</strong> - a markdown file with frontmatter holding one durable piece of
-knowledge. The unit that reaches briefings.</p>
-<p><strong>Note</strong> - a markdown file holding a work artifact: research findings, a meeting
-summary, a design record. Found via recall; never injected into a briefing.</p>
-<p><strong>Plan</strong> - not a primitive. A composition keyed by <code>plan:&lt;slug&gt;</code>: a narrative
-note, supporting notes, and step tasks. See <a href="../../concepts/tasks-and-plans/">Tasks &amp;
+<p><strong>Lab</strong> - a shared Seamless workspace for a systematic investigation, holding
+trials; opened with <code>lab_open</code>.</p>
+<p><strong>Lease</strong> - the expiry on a Seamless task claim (default 900 seconds).
+Re-claiming refreshes it; an expired lease is reclaimable, so a crashed agent
+does not strand a task.</p>
+<p><strong>Memory</strong> - in Seamless, a markdown file with YAML frontmatter holding one
+durable piece of knowledge; the unit that reaches briefings.</p>
+<p><strong>Note</strong> - in Seamless, a markdown file holding a work artifact - research
+findings, a meeting summary, a design record; found via recall, never injected
+into a briefing.</p>
+<p><strong>Plan</strong> - in Seamless, not a primitive but a composition keyed by
+<code>plan:&lt;slug&gt;</code>: a narrative note, supporting notes, and step tasks. See <a href="../../concepts/tasks-and-plans/">Tasks &amp;
 plans</a>.</p>
-<p><strong>Project</strong> - the scope memories, notes, tasks, and sessions belong to. Resolved
-from an explicit argument, a bound session, or the agent's cwd.</p>
-<p><strong>Proposal</strong> - the gardener's output. A suggestion for you to review, applied
-only with <code>gardener_apply</code>.</p>
-<p><strong>Provenance</strong> - the record of where knowledge came from and what replaced it:
-<code>source_session</code>, <code>superseded_by</code>, <code>invalid_at</code>.</p>
-<p><strong>Ready</strong> - a task with no unfinished blocker. <code>tasks_ready</code> returns exactly
-those.</p>
-<p><strong>Recall</strong> - the single search entry point, fusing FTS5 and vector similarity
-with RRF. Also, loosely, the <code>&lt;seam-recall&gt;</code> block injected on prompt match -
-see the disambiguation below.</p>
-<p><strong>Reproject</strong> - moving a memory to a different project that <strong>already exists</strong>.
-Moving it to one that does not is a <em>split</em>.</p>
-<p><strong>RRF (reciprocal rank fusion)</strong> - how recall combines the keyword and vector
-rankings so neither retriever gets a veto.</p>
-<p><strong>Session</strong> - one agent's stretch of work. Heartbeats; an idle one is reaped and
-marked <code>expired</code>.</p>
-<p><strong>Split</strong> - dividing one project into new child projects, creating them and a
-shared parent. Planned as a unit by <code>gardener_split</code>.</p>
-<p><strong>Stage</strong> - a memory kind recording where multi-session work stands. Pinned into
-briefings like a constraint.</p>
-<p><strong>Supersede</strong> - replacing an outdated memory with a new one. The old is marked
-invalid, leaves the indexes, and stays readable pointing at its replacement.</p>
-<p><strong>Trial</strong> - one attempt recorded in a lab: what was tried, what was expected,
-what happened.</p>
-<p><strong>ULID</strong> - the id format, sortable by creation time. Never UUID.</p>
+<p><strong>Project</strong> - the scope a Seamless memory, note, task, or session belongs to;
+resolved from an explicit argument, a bound session, or the agent's cwd.</p>
+<p><strong>Proposal</strong> - the Seamless gardener's output: a suggestion for the owner to
+review, applied only with <code>gardener_apply</code>.</p>
+<p><strong>Provenance</strong> - the Seamless record of where knowledge came from and what
+replaced it: <code>source_session</code>, <code>superseded_by</code>, <code>invalid_at</code>.</p>
+<p><strong>Ready</strong> - a Seamless task with no unfinished blocker; <code>tasks_ready</code> returns
+exactly those.</p>
+<p><strong>Recall</strong> - Seamless's single search entry point, fusing FTS5 keyword matching
+and vector similarity with RRF. Also, loosely, the <code>&lt;seam-recall&gt;</code> block
+injected on prompt match - see the disambiguation below.</p>
+<p><strong>Reproject</strong> - moving a Seamless memory to a different project that <strong>already
+exists</strong>; moving it to one that does not is a <em>split</em>.</p>
+<p><strong>RRF (reciprocal rank fusion)</strong> - the method Seamless recall uses to combine
+the keyword and vector rankings so neither retriever gets a veto.</p>
+<p><strong>Session</strong> - one agent's stretch of work in Seamless. Sessions heartbeat; an
+idle one is reaped and marked <code>expired</code>.</p>
+<p><strong>Split</strong> - dividing one Seamless project into new child projects, creating
+them and a shared parent; planned as a unit by <code>gardener_split</code>.</p>
+<p><strong>Stage</strong> - the Seamless memory kind recording where multi-session work stands;
+pinned into briefings like a constraint.</p>
+<p><strong>Supersede</strong> - replacing an outdated Seamless memory with a new one: the old
+is marked invalid, leaves the indexes, and stays readable pointing at its
+replacement.</p>
+<p><strong>Trial</strong> - one attempt recorded in a Seamless lab: what was tried, what was
+expected, what happened.</p>
+<p><strong>ULID</strong> - the id format Seamless uses everywhere, sortable by creation time.
+Never UUID.</p>
 <h2 id="four-distinctions-worth-getting-right">Four distinctions worth getting right</h2>
 <p><strong>Memory vs. note vs. finding.</strong> A <em>memory</em> is what is true (injected into
 briefings). A <em>note</em> is what you produced (found by searching). A <em>finding</em> is

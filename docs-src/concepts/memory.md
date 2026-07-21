@@ -3,9 +3,16 @@ title: Memory & notes
 description: What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.
 ---
 
-A memory is a markdown file with frontmatter. That is not an implementation
-detail - it is the design. You can read it, `grep` it, edit it, and put it in
-git, and no part of the system needs your permission to be inspected.
+In Seamless, a memory is one markdown file with YAML frontmatter holding one
+durable piece of knowledge an agent should not have to rediscover. The files
+are the source of truth - the SQLite database is a rebuildable index over them -
+and the frontmatter carries a lifecycle: a memory can be superseded or archived,
+and an invalid memory leaves every index while staying readable. A memory is for
+what is *true*; work artifacts belong in [notes](#memory-or-note) instead.
+
+That the store is plain markdown is not an implementation detail - it is the
+design. You can read it, `grep` it, edit it, and put it in git, and no part of
+the system needs your permission to be inspected.
 
 ```yaml
 ---

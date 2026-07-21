@@ -187,7 +187,13 @@
 
   <h1>Tasks &amp; plans</h1>
   <p class="lede">The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.</p>
-  <p>Tasks are how agents hand work to each other. Plans are how a design survives the
+  <p>Seamless gives coding agents a shared task queue that is dependency-aware and
+claimed under leases: a task becomes ready when its <code>depends_on</code> blockers
+finish, <code>tasks_claim</code> takes it atomically so two parallel agents never work the
+same task, and a crashed agent's lease expires instead of stranding the work.
+A plan is deliberately not a primitive - it is a composition of a narrative
+note and step tasks keyed by <code>plan:&lt;slug&gt;</code>.</p>
+<p>Tasks are how agents hand work to each other. Plans are how a design survives the
 agent that wrote it.</p>
 <h2 id="the-ready-queue">The ready queue</h2>
 <p>A task is <strong>ready</strong> when it has no unfinished blocker. <code>tasks_ready</code> returns

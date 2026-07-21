@@ -3,6 +3,12 @@ title: The gardener
 description: The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.
 ---
 
+The Seamless gardener is the background pass that keeps an agent-written memory
+store from rotting: it detects near-duplicate memories by embedding similarity,
+memories gone stale, and plans abandoned with steps still open, and files each
+finding as a proposal. Nothing is applied until you approve it with
+`gardener_apply` - the gardener has no write path of its own.
+
 Any store that agents write to accumulates cruft: two memories saying the same
 thing in different words, a runbook for a system that no longer exists, a plan
 abandoned three weeks ago with its steps still open.

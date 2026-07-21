@@ -10,126 +10,135 @@ things.
 
 ## A–Z
 
-**Ambient session** - a session opened automatically by a Claude Code or Codex
-SessionStart hook, displayed with an opaque `cc/...` or `cx/...` handle, without
-the agent asking. Lifecycle identity uses the full external session ID plus
-client, not the display handle. Contrast *explicit session*.
+**Ambient session** - a Seamless session opened automatically by a Claude Code
+or Codex SessionStart hook, without the agent asking, displayed with an opaque
+`cc/...` or `cx/...` handle. Lifecycle identity uses the full external session
+ID plus client, not the display handle. Contrast *explicit session*.
 
-**Arbitration** - deciding which of several competing memories wins when they
-disagree. Part of the memory lifecycle, alongside supersession and provenance.
+**Arbitration** - the Seamless lifecycle step that decides which of several
+competing memories wins when they disagree, alongside supersession and
+provenance.
 
-**Archive** - marking a memory invalid because it is no longer relevant. It
-leaves the indexes and stays readable. Proposed by the gardener's staleness pass,
-never done to a `constraint` or a pinned `stage`.
+**Archive** - marking a Seamless memory invalid because it is no longer
+relevant: it leaves the indexes and stays readable. Proposed by the gardener's
+staleness pass, never done to a `constraint` or a pinned `stage`.
 
-**Binding** - the association between an MCP connection and a session, set by
-`session_start`. Everything on that connection inherits the bound session's
-project.
+**Binding** - the association between an MCP connection and a Seamless session,
+set by `session_start`; everything on that connection inherits the bound
+session's project.
 
-**Briefing** - the `<seam-briefing>` block injected into an agent's context at
-session start: constraints, pinned stages, plan rollups, the memory index, recent
-findings. Assembled inside a token budget. See [Sessions &
+**Briefing** - the `<seam-briefing>` context block Seamless injects into an
+agent at session start - constraints, pinned stages, plan rollups, the memory
+index, recent findings - assembled inside a token budget. See [Sessions &
 briefings](/concepts/sessions/).
 
-**Claim** - an atomic, leased hold on a task, taken with `tasks_claim`. Exactly
-one agent can hold a live claim.
+**Claim** - an atomic, leased hold on a Seamless task, taken with `tasks_claim`;
+exactly one agent can hold a live claim.
 
-**Console** - the read-mostly web UI at `/console`. An observability surface for
-you; agents use MCP.
+**Console** - Seamless's read-mostly web UI at `/console`, an observability
+surface for the human owner; agents use MCP.
 
-**Constraint** - a memory kind: a rule the project cannot violate. Pinned into
-every briefing, never dropped for budget, never staleness-archived.
+**Constraint** - the Seamless memory kind for a rule the project cannot
+violate; pinned into every briefing, never dropped for budget, never
+staleness-archived.
 
-**Description** - the one-line summary in a memory's frontmatter. The **only**
-text shown in any index, and therefore the entire retrieval surface. See [Write
-memories that get recalled](/guides/write-good-memories/).
+**Description** - the one-line summary in a Seamless memory's frontmatter, the
+**only** text shown in any index and therefore the entire retrieval surface.
+See [Write memories that get recalled](/guides/write-good-memories/).
 
-**Digest** - a note summarizing recent activity, proposed by the gardener.
+**Digest** - a note summarizing a Seamless project's recent activity, proposed
+by the gardener.
 
-**Explicit session** - a session opened by calling `session_start`. It adopts the
-ambient session for the same working directory rather than opening a second one.
+**Explicit session** - a Seamless session opened by calling `session_start`; it
+adopts the ambient session for the same working directory rather than opening a
+second one.
 
-**Family** - a set of projects related by parent/child, so a child's briefing can
-carry the parent's memories and a sibling's recent findings.
+**Family** - a set of Seamless projects related by parent/child, so a child's
+briefing can carry the parent's memories and a sibling's recent findings.
 
-**Fail closed** - the rule that a durable write with no resolvable scope is
-rejected rather than defaulted to global. See [Projects &
+**Fail closed** - the Seamless rule that a durable write with no resolvable
+scope is rejected rather than defaulted to global. See [Projects &
 scope](/concepts/projects/).
 
-**Fail open** - the rule that a hook never blocks an agent: an internal error
-still returns success. The cost is that failure is silent.
+**Fail open** - the Seamless rule that a hook never blocks an agent: an
+internal error still returns success. The cost is that failure is silent.
 
-**Finding** - what a session learned, passed to `session_end` and surfaced in
-later briefings. Not a memory: a finding is what *happened*, a memory is what is
-*true*.
+**Finding** - what a Seamless session learned, passed to `session_end` and
+surfaced in later briefings. Not a memory: a finding is what *happened*, a
+memory is what is *true*.
 
-**FTS5** - SQLite's full-text search, the keyword half of recall.
+**FTS5** - SQLite's built-in full-text search engine, the keyword half of
+Seamless recall.
 
-**Gardener** - the periodic pass that finds duplicates, staleness, and drift and
-**proposes** fixes. It never acts on its own. See [The
+**Gardener** - the Seamless background pass that finds duplicates, staleness,
+and drift and **proposes** fixes; it never acts on its own. See [The
 gardener](/concepts/gardener/).
 
-**Global** - the scope with no project: visible to every agent in every repo.
-Reached only by passing `project: global` deliberately.
+**Global** - the Seamless scope with no project, visible to every agent in
+every repo; reached only by passing `project: global` deliberately.
 
-**Kind** - a memory's type: `constraint`, `runbook`, `protocol`, `gotcha`,
-`decision`, `refuted`, `reference`, or `stage`. See [Memory &
+**Kind** - a Seamless memory's type: `constraint`, `runbook`, `protocol`,
+`gotcha`, `decision`, `refuted`, `reference`, or `stage`. See [Memory &
 notes](/concepts/memory/).
 
-**Lab** - a shared workspace for a systematic investigation, holding trials.
-Opened with `lab_open`.
+**Lab** - a shared Seamless workspace for a systematic investigation, holding
+trials; opened with `lab_open`.
 
-**Lease** - the expiry on a claim (default 900 seconds). Re-claiming refreshes
-it; an expired lease is reclaimable, so a crashed agent does not strand a task.
+**Lease** - the expiry on a Seamless task claim (default 900 seconds).
+Re-claiming refreshes it; an expired lease is reclaimable, so a crashed agent
+does not strand a task.
 
-**Memory** - a markdown file with frontmatter holding one durable piece of
-knowledge. The unit that reaches briefings.
+**Memory** - in Seamless, a markdown file with YAML frontmatter holding one
+durable piece of knowledge; the unit that reaches briefings.
 
-**Note** - a markdown file holding a work artifact: research findings, a meeting
-summary, a design record. Found via recall; never injected into a briefing.
+**Note** - in Seamless, a markdown file holding a work artifact - research
+findings, a meeting summary, a design record; found via recall, never injected
+into a briefing.
 
-**Plan** - not a primitive. A composition keyed by `plan:<slug>`: a narrative
-note, supporting notes, and step tasks. See [Tasks &
+**Plan** - in Seamless, not a primitive but a composition keyed by
+`plan:<slug>`: a narrative note, supporting notes, and step tasks. See [Tasks &
 plans](/concepts/tasks-and-plans/).
 
-**Project** - the scope memories, notes, tasks, and sessions belong to. Resolved
-from an explicit argument, a bound session, or the agent's cwd.
+**Project** - the scope a Seamless memory, note, task, or session belongs to;
+resolved from an explicit argument, a bound session, or the agent's cwd.
 
-**Proposal** - the gardener's output. A suggestion for you to review, applied
-only with `gardener_apply`.
+**Proposal** - the Seamless gardener's output: a suggestion for the owner to
+review, applied only with `gardener_apply`.
 
-**Provenance** - the record of where knowledge came from and what replaced it:
-`source_session`, `superseded_by`, `invalid_at`.
+**Provenance** - the Seamless record of where knowledge came from and what
+replaced it: `source_session`, `superseded_by`, `invalid_at`.
 
-**Ready** - a task with no unfinished blocker. `tasks_ready` returns exactly
-those.
+**Ready** - a Seamless task with no unfinished blocker; `tasks_ready` returns
+exactly those.
 
-**Recall** - the single search entry point, fusing FTS5 and vector similarity
-with RRF. Also, loosely, the `<seam-recall>` block injected on prompt match -
-see the disambiguation below.
+**Recall** - Seamless's single search entry point, fusing FTS5 keyword matching
+and vector similarity with RRF. Also, loosely, the `<seam-recall>` block
+injected on prompt match - see the disambiguation below.
 
-**Reproject** - moving a memory to a different project that **already exists**.
-Moving it to one that does not is a *split*.
+**Reproject** - moving a Seamless memory to a different project that **already
+exists**; moving it to one that does not is a *split*.
 
-**RRF (reciprocal rank fusion)** - how recall combines the keyword and vector
-rankings so neither retriever gets a veto.
+**RRF (reciprocal rank fusion)** - the method Seamless recall uses to combine
+the keyword and vector rankings so neither retriever gets a veto.
 
-**Session** - one agent's stretch of work. Heartbeats; an idle one is reaped and
-marked `expired`.
+**Session** - one agent's stretch of work in Seamless. Sessions heartbeat; an
+idle one is reaped and marked `expired`.
 
-**Split** - dividing one project into new child projects, creating them and a
-shared parent. Planned as a unit by `gardener_split`.
+**Split** - dividing one Seamless project into new child projects, creating
+them and a shared parent; planned as a unit by `gardener_split`.
 
-**Stage** - a memory kind recording where multi-session work stands. Pinned into
-briefings like a constraint.
+**Stage** - the Seamless memory kind recording where multi-session work stands;
+pinned into briefings like a constraint.
 
-**Supersede** - replacing an outdated memory with a new one. The old is marked
-invalid, leaves the indexes, and stays readable pointing at its replacement.
+**Supersede** - replacing an outdated Seamless memory with a new one: the old
+is marked invalid, leaves the indexes, and stays readable pointing at its
+replacement.
 
-**Trial** - one attempt recorded in a lab: what was tried, what was expected,
-what happened.
+**Trial** - one attempt recorded in a Seamless lab: what was tried, what was
+expected, what happened.
 
-**ULID** - the id format, sortable by creation time. Never UUID.
+**ULID** - the id format Seamless uses everywhere, sortable by creation time.
+Never UUID.
 
 ## Four distinctions worth getting right
 

@@ -3,6 +3,13 @@ title: Coordinate multiple agents
 description: Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.
 ---
 
+Coordinating multiple coding agents with Seamless means pointing N workers -
+Claude Code, Codex, or any MCP client - at one shared, dependency-aware task
+queue with atomic lease-based claiming: every worker runs the same claim loop,
+exactly one wins each task, and a dead worker's lease expires instead of
+stranding its work. There is no scheduler process and no orchestrator - the
+coordination is the workers cooperating over the queue.
+
 One agent with memory is a better agent. Several agents with *shared* memory and
 no coordination is a worse outcome than one - they duplicate work, contradict each
 other's writes, and discover the same dead end in parallel.

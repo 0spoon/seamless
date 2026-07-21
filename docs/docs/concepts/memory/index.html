@@ -187,9 +187,15 @@
 
   <h1>Memory &amp; notes</h1>
   <p class="lede">What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.</p>
-  <p>A memory is a markdown file with frontmatter. That is not an implementation
-detail - it is the design. You can read it, <code>grep</code> it, edit it, and put it in
-git, and no part of the system needs your permission to be inspected.</p>
+  <p>In Seamless, a memory is one markdown file with YAML frontmatter holding one
+durable piece of knowledge an agent should not have to rediscover. The files
+are the source of truth - the SQLite database is a rebuildable index over them -
+and the frontmatter carries a lifecycle: a memory can be superseded or archived,
+and an invalid memory leaves every index while staying readable. A memory is for
+what is <em>true</em>; work artifacts belong in <a href="#memory-or-note">notes</a> instead.</p>
+<p>That the store is plain markdown is not an implementation detail - it is the
+design. You can read it, <code>grep</code> it, edit it, and put it in git, and no part of
+the system needs your permission to be inspected.</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...                </span><span class="w"> </span><span class="c"># ULID, assigned once, stable forever</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">gotcha              </span><span class="w"> </span><span class="c"># what sort of knowledge this is (see below)</span><span class="w">

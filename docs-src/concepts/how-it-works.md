@@ -3,9 +3,13 @@ title: How Seamless works
 description: One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.
 ---
 
-Seamless is one Go binary holding one SQLite database and one directory of
-markdown files, bound to loopback on your machine. Everything below follows from
-that.
+Seamless is a local-first memory and coordination system for coding agents,
+built as one Go binary holding one SQLite database and one directory of
+markdown files, bound to loopback on your machine. Agents reach it over MCP,
+hooks make sessions ambient for Claude Code and Codex, and you watch through a
+read-mostly console. It is deliberately not a distributed system - one
+instance, one port, one data directory per machine. Everything below follows
+from that.
 
 ## One daemon, three surfaces
 

@@ -186,8 +186,12 @@
 
   <h1>Install &amp; deploy</h1>
   <p class="lede">The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.</p>
-  <p>The <a href="../quickstart/">Quickstart</a> gets Seamless running in one command. This page is
-what that command did, and what to do when you want to steer it yourself.</p>
+  <p>Installing Seamless is one command: a script downloads a single Go binary for
+macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
+service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
+no database server, no Go toolchain. The <a href="../quickstart/">Quickstart</a> runs that
+command and moves on; this page is what it did, and what to do when you want to
+steer it yourself.</p>
 <h2 id="one-instance-per-machine">One instance per machine</h2>
 <p>There is <strong>one instance</strong>: port <code>8081</code>, data dir <code>~/.seamless</code>. One daemon, one
 database, one set of files.</p>

@@ -3,7 +3,15 @@ title: Recall
 description: One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.
 ---
 
-`recall` is the only search tool. There is no separate keyword search, no
+In Seamless, `recall` is the single search entry point an agent calls to
+retrieve durable knowledge - memories and notes - from the store. It fuses
+SQLite FTS5 keyword matching with float32 cosine vector similarity using
+reciprocal rank fusion, all inside one SQLite file with no external vector
+database. With no embedding provider configured, recall runs keyword-only
+rather than failing; when a configured provider is merely unreachable, it
+degrades the same way instead of erroring.
+
+`recall` is also the *only* search tool. There is no separate keyword search, no
 separate semantic search, no "advanced" variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.
 
