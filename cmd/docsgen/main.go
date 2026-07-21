@@ -10,10 +10,11 @@
 //	docsgen -src docs-src -out docs/docs      # regenerate (what `make docs` runs)
 //	docsgen -serve 127.0.0.1:8899             # regenerate, then serve docs/ locally
 //
-// Besides the docs tree, every run refreshes two crawler files at the site root
+// Besides the docs tree, every run refreshes the crawler files at the site root
 // (-site, default docs/): sitemap.xml, naming the landing page and every docs
-// page, and robots.txt, which points crawlers at it. Both are committed and
-// gated by `make docs-check`, so the sitemap cannot go stale against the nav.
+// page; robots.txt, which points crawlers at it; and llms.txt / llms-full.txt,
+// the site's nav and full source markdown for LLM consumers. All are committed
+// and gated by `make docs-check`, so none can go stale against the nav.
 //
 // Two pages are generated rather than authored, via a `generate:` key in their
 // frontmatter (see generators.go): the MCP tool reference reads mcp.Catalog(),
@@ -31,7 +32,7 @@ import (
 func main() {
 	src := flag.String("src", "docs-src", "directory of authored markdown sources")
 	out := flag.String("out", filepath.Join("docs", "docs"), "output directory for generated HTML (contents are replaced)")
-	site := flag.String("site", "docs", "site root receiving sitemap.xml and robots.txt (files are overwritten, nothing is deleted)")
+	site := flag.String("site", "docs", "site root receiving the crawler files (files are overwritten, nothing is deleted)")
 	serve := flag.String("serve", "", "after generating, serve the site root on this address (e.g. 127.0.0.1:8899)")
 	flag.Parse()
 
@@ -62,7 +63,7 @@ func run(src, out, siteDir, serveAddr string) error {
 	if err := writeSiteRoot(siteDir, site); err != nil {
 		return err
 	}
-	fmt.Printf("docsgen: wrote %d pages to %s, sitemap.xml + robots.txt to %s\n", len(site.Pages), out, siteDir)
+	fmt.Printf("docsgen: wrote %d pages to %s, crawler files to %s\n", len(site.Pages), out, siteDir)
 
 	if serveAddr != "" {
 		// The docs live at <root>/docs/, so serve the parent: the same relative

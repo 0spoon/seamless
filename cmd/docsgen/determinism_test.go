@@ -41,7 +41,7 @@ func renderRepoSite(t *testing.T) map[string]string {
 		files[filepath.ToSlash(rel)] = string(raw)
 		return nil
 	}))
-	for _, name := range []string{"sitemap.xml", "robots.txt"} {
+	for _, name := range []string{"sitemap.xml", "robots.txt", "llms.txt", "llms-full.txt"} {
 		raw, err := os.ReadFile(filepath.Join(dir, name))
 		require.NoError(t, err)
 		files[name] = string(raw)

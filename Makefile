@@ -73,11 +73,13 @@ ADDR          = $(or $(CONFIG_ADDR),$(DEFAULT_ADDR))
 
 # Documentation site (cmd/docsgen). DOCS_OUT is committed; `make check` fails if
 # it drifts from DOCS_SRC. SITE_ROOT is the directory GitHub Pages serves;
-# docsgen additionally writes sitemap.xml and robots.txt there (overwriting
-# those two files only, never deleting), and docs-check gates both.
-DOCS_SRC  := docs-src
-DOCS_OUT  := docs/docs
-SITE_ROOT := docs
+# docsgen additionally writes the crawler files there ($(SITE_FILES),
+# overwriting those named files only, never deleting), and docs-check gates
+# them all.
+DOCS_SRC   := docs-src
+DOCS_OUT   := docs/docs
+SITE_ROOT  := docs
+SITE_FILES := sitemap.xml robots.txt llms.txt llms-full.txt
 DOCS_ADDR ?= 127.0.0.1:8899
 
 # The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).
@@ -204,9 +206,8 @@ docs-check:
 	@tmp=$$(mktemp -d) || exit 1; \
 	    trap 'rm -rf "$$tmp"' EXIT; \
 	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" -site "$$tmp" >/dev/null || exit 1; \
-	    { diff -r "$$tmp/docs" $(DOCS_OUT) && \
-	      diff "$$tmp/sitemap.xml" $(SITE_ROOT)/sitemap.xml && \
-	      diff "$$tmp/robots.txt" $(SITE_ROOT)/robots.txt; } > "$$tmp/diff" 2>&1 \
+	    ( diff -r "$$tmp/docs" $(DOCS_OUT) && \
+	      for f in $(SITE_FILES); do diff "$$tmp/$$f" $(SITE_ROOT)/$$f || exit 1; done ) > "$$tmp/diff" 2>&1 \
 	        || { echo "docs drift: $(DOCS_OUT) or the site-root crawler files do not match $(DOCS_SRC) (run 'make docs' and commit)"; \
 	             head -40 "$$tmp/diff"; exit 1; }
 

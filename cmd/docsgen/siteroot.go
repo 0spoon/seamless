@@ -61,14 +61,72 @@ func sitemapXML(site *Site) []byte {
 	return []byte(b.String())
 }
 
+// siteName is the project name llms.txt leads with -- the llms.txt convention
+// wants the project, not the home page's question-shaped title.
+const siteName = "Seamless"
+
+// llmsTxt renders /llms.txt in the llmstxt.org shape: an H1, a one-line
+// blockquote summary, then one H2 per nav section with `- [title](url): note`
+// entries. It is built from the same Site data the card grids render, so it
+// has no source of truth of its own to drift.
+func llmsTxt(site *Site) []byte {
+	var b strings.Builder
+	b.WriteString("# " + siteName + "\n\n")
+	b.WriteString("> " + site.Home.Description + "\n")
+	for _, sec := range site.Sections {
+		b.WriteString("\n## " + sec.Title + "\n\n")
+		for _, p := range sectionPages(sec) {
+			b.WriteString("- [" + p.Title + "](" + p.Canonical() + "): " + p.Description + "\n")
+		}
+	}
+	return []byte(b.String())
+}
+
+// llmsFullTxt renders /llms-full.txt: every page's full source markdown in nav
+// order, each under its title with its canonical URL, so an LLM that fetches
+// one file gets the whole site untruncated.
+func llmsFullTxt(site *Site) []byte {
+	var b strings.Builder
+	b.WriteString("# " + siteName + "\n\n")
+	b.WriteString("> " + site.Home.Description + "\n")
+	for _, p := range site.Pages {
+		b.WriteString("\n---\n\n")
+		b.WriteString("# " + p.Title + "\n\n")
+		b.WriteString("URL: " + p.Canonical() + "\n\n")
+		b.WriteString(strings.TrimRight(p.FullMarkdown, "\n") + "\n")
+	}
+	return []byte(b.String())
+}
+
+// sectionPages is a section's pages in nav order, its index page (authored or
+// generated) first -- the same order site.Pages carries them.
+func sectionPages(sec *Section) []*Page {
+	if sec.Index == nil {
+		return sec.Pages
+	}
+	return append([]*Page{sec.Index}, sec.Pages...)
+}
+
 // writeSiteRoot writes the crawler files into the site root (docs/, the
 // directory GitHub Pages serves). Unlike writeSite it owns only the files it
 // names and never deletes anything: the site root also holds the hand-written
 // landing page, CNAME, .nojekyll, and fonts, none of which are docsgen's to
 // touch.
 func writeSiteRoot(siteDir string, site *Site) error {
-	if err := writeFile(filepath.Join(siteDir, "sitemap.xml"), sitemapXML(site)); err != nil {
-		return err
+	for name, content := range siteRootFiles(site) {
+		if err := writeFile(filepath.Join(siteDir, name), content); err != nil {
+			return err
+		}
 	}
-	return writeFile(filepath.Join(siteDir, "robots.txt"), []byte(robotsTxt))
+	return nil
+}
+
+// siteRootFiles is the complete set writeSiteRoot owns, by name.
+func siteRootFiles(site *Site) map[string][]byte {
+	return map[string][]byte{
+		"sitemap.xml":   sitemapXML(site),
+		"robots.txt":    []byte(robotsTxt),
+		"llms.txt":      llmsTxt(site),
+		"llms-full.txt": llmsFullTxt(site),
+	}
 }

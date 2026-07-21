@@ -58,6 +58,7 @@ func renderPages(site *Site) error {
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Src, err)
 		}
+		p.FullMarkdown = md
 		p.Body, p.Headings, p.Links, p.Text = out.HTML, out.Headings, out.Links, plainText(md)
 	}
 	return checkLinks(site)

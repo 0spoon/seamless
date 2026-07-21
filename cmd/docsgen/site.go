@@ -77,8 +77,13 @@ type Page struct {
 	Template string
 
 	Markdown string
-	Body     template.HTML
-	Headings []Heading
+	// FullMarkdown is the source the page was actually rendered from: the
+	// authored markdown plus any generator output, untruncated. llms-full.txt
+	// needs it because Text is capped by plainText, and a silently truncated
+	// page there would be worse than none.
+	FullMarkdown string
+	Body         template.HTML
+	Headings     []Heading
 	// Links are the same-site paths this page's body references; checkLinks
 	// resolves them.
 	Links []string
