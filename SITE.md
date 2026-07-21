@@ -71,6 +71,14 @@ Upgrading chroma, goldmark, or Go can shift the generated HTML for the same
 reason. Regenerate in the same PR as the upgrade. Never auto-regenerate in CI:
 the point of committing the output is that a human saw it.
 
+One page has a second, release-time generator: `docs-src/changelog.md` is
+rewritten from the git tags by `make changelog` (scripts/changelog.sh), then
+rendered and committed like any authored page. The split is deliberate --
+release dates are real wall-clock data, and injecting them during `make docs`
+would break the byte-determinism everything above rests on. Between releases
+the page is ordinary committed source; the release skill runs the refresh as
+its final step.
+
 ## The landing page is not
 
 `index.html` is hand-written, and that cuts both ways: no build step, but also

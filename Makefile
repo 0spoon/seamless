@@ -93,7 +93,7 @@ INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
-	docs docs-check docs-serve installer-check site-check site-stamp indexnow metrics release-snapshot install-git-hooks uninstall-git-hooks \
+	docs docs-check docs-serve changelog installer-check site-check site-stamp indexnow metrics release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall update _seed-config _reload-service _wait-healthy start stop restart status \
 	logs install-onboard-skill uninstall-onboard-skill \
 	install-research-skill uninstall-research-skill clean
@@ -114,6 +114,8 @@ help:
 	@echo "  docs       regenerate the docs site (docs-src/ -> docs/docs/, committed)"
 	@echo "  docs-check fail if the committed docs site is stale (part of check)"
 	@echo "  docs-serve regenerate and serve the site at $(DOCS_ADDR)"
+	@echo "  changelog  regenerate docs-src/changelog.md from the git tags + re-render"
+	@echo "             (run at release time, after tagging; output is committed)"
 	@echo "  installer-check   parse-check $(INSTALLER) (part of check)"
 	@echo "  site-check        fail if the landing page drifts from the installer/CLI (part of check)"
 	@echo "  site-stamp        restamp the landing page's static asset ?v= cache-busters"
@@ -219,6 +221,17 @@ docs-check:
 
 docs-serve: docs
 	$(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out $(DOCS_OUT) -serve $(DOCS_ADDR)
+
+# The /docs/changelog/ page, regenerated from the git tags. Deliberately a
+# separate, release-time step rather than part of `make docs`: release dates
+# are real wall-clock data, and the docsgen render must stay byte-deterministic
+# (TestRenderIsDeterministic, docs-check) -- a date injected there would drift
+# the committed site on every unrelated PR. Run this after tagging a release,
+# then commit the rewritten docs-src/changelog.md with the re-rendered site;
+# between releases the page is ordinary committed source that cannot go stale.
+changelog:
+	@scripts/changelog.sh
+	@$(MAKE) docs
 
 # The full gate: everything that must be green before declaring work done
 # (AGENTS.md > "Verification before declaring done"). Sequential $(MAKE) calls

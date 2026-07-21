@@ -19,6 +19,7 @@ sections:
       - claude-code.md
       - claude-app.md
       - codex-cli.md
+      - changelog.md
 
   - title: Concepts
     slug: concepts
