@@ -32,3 +32,12 @@ func TestShortID(t *testing.T) {
 	require.Equal(t, "ABCDEFGH", shortID("01KXFM0000ABCDEFGH"))
 	require.Equal(t, "short", shortID("short")) // <=8 returned as-is
 }
+
+func TestCompactNum(t *testing.T) {
+	require.Equal(t, "0", compactNum(0))
+	require.Equal(t, "999", compactNum(999))
+	require.Equal(t, "1k", compactNum(1000))
+	require.Equal(t, "12.4k", compactNum(12400))
+	require.Equal(t, "999.9k", compactNum(999949))
+	require.Equal(t, "1.2M", compactNum(1_200_000))
+}

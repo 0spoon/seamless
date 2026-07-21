@@ -70,6 +70,7 @@
             <div><strong>{{.MemoriesSurfaced}}</strong><span>distinct memories</span></div>
             <div><strong>{{.Injections}}</strong><span>total injections</span></div>
             <div><strong>{{.SessionsReached}}</strong><span>sessions reached</span></div>
+            <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
           </div>
         </div>
         <div class="overview-chart">

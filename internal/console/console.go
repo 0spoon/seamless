@@ -135,6 +135,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/settings", s.auth(s.settings))
 	handle("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
 	handle("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
+	handle("POST /console/settings/families/save", s.auth(s.settingsFamilySave))
+	handle("POST /console/settings/families/delete", s.auth(s.settingsFamilyDelete))
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
 }
@@ -335,6 +337,7 @@ type overviewData struct {
 	TasksInProg      int
 	TasksDone        int
 	Injections       int                 // item-level injection volume in the window
+	InjectedTokens   int                 // estimated tokens of injected context in the window (reach's cost side)
 	MemoriesSurfaced int                 // distinct active memories surfaced (reach numerator)
 	ActiveMemories   int                 // total active memories (reach denominator)
 	ReachRate        int                 // MemoriesSurfaced / ActiveMemories, %
@@ -490,6 +493,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		TasksInProg:      sum.Tasks[string(core.TaskInProgress)],
 		TasksDone:        sum.Tasks[string(core.TaskDone)],
 		Injections:       report.Injected,
+		InjectedTokens:   report.InjectedTokens,
 		MemoriesSurfaced: report.MemoriesSurfaced,
 		ActiveMemories:   report.ActiveMemories,
 		ReachRate:        report.ReachRate,

@@ -184,6 +184,33 @@ func TestBuildRetrievalReport_Reach(t *testing.T) {
 	require.False(t, rep.Hourly)
 }
 
+// InjectedTokens sums each event's emitted estimate, falls back to a ~4 bytes/token
+// estimate of the recorded content for older hook events, and costs recall-tool
+// injections (ids only, no pushed context) at zero.
+func TestBuildRetrievalReport_InjectedTokens(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	seedMemoryRow(t, db, "A", "mem-a", now)
+
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "",
+		`{"item_ids":["A"],"content":"unused when the estimate is present","emitted_estimated_tokens":120}`, now.Add(-time.Minute))
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "",
+		`{"item_ids":["A"],"content":"12345678"}`, now.Add(-time.Minute)) // 8 bytes -> 2 tokens
+	insertRetrievalEvent(t, db, core.EventInjected, "sessB", "",
+		`{"item_ids":["A"],"source":"recall"}`, now.Add(-time.Minute))
+	insertRetrievalEvent(t, db, core.EventInjected, "sessA", "",
+		`{"item_ids":["A"],"emitted_estimated_tokens":50}`, now.Add(-48*time.Hour))
+
+	all, err := BuildRetrievalReport(ctx, db, ResolveRetrievalWindow("all", now), 12)
+	require.NoError(t, err)
+	require.Equal(t, 172, all.InjectedTokens, "120 + 2 (content fallback) + 0 (recall) + 50")
+
+	day, err := BuildRetrievalReport(ctx, db, ResolveRetrievalWindow("24h", now), 12)
+	require.NoError(t, err)
+	require.Equal(t, 122, day.InjectedTokens, "the 48h-old event is outside the 24h window")
+}
+
 // Older briefing injections were recorded before the ambient session was linked,
 // so their session_id column is empty but the payload always carries the Claude
 // session id; reach must fall back to it so those sessions still count.

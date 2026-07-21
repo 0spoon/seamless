@@ -80,6 +80,7 @@ type ProjectReach struct {
 type RetrievalReport struct {
 	Window           RetrievalWindow `json:"window"`
 	Injected         int             `json:"injected"`         // item-level injections in the window (volume) == sum(Trend)
+	InjectedTokens   int             `json:"injectedTokens"`   // estimated tokens of injected context in the window (reach's cost side)
 	MemoriesSurfaced int             `json:"memoriesSurfaced"` // distinct active memories surfaced >=1x
 	ActiveMemories   int             `json:"activeMemories"`   // total active memories (reach denominator)
 	ReachRate        int             `json:"reachRate"`        // MemoriesSurfaced / ActiveMemories, rounded %
@@ -157,6 +158,7 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 		if sess != "" {
 			sessions[sess] = struct{}{}
 		}
+		rep.InjectedTokens += injectedTokenCost(payload)
 		for _, id := range injectedItemIDs(itemID, payload) {
 			injections = append(injections, injection{session: sess, item: id, at: ts})
 			if earliest.IsZero() || ts.Before(earliest) {
@@ -335,6 +337,37 @@ func injectedSessionKey(sessionID, payload string) string {
 		return p.ClaudeSessionID
 	}
 	return ""
+}
+
+// injectedTokenPayload is the cost-relevant slice of a retrieval.injected
+// payload: hook injections record an emitted_estimated_tokens estimate of the
+// content that reached the model; older hook events carry only the verbatim
+// content. Recall-tool injections carry neither -- the agent pulled ids, no
+// context block was pushed -- and cost 0 here.
+type injectedTokenPayload struct {
+	EmittedEstimatedTokens int    `json:"emitted_estimated_tokens"`
+	Content                string `json:"content"`
+}
+
+// injectedTokenCost returns the estimated token cost of one injection event.
+// The content fallback must stay on the same ~4 bytes/token convention as
+// retrieve.EstimateTokens (not importable here: retrieve depends on store), so
+// old and new events aggregate on one scale.
+func injectedTokenCost(payload string) int {
+	if payload == "" || payload == "{}" {
+		return 0
+	}
+	var p injectedTokenPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return 0
+	}
+	if p.EmittedEstimatedTokens > 0 {
+		return p.EmittedEstimatedTokens
+	}
+	if p.Content != "" {
+		return (len(p.Content) + 3) / 4
+	}
+	return 0
 }
 
 // buildTrend densifies the window into contiguous local-time buckets (so "today"

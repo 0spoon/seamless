@@ -146,6 +146,46 @@ func TestProjectFamilyMutators(t *testing.T) {
 	require.Empty(t, fams)
 }
 
+func TestSaveProjectFamily(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	members, err := SaveProjectFamily(ctx, db, "", "product", []string{"app", "backend", "app"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend"}, members)
+
+	// Create never overwrites an existing family.
+	_, err = SaveProjectFamily(ctx, db, "", "product", []string{"ops"})
+	require.ErrorIs(t, err, ErrFamilyExists)
+	families, err := ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend"}, families["product"])
+
+	// An update replaces membership, and a rename moves the same family.
+	members, err = SaveProjectFamily(ctx, db, "product", "platform", []string{"backend", "ops"})
+	require.NoError(t, err)
+	require.Equal(t, []string{"backend", "ops"}, members)
+	families, err = ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"platform": {"backend", "ops"}}, families)
+
+	_, err = SaveProjectFamily(ctx, db, "missing", "new-name", []string{"app"})
+	require.ErrorIs(t, err, ErrFamilyNotFound)
+	_, err = SaveProjectFamily(ctx, db, "platform", "platform", nil)
+	require.ErrorIs(t, err, ErrFamilyNoMembers)
+
+	_, err = SaveProjectFamily(ctx, db, "", "infra", []string{"ops"})
+	require.NoError(t, err)
+	_, err = SaveProjectFamily(ctx, db, "platform", "infra", []string{"backend"})
+	require.ErrorIs(t, err, ErrFamilyExists)
+	families, err = ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{
+		"infra":    {"ops"},
+		"platform": {"backend", "ops"},
+	}, families)
+}
+
 func TestResolveProjectForCWD(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

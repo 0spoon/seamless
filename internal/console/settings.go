@@ -1,6 +1,8 @@
 package console
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
@@ -10,6 +12,7 @@ import (
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 type repoMapping struct {
@@ -22,15 +25,28 @@ type familyGroup struct {
 	Members []string `json:"members"`
 }
 
-type workspaceFamilyMember struct {
+type familyScopeRef struct {
 	Slug       string `json:"slug"`
 	Registered bool   `json:"registered"`
 }
 
 type workspaceFamily struct {
-	Name        string                  `json:"name"`
-	MemberCount int                     `json:"memberCount"`
-	Peers       []workspaceFamilyMember `json:"peers"`
+	Name        string `json:"name"`
+	MemberCount int    `json:"memberCount"`
+}
+
+type familyProjectOption struct {
+	Slug       string `json:"slug"`
+	Name       string `json:"name,omitempty"`
+	Registered bool   `json:"registered"`
+	Retired    bool   `json:"retired"`
+	Selected   bool   `json:"selected"`
+}
+
+type familyEditor struct {
+	Name    string                `json:"name"`
+	Members []familyScopeRef      `json:"members"`
+	Options []familyProjectOption `json:"options"`
 }
 
 // workspaceScope joins the three ways Settings describes a scope: its project
@@ -51,20 +67,22 @@ type workspaceScope struct {
 }
 
 // settingsData is the payload for the Settings page. Briefing carries the
-// effective briefing knobs (file/env base + the console override row); it is
-// the one editable block -- everything else stays a read-only view of the
-// running configuration.
+// effective briefing knobs (file/env base + the console override row), while
+// FamilyEditors supplies the other intentionally editable control surface.
+// Runtime configuration and project routing remain read-only here.
 type settingsData struct {
-	DataDir            string           `json:"dataDir"`
-	Budgets            config.Budgets   `json:"budgets"`
-	Gardener           config.Gardener  `json:"gardener"`
-	Briefing           config.Briefing  `json:"briefing"`
-	BriefingOverridden bool             `json:"briefingOverridden"`
-	Projects           []core.Project   `json:"projects"`
-	RepoMap            []repoMapping    `json:"repoMap"`
-	Families           []familyGroup    `json:"families"`
-	Workspaces         []workspaceScope `json:"workspaces"`
-	UnboundRepos       []string         `json:"unboundRepos"`
+	DataDir            string                `json:"dataDir"`
+	Budgets            config.Budgets        `json:"budgets"`
+	Gardener           config.Gardener       `json:"gardener"`
+	Briefing           config.Briefing       `json:"briefing"`
+	BriefingOverridden bool                  `json:"briefingOverridden"`
+	Projects           []core.Project        `json:"projects"`
+	RepoMap            []repoMapping         `json:"repoMap"`
+	Families           []familyGroup         `json:"families"`
+	Workspaces         []workspaceScope      `json:"workspaces"`
+	UnboundRepos       []string              `json:"unboundRepos"`
+	FamilyEditors      []familyEditor        `json:"familyEditors"`
+	FamilyOptions      []familyProjectOption `json:"familyOptions"`
 }
 
 func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
@@ -86,6 +104,7 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	workspaces, unboundRepos := buildWorkspaceRegistry(projects, repoMap, families)
+	familyEditors, familyOptions := buildFamilyEditors(workspaces, families)
 	briefing, overridden, err := store.BriefingConfig(ctx, s.cfg.DB, s.cfg.BriefingCfg)
 	if err != nil {
 		s.serverError(w, r, err)
@@ -106,6 +125,8 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			Families:           sortedFamilies(families),
 			Workspaces:         workspaces,
 			UnboundRepos:       unboundRepos,
+			FamilyEditors:      familyEditors,
+			FamilyOptions:      familyOptions,
 		},
 	})
 }
@@ -167,12 +188,142 @@ func (s *Service) settingsBriefingReset(w http.ResponseWriter, r *http.Request) 
 	settingsNotice(w, r, "Briefing overrides cleared -- back to the file/env configuration.")
 }
 
+// settingsFamilySave creates a family or replaces one family's name and member
+// set. The picker submits a closed list of known project slugs; accepting an
+// arbitrary slug here would let a typo create a plausible but inert family
+// member that never contributes context.
+func (s *Service) settingsFamilySave(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
+	if err := r.ParseForm(); err != nil {
+		settingsRegistryFlash(w, r, "Could not read the family form.")
+		return
+	}
+
+	names, ok := r.PostForm["name"]
+	if !ok || len(names) != 1 {
+		settingsRegistryFlash(w, r, "Enter one family name.")
+		return
+	}
+	name := strings.TrimSpace(names[0])
+	if err := validate.Name(name); err != nil {
+		settingsRegistryFlash(w, r, "Family name: "+err.Error())
+		return
+	}
+
+	previousName := ""
+	if previous, present := r.PostForm["original_name"]; present {
+		if len(previous) != 1 || strings.TrimSpace(previous[0]) == "" {
+			settingsRegistryFlash(w, r, "The family being edited is missing.")
+			return
+		}
+		previousName = strings.TrimSpace(previous[0])
+		if err := validate.Name(previousName); err != nil {
+			settingsRegistryFlash(w, r, "Original family name: "+err.Error())
+			return
+		}
+	}
+
+	members := uniqueNonEmpty(r.PostForm["members"])
+	if len(members) == 0 {
+		settingsRegistryFlash(w, r, "Choose at least one project for the family.")
+		return
+	}
+	projects, err := store.ListProjects(r.Context(), s.cfg.DB)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	families, err := store.ProjectFamilies(r.Context(), s.cfg.DB)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	allowed := make(map[string]bool, len(projects)+len(members))
+	for _, project := range projects {
+		allowed[project.Slug] = true
+	}
+	if previousName != "" {
+		currentMembers, exists := families[previousName]
+		if !exists {
+			settingsRegistryFlash(w, r, fmt.Sprintf("Family %q no longer exists.", previousName))
+			return
+		}
+		for _, member := range currentMembers {
+			allowed[member] = true
+		}
+	}
+	for _, member := range members {
+		if err := validate.Name(member); err != nil {
+			settingsRegistryFlash(w, r, "Project slug: "+err.Error())
+			return
+		}
+		if !allowed[member] {
+			settingsRegistryFlash(w, r, fmt.Sprintf("Unknown project scope %q.", member))
+			return
+		}
+	}
+
+	_, err = store.SaveProjectFamily(r.Context(), s.cfg.DB, previousName, name, members)
+	switch {
+	case errors.Is(err, store.ErrFamilyExists):
+		settingsRegistryFlash(w, r, fmt.Sprintf("A family named %q already exists.", name))
+		return
+	case errors.Is(err, store.ErrFamilyNotFound):
+		settingsRegistryFlash(w, r, fmt.Sprintf("Family %q no longer exists.", previousName))
+		return
+	case err != nil:
+		s.serverError(w, r, err)
+		return
+	}
+	verb := "created"
+	if previousName != "" {
+		verb = "updated"
+	}
+	settingsRegistryNotice(w, r, fmt.Sprintf("Family %q %s.", name, verb))
+}
+
+func (s *Service) settingsFamilyDelete(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := r.ParseForm(); err != nil {
+		settingsRegistryFlash(w, r, "Could not read the family form.")
+		return
+	}
+	names, ok := r.PostForm["original_name"]
+	if !ok || len(names) != 1 {
+		settingsRegistryFlash(w, r, "Choose one family to delete.")
+		return
+	}
+	name := strings.TrimSpace(names[0])
+	if err := validate.Name(name); err != nil {
+		settingsRegistryFlash(w, r, "Family name: "+err.Error())
+		return
+	}
+	_, err := store.RemoveFamilyMembers(r.Context(), s.cfg.DB, name, nil)
+	switch {
+	case errors.Is(err, store.ErrFamilyNotFound):
+		settingsRegistryFlash(w, r, fmt.Sprintf("Family %q no longer exists.", name))
+		return
+	case err != nil:
+		s.serverError(w, r, err)
+		return
+	}
+	settingsRegistryNotice(w, r, fmt.Sprintf("Family %q deleted.", name))
+}
+
 func settingsFlash(w http.ResponseWriter, r *http.Request, msg string) {
 	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg), http.StatusSeeOther)
 }
 
 func settingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
 	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+func settingsRegistryFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#workspace-registry", http.StatusSeeOther)
+}
+
+func settingsRegistryNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#workspace-registry", http.StatusSeeOther)
 }
 
 func sortedRepoMap(m map[string]string) []repoMapping {
@@ -241,21 +392,10 @@ func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, 
 			ensure(slug)
 		}
 		for _, slug := range members {
-			membership := workspaceFamily{
+			bySlug[slug].Families = append(bySlug[slug].Families, workspaceFamily{
 				Name:        family.Name,
 				MemberCount: len(members),
-				Peers:       make([]workspaceFamilyMember, 0, len(members)-1),
-			}
-			for _, peer := range members {
-				if peer == slug {
-					continue
-				}
-				membership.Peers = append(membership.Peers, workspaceFamilyMember{
-					Slug:       peer,
-					Registered: bySlug[peer].Registered,
-				})
-			}
-			bySlug[slug].Families = append(bySlug[slug].Families, membership)
+			})
 		}
 	}
 
@@ -281,6 +421,53 @@ func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, 
 	})
 	sort.Strings(unboundRepos)
 	return out, unboundRepos
+}
+
+func buildFamilyEditors(workspaces []workspaceScope, families map[string][]string) ([]familyEditor, []familyProjectOption) {
+	bySlug := make(map[string]workspaceScope, len(workspaces))
+	createOptions := make([]familyProjectOption, 0, len(workspaces))
+	for _, workspace := range workspaces {
+		bySlug[workspace.Slug] = workspace
+		if workspace.Registered && !workspace.Retired {
+			createOptions = append(createOptions, familyProjectOption{
+				Slug:       workspace.Slug,
+				Name:       workspace.Name,
+				Registered: true,
+			})
+		}
+	}
+
+	groups := sortedFamilies(families)
+	editors := make([]familyEditor, 0, len(groups))
+	for _, group := range groups {
+		members := uniqueNonEmpty(group.Members)
+		selected := make(map[string]bool, len(members))
+		editor := familyEditor{
+			Name:    group.Name,
+			Members: make([]familyScopeRef, 0, len(members)),
+		}
+		for _, slug := range members {
+			selected[slug] = true
+			editor.Members = append(editor.Members, familyScopeRef{
+				Slug:       slug,
+				Registered: bySlug[slug].Registered,
+			})
+		}
+		for _, workspace := range workspaces {
+			if (!workspace.Registered || workspace.Retired) && !selected[workspace.Slug] {
+				continue
+			}
+			editor.Options = append(editor.Options, familyProjectOption{
+				Slug:       workspace.Slug,
+				Name:       workspace.Name,
+				Registered: workspace.Registered,
+				Retired:    workspace.Retired,
+				Selected:   selected[workspace.Slug],
+			})
+		}
+		editors = append(editors, editor)
+	}
+	return editors, createOptions
 }
 
 func uniqueNonEmpty(values []string) []string {

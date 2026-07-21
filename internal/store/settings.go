@@ -30,6 +30,14 @@ const SettingProjectFamilies = "project_families"
 // not exist.
 var ErrFamilyNotFound = errors.New("store: project family not found")
 
+// ErrFamilyExists is returned when a family create or rename would overwrite a
+// different existing family.
+var ErrFamilyExists = errors.New("store: project family already exists")
+
+// ErrFamilyNoMembers is returned when a family replacement contains no usable
+// project slugs. Empty families are not persisted.
+var ErrFamilyNoMembers = errors.New("store: project family has no members")
+
 // settingsExecutor is the read+write subset shared by *sql.DB and *sql.Tx (the
 // mirror of rowQuerier in tasks.go), so a settings read-decode-mutate-write runs
 // identically on the pool or inside one transaction. The family mutators need it
@@ -101,6 +109,57 @@ func SiblingProjects(ctx context.Context, db *sql.DB, project string) ([]string,
 // transaction: last-write-wins is inherent to its "set the whole map" contract.
 func SetProjectFamilies(ctx context.Context, db *sql.DB, families map[string][]string) error {
 	return setProjectFamiliesTx(ctx, db, families)
+}
+
+// SaveProjectFamily creates, replaces, or renames one family atomically.
+// previousName is empty for a create; otherwise that family must exist. A
+// create or rename never merges into an existing family because silently
+// combining their context boundaries would be surprising. The submitted
+// member set replaces the old set in full and must contain at least one slug.
+func SaveProjectFamily(ctx context.Context, db *sql.DB, previousName, name string, members []string) ([]string, error) {
+	previousName = strings.TrimSpace(previousName)
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, fmt.Errorf("store.SaveProjectFamily: family name is empty")
+	}
+	members = dedupeSlugs(members)
+	if len(members) == 0 {
+		return nil, fmt.Errorf("store.SaveProjectFamily: %w", ErrFamilyNoMembers)
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("store.SaveProjectFamily: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	families, err := projectFamiliesTx(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	if previousName == "" {
+		if _, exists := families[name]; exists {
+			return nil, fmt.Errorf("store.SaveProjectFamily: %q: %w", name, ErrFamilyExists)
+		}
+	} else {
+		if _, exists := families[previousName]; !exists {
+			return nil, fmt.Errorf("store.SaveProjectFamily: %q: %w", previousName, ErrFamilyNotFound)
+		}
+		if previousName != name {
+			if _, exists := families[name]; exists {
+				return nil, fmt.Errorf("store.SaveProjectFamily: %q: %w", name, ErrFamilyExists)
+			}
+			delete(families, previousName)
+		}
+	}
+	families[name] = members
+	if err := setProjectFamiliesTx(ctx, tx, families); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("store.SaveProjectFamily: commit: %w", err)
+	}
+	return members, nil
 }
 
 // setProjectFamiliesTx canonicalizes and persists families via any executor, so a

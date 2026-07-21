@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -95,6 +96,7 @@ var funcs = template.FuncMap{
 	"labPath":       labPath,
 	"phaseRows":     phaseRows,
 	"icon":          icon,
+	"compactNum":    compactNum,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
 	"areaChart":     areaChart,
@@ -472,6 +474,24 @@ func shortID(id string) string {
 		return id
 	}
 	return id[len(id)-8:]
+}
+
+// compactNum renders a count for dense stat rows: plain below 1000, then one
+// decimal with a k/M suffix ("12.4k", "1.2M"), dropping a trailing ".0".
+func compactNum(n int) string {
+	format := func(v float64, suffix string) string {
+		s := strconv.FormatFloat(v, 'f', 1, 64)
+		s = strings.TrimSuffix(s, ".0")
+		return s + suffix
+	}
+	switch {
+	case n >= 1_000_000:
+		return format(float64(n)/1_000_000, "M")
+	case n >= 1000:
+		return format(float64(n)/1000, "k")
+	default:
+		return strconv.Itoa(n)
+	}
 }
 
 // percent computes n/d as a rounded whole percentage (0 when d == 0).

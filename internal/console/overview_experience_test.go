@@ -21,6 +21,9 @@ func TestOverviewFrontDoor_RendersProductNarrativeAndSystemLayers(t *testing.T) 
 	require.Contains(t, body, `class="live overview-live"`)
 	require.Contains(t, body, `class="active" aria-current="page" href="?w=7d"`)
 
+	require.Contains(t, body, "est. tokens injected",
+		"the reach vital pairs the reach rate with its injected-token cost")
+
 	for _, id := range []string{
 		"overview-circulation-title",
 		"overview-atlas-title",

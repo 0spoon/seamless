@@ -54,9 +54,12 @@ func TestSettingsPage(t *testing.T) {
 	require.Len(t, data.RepoMap, 1)
 	require.Len(t, data.Families, 1)
 	require.Len(t, data.Workspaces, 2)
+	require.Len(t, data.FamilyEditors, 1)
+	require.Len(t, data.FamilyOptions, 2)
 	require.Equal(t, "/Users/x/repos/seamless", data.RepoMap[0].Repo)
 	require.Equal(t, "seam", data.Workspaces[0].Slug)
-	require.Equal(t, "seamless", data.Workspaces[0].Families[0].Peers[0].Slug)
+	require.Equal(t, workspaceFamily{Name: "seam-tools", MemberCount: 2}, data.Workspaces[0].Families[0])
+	require.Equal(t, familyScopeRef{Slug: "seam", Registered: true}, data.FamilyEditors[0].Members[0])
 	require.Equal(t, []string{"/Users/x/repos/seamless"}, data.Workspaces[1].Repos)
 
 	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
@@ -76,8 +79,12 @@ func TestSettingsPage(t *testing.T) {
 	require.Contains(t, page, `class="registry-scroll workspace-directory"`)
 	require.Contains(t, page, `class="workspace-row" data-workspace-scope="seamless"`)
 	require.Contains(t, page, `class="workspace-route" title="/Users/x/repos/seamless"`)
-	require.Contains(t, page, `class="workspace-family"`)
-	require.Contains(t, page, `Scope + arrival + lineage`)
+	require.Contains(t, page, `class="workspace-tag family"`)
+	require.Contains(t, page, `class="family-summary"`)
+	require.Contains(t, page, `data-dialog-open="family-create-dialog"`)
+	require.Contains(t, page, `action="/console/settings/families/save"`)
+	require.Contains(t, page, `action="/console/settings/families/delete"`)
+	require.NotContains(t, page, `workspace-family-peers`)
 	require.NotContains(t, page, `class="repos-panel"`)
 	require.NotContains(t, page, `class="families-panel"`)
 	require.Contains(t, page, `window.SEAM_NO_LIVE_REFRESH = true`)
@@ -94,6 +101,8 @@ func TestSettingsStyles_ControlPlaneContracts(t *testing.T) {
 	require.Contains(t, css, ".registry-scroll { max-height:")
 	require.Contains(t, css, ".workspace-row { display: grid;")
 	require.Contains(t, css, ".workspace-cell-label")
+	require.Contains(t, css, ".family-summary")
+	require.Contains(t, css, ".family-dialog::backdrop")
 	require.Contains(t, css, "@media (max-width: 520px)")
 }
 
@@ -128,13 +137,94 @@ func TestBuildWorkspaceRegistry_JoinsSourcesAndPreservesReferences(t *testing.T)
 	require.True(t, workspaces[0].ParentRegistered)
 	require.Equal(t, "suite", workspaces[0].Families[0].Name)
 	require.Equal(t, 2, workspaces[0].Families[0].MemberCount)
-	require.Equal(t, workspaceFamilyMember{Slug: "future", Registered: false}, workspaces[0].Families[0].Peers[0])
-	require.Empty(t, workspaces[1].Families[0].Peers)
 	require.True(t, workspaces[2].Retired)
 	require.False(t, workspaces[3].Registered)
 	require.Equal(t, []string{"/repos/future"}, workspaces[3].Repos)
-	require.Equal(t, workspaceFamilyMember{Slug: "app", Registered: true}, workspaces[3].Families[0].Peers[0])
 	require.Equal(t, []string{"/repos/global"}, unbound)
+
+	editors, createOptions := buildFamilyEditors(workspaces, families)
+	require.Len(t, editors, 2)
+	require.Equal(t, "solo", editors[0].Name)
+	require.Equal(t, "suite", editors[1].Name)
+	require.Equal(t, []familyScopeRef{
+		{Slug: "app", Registered: true},
+		{Slug: "future", Registered: false},
+	}, editors[1].Members)
+	require.Len(t, editors[1].Options, 3)
+	require.True(t, editors[1].Options[0].Selected)
+	require.False(t, editors[1].Options[1].Selected)
+	require.True(t, editors[1].Options[2].Selected)
+	require.Equal(t, []string{"app", "shared"}, []string{createOptions[0].Slug, createOptions[1].Slug})
+}
+
+func TestSettingsFamilyCreateUpdateAndDelete(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	for _, slug := range []string{"app", "backend", "ops"} {
+		_, err := store.EnsureProject(ctx, db, slug, slug)
+		require.NoError(t, err)
+	}
+
+	svc, err := New(Config{DB: db, APIKey: testKey, BriefingCfg: config.Defaults().Briefing})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	rr := postForm(mux, "/console/settings/families/save", url.Values{
+		"name":    {"product"},
+		"members": {"app", "backend"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+	require.Contains(t, rr.Header().Get("Location"), "#workspace-registry")
+	families, err := store.ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"product": {"app", "backend"}}, families)
+
+	// A create using an occupied name errors instead of silently replacing it.
+	rr = postForm(mux, "/console/settings/families/save", url.Values{
+		"name":    {"product"},
+		"members": {"ops"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+	families, err = store.ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{"app", "backend"}, families["product"])
+
+	// Editing replaces the member set and can rename the family in one write.
+	rr = postForm(mux, "/console/settings/families/save", url.Values{
+		"original_name": {"product"},
+		"name":          {"platform"},
+		"members":       {"backend", "ops"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	families, err = store.ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string][]string{"platform": {"backend", "ops"}}, families)
+
+	// The picker is a closed set: a forged or stale unknown slug is rejected.
+	rr = postForm(mux, "/console/settings/families/save", url.Values{
+		"original_name": {"platform"},
+		"name":          {"platform"},
+		"members":       {"not-a-project"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+	families, err = store.ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, []string{"backend", "ops"}, families["platform"])
+
+	rr = postForm(mux, "/console/settings/families/delete", url.Values{
+		"original_name": {"platform"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+	families, err = store.ProjectFamilies(ctx, db)
+	require.NoError(t, err)
+	require.Empty(t, families)
 }
 
 func TestSettingsBriefingSaveAndReset(t *testing.T) {
