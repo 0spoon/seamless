@@ -5,6 +5,7 @@
   <url><loc>https://thereisnospoon.org/docs/quickstart/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/install/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/claude-code/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/claude-app/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/codex-cli/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/concepts/how-it-works/</loc></url>
@@ -32,6 +33,7 @@
   <url><loc>https://thereisnospoon.org/docs/reference/cli-seamlessd/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/reference/configuration/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/reference/hooks/</loc></url>
+  <url><loc>https://thereisnospoon.org/docs/reference/claude-app-compatibility/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/reference/codex-compatibility/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/reference/console/</loc></url>
   <url><loc>https://thereisnospoon.org/docs/reference/storage/</loc></url>

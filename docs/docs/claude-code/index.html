@@ -57,6 +57,8 @@
         
         <li><a href="../claude-code/" class="current" aria-current="page">Claude Code setup</a></li>
         
+        <li><a href="../claude-app/">Claude app chat setup</a></li>
+        
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
       </ul>
@@ -128,6 +130,8 @@
         <li><a href="../reference/configuration/">Configuration</a></li>
         
         <li><a href="../reference/hooks/">Hooks</a></li>
+        
+        <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
         
@@ -245,6 +249,36 @@ conversation, work that crosses agents) and when not to (trivial edits, things
 the codebase already records).
 The briefing tells an agent <em>what you know</em>; your <code>CLAUDE.md</code> tells it <em>when to
 write more down</em>.</p>
+<h2 id="the-claude-apps-code-surface">The Claude app's code surface</h2>
+<p>Code sessions inside the Claude desktop app are real Claude Code, running
+against the same <code>~/.claude</code> profile as your terminal sessions. The setup on
+this page is therefore all the setup they need: the hooks in <code>settings.json</code>,
+the user-scope MCP registration, and the skills apply to app code sessions
+unchanged, with nothing extra to install.</p>
+<p>Three app-specific facts are worth knowing, all recorded with build-pinned
+evidence in the <a href="../reference/claude-app-compatibility/">Claude app compatibility
+matrix</a>:</p>
+<ul>
+<li><strong>The app bundles its own Claude Code runtime</strong>, retained under
+<code>~/Library/Application Support/Claude/claude-code/&lt;version&gt;/</code>, and it can lag
+or lead the PATH CLI (observed: 2.1.215 in the app beside a 2.1.216 CLI).
+<code>seamlessd doctor</code> reports each discoverable runtime on its own line -
+<code>claude CLI runtime</code> and <code>claude app runtime</code> - so the skew is visible when
+an app-only failure has you debugging.</li>
+<li><strong>Per-prompt recall does not currently fire in app code sessions.</strong> On the
+observed build, the SessionStart briefing, PostToolUse events, and the
+SessionEnd findings harvest all work - but UserPromptSubmit never fires, so
+<code>&lt;seam-recall&gt;</code> injections never happen there. The briefing at session start
+is what an app code session gets.</li>
+<li><strong>Managed worktrees keep their project.</strong> The app may run a session in a
+managed worktree (<code>&lt;repo&gt;/.claude/worktrees/&lt;name&gt;</code>); Seamless resolves a
+linked worktree through its git common directory to the main checkout, so
+such a session inherits the repo's project instead of registering a
+transient one named after the worktree.</li>
+</ul>
+<p>Chat conversations in the same app are a different surface entirely - no
+hooks, no <code>CLAUDE.md</code>, an explicit opt-in MCP registration of its own. See
+<a href="../claude-app/">Claude app chat setup</a>.</p>
 <h2 id="verify">Verify</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd doctor    <span class="c1"># config, database, tool count, and the hooks check</span>
 </span></span></code></pre><p>Then start a Claude Code session in a mapped repo and look for the injected
@@ -267,7 +301,7 @@ organized by symptom.</p>
     
     <nav class="page-nav" aria-label="Pagination">
       <a class="prev" href="../install/"><span class="dir">Previous</span><span class="t">Install &amp; deploy</span></a>
-      <a class="next" href="../codex-cli/"><span class="dir">Next</span><span class="t">Codex local setup (app, CLI, and IDE)</span></a>
+      <a class="next" href="../claude-app/"><span class="dir">Next</span><span class="t">Claude app chat setup</span></a>
     </nav>
     
   </main>
@@ -276,7 +310,7 @@ organized by symptom.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-3"><a href="#why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</a></li><li class="lvl-2"><a href="#registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</a></li><li class="lvl-2"><a href="#map-your-repos">Map your repos</a></li><li class="lvl-2"><a href="#tell-your-agents-it-exists">Tell your agents it exists</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-3"><a href="#why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</a></li><li class="lvl-2"><a href="#registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</a></li><li class="lvl-2"><a href="#map-your-repos">Map your repos</a></li><li class="lvl-2"><a href="#tell-your-agents-it-exists">Tell your agents it exists</a></li><li class="lvl-2"><a href="#the-claude-apps-code-surface">The Claude app&#39;s code surface</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
     </ul>
   </aside>
   

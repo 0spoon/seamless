@@ -72,7 +72,10 @@ config or the database cannot be loaded at all.
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
+| `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
 | `hooks` | Claude Code definitions compared with today's desired profile. |
+| `claude desktop mcp` | The chat surface's `claude_desktop_config.json` entry compared with the desired stdio bridge. Absent is an **info** line naming the opt-in command, never a nag; an exact entry reports OK while stating that the running app's loaded state is unverifiable (the app reads the config at startup). No lines when neither the app nor a desktop config exists. |
+| `codex CLI runtime` / `codex app runtime` | Each discoverable Codex runtime's self-reported version, separately, on the same principle. |
 | `codex hooks` | Codex current, stale, and missing definitions, including command targets. |
 | `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
 | `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
@@ -113,19 +116,24 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--client claude|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
+seamlessd install-hooks [--client claude|codex|claude-desktop|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
-Wires the selected agent client(s) to Seamless: merges the hook entries into
-each client's hook file (Claude Code `settings.json`, Codex `hooks.json`),
-registers the MCP server with the client's CLI, and installs the embedded
-`seam-onboard` and `seam-research` skills into the client's skill home.
+Wires the selected install target(s) to Seamless: merges the hook entries into
+each hook client's file (Claude Code `settings.json`, Codex `hooks.json`),
+registers the MCP server (via the client's CLI, or for the Claude app chat
+surface by editing `claude_desktop_config.json` directly), and installs the
+embedded `seam-onboard` and `seam-research` skills into each hook client's
+skill home. The `claude-desktop` target is the chat surface's MCP bridge only -
+it has no hooks and no skills - so selecting only it together with
+`--mcp=false` is an error rather than a silent no-op.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--client` | `detect` | Which client(s) to wire: `claude`, `codex`, `all`, or `detect`. With the flag omitted on a terminal, it prompts and defaults to the detected set; non-interactive runs detect without prompting. If neither client exists, detection falls back to Claude Code. |
+| `--client` | `detect` | Which target(s) to wire: `claude`, `codex`, `claude-desktop`, a comma list of those (`claude,claude-desktop`), `all` (every target this platform can host), or `detect` (the targets present on this machine). With the flag omitted on a terminal, a multi-select menu prompts, defaulting to the detected set; non-interactive runs detect without prompting. With nothing detected, `detect` is an error, never a silent Claude Code default. |
 | `--settings` | `~/.claude/settings.json` | Target Claude Code settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Target Codex hooks file, created if absent. |
+| `--desktop-config` | the app's per-OS location | Claude app `claude_desktop_config.json` to register the chat-surface bridge in (macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`). |
 | `--url` | derived from the config addr | Base URL of the daemon. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
 | `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add-json --scope user` / `codex mcp add`). |
@@ -147,6 +155,17 @@ and re-reads it before reporting success. A direct-HTTP or other incompatible
 entry under `seamless` is not overwritten; remove it explicitly or rerun with
 `--mcp=false` to keep that manual transport.
 
+The `claude-desktop` target has no management CLI at all, so its registration
+is a merge-preserving edit of `claude_desktop_config.json`: the reserved
+`seamless` entry is set to the `seam mcp-proxy` stdio bridge (absolute paths,
+no secret - the bridge reads the bearer key from Seamless's config), every
+foreign key round-trips byte-for-byte, the file is backed up once before the
+first change, and the write is verified by re-reading it. An incompatible entry
+under the reserved name is an error naming the in-app fix (Settings >
+Developer > Edit Config), and every change ends with a restart notice - the
+app reads the file only at startup. See
+[Claude app chat setup](/claude-app/).
+
 The hook merge preserves unknown keys and foreign entries, replaces marked stale
 definitions, adopts only recognizable legacy Seamless URLs/commands, deduplicates
 owned entries, and backs the file up once before the first change. An arbitrary
@@ -167,12 +186,14 @@ safe constraint injection and parent-only lifecycle handling for subagents; the
 ## seamlessd uninstall {#seamlessd_uninstall}
 
 ```bash
-seamlessd uninstall [--client claude|codex|all|detect] [--dry-run] [--yes] [--purge]
+seamlessd uninstall [--client claude|codex|claude-desktop|all|detect] [--dry-run] [--yes] [--purge]
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server, removes
-the installed skills, and deletes the binaries. Config and the data dir
+service, strips the Seamless hook entries, deregisters the MCP server
+(including the chat surface's `claude_desktop_config.json` entry - only the
+reserved `seamless` key is removed, everything else stays byte-for-byte),
+removes the installed skills, and deletes the binaries. Config and the data dir
 (`~/.seamless` - memories and notes are markdown that outlive the program) are
 kept unless `--purge` is passed. Every external step is best-effort: an
 already-gone file or a missing client CLI is a note, never a failure, so
@@ -185,12 +206,13 @@ one-shot delivery marker in each selected client's skill root.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--client` | `all` | Which client(s) to remove hooks/MCP/skills for. |
+| `--client` | `all` | Which target(s) to remove hooks/MCP/skills for: `claude`, `codex`, `claude-desktop`, a comma list, `all`, or `detect`. `claude-desktop` scopes the run to the chat surface's desktop-config entry. |
 | `--dry-run` | `false` | Print what would be removed and exit without changing anything. |
 | `--yes` | `false` | Skip the confirmation prompt. |
 | `--purge` | `false` | Also delete the config dir (`~/.config/seamless`) and data dir (`~/.seamless`). |
 | `--settings` | `~/.claude/settings.json` | Claude Code settings file to remove hooks from. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Codex hooks file to remove hooks from. |
+| `--desktop-config` | the app's per-OS location | Claude app `claude_desktop_config.json` to remove the chat-surface bridge from. |
 | `--url` | derived from the config addr | Base URL the hook entries were installed with. |
 | `--install-dir` | `$SEAMLESS_INSTALL_DIR`, else `~/.local/bin` | Directory the binaries were installed to. |
 | `--mcp` | `true` | Also deregister the MCP server (`claude`/`codex mcp remove`). |

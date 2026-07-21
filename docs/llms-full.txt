@@ -225,21 +225,29 @@ itself. No Go toolchain is involved. In order, it:
    against this repository's release workflow identity;
 2. installs `seamlessd` and `seam` into `~/.local/bin`;
 3. runs `seamlessd install-hooks`, which generates the bearer key into
-   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code and/or
-   Codex, and installs that set's hooks, MCP registration, and skills;
+   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code,
+   Codex, and the Claude app chat surface, and installs that set's hooks, MCP
+   registrations, and skills;
 4. installs and starts the per-user service - launchd on macOS, systemd
    `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
    `/healthz` until the daemon actually answers.
 
-Step 3 detects **Claude Code**, **Codex**, or both and wires the detected set.
-That one client choice drives hooks, MCP registration, and the maintained
-`seam-onboard` / `seam-research` skills together. With both detected, a run on a
-terminal confirms which to wire (both is the default); headless, both are wired.
-With neither detected, a run on a terminal warns and asks whether to install at
-all (defaulting to no), and a headless run aborts - the installer never silently
-wires a client that is not there. Set `SEAMLESS_CLIENT` to make the choice
-explicit; see [Codex local setup](/codex-cli/) for the shared app/CLI/IDE profile
-and Codex's trust gate.
+Step 3 detects three install targets - **Claude Code**, **Codex**, and the
+**Claude app chat surface** (`claude-desktop`, the app's `mcpServers` bridge;
+it has no hooks or skills) - and wires the detected set. That one selection
+drives hooks, MCP registrations, and the maintained `seam-onboard` /
+`seam-research` skills together. On a terminal the run confirms the selection
+with a multi-select menu - answers are numbers or names, comma-separated
+(`1,3`), defaulting to the detected set; headless, the detected set is wired
+as-is. With nothing detected, a run on a terminal warns and asks whether to
+install at all (defaulting to no), and a headless run aborts - the installer
+never silently wires a client that is not there. Set `SEAMLESS_CLIENT` to make
+the choice explicit: one target, a comma list, or `all` (every target the
+platform can host - the chat surface exists only where the Claude app runs, so
+`all` never fails on Linux over it). See [Codex local setup](/codex-cli/) for
+the shared app/CLI/IDE profile and Codex's trust gate, and
+[Claude app chat setup](/claude-app/) for what the chat surface does and does
+not get.
 
 On every OS, Claude's copies live under `$HOME/.claude/skills`; Codex's live
 under `$CODEX_HOME/skills` when set, otherwise `$HOME/.codex/skills` (the same
@@ -265,7 +273,7 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 |---|---|
 | `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
 | `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
-| `SEAMLESS_CLIENT=claude\|codex\|all` | choose which agent client(s) receive hooks, MCP, and skills instead of auto-detection |
+| `SEAMLESS_CLIENT=claude\|codex\|claude-desktop\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
 | `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
 | `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
 | `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |
@@ -434,7 +442,8 @@ binary looks exactly like a bug in the new one.
 
 `seamlessd uninstall` is the one command, on every OS. It reverses the whole
 install - stops and removes the per-user service, strips the Claude Code and
-Codex hooks, deregisters the MCP server, removes both clients' installed
+Codex hooks, deregisters the MCP server from both client CLIs and from the
+Claude app's `claude_desktop_config.json`, removes both hook clients' installed
 `seam-onboard` and `seam-research` packages/one-shot markers, and deletes the
 binaries - and it is idempotent, so a second run is a clean no-op. Preview it
 first with `--dry-run`:
@@ -462,7 +471,9 @@ original backup sits next to each file. If you would rather do it by hand - a
 bare binary you never installed a service for, say - the service teardown is
 `launchctl bootout` / `systemctl --user disable --now` /
 `Unregister-ScheduledTask -TaskName Seamless`, and `claude mcp remove seamless`
-or `codex mcp remove seamless` drops that client's MCP registration.
+or `codex mcp remove seamless` drops that client's MCP registration. The chat
+surface has no CLI: delete the `seamless` entry under `mcpServers` in the
+Claude app (Settings > Developer > Edit Config) and restart it.
 
 ## Security posture
 
@@ -625,6 +636,39 @@ the codebase already records).
 The briefing tells an agent *what you know*; your `CLAUDE.md` tells it *when to
 write more down*.
 
+## The Claude app's code surface {#the-claude-apps-code-surface}
+
+Code sessions inside the Claude desktop app are real Claude Code, running
+against the same `~/.claude` profile as your terminal sessions. The setup on
+this page is therefore all the setup they need: the hooks in `settings.json`,
+the user-scope MCP registration, and the skills apply to app code sessions
+unchanged, with nothing extra to install.
+
+Three app-specific facts are worth knowing, all recorded with build-pinned
+evidence in the [Claude app compatibility
+matrix](/reference/claude-app-compatibility/):
+
+- **The app bundles its own Claude Code runtime**, retained under
+  `~/Library/Application Support/Claude/claude-code/<version>/`, and it can lag
+  or lead the PATH CLI (observed: 2.1.215 in the app beside a 2.1.216 CLI).
+  `seamlessd doctor` reports each discoverable runtime on its own line -
+  `claude CLI runtime` and `claude app runtime` - so the skew is visible when
+  an app-only failure has you debugging.
+- **Per-prompt recall does not currently fire in app code sessions.** On the
+  observed build, the SessionStart briefing, PostToolUse events, and the
+  SessionEnd findings harvest all work - but UserPromptSubmit never fires, so
+  `<seam-recall>` injections never happen there. The briefing at session start
+  is what an app code session gets.
+- **Managed worktrees keep their project.** The app may run a session in a
+  managed worktree (`<repo>/.claude/worktrees/<name>`); Seamless resolves a
+  linked worktree through its git common directory to the main checkout, so
+  such a session inherits the repo's project instead of registering a
+  transient one named after the worktree.
+
+Chat conversations in the same app are a different surface entirely - no
+hooks, no `CLAUDE.md`, an explicit opt-in MCP registration of its own. See
+[Claude app chat setup](/claude-app/).
+
 ## Verify
 
 ```bash
@@ -649,6 +693,147 @@ If it is **not** there, note that hooks fail open by design - a broken hook neve
 blocks your agent, which means **silence is the failure mode**. Start with
 `seamlessd doctor`; the [Troubleshooting](/guides/troubleshooting/) guide is
 organized by symptom.
+
+---
+
+# Claude app chat setup
+
+URL: https://thereisnospoon.org/docs/claude-app/
+
+
+The Claude desktop app hosts two different Seamless surfaces, and they are wired
+differently:
+
+- **Code sessions** inside the app are real Claude Code - they share
+  `~/.claude`, so the hooks, MCP registration, and skills from your [Claude Code
+  setup](/claude-code/) apply unchanged. See [the code surface inside the Claude
+  app](/claude-code/#the-claude-apps-code-surface).
+- **Chat conversations** are this page: a plain MCP client with **no hooks**,
+  wired through `claude_desktop_config.json`. Seamless treats it as its own
+  install target, named `claude-desktop`.
+
+## No hooks means no ambient layer
+
+Everything the hooks deliver on the code surface is absent in a chat. There is
+no `<seam-briefing>` at conversation start, no per-prompt `<seam-recall>`, no
+findings harvest when the conversation ends, no plan capture - and no
+`CLAUDE.md`, so none of your standing agent guidance is in context either. The
+chat surface installs no skills.
+
+What a chat gets instead is the full MCP tool surface, which means the model has
+to **run the loop itself** - the same explicit loop as any
+[hand-integrated agent](/guides/integrate-your-agent/): `session_start` to bind
+and fetch the briefing, `recall` before guessing, durable writes for what should
+outlive the conversation, `session_end` to leave findings. The MCP handshake's
+server instructions give the model that baseline workflow, but nothing forces
+it - if a conversation never calls `session_start`, Seamless never hears about
+it.
+
+## Register the bridge
+
+```bash
+seamlessd install-hooks --client claude-desktop
+```
+
+This is the same registration the interactive installer offers as menu entry
+`[3] Claude app (chat)` - answers are comma lists, so `1,3` wires Claude Code
+and the chat surface together, and `all` includes the chat surface on the
+platforms that can host it (the Claude app ships for macOS and Windows; on
+Linux `all` deliberately excludes it).
+
+There is no management CLI for the app, so registration is a direct,
+merge-preserving edit of the app's config file:
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- `--desktop-config PATH` overrides the location.
+
+The edit adds one stdio entry under `mcpServers` - the reserved name
+`seamless`, launching `seam mcp-proxy --config <absolute seamless.yaml>` - and
+touches nothing else. Foreign entries round-trip byte-for-byte (other servers'
+entries may hold credentials in `env`), the original file is backed up once
+before the first change, and the write is verified by re-reading the file. **No
+secret lands in the app's config**: the bridge reads the bearer key from
+Seamless's `0600` config at connect time, the same policy as every other
+registration (see [why MCP goes through a bridge](/codex-cli/#why-mcp-goes-through-a-bridge)).
+
+Then **restart the app**. It reads the config only at startup; the installer
+prints the same notice.
+
+Two sharp edges, stated rather than discovered:
+
+- `--client claude-desktop --mcp=false` is an error. The chat surface has no
+  hooks and no skills, so skipping MCP leaves nothing to install.
+- A foreign entry already holding the reserved `seamless` name is never
+  overwritten - the installer refuses and names the manual fix.
+
+## Registering by hand
+
+In the app: **Settings > Developer > Edit Config**, then add under
+`mcpServers`:
+
+```json
+"seamless": {
+  "command": "/abs/path/seam",
+  "args": ["mcp-proxy", "--config", "/abs/path/seamless.yaml"]
+}
+```
+
+Use the absolute installed `seam` and config paths, save, and restart the app.
+This is also the repair path whenever the automatic edit refuses to run.
+
+## Scope discipline in a chat
+
+A chat conversation has no working directory, and cwd is how every other
+surface resolves scope. Three consequences worth knowing before the first
+durable write - the failure modes are quiet, and two of them are **not**
+rejections:
+
+- **`session_start` has no `project` parameter.** The only way a chat session
+  binds to a project is passing `cwd` - so when the conversation is about a
+  repo, tell Claude the repo's absolute path and have it pass that as `cwd`.
+  That one argument buys the full project briefing and correctly scoped
+  unscoped calls for the rest of the session.
+- **A cwd-less `session_start` binds the session to the global scope.** The
+  response's scope line warns, but every later unscoped durable write then
+  lands global silently - nothing at write time flags it.
+- **Skipping `session_start` does not make writes fail closed.** An unscoped
+  durable write with no bound session falls back to the sole active ambient
+  session - and on a machine where you also run Claude Code or Codex, that is
+  usually your *other* agent's session, so the chat's write lands in **that
+  session's project**, stamped with its provenance. The
+  "no session, no `project`, rejected" rule only holds when zero ambient
+  sessions are live.
+
+The discipline that avoids all three: have the chat pass a real `cwd` at
+`session_start`, or pass `project:` explicitly on every durable write. Use
+`project: global` only when global is the point. The full precedence chain is
+in [Projects & scope](/concepts/projects/).
+
+## Uninstall
+
+`seamlessd uninstall` (default `--client all`) removes the chat-surface entry
+along with everything else; `--client claude-desktop` scopes the run to just
+it. Removal deletes only the reserved `seamless` entry - every other key,
+including a now-empty `mcpServers`, stays exactly as found - and prints the
+same restart notice, since the app also unloads config at startup only.
+
+## Verify
+
+```bash
+seamlessd doctor
+```
+
+Look for the `claude desktop mcp` line. Not registered is an **info** line, not
+a warning - the chat surface is an explicit opt-in, so doctor never nags you
+into it. An exact registration reports OK with one honest caveat: whether the
+*running* app has actually loaded it is unverifiable, because the app reads the
+config at startup and exposes no way to ask. If you registered and did not
+restart, doctor cannot tell - the restart is on you.
+
+The live evidence behind what this page claims - protocol handshake, in-app
+tool calls, and the scope gotchas above - is recorded in the
+[Claude app compatibility matrix](/reference/claude-app-compatibility/).
 
 ---
 
@@ -4112,7 +4297,10 @@ config or the database cannot be loaded at all.
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
+| `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
 | `hooks` | Claude Code definitions compared with today's desired profile. |
+| `claude desktop mcp` | The chat surface's `claude_desktop_config.json` entry compared with the desired stdio bridge. Absent is an **info** line naming the opt-in command, never a nag; an exact entry reports OK while stating that the running app's loaded state is unverifiable (the app reads the config at startup). No lines when neither the app nor a desktop config exists. |
+| `codex CLI runtime` / `codex app runtime` | Each discoverable Codex runtime's self-reported version, separately, on the same principle. |
 | `codex hooks` | Codex current, stale, and missing definitions, including command targets. |
 | `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
 | `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
@@ -4153,19 +4341,24 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--client claude|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
+seamlessd install-hooks [--client claude|codex|claude-desktop|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
-Wires the selected agent client(s) to Seamless: merges the hook entries into
-each client's hook file (Claude Code `settings.json`, Codex `hooks.json`),
-registers the MCP server with the client's CLI, and installs the embedded
-`seam-onboard` and `seam-research` skills into the client's skill home.
+Wires the selected install target(s) to Seamless: merges the hook entries into
+each hook client's file (Claude Code `settings.json`, Codex `hooks.json`),
+registers the MCP server (via the client's CLI, or for the Claude app chat
+surface by editing `claude_desktop_config.json` directly), and installs the
+embedded `seam-onboard` and `seam-research` skills into each hook client's
+skill home. The `claude-desktop` target is the chat surface's MCP bridge only -
+it has no hooks and no skills - so selecting only it together with
+`--mcp=false` is an error rather than a silent no-op.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--client` | `detect` | Which client(s) to wire: `claude`, `codex`, `all`, or `detect`. With the flag omitted on a terminal, it prompts and defaults to the detected set; non-interactive runs detect without prompting. If neither client exists, detection falls back to Claude Code. |
+| `--client` | `detect` | Which target(s) to wire: `claude`, `codex`, `claude-desktop`, a comma list of those (`claude,claude-desktop`), `all` (every target this platform can host), or `detect` (the targets present on this machine). With the flag omitted on a terminal, a multi-select menu prompts, defaulting to the detected set; non-interactive runs detect without prompting. With nothing detected, `detect` is an error, never a silent Claude Code default. |
 | `--settings` | `~/.claude/settings.json` | Target Claude Code settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Target Codex hooks file, created if absent. |
+| `--desktop-config` | the app's per-OS location | Claude app `claude_desktop_config.json` to register the chat-surface bridge in (macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`). |
 | `--url` | derived from the config addr | Base URL of the daemon. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
 | `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add-json --scope user` / `codex mcp add`). |
@@ -4187,6 +4380,17 @@ and re-reads it before reporting success. A direct-HTTP or other incompatible
 entry under `seamless` is not overwritten; remove it explicitly or rerun with
 `--mcp=false` to keep that manual transport.
 
+The `claude-desktop` target has no management CLI at all, so its registration
+is a merge-preserving edit of `claude_desktop_config.json`: the reserved
+`seamless` entry is set to the `seam mcp-proxy` stdio bridge (absolute paths,
+no secret - the bridge reads the bearer key from Seamless's config), every
+foreign key round-trips byte-for-byte, the file is backed up once before the
+first change, and the write is verified by re-reading it. An incompatible entry
+under the reserved name is an error naming the in-app fix (Settings >
+Developer > Edit Config), and every change ends with a restart notice - the
+app reads the file only at startup. See
+[Claude app chat setup](/claude-app/).
+
 The hook merge preserves unknown keys and foreign entries, replaces marked stale
 definitions, adopts only recognizable legacy Seamless URLs/commands, deduplicates
 owned entries, and backs the file up once before the first change. An arbitrary
@@ -4207,12 +4411,14 @@ safe constraint injection and parent-only lifecycle handling for subagents; the
 ## seamlessd uninstall {#seamlessd_uninstall}
 
 ```bash
-seamlessd uninstall [--client claude|codex|all|detect] [--dry-run] [--yes] [--purge]
+seamlessd uninstall [--client claude|codex|claude-desktop|all|detect] [--dry-run] [--yes] [--purge]
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server, removes
-the installed skills, and deletes the binaries. Config and the data dir
+service, strips the Seamless hook entries, deregisters the MCP server
+(including the chat surface's `claude_desktop_config.json` entry - only the
+reserved `seamless` key is removed, everything else stays byte-for-byte),
+removes the installed skills, and deletes the binaries. Config and the data dir
 (`~/.seamless` - memories and notes are markdown that outlive the program) are
 kept unless `--purge` is passed. Every external step is best-effort: an
 already-gone file or a missing client CLI is a note, never a failure, so
@@ -4225,12 +4431,13 @@ one-shot delivery marker in each selected client's skill root.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--client` | `all` | Which client(s) to remove hooks/MCP/skills for. |
+| `--client` | `all` | Which target(s) to remove hooks/MCP/skills for: `claude`, `codex`, `claude-desktop`, a comma list, `all`, or `detect`. `claude-desktop` scopes the run to the chat surface's desktop-config entry. |
 | `--dry-run` | `false` | Print what would be removed and exit without changing anything. |
 | `--yes` | `false` | Skip the confirmation prompt. |
 | `--purge` | `false` | Also delete the config dir (`~/.config/seamless`) and data dir (`~/.seamless`). |
 | `--settings` | `~/.claude/settings.json` | Claude Code settings file to remove hooks from. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Codex hooks file to remove hooks from. |
+| `--desktop-config` | the app's per-OS location | Claude app `claude_desktop_config.json` to remove the chat-surface bridge from. |
 | `--url` | derived from the config addr | Base URL the hook entries were installed with. |
 | `--install-dir` | `$SEAMLESS_INSTALL_DIR`, else `~/.local/bin` | Directory the binaries were installed to. |
 | `--mcp` | `true` | Also deregister the MCP server (`claude`/`codex mcp remove`). |
@@ -4932,6 +5139,92 @@ looks vaguely Seamless-shaped.
 - [Codex compatibility matrix](/reference/codex-compatibility/) - versioned
   live/schema evidence and the recapture procedure.
 - [Quickstart](/quickstart/) - install order for a working setup.
+
+---
+
+# Claude app compatibility matrix
+
+URL: https://thereisnospoon.org/docs/reference/claude-app-compatibility/
+
+
+This matrix records what Seamless has **observed** in the Claude desktop app,
+and what remains unverified. It is an evidence ledger, not a support claim: a
+row says "this was seen working on this build, on this platform, on this date",
+and its absence says exactly that. The app has two distinct surfaces -
+[embedded code sessions](/claude-code/#the-claude-apps-code-surface) (real
+Claude Code sharing `~/.claude`) and the [chat surface](/claude-app/) (a
+hookless MCP client wired through `claude_desktop_config.json`) - and evidence
+for one is never evidence for the other.
+
+## Code surface (embedded Claude Code sessions)
+
+| App runtime / platform | Hooks observed | MCP | Sessions |
+|---|---|---|---|
+| Bundled Claude Code 2.1.215 (PATH CLI 2.1.216 on the same machine) / Darwin arm64, 2026-07-21 | SessionStart briefing injected in 8/8 app sessions, correctly project-scoped (including global for cwd-less helper sessions); PostToolUse tool-call events recorded; SessionEnd auto-harvest fired on app close and completed the sessions with genuine findings. **UserPromptSubmit never fired** - no per-prompt recall on this surface | The shared user-scope `~/.claude.json` registration (http + `headersHelper`) worked unchanged from an app code session: a `notes_create` round trip landed a real note | Repo cwd resolved to the mapped project; ambient `cc/...` sessions behaved exactly as CLI sessions |
+
+The UserPromptSubmit row is a live defect on that build, not a Seamless
+configuration problem: a firing hook always leaves a trace (an injection or a
+prompt event), and none exists for any of the eight observed app sessions. The
+suspects - the bundled 2.1.215 runtime versus the app's hook dispatch - are
+unresolved, so the finding is pinned to the build and should be re-tested after
+each app update rather than hardened into a permanent claim.
+
+Managed worktrees did **not** materialize during this capture (the app ran its
+code sessions directly in the repo root), so the worktree-to-project mapping -
+a linked worktree resolves through its git common directory to the main
+checkout's project - is verified by unit tests against real worktree layouts,
+not yet by a live app session inside one.
+
+## Chat surface (stdio MCP bridge)
+
+| Bridge / daemon / platform | Protocol evidence | Tool round trips | App evidence |
+|---|---|---|---|
+| `seam mcp-proxy` (stdio) / Seamless 0.3.8+a189f0d / Darwin arm64, 2026-07-21 | Driven over stdio exactly as `claude_desktop_config.json` instructs the app to (newline-delimited JSON-RPC, protocol 2025-06-18): initialize handshake with server instructions delivered; capabilities are tools-only by design; `tools/list` matched the daemon's authoritative tool count | `memory_read` and a full `notes_create` round trip with explicit `project` (plan tag promoted, session model stamped, `created-by:agent` auto-tag, clean delete); session persistence across calls on one stdio connection - `session_end` with no arguments closed the exact session `session_start` had bound | A fresh app launch spawned two `seam mcp-proxy` instances, both holding established TCP connections to `127.0.0.1:8081` - process and socket evidence that this app build loads the registration, covering the "loaded state unverifiable" caveat `doctor` honestly reports. A conversation typed in the app UI invoked `memory_read` and got the memory back |
+
+One caveat keeps the in-UI row narrow: on the test machine the code surface was
+also installed, and the confirming conversation *also* fired a SessionStart
+hook, so the daemon's event log cannot attribute that one tool call to the chat
+stdio bridge rather than the code surface's HTTP registration. The chat stdio
+protocol path is independently verified end to end; only the final in-UI hop
+rests on owner confirmation plus process evidence.
+
+The same capture probed the scope edges the
+[chat setup page](/claude-app/#scope-discipline-in-a-chat) warns about, and
+both quiet outcomes are real observations, not theory: a sessionless unscoped
+durable write was **not** rejected while an ambient CLI session was live - it
+landed in that session's project with that session's provenance - and a
+cwd-less `session_start` bound the global scope, after which unscoped writes
+landed global with no write-time flag. Passing a repo `cwd` delivered the full
+project briefing and correctly scoped every later unscoped call.
+
+## What remains unverified
+
+- **Windows, entirely.** Detection there is the config file's existence (there
+  is no documented install location to probe), and no live Windows run of
+  either surface has been recorded.
+- **Whether a running app has loaded the registration**, as a queryable fact.
+  The app reads its config at startup and exposes no way to ask; the process
+  and socket evidence above covers one observed build, and `doctor` keeps
+  reporting the general case as unverifiable.
+- **An app-only machine.** The tested machine had the PATH CLI and the code
+  surface installed; chat-surface setup with nothing else present is untested.
+- **UserPromptSubmit's permanence** on the code surface, per above.
+- **A live app code session inside a managed worktree**, per above.
+
+## Re-verifying after an app update
+
+The chat surface's protocol path can be re-checked without the app: run the
+installed `seam mcp-proxy` over stdio, speak newline-delimited JSON-RPC
+(initialize, `notifications/initialized`, then tool calls), and compare against
+the rows above - the [integration guide](/guides/integrate-your-agent/) shows
+the same handshake over plain HTTP. For the app itself: restart it, confirm
+`seam mcp-proxy` child processes with established connections to the daemon,
+and have a chat conversation call `memory_read`. For the code surface: open an
+app code session in a mapped repo, look for the `<seam-briefing>` block, then
+prompt again and check whether recall injection ever appears - that is the
+UserPromptSubmit re-test. `seamlessd doctor` reports the bundled app runtime
+and the PATH CLI separately precisely so version skew between them is visible
+while you do this.
 
 ---
 

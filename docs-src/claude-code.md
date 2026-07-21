@@ -120,6 +120,39 @@ the codebase already records).
 The briefing tells an agent *what you know*; your `CLAUDE.md` tells it *when to
 write more down*.
 
+## The Claude app's code surface {#the-claude-apps-code-surface}
+
+Code sessions inside the Claude desktop app are real Claude Code, running
+against the same `~/.claude` profile as your terminal sessions. The setup on
+this page is therefore all the setup they need: the hooks in `settings.json`,
+the user-scope MCP registration, and the skills apply to app code sessions
+unchanged, with nothing extra to install.
+
+Three app-specific facts are worth knowing, all recorded with build-pinned
+evidence in the [Claude app compatibility
+matrix](/reference/claude-app-compatibility/):
+
+- **The app bundles its own Claude Code runtime**, retained under
+  `~/Library/Application Support/Claude/claude-code/<version>/`, and it can lag
+  or lead the PATH CLI (observed: 2.1.215 in the app beside a 2.1.216 CLI).
+  `seamlessd doctor` reports each discoverable runtime on its own line -
+  `claude CLI runtime` and `claude app runtime` - so the skew is visible when
+  an app-only failure has you debugging.
+- **Per-prompt recall does not currently fire in app code sessions.** On the
+  observed build, the SessionStart briefing, PostToolUse events, and the
+  SessionEnd findings harvest all work - but UserPromptSubmit never fires, so
+  `<seam-recall>` injections never happen there. The briefing at session start
+  is what an app code session gets.
+- **Managed worktrees keep their project.** The app may run a session in a
+  managed worktree (`<repo>/.claude/worktrees/<name>`); Seamless resolves a
+  linked worktree through its git common directory to the main checkout, so
+  such a session inherits the repo's project instead of registering a
+  transient one named after the worktree.
+
+Chat conversations in the same app are a different surface entirely - no
+hooks, no `CLAUDE.md`, an explicit opt-in MCP registration of its own. See
+[Claude app chat setup](/claude-app/).
+
 ## Verify
 
 ```bash

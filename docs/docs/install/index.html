@@ -57,6 +57,8 @@
         
         <li><a href="../claude-code/">Claude Code setup</a></li>
         
+        <li><a href="../claude-app/">Claude app chat setup</a></li>
+        
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
       </ul>
@@ -129,6 +131,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
+        
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
         
         <li><a href="../reference/console/">Console</a></li>
@@ -189,21 +193,29 @@ against the release's <code>checksums.txt</code> before unpacking anything; when
 against this repository's release workflow identity;</li>
 <li>installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>;</li>
 <li>runs <code>seamlessd install-hooks</code>, which generates the bearer key into
-<code>~/.config/seamless/seamless.yaml</code> on first run, detects Claude Code and/or
-Codex, and installs that set's hooks, MCP registration, and skills;</li>
+<code>~/.config/seamless/seamless.yaml</code> on first run, detects Claude Code,
+Codex, and the Claude app chat surface, and installs that set's hooks, MCP
+registrations, and skills;</li>
 <li>installs and starts the per-user service - launchd on macOS, systemd
 <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
 <code>/healthz</code> until the daemon actually answers.</li>
 </ol>
-<p>Step 3 detects <strong>Claude Code</strong>, <strong>Codex</strong>, or both and wires the detected set.
-That one client choice drives hooks, MCP registration, and the maintained
-<code>seam-onboard</code> / <code>seam-research</code> skills together. With both detected, a run on a
-terminal confirms which to wire (both is the default); headless, both are wired.
-With neither detected, a run on a terminal warns and asks whether to install at
-all (defaulting to no), and a headless run aborts - the installer never silently
-wires a client that is not there. Set <code>SEAMLESS_CLIENT</code> to make the choice
-explicit; see <a href="../codex-cli/">Codex local setup</a> for the shared app/CLI/IDE profile
-and Codex's trust gate.</p>
+<p>Step 3 detects three install targets - <strong>Claude Code</strong>, <strong>Codex</strong>, and the
+<strong>Claude app chat surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge;
+it has no hooks or skills) - and wires the detected set. That one selection
+drives hooks, MCP registrations, and the maintained <code>seam-onboard</code> /
+<code>seam-research</code> skills together. On a terminal the run confirms the selection
+with a multi-select menu - answers are numbers or names, comma-separated
+(<code>1,3</code>), defaulting to the detected set; headless, the detected set is wired
+as-is. With nothing detected, a run on a terminal warns and asks whether to
+install at all (defaulting to no), and a headless run aborts - the installer
+never silently wires a client that is not there. Set <code>SEAMLESS_CLIENT</code> to make
+the choice explicit: one target, a comma list, or <code>all</code> (every target the
+platform can host - the chat surface exists only where the Claude app runs, so
+<code>all</code> never fails on Linux over it). See <a href="../codex-cli/">Codex local setup</a> for
+the shared app/CLI/IDE profile and Codex's trust gate, and
+<a href="../claude-app/">Claude app chat setup</a> for what the chat surface does and does
+not get.</p>
 <p>On every OS, Claude's copies live under <code>$HOME/.claude/skills</code>; Codex's live
 under <code>$CODEX_HOME/skills</code> when set, otherwise <code>$HOME/.codex/skills</code> (the same
 paths are <code>%USERPROFILE%</code>-relative on Windows). Invoke <code>/seam-onboard</code> in Claude
@@ -239,8 +251,8 @@ script</a> with no dependencies to audit.</p>
 <td>put the binaries somewhere else</td>
 </tr>
 <tr>
-<td><code>SEAMLESS_CLIENT=claude|codex|all</code></td>
-<td>choose which agent client(s) receive hooks, MCP, and skills instead of auto-detection</td>
+<td><code>SEAMLESS_CLIENT=claude|codex|claude-desktop|all</code></td>
+<td>choose which target(s) to wire instead of auto-detection; comma lists work (<code>claude,claude-desktop</code>)</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_HOOKS=1</code></td>
@@ -377,7 +389,8 @@ binary looks exactly like a bug in the new one.</p>
 <h2 id="uninstalling">Uninstalling</h2>
 <p><code>seamlessd uninstall</code> is the one command, on every OS. It reverses the whole
 install - stops and removes the per-user service, strips the Claude Code and
-Codex hooks, deregisters the MCP server, removes both clients' installed
+Codex hooks, deregisters the MCP server from both client CLIs and from the
+Claude app's <code>claude_desktop_config.json</code>, removes both hook clients' installed
 <code>seam-onboard</code> and <code>seam-research</code> packages/one-shot markers, and deletes the
 binaries - and it is idempotent, so a second run is a clean no-op. Preview it
 first with <code>--dry-run</code>:</p>
@@ -399,7 +412,9 @@ original backup sits next to each file. If you would rather do it by hand - a
 bare binary you never installed a service for, say - the service teardown is
 <code>launchctl bootout</code> / <code>systemctl --user disable --now</code> /
 <code>Unregister-ScheduledTask -TaskName Seamless</code>, and <code>claude mcp remove seamless</code>
-or <code>codex mcp remove seamless</code> drops that client's MCP registration.</p>
+or <code>codex mcp remove seamless</code> drops that client's MCP registration. The chat
+surface has no CLI: delete the <code>seamless</code> entry under <code>mcpServers</code> in the
+Claude app (Settings &gt; Developer &gt; Edit Config) and restart it.</p>
 <h2 id="security-posture">Security posture</h2>
 <p>What you are accepting when you run this:</p>
 <ul>

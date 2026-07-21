@@ -57,6 +57,8 @@
         
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
+        <li><a href="../../claude-app/">Claude app chat setup</a></li>
+        
         <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
         
       </ul>
@@ -128,6 +130,8 @@
         <li><a href="../../reference/configuration/">Configuration</a></li>
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
+        
+        <li><a href="../../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
         
@@ -247,8 +251,20 @@ config or the database cannot be loaded at all.</p>
 <td>Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in.</td>
 </tr>
 <tr>
+<td><code>claude CLI runtime</code> / <code>claude app runtime</code></td>
+<td>Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines.</td>
+</tr>
+<tr>
 <td><code>hooks</code></td>
 <td>Claude Code definitions compared with today's desired profile.</td>
+</tr>
+<tr>
+<td><code>claude desktop mcp</code></td>
+<td>The chat surface's <code>claude_desktop_config.json</code> entry compared with the desired stdio bridge. Absent is an <strong>info</strong> line naming the opt-in command, never a nag; an exact entry reports OK while stating that the running app's loaded state is unverifiable (the app reads the config at startup). No lines when neither the app nor a desktop config exists.</td>
+</tr>
+<tr>
+<td><code>codex CLI runtime</code> / <code>codex app runtime</code></td>
+<td>Each discoverable Codex runtime's self-reported version, separately, on the same principle.</td>
 </tr>
 <tr>
 <td><code>codex hooks</code></td>
@@ -319,11 +335,15 @@ a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
 prints a report even when the import ends in an error. With <code>--embed</code> on and no
 usable embedder, it warns and imports without vectors rather than failing.</p>
 <h2 id="seamlessd_install_hooks">seamlessd install-hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
-</span></span></code></pre><p>Wires the selected agent client(s) to Seamless: merges the hook entries into
-each client's hook file (Claude Code <code>settings.json</code>, Codex <code>hooks.json</code>),
-registers the MCP server with the client's CLI, and installs the embedded
-<code>seam-onboard</code> and <code>seam-research</code> skills into the client's skill home.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>claude-desktop<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--desktop-config PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
+</span></span></code></pre><p>Wires the selected install target(s) to Seamless: merges the hook entries into
+each hook client's file (Claude Code <code>settings.json</code>, Codex <code>hooks.json</code>),
+registers the MCP server (via the client's CLI, or for the Claude app chat
+surface by editing <code>claude_desktop_config.json</code> directly), and installs the
+embedded <code>seam-onboard</code> and <code>seam-research</code> skills into each hook client's
+skill home. The <code>claude-desktop</code> target is the chat surface's MCP bridge only -
+it has no hooks and no skills - so selecting only it together with
+<code>--mcp=false</code> is an error rather than a silent no-op.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -337,7 +357,7 @@ registers the MCP server with the client's CLI, and installs the embedded
 <tr>
 <td><code>--client</code></td>
 <td><code>detect</code></td>
-<td>Which client(s) to wire: <code>claude</code>, <code>codex</code>, <code>all</code>, or <code>detect</code>. With the flag omitted on a terminal, it prompts and defaults to the detected set; non-interactive runs detect without prompting. If neither client exists, detection falls back to Claude Code.</td>
+<td>Which target(s) to wire: <code>claude</code>, <code>codex</code>, <code>claude-desktop</code>, a comma list of those (<code>claude,claude-desktop</code>), <code>all</code> (every target this platform can host), or <code>detect</code> (the targets present on this machine). With the flag omitted on a terminal, a multi-select menu prompts, defaulting to the detected set; non-interactive runs detect without prompting. With nothing detected, <code>detect</code> is an error, never a silent Claude Code default.</td>
 </tr>
 <tr>
 <td><code>--settings</code></td>
@@ -348,6 +368,11 @@ registers the MCP server with the client's CLI, and installs the embedded
 <td><code>--codex-hooks</code></td>
 <td><code>$CODEX_HOME/hooks.json</code>, else <code>~/.codex/hooks.json</code></td>
 <td>Target Codex hooks file, created if absent.</td>
+</tr>
+<tr>
+<td><code>--desktop-config</code></td>
+<td>the app's per-OS location</td>
+<td>Claude app <code>claude_desktop_config.json</code> to register the chat-surface bridge in (macOS <code>~/Library/Application Support/Claude/</code>, Windows <code>%APPDATA%\Claude\</code>).</td>
 </tr>
 <tr>
 <td><code>--url</code></td>
@@ -386,6 +411,16 @@ stdio bridge unchanged, repairs an owned disabled/stale bridge with <code>mcp ad
 and re-reads it before reporting success. A direct-HTTP or other incompatible
 entry under <code>seamless</code> is not overwritten; remove it explicitly or rerun with
 <code>--mcp=false</code> to keep that manual transport.</p>
+<p>The <code>claude-desktop</code> target has no management CLI at all, so its registration
+is a merge-preserving edit of <code>claude_desktop_config.json</code>: the reserved
+<code>seamless</code> entry is set to the <code>seam mcp-proxy</code> stdio bridge (absolute paths,
+no secret - the bridge reads the bearer key from Seamless's config), every
+foreign key round-trips byte-for-byte, the file is backed up once before the
+first change, and the write is verified by re-reading it. An incompatible entry
+under the reserved name is an error naming the in-app fix (Settings &gt;
+Developer &gt; Edit Config), and every change ends with a restart notice - the
+app reads the file only at startup. See
+<a href="../../claude-app/">Claude app chat setup</a>.</p>
 <p>The hook merge preserves unknown keys and foreign entries, replaces marked stale
 definitions, adopts only recognizable legacy Seamless URLs/commands, deduplicates
 owned entries, and backs the file up once before the first change. An arbitrary
@@ -402,10 +437,12 @@ often be lost. The Codex profile is five shell-string command hooks, including
 safe constraint injection and parent-only lifecycle handling for subagents; the
 <a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
 <h2 id="seamlessd_uninstall">seamlessd uninstall</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
+<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>claude-desktop<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
 </span></span></code></pre><p>Reverses a full install on any supported OS: stops and removes the per-user
-service, strips the Seamless hook entries, deregisters the MCP server, removes
-the installed skills, and deletes the binaries. Config and the data dir
+service, strips the Seamless hook entries, deregisters the MCP server
+(including the chat surface's <code>claude_desktop_config.json</code> entry - only the
+reserved <code>seamless</code> key is removed, everything else stays byte-for-byte),
+removes the installed skills, and deletes the binaries. Config and the data dir
 (<code>~/.seamless</code> - memories and notes are markdown that outlive the program) are
 kept unless <code>--purge</code> is passed. Every external step is best-effort: an
 already-gone file or a missing client CLI is a note, never a failure, so
@@ -427,7 +464,7 @@ one-shot delivery marker in each selected client's skill root.</p>
 <tr>
 <td><code>--client</code></td>
 <td><code>all</code></td>
-<td>Which client(s) to remove hooks/MCP/skills for.</td>
+<td>Which target(s) to remove hooks/MCP/skills for: <code>claude</code>, <code>codex</code>, <code>claude-desktop</code>, a comma list, <code>all</code>, or <code>detect</code>. <code>claude-desktop</code> scopes the run to the chat surface's desktop-config entry.</td>
 </tr>
 <tr>
 <td><code>--dry-run</code></td>
@@ -453,6 +490,11 @@ one-shot delivery marker in each selected client's skill root.</p>
 <td><code>--codex-hooks</code></td>
 <td><code>$CODEX_HOME/hooks.json</code>, else <code>~/.codex/hooks.json</code></td>
 <td>Codex hooks file to remove hooks from.</td>
+</tr>
+<tr>
+<td><code>--desktop-config</code></td>
+<td>the app's per-OS location</td>
+<td>Claude app <code>claude_desktop_config.json</code> to remove the chat-surface bridge from.</td>
 </tr>
 <tr>
 <td><code>--url</code></td>

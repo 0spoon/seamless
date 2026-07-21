@@ -16,6 +16,7 @@ sections:
       - quickstart.md
       - install.md
       - claude-code.md
+      - claude-app.md
       - codex-cli.md
 
   - title: Concepts
@@ -55,6 +56,7 @@ sections:
       - cli-seamlessd.md
       - configuration.md
       - hooks.md
+      - claude-app-compatibility.md
       - codex-compatibility.md
       - console.md
       - storage.md
