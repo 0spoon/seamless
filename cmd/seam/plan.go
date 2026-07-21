@@ -66,9 +66,9 @@ var planListCmd = spec("plan list", groupPlans, "list captured plans with status
 // It is transcribed rather than imported because seam must not import
 // internal/store: that pulls the ~30 modernc.org/sqlite packages into a binary
 // that currently has none of them (doctor.go documents the same reasoning for not
-// importing internal/mcp). A package-local slice of accepted values at the surface
-// is house style here, not a compromise -- console/search.go, console/sessions.go,
-// console/notes.go and console/relations.go each keep their own.
+// importing internal/mcp). A package-local slice of accepted values at the
+// surface is house style here, not a compromise; console/search.go likewise
+// owns its distinct, strict window enum at its HTTP boundary.
 var planWindows = []string{"24h", "7d", "30d", "all"}
 
 type planListOpts struct {

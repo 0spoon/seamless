@@ -281,6 +281,9 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 	if mem.Model != "" {
 		out["model"] = mem.Model
 	}
+	if mem.Favorite {
+		out["favorite"] = true
+	}
 	if !mem.Active() {
 		out["warning"] = s.supersededWarning(ctx, mem)
 	}

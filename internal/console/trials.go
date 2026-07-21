@@ -31,13 +31,14 @@ var trialOutcomeSegs = []string{"", "pass", "fail", "partial", "inconclusive"}
 
 // trialRow is a display projection of one trial for the rail.
 type trialRow struct {
-	ID      string    `json:"id"`
-	Lab     string    `json:"lab"`
-	Title   string    `json:"title"`
-	Outcome string    `json:"outcome,omitempty"`
-	Project string    `json:"project,omitempty"`
-	Metrics int       `json:"metrics,omitempty"` // structured metric count
-	Created time.Time `json:"created"`
+	ID       string    `json:"id"`
+	Lab      string    `json:"lab"`
+	Title    string    `json:"title"`
+	Outcome  string    `json:"outcome,omitempty"`
+	Project  string    `json:"project,omitempty"`
+	Favorite bool      `json:"favorite,omitempty"`
+	Metrics  int       `json:"metrics,omitempty"` // structured metric count
+	Created  time.Time `json:"created"`
 }
 
 // trialLabGroup is one lab's trials in the rail, ordered newest first; groups
@@ -74,6 +75,7 @@ type trialDetailData struct {
 	Title       string        `json:"title"`
 	Outcome     string        `json:"outcome,omitempty"`
 	Project     string        `json:"project,omitempty"`
+	Favorite    bool          `json:"favorite,omitempty"`
 	Changes     template.HTML `json:"-"`
 	ChangesText string        `json:"changes,omitempty"`
 	Expected    template.HTML `json:"-"`
@@ -117,7 +119,8 @@ func (s *Service) trialsPage(ctx context.Context, lab, outcome string) (trialsDa
 	for _, tr := range trials {
 		row := trialRow{
 			ID: tr.ID, Lab: tr.Lab, Title: tr.Title, Outcome: string(tr.Outcome),
-			Project: tr.ProjectSlug, Metrics: len(tr.Metrics), Created: tr.CreatedAt,
+			Project: tr.ProjectSlug, Favorite: tr.Favorite,
+			Metrics: len(tr.Metrics), Created: tr.CreatedAt,
 		}
 		i, ok := idx[tr.Lab]
 		if !ok {
@@ -161,7 +164,8 @@ func (s *Service) trialsList(w http.ResponseWriter, r *http.Request) {
 func (s *Service) trialDetailData(ctx context.Context, tr core.Trial) trialDetailData {
 	d := trialDetailData{
 		ID: tr.ID, Lab: tr.Lab, Title: tr.Title, Outcome: string(tr.Outcome),
-		Project: tr.ProjectSlug, SessionID: tr.SessionID, Created: tr.CreatedAt,
+		Project: tr.ProjectSlug, Favorite: tr.Favorite,
+		SessionID: tr.SessionID, Created: tr.CreatedAt,
 		ChangesText: tr.Changes, ExpText: tr.Expected, ActText: tr.Actual,
 	}
 	if tr.Changes != "" {

@@ -5,25 +5,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Lab, gardener &amp; usage - Seamless docs</title>
-<meta name="description" content="Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.">
+<meta name="description" content="Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/">
 <meta property="og:title" content="Lab, gardener &amp; usage - Seamless docs">
-<meta property="og:description" content="Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.">
+<meta property="og:description" content="Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Lab, gardener \u0026 usage","item":"https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/"}]},{"@type":"TechArticle","headline":"Lab, gardener \u0026 usage - Seamless docs","description":"Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.","url":"https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Lab, gardener \u0026 usage","item":"https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/"}]},{"@type":"TechArticle","headline":"Lab, gardener \u0026 usage - Seamless docs","description":"Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.","url":"https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
-<link rel="stylesheet" href="../../../../static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="../../../../static/site.css?v=7fc27d20">
 <link rel="stylesheet" href="../../../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../../../">
@@ -184,7 +184,7 @@
 </nav>
 
   <h1>Lab, gardener &amp; usage</h1>
-  <p class="lede">Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.</p>
+  <p class="lede">Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.</p>
   <h2 id="the-research-lab">The research lab</h2>
 <p>A lab is a shared workspace for a systematic investigation: a hypothesis, a
 series of trials, and what each one actually did. <code>lab_open</code> binds a lab to the
@@ -251,6 +251,15 @@ than as a pile of individual moves.</p>
 been doing: memory counts, retrieval statistics, events by kind. It answers &quot;is
 this thing working, and on how much?&quot; - the same question the console's Overview
 answers, for an agent that cannot open a browser.</p>
+<h2 id="favorite-set">favorite_set</h2>
+<p><code>favorite_set</code> stars or unstars an item - a memory, note, project, plan, task,
+session, or trial. A starred memory is pinned into every session briefing as a
+<code>FAVORITE:</code> line and gets a mild recall rank boost; in the console, favorites
+carry a star, sort first, and can be filtered. For memories and notes the flag
+lives in the file's frontmatter (<code>favorite: true</code>), so it survives an index
+rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
+a task-only plan (no note) cannot be starred. Starring never bumps an item's
+updated time - it is metadata, not authorship.</p>
 <h2 id="lab_open">lab_open</h2>
 <p>Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.</p>
 <div class="table-wrap">
@@ -492,8 +501,49 @@ answers, for an agent that cannot open a browser.</p>
 <h2 id="usage_summary">usage_summary</h2>
 <p>Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.</p>
 <p>Takes no parameters.</p>
+<h2 id="favorite_set">favorite_set</h2>
+<p>Star or unstar an item. Favorites sort first in the console, are pinned into session briefings (memories), and get a mild recall rank boost. For memories and notes the flag is stored in the file's frontmatter; starring never bumps an item's updated time.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kind</code></td>
+<td>string</td>
+<td><strong>yes</strong></td>
+<td>what kind of item to star. One of: <code>memory</code>, <code>note</code>, <code>project</code>, <code>plan</code>, <code>task</code>, <code>session</code>, <code>trial</code>.</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td>string</td>
+<td><strong>yes</strong></td>
+<td>the item's identifier: memory name, note id (or slug), project slug, plan slug, task id, session id (or name), trial id</td>
+</tr>
+<tr>
+<td><code>favorite</code></td>
+<td>boolean</td>
+<td><strong>yes</strong></td>
+<td>true to star, false to unstar</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>no</td>
+<td>project scope for memory-name/note-slug resolution; defaults to the bound session's project</td>
+</tr>
+</tbody>
+</table>
+</div>
 
 </article>
+
 
 
     
@@ -508,7 +558,7 @@ answers, for an agent that cannot open a browser.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-research-lab">The research lab</a></li><li class="lvl-2"><a href="#the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</a></li><li class="lvl-2"><a href="#splits-are-a-different-thing">Splits are a different thing</a></li><li class="lvl-2"><a href="#usage-summary">usage_summary</a></li><li class="lvl-2"><a href="#lab_open">lab_open</a></li><li class="lvl-2"><a href="#trial_record">trial_record</a></li><li class="lvl-2"><a href="#trial_query">trial_query</a></li><li class="lvl-2"><a href="#gardener_proposals">gardener_proposals</a></li><li class="lvl-2"><a href="#gardener_request">gardener_request</a></li><li class="lvl-2"><a href="#gardener_split">gardener_split</a></li><li class="lvl-2"><a href="#gardener_apply">gardener_apply</a></li><li class="lvl-2"><a href="#usage_summary">usage_summary</a></li>
+      <li class="lvl-2"><a href="#the-research-lab">The research lab</a></li><li class="lvl-2"><a href="#the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</a></li><li class="lvl-2"><a href="#splits-are-a-different-thing">Splits are a different thing</a></li><li class="lvl-2"><a href="#usage-summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite-set">favorite_set</a></li><li class="lvl-2"><a href="#lab_open">lab_open</a></li><li class="lvl-2"><a href="#trial_record">trial_record</a></li><li class="lvl-2"><a href="#trial_query">trial_query</a></li><li class="lvl-2"><a href="#gardener_proposals">gardener_proposals</a></li><li class="lvl-2"><a href="#gardener_request">gardener_request</a></li><li class="lvl-2"><a href="#gardener_split">gardener_split</a></li><li class="lvl-2"><a href="#gardener_apply">gardener_apply</a></li><li class="lvl-2"><a href="#usage_summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite_set">favorite_set</a></li>
     </ul>
   </aside>
   

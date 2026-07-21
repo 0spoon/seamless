@@ -68,6 +68,7 @@ Field by field:
 | `superseded_by` | **system only** | ULID of the replacement, or `null`. |
 | `source_session` | system | Provenance - an ambient session name such as `cc/019f7291-7ccbc0d8f16e51a4`, or the ULID of a bound explicit session. Consumers resolve both; treat names as opaque. |
 | `model` | system | The model that produced the content, verbatim as the provider names it (`claude-fable-5`, `gpt-5.5`). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown. |
+| `favorite` | author | `true` when starred (console, `seam fav`, or `favorite_set`). A starred memory is pinned into every briefing and boosted in recall. Omitted when false; hand-editing it works - the watcher reindexes. Starring never bumps `updated`. |
 | `tags` | author | Flow-style list. Omitted when empty. Also the `plan:<slug>` composition key. |
 
 Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
@@ -122,10 +123,12 @@ body markdown
 ```
 
 `id`, `title`, `created`, and `updated` are always emitted. `slug`,
-`description`, `project`, `source_url`, `model`, and `tags` are omitted when
-empty. `source_url` is set when the note came from `capture_url`; `model` is
-the producing model, stamped exactly as for memories. Empty `project` means
-`notes/_global/`. Unknown keys round-trip losslessly, same as memories.
+`description`, `project`, `source_url`, `model`, `favorite`, and `tags` are
+omitted when empty (or, for `favorite`, false). `source_url` is set when the
+note came from `capture_url`; `model` is the producing model, stamped exactly
+as for memories; `favorite` marks a starred note, exactly as for memories.
+Empty `project` means `notes/_global/`. Unknown keys round-trip losslessly,
+same as memories.
 
 ## What lives only in SQLite
 

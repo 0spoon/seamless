@@ -91,6 +91,9 @@ func (s *Server) handleNotesRead(ctx context.Context, req mcp.CallToolRequest) (
 	if note.Model != "" {
 		out["model"] = note.Model
 	}
+	if note.Favorite {
+		out["favorite"] = true
+	}
 	return jsonResult(out)
 }
 

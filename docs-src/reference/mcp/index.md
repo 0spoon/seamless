@@ -65,14 +65,14 @@ Pass `project: global` to mean global deliberately.
 
 ## The tool surface
 
-Seamless registers **30 tools**. They are documented in groups:
+Seamless registers **31 tools**. They are documented in groups:
 
 | Group | Tools |
 |---|---|
 | Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_read`, `memory_delete`, `recall` |
 | Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
-| Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary` |
+| Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
 
 Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.

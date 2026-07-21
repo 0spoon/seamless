@@ -128,6 +128,6 @@ Go's `./...` pattern excludes.
 The docs site's output under `docs/docs/` is committed, and `make check` runs
 `docs-check`, so a change to `docs-src/` -- or to the tool surface or config keys
 the reference generates from -- must be followed by `make docs` in the same
-change. See [`docs/README-site.md`](docs/README-site.md).
+change. See [`SITE.md`](SITE.md).
 
 Conventions live in [`AGENTS.md`](AGENTS.md); read it before writing code.

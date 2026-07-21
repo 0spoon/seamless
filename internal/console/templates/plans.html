@@ -43,7 +43,7 @@
         <div class="rail-items">
           {{range phaseRows .Rows "in_progress"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
@@ -56,7 +56,7 @@
         <div class="rail-items">
           {{range phaseRows .Rows "ready"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
@@ -69,7 +69,7 @@
         <div class="rail-items">
           {{range phaseRows .Rows "done"}}
           <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
@@ -103,7 +103,13 @@
       {{if .Row.Status}}<span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>{{end}}
       {{if .Row.Project}}<a class="chip-parent" href="/console/projects/{{.Row.Project}}">{{icon "git-branch"}}{{.Row.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
     </div>
-    <h2 class="reader-title">{{.Row.Title}}{{copyBtn .Row.Title}}</h2>
+    <h2 class="reader-title">{{.Row.Title}}{{copyBtn .Row.Title}}
+      <form class="star-form" method="post" action="/console/favorites/plan/{{.Row.Slug}}">
+        <input type="hidden" name="favorite" value="{{if .Row.Favorite}}0{{else}}1{{end}}">
+        <input type="hidden" name="next" value="/console/plans/{{.Row.Slug}}">
+        <button class="star{{if .Row.Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Row.Favorite}}true{{else}}false{{end}}" title="{{if .Row.Favorite}}Unstar{{else}}Star{{end}} this plan">{{icon "star"}}</button>
+      </form>
+    </h2>
     <div class="reader-facts">
       <span class="fact">{{if eq .Row.Source "capture"}}CC capture{{if .Row.Basename}} &middot; <span class="mono">{{.Row.Basename}}.md</span>{{end}}{{else}}composed{{end}}</span>
       {{if .Row.Iteration}}<span class="fact">iteration {{.Row.Iteration}}</span>{{end}}

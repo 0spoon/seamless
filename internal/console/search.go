@@ -78,6 +78,7 @@ type searchRow struct {
 	// distance -- and for the structured-entity groups, which match by LIKE.
 	Similarity int    `json:"similarity,omitempty"`
 	ScoreTone  string `json:"-"`
+	Favorite   bool   `json:"favorite,omitempty"`
 	Peek       bool   `json:"peek"`
 }
 
@@ -97,6 +98,7 @@ type searchData struct {
 	Window      string               `json:"window"`
 	WindowLabel string               `json:"windowLabel"`
 	Fast        bool                 `json:"fast"`
+	Fav         bool                 `json:"favoritesOnly"`
 	Groups      []searchGroup        `json:"groups"`
 	Total       int                  `json:"total"`
 	Rows        []searchRow          `json:"-"` // unified, globally sorted page projection
@@ -127,7 +129,7 @@ func highlightSnippet(raw string) template.HTML {
 // wants reports whether scope selects the given kind.
 func (d searchData) wants(kind string) bool { return d.Scope == "all" || d.Scope == kind }
 
-var searchParamNames = []string{"q", "scope", "w", "sort", "fast", "format"}
+var searchParamNames = []string{"q", "scope", "w", "sort", "fast", "fav", "format"}
 
 // validateSearchParams rejects misspelled and ambiguous query parameters. The
 // search controls are bookmarkable API inputs: silently ignoring ?srot=project
@@ -195,12 +197,18 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fast := fastParam == "1"
+	favParam := values.Get("fav")
+	if _, present := values["fav"]; present && favParam != "1" {
+		s.badRequest(w, r, fmt.Sprintf("invalid fav %q: valid values are 1 (or omit)", favParam))
+		return
+	}
+	fav := favParam == "1"
 	window := resolveSearchWindow(windowKey, time.Now().UTC())
 
 	data := searchData{
 		Query: q, Scope: scope, Sort: sortKey,
 		Window: window.Key, WindowLabel: window.Label, Since: window.Since,
-		Fast: fast, Scopes: searchScopeOptions(scope),
+		Fast: fast, Fav: fav, Scopes: searchScopeOptions(scope),
 		Windows: searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
 	}
 	if len([]rune(q)) < searchQueryMin {
@@ -221,6 +229,9 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.serverError(w, r, err)
 		return
+	}
+	if data.Fav {
+		groups = filterFavoriteGroups(groups)
 	}
 	data.Groups = groups
 	for _, g := range groups {
@@ -277,7 +288,8 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "task", ID: t.ID, Title: t.Title, Project: t.ProjectSlug,
 				Age: ago(t.UpdatedAt), Href: "/console/tasks/" + t.ID,
-				Description: string(t.Status), Updated: t.UpdatedAt, Lexical: true, Peek: true,
+				Description: string(t.Status), Updated: t.UpdatedAt,
+				Favorite: t.Favorite, Lexical: true, Peek: true,
 			})
 		}
 		add("tasks", "Tasks", rows)
@@ -293,7 +305,7 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "plan", ID: p.Slug, Title: p.Title, Project: p.Project,
 				Age: ago(p.Updated), Updated: p.Updated, Href: "/console/plans/" + p.Slug,
-				Lexical: true, Peek: true,
+				Favorite: p.Favorite, Lexical: true, Peek: true,
 			})
 		}
 		add("plans", "Plans", rows)
@@ -313,7 +325,8 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "trial", ID: tr.ID, Title: tr.Title, Project: tr.ProjectSlug,
 				Age: ago(tr.CreatedAt), Href: "/console/trials/" + tr.ID,
-				Description: desc, Updated: tr.CreatedAt, Lexical: true, Peek: true,
+				Description: desc, Updated: tr.CreatedAt,
+				Favorite: tr.Favorite, Lexical: true, Peek: true,
 			})
 		}
 		add("trials", "Trials", rows)
@@ -329,7 +342,7 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "project", ID: p.Slug, Title: p.Slug, Project: p.Slug, Age: ago(p.UpdatedAt),
 				Href: "/console/projects/" + p.Slug, Description: p.Name,
-				Updated: p.UpdatedAt, Lexical: true, Peek: true,
+				Updated: p.UpdatedAt, Favorite: p.Favorite, Lexical: true, Peek: true,
 			})
 		}
 		add("projects", "Projects", rows)
@@ -345,7 +358,8 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			rows = append(rows, searchRow{
 				Kind: "session", ID: sess.ID, Title: sess.Name, Project: sess.ProjectSlug,
 				Age: ago(sess.UpdatedAt), Href: "/console/sessions/" + sess.ID,
-				Description: string(sess.Status), Updated: sess.UpdatedAt, Lexical: true, Peek: true,
+				Description: string(sess.Status), Updated: sess.UpdatedAt,
+				Favorite: sess.Favorite, Lexical: true, Peek: true,
 			})
 		}
 		add("sessions", "Sessions", rows)
@@ -360,7 +374,8 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 func hitRow(h retrieve.Hit) searchRow {
 	row := searchRow{
 		Kind: h.Kind, ID: h.ID, Title: h.Title, Project: h.Project,
-		Age: h.Age, Description: h.Description, Updated: h.Updated, Peek: true,
+		Age: h.Age, Description: h.Description, Updated: h.Updated,
+		Favorite: h.Favorite, Peek: true,
 	}
 	if h.Similarity > 0 {
 		row.Similarity = min(int(h.Similarity*100+0.5), 100)
@@ -389,11 +404,34 @@ func similarityTone(score int) string {
 	}
 }
 
-// sortSearchRows orders the unified page projection. Relevance deliberately
-// preserves the grouped retrieval order: knowledge is fused-ranked, while the
-// structured stores provide their own deterministic defaults.
+// filterFavoriteGroups keeps only starred rows (the ?fav=1 control), dropping
+// groups the filter empties. It runs after the candidate queries, so it narrows
+// what surfaced rather than reaching deeper -- same contract as the page limit.
+func filterFavoriteGroups(groups []searchGroup) []searchGroup {
+	out := groups[:0]
+	for _, g := range groups {
+		kept := make([]searchRow, 0, len(g.Rows))
+		for _, row := range g.Rows {
+			if row.Favorite {
+				kept = append(kept, row)
+			}
+		}
+		if len(kept) > 0 {
+			out = append(out, searchGroup{Kind: g.Kind, Label: g.Label, Count: len(kept), Rows: kept})
+		}
+	}
+	return out
+}
+
+// sortSearchRows orders the unified page projection. Relevance preserves the
+// grouped retrieval order -- knowledge is fused-ranked, the structured stores
+// provide their own deterministic defaults -- except that starred rows float
+// first (a stable partition, so fused order holds within both halves).
 func sortSearchRows(rows []searchRow, sortKey string) {
 	if sortKey == "relevance" {
+		sort.SliceStable(rows, func(i, j int) bool {
+			return rows[i].Favorite && !rows[j].Favorite
+		})
 		return
 	}
 	sort.SliceStable(rows, func(i, j int) bool {

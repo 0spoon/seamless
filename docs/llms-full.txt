@@ -1133,6 +1133,36 @@ Primary upstream contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
 URL: https://thereisnospoon.org/docs/concepts/
 
 
+Seamless is built around a small number of load-bearing ideas, and everything
+else follows from them. Knowledge lives in markdown files that are the source
+of truth, with SQLite as a rebuildable index over them. Memory has a lifecycle:
+a memory is never silently rewritten - it is superseded, with provenance
+pointing back at what it replaced. And agents do not ask for context; context
+arrives ambiently, injected at session start and on matching prompts, before
+the agent has done anything at all.
+
+Start with [How Seamless works](/concepts/how-it-works/) for the shape of the
+system - one daemon, the surfaces it serves, and the line between files and
+database. Then [Memory & notes](/concepts/memory/) explains what actually gets
+stored: the eight memory kinds, when a note is the better vehicle, and how
+supersession keeps a long-lived store honest instead of letting it silt up.
+
+The middle of the story is how knowledge reaches an agent.
+[Sessions & briefings](/concepts/sessions/) covers the ambient side - what a
+session is, how the briefing is packed, and what never gets dropped from it.
+[Recall](/concepts/recall/) covers the on-demand side: one search entry point
+that fuses keyword and vector results, and the three distinct paths by which a
+stored fact ends up in front of a model. [Projects & scope](/concepts/projects/)
+explains which knowledge is even in play for a given call - the scope
+precedence chain, the fail-closed rule, and project families.
+
+The last two pages are about work and upkeep rather than knowledge.
+[Tasks & plans](/concepts/tasks-and-plans/) describes the dependency-aware
+ready queue, lease-based claiming that lets parallel agents divide work without
+colliding, and plans as compositions of notes and tasks rather than a separate
+primitive. [The gardener](/concepts/gardener/) is the background pass that
+finds duplicates, staleness, and drift - and only ever proposes, because
+nothing in Seamless rewrites your knowledge behind your back.
 
 ---
 
@@ -1937,6 +1967,34 @@ The gardener runs every `gardener.interval_minutes` (60) when
 URL: https://thereisnospoon.org/docs/guides/
 
 
+Where the [concepts](/concepts/) pages explain how Seamless thinks, these pages
+are organized around jobs: each one starts from something you are trying to do
+and walks the shortest honest path through it, including the failure modes.
+
+If you are connecting a client, start with
+[Integrate your agent](/guides/integrate-your-agent/) - the MCP handshake, the
+stdio bridge, session binding, and the scope discipline that keeps writes
+landing in the right project. Once an agent is writing,
+[Write memories that get recalled](/guides/write-good-memories/) is the guide
+that pays for itself: the description line is the retrieval surface, and the
+difference between a store that compounds and one that fills with noise is
+mostly the four habits that page names.
+
+Two guides cover multi-agent work.
+[Coordinate multiple agents](/guides/coordinate-agents/) shows fan-out over the
+ready queue, planner/executor splits via plan composition, and what happens
+when a claim holder dies mid-task. [Run research trials](/guides/research-trials/)
+is the lab loop for systematic debugging - recording every attempt so parallel
+agents share dead ends instead of repeating them. Related:
+[Capture Claude Code plans](/guides/plan-mode/) explains how plan mode is
+captured into notes and tasks automatically, and which hook does what.
+
+The last two are operational. [Import, back up & restore](/guides/data/) covers
+putting `~/.seamless` in git, what deleting `seam.db` actually costs (an index
+rebuild, not data loss), and moving to a new machine.
+[Troubleshooting](/guides/troubleshooting/) is symptom-first, written for a
+system whose hooks deliberately fail open - where a broken install looks like
+silence, not an error message.
 
 ---
 
@@ -3215,6 +3273,34 @@ name is a lossless in-place update, so retrying is safe.
 URL: https://thereisnospoon.org/docs/reference/
 
 
+This section is the contract: the complete enumeration of every surface
+Seamless exposes, with the parts that are generated straight from the code so
+they cannot drift from it. The MCP tool reference is rendered from the same
+catalog the server registers, and the configuration reference from the same
+defaults the daemon loads - adding a tool or a key makes stale docs a build
+error, not a doc bug.
+
+Agents mostly care about the [MCP API](/reference/mcp/): the endpoint and auth
+model, the scope rules, and every tool grouped by area - sessions, memory and
+recall, notes and projects, tasks, and the research lab. Humans get the two
+CLIs: [seam](/reference/cli-seam/), the short handle an agent or owner types,
+and [seamlessd](/reference/cli-seamlessd/), the daemon and operator commands.
+
+Deployment behavior lives in [Configuration](/reference/configuration/) (every
+key, type, and default, plus the four layers that resolve them) and
+[Hooks](/reference/hooks/) (what `install-hooks` writes per client, the
+transports and timeouts, and the fail-open contract). The two compatibility
+matrices - [Claude app](/reference/claude-app-compatibility/) and
+[Codex](/reference/codex-compatibility/) - hold versioned, platform-specific
+evidence rather than assumptions, and record how to re-verify each claim.
+
+The remaining pages describe what you can see and touch directly:
+[Console](/reference/console/) documents the observability UI at `/console`
+and the complete list of what it can change,
+[Storage and file formats](/reference/storage/) specifies the `~/.seamless`
+tree and every frontmatter field, and the [Glossary](/reference/glossary/)
+pins the vocabulary - including the distinctions that actually matter, like
+memory versus note versus finding, and archive versus supersede versus delete.
 
 ---
 
@@ -3285,14 +3371,14 @@ Pass `project: global` to mean global deliberately.
 
 ## The tool surface
 
-Seamless registers **30 tools**. They are documented in groups:
+Seamless registers **31 tools**. They are documented in groups:
 
 | Group | Tools |
 |---|---|
 | Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_read`, `memory_delete`, `recall` |
 | Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
-| Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary` |
+| Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
 
 Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.
@@ -3746,6 +3832,17 @@ been doing: memory counts, retrieval statistics, events by kind. It answers "is
 this thing working, and on how much?" - the same question the console's Overview
 answers, for an agent that cannot open a browser.
 
+## favorite_set
+
+`favorite_set` stars or unstars an item - a memory, note, project, plan, task,
+session, or trial. A starred memory is pinned into every session briefing as a
+`FAVORITE:` line and gets a mild recall rank boost; in the console, favorites
+carry a star, sort first, and can be filtered. For memories and notes the flag
+lives in the file's frontmatter (`favorite: true`), so it survives an index
+rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
+a task-only plan (no note) cannot be starred. Starring never bumps an item's
+updated time - it is metadata, not authorship.
+
 ## lab_open {#lab_open}
 
 Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.
@@ -3821,6 +3918,17 @@ Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; 
 Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.
 
 Takes no parameters.
+
+## favorite_set {#favorite_set}
+
+Star or unstar an item. Favorites sort first in the console, are pinned into session briefings (memories), and get a mild recall rank boost. For memories and notes the flag is stored in the file's frontmatter; starring never bumps an item's updated time.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `kind` | string | **yes** | what kind of item to star. One of: `memory`, `note`, `project`, `plan`, `task`, `session`, `trial`. |
+| `id` | string | **yes** | the item's identifier: memory name, note id (or slug), project slug, plan slug, task id, session id (or name), trial id |
+| `favorite` | boolean | **yes** | true to star, false to unstar |
+| `project` | string | no | project scope for memory-name/note-slug resolution; defaults to the bound session's project |
 
 ---
 
@@ -4117,6 +4225,22 @@ endpoint.
 `--status` is `active`, `completed`, or `expired`; anything else is a parse
 error. The console rejects an unrecognized `?status=` too, so a direct URL cannot
 silently list everything either.
+
+### seam fav {#seam_fav}
+
+```bash
+seam fav <kind> <id> [--off] [--project SLUG]
+```
+
+Stars (or with `--off`, unstars) an item via `favorite_set`. `kind` is one of
+`memory`, `note`, `project`, `plan`, `task`, `session`, or `trial`; `id` is the
+kind's natural identifier - a memory name, note id or slug, project slug, plan
+slug, task id, session id or name, or trial id. `--project` scopes memory-name
+and note-slug resolution when the ambient scope is not the right one.
+
+Favorites sort first in the console, can be filtered there, and starred
+memories are pinned into every session briefing and rank-boosted in recall. A
+plan's star lives on its primary note, so a task-only plan cannot be starred.
 
 ### seam usage {#seam_usage}
 
@@ -5514,7 +5638,7 @@ project alone:
 | Memories | The project's memories with a lineage cell - provenance session, or a supersession pointer - plus the memories it *inherits* from a parent that a strict per-slug count excludes. |
 | Notes | The project's notes. |
 | Interactions | The project-scoped slice of the feed. |
-| Relations | The project's plan → step → session → memory tree. |
+| Context | The effective SessionStart flow into and out of the project: global and parent memory pools, sibling-family channels, and split lineage. |
 
 A retired project still renders, with its banner - kept for provenance. Only an
 unknown slug is a 404.
@@ -5629,14 +5753,21 @@ side by side (the actual pane tinted by outcome), the structured metrics
 session, each linked. Trial hits also surface in [search](#search) and the
 command palette, and a session's page lists the trials it recorded.
 
-## Relations
+## Context
 
-`/console/relations`
+`/console/context`
 
-The dependency spine a flat list cannot show: a plan expands into its steps, each
-step's claiming session, and the memories that session left behind. `?scope=all`
-renders every project's tree on one page; `?scope=project&project=<slug>` narrows
-to one.
+The briefing topology that the plans board does not show: which knowledge pools
+are eligible at SessionStart, which configured edges are currently enabled by
+the effective briefing settings, and where project splits moved durable memory.
+It covers global memory, one-way parent-memory inheritance, bidirectional sibling
+families (findings and the opt-in memory channel), unregistered-scope warnings,
+and retired-project split lineage reconstructed from the memory-move event log.
+
+`?scope=all` renders every known project scope, with global memory shown as the
+shared source pool; `?scope=project&project=<slug>` focuses the same topology on
+one project. The legacy `/console/relations` route permanently redirects here
+and preserves its query string.
 
 Reachable from the Projects board.
 
@@ -5784,6 +5915,7 @@ Field by field:
 | `superseded_by` | **system only** | ULID of the replacement, or `null`. |
 | `source_session` | system | Provenance - an ambient session name such as `cc/019f7291-7ccbc0d8f16e51a4`, or the ULID of a bound explicit session. Consumers resolve both; treat names as opaque. |
 | `model` | system | The model that produced the content, verbatim as the provider names it (`claude-fable-5`, `gpt-5.5`). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown. |
+| `favorite` | author | `true` when starred (console, `seam fav`, or `favorite_set`). A starred memory is pinned into every briefing and boosted in recall. Omitted when false; hand-editing it works - the watcher reindexes. Starring never bumps `updated`. |
 | `tags` | author | Flow-style list. Omitted when empty. Also the `plan:<slug>` composition key. |
 
 Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
@@ -5838,10 +5970,12 @@ body markdown
 ```
 
 `id`, `title`, `created`, and `updated` are always emitted. `slug`,
-`description`, `project`, `source_url`, `model`, and `tags` are omitted when
-empty. `source_url` is set when the note came from `capture_url`; `model` is
-the producing model, stamped exactly as for memories. Empty `project` means
-`notes/_global/`. Unknown keys round-trip losslessly, same as memories.
+`description`, `project`, `source_url`, `model`, `favorite`, and `tags` are
+omitted when empty (or, for `favorite`, false). `source_url` is set when the
+note came from `capture_url`; `model` is the producing model, stamped exactly
+as for memories; `favorite` marks a starred note, exactly as for memories.
+Empty `project` means `notes/_global/`. Unknown keys round-trip losslessly,
+same as memories.
 
 ## What lives only in SQLite
 
@@ -6102,6 +6236,30 @@ things that stopped being true; archive is for things that stopped mattering.
 URL: https://thereisnospoon.org/docs/internals/
 
 
+These pages are for people changing Seamless rather than running it. They
+document the things a contributor cannot recover from the code alone: why the
+packages layer the way they do, what the build gate is actually defending, and
+the invariants that look like implementation details until a refactor quietly
+breaks one.
+
+[Architecture](/internals/architecture/) is the map - what each package owns,
+the dependency direction between them, and two data-flow traces followed
+through the real code: a memory write from MCP call to markdown file, and a
+briefing assembly from session start to injected text. It also lists the
+things Seamless deliberately does not have, which explains more design
+decisions than what it does.
+
+[Contributing](/internals/contributing/) is the workflow page: the make
+targets, what `make check` gates and in what order, the conventions that are
+enforced rather than suggested, the forbidden APIs, and the three places a new
+MCP tool must be wired before the build goes green.
+
+[Domain invariants](/internals/invariants/) is the page to read before
+touching lifecycle, scope, or search code. Each entry is a rule that
+reasonable-looking code has broken or would break - supersession ordering,
+scope resolution, FTS and LIKE escaping, LLM degradation - stated with the
+failure it prevents, so you can tell when a change is about to relearn one the
+hard way.
 
 ---
 

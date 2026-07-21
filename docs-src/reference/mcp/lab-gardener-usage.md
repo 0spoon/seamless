@@ -1,6 +1,6 @@
 ---
 title: Lab, gardener & usage
-description: Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.
+description: Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.
 generate: mcp-tools
 tools:
   - lab_open
@@ -11,6 +11,7 @@ tools:
   - gardener_split
   - gardener_apply
   - usage_summary
+  - favorite_set
 ---
 
 ## The research lab
@@ -70,3 +71,14 @@ than as a pile of individual moves.
 been doing: memory counts, retrieval statistics, events by kind. It answers "is
 this thing working, and on how much?" - the same question the console's Overview
 answers, for an agent that cannot open a browser.
+
+## favorite_set
+
+`favorite_set` stars or unstars an item - a memory, note, project, plan, task,
+session, or trial. A starred memory is pinned into every session briefing as a
+`FAVORITE:` line and gets a mild recall rank boost; in the console, favorites
+carry a star, sort first, and can be filtered. For memories and notes the flag
+lives in the file's frontmatter (`favorite: true`), so it survives an index
+rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
+a task-only plan (no note) cannot be starred. Starring never bumps an item's
+updated time - it is metadata, not authorship.

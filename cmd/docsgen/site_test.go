@@ -203,3 +203,40 @@ func TestLoadSiteIgnoresPartials(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, site.Pages, 1)
 }
+
+// TestSectionIndexesKeepCardGrid: a section landing must always carry the card
+// grid of its children. A generated index renders the grid as its whole body;
+// an authored index goes through the "page" template, which appends the same
+// grid via IsSectionIndex -- without that guard, authoring orientation prose
+// would silently cost the section its navigation. Ordinary pages must never
+// grow the grid.
+func TestSectionIndexesKeepCardGrid(t *testing.T) {
+	repoRoot(t)
+
+	files := renderRepoSite(t)
+	site, err := loadSite("docs-src")
+	require.NoError(t, err)
+
+	for _, sec := range site.Sections {
+		if sec.Slug == "" {
+			continue
+		}
+		require.NotNil(t, sec.Index, "%s has a landing page", sec.Slug)
+		require.True(t, sec.Index.IsSectionIndex())
+		body, ok := files[sec.Index.Out]
+		require.True(t, ok, "%s landing was rendered", sec.Slug)
+		require.Contains(t, body, `class="card-grid"`, "%s landing keeps the card grid", sec.Slug)
+		for _, child := range sec.Pages {
+			require.Contains(t, body, `href="`+sec.Index.DocsRoot+child.URL+`"`,
+				"%s landing links its child %s", sec.Slug, child.URL)
+		}
+	}
+
+	for _, p := range site.Pages {
+		if p.IsSectionIndex() || p.IsHome() {
+			continue
+		}
+		require.NotContains(t, files[p.Out], `class="card-grid"`,
+			"%s is not a section landing and must not render the grid", p.URL)
+	}
+}

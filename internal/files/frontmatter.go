@@ -75,6 +75,10 @@ func stringOrNull(s string) *yaml.Node {
 	return scalarNode(s)
 }
 
+func boolNode(v bool) *yaml.Node {
+	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: fmt.Sprintf("%t", v)}
+}
+
 func flowSeqNode(items []string) *yaml.Node {
 	n := &yaml.Node{Kind: yaml.SequenceNode, Style: yaml.FlowStyle}
 	for _, it := range items {
@@ -146,7 +150,7 @@ var memoryKnownKeys = map[string]bool{
 	"id": true, "kind": true, "name": true, "description": true,
 	"project": true, "created": true, "updated": true, "valid_from": true,
 	"invalid_at": true, "superseded_by": true, "source_session": true,
-	"model": true, "tags": true,
+	"model": true, "favorite": true, "tags": true,
 }
 
 // memoryFrontmatter mirrors a memory file's YAML frontmatter. Timestamps are
@@ -166,6 +170,7 @@ type memoryFrontmatter struct {
 	SupersededBy  string         `yaml:"superseded_by"`
 	SourceSession string         `yaml:"source_session"`
 	Model         string         `yaml:"model"`
+	Favorite      bool           `yaml:"favorite"`
 	Tags          []string       `yaml:"tags"`
 	Extra         map[string]any `yaml:"-"`
 }
@@ -197,6 +202,9 @@ func (fm *memoryFrontmatter) MarshalYAML() (any, error) {
 	b.put("superseded_by", stringOrNull(fm.SupersededBy))
 	b.putIf("source_session", fm.SourceSession)
 	b.putIf("model", fm.Model)
+	if fm.Favorite {
+		b.put("favorite", boolNode(true))
+	}
 	if len(fm.Tags) > 0 {
 		b.put("tags", flowSeqNode(fm.Tags))
 	}
@@ -213,7 +221,7 @@ func (fm *memoryFrontmatter) MarshalYAML() (any, error) {
 var noteKnownKeys = map[string]bool{
 	"id": true, "title": true, "slug": true, "description": true,
 	"project": true, "created": true, "updated": true, "source_url": true,
-	"model": true, "tags": true,
+	"model": true, "favorite": true, "tags": true,
 }
 
 // noteFrontmatter mirrors a note file's YAML frontmatter.
@@ -227,6 +235,7 @@ type noteFrontmatter struct {
 	Updated     string         `yaml:"updated"`
 	SourceURL   string         `yaml:"source_url"`
 	Model       string         `yaml:"model"`
+	Favorite    bool           `yaml:"favorite"`
 	Tags        []string       `yaml:"tags"`
 	Extra       map[string]any `yaml:"-"`
 }
@@ -255,6 +264,9 @@ func (fm *noteFrontmatter) MarshalYAML() (any, error) {
 	b.put("updated", scalarNode(fm.Updated))
 	b.putIf("source_url", fm.SourceURL)
 	b.putIf("model", fm.Model)
+	if fm.Favorite {
+		b.put("favorite", boolNode(true))
+	}
 	if len(fm.Tags) > 0 {
 		b.put("tags", flowSeqNode(fm.Tags))
 	}

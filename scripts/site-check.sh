@@ -10,7 +10,7 @@
 # run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
-# Eight assertions, each one a thing a machine can actually verify:
+# Nine assertions, each one a thing a machine can actually verify:
 #
 #   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
 #   2. every surface that teaches installing teaches the SAME two commands
@@ -20,6 +20,7 @@
 #   6. the head is complete and the canonical matches docs/CNAME
 #   7. exactly one JSON-LD block, braces balanced, with the required types
 #   8. the JSON-LD FAQPage mirrors the visible #faq section
+#   9. every scene outcome in scenes.js appears verbatim in the SSR fallbacks
 #
 # Deliberately not a prose linter: claims like "one binary, no ceremony" are the
 # author's problem. Commands are checkable, so these are checked.
@@ -196,6 +197,36 @@ else
 	done <<EOF
 $(grep -oE '<summary>[^<]*</summary>' "$PAGE" | sed 's/<summary>//; s|</summary>||')
 EOF
+fi
+
+# 9. The terminal scenes are rendered by JS, so the page carries a static
+#    .scenes-fallback summary per scene -- that summary is all a crawler ever
+#    reads of them. Its load-bearing lines are the pane outcomes, and they must
+#    stay verbatim copies of scenes.js or the page quietly describes sessions
+#    that never happened. Same entity caveat as check 8: the JS side is literal
+#    UTF-8, so the HTML side is normalized over the entities an outcome could
+#    plausibly be rewritten with before comparing.
+SCENES=docs/static/scenes.js
+if grep '"outcome"' "$SCENES" | grep -q '\\"'; then
+	err "a scenes.js outcome contains an escaped double quote, which this gate cannot parse; rephrase without quotes"
+else
+	outcomes=$(grep -oE '"outcome": "[^"]*"' "$SCENES" | sed 's/^"outcome": "//; s/"$//')
+	if [ -z "$outcomes" ]; then
+		err "no outcome strings found in $SCENES (did its formatting change?)"
+	else
+		page_norm=$(sed 's/&mdash;/—/g; s/&rarr;/→/g; s/&hellip;/…/g; s/&rsquo;/’/g; s/&amp;/\&/g' "$PAGE")
+		while IFS= read -r o; do
+			case "$o" in
+			*'<'* | *'>'*) err "scenes.js outcome [$o] contains < or >, which this gate cannot compare across HTML escaping; rephrase" ;;
+			*)
+				printf '%s\n' "$page_norm" | grep -qF "$o" ||
+					err "scenes.js outcome is missing from the $PAGE scene fallbacks: [$o]"
+				;;
+			esac
+		done <<EOF
+$outcomes
+EOF
+	fi
 fi
 
 [ "$fail" -eq 0 ] || exit 1

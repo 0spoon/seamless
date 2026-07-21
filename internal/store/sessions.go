@@ -12,7 +12,7 @@ import (
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
-	external_client, cwd, source, model, ambient, metadata, created_at, updated_at,
+	external_client, cwd, source, model, ambient, favorite, metadata, created_at, updated_at,
 	input_tokens, cached_input_tokens, cache_creation_tokens, output_tokens, total_tokens`
 
 // ErrSessionNameExists is returned by CreateSession when the name is already
@@ -717,7 +717,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 	)
 	if err := rows.Scan(
 		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
-		&s.ExternalClient, &s.CWD, &s.Source, &s.Model, &ambient, &meta, &created, &updated,
+		&s.ExternalClient, &s.CWD, &s.Source, &s.Model, &ambient, &s.Favorite, &meta, &created, &updated,
 		&s.Tokens.Input, &s.Tokens.Cached, &s.Tokens.CacheCreation, &s.Tokens.Output, &s.Tokens.Total,
 	); err != nil {
 		return core.Session{}, err

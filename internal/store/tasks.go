@@ -16,7 +16,7 @@ import (
 
 // taskCols is the SELECT list for the tasks table, matching scanTask.
 const taskCols = `id, project_slug, title, body, status, created_by,
-	plan_slug, claimed_by, lease_expires_at, created_at, updated_at, closed_at`
+	plan_slug, claimed_by, lease_expires_at, favorite, created_at, updated_at, closed_at`
 
 // ErrTaskNotFound is returned when a task id does not exist (e.g. a dangling
 // depends_on reference).

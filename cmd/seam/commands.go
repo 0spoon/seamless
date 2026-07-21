@@ -58,6 +58,7 @@ func commands() []cmd {
 
 		statusCmd,
 		sessionsCmd,
+		favCmd,
 		usageCmd,
 		doctorCmd,
 		versionCmd,

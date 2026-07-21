@@ -117,3 +117,19 @@
 </nav>
 {{end -}}
 {{end}}
+
+{{/* cardgrid is a section landing's navigation: one card per child page. The
+     "section" template is nothing but this grid; the "page" template appends
+     it when the page is an authored section index, so writing orientation
+     prose never costs a section its navigation. */}}
+{{define "cardgrid" -}}
+<div class="card-grid">
+  {{$docsRoot := .DocsRoot}}
+  {{range .Section.Pages}}
+  <a class="doc-card" href="{{$docsRoot}}{{.URL}}">
+    <h2>{{.Title}}</h2>
+    {{with .Description}}<p>{{.}}</p>{{end}}
+  </a>
+  {{end}}
+</div>
+{{end}}

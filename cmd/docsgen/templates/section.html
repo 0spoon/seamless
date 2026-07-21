@@ -5,13 +5,5 @@
   {{with .Description}}<p class="lede">{{.}}</p>{{end}}
 </article>
 
-<div class="card-grid">
-  {{$docsRoot := .DocsRoot}}
-  {{range .Section.Pages}}
-  <a class="doc-card" href="{{$docsRoot}}{{.URL}}">
-    <h2>{{.Title}}</h2>
-    {{with .Description}}<p>{{.}}</p>{{end}}
-  </a>
-  {{end}}
-</div>
+{{template "cardgrid" .}}
 {{end}}

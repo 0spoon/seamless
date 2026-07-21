@@ -65,6 +65,7 @@
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
       <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
+      <a class="{{if eq .Sort "favorites"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=favorites&amp;q={{.Query}}&amp;w={{.Window}}">Starred</a>
     </div>
   </div>
   <div class="lib-control ops-window-control">
@@ -73,7 +74,7 @@
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/projects?group={{$group}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;w={{.Key}}">{{.Label}}</a>{{end}}
     </div>
   </div>
-  <a class="btn small ops-related" href="/console/relations" title="Plans, steps, claiming sessions, and the memories they left behind">{{icon "git-fork"}}<span>Relations</span></a>
+  <a class="btn small ops-related" href="/console/context" title="Global, parent, family, and split-lineage context flow">{{icon "share-2"}}<span>Context</span></a>
 </section>
 
 <section class="ops-stage projects-stage" aria-label="Project map">
@@ -122,7 +123,7 @@
     <span class="project-card-tile tile {{.TileClass}}">{{icon .TileIcon}}</span>
     <div class="project-card-copy">
       <div class="project-card-titleline">
-        {{if .Global}}<span class="project-card-name">Global context</span>{{else}}<a class="project-card-name" href="/console/projects/{{.Slug}}">{{.Name}}</a>{{if ne .Name .Slug}}<span class="project-card-slug">{{.Slug}}</span>{{end}}{{end}}
+        {{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{if .Global}}<span class="project-card-name">Global context</span>{{else}}<a class="project-card-name" href="/console/projects/{{.Slug}}">{{.Name}}</a>{{if ne .Name .Slug}}<span class="project-card-slug">{{.Slug}}</span>{{end}}{{end}}
       </div>
       <div class="project-card-badges">
         {{if .Global}}<span class="project-role global">shared root</span>{{else if .Retired}}<span class="project-role retired">retired</span>{{else if .Unregistered}}<span class="project-role warn">unregistered</span>{{else if .Child}}<span class="project-role child">child scope</span>{{else if .Parent}}<span class="project-role parent">shared parent</span>{{else}}<span class="project-role">standalone</span>{{end}}

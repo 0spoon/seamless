@@ -44,6 +44,13 @@ func argInt(r mcp.CallToolRequest, key string, def int) int {
 	return r.GetInt(key, def)
 }
 
+// argBool reads a boolean argument, or def when absent/invalid. The validator
+// has already coerced a declared boolean property from a bool or its string
+// forms ("true"/"false"), so this only ever sees a real bool.
+func argBool(r mcp.CallToolRequest, key string, def bool) bool {
+	return r.GetBool(key, def)
+}
+
 // argStrings reads a string-array argument, nil when absent.
 //
 // validateMiddleware is the only supported way in. It coerces every declared

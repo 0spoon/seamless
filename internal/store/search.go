@@ -203,7 +203,12 @@ type PlanSearchRow struct {
 	Slug    string
 	Project string
 	Title   string
-	Updated time.Time
+	// Favorite is true when any of the plan's tagged notes is favorited. The
+	// authoritative flag lives on the plan's primary note, but this query cannot
+	// cheaply identify the primary; the two only disagree after deliberate
+	// hand-editing of a secondary note's frontmatter.
+	Favorite bool
+	Updated  time.Time
 }
 
 // SearchPlans returns plans whose slug or narrative-note title contains q,
@@ -233,7 +238,7 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 	// Notes: a plan:<slug> tag, matched on the note's title or on the tag's own
 	// slug suffix. json_each is the tag-array reader NotesByTagPrefix uses.
 	noteRows, err := db.QueryContext(ctx, `
-		SELECT je.value, n.project, n.title, n.updated_at
+		SELECT je.value, n.project, n.title, n.favorite, n.updated_at
 		FROM notes_index n, json_each(n.tags) je
 		WHERE je.value LIKE 'plan:%' ESCAPE '\'
 		  AND (n.title LIKE ? ESCAPE '\' OR je.value LIKE ? ESCAPE '\')
@@ -244,20 +249,21 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 	}
 	byKey := make(map[string]*PlanSearchRow)
 	var order []string
-	upsert := func(project, slug, title string, updated time.Time) {
+	upsert := func(project, slug, title string, favorite bool, updated time.Time) {
 		if slug == "" {
 			return
 		}
 		key := project + "\x00" + slug
 		row, ok := byKey[key]
 		if !ok {
-			byKey[key] = &PlanSearchRow{Slug: slug, Project: project, Title: title, Updated: updated}
+			byKey[key] = &PlanSearchRow{Slug: slug, Project: project, Title: title, Favorite: favorite, Updated: updated}
 			order = append(order, key)
 			return
 		}
 		if updated.After(row.Updated) {
 			row.Updated = updated
 		}
+		row.Favorite = row.Favorite || favorite
 		// A note title is a real label; the task path can only offer the slug.
 		if row.Title == row.Slug && title != "" {
 			row.Title = title
@@ -267,7 +273,8 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 		defer func() { _ = noteRows.Close() }()
 		for noteRows.Next() {
 			var tag, project, title, updated string
-			if err := noteRows.Scan(&tag, &project, &title, &updated); err != nil {
+			var favorite bool
+			if err := noteRows.Scan(&tag, &project, &title, &favorite, &updated); err != nil {
 				return fmt.Errorf("scan: %w", err)
 			}
 			u, err := core.ParseTime(updated)
@@ -278,7 +285,7 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 			if title == "" {
 				title = slug
 			}
-			upsert(project, slug, title, u)
+			upsert(project, slug, title, favorite, u)
 		}
 		return noteRows.Err()
 	}()
@@ -305,7 +312,7 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 			if err != nil {
 				return fmt.Errorf("updated_at: %w", err)
 			}
-			upsert(project, slug, slug, u)
+			upsert(project, slug, slug, false, u)
 		}
 		return taskRows.Err()
 	}()

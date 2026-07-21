@@ -28,6 +28,7 @@
     <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
+      <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
   </div>
   <div class="lib-control-note"><strong>Browse structure</strong><span>Scope &rarr; note</span></div>
@@ -44,7 +45,7 @@
         <div class="rail-items">
           {{range .Notes}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/notes/{{.ID}}{{$qs}}" data-title="{{.Title}}" data-context="{{if .Project}}{{.Project}}{{else}}Global inbox{{end}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             {{if .Description}}<span class="ri-desc">{{.Description}}</span>{{end}}
             <span class="ri-meta"><span title="{{ts .Updated}}">updated {{ago .Updated}}</span>{{with agentPill "" .Model}} {{.}}{{end}}</span>
           </a>
@@ -80,7 +81,13 @@
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}inbox</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
     </div>
-    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}</h2>
+    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}
+      <form class="star-form" method="post" action="/console/favorites/note/{{.ID}}">
+        <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+        <input type="hidden" name="next" value="/console/notes/{{.ID}}">
+        <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this note">{{icon "star"}}</button>
+      </form>
+    </h2>
     {{if .Description}}<p class="reader-desc">{{.Description}}</p>{{end}}
     <div class="reader-facts">
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>

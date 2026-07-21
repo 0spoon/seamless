@@ -13,7 +13,7 @@
 
 ## Concepts
 
-- [Concepts](https://thereisnospoon.org/docs/concepts/): How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.
+- [Concepts](https://thereisnospoon.org/docs/concepts/): The mental model behind Seamless - memory with a lifecycle, ambient sessions, one search entry point, a dependency-aware task queue, and a gardener that only proposes.
 - [How Seamless works](https://thereisnospoon.org/docs/concepts/how-it-works/): One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.
 - [Memory & notes](https://thereisnospoon.org/docs/concepts/memory/): What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.
 - [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/): How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.
@@ -24,7 +24,7 @@
 
 ## Guides
 
-- [Guides](https://thereisnospoon.org/docs/guides/): Task-shaped walkthroughs - wiring up an agent, writing memories worth recalling, running a fleet, and fixing what broke.
+- [Guides](https://thereisnospoon.org/docs/guides/): Task-shaped walkthroughs - wiring an agent into the loop, writing memories that get recalled, coordinating a fleet, capturing plans, running trials, and fixing what broke.
 - [Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/): Wire another agent into the loop - the MCP handshake, stdio bridge, session binding, scope discipline, and seam CLI fallback.
 - [Write memories that get recalled](https://thereisnospoon.org/docs/guides/write-good-memories/): The description is the retrieval surface, not a label - how to write one, how to pick a kind, and the four habits that fill a store with noise.
 - [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/): Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.
@@ -35,12 +35,12 @@
 
 ## Reference
 
-- [Reference](https://thereisnospoon.org/docs/reference/): The complete surface - MCP tools, CLIs, configuration keys, hooks, and file formats.
+- [Reference](https://thereisnospoon.org/docs/reference/): The complete Seamless surface - every MCP tool, both CLIs, every configuration key, every hook, the console, and the on-disk file formats.
 - [MCP API overview](https://thereisnospoon.org/docs/reference/mcp/): The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.
 - [Sessions, memory & recall](https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/): The eight tools an agent uses most - open a session, write and read memory, and search the store.
 - [Notes, projects & capture](https://thereisnospoon.org/docs/reference/mcp/notes-projects-capture/): Work artifacts, project scope, and SSRF-safe URL capture - the eight tools around the edges of memory.
 - [Tasks](https://thereisnospoon.org/docs/reference/mcp/tasks/): The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.
-- [Lab, gardener & usage](https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/): Research trials, the propose-only gardener, and the usage summary - the eight tools for keeping the store honest.
+- [Lab, gardener & usage](https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/): Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.
 - [seam CLI](https://thereisnospoon.org/docs/reference/cli-seam/): Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.
 - [seamlessd CLI](https://thereisnospoon.org/docs/reference/cli-seamlessd/): The daemon and operator CLI - serve, doctor, import, install-hooks, map-repo, family, console-open, start/stop/restart/status, and version.
 - [Configuration](https://thereisnospoon.org/docs/reference/configuration/): Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.
@@ -53,7 +53,7 @@
 
 ## Internals
 
-- [Internals](https://thereisnospoon.org/docs/internals/): For contributors - the package layering, the check gate, and the invariants the code holds.
+- [Internals](https://thereisnospoon.org/docs/internals/): For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.
 - [Architecture](https://thereisnospoon.org/docs/internals/architecture/): The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
 - [Contributing](https://thereisnospoon.org/docs/internals/contributing/): The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.
 - [Domain invariants](https://thereisnospoon.org/docs/internals/invariants/): The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.

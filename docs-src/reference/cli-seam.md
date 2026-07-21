@@ -292,6 +292,22 @@ endpoint.
 error. The console rejects an unrecognized `?status=` too, so a direct URL cannot
 silently list everything either.
 
+### seam fav {#seam_fav}
+
+```bash
+seam fav <kind> <id> [--off] [--project SLUG]
+```
+
+Stars (or with `--off`, unstars) an item via `favorite_set`. `kind` is one of
+`memory`, `note`, `project`, `plan`, `task`, `session`, or `trial`; `id` is the
+kind's natural identifier - a memory name, note id or slug, project slug, plan
+slug, task id, session id or name, or trial id. `--project` scopes memory-name
+and note-slug resolution when the ambient scope is not the right one.
+
+Favorites sort first in the console, can be filtered there, and starred
+memories are pinned into every session briefing and rank-boosted in recall. A
+plan's star lives on its primary note, so a task-only plan cannot be starred.
+
 ### seam usage {#seam_usage}
 
 ```bash

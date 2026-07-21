@@ -29,6 +29,7 @@
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "reach"}}on{{end}}" href="{{$base}}?sort=reach&amp;q={{.Query}}">Reach</a>
+      <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
   </div>
   <div class="lib-control-note"><strong>Browse structure</strong><span>Project &rarr; kind &rarr; memory</span></div>
@@ -49,7 +50,7 @@
           <div class="rail-items">
           {{range .Memories}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/memories/{{.ID}}{{$qs}}" data-title="{{.Name}}" data-context="{{if .Project}}{{.Project}}{{else}}Shared globally{{end}} / {{.Kind}}" data-memory-kind="{{.Kind}}"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title mono">{{.Name}}</span>
+            <span class="ri-title mono">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Name}}</span>
             {{if .Description}}<span class="ri-desc">{{.Description}}</span>{{end}}
             <span class="ri-meta"><span title="{{ts .Updated}}">updated {{ago .Updated}}</span>{{if .Injects}} &middot; surfaced {{.Injects}}&times;{{else}} &middot; never surfaced{{end}}{{with agentPill .Harness .Model}} {{.}}{{end}}</span>
           </a>
@@ -108,7 +109,13 @@
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "share-2"}}Shared globally</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
     </div>
-    <h2 class="reader-title mono-title">{{.Name}}{{copyBtn .Name}}</h2>
+    <h2 class="reader-title mono-title">{{.Name}}{{copyBtn .Name}}
+      <form class="star-form" method="post" action="/console/favorites/memory/{{.ID}}">
+        <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+        <input type="hidden" name="next" value="/console/memories/{{.ID}}">
+        <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this memory">{{icon "star"}}</button>
+      </form>
+    </h2>
     {{if .Description}}<p class="reader-desc">{{.Description}}</p>{{end}}
     <div class="reader-facts">
       <span class="fact">injected {{.Injects}}&times;{{if .LastInjected}} &middot; last <span title="{{ts .LastInjected}}">{{ago .LastInjected}}</span>{{end}}</span>

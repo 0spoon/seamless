@@ -5,4 +5,7 @@
   {{with .Description}}<p class="lede">{{.}}</p>{{end}}
   {{.Body}}
 </article>
+
+{{if .IsSectionIndex}}{{template "cardgrid" .}}
+{{end -}}
 {{end}}

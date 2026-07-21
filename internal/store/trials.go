@@ -15,7 +15,7 @@ import (
 
 // trialCols is the SELECT list for the trials table, matching scanTrial.
 const trialCols = `id, lab, title, changes, expected, actual, outcome, metrics,
-	session_id, project_slug, created_at`
+	session_id, project_slug, favorite, created_at`
 
 // TrialFilter parameterizes QueryTrials. Empty string fields are not filtered;
 // MetricsEquals matches trials whose metrics contain each given key with an
@@ -224,7 +224,7 @@ func scanTrial(rows *sql.Rows) (core.Trial, error) {
 		created string
 	)
 	if err := rows.Scan(&tr.ID, &tr.Lab, &tr.Title, &tr.Changes, &tr.Expected,
-		&tr.Actual, &outcome, &metrics, &tr.SessionID, &tr.ProjectSlug, &created); err != nil {
+		&tr.Actual, &outcome, &metrics, &tr.SessionID, &tr.ProjectSlug, &tr.Favorite, &created); err != nil {
 		return core.Trial{}, err
 	}
 	tr.Outcome = core.TrialOutcome(outcome)

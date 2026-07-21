@@ -24,7 +24,7 @@ preserved read-only as a fallback archive.
 cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks, map-repo,
                    family, console-open
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
-cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see docs/README-site.md)
+cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see SITE.md)
 docs-src/          docs site markdown + nav.yaml (source; docs/docs/ is output)
 internal/core/     domain types: Project, Memory, Session, Task, Trial, Event
 internal/config/   single YAML + env config (static key, budgets, briefing tunables, llm)
@@ -157,7 +157,8 @@ atomic lease-based claiming), research lab (`lab_open`, `trial_record`,
 `trial_query`), gardener (`gardener_proposals`, `gardener_apply`, plus the
 natural-language `gardener_request` and the project-split planner
 `gardener_split` -- both LLM-backed, and both only ever propose), utility
-(`capture_url`, `usage_summary`). Project and session are inherited from the
+(`capture_url`, `usage_summary`, `favorite_set` -- star/unstar any entity;
+starred memories pin into briefings and boost recall). Project and session are inherited from the
 session binding; agents in mapped repos rarely pass `project` explicitly.
 
 ## Plans as composition

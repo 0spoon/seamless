@@ -587,10 +587,45 @@ body::before {
   transform: scaleX(0); transform-origin: left center;
 }
 
-/* stage: exactly one scene card visible; JS toggles .on */
+/* stage: exactly one scene card visible; JS toggles .on. Before the player
+   runs (crawlers, JS off) every card shows its server-rendered .scenes-fallback
+   summary instead. The mount signal is the scene nav: the player always fills
+   it, so a populated nav collapses the stage to the one .on card and hides the
+   fallbacks. No JS hook needed -- the player only ever appends next to the
+   fallback, it never clears the mount. */
 .scenes-stage { position: relative; }
-.scenes-stage .term-scene { display: none; }
-.scenes-stage .term-scene.on { display: block; animation: reel-in .34s var(--ease-out); }
+.scenes-stage .term-scene { display: block; }
+.scenes-stage .term-scene + .term-scene { margin-top: 16px; }
+.scenes-nav:not(:empty) ~ .scenes-stage .term-scene { display: none; margin-top: 0; }
+.scenes-nav:not(:empty) ~ .scenes-stage .term-scene.on { display: block; animation: reel-in .34s var(--ease-out); }
+.scenes-nav:not(:empty) ~ .scenes-stage .scenes-fallback { display: none; }
+
+/* the static summary itself: the scene head plus a without|with outcome pair */
+.scenes-fallback .ts-head { margin-bottom: 0; }
+.sf-outcomes {
+  margin-top: 16px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px;
+}
+.sf-pane {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+.sf-pane dt {
+  display: flex; align-items: center; gap: 8px;
+  font-family: var(--font-mono); font-size: 11.5px; font-weight: 600;
+  letter-spacing: var(--tracking-wide); text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.sf-pane dt::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--border-strong); flex: none;
+}
+.sf-without dt::before { background: var(--pop); }
+.sf-with dt::before { background: var(--ok); }
+.sf-pane dd { font-size: 14px; color: var(--ink-2); line-height: 1.55; }
 @keyframes reel-in {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: none; }
@@ -900,7 +935,7 @@ body::before {
 .console-note { margin-top: 26px; font-size: 13.5px; color: var(--faint); font-family: var(--font-mono); }
 
 /* console screenshots (captured from a seeded demo instance; see
-   docs/README-site.md "Regenerate the console shots") */
+   SITE.md "Regenerate the console shots") */
 .shot-frame {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -927,7 +962,7 @@ body::before {
 .shot-strip {
   margin-top: 44px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18px;
 }
 .shot-card { margin: 0; }

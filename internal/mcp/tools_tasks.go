@@ -345,6 +345,9 @@ func taskJSON(t core.Task) map[string]any {
 	if len(t.DependsOn) > 0 {
 		j["depends_on"] = t.DependsOn
 	}
+	if t.Favorite {
+		j["favorite"] = true
+	}
 	return j
 }
 

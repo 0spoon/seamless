@@ -1,6 +1,6 @@
 {{define "content"}}
 {{with .Data}}
-{{$query := .Query}}{{$scope := .Scope}}{{$window := .Window}}{{$sort := .Sort}}
+{{$query := .Query}}{{$scope := .Scope}}{{$window := .Window}}{{$sort := .Sort}}{{$fav := .Fav}}
 <header class="search-hero">
   <div class="search-hero-copy">
     <div class="search-eyebrow">{{icon "brain"}} Knowledge explorer</div>
@@ -18,6 +18,7 @@
   <input type="hidden" name="scope" value="{{.Scope}}">
   <input type="hidden" name="w" value="{{.Window}}">
   <input type="hidden" name="sort" value="{{.Sort}}">
+  {{if .Fav}}<input type="hidden" name="fav" value="1">{{end}}
   <button class="search-submit" type="submit">Search</button>
 </form>
 
@@ -26,7 +27,7 @@
     <span class="search-control-label">Type</span>
     <div class="search-pills" role="list" aria-label="Result type" data-seam-query>
       {{range .Scopes}}
-      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{.Key}}&amp;w={{$window}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{.Key}}&amp;w={{$window}}&amp;sort={{$sort}}{{if $fav}}&amp;fav=1{{end}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
       {{end}}
     </div>
   </div>
@@ -34,14 +35,21 @@
     <span class="search-control-label">Updated</span>
     <div class="search-pills search-time-pills" role="list" aria-label="Time window" data-seam-query>
       {{range .Windows}}
-      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
+      <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{.Key}}&amp;sort={{$sort}}{{if $fav}}&amp;fav=1{{end}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
       {{end}}
+    </div>
+  </div>
+  <div class="search-control">
+    <span class="search-control-label">Starred</span>
+    <div class="search-pills" role="list" aria-label="Starred only" data-seam-query>
+      <a class="{{if .Fav}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{$window}}&amp;sort={{$sort}}{{if not $fav}}&amp;fav=1{{end}}&amp;q={{$query}}"{{if .Fav}} aria-current="page"{{end}}>{{icon "star"}} Starred only</a>
     </div>
   </div>
   <form class="search-sort" method="get" action="/console/search" data-seam-query data-seam-auto-submit>
     <input type="hidden" name="q" value="{{.Query}}">
     <input type="hidden" name="scope" value="{{.Scope}}">
     <input type="hidden" name="w" value="{{.Window}}">
+    {{if .Fav}}<input type="hidden" name="fav" value="1">{{end}}
     <label for="search-sort">Sort</label>
     <select id="search-sort" name="sort">
       {{range .Sorts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
@@ -64,7 +72,7 @@
       <article class="search-result row-link" data-search-kind="{{.Kind}}" data-href="{{.Href}}"{{if .Peek}} data-peek{{end}}>
         <div class="search-result-body">
           <div class="search-result-titleline">
-            <strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
+            {{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}<strong><a href="{{.Href}}"{{if .Peek}} data-peek{{end}}>{{.Title}}</a></strong>{{copyBtn .Title}}
           </div>
           {{if .SnippetHTML}}<div class="search-result-desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="search-result-desc">{{.Description}}</div>{{end}}
           <div class="search-result-meta">

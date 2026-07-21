@@ -183,6 +183,26 @@ func (s *Service) planStep(ctx context.Context, t core.Task, cache map[string]co
 	return step
 }
 
+// blockingDep reports whether an open step has an unfinished dependency and,
+// when possible, returns its title. The project plan timeline is the execution
+// surface that owns this dependency projection.
+func (s *Service) blockingDep(ctx context.Context, t core.Task, cache map[string]core.Task) (title string, blocked bool) {
+	for _, depID := range t.DependsOn {
+		dep, ok := cache[depID]
+		if !ok {
+			d, err := store.TaskByID(ctx, s.cfg.DB, depID)
+			if err != nil {
+				continue
+			}
+			dep, cache[depID] = d, d
+		}
+		if dep.Status == core.TaskOpen || dep.Status == core.TaskInProgress {
+			return dep.Title, true
+		}
+	}
+	return "", false
+}
+
 // fillSessionsTab loads the Sessions panel: the project's sessions newest first,
 // with each active session's held tasks resolved for an inline claim indicator.
 func (s *Service) fillSessionsTab(ctx context.Context, data *projectWorkspaceData, slug string) error {

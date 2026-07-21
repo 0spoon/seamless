@@ -18,6 +18,7 @@ type taskRow struct {
 	Title    string     `json:"title"`
 	Project  string     `json:"project"`
 	Status   string     `json:"status"`
+	Favorite bool       `json:"favorite,omitempty"`
 	Deps     int        `json:"deps"`
 	Created  time.Time  `json:"created"`
 	Closed   *time.Time `json:"closed,omitempty"`
@@ -80,13 +81,22 @@ func (s *Service) tasksPage(ctx context.Context) (tasksData, error) {
 		closed = closed[:closedLimit]
 	}
 
-	return tasksData{
+	data := tasksData{
 		Ready:      taskRows(ready),
 		InProgress: taskRows(inProgress),
 		Blocked:    blockedRows(blocked),
 		Closed:     taskRows(closed),
 		ClosedMore: closedMore,
-	}, nil
+	}
+	// Starred tasks float to the top of their status bucket (stable, so each
+	// bucket's own order holds within the partitions). A no-op until something
+	// is starred -- the buckets have no user-selectable sort to interact with.
+	for _, bucket := range [][]taskRow{data.Ready, data.InProgress, data.Blocked, data.Closed} {
+		sort.SliceStable(bucket, func(i, j int) bool {
+			return bucket[i].Favorite && !bucket[j].Favorite
+		})
+	}
+	return data, nil
 }
 
 func (s *Service) tasks(w http.ResponseWriter, r *http.Request) {
@@ -184,7 +194,7 @@ func taskRows(tasks []core.Task) []taskRow {
 	for _, t := range tasks {
 		out = append(out, taskRow{
 			ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
-			Deps: len(t.DependsOn), Created: t.CreatedAt, Closed: t.ClosedAt,
+			Favorite: t.Favorite, Deps: len(t.DependsOn), Created: t.CreatedAt, Closed: t.ClosedAt,
 		})
 	}
 	return out
@@ -195,7 +205,8 @@ func blockedRows(blocked []store.BlockedTask) []taskRow {
 	for _, b := range blocked {
 		row := taskRow{
 			ID: b.Task.ID, Title: b.Task.Title, Project: b.Task.ProjectSlug,
-			Status: string(b.Task.Status), Deps: len(b.Task.DependsOn), Created: b.Task.CreatedAt,
+			Status: string(b.Task.Status), Favorite: b.Task.Favorite,
+			Deps: len(b.Task.DependsOn), Created: b.Task.CreatedAt,
 		}
 		for _, bl := range b.Blockers {
 			row.Blockers = append(row.Blockers, blocker{ID: bl.ID, Title: bl.Title, Status: string(bl.Status)})

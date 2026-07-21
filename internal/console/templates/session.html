@@ -10,6 +10,11 @@
     {{if .Session.Ambient}}<span class="kind">ambient</span>{{end}}
     {{agentPill .Harness .Session.Model}}
     <span class="chip-parent">{{icon "git-branch"}}{{if .Session.ProjectSlug}}{{.Session.ProjectSlug}}{{else}}global{{end}}</span>
+    <form class="star-form" method="post" action="/console/favorites/session/{{.Session.ID}}">
+      <input type="hidden" name="favorite" value="{{if .Session.Favorite}}0{{else}}1{{end}}">
+      <input type="hidden" name="next" value="/console/sessions/{{.Session.ID}}">
+      <button class="star{{if .Session.Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Session.Favorite}}true{{else}}false{{end}}" title="{{if .Session.Favorite}}Unstar{{else}}Star{{end}} this session">{{icon "star"}}</button>
+    </form>
   </div>
 </div>
 

@@ -106,6 +106,12 @@ type Page struct {
 // IsHome reports whether the page is the docs root.
 func (p *Page) IsHome() bool { return p.URL == "" }
 
+// IsSectionIndex reports whether the page is a section's landing page. An
+// authored index renders through the "page" template, which appends the same
+// card grid the generated "section" template shows -- authoring orientation
+// prose must not cost the section its navigation.
+func (p *Page) IsSectionIndex() bool { return p.Section != nil && p.Section.Index == p }
+
 // loadSite parses nav.yaml, loads every listed page, cross-validates the
 // manifest against the tree, and computes the derived nav state (URLs, relative
 // roots, section indexes, prev/next). It does not render markdown; renderPages

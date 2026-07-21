@@ -54,5 +54,7 @@ func Catalog() []mcp.Tool {
 
 		captureURLTool(),
 		usageSummaryTool(),
+
+		favoriteSetTool(),
 	}
 }

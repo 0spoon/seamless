@@ -11,6 +11,11 @@
         {{if .Live}}<span class="badge ok"><span class="live-dot"></span>{{.Live}} agent{{if ne .Live 1}}s{{end}} working</span>{{end}}
         {{if .Retired}}<span class="kind warn">retired</span>{{end}}
         {{if .IsRoot}}<span class="chip-parent">{{icon "git-branch"}}root project</span>{{else}}<span class="chip-parent">{{icon "git-branch"}}child of {{.Parent}}</span>{{end}}
+        <form class="star-form" method="post" action="/console/favorites/project/{{.Slug}}">
+          <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+          <input type="hidden" name="next" value="/console/projects/{{.Slug}}">
+          <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this project">{{icon "star"}}</button>
+        </form>
       </div>
       {{if .Description}}<div class="desc">{{.Description}}</div>{{end}}
     </div>
@@ -186,27 +191,11 @@
   </div>
 </div>
 
-<!-- TAB: relations -->
-<div class="tabpanel{{if eq .ActiveTab "relations"}} on{{end}}" data-panel="relations">
-  {{if .Tree}}
-  <div class="tree" style="margin-bottom:18px">
-    {{range .Tree}}{{template "treenode" .}}{{end}}
-  </div>
-  {{else}}<div class="empty">No plans traced in {{.Slug}} yet</div>{{end}}
-  {{if .Banners}}
-  <div style="display:flex;flex-direction:column;gap:10px">
-    {{range .Banners}}<div class="relbanner{{if .Retired}} retired{{end}}">{{icon .Icon}}<div>{{.HTML}}</div></div>{{end}}
-  </div>
-  {{end}}
+<!-- TAB: context -->
+<div class="tabpanel{{if eq .ActiveTab "context"}} on{{end}}" data-panel="context">
+  {{template "context-map" .Context}}
 </div>
 {{end}}
-{{end}}
-
-{{define "treenode"}}
-<div class="tnode">
-  <div class="tline"><span class="ico-lead lead-{{.Lead}}">{{icon .Icon}}</span><span class="nm">{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}{{.Name}}{{end}}</span>{{if .Cap}}<span class="cap{{if .Flag}} tflag{{end}}">{{.Cap}}</span>{{end}}</div>
-  {{if .Kids}}<div class="tkids">{{range .Kids}}{{template "treenode" .}}{{end}}</div>{{end}}
-</div>
 {{end}}
 
 {{define "scripts"}}

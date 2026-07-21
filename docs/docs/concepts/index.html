@@ -5,25 +5,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Concepts - Seamless docs</title>
-<meta name="description" content="How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.">
+<meta name="description" content="The mental model behind Seamless - memory with a lifecycle, ambient sessions, one search entry point, a dependency-aware task queue, and a gardener that only proposes.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/concepts/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/concepts/">
 <meta property="og:title" content="Concepts - Seamless docs">
-<meta property="og:description" content="How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.">
+<meta property="og:description" content="The mental model behind Seamless - memory with a lifecycle, ambient sessions, one search entry point, a dependency-aware task queue, and a gardener that only proposes.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"}]},{"@type":"TechArticle","headline":"Concepts - Seamless docs","description":"How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.","url":"https://thereisnospoon.org/docs/concepts/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"}]},{"@type":"TechArticle","headline":"Concepts - Seamless docs","description":"The mental model behind Seamless - memory with a lifecycle, ambient sessions, one search entry point, a dependency-aware task queue, and a gardener that only proposes.","url":"https://thereisnospoon.org/docs/concepts/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
-<link rel="stylesheet" href="../../static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
 <link rel="stylesheet" href="../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../">
@@ -183,7 +183,35 @@
 </nav>
 
   <h1>Concepts</h1>
-  <p class="lede">How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.</p>
+  <p class="lede">The mental model behind Seamless - memory with a lifecycle, ambient sessions, one search entry point, a dependency-aware task queue, and a gardener that only proposes.</p>
+  <p>Seamless is built around a small number of load-bearing ideas, and everything
+else follows from them. Knowledge lives in markdown files that are the source
+of truth, with SQLite as a rebuildable index over them. Memory has a lifecycle:
+a memory is never silently rewritten - it is superseded, with provenance
+pointing back at what it replaced. And agents do not ask for context; context
+arrives ambiently, injected at session start and on matching prompts, before
+the agent has done anything at all.</p>
+<p>Start with <a href="../concepts/how-it-works/">How Seamless works</a> for the shape of the
+system - one daemon, the surfaces it serves, and the line between files and
+database. Then <a href="../concepts/memory/">Memory &amp; notes</a> explains what actually gets
+stored: the eight memory kinds, when a note is the better vehicle, and how
+supersession keeps a long-lived store honest instead of letting it silt up.</p>
+<p>The middle of the story is how knowledge reaches an agent.
+<a href="../concepts/sessions/">Sessions &amp; briefings</a> covers the ambient side - what a
+session is, how the briefing is packed, and what never gets dropped from it.
+<a href="../concepts/recall/">Recall</a> covers the on-demand side: one search entry point
+that fuses keyword and vector results, and the three distinct paths by which a
+stored fact ends up in front of a model. <a href="../concepts/projects/">Projects &amp; scope</a>
+explains which knowledge is even in play for a given call - the scope
+precedence chain, the fail-closed rule, and project families.</p>
+<p>The last two pages are about work and upkeep rather than knowledge.
+<a href="../concepts/tasks-and-plans/">Tasks &amp; plans</a> describes the dependency-aware
+ready queue, lease-based claiming that lets parallel agents divide work without
+colliding, and plans as compositions of notes and tasks rather than a separate
+primitive. <a href="../concepts/gardener/">The gardener</a> is the background pass that
+finds duplicates, staleness, and drift - and only ever proposes, because
+nothing in Seamless rewrites your knowledge behind your back.</p>
+
 </article>
 
 <div class="card-grid">
@@ -225,6 +253,7 @@
   </a>
   
 </div>
+
 
 
     

@@ -182,6 +182,11 @@ func (s *Seeder) projects() {
 	if err := store.SetProjectParent(s.ctx, s.db, "orbital-web", "orbital", s.DaysAgo(40)); err != nil {
 		log.Fatalf("demoseed: parent: %v", err)
 	}
+	if err := store.SetProjectFamilies(s.ctx, s.db, map[string][]string{
+		"orbital-suite": {"orbital", "orbital-web"},
+	}); err != nil {
+		log.Fatalf("demoseed: family: %v", err)
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -318,8 +323,8 @@ func (s *Seeder) sessionFor(sessions []sessRec, project string, notBefore int) s
 }
 
 // pinnedMemories anchor the "right now" story: memories written minutes ago by
-// the live claiming sessions, so the relations spine shows plan -> step ->
-// session -> memory at full depth.
+// the live claiming sessions keep project workspaces and plan timelines tied to
+// the agents actively executing them.
 var pinnedMemories = map[string]struct {
 	sess string
 	ago  time.Duration

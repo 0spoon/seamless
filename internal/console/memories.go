@@ -18,8 +18,8 @@ import (
 
 // memorySortKeys are the accepted ?sort values on the memories list. name is the
 // default (preserving the by-name order within each kind group); recent orders by
-// last-updated, reach by injection count.
-var memorySortKeys = []string{"name", "recent", "reach"}
+// last-updated, reach by injection count, favorites floats starred rows first.
+var memorySortKeys = []string{"name", "recent", "reach", "favorites"}
 
 // errNoFiles is returned when a write action needs the files subsystem but the
 // console was built without it (should not happen in serve).
@@ -39,6 +39,7 @@ type memoryRow struct {
 	Model        string       `json:"model,omitempty"`   // producing model, verbatim
 	ReplacedBy   string       `json:"replacedBy,omitempty"`
 	ReplacedByID string       `json:"replacedById,omitempty"`
+	Favorite     bool         `json:"favorite,omitempty"`
 	Injects      int          `json:"injects"`
 	Reads        int          `json:"reads"`
 	LastInjected *time.Time   `json:"lastInjected,omitempty"`
@@ -221,6 +222,7 @@ func toMemoryRow(m core.Memory, stat store.RetrievalStat, nameByID map[string]st
 		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, FilePath: m.FilePath, Updated: m.Updated, Status: status,
 		Model:      m.Model, // Harness is filled by the caller (it needs a session resolver)
+		Favorite:   m.Favorite,
 		ReplacedBy: nameByID[m.SupersededBy], ReplacedByID: m.SupersededBy,
 		Injects: stat.InjectCount, Reads: stat.ReadCount, LastInjected: stat.LastInjectedAt,
 		AbsPath: abs, EditURL: edit,
@@ -273,10 +275,18 @@ func buildGroups(active map[string]map[string][]memoryRow, sortKey string) []pro
 }
 
 // sortMemoryRows orders the rows within a kind group per the ?sort key: name
-// (A-Z, the default), recent (newest-updated first), or reach (most-injected
-// first). Ties fall back to name for a stable, readable order.
+// (A-Z, the default), recent (newest-updated first), reach (most-injected
+// first), or favorites (starred first). Ties fall back to name for a stable,
+// readable order.
 func sortMemoryRows(rows []memoryRow, sortKey string) {
 	switch sortKey {
+	case "favorites":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if rows[i].Favorite != rows[j].Favorite {
+				return rows[i].Favorite
+			}
+			return rows[i].Name < rows[j].Name
+		})
 	case "recent":
 		sort.SliceStable(rows, func(i, j int) bool {
 			if !rows[i].Updated.Equal(rows[j].Updated) {

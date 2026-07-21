@@ -1,0 +1,124 @@
+{{define "context-map"}}
+{{$context := .}}
+<section class="context-rule-grid" aria-label="Effective briefing flow rules">
+  <article class="context-rule active">
+    <span class="context-rule-icon global">{{icon "database"}}</span>
+    <div><span class="context-rule-label">Global memory</span><strong>{{.Rules.GlobalMemories}} active</strong><small>eligible in {{.Rules.GlobalTargets}} known project scope{{if ne .Rules.GlobalTargets 1}}s{{end}}</small></div>
+    <span class="context-rule-state on">always on</span>
+  </article>
+  <article class="context-rule{{if .Rules.ParentEnabled}} active{{end}}">
+    <span class="context-rule-icon parent">{{icon "git-branch"}}</span>
+    <div><span class="context-rule-label">Parent memory</span><strong>{{.Rules.ParentLinks}} configured</strong><small>registry-wide shared-parent links at SessionStart</small></div>
+    <span class="context-rule-state {{if .Rules.ParentEnabled}}on{{else}}off{{end}}">{{if .Rules.ParentEnabled}}enabled{{else}}disabled{{end}}</span>
+  </article>
+  <article class="context-rule{{if .Rules.SiblingFindings}} active{{end}}">
+    <span class="context-rule-icon family">{{icon "share-2"}}</span>
+    <div><span class="context-rule-label">Sibling findings</span><strong>{{.Rules.SiblingFindings}} per briefing</strong><small>recent findings across configured families</small></div>
+    <span class="context-rule-state {{if .Rules.SiblingFindings}}on{{else}}off{{end}}">{{if .Rules.SiblingFindings}}enabled{{else}}disabled{{end}}</span>
+  </article>
+  <article class="context-rule{{if .Rules.SiblingMemories}} active{{end}}">
+    <span class="context-rule-icon sibling">{{icon "brain"}}</span>
+    <div><span class="context-rule-label">Sibling memories</span><strong>{{if .Rules.SiblingMemories}}opted in{{else}}not shared{{end}}</strong><small>non-constraint, non-stage memories only</small></div>
+    <span class="context-rule-state {{if .Rules.SiblingMemories}}on{{else}}off{{end}}">{{if .Rules.SiblingMemories}}enabled{{else}}disabled{{end}}</span>
+  </article>
+</section>
+
+<section class="context-section" aria-labelledby="context-scopes-title">
+  <header class="context-section-head">
+    <div><span class="context-section-kicker">Briefing paths</span><h2 id="context-scopes-title">{{if .Project}}What {{.Project}} receives and shares{{else}}Scope-by-scope context flow{{end}}</h2></div>
+    <span class="context-section-note">Active memories are eligibility pools; age and token-budget trims still apply.</span>
+  </header>
+  {{if .Projects}}
+  <div class="context-scope-grid{{if .Project}} focused{{end}}">
+    {{range .Projects}}
+    <article class="context-scope-card{{if .Retired}} retired{{end}}{{if .Warnings}} warned{{end}}">
+      <header class="context-scope-head">
+        <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
+        <div class="context-scope-identity">
+          <div class="context-scope-title">{{if .Href}}<a href="{{.Href}}">{{.Name}}</a>{{else}}<strong>{{.Name}}</strong>{{end}}{{if ne .Name .Slug}}<span class="mono">{{.Slug}}</span>{{end}}</div>
+          <span class="context-role">{{.Role}}</span>
+        </div>
+        <a class="context-focus-link" href="{{.FocusHref}}">focus {{icon "arrow-right"}}</a>
+      </header>
+      {{if .Description}}<p class="context-scope-desc">{{.Description}}</p>{{end}}
+      <div class="context-pool-strip" aria-label="Memory pools">
+        <span><small>local</small><strong>{{.LocalMemories}}</strong></span>
+        <span><small>global</small><strong>+{{.GlobalMemories}}</strong></span>
+        {{if .ParentSlug}}<span class="{{if not $context.Rules.ParentEnabled}}off{{end}}"><small>parent</small><strong>{{if $context.Rules.ParentEnabled}}+{{.ParentMemories}}{{else}}off{{end}}</strong></span>{{end}}
+      </div>
+      <div class="context-flow-columns">
+        <section class="context-flow-column">
+          <h3>{{icon "arrow-down-to-line"}} Receives</h3>
+          {{range .Incoming}}
+          <div class="context-flow {{.Kind}}{{if not .Enabled}} disabled{{end}}">
+            <span class="context-flow-icon">{{icon .Icon}}</span>
+            <div><strong>{{if .Href}}<a href="{{.Href}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</strong><span>{{.Detail}}</span></div>
+            <span class="context-flow-state">{{if .Enabled}}on{{else}}off{{end}}</span>
+          </div>
+          {{end}}
+        </section>
+        <section class="context-flow-column">
+          <h3>{{icon "share-2"}} Publishes / shares</h3>
+          {{if .Outgoing}}
+          {{range .Outgoing}}
+          <div class="context-flow {{.Kind}}{{if not .Enabled}} disabled{{end}}">
+            <span class="context-flow-icon">{{icon .Icon}}</span>
+            <div><strong>{{if .Href}}<a href="{{.Href}}">{{.Label}}</a>{{else}}{{.Label}}{{end}}</strong><span>{{.Detail}}</span></div>
+            <span class="context-flow-state">{{if .Enabled}}on{{else}}off{{end}}</span>
+          </div>
+          {{end}}
+          {{else}}<div class="context-flow-empty">No outgoing context edges.</div>{{end}}
+        </section>
+      </div>
+      {{if .Warnings}}<div class="context-warnings">{{range .Warnings}}<span>{{icon "triangle-alert"}}{{.}}</span>{{end}}</div>{{end}}
+    </article>
+    {{end}}
+  </div>
+  {{else}}<div class="empty dotgrid"><span class="empty-ico">{{icon "share-2"}}</span><div>No project scopes to map yet.</div></div>{{end}}
+</section>
+
+{{if .Families}}
+<section class="context-section" aria-labelledby="context-families-title">
+  <header class="context-section-head">
+    <div><span class="context-section-kicker">Peer crossover</span><h2 id="context-families-title">Briefing families</h2></div>
+    <span class="context-section-note">Families are bidirectional; parent inheritance remains a separate one-way edge.</span>
+  </header>
+  <div class="context-family-grid">
+    {{range .Families}}
+    <article class="context-family-card{{if .Warnings}} warned{{end}}">
+      <header><span>{{icon "share-2"}}</span><div><small>family</small><strong>{{.Name}}</strong></div></header>
+      <div class="context-members">
+        {{range .Members}}{{if .FocusHref}}<a href="{{.FocusHref}}"{{if not .Registered}} class="warn"{{end}}>{{.Slug}}{{if .Retired}} <small>retired</small>{{else if not .Registered}} <small>unregistered</small>{{end}}</a>{{else}}<span class="warn">{{.Slug}} <small>unknown scope</small></span>{{end}}{{end}}
+      </div>
+      <div class="context-channels">
+        <span class="{{if .FindingsEnabled}}on{{else}}off{{end}}">findings {{if .FindingsEnabled}}on · {{.FindingsCount}} total cap{{else}}off{{end}}</span>
+        <span class="{{if .MemoriesEnabled}}on{{else}}off{{end}}">sibling memories {{if .MemoriesEnabled}}on{{else}}off{{end}}</span>
+      </div>
+      {{if .Warnings}}<div class="context-warnings">{{range .Warnings}}<span>{{icon "triangle-alert"}}{{.}}</span>{{end}}</div>{{end}}
+    </article>
+    {{end}}
+  </div>
+</section>
+{{end}}
+
+{{if .Lineages}}
+<section class="context-section" aria-labelledby="context-lineage-title">
+  <header class="context-section-head">
+    <div><span class="context-section-kicker">Historical movement</span><h2 id="context-lineage-title">Split lineage</h2></div>
+    <span class="context-section-note">Built from the append-only memory-move log, not inferred from current ownership.</span>
+  </header>
+  <div class="context-lineage-list">
+    {{range .Lineages}}
+    <article class="context-lineage-row">
+      <div class="context-lineage-source"><span class="tile">{{icon "archive"}}</span><div><small>retired {{ago .RetiredAt}}</small><strong><a href="{{.Source.FocusHref}}">{{.Source.Slug}}</a></strong></div></div>
+      <span class="context-lineage-arrow">{{icon "split"}}</span>
+      <div class="context-lineage-targets">
+        {{if .Destinations}}{{range .Destinations}}{{if .Scope.FocusHref}}<a href="{{.Scope.FocusHref}}"><strong>{{.Scope.Slug}}</strong><span>{{.Moves}} memory move{{if ne .Moves 1}}s{{end}}</span></a>{{else if .Scope.Global}}<span class="context-lineage-global"><strong>global</strong><span>{{.Moves}} memory move{{if ne .Moves 1}}s{{end}} · shared pool</span></span>{{else}}<span class="context-lineage-unknown"><strong>{{.Scope.Slug}}</strong><span>{{.Moves}} memory move{{if ne .Moves 1}}s{{end}} · scope no longer known</span></span>{{end}}{{end}}{{else}}<span class="context-lineage-empty">No destination events recorded</span>{{end}}
+      </div>
+      <span class="context-lineage-total">{{.Moves}} total move{{if ne .Moves 1}}s{{end}}</span>
+    </article>
+    {{end}}
+  </div>
+</section>
+{{end}}
+{{end}}

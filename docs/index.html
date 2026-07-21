@@ -126,7 +126,7 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;})();</script>
-<link rel="stylesheet" href="static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="static/site.css?v=7fc27d20">
 </head>
 <body>
 
@@ -243,13 +243,90 @@
     </div>
     <div class="scenes-reel">
       <div class="scenes-nav" role="tablist" aria-label="Terminal scenes"></div>
+      <!-- Each .scenes-fallback is the scene's server-rendered summary: kicker,
+           title, prompt, and both panes' outcomes, verbatim from scenes.js
+           (site-check asserts every outcome string matches). The player appends
+           its DOM next to it; CSS hides the fallbacks once the scene nav is
+           populated, so they are what crawlers and JS-off visitors read. -->
       <div class="scenes-stage">
-        <div class="term-scene" data-scene="cold-start"></div>
-        <div class="term-scene" data-scene="hardening-trap"></div>
-        <div class="term-scene" data-scene="token-safety"></div>
-        <div class="term-scene" data-scene="coordination"></div>
+        <div class="term-scene" data-scene="cold-start">
+          <div class="scenes-fallback">
+            <div class="ts-head">
+              <p class="ts-kicker">cold start</p>
+              <h3 class="ts-title">Continue where the last session left off</h3>
+              <p class="ts-ask"><span class="ts-ask-label">prompt</span><span>continue where we left off</span></p>
+            </div>
+            <dl class="sf-outcomes">
+              <div class="sf-pane sf-without">
+                <dt>without Seamless</dt>
+                <dd>No memory to stand on. Ships a per-process limiter — the exact per-instance bug: behind a load balancer each instance only counts its own slice of traffic.</dd>
+              </div>
+              <div class="sf-pane sf-with">
+                <dt>with Seamless</dt>
+                <dd>The briefing hands it step 5 and the rate-limit-not-in-memory gotcha. Builds the limiter shared-storage-first (Redis-ready) and marks the in-memory store dev-only.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div class="term-scene" data-scene="hardening-trap">
+          <div class="scenes-fallback">
+            <div class="ts-head">
+              <p class="ts-kicker">a hardening trap</p>
+              <h3 class="ts-title">“The scanner says tighten the auth cookies”</h3>
+              <p class="ts-ask"><span class="ts-ask-label">prompt</span><span>our security scanner is failing CI on the auth cookies -- it flags SameSite=Lax as too weak and wants SameSite=Strict. make the change so the build passes.</span></p>
+            </div>
+            <dl class="sf-outcomes">
+              <div class="sf-pane sf-without">
+                <dt>without Seamless</dt>
+                <dd>Names the external-link bounce in the abstract — then flips Lax→Strict anyway because CI demands it. Ships the regression the constraint was written to prevent.</dd>
+              </div>
+              <div class="sf-pane sf-with">
+                <dt>with Seamless</dt>
+                <dd>The briefing's pinned constraint says the opposite. Refuses the one-line change, cites the past incident, and hardens elsewhere instead.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div class="term-scene" data-scene="token-safety">
+          <div class="scenes-fallback">
+            <div class="ts-head">
+              <p class="ts-kicker">a danger the code can't reveal</p>
+              <h3 class="ts-title">Persist the refresh tokens</h3>
+              <p class="ts-ask"><span class="ts-ask-label">prompt</span><span>persist the refresh tokens to the database so sessions survive a restart</span></p>
+            </div>
+            <dl class="sf-outcomes">
+              <div class="sf-pane sf-without">
+                <dt>without Seamless</dt>
+                <dd>Mirrors the in-memory maps straight into SQL — a raw-refresh-token column. A DB snapshot is now every live session, in plaintext.</dd>
+              </div>
+              <div class="sf-pane sf-with">
+                <dt>with Seamless</dt>
+                <dd>Sees persist-refresh-tokens in the briefing, reads it at the moment of persisting, and stores only a SHA-256 hash. A stolen DB snapshot is useless.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+        <div class="term-scene" data-scene="coordination">
+          <div class="scenes-fallback">
+            <div class="ts-head">
+              <p class="ts-kicker">two agents, one queue</p>
+              <h3 class="ts-title">Two agents pick up the same plan</h3>
+              <p class="ts-ask"><span class="ts-ask-label">prompt</span><span>pick up the next step of the plan</span></p>
+            </div>
+            <dl class="sf-outcomes">
+              <div class="sf-pane">
+                <dt>agent B</dt>
+                <dd>Claims the rate-limit step first. Its lease is what makes the other agent's claim bounce.</dd>
+              </div>
+              <div class="sf-pane">
+                <dt>agent A</dt>
+                <dd>Reaches for the same step — the queue says it is already held. Pivots to the metrics step without being told.</dd>
+              </div>
+            </dl>
+          </div>
+        </div>
       </div>
-      <noscript><p class="console-note"># these scenes animate real terminal transcripts and need JavaScript. The transcripts themselves are plain files in the repo: docs/static/scenes.js?v=69de32f8</p></noscript>
+      <noscript><p class="console-note"># with JavaScript off the transcripts don't animate; the summaries above are each scene's real outcome, and the full verbatim transcripts ship with the page as a plain script asset anyone can read.</p></noscript>
     </div>
     <p class="console-note"># real sessions against a seeded demo instance &mdash; transcripts verbatim, only the typing is animated.</p>
   </div>
@@ -363,7 +440,7 @@
           <li><span class="pt">01</span><span><strong>Interactions feed.</strong> Every injection, recall, and tool call from every agent, streamed live.</span></li>
           <li><span class="pt">02</span><span><strong>Plans board.</strong> Captured Claude Code plans with their notes, steps, and claim status.</span></li>
           <li><span class="pt">03</span><span><strong>Retrieval health.</strong> How much of the store is actually reaching agents - not how big it is.</span></li>
-          <li><span class="pt">04</span><span><strong>Relations graph.</strong> How memories, notes, sessions, and tasks connect across projects.</span></li>
+          <li><span class="pt">04</span><span><strong>Context flow.</strong> Which global, parent, and sibling knowledge reaches each project's SessionStart briefing.</span></li>
         </ul>
         <p class="console-note"># captured from a live local instance - it ships inside the binary at<br>#&nbsp;127.0.0.1:8081/console. your data never leaves the machine.</p>
       </div>
@@ -397,14 +474,6 @@
           <a class="themed-dark" href="static/shots/retrieval-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/retrieval-dark.webp" width="1440" height="900" loading="lazy" alt="Retrieval health: injections funnel, reach by kind and by project, and a 30-day injection trend"></a>
         </div>
         <figcaption><span class="pt">03</span> retrieval health</figcaption>
-      </figure>
-      <figure class="shot-card rv">
-        <div class="shot-frame">
-          <div class="shot-bar" aria-hidden="true"><i></i><i></i><i></i></div>
-          <a class="themed-light" href="static/shots/relations-light.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/relations-light.webp" width="1440" height="900" loading="lazy" alt="Relations spine: a plan expands into steps, the claiming live session, and the memories it wrote"></a>
-          <a class="themed-dark" href="static/shots/relations-dark.webp" target="_blank" rel="noopener"><img class="shot-img" src="static/shots/relations-dark.webp" width="1440" height="900" loading="lazy" alt="Relations spine: a plan expands into steps, the claiming live session, and the memories it wrote"></a>
-        </div>
-        <figcaption><span class="pt">04</span> relations graph</figcaption>
       </figure>
     </div>
   </div>

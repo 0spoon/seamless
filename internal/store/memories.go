@@ -11,8 +11,8 @@ import (
 // memoryCols is the SELECT list for memories_index, matching scanMemory. Body is
 // not in the index (it lives in the file), so a scanned memory has Body == "".
 const memoryCols = `id, kind, name, description, project, file_path, tags,
-	valid_from, invalid_at, superseded_by, source_session, model, content_hash,
-	created_at, updated_at`
+	valid_from, invalid_at, superseded_by, source_session, model, favorite,
+	content_hash, created_at, updated_at`
 
 // scanMemory scans one memories_index row (memoryCols order) into a core.Memory.
 func scanMemory(rows *sql.Rows) (core.Memory, error) {
@@ -24,8 +24,8 @@ func scanMemory(rows *sql.Rows) (core.Memory, error) {
 	)
 	if err := rows.Scan(
 		&m.ID, &kind, &m.Name, &m.Description, &m.Project, &m.FilePath, &tags,
-		&validFrom, &invalidAt, &supersededBy, &srcSession, &m.Model, &hash,
-		&created, &updated,
+		&validFrom, &invalidAt, &supersededBy, &srcSession, &m.Model, &m.Favorite,
+		&hash, &created, &updated,
 	); err != nil {
 		return core.Memory{}, err
 	}

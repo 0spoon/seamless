@@ -23,7 +23,7 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
-<link rel="stylesheet" href="../../../static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
 <link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../../">
@@ -424,8 +424,8 @@ project alone:</p>
 <td>The project-scoped slice of the feed.</td>
 </tr>
 <tr>
-<td>Relations</td>
-<td>The project's plan → step → session → memory tree.</td>
+<td>Context</td>
+<td>The effective SessionStart flow into and out of the project: global and parent memory pools, sibling-family channels, and split lineage.</td>
 </tr>
 </tbody>
 </table>
@@ -516,12 +516,18 @@ side by side (the actual pane tinted by outcome), the structured metrics
 <code>trial_record</code> captured, and its provenance - lab, project, and the recording
 session, each linked. Trial hits also surface in <a href="#search">search</a> and the
 command palette, and a session's page lists the trials it recorded.</p>
-<h2 id="relations">Relations</h2>
-<p><code>/console/relations</code></p>
-<p>The dependency spine a flat list cannot show: a plan expands into its steps, each
-step's claiming session, and the memories that session left behind. <code>?scope=all</code>
-renders every project's tree on one page; <code>?scope=project&amp;project=&lt;slug&gt;</code> narrows
-to one.</p>
+<h2 id="context">Context</h2>
+<p><code>/console/context</code></p>
+<p>The briefing topology that the plans board does not show: which knowledge pools
+are eligible at SessionStart, which configured edges are currently enabled by
+the effective briefing settings, and where project splits moved durable memory.
+It covers global memory, one-way parent-memory inheritance, bidirectional sibling
+families (findings and the opt-in memory channel), unregistered-scope warnings,
+and retired-project split lineage reconstructed from the memory-move event log.</p>
+<p><code>?scope=all</code> renders every known project scope, with global memory shown as the
+shared source pool; <code>?scope=project&amp;project=&lt;slug&gt;</code> focuses the same topology on
+one project. The legacy <code>/console/relations</code> route permanently redirects here
+and preserves its query string.</p>
 <p>Reachable from the Projects board.</p>
 <h2 id="retrieval">Retrieval</h2>
 <p><code>/console/retrieval</code></p>
@@ -579,6 +585,7 @@ the detail pane would nest the whole console inside itself.</p>
 </article>
 
 
+
     
     <nav class="page-nav" aria-label="Pagination">
       <a class="prev" href="../../reference/codex-compatibility/"><span class="dir">Previous</span><span class="t">Codex compatibility matrix</span></a>
@@ -591,7 +598,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#relations">Relations</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

@@ -9,6 +9,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -110,6 +111,55 @@ func NoteIteration(n core.Note) int {
 // NoteDescription is the captured-plan note's one-line index text.
 func NoteDescription(basename string, iter int, status string) string {
 	return fmt.Sprintf("Captured Claude Code plan %s.md (iteration %d, %s)", basename, iter, status)
+}
+
+// EarlierPrimary reports whether a should win over b as a plan's narrative
+// primary: the earlier Created wins, ties broken by the lower id for stability.
+func EarlierPrimary(a, b core.Note) bool {
+	if !a.Created.Equal(b.Created) {
+		return a.Created.Before(b.Created)
+	}
+	return a.ID < b.ID
+}
+
+// Composition resolves a plan slug to its primary note and the other notes
+// tagged into the composition (agent caches and supporting notes). The primary
+// is the cc-plan capture when one carries the tag; otherwise it is the composed
+// plan's narrative -- the earliest-created non-agent note (EarlierPrimary). ok
+// is false when no note carries the tag at all -- a task-only plan has no
+// composition and, notably, nothing to hang a favorite on.
+func Composition(ctx context.Context, db *sql.DB, slug string) (primary core.Note, others []core.Note, ok bool, err error) {
+	tagged, err := store.NotesByTag(ctx, db, "", SlugTag(slug))
+	if err != nil {
+		return core.Note{}, nil, false, err
+	}
+	idx := -1
+	for i, n := range tagged {
+		if slices.Contains(n.Tags, TagPlan) {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		for i, n := range tagged {
+			if slices.Contains(n.Tags, TagAgent) {
+				continue
+			}
+			if idx == -1 || EarlierPrimary(n, tagged[idx]) {
+				idx = i
+			}
+		}
+	}
+	if idx == -1 {
+		return core.Note{}, nil, false, nil
+	}
+	others = make([]core.Note, 0, len(tagged)-1)
+	for i, n := range tagged {
+		if i != idx {
+			others = append(others, n)
+		}
+	}
+	return tagged[idx], others, true, nil
 }
 
 // EnsureTask creates the "Implement plan" tracking task for an approved plan

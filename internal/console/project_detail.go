@@ -3,11 +3,11 @@ package console
 // The project-detail workspace turns the thin project peek into a full tabbed
 // page: the peek fragment stays the at-a-glance summary, while the full page
 // (the "open" target) is a 7-tab workspace over the project's health,
-// plans/tasks, sessions, memories, notes, interactions, and relations.
+// plans/tasks, sessions, memories, notes, interactions, and context flow.
 //
 // This file is the route dispatch and page assembly. The tab panels live in
-// project_tabs.go; the relations tree and cross-project banners live in
-// project_tree.go and project_banners.go, both shared with /console/relations.
+// project_tabs.go; the Context panel reuses the same durable topology builder
+// as /console/context.
 
 import (
 	"fmt"
@@ -23,7 +23,7 @@ import (
 // projectTabKeys are the workspace tabs in bar order. A ?tab= deep-link outside
 // this set is a 400 (never a silent fallback to Overview), matching the board's
 // strict-param policy so an agent driving the console by URL sees the fix.
-var projectTabKeys = []string{"overview", "tasks", "sessions", "memories", "notes", "interactions", "relations"}
+var projectTabKeys = []string{"overview", "tasks", "sessions", "memories", "notes", "interactions", "context"}
 
 // projectWorkspaceData is the full project-detail page payload: the header, the
 // tab bar (with counts), and every tab's server-rendered panel.
@@ -37,6 +37,7 @@ type projectWorkspaceData struct {
 	IsRoot      bool // no parent (a root project injects only its own memories)
 	Parent      string
 	Retired     bool
+	Favorite    bool
 	ActiveTab   string
 	Tabs        []projectTabVM
 
@@ -60,8 +61,7 @@ type projectWorkspaceData struct {
 	Interactions []interactionRow
 	IxVolumeJSON string // compact JSON of the project's volume buckets, for IX.renderVolume
 
-	Tree    []treeNode
-	Banners []relBanner
+	Context contextData
 }
 
 // projectTabVM is one entry in the workspace tab bar.
@@ -134,9 +134,19 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 	ctx := r.Context()
 	slug := p.Slug
 
-	tab := r.URL.Query().Get("tab")
-	if tab == "" {
-		tab = "overview"
+	query := r.URL.Query()
+	tab := "overview"
+	if values, ok := query["tab"]; ok {
+		if len(values) != 1 {
+			s.badRequest(w, r, "parameter \"tab\" must be provided exactly once")
+			return
+		}
+		tab = values[0]
+	}
+	if tab == "relations" {
+		query.Set("tab", "context")
+		http.Redirect(w, r, r.URL.Path+"?"+query.Encode(), http.StatusPermanentRedirect)
+		return
 	}
 	if !slices.Contains(projectTabKeys, tab) {
 		s.badRequest(w, r, fmt.Sprintf("invalid tab %q: valid values are %s",
@@ -148,7 +158,7 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 
 	data := projectWorkspaceData{
 		Slug: slug, Name: p.Name, Description: p.Description,
-		Parent: p.ParentSlug, Retired: p.Retired(), ActiveTab: tab,
+		Parent: p.ParentSlug, Retired: p.Retired(), Favorite: p.Favorite, ActiveTab: tab,
 		IsRoot: p.ParentSlug == "", TrendWin: win.Label,
 	}
 	if data.Name == "" {
@@ -206,18 +216,18 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		s.serverError(w, r, err)
 		return
 	}
-	tree, err := s.buildProjectTree(ctx, slug)
+	contextData, found, err := s.buildContextData(ctx, slug)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	data.Tree = tree
-	banners, err := s.projectBanners(ctx, p)
-	if err != nil {
-		s.serverError(w, r, err)
+	if !found {
+		s.serverError(w, r, fmt.Errorf("console.projectWorkspace: registered scope %q missing from context topology", slug))
 		return
 	}
-	data.Banners = banners
+	contextData.Scope = "project"
+	contextData.Project = slug
+	data.Context = contextData
 
 	data.Tabs = []projectTabVM{
 		{Key: "overview", Label: "Overview", Icon: "gauge"},
@@ -226,7 +236,7 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		{Key: "memories", Label: "Memories", Icon: "brain", Count: data.Metrics.Memories, HasCount: true},
 		{Key: "notes", Label: "Notes", Icon: "file-text", Count: len(data.Notes), HasCount: true},
 		{Key: "interactions", Label: "Interactions", Icon: "activity"},
-		{Key: "relations", Label: "Relations", Icon: "share-2"},
+		{Key: "context", Label: "Context", Icon: "share-2"},
 	}
 	for i := range data.Tabs {
 		data.Tabs[i].Active = data.Tabs[i].Key == tab

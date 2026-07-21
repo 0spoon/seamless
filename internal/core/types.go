@@ -23,6 +23,7 @@ type Project struct {
 	Description string     `json:"description"`
 	ParentSlug  string     `json:"parentSlug,omitempty"`
 	RetiredAt   *time.Time `json:"retiredAt,omitempty"`
+	Favorite    bool       `json:"favorite,omitempty"` // owner/agent star; never bumps UpdatedAt
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
@@ -72,10 +73,11 @@ type Memory struct {
 	Created       time.Time  `json:"created"`
 	Updated       time.Time  `json:"updated"`
 	ValidFrom     time.Time  `json:"validFrom"`
-	InvalidAt     *time.Time `json:"invalidAt"`     // nil = still valid
-	SupersededBy  string     `json:"supersededBy"`  // ULID of the replacement, "" = none
-	SourceSession string     `json:"sourceSession"` // provenance
-	Model         string     `json:"model"`         // model that produced the content, as the provider names it (e.g. "claude-fable-5")
+	InvalidAt     *time.Time `json:"invalidAt"`          // nil = still valid
+	SupersededBy  string     `json:"supersededBy"`       // ULID of the replacement, "" = none
+	SourceSession string     `json:"sourceSession"`      // provenance
+	Model         string     `json:"model"`              // model that produced the content, as the provider names it (e.g. "claude-fable-5")
+	Favorite      bool       `json:"favorite,omitempty"` // owner/agent star; frontmatter is authoritative, never bumps Updated
 	ContentHash   string     `json:"contentHash"`
 	// Extra preserves unknown frontmatter keys (e.g. Obsidian plugin fields) so
 	// a parse -> render round-trip is lossless. Not mirrored to the index.
@@ -103,7 +105,8 @@ type Note struct {
 	FilePath    string    `json:"filePath"`
 	Tags        []string  `json:"tags"`
 	SourceURL   string    `json:"sourceUrl"`
-	Model       string    `json:"model"` // model that produced the content, as the provider names it (e.g. "claude-fable-5")
+	Model       string    `json:"model"`              // model that produced the content, as the provider names it (e.g. "claude-fable-5")
+	Favorite    bool      `json:"favorite,omitempty"` // owner/agent star; frontmatter is authoritative, never bumps Updated
 	Created     time.Time `json:"created"`
 	Updated     time.Time `json:"updated"`
 	ContentHash string    `json:"contentHash"`
@@ -189,8 +192,9 @@ type Session struct {
 	// payloads' model field, or a tail-sniff of the Claude Code transcript.
 	// Updated in place when the agent switches models, and stamped onto
 	// memories/notes at write time.
-	Model   string `json:"model"`
-	Ambient bool   `json:"ambient"`
+	Model    string `json:"model"`
+	Ambient  bool   `json:"ambient"`
+	Favorite bool   `json:"favorite,omitempty"` // owner/agent star; never bumps UpdatedAt
 	// Tokens is the real model token consumption harvested from the agent's
 	// transcript (Claude Code at SessionEnd, Codex every Stop) -- the actual burn,
 	// not the injection estimate. Zero until harvested, or for a client with no
@@ -280,6 +284,7 @@ type Task struct {
 	PlanSlug       string     `json:"planSlug,omitempty"`
 	ClaimedBy      string     `json:"claimedBy,omitempty"`
 	LeaseExpiresAt *time.Time `json:"leaseExpiresAt,omitempty"`
+	Favorite       bool       `json:"favorite,omitempty"` // owner/agent star; never bumps UpdatedAt
 	DependsOn      []string   `json:"dependsOn,omitempty"`
 	CreatedAt      time.Time  `json:"createdAt"`
 	UpdatedAt      time.Time  `json:"updatedAt"`
@@ -322,6 +327,7 @@ type Trial struct {
 	Metrics     map[string]any `json:"metrics"`
 	SessionID   string         `json:"sessionId"`
 	ProjectSlug string         `json:"projectSlug"`
+	Favorite    bool           `json:"favorite,omitempty"` // owner/agent star
 	CreatedAt   time.Time      `json:"createdAt"`
 }
 
@@ -340,7 +346,8 @@ const (
 	EventMemoryRead       EventKind = "memory.read"
 	EventMemorySuperseded EventKind = "memory.superseded"
 	EventMemoryArchived   EventKind = "memory.archived"
-	EventMemoryMoved      EventKind = "memory.moved" // relocated to another project (reproject/split)
+	EventMemoryMoved      EventKind = "memory.moved"     // relocated to another project (reproject/split)
+	EventFavoriteChanged  EventKind = "favorite.changed" // an item was starred/unstarred (payload: kind, id, name, favorite, by)
 	EventNoteWritten      EventKind = "note.written"
 	EventTrialRecorded    EventKind = "trial.recorded"
 	EventTaskTransition   EventKind = "task.transition"

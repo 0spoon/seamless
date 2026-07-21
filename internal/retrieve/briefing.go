@@ -46,14 +46,20 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	var constraints, stageMems []core.Memory
+	var constraints, stageMems, favorites []core.Memory
 	index := make([]core.Memory, 0, len(mems))
 	for _, m := range mems {
-		switch m.Kind {
-		case core.KindConstraint:
+		switch {
+		case m.Kind == core.KindConstraint:
 			constraints = append(constraints, m)
-		case core.KindStage:
+		case m.Kind == core.KindStage:
 			stageMems = append(stageMems, m)
+		case m.Favorite:
+			// Starred memories are pinned like constraints/stages: pulled out of
+			// the index before the recency/count trims and never budget-dropped.
+			// A starred constraint or stage keeps its existing pinned section
+			// (the cases above win), so it is never rendered twice.
+			favorites = append(favorites, m)
 		default:
 			index = append(index, m)
 		}
@@ -101,13 +107,13 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		return "", nil, err
 	}
 	stages := s.pinnedStages(stageMems, cfg.StageUnknownMaxAgeDays, time.Now())
-	if len(constraints) == 0 && len(index) == 0 && omitted == 0 && len(findings) == 0 &&
-		len(ready) == 0 && len(siblings) == 0 && len(siblingMems) == 0 && len(stages) == 0 &&
-		len(rollups) == 0 && len(pending) == 0 {
+	if len(constraints) == 0 && len(favorites) == 0 && len(index) == 0 && omitted == 0 &&
+		len(findings) == 0 && len(ready) == 0 && len(siblings) == 0 && len(siblingMems) == 0 &&
+		len(stages) == 0 && len(rollups) == 0 && len(pending) == 0 {
 		return "", nil, nil
 	}
 	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
-		constraints: constraints, index: index, indexOmitted: omitted,
+		constraints: constraints, favorites: favorites, index: index, indexOmitted: omitted,
 		findings: findings, ready: ready, siblings: siblings,
 		siblingMems: siblingMems, stages: stages, plans: rollups,
 		pendingPlans: pending,
@@ -288,6 +294,7 @@ func projectLabel(project string) string {
 // the assembler signature stable as new sections are added.
 type briefingSections struct {
 	constraints  []core.Memory
+	favorites    []core.Memory // starred non-constraint/stage memories, pinned after plans
 	index        []core.Memory
 	indexOmitted int // index lines cut by the recency/count trims, for the "+N older" trailer
 	findings     []core.Session
@@ -305,7 +312,8 @@ type briefingSections struct {
 // just happened here, and before the reservation a fat memory index silently
 // evicted all of them while the header still claimed they were present. The
 // memory index and sibling sections then pack against what remains, and the
-// whole is hard-capped. Render order is unchanged: constraints > memory index >
+// whole is hard-capped. Render order: constraints > stages > plans > favorites
+// (all pinned) > pending plans > memory index >
 // sibling findings > sibling memories > recent findings > ready tasks. The
 // header counts the findings actually rendered, and findings cut despite the
 // reservation leave a "+N more" trailer, mirroring the memory index. The
@@ -340,7 +348,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// subset. Reporting them as two disjoint pools ("6 constraints, 76 memories")
 	// contradicts the body, where 6 CONSTRAINT lines + the index + the "+N older"
 	// trailer sum to the total, not to the index count alone.
-	totalMems := len(constraints) + len(index)
+	totalMems := len(constraints) + len(sec.favorites) + len(index)
 	headLine := func(renderedFindings int) string {
 		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories (%d constraints), %d recent findings.\n",
 			sanitizeField(label, 80), totalMems, len(constraints), renderedFindings)
@@ -360,6 +368,13 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// Active-plan rollups follow stages, also pinned: a plan's claimable/in-flight
 	// counts tell the next agent what work is available to pick up right now.
 	head.WriteString(planHead(sec.plans))
+	// Starred memories close the pinned head: the owner (or an agent) marked
+	// them important enough that every session should see them, so like
+	// constraints they are exempt from the trims and the budget loop.
+	for _, m := range sec.favorites {
+		head.WriteString("FAVORITE: " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n")
+		ids = append(ids, m.ID)
+	}
 
 	var tail strings.Builder
 	tail.WriteString(agentguide.BriefingFooter)

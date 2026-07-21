@@ -39,7 +39,7 @@
         <div class="rail-items">
           {{range .InProgress}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
           {{end}}
@@ -52,7 +52,7 @@
         <div class="rail-items">
           {{range .Ready}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Deps}} &middot; {{.Deps}} dep{{if ne .Deps 1}}s{{end}}{{end}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
           {{end}}
@@ -67,7 +67,7 @@
         <div class="rail-items">
           {{range .Blocked}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Blocked"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; blocked by {{len .Blockers}}</span>
           </a>
           {{end}}
@@ -80,7 +80,7 @@
         <div class="rail-items">
           {{range .Closed}}
           <a class="rail-item dim{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Recently closed"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
-            <span class="ri-title">{{.Title}}</span>
+            <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta">{{.Status}} &middot; {{if .Project}}{{.Project}}{{else}}global{{end}}{{if .Closed}} &middot; <span title="{{ts .Closed}}">{{ago .Closed}}</span>{{end}}</span>
           </a>
           {{end}}
@@ -112,7 +112,13 @@
       {{if .PlanSlug}}<a class="kind" href="/console/plans/{{.PlanSlug}}">plan:{{.PlanSlug}}</a>{{end}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
     </div>
-    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}</h2>
+    <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}
+      <form class="star-form" method="post" action="/console/favorites/task/{{.ID}}">
+        <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+        <input type="hidden" name="next" value="/console/tasks/{{.ID}}">
+        <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this task">{{icon "star"}}</button>
+      </form>
+    </h2>
     <div class="reader-facts">
       {{if .CreatedBy}}<span class="fact">created by <span class="mono">{{.CreatedBy}}</span></span>{{end}}
       {{if .ClaimedBy}}<span class="fact">claimed by <span class="mono">{{.ClaimedBy}}</span> &middot; <span title="{{ts .LeaseExpiry}}">lease {{if .ClaimLive}}live{{else}}expired{{end}}</span></span>{{end}}

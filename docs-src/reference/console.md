@@ -193,7 +193,7 @@ project alone:
 | Memories | The project's memories with a lineage cell - provenance session, or a supersession pointer - plus the memories it *inherits* from a parent that a strict per-slug count excludes. |
 | Notes | The project's notes. |
 | Interactions | The project-scoped slice of the feed. |
-| Relations | The project's plan → step → session → memory tree. |
+| Context | The effective SessionStart flow into and out of the project: global and parent memory pools, sibling-family channels, and split lineage. |
 
 A retired project still renders, with its banner - kept for provenance. Only an
 unknown slug is a 404.
@@ -308,14 +308,21 @@ side by side (the actual pane tinted by outcome), the structured metrics
 session, each linked. Trial hits also surface in [search](#search) and the
 command palette, and a session's page lists the trials it recorded.
 
-## Relations
+## Context
 
-`/console/relations`
+`/console/context`
 
-The dependency spine a flat list cannot show: a plan expands into its steps, each
-step's claiming session, and the memories that session left behind. `?scope=all`
-renders every project's tree on one page; `?scope=project&project=<slug>` narrows
-to one.
+The briefing topology that the plans board does not show: which knowledge pools
+are eligible at SessionStart, which configured edges are currently enabled by
+the effective briefing settings, and where project splits moved durable memory.
+It covers global memory, one-way parent-memory inheritance, bidirectional sibling
+families (findings and the opt-in memory channel), unregistered-scope warnings,
+and retired-project split lineage reconstructed from the memory-move event log.
+
+`?scope=all` renders every known project scope, with global memory shown as the
+shared source pool; `?scope=project&project=<slug>` focuses the same topology on
+one project. The legacy `/console/relations` route permanently redirects here
+and preserves its query string.
 
 Reachable from the Projects board.
 

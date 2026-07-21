@@ -49,6 +49,7 @@ type planRow struct {
 	Title      string `json:"title"`
 	Project    string `json:"project,omitempty"`
 	Status     string `json:"status"`
+	Favorite   bool   `json:"favorite,omitempty"` // the primary note's star
 	Iteration  int    `json:"iteration,omitempty"`
 	Agents     int    `json:"agents"` // cached subagent notes in the composition
 	TasksDone  int    `json:"tasksDone"`
@@ -206,7 +207,10 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 		rows = append(rows, s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
 	}
 	// Total is every plan regardless of window -- the headline the sidebar badge
-	// must agree with. Window-filter last so it applies uniformly across sources.
+	// must agree with. Window-filter last so it applies uniformly across sources,
+	// then sort: starred plans first, newest-updated within each partition (the
+	// template's phase grouping runs after this, so favorites float within each
+	// phase group).
 	total := len(rows)
 	kept := rows[:0]
 	for _, row := range rows {
@@ -215,6 +219,12 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 		}
 	}
 	slices.SortFunc(kept, func(a, b planRow) int {
+		if a.Favorite != b.Favorite {
+			if a.Favorite {
+				return -1
+			}
+			return 1
+		}
 		if !a.Updated.Equal(b.Updated) {
 			return b.Updated.Compare(a.Updated)
 		}
@@ -256,7 +266,7 @@ func composedPrimaries(notes []core.Note, owned map[string]bool) []core.Note {
 		if owned[key] {
 			continue
 		}
-		if cur, ok := primary[key]; !ok || earlierPrimary(n, cur) {
+		if cur, ok := primary[key]; !ok || plans.EarlierPrimary(n, cur) {
 			primary[key] = n
 		}
 	}
@@ -265,15 +275,6 @@ func composedPrimaries(notes []core.Note, owned map[string]bool) []core.Note {
 		out = append(out, n)
 	}
 	return out
-}
-
-// earlierPrimary reports whether a should win over b as a plan's narrative
-// primary: the earlier Created wins, ties broken by the lower id for stability.
-func earlierPrimary(a, b core.Note) bool {
-	if !a.Created.Equal(b.Created) {
-		return a.Created.Before(b.Created)
-	}
-	return a.ID < b.ID
 }
 
 // planDetailBySlug assembles a plan's full detail payload: the row, the
@@ -421,46 +422,21 @@ func (s *Service) planApprove(w http.ResponseWriter, r *http.Request) {
 }
 
 // planComposition resolves a plan slug to its primary note and the other notes
-// tagged into the composition (agent caches and supporting notes). The primary
-// is the cc-plan capture when one carries the tag; otherwise it is the composed
-// plan's narrative -- the earliest-created non-agent note. ok is false when no
-// note carries the tag at all.
+// tagged into the composition, projected for display. The selection rule lives
+// in plans.Composition, shared with the favorite surfaces.
 func (s *Service) planComposition(ctx context.Context, slug string) (core.Note, []planNoteRef, bool, error) {
-	tagged, err := store.NotesByTag(ctx, s.cfg.DB, "", plans.SlugTag(slug))
-	if err != nil {
-		return core.Note{}, nil, false, err
-	}
-	primary := -1
-	for i, n := range tagged {
-		if slices.Contains(n.Tags, plans.TagPlan) {
-			primary = i
-			break
-		}
-	}
-	if primary == -1 {
-		for i, n := range tagged {
-			if slices.Contains(n.Tags, plans.TagAgent) {
-				continue
-			}
-			if primary == -1 || earlierPrimary(n, tagged[primary]) {
-				primary = i
-			}
-		}
-	}
-	if primary == -1 {
-		return core.Note{}, nil, false, nil
+	primary, others, ok, err := plans.Composition(ctx, s.cfg.DB, slug)
+	if err != nil || !ok {
+		return core.Note{}, nil, ok, err
 	}
 	var attached []planNoteRef
-	for i, n := range tagged {
-		if i == primary {
-			continue
-		}
+	for _, n := range others {
 		attached = append(attached, planNoteRef{
 			ID: n.ID, Title: n.Title, Slug: n.Slug,
 			IsAgent: slices.Contains(n.Tags, plans.TagAgent), Updated: n.Updated,
 		})
 	}
-	return tagged[primary], attached, true, nil
+	return primary, attached, true, nil
 }
 
 // planNoteActivity indexes the newest note stamp per (project, slug) across a
@@ -511,7 +487,8 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 	row := planRow{
 		NoteID: n.ID, Slug: slug, Source: planSourceComposed,
 		Title: n.Title, Project: n.Project,
-		Status: plans.StatusFromTags(n.Tags), Agents: agentCount[slug],
+		Status: plans.StatusFromTags(n.Tags), Favorite: n.Favorite,
+		Agents:  agentCount[slug],
 		Updated: n.Updated,
 	}
 	if noteActivity.After(row.Updated) {

@@ -56,8 +56,8 @@ func TestProjectWorkspace_RendersAllTabs(t *testing.T) {
 		ID: sessID, Name: "cc/s1", ProjectSlug: "seamless", Status: core.SessionActive,
 		Findings: "building the tabbed workspace", CreatedAt: now, UpdatedAt: now,
 	}))
-	// A plan step the live session claims -> exercises the plan timeline, the
-	// Sessions "holds" indicator, and the relations tree's claim edge.
+	// A plan step the live session claims -> exercises the plan timeline and the
+	// Sessions "holds" indicator. Context deliberately ignores execution state.
 	taskID := mustID(t)
 	require.NoError(t, store.CreateTask(ctx, db, core.Task{
 		ID: taskID, ProjectSlug: "seamless", Title: "Build project detail",
@@ -73,8 +73,8 @@ func TestProjectWorkspace_RendersAllTabs(t *testing.T) {
 	for _, panel := range projectTabKeys {
 		require.Contains(t, body, `data-panel="`+panel+`"`, "panel %q must render", panel)
 	}
-	require.Contains(t, body, "plan:demo", "plan slug on the tasks + relations panels")
-	require.Contains(t, body, "cc/s1", "the claiming session appears on sessions + tree")
+	require.Contains(t, body, "plan:demo", "plan slug on the tasks panel")
+	require.Contains(t, body, "cc/s1", "the claiming session appears on the sessions panel")
 	require.Contains(t, body, "Build project detail", "the plan step title")
 	require.Contains(t, body, "root project", "the shared-briefing banner (no parent/children)")
 	require.Contains(t, body, "holds demo step", "the session's inline claim indicator")
@@ -93,10 +93,24 @@ func TestProjectWorkspace_DeepLinkTabAndFamilyChild(t *testing.T) {
 	require.NoError(t, store.SetProjectParent(ctx, db, "acme-ios", "acme", now))
 
 	// A ?tab= deep-link marks that panel active server-side (no-JS + shareable).
-	body := getHTMLBody(t, mux, "/console/projects/acme-ios?tab=relations")
-	require.Contains(t, body, `class="tabpanel on" data-panel="relations"`)
-	require.Contains(t, body, "child of acme", "the parent chip for a family child")
-	require.Contains(t, body, "inherits", "the child inherits-from-parent banner")
+	body := getHTMLBody(t, mux, "/console/projects/acme-ios?tab=context")
+	require.Contains(t, body, `class="tabpanel on" data-panel="context"`)
+	require.Contains(t, body, "What acme-ios receives and shares")
+	require.Contains(t, body, "Parent memory")
+}
+
+func TestProjectWorkspace_LegacyRelationsTabRedirectsToContext(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: mustID(t), Slug: "demo", Name: "demo", CreatedAt: now, UpdatedAt: now,
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/console/projects/demo?tab=relations&w=7d", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusPermanentRedirect, rr.Code)
+	require.Equal(t, "/console/projects/demo?tab=context&w=7d", rr.Header().Get("Location"))
 }
 
 func TestProjectWorkspace_BadTabIs400(t *testing.T) {
@@ -107,11 +121,16 @@ func TestProjectWorkspace_BadTabIs400(t *testing.T) {
 		ID: mustID(t), Slug: "seamless", Name: "seamless", CreatedAt: now, UpdatedAt: now,
 	}))
 
-	req := httptest.NewRequest(http.MethodGet, "/console/projects/seamless?tab=bogus", nil)
-	req.Header.Set("Authorization", "Bearer "+testKey)
-	rr := do(mux, req)
-	require.Equal(t, http.StatusBadRequest, rr.Code)
-	require.Contains(t, rr.Body.String(), "overview, tasks, sessions", "a bad tab must name the valid values")
+	for _, path := range []string{
+		"/console/projects/seamless?tab=bogus",
+		"/console/projects/seamless?tab=",
+		"/console/projects/seamless?tab=context&tab=overview",
+	} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.Header.Set("Authorization", "Bearer "+testKey)
+		rr := do(mux, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code, "GET %s", path)
+	}
 }
 
 func TestProjectWorkspace_UnknownSlug404(t *testing.T) {

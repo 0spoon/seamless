@@ -23,7 +23,7 @@
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
-<link rel="stylesheet" href="../../../static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
 <link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../../">
@@ -293,6 +293,11 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <td>The model that produced the content, verbatim as the provider names it (<code>claude-fable-5</code>, <code>gpt-5.5</code>). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown.</td>
 </tr>
 <tr>
+<td><code>favorite</code></td>
+<td>author</td>
+<td><code>true</code> when starred (console, <code>seam fav</code>, or <code>favorite_set</code>). A starred memory is pinned into every briefing and boosted in recall. Omitted when false; hand-editing it works - the watcher reindexes. Starring never bumps <code>updated</code>.</td>
+</tr>
+<tr>
 <td><code>tags</code></td>
 <td>author</td>
 <td>Flow-style list. Omitted when empty. Also the <code>plan:&lt;slug&gt;</code> composition key.</td>
@@ -375,10 +380,12 @@ Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
 </span></span></span></code></pre><p><code>id</code>, <code>title</code>, <code>created</code>, and <code>updated</code> are always emitted. <code>slug</code>,
-<code>description</code>, <code>project</code>, <code>source_url</code>, <code>model</code>, and <code>tags</code> are omitted when
-empty. <code>source_url</code> is set when the note came from <code>capture_url</code>; <code>model</code> is
-the producing model, stamped exactly as for memories. Empty <code>project</code> means
-<code>notes/_global/</code>. Unknown keys round-trip losslessly, same as memories.</p>
+<code>description</code>, <code>project</code>, <code>source_url</code>, <code>model</code>, <code>favorite</code>, and <code>tags</code> are
+omitted when empty (or, for <code>favorite</code>, false). <code>source_url</code> is set when the
+note came from <code>capture_url</code>; <code>model</code> is the producing model, stamped exactly
+as for memories; <code>favorite</code> marks a starred note, exactly as for memories.
+Empty <code>project</code> means <code>notes/_global/</code>. Unknown keys round-trip losslessly,
+same as memories.</p>
 <h2 id="what-lives-only-in-sqlite">What lives only in SQLite</h2>
 <p><code>seam.db</code> holds two categories of data with very different recovery stories.</p>
 <p><strong>Rebuildable mirrors of the files.</strong> Delete these and they come back:</p>
@@ -460,6 +467,7 @@ including <code>memory_write</code>'s <code>supersedes</code>.</li>
 </ul>
 
 </article>
+
 
 
     

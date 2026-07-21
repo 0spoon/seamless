@@ -15,7 +15,7 @@ import (
 // expectedTools mirrors mcp.ToolCount without importing the mcp server package
 // into the CLI (which would pull its whole dependency tree). doctor asserts the
 // running server exposes this many tools via tools/list.
-const expectedTools = 30
+const expectedTools = 31
 
 var doctorCmd = spec("doctor", groupObservability, "reachability + key + tool-count check",
 	noArgs(), bindNoOpts, runDoctor)

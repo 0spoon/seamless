@@ -70,6 +70,12 @@ func eventSummary(e core.Event) string {
 		return "archived " + payloadStr(p, "name")
 	case core.EventNoteWritten:
 		return "wrote note " + payloadStr(p, "title")
+	case core.EventFavoriteChanged:
+		verb := "starred"
+		if fav, _ := p["favorite"].(bool); !fav {
+			verb = "unstarred"
+		}
+		return verb + " " + payloadStr(p, "kind") + " " + payloadStr(p, "id")
 	case core.EventTrialRecorded:
 		return "recorded trial " + payloadStr(p, "title")
 	case core.EventTaskTransition:

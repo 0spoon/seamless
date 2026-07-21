@@ -40,7 +40,7 @@ var faviconSVG []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "search", "interactions", "projects", "projectdetail", "relations", "sessions", "session",
+	"login", "overview", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
 	"memories", "notes", "retrieval", "tasks", "plans", "labs", "trials", "gardener", "settings", "event", "error",
 }
 
@@ -176,6 +176,9 @@ func parseTemplates() (pages, fragments map[string]*template.Template, err error
 	for _, name := range pageNames {
 		t := template.New("layout").Funcs(funcs)
 		files := []string{"templates/layout.html", "templates/" + name + ".html"}
+		if name == "context" || name == "projectdetail" {
+			files = append(files, "templates/context_shared.html")
+		}
 		if entityPeekPages[name] {
 			files = append(files, "templates/peek_"+name+".html")
 		}

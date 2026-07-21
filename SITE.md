@@ -1,10 +1,12 @@
 # thereisnospoon.org -- landing page + docs site
 
-This directory is the Seamless public site, served by GitHub Pages: a
+The `docs/` directory is the Seamless public site, served by GitHub Pages: a
 hand-written landing page at `/`, and the generated documentation site at
-`/docs/`.
+`/docs/`. This file lives at the repo root on purpose -- everything under
+`docs/` is published verbatim, and maintainer notes have no business being
+served at thereisnospoon.org.
 
-## Contents
+## Contents (paths relative to `docs/`)
 
 ```
 index.html              the landing page (single file, no build step)
@@ -104,7 +106,7 @@ It does not read prose. "One binary, no ceremony" is still yours to keep true.
 make docs-serve     # landing page at /, docs at /docs/
 ```
 
-Or any static file server pointed at this directory:
+Or any static file server pointed at `docs/`:
 
 ```
 cd docs && python3 -m http.server 8899

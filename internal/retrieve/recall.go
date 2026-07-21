@@ -25,6 +25,14 @@ const recallSourceDepth = 24
 // [[name]] links; each linked neighbor is pulled in as a third retrieval signal.
 const linkExpandFrom = 5
 
+// favoriteBoost multiplies a favorited item's fused score in Recall. It is
+// applied after fusion and link expansion, so it can promote a favorite past
+// similarly-ranked non-favorites but can never resurrect an item the candidate
+// queries (scope, validity, depth) already excluded. Console Search does not
+// use it: the search page partitions favorites in its own sort instead, keeping
+// the semantic floor untouched.
+const favoriteBoost = 1.15
+
 // Hit is one recall result. Kind tells the agent how to read it: a memory by its
 // Name (memory_read), a note by its ID (notes_read).
 type Hit struct {
@@ -49,6 +57,9 @@ type Hit struct {
 	// it zero, so omitempty keeps the MCP recall payload unchanged. A lexical-only
 	// hit has no vector distance to report and also omits it.
 	Similarity float64 `json:"similarity,omitempty"`
+	// Favorite marks a starred item. omitempty keeps the recall payload
+	// byte-identical to the pre-favorites contract for unstarred hits.
+	Favorite bool `json:"favorite,omitempty"`
 	// Updated is carried internally so the human search page can sort and
 	// window hydrated hits. It is deliberately excluded from Recall's JSON
 	// contract, whose payload predates console Search and must remain stable.
@@ -209,12 +220,20 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	// Link expansion: pull in memories referenced by [[name]] links in the top
 	// hits, as a third retrieval signal alongside semantic and FTS. Requires the
 	// body reader (index rows carry no body); degrades away when it is unset.
-	// expandLinks adds neighbors to both acc and mems, so we only re-rank.
-	if neighbors, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
+	// expandLinks adds neighbors to both acc and mems.
+	if _, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
 		return nil, err
-	} else if len(neighbors) > 0 {
-		ordered = rankFused(acc)
 	}
+
+	// Favorite boost, then one re-rank covering both the boost and any link
+	// neighbors. Hydration misses (an id in acc but not in mems/notes) read as
+	// unfavorited zero values and are skipped in the assembly loop below anyway.
+	for id, f := range acc {
+		if (f.kind == "note" && notes[id].Favorite) || (f.kind != "note" && mems[id].Favorite) {
+			f.score *= favoriteBoost
+		}
+	}
+	ordered = rankFused(acc)
 
 	budget := s.budgets.RecallBudgetTokens
 	if budget <= 0 {
@@ -303,7 +322,7 @@ func memoryHit(m core.Memory) Hit {
 	return Hit{
 		Kind: "memory", ID: m.ID, Name: m.Name, Title: m.Name,
 		Description: sanitizeField(m.Description, 200), Project: m.Project,
-		Age: humanAge(m.Updated), Updated: m.Updated,
+		Age: humanAge(m.Updated), Favorite: m.Favorite, Updated: m.Updated,
 	}
 }
 
@@ -311,7 +330,7 @@ func noteHit(n core.Note) Hit {
 	return Hit{
 		Kind: "note", ID: n.ID, Name: n.Slug, Title: n.Title,
 		Description: sanitizeField(n.Description, 200), Project: n.Project,
-		Age: humanAge(n.Updated), Updated: n.Updated,
+		Age: humanAge(n.Updated), Favorite: n.Favorite, Updated: n.Updated,
 	}
 }
 

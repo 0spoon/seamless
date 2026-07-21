@@ -55,7 +55,8 @@ type memoryDetail struct {
 	SourceID     string        `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
 	Model        string        `json:"model,omitempty"`           // producing model, as the provider names it
 	Harness      string        `json:"harness,omitempty"`         // producing client, resolved from the source session
-	ReplacedBy   string        `json:"replacedBy,omitempty"`      // name of the superseder
+	Favorite     bool          `json:"favorite,omitempty"`
+	ReplacedBy   string        `json:"replacedBy,omitempty"` // name of the superseder
 	ReplacedByID string        `json:"replacedById,omitempty"`
 	Supersedes   []memoryRef   `json:"supersedes,omitempty"` // reverse: memories this replaced
 	FilePath     string        `json:"filePath"`
@@ -80,6 +81,7 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 		ID: m.ID, Kind: string(m.Kind), Name: m.Name, Description: m.Description,
 		Project: m.Project, Status: status, Tags: m.Tags,
 		Created: m.Created, Updated: m.Updated, Source: m.SourceSession, Model: m.Model,
+		Favorite: m.Favorite,
 		FilePath: m.FilePath, AbsPath: abs, EditURL: edit,
 		CanArchive: s.cfg.Files != nil && m.Active(),
 	}
@@ -202,6 +204,7 @@ type noteDetail struct {
 	Tags        []string      `json:"tags,omitempty"`
 	SourceURL   string        `json:"sourceUrl,omitempty"`
 	Model       string        `json:"model,omitempty"` // producing model, as the provider names it
+	Favorite    bool          `json:"favorite,omitempty"`
 	Created     time.Time     `json:"created"`
 	Updated     time.Time     `json:"updated"`
 	FilePath    string        `json:"filePath"`
@@ -216,7 +219,7 @@ func (s *Service) noteDetailData(ctx context.Context, n core.Note) noteDetail {
 	d := noteDetail{
 		ID: n.ID, Title: n.Title, Slug: n.Slug, Description: n.Description,
 		Project: n.Project, Tags: n.Tags, SourceURL: n.SourceURL, Model: n.Model,
-		Created: n.Created, Updated: n.Updated,
+		Favorite: n.Favorite, Created: n.Created, Updated: n.Updated,
 		FilePath: n.FilePath, AbsPath: abs, EditURL: edit,
 	}
 	if s.cfg.Files != nil {
@@ -290,10 +293,11 @@ type taskRef struct {
 // taskDetail is the payload for a single task's peek/detail. Unlike the Tasks
 // list rows, it renders the task Body and resolves both dependency directions.
 type taskDetail struct {
-	ID      string `json:"id"`
-	Title   string `json:"title"`
-	Project string `json:"project"`
-	Status  string `json:"status"`
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Project  string `json:"project"`
+	Status   string `json:"status"`
+	Favorite bool   `json:"favorite,omitempty"`
 	// Body is the rendered markdown HTML the template shows; BodyText is the raw
 	// source (JSON output), so the two never double-escape each other.
 	Body        template.HTML `json:"-"`
@@ -315,6 +319,7 @@ type taskDetail struct {
 func (s *Service) taskDetailData(ctx context.Context, t core.Task) (taskDetail, error) {
 	d := taskDetail{
 		ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
+		Favorite: t.Favorite,
 		BodyText: t.Body, PlanSlug: t.PlanSlug, CreatedBy: t.CreatedBy,
 		ClaimedBy: t.ClaimedBy, LeaseExpiry: t.LeaseExpiresAt,
 		ClaimLive: t.ClaimLive(time.Now().UTC()),

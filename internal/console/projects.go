@@ -18,7 +18,7 @@ import (
 // ignored its param.
 var (
 	projectGroupKeys = []string{"family", "flat"}
-	projectSortKeys  = []string{"recent", "coverage", "name"}
+	projectSortKeys  = []string{"recent", "coverage", "name", "favorites"}
 )
 
 // projectRowVM is one board row: a project's strict per-slug health (from
@@ -34,6 +34,7 @@ type projectRowVM struct {
 	Parent       bool
 	Child        bool
 	Retired      bool
+	Favorite     bool
 	Unregistered bool
 	TileClass    string
 	TileIcon     string
@@ -321,6 +322,7 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		Parent:       parent,
 		Child:        p.ParentSlug != "",
 		Retired:      p.Retired(),
+		Favorite:     p.Favorite,
 		Unregistered: b.Unregistered,
 		Working:      b.LiveSessions,
 		Sessions:     b.Sessions,
@@ -398,9 +400,20 @@ func plural(n int, one, many string) string {
 }
 
 // projectLess builds the row comparator for a sort key: recent = most recent
-// activity first, coverage = highest reach first, name = slug ascending.
+// activity first, coverage = highest reach first, name = slug ascending,
+// favorites = starred first (then most recent activity).
 func projectLess(sortKey string) func(a, b projectRowVM) bool {
 	switch sortKey {
+	case "favorites":
+		return func(a, b projectRowVM) bool {
+			if a.Favorite != b.Favorite {
+				return a.Favorite
+			}
+			if !a.LastActive.Equal(b.LastActive) {
+				return a.LastActive.After(b.LastActive)
+			}
+			return a.Slug < b.Slug
+		}
 	case "coverage":
 		return func(a, b projectRowVM) bool {
 			if a.ReachRate != b.ReachRate {

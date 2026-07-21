@@ -25,7 +25,9 @@ const PAGES = [
   { name: 'interactions', url: '/console/interactions' },
   { name: 'plans', url: '/console/plans?w=30d' },
   { name: 'retrieval', url: '/console/retrieval?w=30d' },
-  { name: 'relations', url: '/console/relations?scope=project&project=orbital' },
+  // Keep the legacy asset basename so published and cached landing-page URLs
+  // stay valid; the captured surface itself is the canonical Context view.
+  { name: 'relations', url: '/console/context?scope=project&project=orbital' },
 ];
 
 (async () => {

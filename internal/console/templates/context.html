@@ -1,0 +1,55 @@
+{{define "content"}}
+{{with .Data}}
+<div class="crumb"><a href="/console/projects">All projects</a> <span class="faint">/</span> {{if .Project}}<a href="/console/context">context</a> <span class="faint">/</span> <b>{{.Project}}</b>{{else}}<b>context</b>{{end}}</div>
+
+<div class="context-page">
+  <header class="lib-hero context-hero">
+    <div class="lib-hero-copy">
+      <div class="lib-eyebrow">{{icon "share-2"}} Briefing topology</div>
+      <h1>Context</h1>
+      <div class="sub">How SessionStart knowledge crosses scope boundaries: global memory, shared parents, sibling families, and split lineage.{{if .Project}} Focused on <span class="mono">{{.Project}}</span>.{{end}}</div>
+      <div class="context-hero-tags" aria-label="Context topology summary">
+        <span>{{.Summary.Scopes}} project scope{{if ne .Summary.Scopes 1}}s{{end}}</span>
+        <span>{{.Summary.ParentLinks}} parent link{{if ne .Summary.ParentLinks 1}}s{{end}}</span>
+        <span>{{.Summary.Families}} briefing famil{{if eq .Summary.Families 1}}y{{else}}ies{{end}}</span>
+        {{if .Summary.Lineages}}<span>{{.Summary.Lineages}} split lineage{{if ne .Summary.Lineages 1}}s{{end}}</span>{{end}}
+        {{if .Summary.Warnings}}<span class="warn">{{icon "triangle-alert"}}{{.Summary.Warnings}} topology warning{{if ne .Summary.Warnings 1}}s{{end}}</span>{{end}}
+      </div>
+    </div>
+    <div class="context-hero-diagram" aria-hidden="true">
+      <span class="context-hero-node global">{{icon "database"}}global</span>
+      <span class="context-hero-arrow global">&rarr;</span>
+      <span class="context-hero-node parent">{{icon "folder-tree"}}parent</span>
+      <span class="context-hero-arrow parent">&rarr;</span>
+      <span class="context-hero-node family">{{icon "share-2"}}family peers</span>
+      <span class="context-hero-arrow family">&harr;</span>
+      <span class="context-hero-node project">{{icon "box"}}project</span>
+    </div>
+  </header>
+
+  <section class="lib-controlbar context-controlbar" aria-label="Context scope">
+    <div class="lib-control">
+      <span class="lib-control-label">View</span>
+      <div class="seg" data-seam-query><a class="{{if eq .Scope "all"}}on{{end}}" href="/console/context">All scopes</a></div>
+    </div>
+    {{if .Options}}
+    <form class="context-picker" method="get" action="/console/context" data-seam-query>
+      <input type="hidden" name="scope" value="project">
+      <label for="context-project">Focus project</label>
+      <select id="context-project" name="project" required>
+        <option value="" disabled{{if not .Project}} selected{{end}}>Choose a scope&hellip;</option>
+        {{range .Options}}<option value="{{.Slug}}"{{if .Selected}} selected{{end}}>{{.Label}}{{if not .Registered}} · unregistered{{else if .Retired}} · retired{{end}}</option>{{end}}
+      </select>
+      <button class="btn small" type="submit">Focus</button>
+    </form>
+    {{end}}
+    <div class="context-policy-link">
+      <span class="kind{{if .Rules.BriefingOverridden}} brand{{end}}">{{if .Rules.BriefingOverridden}}runtime override{{else}}file / env policy{{end}}</span>
+      <a href="/console/settings#briefing-recipe">briefing settings &rarr;</a>
+    </div>
+  </section>
+
+  {{template "context-map" .}}
+</div>
+{{end}}
+{{end}}

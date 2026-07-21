@@ -5,25 +5,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Internals - Seamless docs</title>
-<meta name="description" content="For contributors - the package layering, the check gate, and the invariants the code holds.">
+<meta name="description" content="For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/internals/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/internals/">
 <meta property="og:title" content="Internals - Seamless docs">
-<meta property="og:description" content="For contributors - the package layering, the check gate, and the invariants the code holds.">
+<meta property="og:description" content="For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"}]},{"@type":"TechArticle","headline":"Internals - Seamless docs","description":"For contributors - the package layering, the check gate, and the invariants the code holds.","url":"https://thereisnospoon.org/docs/internals/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"}]},{"@type":"TechArticle","headline":"Internals - Seamless docs","description":"For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.","url":"https://thereisnospoon.org/docs/internals/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
-<link rel="stylesheet" href="../../static/site.css?v=dbdac09c">
+<link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
 <link rel="stylesheet" href="../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../">
@@ -183,7 +183,29 @@
 </nav>
 
   <h1>Internals</h1>
-  <p class="lede">For contributors - the package layering, the check gate, and the invariants the code holds.</p>
+  <p class="lede">For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.</p>
+  <p>These pages are for people changing Seamless rather than running it. They
+document the things a contributor cannot recover from the code alone: why the
+packages layer the way they do, what the build gate is actually defending, and
+the invariants that look like implementation details until a refactor quietly
+breaks one.</p>
+<p><a href="../internals/architecture/">Architecture</a> is the map - what each package owns,
+the dependency direction between them, and two data-flow traces followed
+through the real code: a memory write from MCP call to markdown file, and a
+briefing assembly from session start to injected text. It also lists the
+things Seamless deliberately does not have, which explains more design
+decisions than what it does.</p>
+<p><a href="../internals/contributing/">Contributing</a> is the workflow page: the make
+targets, what <code>make check</code> gates and in what order, the conventions that are
+enforced rather than suggested, the forbidden APIs, and the three places a new
+MCP tool must be wired before the build goes green.</p>
+<p><a href="../internals/invariants/">Domain invariants</a> is the page to read before
+touching lifecycle, scope, or search code. Each entry is a rule that
+reasonable-looking code has broken or would break - supersession ordering,
+scope resolution, FTS and LIKE escaping, LLM degradation - stated with the
+failure it prevents, so you can tell when a change is about to relearn one the
+hard way.</p>
+
 </article>
 
 <div class="card-grid">
@@ -205,6 +227,7 @@
   </a>
   
 </div>
+
 
 
     

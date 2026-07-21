@@ -5,8 +5,9 @@
 #
 # `pages` are markdown paths relative to the section's `slug`, in nav order.
 # A section with a slug gets a generated card-grid index at /docs/<slug>/ unless
-# it lists its own <slug>/index.md. Underscore-prefixed paths (_tools/) are
-# generator partials, not pages, and are not listed here.
+# it lists its own <slug>/index.md; an authored index still gets the card grid,
+# appended after its prose. Underscore-prefixed paths (_tools/) are generator
+# partials, not pages, and are not listed here.
 sections:
   - title: Getting started
     slug: ""
@@ -23,6 +24,7 @@ sections:
     slug: concepts
     description: How the pieces fit - memory with a lifecycle, ambient sessions, recall, tasks, scope, and the gardener.
     pages:
+      - index.md
       - how-it-works.md
       - memory.md
       - sessions.md
@@ -35,6 +37,7 @@ sections:
     slug: guides
     description: Task-shaped walkthroughs - wiring up an agent, writing memories worth recalling, running a fleet, and fixing what broke.
     pages:
+      - index.md
       - integrate-your-agent.md
       - write-good-memories.md
       - coordinate-agents.md
@@ -47,6 +50,7 @@ sections:
     slug: reference
     description: The complete surface - MCP tools, CLIs, configuration keys, hooks, and file formats.
     pages:
+      - index.md
       - mcp/index.md
       - mcp/sessions-memory-recall.md
       - mcp/notes-projects-capture.md
@@ -66,6 +70,7 @@ sections:
     slug: internals
     description: For contributors - the package layering, the check gate, and the invariants the code holds.
     pages:
+      - index.md
       - architecture.md
       - contributing.md
       - invariants.md

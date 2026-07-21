@@ -15,7 +15,7 @@ import (
 var ErrSlugExists = errors.New("store: project slug already exists")
 
 // projectCols is the SELECT list for the projects table, matching scanProject.
-const projectCols = `id, slug, name, description, parent_slug, retired_at, created_at, updated_at`
+const projectCols = `id, slug, name, description, parent_slug, retired_at, favorite, created_at, updated_at`
 
 // EnsureProject returns the project registered under slug, creating a minimal
 // row when none exists yet. It is the idempotent upsert used by the importer and
@@ -113,7 +113,7 @@ func scanProject(rows *sql.Rows) (core.Project, error) {
 		created, updated string
 		retired          sql.NullString
 	)
-	if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.ParentSlug, &retired, &created, &updated); err != nil {
+	if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.ParentSlug, &retired, &p.Favorite, &created, &updated); err != nil {
 		return core.Project{}, err
 	}
 	var err error

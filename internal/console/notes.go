@@ -14,7 +14,7 @@ import (
 )
 
 // noteSortKeys are the accepted ?sort values on the notes list.
-var noteSortKeys = []string{"recent", "name"}
+var noteSortKeys = []string{"recent", "name", "favorites"}
 
 // noteRow is a display projection of a note for the browser.
 type noteRow struct {
@@ -24,6 +24,7 @@ type noteRow struct {
 	Project     string    `json:"project"`
 	Tags        []string  `json:"tags,omitempty"`
 	Model       string    `json:"model,omitempty"` // producing model, verbatim
+	Favorite    bool      `json:"favorite,omitempty"`
 	Updated     time.Time `json:"updated"`
 }
 
@@ -95,7 +96,8 @@ func (s *Service) notesPage(ctx context.Context, sortKey, query string) (notesDa
 	for _, n := range notes {
 		row := noteRow{
 			ID: n.ID, Title: n.Title, Description: n.Description,
-			Project: n.Project, Tags: n.Tags, Model: n.Model, Updated: n.Updated,
+			Project: n.Project, Tags: n.Tags, Model: n.Model, Favorite: n.Favorite,
+			Updated: n.Updated,
 		}
 		if !noteMatches(row, q) {
 			continue
@@ -172,7 +174,8 @@ func noteMatches(row noteRow, q string) bool {
 
 // buildNoteGroups orders the project->notes map: global ("") first, then
 // projects alphabetically. Within a group notes keep ListNotes' newest-first
-// order for sort=recent, or sort by title for sort=name.
+// order for sort=recent, sort by title for sort=name, or float starred rows
+// (keeping newest-first within each partition) for sort=favorites.
 func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProjectGroup {
 	projects := make([]string, 0, len(byProject))
 	for p := range byProject {
@@ -187,9 +190,14 @@ func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProje
 	groups := make([]noteProjectGroup, 0, len(projects))
 	for _, p := range projects {
 		rows := byProject[p]
-		if sortKey == "name" {
+		switch sortKey {
+		case "name":
 			sort.SliceStable(rows, func(i, j int) bool {
 				return strings.ToLower(rows[i].Title) < strings.ToLower(rows[j].Title)
+			})
+		case "favorites":
+			sort.SliceStable(rows, func(i, j int) bool {
+				return rows[i].Favorite && !rows[j].Favorite
 			})
 		}
 		groups = append(groups, noteProjectGroup{Project: p, Count: len(rows), Notes: rows})
