@@ -169,7 +169,7 @@
   {{end}}
   <div class="ix-feed" id="ix-pfeed">
     {{range .Interactions}}
-    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
+    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
       <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{agentPill .Harness .Model}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
         {{if or .SessionName .DurationMS .Items .IsError .Ambient}}
@@ -229,8 +229,10 @@
      histogram and wire the category filter, reusing the shared IX helpers so it
      matches the live feed. */
   if (!window.IX) return;
-  window.IX.mountVolume(document.getElementById('ix-pvol'));
-  window.IX.wireKindFilter(document.getElementById('ix-pkinds'), document.getElementById('ix-pfeed'));
+  var feed = document.getElementById('ix-pfeed');
+  var kinds = document.getElementById('ix-pkinds');
+  window.IX.mountVolume(document.getElementById('ix-pvol'), feed, kinds);
+  window.IX.wireKindFilter(kinds, feed);
 })();
 </script>
 {{end}}

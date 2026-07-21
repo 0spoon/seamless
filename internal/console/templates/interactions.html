@@ -318,6 +318,12 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     else timeSel = { from: from, to: to, idx: idx };
     applyAll();
     highlightSel();
+    if (timeSel) {
+      for (var i = 0; i < order.length; i++) {
+        var row = rows[order[i]];
+        if (row && !row.el.hidden) { window.IX.revealRow(row.el); break; }
+      }
+    }
   }
 
   function loadVolume() {

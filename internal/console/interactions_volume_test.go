@@ -86,7 +86,7 @@ func TestBuildVolume(t *testing.T) {
 	require.Equal(t, 1, session)
 	require.Equal(t, 0, plan)
 	require.Positive(t, buckets[volBuckets-1].N, "the most recent ticks land in the last bucket")
-	require.Equal(t, "01TOOL", buckets[volBuckets-1].LatestID, "the newest event becomes the bucket click target")
+	require.Equal(t, "01TOOL", buckets[volBuckets-1].LatestID, "the newest event becomes the preferred row target")
 
 	require.Nil(t, buildVolume(nil, 300*time.Second, now), "empty input yields nil")
 }
@@ -114,11 +114,14 @@ func TestInteractions_VolumeEndpoint(t *testing.T) {
 // The shared renderer powers the live Interactions chart and the embedded
 // project/session timelines. Pin the interaction affordances in one place so a
 // later visual refactor cannot silently return the embedded charts to title-only
-// hover or remove their event-detail action.
+// hover or restore navigation away from the event list.
 func TestInteractionsVolumeClient_InteractiveContract(t *testing.T) {
 	js := string(interactionsJS)
 	require.Contains(t, js, "fillVolumeTip(tip, b, range, action)", "non-empty buckets render a visible breakdown")
 	require.Contains(t, js, "bar.onfocus = bar.onpointerenter", "keyboard focus gets the same readout as pointer hover")
-	require.Contains(t, js, "'/console/events/' + encodeURIComponent(b.latestId)", "embedded charts link to the represented event")
+	require.Contains(t, js, "rowForBucket(feedEl, bucket, from, to)", "embedded charts resolve a rendered event row")
+	require.Contains(t, js, "row.scrollIntoView", "off-screen event rows are brought into view")
+	require.Contains(t, js, "row.classList.add('ix-located')", "the target row receives a temporary highlight")
 	require.Contains(t, js, "bar.setAttribute('aria-pressed', 'false')", "live-feed filter bars expose their toggle state")
+	require.Contains(t, string(consoleCSS), ".ix-row.ix-located", "the temporary row highlight is styled")
 }

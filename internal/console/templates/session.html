@@ -86,7 +86,7 @@
         </div>
         <div class="ix-feed" id="ix-sfeed">
           {{range .Interactions}}
-          <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
+          <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
             <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when" title="{{ts .TS}}">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .Ambient}}<span class="badge">ambient</span>{{end}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .DurationMS}}<span class="ix-meta">{{.DurationMS}}ms</span>{{else if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
             <div class="ix-body">
               {{if or .DurationMS .Items .IsError}}
@@ -183,8 +183,10 @@
      (enhance) on load; here we draw the session's volume histogram and wire the
      kind filter, reusing the shared IX helpers so it matches the live feed. */
   if (!window.IX) return;
-  window.IX.mountVolume(document.getElementById('ix-svol'));
-  window.IX.wireKindFilter(document.getElementById('ix-skinds'), document.getElementById('ix-sfeed'));
+  var feed = document.getElementById('ix-sfeed');
+  var kinds = document.getElementById('ix-skinds');
+  window.IX.mountVolume(document.getElementById('ix-svol'), feed, kinds);
+  window.IX.wireKindFilter(kinds, feed);
 })();
 </script>
 {{end}}

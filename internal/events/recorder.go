@@ -245,7 +245,7 @@ func (r *Recorder) ByKindsSince(ctx context.Context, kinds []core.EventKind, sin
 
 // KindTick is one event's id, timestamp, and kind -- the minimal projection the
 // console buckets into the interaction-volume histogram. ID lets an interactive
-// bucket link back to its newest represented event without fetching wide event
+// bucket identify its newest represented row without fetching wide event
 // payloads for the chart.
 type KindTick struct {
 	ID   string

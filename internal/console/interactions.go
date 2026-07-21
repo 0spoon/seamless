@@ -243,7 +243,7 @@ func buildVolume(ticks []events.KindTick, window time.Duration, now time.Time) [
 		b := &out[idx]
 		b.N++
 		// KindTimeline and the session-detail caller both supply newest-first
-		// ticks, so the first id placed in a bucket is its honest click target.
+		// ticks, so the first id placed in a bucket is its preferred row target.
 		if b.LatestID == "" {
 			b.LatestID = tk.ID
 		}

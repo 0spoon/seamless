@@ -366,7 +366,7 @@
       if (b[cat]) parts.push(VOL_META[cat] + ' ' + b[cat]);
     });
     if (action === 'filter') parts.push('Activate to isolate this time slice');
-    if (action === 'open') parts.push('Activate to open the latest event');
+    if (action === 'locate') parts.push('Activate to locate the event in the list');
     return parts.filter(Boolean).join('. ');
   }
 
@@ -385,7 +385,7 @@
     });
     tip.appendChild(list);
     if (action === 'filter') tip.appendChild(el('div', 'ix-vol-tip-action', 'Click to isolate this time slice'));
-    if (action === 'open') tip.appendChild(el('div', 'ix-vol-tip-action', 'Open the latest event in this bucket'));
+    if (action === 'locate') tip.appendChild(el('div', 'ix-vol-tip-action', 'Click to locate the event in the list'));
   }
 
   function placeVolumeTip(mount, tip, bar) {
@@ -400,9 +400,11 @@
 
   // renderVolume draws bucketed interaction volume as a stacked bar chart into
   // mount. Every non-empty bucket gets a visible hover/focus breakdown. An
-  // opts.onSelect(fromMs, toMs, index, barEl) callback makes buckets filter the
-  // current feed; otherwise latestId makes them link to the newest event in the
-  // bucket. Returns the bar elements for selection state on the live feed.
+  // opts.onSelect(fromMs, toMs, index, barEl, bucket) callback makes buckets
+  // actionable. action="filter" describes the live time-slice toggle;
+  // action="locate" describes the embedded charts' in-page row reveal.
+  // canSelect can leave a bucket hover-only when its row is not in the snapshot.
+  // Returns the bar elements for selection state on the live feed.
   function renderVolume(buckets, mount, opts) {
     opts = opts || {};
     mount.textContent = '';
@@ -423,8 +425,9 @@
     var bars = [];
     buckets.forEach(function (b, i) {
       var from = Date.parse(b.t), to = from + sliceMs;
-      var action = opts.onSelect && b.n > 0 ? 'filter' : (b.latestId && b.n > 0 ? 'open' : '');
-      var bar = el(action === 'filter' ? 'button' : (action === 'open' ? 'a' : 'div'), 'ix-vbar');
+      var selectable = b.n > 0 && (!opts.canSelect || opts.canSelect(b, from, to));
+      var action = opts.onSelect && selectable ? (opts.action || 'filter') : '';
+      var bar = el(action ? 'button' : 'div', 'ix-vbar');
       var barPx = b.n > 0 ? Math.max(2, Math.round(b.n / maxN * H)) : 0;
       bar.style.height = barPx + 'px';
       VOL_CATS.forEach(function (cat) {
@@ -450,16 +453,13 @@
         bar.onfocus = bar.onpointerenter;
         bar.onblur = bar.onpointerleave;
       }
-      if (action === 'filter') {
+      if (action) {
         bar.type = 'button';
         bar.classList.add('clickable');
-        bar.onclick = (function (f, idx, elBar) {
-          return function () { opts.onSelect(f, f + sliceMs, idx, elBar); };
-        })(from, i, bar);
-        bar.setAttribute('aria-pressed', 'false');
-      } else if (action === 'open') {
-        bar.href = '/console/events/' + encodeURIComponent(b.latestId);
-        bar.classList.add('clickable');
+        bar.onclick = (function (f, idx, elBar, bucket) {
+          return function () { opts.onSelect(f, f + sliceMs, idx, elBar, bucket); };
+        })(from, i, bar, b);
+        if (action === 'filter') bar.setAttribute('aria-pressed', 'false');
       }
       track.appendChild(bar);
       bars.push(bar);
@@ -510,14 +510,86 @@
     });
   }
 
+  var revealTimer = null;
+
+  function rowTime(row) {
+    var raw = row.getAttribute('data-ts') || '';
+    var n = Number(raw);
+    if (raw && isFinite(n)) return n;
+    return Date.parse(raw);
+  }
+
+  // rowForBucket prefers the bucket's newest event id. A project snapshot may
+  // not include that exact row, so fall back to the newest rendered row inside
+  // the same time slice. Buckets with no rendered row remain hover-only.
+  function rowForBucket(feedEl, bucket, from, to) {
+    if (!feedEl) return null;
+    var rows = feedEl.querySelectorAll('.ix-row[data-id]');
+    var fallback = null, fallbackTS = -Infinity;
+    for (var i = 0; i < rows.length; i++) {
+      if (bucket.latestId && rows[i].getAttribute('data-id') === bucket.latestId) return rows[i];
+      var t = rowTime(rows[i]);
+      if (!isNaN(t) && t >= from && t < to && t > fallbackTS) {
+        fallback = rows[i];
+        fallbackTS = t;
+      }
+    }
+    return fallback;
+  }
+
+  // revealRow keeps chart navigation on the current page. It scrolls only when
+  // the summary is outside the viewport, moves keyboard focus to that summary,
+  // and leaves a conspicuous but temporary highlight behind.
+  function revealRow(row) {
+    if (!row) return false;
+    if (revealTimer) clearTimeout(revealTimer);
+    document.querySelectorAll('.ix-row.ix-located').forEach(function (old) {
+      old.classList.remove('ix-located');
+    });
+    row.classList.remove('ix-located');
+    void row.offsetWidth; // restart the highlight when the same bucket is clicked again
+    row.classList.add('ix-located');
+
+    var rect = row.getBoundingClientRect();
+    var outside = rect.top < 16 || rect.bottom > window.innerHeight - 16;
+    if (outside && row.scrollIntoView) {
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      row.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'center', inline: 'nearest' });
+    }
+    var summary = row.querySelector('summary');
+    if (summary && summary.focus) {
+      try { summary.focus({ preventScroll: true }); } catch (e) { summary.focus(); }
+    }
+    revealTimer = setTimeout(function () {
+      row.classList.remove('ix-located');
+      revealTimer = null;
+    }, 3200);
+    return true;
+  }
+
+  function resetKindFilter(kindsEl) {
+    if (!kindsEl) return;
+    var all = kindsEl.querySelector('.ix-seg[data-cat="all"]');
+    if (all && !all.classList.contains('active')) all.click();
+  }
+
   // mountVolume renders the histogram a server embedded as JSON in el's data-vol
-  // attribute. Its non-empty buckets link to their latest event; the live feed
-  // calls renderVolume directly with click-to-filter instead.
-  function mountVolume(el) {
+  // attribute. Buckets represented in feedEl locate and highlight their newest
+  // visible row; the live feed calls renderVolume directly with time filtering.
+  function mountVolume(el, feedEl, kindsEl) {
     if (!el) return;
     var buckets;
     try { buckets = JSON.parse(el.getAttribute('data-vol') || '[]'); } catch (e) { return; }
-    renderVolume(buckets, el, {});
+    renderVolume(buckets, el, {
+      action: 'locate',
+      canSelect: function (bucket, from, to) { return !!rowForBucket(feedEl, bucket, from, to); },
+      onSelect: function (from, to, idx, bar, bucket) {
+        var row = rowForBucket(feedEl, bucket, from, to);
+        if (!row) return;
+        resetKindFilter(kindsEl);
+        revealRow(row);
+      }
+    });
     el.setAttribute('aria-hidden', buckets.length ? 'false' : 'true');
   }
 
@@ -534,6 +606,7 @@
     shortId: shortId,
     buildRow: buildRow,
     enhance: enhance,
+    revealRow: revealRow,
     wireKindFilter: wireKindFilter,
     mountVolume: mountVolume,
     renderVolume: renderVolume

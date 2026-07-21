@@ -1449,6 +1449,20 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-row > summary::-webkit-details-marker { display: none; }
 .ix-row > summary:hover { background: var(--surface-2); }
 .ix-row[open] > summary { border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.ix-row.ix-located { animation: ix-locate-frame 3.2s var(--ease-out) both; }
+.ix-row.ix-located > summary { animation: ix-locate-wash 3.2s var(--ease-out) both; }
+@keyframes ix-locate-frame {
+  0%, 18% { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand), var(--shadow-md); }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes ix-locate-wash {
+  0%, 18% { background: color-mix(in oklab, var(--brand) 20%, var(--surface)); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ix-row.ix-located { border-color: var(--brand); box-shadow: 0 0 0 2px var(--brand) !important; }
+  .ix-row.ix-located > summary { background: var(--brand-soft) !important; }
+}
 .ix-type { flex: none; display: inline-flex; color: var(--muted); }
 .ix-type .ico { width: 14px; height: 14px; }
 .ix-row.tone-brand .ix-type, .ix-row.tone-accent .ix-type { color: var(--brand); }

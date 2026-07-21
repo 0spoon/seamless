@@ -69,6 +69,8 @@ func TestSessionDetail_InteractionsSurface(t *testing.T) {
 	require.Contains(t, body, `class="ix-volume`, "renders the volume histogram mount")
 	require.Contains(t, body, `data-ix-title="Request"`, "tool args/prompt become a copyable IX section")
 	require.Contains(t, body, "memory_write", "the tool label shows on its row")
+	require.Contains(t, body, `data-id="`, "rendered rows expose their event id to bucket navigation")
+	require.Contains(t, body, `data-ts="`, "rendered rows expose precise timestamps for bucket matching")
 	require.Contains(t, body, `data-vol="[`, "embeds the session-scoped volume buckets as JSON")
-	require.Contains(t, body, `latestId`, "volume buckets carry an event-detail click target")
+	require.Contains(t, body, `latestId`, "volume buckets carry their preferred rendered-row target")
 }
