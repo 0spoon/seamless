@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCodexRuntimeCheckReportsSurfaceVersionAndPath(t *testing.T) {
-	candidate := codexRuntimeCandidate{name: "codex app runtime", path: "/Applications/Codex.app/runtime"}
-	chk := codexRuntimeCheck(candidate, func(_ context.Context, path string) (string, error) {
+func TestRuntimeVersionCheckReportsSurfaceVersionAndPath(t *testing.T) {
+	candidate := runtimeCandidate{name: "codex app runtime", path: "/Applications/Codex.app/runtime"}
+	chk := runtimeVersionCheck(candidate, func(_ context.Context, path string) (string, error) {
 		require.Equal(t, candidate.path, path)
 		return "codex-cli 0.145.0-alpha.18", nil
 	})
@@ -20,9 +20,9 @@ func TestCodexRuntimeCheckReportsSurfaceVersionAndPath(t *testing.T) {
 	require.Equal(t, "codex-cli 0.145.0-alpha.18 (/Applications/Codex.app/runtime)", chk.detail)
 }
 
-func TestCodexRuntimeCheckSurfacesInspectionFailure(t *testing.T) {
-	candidate := codexRuntimeCandidate{name: "codex CLI runtime", path: "/opt/codex"}
-	chk := codexRuntimeCheck(candidate, func(context.Context, string) (string, error) {
+func TestRuntimeVersionCheckSurfacesInspectionFailure(t *testing.T) {
+	candidate := runtimeCandidate{name: "codex CLI runtime", path: "/opt/codex"}
+	chk := runtimeVersionCheck(candidate, func(context.Context, string) (string, error) {
 		return "", errors.New("synthetic failure")
 	})
 

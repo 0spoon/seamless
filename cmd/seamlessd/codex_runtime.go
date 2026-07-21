@@ -1,9 +1,6 @@
 package main
 
 import (
-	"context"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,13 +10,6 @@ import (
 
 const macOSCodexAppRuntime = "/Applications/Codex.app/Contents/Resources/codex"
 
-type codexRuntimeCandidate struct {
-	name string
-	path string
-}
-
-type codexVersionReader func(context.Context, string) (string, error)
-
 // codexRuntimeChecks reports each locally discoverable Codex runtime
 // independently. The PATH CLI and desktop app can bundle different versions,
 // so collapsing them into one value would hide the compatibility boundary the
@@ -28,15 +18,15 @@ func codexRuntimeChecks() []check {
 	candidates := discoverCodexRuntimes()
 	checks := make([]check, 0, len(candidates))
 	for _, candidate := range candidates {
-		checks = append(checks, codexRuntimeCheck(candidate, readCodexVersion))
+		checks = append(checks, runtimeVersionCheck(candidate, readRuntimeVersion))
 	}
 	return checks
 }
 
-func discoverCodexRuntimes() []codexRuntimeCandidate {
-	var candidates []codexRuntimeCandidate
+func discoverCodexRuntimes() []runtimeCandidate {
+	var candidates []runtimeCandidate
 	if path, err := exec.LookPath("codex"); err == nil {
-		candidates = append(candidates, codexRuntimeCandidate{
+		candidates = append(candidates, runtimeCandidate{
 			name: "codex CLI runtime",
 			path: path,
 		})
@@ -49,7 +39,7 @@ func discoverCodexRuntimes() []codexRuntimeCandidate {
 	// state we have not established.
 	if path := codexAppRuntimePath(); path != "" {
 		if info, err := os.Lstat(path); err == nil && !info.IsDir() {
-			candidates = append(candidates, codexRuntimeCandidate{
+			candidates = append(candidates, runtimeCandidate{
 				name: "codex app runtime",
 				path: path,
 			})
@@ -79,38 +69,4 @@ func codexAppSharesSelectedHome() bool {
 		return false
 	}
 	return filepath.Clean(selected) == filepath.Clean(defaultHome)
-}
-
-func codexRuntimeCheck(candidate codexRuntimeCandidate, readVersion codexVersionReader) check {
-	ctx, cancel := context.WithTimeout(context.Background(), mcpCommandTimeout)
-	defer cancel()
-
-	version, err := readVersion(ctx, candidate.path)
-	if err != nil {
-		return check{statusWarn, candidate.name,
-			fmt.Sprintf("cannot run %q --version: %v", candidate.path, err)}
-	}
-	return check{statusOK, candidate.name, fmt.Sprintf("%s (%s)", version, candidate.path)}
-}
-
-func readCodexVersion(ctx context.Context, path string) (string, error) {
-	cmd := exec.CommandContext(ctx, path, "--version")
-	out, err := cmd.Output()
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return "", ctxErr
-		}
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			if detail := strings.TrimSpace(string(exitErr.Stderr)); detail != "" {
-				return "", fmt.Errorf("%w: %s", err, detail)
-			}
-		}
-		return "", err
-	}
-	version := strings.TrimSpace(string(out))
-	if version == "" {
-		return "", errors.New("empty version output")
-	}
-	return version, nil
 }

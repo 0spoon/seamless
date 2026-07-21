@@ -482,13 +482,40 @@ func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string,
 	if root == "" {
 		return "", nil // not inside a git repo: stay global, register nothing
 	}
-	name := filepath.Base(root)
-	slug := uniqueProjectSlug(core.Slugify(name), root, m)
+	// A linked worktree (git worktree add, the Claude/Codex apps' managed
+	// worktrees) is a checkout of the main repository, not a repository of its
+	// own: key project identity on the main checkout so a session whose first
+	// contact is a worktree inherits the repo's project instead of registering
+	// a transient project named after the worktree directory.
+	main := gitMainWorktreeRoot(root)
+	if main != root {
+		if slug := matchProjectPath(main, m); slug != "" {
+			// Main checkout already mapped: adopt its project. An out-of-tree
+			// worktree also gets its own map entry so read paths (briefing,
+			// prompt recall) resolve it without re-deriving git identity.
+			if _, err := EnsureProject(ctx, db, slug, slug); err != nil {
+				return "", err
+			}
+			if !pathHasPrefix(root, main) {
+				if err := AddRepoMapping(ctx, db, root, slug); err != nil {
+					return "", err
+				}
+			}
+			return slug, nil
+		}
+	}
+	name := filepath.Base(main)
+	slug := uniqueProjectSlug(core.Slugify(name), main, m)
 	if _, err := EnsureProject(ctx, db, slug, name); err != nil {
 		return "", err
 	}
-	if err := AddRepoMapping(ctx, db, root, slug); err != nil {
+	if err := AddRepoMapping(ctx, db, main, slug); err != nil {
 		return "", err
+	}
+	if main != root && !pathHasPrefix(root, main) {
+		if err := AddRepoMapping(ctx, db, root, slug); err != nil {
+			return "", err
+		}
 	}
 	return slug, nil
 }
@@ -508,6 +535,58 @@ func gitRepoRoot(dir string) string {
 		}
 		dir = parent
 	}
+}
+
+// gitMainWorktreeRoot resolves a linked-worktree root to the root of its main
+// checkout. A linked worktree's .git is a file ("gitdir: <admin dir>") whose
+// admin dir lives under the main repository's .git/worktrees/<name>/, and the
+// commondir file inside it points back at the shared .git directory; the main
+// checkout root is that directory's parent. Everything else resolves to root
+// unchanged: a regular checkout (.git directory), a submodule (gitdir under
+// .git/modules/, no commondir file -- a genuinely separate repository), a bare
+// main repo (commondir not named .git, so there is no main checkout), or an
+// unparseable/stale layout. Pure filesystem -- hooks and session_start must not
+// depend on a git executable.
+func gitMainWorktreeRoot(root string) string {
+	gitPath := filepath.Join(root, ".git")
+	info, err := os.Lstat(gitPath)
+	if err != nil || info.IsDir() {
+		return root
+	}
+	data, err := os.ReadFile(gitPath)
+	if err != nil {
+		return root
+	}
+	gitdir, ok := strings.CutPrefix(strings.TrimSpace(string(data)), "gitdir:")
+	if !ok {
+		return root
+	}
+	gitdir = strings.TrimSpace(gitdir)
+	if gitdir == "" {
+		return root
+	}
+	if !filepath.IsAbs(gitdir) {
+		gitdir = filepath.Join(root, gitdir)
+	}
+	common, err := os.ReadFile(filepath.Join(gitdir, "commondir"))
+	if err != nil {
+		return root
+	}
+	commonDir := strings.TrimSpace(string(common))
+	if commonDir == "" {
+		return root
+	}
+	if !filepath.IsAbs(commonDir) {
+		commonDir = filepath.Join(gitdir, commonDir)
+	}
+	commonDir = filepath.Clean(commonDir)
+	if filepath.Base(commonDir) != ".git" {
+		return root
+	}
+	if info, err := os.Lstat(commonDir); err != nil || !info.IsDir() {
+		return root
+	}
+	return filepath.Dir(commonDir)
 }
 
 // uniqueProjectSlug returns base unless another repo path already owns it in m,

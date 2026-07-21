@@ -100,7 +100,9 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
-	checks = append(checks, mcpToolsCheck(), hooksCheck(cfg))
+	checks = append(checks, mcpToolsCheck())
+	checks = append(checks, claudeRuntimeChecks()...)
+	checks = append(checks, hooksCheck(cfg))
 	checks = append(checks, codexChecks(cfg, db)...)
 	checks = append(checks, gardenerCheck(cfg))
 
