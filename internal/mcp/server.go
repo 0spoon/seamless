@@ -236,7 +236,7 @@ func (s *Server) toolSchema(name string) (mcp.ToolInputSchema, bool) {
 
 // binding is the session context inherited by later tool calls on a connection.
 type binding struct {
-	sessionID string    // ULID of the bound session
+	sessionID string    // ULID of the bound session; "" marks a session-less (lab-only) entry
 	project   string    // resolved project slug ("" = global)
 	lab       string    // current research lab (set by lab_open), inherited by trial_record
 	touchedAt time.Time // last set/lookup; the sweep's staleness signal for session-less bindings
@@ -390,7 +390,21 @@ func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
 	s.maybeSweepBindings(ctx)
 }
 
+// getBinding returns the connection's session binding. A session-less entry --
+// created by setBindingLab on a connection that never ran session_start -- is
+// not one: reporting it as bound would hand resolveWriteScope/resolveReadScope
+// an empty project (the global scope) and shadow the ambient fallback, silently
+// globalizing unscoped writes after a bare lab_open. Such entries are visible
+// only through rawBinding.
 func (s *Server) getBinding(ctx context.Context) (binding, bool) {
+	b, ok := s.rawBinding(ctx)
+	return b, ok && b.sessionID != ""
+}
+
+// rawBinding returns the connection's bindings entry whether or not it carries
+// a session, refreshing its touchedAt. Only lab affinity reads through it --
+// a lab is legitimately bound on a connection with no session.
+func (s *Server) rawBinding(ctx context.Context) (binding, bool) {
 	id := s.mcpSessionID(ctx)
 	if id == "" {
 		return binding{}, false
@@ -616,7 +630,10 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 
 // setBindingLab records the current research lab on the connection's binding, so
 // a later trial_record can inherit it. It is a no-op on a stateless transport
-// (no client session id) -- such callers pass lab explicitly.
+// (no client session id) -- such callers pass lab explicitly. On a connection
+// with no session binding it deliberately creates a session-less entry: that
+// preserves lab affinity, and getBinding refuses to report the entry as a
+// session binding, so it cannot leak an empty project into scope resolution.
 func (s *Server) setBindingLab(ctx context.Context, lab string) {
 	id := s.mcpSessionID(ctx)
 	if id == "" {
@@ -630,9 +647,11 @@ func (s *Server) setBindingLab(ctx context.Context, lab string) {
 	s.mu.Unlock()
 }
 
-// boundLab returns the connection's current lab, or "".
+// boundLab returns the connection's current lab, or "". It reads the raw
+// entry, not the session binding: lab affinity survives on a connection that
+// never ran session_start.
 func (s *Server) boundLab(ctx context.Context) string {
-	if b, ok := s.getBinding(ctx); ok {
+	if b, ok := s.rawBinding(ctx); ok {
 		return b.lab
 	}
 	return ""

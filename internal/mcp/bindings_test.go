@@ -70,6 +70,29 @@ func hasBinding(s *Server, conn string) bool {
 	return ok
 }
 
+// TestLabOnlyBindingIsNotASessionBinding pins the getBinding/rawBinding split:
+// the session-less entry setBindingLab creates on an unbound connection keeps
+// its lab visible through boundLab but is never reported as a session binding,
+// so scope resolution falls through to the ambient path instead of reading the
+// entry's empty (global) project.
+func TestLabOnlyBindingIsNotASessionBinding(t *testing.T) {
+	s, db := newBindingsServer(t)
+	ctx := connCtx(s, "conn-lab-only")
+
+	s.setBindingLab(ctx, "lab-1")
+	require.True(t, hasBinding(s, "conn-lab-only"), "the lab-only entry must exist")
+	_, ok := s.getBinding(ctx)
+	require.False(t, ok, "a lab-only entry must not count as a session binding")
+	require.Equal(t, "lab-1", s.boundLab(ctx), "lab affinity must survive without a session binding")
+
+	// Once a real session binds, the connection is session-bound again.
+	id := seedStatusSession(t, db, "sess/lab-bind", core.SessionActive, time.Now().UTC())
+	s.setBinding(ctx, id, "demo")
+	b, ok := s.getBinding(ctx)
+	require.True(t, ok)
+	require.Equal(t, "demo", b.project)
+}
+
 // TestSessionEnd_EvictsBindings verifies the session_end tool evicts every
 // connection binding pointing at the ended session -- the graceful-end half of
 // the unbounded-bindings fix.
