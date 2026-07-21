@@ -75,10 +75,13 @@ func TestRenderIsDeterministic(t *testing.T) {
 // apart, so a second-granularity stamp is identical in both and slips through.
 // This looks for *today's* date instead, which is what a build stamp would be by
 // definition -- and, unlike a generic timestamp regex, does not fire on the
-// memory frontmatter examples the docs legitimately print.
+// memory frontmatter examples the docs legitimately print. A date the sources
+// themselves contain is content, not a stamp -- pages that record when something
+// was verified fire this on the day they land -- so those formats are exempt.
 func TestOutputHasNoBuildTimestamp(t *testing.T) {
 	repoRoot(t)
 
+	sources := docsSrcText(t)
 	now := time.Now().UTC()
 	today := []string{
 		now.Format("2006-01-02"),  // 2026-07-15
@@ -87,10 +90,33 @@ func TestOutputHasNoBuildTimestamp(t *testing.T) {
 	}
 	for name, body := range renderRepoSite(t) {
 		for _, stamp := range today {
+			if strings.Contains(sources, stamp) {
+				continue
+			}
 			require.NotContains(t, body, stamp,
 				"%s contains today's date (%s): a build timestamp makes docs-check drift on its own", name, stamp)
 		}
 	}
+}
+
+// docsSrcText concatenates every docs-src source file, so a date string can be
+// checked for being author-written rather than generator-injected.
+func docsSrcText(t *testing.T) string {
+	t.Helper()
+	var b strings.Builder
+	require.NoError(t, filepath.WalkDir("docs-src", func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return err
+		}
+		b.Write(raw)
+		b.WriteByte('\n')
+		return nil
+	}))
+	return b.String()
 }
 
 // TestEveryPageIsMarked: the generated marker is both a note to a human who
