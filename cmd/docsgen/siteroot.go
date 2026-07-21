@@ -8,7 +8,7 @@ import (
 // rootURLs are the site-root pages docsgen does not render but the sitemap must
 // still name -- the hand-written landing page and the hand-written comparison
 // hub. Deliberately a constant rather than a directory scan, which would sweep
-// in install, install.ps1, SECURITY.md, and static assets.
+// in install, install.ps1, and static assets.
 var rootURLs = []string{"/", "/compare/"}
 
 // robotsTxt is written verbatim to the site root. The marker line is
