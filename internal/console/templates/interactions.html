@@ -1,43 +1,63 @@
 {{define "content"}}
-<div class="topbar">
-  <div>
+<div class="ops-page" data-ops="interactions">
+<header class="lib-hero ops-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "activity"}} Live transport</div>
     <h1>Interactions</h1>
-    <div class="sub">every agent request and response, live</div>
+    <div class="sub">Watch agent prompts, tool calls, injections, session changes, and plan activity as one traceable stream.</div>
   </div>
-  <span class="live" id="ix-live"><span class="live-dot"></span> live</span>
-</div>
+  <div class="lib-total ix-total" aria-live="polite">
+    <strong id="ix-count">0</strong><span>events in view</span>
+    <small class="live" id="ix-live"><span class="live-dot"></span>streaming now</small>
+  </div>
+</header>
 
-<div class="ix-volume empty" id="ix-volume" aria-hidden="true"></div>
-
-<div class="ix-controls">
-  <div class="ix-filters" id="ix-kinds">
-    <button class="ix-seg active" type="button" data-cat="all">All</button>
-    <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
-    <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
-    <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
-    <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
-    <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
+<section class="lib-controlbar ops-controlbar ix-controls" aria-label="Interaction filters">
+  <div class="lib-control ix-kind-control">
+    <span class="lib-control-label">Event type</span>
+    <div class="ix-filters" id="ix-kinds">
+      <button class="ix-seg active" type="button" data-cat="all">All</button>
+      <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
+      <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
+      <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
+      <button class="ix-seg" type="button" data-cat="prompt"><span class="dot prompt"></span>Prompts</button>
+      <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
+      <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
+    </div>
   </div>
   <div class="ix-actions">
-    <label class="ix-window">range
-      <select id="ix-window" aria-label="Time range">
-        <option value="60">1m</option>
-        <option value="300">5m</option>
-        <option value="900">15m</option>
-        <option value="3600" selected>1h</option>
-        <option value="0">all</option>
-      </select>
-    </label>
+    <div class="lib-control">
+      <label class="lib-control-label" for="ix-window">Activity range</label>
+      <select id="ix-window" class="ops-select" aria-label="Time range">
+          <option value="60">1 minute</option>
+          <option value="300">5 minutes</option>
+          <option value="900">15 minutes</option>
+          <option value="3600" selected>1 hour</option>
+          <option value="0">All time</option>
+        </select>
+    </div>
     <button class="btn small" type="button" id="ix-pause">Pause</button>
   </div>
-</div>
+  <div class="lib-control-note"><strong>Filter stack</strong><span>Type &rarr; session &rarr; time bucket</span></div>
+</section>
 
-<div class="ix-tabs" id="ix-tabs"></div>
+<section class="ops-stage ix-volume-stage" aria-label="Interaction volume">
+  <header class="ops-stage-head">
+    <div class="ops-stage-title"><span class="ops-stage-eyebrow">Activity volume</span><strong>Transport events over the selected range</strong></div>
+    <div class="ops-stage-meta"><span>Select a bar to isolate its time slice</span></div>
+  </header>
+  <div class="ix-volume empty" id="ix-volume" aria-hidden="true"></div>
+</section>
 
-<div class="list-detail-split">
+<section class="ops-stage ix-stream-stage" aria-label="Interaction stream">
+  <header class="ops-stage-head ix-stream-head">
+    <div class="ops-stage-title"><span class="ops-stage-eyebrow">Interaction stream</span><strong>Newest events first</strong></div>
+    <div class="ix-session-filter"><span class="lib-control-label">Session lane</span><div class="ix-tabs" id="ix-tabs"></div></div>
+  </header>
+<div class="list-detail-split ops-split interactions-split">
   <div class="list-pane">
     <div class="ix-feed" id="ix-feed"></div>
-    <div class="empty" id="ix-empty" hidden>No interactions yet &mdash; run a hooked agent and its calls will stream in here.</div>
+    <div class="empty dotgrid" id="ix-empty" hidden><span class="empty-ico">{{icon "activity"}}</span><div id="ix-empty-copy">No interactions yet &mdash; run a hooked agent and its calls will stream in here.</div></div>
     <div class="ix-more" hidden><button class="btn small" type="button" id="ix-older">Load older</button></div>
   </div><!-- .list-pane -->
   <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Interaction detail">
@@ -48,7 +68,9 @@
     <div class="detail-pane-body"></div>
   </section>
 </div><!-- .list-detail-split -->
+</section>
 <noscript><div class="empty">The Interactions feed needs JavaScript. Individual events are at <span class="mono">/console/events/&lt;id&gt;</span>.</div></noscript>
+</div><!-- .ops-page -->
 {{end}}
 
 {{define "scripts"}}
@@ -65,6 +87,8 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   var olderBtn = document.getElementById('ix-older');
   var liveEl = document.getElementById('ix-live');
   var windowSel = document.getElementById('ix-window');
+  var countEl = document.getElementById('ix-count');
+  var emptyCopy = document.getElementById('ix-empty-copy');
   if (!feed || !window.IX) return;
 
   // The time range drives both the session-tab activity window and the volume
@@ -189,8 +213,17 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   }
 
   function updateEmpty() {
-    var has = order.length > 0;
-    emptyEl.hidden = has;
+    var visible = 0;
+    order.forEach(function (id) {
+      if (rows[id] && rows[id].el && !rows[id].el.hidden) visible++;
+    });
+    if (countEl) countEl.textContent = String(visible);
+    emptyEl.hidden = visible > 0;
+    if (emptyCopy) {
+      emptyCopy.textContent = order.length
+        ? 'No interactions match the active type, session, and time filters.'
+        : 'No interactions yet — run a hooked agent and its calls will stream in here.';
+    }
     if (olderWrap) olderWrap.hidden = !cursor;
   }
 
@@ -252,6 +285,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
       var r = rows[id];
       applyFilter(r.el, r.data);
     });
+    updateEmpty();
   }
 
   // --- Kind (category) filter segments ---

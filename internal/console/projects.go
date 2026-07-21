@@ -57,15 +57,17 @@ type projectGroupVM struct {
 
 // projectsData is the board page payload.
 type projectsData struct {
-	Group    string
-	Sort     string
-	Query    string
-	Window   string
-	Groups   []projectGroupVM // family mode
-	Flat     []projectRowVM   // flat mode
-	Projects int              // # project rows (excludes the global scope)
-	Working  int              // total live sessions across projects
-	Families int              // # shared-briefing family bands
+	Group       string
+	Sort        string
+	Query       string
+	Window      string
+	WindowLabel string           `json:"-"`
+	Windows     []windowOption   `json:"-"`
+	Groups      []projectGroupVM // family mode
+	Flat        []projectRowVM   // flat mode
+	Projects    int              // # project rows (excludes the global scope)
+	Working     int              // total live sessions across projects
+	Families    int              // # shared-briefing family bands
 }
 
 func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
@@ -159,7 +161,8 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 
 	less := projectLess(sortKey)
 	data := projectsData{
-		Group: group, Sort: sortKey, Query: query, Window: win.Key,
+		Group: group, Sort: sortKey, Query: query,
+		Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 		Projects: projectCount, Working: working,
 	}
 

@@ -1076,10 +1076,6 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-tab.muted { color: var(--faint); background: transparent; border-style: dashed; }
 .ix-tab.muted:hover { color: var(--muted); border-color: var(--border-strong); }
 .ix-actions { display: flex; align-items: center; gap: 8px; flex: none; }
-.ix-window { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--muted); white-space: nowrap; }
-.ix-window select { font-family: inherit; font-size: var(--text-xs); color: var(--ink); background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-xs); padding: 3px 6px; cursor: pointer; }
-.ix-window select:hover { border-color: var(--border-strong); }
-.ix-window select:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 
 /* Segmented kind filter (errors-only + per-category), a group of .ix-seg chips
    each carrying a category dot. */
@@ -1203,8 +1199,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .tile.web { background: color-mix(in oklab, var(--brand) 22%, var(--surface)); color: var(--brand); border-color: transparent; }
 .tile.grp { background: color-mix(in oklab, var(--k-decision) 22%, var(--surface)); color: var(--k-decision); border-color: transparent; }
 
-/* --- board/detail toolbar ------------------------------------------------- */
-.proj-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; }
+/* --- shared search + segmented controls ----------------------------------- */
 .search { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 8px; padding: 7px 12px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius-sm); color: var(--muted); font-size: var(--text-sm); }
 .search .ico { width: 15px; height: 15px; }
 .search:focus-within { border-color: var(--brand); box-shadow: var(--shadow-focus); }
@@ -1922,4 +1917,185 @@ a.kind:hover { color: var(--brand); border-color: var(--border-strong); text-dec
   .lib-control .seg { width: 100%; overflow-x: auto; }
   .lib-control .seg a { flex: 1; text-align: center; }
   .reader-location { max-width: 44vw; }
+}
+
+/* ===========================================================================
+   OPERATIONAL EXPLORERS -- Projects / Sessions / Interactions
+
+   These three high-churn surfaces share the library/search orientation
+   language (hero + one explicit control bar), then adapt it to a dense map,
+   workspace ledger, or live stream. Their routes, filters, and peek behavior
+   stay independent; this layer is the common visual contract.
+   =========================================================================== */
+.ops-page { --lib-accent: var(--brand); min-width: 0; }
+.ops-page[data-ops="sessions"] { --lib-accent: var(--ok); }
+.ops-page[data-ops="interactions"] { --lib-accent: var(--pop-strong); }
+.ops-page .seg a.on { color: var(--lib-accent); background: color-mix(in oklab, var(--lib-accent) 12%, var(--surface)); }
+.ops-hero .lib-total small { display: inline-flex; align-items: center; gap: 6px; }
+.ops-controlbar { align-items: flex-end; }
+.ops-controlbar .lib-query { flex: 1 1 330px; }
+.ops-window-control .seg { max-width: min(100%, 330px); overflow-x: auto; }
+.ops-window-control .seg a { white-space: nowrap; }
+.ops-related { align-self: flex-end; min-height: 31px; color: var(--lib-accent); }
+.ops-select {
+  min-height: 31px; padding: 5px 28px 5px 9px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: var(--text-xs); cursor: pointer;
+}
+.ops-select:hover { border-color: var(--lib-accent); }
+.ops-select:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--lib-accent) 18%, transparent); }
+
+.ops-stage { min-width: 0; margin-top: 18px; }
+.ops-stage-head {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; min-height: 44px;
+  padding: 0 4px 10px; border-bottom: 1px solid var(--border);
+}
+.ops-stage-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ops-stage-eyebrow {
+  color: var(--lib-accent); font-size: var(--text-2xs); font-weight: 750;
+  letter-spacing: var(--tracking-wider); text-transform: uppercase;
+}
+.ops-stage-title strong { color: var(--ink-2); font-family: var(--font-display); font-size: var(--text-md); font-weight: 650; }
+.ops-stage-meta {
+  display: flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap;
+  color: var(--faint); font-size: var(--text-2xs); text-align: right;
+}
+.ops-stage-dot { color: var(--border-strong); }
+
+/* Project map: stronger family landmarks, calmer metric columns, and enough
+   vertical rhythm to scan the board without turning it into a card grid. */
+.projects-stage .board { margin-top: 10px; border-radius: var(--radius-lg); }
+.projects-stage .board-colhd { padding: 10px 17px; background: var(--surface-2); color: var(--faint); }
+.projects-stage .grp-hd {
+  padding: 10px 17px; border-top-width: 1px;
+  background: color-mix(in oklab, var(--lib-accent) 7%, var(--surface-2));
+  box-shadow: inset 3px 0 0 color-mix(in oklab, var(--lib-accent) 68%, transparent);
+}
+.projects-stage .grp-hd .ico { color: var(--lib-accent); }
+.projects-stage .prow { min-height: 63px; padding: 12px 17px; }
+.projects-stage .prow:hover { background: color-mix(in oklab, var(--lib-accent) 6%, var(--surface)); }
+.projects-stage .tile { width: 34px; height: 34px; border-radius: var(--radius-md); }
+.projects-stage .pname .cap { margin-top: 3px; line-height: 1.35; }
+.projects-stage .prow.child .pname { padding-left: 28px; }
+.projects-stage .prow.child .pname::before { left: 7px; width: 13px; background: color-mix(in oklab, var(--lib-accent) 35%, var(--border-strong)); }
+.projects-stage .health .mtr { height: 6px; background: var(--surface-3); }
+.projects-stage .health .mtr > span { background: linear-gradient(90deg, var(--brand), color-mix(in oklab, var(--brand) 62%, var(--ok))); }
+.projects-stage .cell-r .big { color: var(--ink-2); }
+.projects-stage .cell-r.zero .big { color: var(--faint); }
+
+/* Session map: status is carried by a small rail, while project/source remain
+   secondary columns until the right-hand detail workspace opens. */
+.sessions-stage .list-detail-split { margin-top: 10px; }
+.sessions-stage .ops-stage-meta { gap: 10px; }
+.status-key { display: inline-flex; align-items: center; gap: 5px; }
+.status-key.live { color: var(--ok); }
+.status-key.idle { color: var(--warn); }
+.status-key.expired { color: var(--faint); }
+.sess-group { margin-bottom: 22px; }
+.sess-group:last-child { margin-bottom: 0; }
+.sess-group > h2 { justify-content: space-between; gap: 18px; padding: 0 4px; }
+.sess-group-title { display: inline-flex; align-items: center; gap: 7px; }
+.sess-group-note { color: var(--faint); font-family: var(--font-sans); font-size: var(--text-2xs); font-weight: 500; }
+.sess-list { border-radius: var(--radius-lg); }
+.sess-row { grid-template-columns: minmax(0, 1fr) 170px 78px 58px; padding: 12px 15px; border-left: 3px solid transparent; }
+.sessions-stage .sess-row.row-link:hover {
+  border-left-color: color-mix(in oklab, var(--lib-accent) 65%, transparent);
+  background: color-mix(in oklab, var(--lib-accent) 5%, var(--surface)); box-shadow: none;
+}
+.sess-main { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
+.sess-copy { min-width: 0; }
+.sess-state {
+  width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; flex: none;
+  background: var(--faint); box-shadow: 0 0 0 4px color-mix(in oklab, var(--faint) 12%, transparent);
+}
+.sess-state.live { background: var(--ok); box-shadow: 0 0 0 4px var(--ok-soft); }
+.sess-state.idle { background: var(--warn); box-shadow: 0 0 0 4px var(--warn-soft); }
+.sess-state.completed { background: var(--brand); box-shadow: 0 0 0 4px var(--brand-soft); }
+.sess-state.expired { background: var(--faint); }
+.sess-row .proj a { display: inline-flex; align-items: center; justify-content: flex-end; gap: 5px; max-width: 100%; }
+.sess-row .proj .ico { width: 12px; height: 12px; }
+.sess-row .src {
+  justify-self: end; padding: 2px 7px; border-radius: var(--radius-pill);
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--muted);
+}
+.ops-page .list-detail-split .sess-row.selected,
+.ops-page .list-detail-split .sess-row.selected:hover {
+  border-left-color: var(--lib-accent); background: color-mix(in oklab, var(--lib-accent) 10%, var(--surface));
+  box-shadow: none;
+}
+
+/* The generic peek loader still owns state/history. On these operational pages,
+   its open state becomes a real side-by-side workspace at desktop widths. */
+.ops-split.detail-open {
+  display: grid; grid-template-columns: minmax(360px, .85fr) minmax(480px, 1.15fr);
+  gap: 18px; align-items: start;
+}
+.ops-split.detail-open .list-pane { max-height: calc(100vh - 36px); overflow: auto; overscroll-behavior: contain; }
+.ops-split.detail-open .detail-pane {
+  position: sticky; top: 18px; max-height: calc(100vh - 36px); overflow: auto;
+  border-radius: var(--radius-lg); border-color: color-mix(in oklab, var(--lib-accent) 24%, var(--border));
+}
+.ops-split.detail-open .detail-pane-chrome {
+  position: sticky; top: 0; z-index: 2;
+  background: color-mix(in oklab, var(--lib-accent) 7%, var(--surface));
+}
+.ops-split.detail-open .detail-pane-body { padding: 22px; }
+.sessions-split.detail-open .sess-row { grid-template-columns: minmax(0, 1fr) 58px; }
+.sessions-split.detail-open .sess-row .proj,
+.sessions-split.detail-open .sess-row .src { display: none; }
+
+/* Interaction stream: make the filter hierarchy legible, keep the histogram
+   distinct from the event ledger, and expose the live in-view count. */
+.ix-total .live { color: var(--ok); font-weight: 650; letter-spacing: 0; text-transform: none; }
+.ix-total .live.off { color: var(--faint); }
+.ix-controls { justify-content: flex-start; gap: 12px 16px; margin: 0 0 18px; }
+.ix-kind-control { flex: 1 1 590px; }
+.ix-controls .ix-filters { margin: 0; }
+.ix-controls .ix-actions { align-items: flex-end; }
+.ix-controls .lib-control-note { margin-left: auto; }
+.ix-volume-stage { margin-top: 0; }
+.ix-volume-stage .ix-volume { margin: 10px 0 0; padding: 16px 16px 10px; border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.ix-volume-stage .ix-vol-track { height: 62px; }
+.ix-stream-head { align-items: flex-end; }
+.ix-session-filter { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; max-width: 65%; }
+.ix-session-filter .ix-tabs { justify-content: flex-end; }
+.ix-stream-stage .list-detail-split { margin-top: 10px; }
+.ix-feed { gap: 8px; }
+.ix-row { border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
+.ix-row > summary { min-height: 42px; padding: 10px 13px; }
+.ix-row[open] { box-shadow: var(--shadow-sm); }
+.ix-row[open] > summary { background: color-mix(in oklab, var(--lib-accent) 5%, var(--surface-2)); }
+.ix-row[open] .ix-body { padding: 14px; gap: 10px; }
+.ix-empty { min-height: 240px; }
+.interactions-split.detail-open { grid-template-columns: minmax(520px, 1.15fr) minmax(390px, .85fr); }
+
+@media (max-width: 1180px) {
+  .ops-controlbar .lib-control-note { display: none; }
+  .ops-split.detail-open,
+  .interactions-split.detail-open { grid-template-columns: minmax(330px, .8fr) minmax(430px, 1.2fr); }
+  .interactions-split.detail-open .ix-meta { display: none; }
+}
+
+@media (max-width: 960px) {
+  .ops-split.detail-open,
+  .interactions-split.detail-open { display: flex; flex-direction: column; }
+  .ops-split.detail-open .list-pane { width: 100%; max-height: none; overflow: visible; }
+  .ops-split.detail-open .detail-pane { position: static; width: 100%; max-height: none; }
+  .sessions-split.detail-open .sess-row { grid-template-columns: minmax(0, 1fr) 170px 78px 58px; }
+  .sessions-split.detail-open .sess-row .proj,
+  .sessions-split.detail-open .sess-row .src { display: block; }
+}
+
+@media (max-width: 720px) {
+  .ops-stage-head { align-items: flex-start; flex-direction: column; gap: 7px; }
+  .ops-stage-meta { justify-content: flex-start; text-align: left; }
+  .ops-stage-dot { display: none; }
+  .sess-group-note { display: none; }
+  .sess-row,
+  .sessions-split.detail-open .sess-row { grid-template-columns: minmax(0, 1fr) 58px; gap: 10px; }
+  .sess-row .proj, .sess-row .src,
+  .sessions-split.detail-open .sess-row .proj,
+  .sessions-split.detail-open .sess-row .src { display: none; }
+  .ix-session-filter { align-items: flex-start; width: 100%; max-width: none; }
+  .ix-session-filter .ix-tabs { justify-content: flex-start; }
+  .ix-controls .ix-actions { width: 100%; justify-content: space-between; }
 }

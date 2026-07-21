@@ -1,44 +1,73 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
-    <h1>All projects</h1>
-    <div class="sub">{{.Projects}} project{{if ne .Projects 1}}s{{end}}{{if eq .Group "family"}} grouped by family{{end}}{{if .Working}} &middot; {{.Working}} agent{{if ne .Working 1}}s{{end}} working now{{end}}</div>
+{{$group := .Group}}{{$sort := .Sort}}{{$query := .Query}}
+<div class="ops-page" data-ops="projects">
+<header class="lib-hero ops-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "folder-tree"}} Workspace topology</div>
+    <h1>Projects</h1>
+    <div class="sub">See where agent work lives, how scopes inherit knowledge, and which projects are active now.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
   </div>
-  <span class="live"><span class="live-dot"></span> live</span>
-</div>
+  <div class="lib-total" aria-label="{{.Projects}} projects">
+    <strong>{{.Projects}}</strong><span>{{if .Query}}match{{if ne .Projects 1}}es{{end}}{{else}}project{{if ne .Projects 1}}s{{end}}{{end}}</span>
+    <small>{{if .Working}}{{.Working}} agent{{if ne .Working 1}}s{{end}} working now{{else}}No agents working now{{end}}</small>
+  </div>
+</header>
 
-<div class="proj-toolbar">
-  <form class="search" method="get" action="/console/projects">
+<section class="lib-controlbar ops-controlbar" aria-label="Project filters and sorting">
+  <form class="search lib-query" method="get" action="/console/projects">
     {{icon "search"}}
     <input name="q" aria-label="Filter projects by slug, name, or description" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
     <input type="hidden" name="group" value="{{.Group}}">
     <input type="hidden" name="sort" value="{{.Sort}}">
     <input type="hidden" name="w" value="{{.Window}}">
   </form>
-  <div class="seg">
-    <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
-    <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
+  <div class="lib-control">
+    <span class="lib-control-label">View</span>
+    <div class="seg">
+      <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
+      <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
+    </div>
   </div>
-  <div class="seg">
-    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
-    <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
-    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
+  <div class="lib-control">
+    <span class="lib-control-label">Order</span>
+    <div class="seg">
+      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
+      <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
+    </div>
   </div>
-  <a class="btn small" href="/console/relations" title="Relations graph: plans expand into steps, each step's claiming session, and the memories it left behind">{{icon "git-fork"}}<span>Relations</span></a>
-</div>
+  <div class="lib-control ops-window-control">
+    <span class="lib-control-label">Reach window</span>
+    <div class="seg">
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/projects?group={{$group}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;w={{.Key}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+  <a class="btn small ops-related" href="/console/relations" title="Plans, steps, claiming sessions, and the memories they left behind">{{icon "git-fork"}}<span>Relations</span></a>
+  <div class="lib-control-note"><strong>Browse structure</strong><span>Family &rarr; project &rarr; activity</span></div>
+</section>
 
-<div class="board">
-  <div class="board-colhd"><span>Project</span><span>Health</span><span>Sessions</span><span>Open tasks</span><span>Memories</span><span>Last active</span></div>
-  {{if eq .Group "flat"}}
-    {{if .Flat}}{{range .Flat}}{{template "projrow" .}}{{end}}{{else}}<div class="empty">No projects match "{{.Query}}"</div>{{end}}
-  {{else}}
-    {{if .Groups}}{{range .Groups}}
-    <div class="grp-hd">{{icon .Icon}}{{.Label}} <span class="n">{{.Count}}</span>{{if .Note}}<span class="note">{{.Note}}</span>{{end}}</div>
-    {{range .Rows}}{{template "projrow" .}}{{end}}
-    {{end}}{{else}}<div class="empty">No projects{{if .Query}} match "{{.Query}}"{{end}} yet</div>{{end}}
-  {{end}}
-</div>
+<section class="ops-stage projects-stage" aria-label="Project map">
+  <header class="ops-stage-head">
+    <div class="ops-stage-title">
+      <span class="ops-stage-eyebrow">{{if eq .Group "family"}}Project map{{else}}Project index{{end}}</span>
+      <strong>{{if eq .Group "family"}}Scopes grouped by knowledge inheritance{{else}}Every scope in one sortable list{{end}}</strong>
+    </div>
+    <div class="ops-stage-meta"><span>Reach = active memories surfaced</span><span class="ops-stage-dot">&middot;</span><span>{{.WindowLabel}}</span>{{if and (eq .Group "family") .Families}}<span class="ops-stage-dot">&middot;</span><span>{{.Families}} shared-briefing famil{{if eq .Families 1}}y{{else}}ies{{end}}</span>{{end}}</div>
+  </header>
+  <div class="board">
+    <div class="board-colhd"><span>Project</span><span>Knowledge reach</span><span>Sessions</span><span>Open tasks</span><span>Memories</span><span>Last active</span></div>
+    {{if eq .Group "flat"}}
+      {{if .Flat}}{{range .Flat}}{{template "projrow" .}}{{end}}{{else}}<div class="empty dotgrid"><span class="empty-ico">{{icon "folder-tree"}}</span><div>No projects match &ldquo;{{.Query}}&rdquo;.</div></div>{{end}}
+    {{else}}
+      {{if .Groups}}{{range .Groups}}
+      <div class="grp-hd">{{icon .Icon}}{{.Label}} <span class="n">{{.Count}}</span>{{if .Note}}<span class="note">{{.Note}}</span>{{end}}</div>
+      {{range .Rows}}{{template "projrow" .}}{{end}}
+      {{end}}{{else}}<div class="empty dotgrid"><span class="empty-ico">{{icon "folder-tree"}}</span><div>No projects{{if .Query}} match &ldquo;{{.Query}}&rdquo;{{end}} yet.</div></div>{{end}}
+    {{end}}
+  </div>
+</section>
+</div><!-- .ops-page -->
 {{end}}
 {{end}}
 

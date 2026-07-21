@@ -1,51 +1,78 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
+{{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}
+<div class="ops-page" data-ops="sessions">
+<header class="lib-hero ops-hero">
+  <div class="lib-hero-copy">
+    <div class="lib-eyebrow">{{icon "terminal"}} Agent workspaces</div>
     <h1>Sessions</h1>
-    <div class="sub">{{.Total}} total &middot; {{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}}</div>
+    <div class="sub">Follow active runs, reopen completed findings, and inspect the work each agent left behind.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
   </div>
-  <div class="btn-row">
-    <a class="btn small {{if eq .Filter ""}}primary{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
-    <a class="btn small {{if eq .Filter "active"}}primary{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
-    <a class="btn small {{if eq .Filter "completed"}}primary{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
-    <a class="btn small {{if eq .Filter "expired"}}primary{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Expired</a>
+  <div class="lib-total" aria-label="{{.Total}} sessions total">
+    <strong>{{.Total}}</strong><span>sessions total</span>
+    <small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{.WindowLabel}} view</small>
   </div>
-</div>
+</header>
 
-<div class="proj-toolbar">
-  <form class="search" method="get" action="/console/sessions">
+<section class="lib-controlbar ops-controlbar" aria-label="Session filters and sorting">
+  <form class="search lib-query" method="get" action="/console/sessions">
     {{icon "search"}}
     <input name="q" aria-label="Search sessions by name, project, or findings" placeholder="Search name, project, findings&hellip;" value="{{.Query}}">
     <input type="hidden" name="status" value="{{.Filter}}">
     <input type="hidden" name="w" value="{{.Window}}">
     <input type="hidden" name="sort" value="{{.Sort}}">
   </form>
-  <div class="seg">
-    <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
-    <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
+  <div class="lib-control">
+    <span class="lib-control-label">Status</span>
+    <div class="seg">
+      <a class="{{if eq .Filter ""}}on{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
+      <a class="{{if eq .Filter "active"}}on{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
+      <a class="{{if eq .Filter "completed"}}on{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
+      <a class="{{if eq .Filter "expired"}}on{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Expired</a>
+    </div>
   </div>
-</div>
+  <div class="lib-control">
+    <span class="lib-control-label">Order</span>
+    <div class="seg">
+      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
+    </div>
+  </div>
+  <div class="lib-control ops-window-control">
+    <span class="lib-control-label">Updated</span>
+    <div class="seg">
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+  <div class="lib-control-note"><strong>Browse structure</strong><span>Status &rarr; session &rarr; findings</span></div>
+</section>
 
-<div class="win-tabs win-tabs-page">
-  {{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}{{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
-</div>
-
-<div class="list-detail-split">
+<section class="ops-stage sessions-stage" aria-label="Session map">
+  <header class="ops-stage-head">
+    <div class="ops-stage-title">
+      <span class="ops-stage-eyebrow">Session map</span>
+      <strong>{{len .Sessions}} run{{if ne (len .Sessions) 1}}s{{end}} in this view</strong>
+    </div>
+    <div class="ops-stage-meta"><span class="status-key live"><span class="live-dot"></span>{{.Active}} live</span>{{if .Idle}}<span class="status-key idle">{{.Idle}} idle</span>{{end}}<span class="status-key done">{{.Completed}} completed</span><span class="status-key expired">{{.Expired}} expired</span></div>
+  </header>
+<div class="list-detail-split ops-split sessions-split">
   <div class="list-pane">
 {{if .Sessions}}
 
 {{if and (or (eq .Filter "") (eq .Filter "active")) (or .Active .Idle)}}
-<div class="sess-group">
-  <h2><span class="live-dot"></span> Active <span class="count">{{.Active}}</span>{{if .Idle}} <span class="h2-meta faint">+{{.Idle}} idle</span>{{end}}</h2>
+<div class="sess-group state-active">
+  <h2><span class="sess-group-title"><span class="live-dot"></span> Active <span class="count">{{add .Active .Idle}}</span></span><span class="sess-group-note">{{.Active}} heartbeating{{if .Idle}} &middot; {{.Idle}} awaiting expiry{{end}}</span></h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "active"}}
     <div id="{{.ID}}" class="sess-row row-link{{if not .Live}} idle{{end}}" data-href="/console/sessions/{{.ID}}" data-peek>
-      <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
-        {{if .Findings}}<div class="find">{{.Findings}}</div>{{end}}
+      <div class="sess-main">
+        <span class="sess-state {{if .Live}}live{{else}}idle{{end}}" aria-hidden="true"></span>
+        <div class="sess-copy">
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
+          {{if .Findings}}<div class="find">{{.Findings}}</div>{{else}}<div class="find faint">Work in progress &mdash; no findings yet</div>{{end}}
+        </div>
       </div>
-      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
       <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
@@ -56,16 +83,19 @@
 
 {{if or (eq .Filter "") (eq .Filter "completed")}}
 {{if .Completed}}
-<div class="sess-group">
-  <h2>Completed{{if eq .Filter ""}} <span class="count">{{.Completed}}</span>{{end}}</h2>
+<div class="sess-group state-completed">
+  <h2><span class="sess-group-title">Completed <span class="count">{{.Completed}}</span></span><span class="sess-group-note">Findings retained for future work</span></h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "completed"}}
     <div id="{{.ID}}" class="sess-row row-link" data-href="/console/sessions/{{.ID}}" data-peek>
-      <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
-        <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
+      <div class="sess-main">
+        <span class="sess-state completed" aria-hidden="true"></span>
+        <div class="sess-copy">
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+          <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
+        </div>
       </div>
-      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
       <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
@@ -77,16 +107,19 @@
 
 {{if or (eq .Filter "") (eq .Filter "expired")}}
 {{if .Expired}}
-<div class="sess-group">
-  <h2>Expired{{if eq .Filter ""}} <span class="count">{{.Expired}}</span>{{end}}</h2>
+<div class="sess-group state-expired">
+  <h2><span class="sess-group-title">Expired <span class="count">{{.Expired}}</span></span><span class="sess-group-note">Reaped after going quiet</span></h2>
   <div class="sess-list">
     {{range .Sessions}}{{if eq .Status "expired"}}
     <div id="{{.ID}}" class="sess-row row-link expired" data-href="/console/sessions/{{.ID}}" data-peek>
-      <div>
-        <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
-        <div class="find">{{if .Findings}}{{.Findings}}{{else}}&mdash;{{end}}</div>
+      <div class="sess-main">
+        <span class="sess-state expired" aria-hidden="true"></span>
+        <div class="sess-copy">
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
+          <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
+        </div>
       </div>
-      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</span>
+      <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
       <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
@@ -112,5 +145,7 @@
     <div class="detail-pane-body"></div>
   </section>
 </div><!-- .list-detail-split -->
+</section>
+</div><!-- .ops-page -->
 {{end}}
 {{end}}
