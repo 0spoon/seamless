@@ -401,15 +401,15 @@ func codexMCPCheckWithRunner(ctx context.Context, runner mcpCommandRunner, seamB
 	}
 	class, drift := classifyCodexMCPState(got, want)
 	switch class {
-	case codexMCPIncompatible:
+	case mcpRegIncompatible:
 		return check{statusWarn, "codex mcp", fmt.Sprintf(
 			"reserved name has an incompatible registration (%s); run: codex mcp remove seamless; then seamlessd install-hooks --client codex",
 			strings.Join(drift, ", "))}
-	case codexMCPOwnedDrifted:
+	case mcpRegOwnedDrifted:
 		return check{statusWarn, "codex mcp", fmt.Sprintf(
 			"owned registration is stale (%s; run: seamlessd install-hooks --client codex)",
 			strings.Join(drift, ", "))}
-	case codexMCPExact:
+	case mcpRegExact:
 		// Continue to the local target checks below.
 	default:
 		return check{statusWarn, "codex mcp",

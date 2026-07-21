@@ -276,23 +276,28 @@ func rawMessagesEqual(a, b []json.RawMessage) bool {
 	})
 }
 
-type codexMCPClass string
+// mcpRegClass is the shared classification vocabulary for a found registration
+// under the reserved Seamless name, whatever surface holds it (the Codex CLI
+// store or the Claude desktop config file): exact matches are left alone,
+// owned drift is repaired in place, and an incompatible entry is never touched
+// -- the owner must remove it explicitly.
+type mcpRegClass string
 
 const (
-	codexMCPExact        codexMCPClass = "exact"
-	codexMCPOwnedDrifted codexMCPClass = "owned-drifted"
-	codexMCPIncompatible codexMCPClass = "incompatible"
+	mcpRegExact        mcpRegClass = "exact"
+	mcpRegOwnedDrifted mcpRegClass = "owned-drifted"
+	mcpRegIncompatible mcpRegClass = "incompatible"
 )
 
-func classifyCodexMCPState(got, want codexMCPState) (codexMCPClass, []string) {
+func classifyCodexMCPState(got, want codexMCPState) (mcpRegClass, []string) {
 	drift := codexMCPDrift(got, want)
 	if len(drift) == 0 {
-		return codexMCPExact, nil
+		return mcpRegExact, nil
 	}
 	if codexMCPIsOwned(got, want) {
-		return codexMCPOwnedDrifted, drift
+		return mcpRegOwnedDrifted, drift
 	}
-	return codexMCPIncompatible, drift
+	return mcpRegIncompatible, drift
 }
 
 // codexMCPIsOwned is conservative because "seamless" is reserved but users may
@@ -407,42 +412,42 @@ func parseCodexMCPListNames(data []byte) ([]string, error) {
 	return names, nil
 }
 
-type codexMCPReconcileAction string
+type mcpRegAction string
 
 const (
-	codexMCPAdded     codexMCPReconcileAction = "added"
-	codexMCPUnchanged codexMCPReconcileAction = "unchanged"
-	codexMCPRepaired  codexMCPReconcileAction = "repaired"
+	mcpRegAdded     mcpRegAction = "added"
+	mcpRegUnchanged mcpRegAction = "unchanged"
+	mcpRegRepaired  mcpRegAction = "repaired"
 )
 
-type codexMCPReconcileResult struct {
-	Action codexMCPReconcileAction
+type mcpRegResult struct {
+	Action mcpRegAction
 	Drift  []string
 }
 
-func reconcileCodexMCP(ctx context.Context, runner mcpCommandRunner, seamBin, configPath string) (codexMCPReconcileResult, error) {
+func reconcileCodexMCP(ctx context.Context, runner mcpCommandRunner, seamBin, configPath string) (mcpRegResult, error) {
 	want, err := desiredCodexMCPState(seamBin, configPath)
 	if err != nil {
-		return codexMCPReconcileResult{}, err
+		return mcpRegResult{}, err
 	}
 	got, present, err := inspectCodexMCP(ctx, runner)
 	if err != nil {
-		return codexMCPReconcileResult{}, err
+		return mcpRegResult{}, err
 	}
 
-	action := codexMCPAdded
+	action := mcpRegAdded
 	var priorDrift []string
 	if present {
 		class, drift := classifyCodexMCPState(got, want)
 		switch class {
-		case codexMCPExact:
-			return codexMCPReconcileResult{Action: codexMCPUnchanged}, nil
-		case codexMCPIncompatible:
-			return codexMCPReconcileResult{}, fmt.Errorf(
+		case mcpRegExact:
+			return mcpRegResult{Action: mcpRegUnchanged}, nil
+		case mcpRegIncompatible:
+			return mcpRegResult{}, fmt.Errorf(
 				"reserved MCP name %q has an incompatible configuration (%s); remove it explicitly with `codex mcp remove %s` before rerunning install-hooks",
 				seamlessMCPName, strings.Join(drift, ", "), seamlessMCPName)
-		case codexMCPOwnedDrifted:
-			action = codexMCPRepaired
+		case mcpRegOwnedDrifted:
+			action = mcpRegRepaired
 			priorDrift = drift
 		}
 	}
@@ -452,22 +457,22 @@ func reconcileCodexMCP(ctx context.Context, runner mcpCommandRunner, seamBin, co
 	// the old entry remains intact and this returns a visible error.
 	addOut, err := runner.Run(ctx, codexMCPAddArgs(seamBin, configPath)...)
 	if err != nil {
-		return codexMCPReconcileResult{}, fmt.Errorf("write desired Codex MCP registration: %w%s", err, commandOutputSuffix(addOut))
+		return mcpRegResult{}, fmt.Errorf("write desired Codex MCP registration: %w%s", err, commandOutputSuffix(addOut))
 	}
 
 	// Never report success from the add command alone. A fresh get --json must
 	// decode and exactly match the same desired value used above.
 	verified, verifiedPresent, err := inspectCodexMCP(ctx, runner)
 	if err != nil {
-		return codexMCPReconcileResult{}, fmt.Errorf("verify Codex MCP registration after add: %w", err)
+		return mcpRegResult{}, fmt.Errorf("verify Codex MCP registration after add: %w", err)
 	}
 	if !verifiedPresent {
-		return codexMCPReconcileResult{}, errors.New("verify Codex MCP registration after add: reserved name is still absent")
+		return mcpRegResult{}, errors.New("verify Codex MCP registration after add: reserved name is still absent")
 	}
 	if drift := codexMCPDrift(verified, want); len(drift) > 0 {
-		return codexMCPReconcileResult{}, fmt.Errorf("verify Codex MCP registration after add: desired state still differs (%s)", strings.Join(drift, ", "))
+		return mcpRegResult{}, fmt.Errorf("verify Codex MCP registration after add: desired state still differs (%s)", strings.Join(drift, ", "))
 	}
-	return codexMCPReconcileResult{Action: action, Drift: priorDrift}, nil
+	return mcpRegResult{Action: action, Drift: priorDrift}, nil
 }
 
 func commandOutputSuffix(out []byte) string {
@@ -500,9 +505,9 @@ func registerCodexMCP(seamBin, configPath string) error {
 	}
 
 	switch result.Action {
-	case codexMCPUnchanged:
+	case mcpRegUnchanged:
 		fieldRow("mcp", dim("already registered (exact stdio bridge)"))
-	case codexMCPRepaired:
+	case mcpRegRepaired:
 		fieldRow("mcp", green("repaired")+dim(" ("+strings.Join(result.Drift, ", ")+")"))
 	default:
 		fieldRow("mcp", green("registered")+dim(" (stdio bridge: seam mcp-proxy)"))

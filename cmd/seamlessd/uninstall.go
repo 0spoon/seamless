@@ -37,21 +37,34 @@ const (
 // failure, so uninstall is idempotent and safe to re-run.
 func runUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
-	clientFlag := fs.String("client", "all", "which agent client to remove hooks/MCP for: claude|codex|all|detect")
+	clientFlag := fs.String("client", "all", "which agent client to remove hooks/MCP for: claude|codex|claude-desktop|all|detect")
 	purge := fs.Bool("purge", false, "also delete the config dir (~/.config/seamless) and data dir (~/.seamless)")
 	dryRun := fs.Bool("dry-run", false, "print what would be removed and exit without changing anything")
 	yes := fs.Bool("yes", false, "skip the confirmation prompt")
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to remove hooks from")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to remove hooks from (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
+	desktopConfigFlag := fs.String("desktop-config", "", "Claude desktop app claude_desktop_config.json to remove the MCP bridge from (default: the app's per-OS location)")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	installDirFlag := fs.String("install-dir", "", "directory the binaries were installed to (default $SEAMLESS_INSTALL_DIR, else ~/.local/bin)")
 	mcpFlag := fs.Bool("mcp", true, "also deregister the MCP server (claude/codex mcp remove)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	clients, err := parseInstallClients(*clientFlag, claudeDetected(), codexDetected())
-	if err != nil {
-		return fmt.Errorf("seamlessd.uninstall: %w", err)
+	// The Claude app chat surface is uninstalled by removing its desktop-config
+	// entry -- no hooks, no skills, no client CLI. --client claude-desktop scopes
+	// the client step to that alone; "all" (the default) includes it after the
+	// hook clients, so a full uninstall never leaves the app pointed at a deleted
+	// bridge binary. An absent file or entry stays a quiet note.
+	rawClient := strings.ToLower(strings.TrimSpace(*clientFlag))
+	desktopOnly := isClaudeDesktopSelector(rawClient)
+	includeDesktop := desktopOnly || rawClient == "all" || rawClient == "both"
+	var clients []hooks.Client
+	if !desktopOnly {
+		var err error
+		clients, err = parseInstallClients(*clientFlag, claudeDetected(), codexDetected())
+		if err != nil {
+			return fmt.Errorf("seamlessd.uninstall: %w", err)
+		}
 	}
 
 	// Config is best-effort: uninstall must work when the config is broken or
@@ -76,7 +89,11 @@ func runUninstall(args []string) error {
 	}
 	dataDir := cfg.DataDir
 
-	printUninstallPreamble(clients, installDir, configDir, dataDir, *purge, *dryRun)
+	names := clientNames(clients)
+	if includeDesktop {
+		names = append(names, "Claude app (chat)")
+	}
+	printUninstallPreamble(names, installDir, configDir, dataDir, *purge, *dryRun)
 
 	if !*dryRun && !*yes && stdinIsTerminal() && !confirmUninstall(os.Stdin, os.Stdout) {
 		fmt.Println(dim("aborted -- nothing was changed"))
@@ -108,7 +125,14 @@ func runUninstall(args []string) error {
 		}
 	}
 
-	removeSkills(clients, *dryRun)
+	if includeDesktop && *mcpFlag {
+		fmt.Printf("\n%s\n", bold("Claude app (chat)"))
+		deregisterClaudeDesktopMCP(*desktopConfigFlag, *dryRun)
+	}
+
+	if len(clients) > 0 {
+		removeSkills(clients, *dryRun)
+	}
 	removeBinaries(installDir, runtime.GOOS, *dryRun)
 	if *purge {
 		purgeData(configDir, dataDir, *dryRun)
@@ -121,11 +145,11 @@ func runUninstall(args []string) error {
 	return nil
 }
 
-// printUninstallPreamble prints the header block: which clients, where the
-// binaries live, and whether user data is kept or purged.
-func printUninstallPreamble(clients []hooks.Client, installDir, configDir, dataDir string, purge, dryRun bool) {
+// printUninstallPreamble prints the header block: which client targets, where
+// the binaries live, and whether user data is kept or purged.
+func printUninstallPreamble(names []string, installDir, configDir, dataDir string, purge, dryRun bool) {
 	fmt.Printf("\n%s %s\n", bold("Seamless"), dim("uninstall"+dryRunTag(dryRun)))
-	fieldRow("clients", strings.Join(clientNames(clients), ", "))
+	fieldRow("clients", strings.Join(names, ", "))
 	fieldRow("bin", tildePath(installDir))
 	if purge {
 		fieldRow("purge", yellow("will delete ")+dim(tildePath(configDir)+", "+tildePath(dataDir)))

@@ -100,37 +100,37 @@ func TestCodexMCPComparator_ClassifiesExactOwnedDriftAndForeign(t *testing.T) {
 	for _, tt := range []struct {
 		name      string
 		mutate    func(*codexMCPState)
-		wantClass codexMCPClass
+		wantClass mcpRegClass
 		wantDrift string
 	}{
-		{"exact", func(*codexMCPState) {}, codexMCPExact, ""},
+		{"exact", func(*codexMCPState) {}, mcpRegExact, ""},
 		{"disabled", func(s *codexMCPState) {
 			s.Enabled = false
 			s.DisabledReason = &disabledReason
-		}, codexMCPOwnedDrifted, "disabled"},
+		}, mcpRegOwnedDrifted, "disabled"},
 		{"old binary", func(s *codexMCPState) {
 			s.Transport.Command = "/old/bin/seam"
-		}, codexMCPOwnedDrifted, "command"},
+		}, mcpRegOwnedDrifted, "command"},
 		{"old config", func(s *codexMCPState) {
 			s.Transport.Args = []string{"mcp-proxy", "--config", "/old/config/seamless.yaml"}
-		}, codexMCPOwnedDrifted, "arguments"},
+		}, mcpRegOwnedDrifted, "arguments"},
 		{"wrong args", func(s *codexMCPState) {
 			s.Transport.Args = []string{"mcp-proxy", "--unknown"}
-		}, codexMCPOwnedDrifted, "arguments"},
+		}, mcpRegOwnedDrifted, "arguments"},
 		{"environment drift", func(s *codexMCPState) {
 			s.Transport.Env = map[string]string{"TOKEN": "must-not-appear-in-diagnostic"}
-		}, codexMCPOwnedDrifted, "environment"},
+		}, mcpRegOwnedDrifted, "environment"},
 		{"timeout drift", func(s *codexMCPState) {
 			seconds := 10.0
 			s.ToolTimeoutSec = &seconds
-		}, codexMCPOwnedDrifted, "timeouts"},
+		}, mcpRegOwnedDrifted, "timeouts"},
 		{"direct HTTP is foreign", func(s *codexMCPState) {
 			s.Transport = codexMCPTransport{Type: "streamable_http", URL: "https://example.invalid/api/mcp"}
-		}, codexMCPIncompatible, "transport"},
+		}, mcpRegIncompatible, "transport"},
 		{"arbitrary stdio is foreign", func(s *codexMCPState) {
 			s.Transport.Command = "/usr/bin/python3"
 			s.Transport.Args = []string{"bridge.py"}
-		}, codexMCPIncompatible, "command"},
+		}, mcpRegIncompatible, "command"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			got := cloneCodexMCPState(want)
@@ -199,17 +199,17 @@ func TestReconcileCodexMCP_StateMachine(t *testing.T) {
 		afterAdd   []byte
 		mode       string
 		timeout    time.Duration
-		wantAction codexMCPReconcileAction
+		wantAction mcpRegAction
 		wantErr    string
 		wantAdds   int
 		wantGets   int
 	}{
-		{"absent adds", nil, marshalCodexMCPState(t, want), "", 2 * time.Second, codexMCPAdded, "", 1, 2},
-		{"exact reinstall is no-op", marshalCodexMCPState(t, want), nil, "", 2 * time.Second, codexMCPUnchanged, "", 0, 1},
-		{"disabled repairs", marshalCodexMCPState(t, disabled), marshalCodexMCPState(t, want), "", 2 * time.Second, codexMCPRepaired, "", 1, 2},
-		{"old binary repairs", marshalCodexMCPState(t, oldBinary), marshalCodexMCPState(t, want), "", 2 * time.Second, codexMCPRepaired, "", 1, 2},
-		{"old config repairs", marshalCodexMCPState(t, oldConfig), marshalCodexMCPState(t, want), "", 2 * time.Second, codexMCPRepaired, "", 1, 2},
-		{"wrong args repair", marshalCodexMCPState(t, wrongArgs), marshalCodexMCPState(t, want), "", 2 * time.Second, codexMCPRepaired, "", 1, 2},
+		{"absent adds", nil, marshalCodexMCPState(t, want), "", 2 * time.Second, mcpRegAdded, "", 1, 2},
+		{"exact reinstall is no-op", marshalCodexMCPState(t, want), nil, "", 2 * time.Second, mcpRegUnchanged, "", 0, 1},
+		{"disabled repairs", marshalCodexMCPState(t, disabled), marshalCodexMCPState(t, want), "", 2 * time.Second, mcpRegRepaired, "", 1, 2},
+		{"old binary repairs", marshalCodexMCPState(t, oldBinary), marshalCodexMCPState(t, want), "", 2 * time.Second, mcpRegRepaired, "", 1, 2},
+		{"old config repairs", marshalCodexMCPState(t, oldConfig), marshalCodexMCPState(t, want), "", 2 * time.Second, mcpRegRepaired, "", 1, 2},
+		{"wrong args repair", marshalCodexMCPState(t, wrongArgs), marshalCodexMCPState(t, want), "", 2 * time.Second, mcpRegRepaired, "", 1, 2},
 		{"HTTP entry fails loudly", marshalCodexMCPState(t, foreignHTTP), nil, "", 2 * time.Second, "", "incompatible", 0, 1},
 		{"malformed get JSON", []byte(`{"name":`), nil, "", 2 * time.Second, "", "parse Codex MCP JSON", 0, 1},
 		{"malformed list JSON", nil, nil, "malformed-list", 2 * time.Second, "", "mcp list --json", 0, 1},
@@ -270,7 +270,7 @@ func TestReconcileCodexMCP_PathsWithSpacesAndWindowsPathsRoundTrip(t *testing.T)
 				client: "codex", path: fake.path, timeout: 2 * time.Second,
 			}, tt.seamBin, tt.configPath)
 			require.NoError(t, err)
-			require.Equal(t, codexMCPAdded, result.Action)
+			require.Equal(t, mcpRegAdded, result.Action)
 
 			logRaw, readErr := os.ReadFile(fake.logPath)
 			require.NoError(t, readErr)

@@ -33,9 +33,10 @@ import (
 // .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
-	clientFlag := fs.String("client", "detect", "which agent client to install for: claude|codex|all|detect")
+	clientFlag := fs.String("client", "detect", "which agent client to install for: claude|codex|claude-desktop|all|detect (claude-desktop wires only the Claude app chat surface's MCP bridge)")
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
+	desktopConfigFlag := fs.String("desktop-config", "", "Claude desktop app claude_desktop_config.json to register the MCP bridge in (default: the app's per-OS location)")
 	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
 	mcpFlag := fs.Bool("mcp", true, "register MCP through claude/codex mcp add (prints the Codex app fallback when the management CLI is absent)")
@@ -49,9 +50,20 @@ func runInstallHooks(args []string) error {
 			clientSet = true
 		}
 	})
-	clients, err := resolveInstallClients(*clientFlag, clientSet)
-	if err != nil {
-		return fmt.Errorf("seamlessd.install-hooks: %w", err)
+	// The Claude app chat surface is an install target with no hooks.Client
+	// behind it (see the claude-chat-surface-client-model decision): it gets no
+	// hooks and no skills, only the desktop-config MCP registration, so it is
+	// resolved before the hook-client selection. It is explicit-only for now --
+	// detect and the interactive menu still offer the two hook clients; wiring
+	// it into detection is the four-synced-copies change tracked separately.
+	desktopOnly := isClaudeDesktopSelector(*clientFlag)
+	var clients []hooks.Client
+	if !desktopOnly {
+		var err error
+		clients, err = resolveInstallClients(*clientFlag, clientSet)
+		if err != nil {
+			return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		}
 	}
 
 	cfg, err := config.Load()
@@ -83,6 +95,21 @@ func runInstallHooks(args []string) error {
 			yellow("warning:"), seamBin, fieldCont, dim("go install github.com/0spoon/seamless/cmd/seam@latest"))
 	}
 	configPath := absConfigPath(cfg.SourcePath())
+
+	if desktopOnly {
+		// The chat surface is MCP-only, so --mcp=false leaves nothing this
+		// selection could install; present-but-contradictory flags are an error,
+		// never a silent no-op.
+		if !*mcpFlag {
+			return errors.New("seamlessd.install-hooks: --client claude-desktop with --mcp=false leaves nothing to install (the Claude app chat surface has no hooks or skills)")
+		}
+		fmt.Printf("\n%s\n", bold("Claude app (chat)"))
+		if err := registerClaudeDesktopMCP(*desktopConfigFlag, seamBin, configPath); err != nil {
+			return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		}
+		return nil
+	}
+
 	var skillOpts agentskills.Options
 	if *skillsFlag {
 		skillOpts, err = agentskills.OptionsFromEnvironment()
@@ -235,8 +262,20 @@ func parseInstallClients(raw string, claudeOK, codexOK bool) ([]hooks.Client, er
 	case "all", "both":
 		return []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, nil
 	default:
-		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, all, detect", raw)
+		return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, claude-desktop, all, detect", raw)
 	}
+}
+
+// isClaudeDesktopSelector reports whether a --client value names the Claude app
+// chat surface. That surface is an install/uninstall target but deliberately
+// NOT a hooks.Client (it can never send a hook), so both commands resolve it
+// before the hook-client parsing, which would otherwise reject it.
+func isClaudeDesktopSelector(raw string) bool {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "claude-desktop", "desktop":
+		return true
+	}
+	return false
 }
 
 // resolveInstallClients decides which client profiles to install for. An
