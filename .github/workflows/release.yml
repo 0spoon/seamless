@@ -79,3 +79,8 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pushes the Homebrew formula to 0spoon/homebrew-tap (`brews:` in
+          # .goreleaser.yaml). GITHUB_TOKEN cannot cross repos, so this is a
+          # fine-grained PAT with contents:write on that single repo -- keep it
+          # that narrow; this job builds what every user downloads.
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
