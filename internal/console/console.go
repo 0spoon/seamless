@@ -96,6 +96,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/static/search.js", s.serveSearchJS)
 	handle("GET /console/static/library.js", s.serveLibraryJS)
 	handle("GET /console/static/charts.js", s.serveChartsJS)
+	handle("GET /console/static/navigation.js", s.serveNavigationJS)
 	handle("GET /console/static/favicon.svg", s.serveFavicon)
 	handle("GET /console/login", s.loginForm)
 	handle("POST /console/login", s.loginSubmit)
@@ -308,6 +309,15 @@ func (s *Service) serveChartsJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	_, _ = w.Write(chartsJS)
+}
+
+// serveNavigationJS serves the shared partial-navigation client. Query controls
+// and owner mutations fetch their next server-rendered state and morph only
+// changed view nodes; the SSE refresher uses the same morph path.
+func (s *Service) serveNavigationJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(navigationJS)
 }
 
 func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {

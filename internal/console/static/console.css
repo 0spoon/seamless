@@ -525,8 +525,8 @@ details > summary { font-family: var(--font-display); }
 /* The wordmark dot pulses while the SSE stream is connected. */
 .brand .dot.on { animation: seam-pulse 2s var(--ease-in-out) infinite; }
 
-/* Enter animation for elements the live in-place refresh inserts (the SSE
-   morph in layout.html tags them .live-in and strips the class after play).
+/* Enter animation for elements an in-place data refresh inserts (the shared
+   navigation morph tags them .live-in and strips the class after play).
    Compositor-only (opacity + transform), so a burst of rows cannot thrash
    layout; prefers-reduced-motion zeroes it via the global rule above. */
 .live-in { animation: live-in var(--dur-med) var(--ease-out); }
@@ -580,8 +580,15 @@ details > summary { font-family: var(--font-display); }
   transition: opacity 0.25s var(--ease-out), transform 0.25s var(--ease-out);
 }
 #live-toast::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); flex: none; }
+#live-toast.error::before { background: var(--danger); }
 #live-toast.show { opacity: 1; transform: translateY(0); }
 #live-toast[hidden] { display: none; }
+
+/* Query controls remain interactive so a newer choice can supersede an
+   in-flight request; the progress cursor is the only loading treatment. The
+   existing view stays fully legible until its changed data is morphed in. */
+.main[aria-busy="true"] [data-seam-query] { cursor: progress; }
+.main[aria-busy="true"] [data-seam-query] * { cursor: progress; }
 
 .crumb { color: var(--muted); font-size: var(--text-sm); margin-bottom: 6px; }
 .crumb a { color: var(--muted); }

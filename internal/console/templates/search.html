@@ -12,7 +12,7 @@
   {{if .Query}}<div class="search-total" aria-label="{{.Total}} results"><strong>{{.Total}}</strong><span>matches</span></div>{{end}}
 </header>
 
-<form class="search search-query" method="get" action="/console/search">
+<form class="search search-query" method="get" action="/console/search" data-seam-query>
   {{icon "search"}}
   <input name="q" aria-label="Search memories, notes, tasks, plans, trials, projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
   <input type="hidden" name="scope" value="{{.Scope}}">
@@ -24,7 +24,7 @@
 <section class="search-filterbar" aria-label="Search filters and sorting">
   <div class="search-control search-control-types">
     <span class="search-control-label">Type</span>
-    <div class="search-pills" role="list" aria-label="Result type">
+    <div class="search-pills" role="list" aria-label="Result type" data-seam-query>
       {{range .Scopes}}
       <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{.Key}}&amp;w={{$window}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
       {{end}}
@@ -32,18 +32,18 @@
   </div>
   <div class="search-control">
     <span class="search-control-label">Updated</span>
-    <div class="search-pills search-time-pills" role="list" aria-label="Time window">
+    <div class="search-pills search-time-pills" role="list" aria-label="Time window" data-seam-query>
       {{range .Windows}}
       <a class="{{if .Active}}active{{end}}" href="/console/search?scope={{$scope}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}"{{if .Active}} aria-current="page"{{end}}>{{.Label}}</a>
       {{end}}
     </div>
   </div>
-  <form class="search-sort" method="get" action="/console/search">
+  <form class="search-sort" method="get" action="/console/search" data-seam-query data-seam-auto-submit>
     <input type="hidden" name="q" value="{{.Query}}">
     <input type="hidden" name="scope" value="{{.Scope}}">
     <input type="hidden" name="w" value="{{.Window}}">
     <label for="search-sort">Sort</label>
-    <select id="search-sort" name="sort" onchange="this.form.submit()">
+    <select id="search-sort" name="sort">
       {{range .Sorts}}<option value="{{.Key}}"{{if .Selected}} selected{{end}}>{{.Label}}</option>{{end}}
     </select>
     <button class="btn small search-sort-apply" type="submit">Apply</button>
@@ -93,7 +93,7 @@
     </section>
 {{else}}
 {{if .Query}}
-    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}.</div><a href="/console/search?scope={{.Scope}}&amp;w=all&amp;sort={{.Sort}}&amp;q={{.Query}}">Search all time</a></div>
+    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}.</div><a href="/console/search?scope={{.Scope}}&amp;w=all&amp;sort={{.Sort}}&amp;q={{.Query}}" data-seam-query>Search all time</a></div>
 {{else}}
     <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
 {{end}}

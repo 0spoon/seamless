@@ -8,7 +8,7 @@
   </div>
 </div>
 
-<div class="win-tabs win-tabs-page">
+<div class="win-tabs win-tabs-page" data-seam-query>
   {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
 </div>
 

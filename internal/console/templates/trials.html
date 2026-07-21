@@ -20,13 +20,13 @@
   {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
   <div class="lib-control">
     <span class="lib-control-label">Outcome</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       {{$lab := .Lab}}
       {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
     </div>
   </div>
   {{if .Lab}}
-  <div class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}">Clear</a></div>
+  <div class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}" data-seam-query>Clear</a></div>
   {{end}}
   <div class="lib-control-note"><strong>Order</strong><span>Newest first, grouped by lab</span></div>
 </section>

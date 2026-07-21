@@ -15,7 +15,7 @@
 </header>
 
 <section class="lib-controlbar ops-controlbar" aria-label="Session filters and sorting">
-  <form class="search lib-query" method="get" action="/console/sessions">
+  <form class="search lib-query" method="get" action="/console/sessions" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Search sessions by name, project, or findings" placeholder="Search name, project, findings&hellip;" value="{{.Query}}">
     <input type="hidden" name="status" value="{{.Filter}}">
@@ -24,7 +24,7 @@
   </form>
   <div class="lib-control">
     <span class="lib-control-label">Status</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Filter ""}}on{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
       <a class="{{if eq .Filter "active"}}on{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
       <a class="{{if eq .Filter "completed"}}on{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
@@ -33,14 +33,14 @@
   </div>
   <div class="lib-control">
     <span class="lib-control-label">Order</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
     </div>
   </div>
   <div class="lib-control ops-window-control">
     <span class="lib-control-label">Updated</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
     </div>
   </div>

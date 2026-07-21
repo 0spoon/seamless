@@ -38,7 +38,7 @@
       <span>Observation window</span>
       <strong>How context moved over {{.WindowLabel}}</strong>
     </div>
-    <nav class="overview-window-tabs" aria-label="Choose observation window">
+    <nav class="overview-window-tabs" aria-label="Choose observation window" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="page"{{end}} href="?w={{.Key}}">{{.Label}}</a>{{end}}
     </nav>
     <div class="overview-window-note"><strong>{{.CovTotal}}</strong> session{{if ne .CovTotal 1}}s{{end}} observed</div>

@@ -20,7 +20,7 @@
   {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
   <div class="lib-control">
     <span class="lib-control-label">Updated</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
     </div>
   </div>

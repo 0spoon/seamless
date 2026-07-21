@@ -2,17 +2,19 @@
    the left and a document reader on the right. Every rail item is a real server-rendered link;
    this module upgrades clicks to an in-place reader swap (?reader=1 fragment +
    history.pushState of the item's canonical URL) so the rail keeps its scroll
-   position and the switch is instant. j / k move the selection. Inert on pages
-   without a #lib-reader. */
+   position and the switch is instant. j / k move the selection. The delegated
+   handlers stay inert without #lib-reader, but can enhance one inserted by an
+   in-place mutation response later. */
 (function () {
   'use strict';
-  var reader = document.getElementById('lib-reader');
-  if (!reader) return;
-  var base = reader.getAttribute('data-base') || '';
 
   // Re-queried lazily: the SSE live client can morph the rail in place.
   function items() { return Array.prototype.slice.call(document.querySelectorAll('.lib-rail .rail-item')); }
   function readerEl() { return document.getElementById('lib-reader'); }
+  function basePath() {
+    var el = readerEl();
+    return el ? el.getAttribute('data-base') || '' : '';
+  }
   function pathOf(href) {
     try { return new URL(href, location.origin).pathname; } catch (e) { return href; }
   }
@@ -132,7 +134,11 @@
         ensureReaderNav();
         window.scrollTo({ top: 0 });
       })
-      .catch(function () { location.href = href; }); // degrade to a plain navigation
+      .catch(function () {
+        // Keep the current reader intact. A fetch failure is not permission to
+        // turn a data update into a document navigation.
+        if (window.SeamConsole) window.SeamConsole.flash('Could not update the reader. The current data is unchanged.', 'error');
+      });
   }
 
   document.addEventListener('click', function (e) {
@@ -150,6 +156,7 @@
     // Inside the reader, links to siblings of the same entity (e.g. a
     // supersession neighbor) swap in place too; everything else navigates.
     var el = readerEl();
+    var base = basePath();
     var inReader = el && el.contains(a) && base && pathOf(a.getAttribute('href')).indexOf(base + '/') === 0;
     if (!inRail && !inReader) return;
     e.preventDefault();
@@ -158,6 +165,10 @@
 
   // Browser Back/Forward across swapped selections.
   window.addEventListener('popstate', function () {
+    // A filter/sort history step needs the whole server-rendered view patched;
+    // the shared navigation client owns it. Reader-only history stays cheap.
+    if (window.SeamConsole && window.SeamConsole.needsView(location.href)) return;
+    var base = basePath();
     if (base && location.pathname.indexOf(base) === 0) load(location.pathname + location.search, false);
   });
 
@@ -181,17 +192,23 @@
     stepSelection(e.key === 'j' ? 1 : -1);
   });
 
-  // The list URL auto-opens a default selection server-side; pin its canonical
-  // URL so a live refresh (which refetches location.href) cannot yank the
-  // reader to a different item mid-read.
-  var layout = document.querySelector('.lib-layout');
-  var auto = layout && layout.getAttribute('data-auto-url');
-  if (auto) { try { history.replaceState(null, '', auto); } catch (e) {} }
+  function enhanceReader(initial) {
+    if (!readerEl()) return;
+    // The list URL auto-opens a default selection server-side; pin its
+    // canonical URL so a live refresh cannot choose a different item mid-read.
+    // Later full-view patches already canonicalize through navigation.js.
+    if (initial) {
+      var layout = document.querySelector('.lib-layout');
+      var auto = layout && layout.getAttribute('data-auto-url');
+      if (auto) { try { history.replaceState(null, '', auto); } catch (e) {} }
+    }
+    var selected = items().filter(function (a) { return a.classList.contains('selected'); })[0];
+    if (selected) revealInRail(selected);
+    ensureReaderNav();
+  }
 
-  // Bring the initial selection into the rail's view.
-  var sel0 = items().filter(function (a) { return a.classList.contains('selected'); })[0];
-  if (sel0) revealInRail(sel0);
-  ensureReaderNav();
+  enhanceReader(true);
+  document.addEventListener('seam:content-updated', function () { enhanceReader(false); });
 
   // Live refreshes morph the server-rendered page and can remove this small
   // JS-owned navigation strip. Restore it after any such replacement; the

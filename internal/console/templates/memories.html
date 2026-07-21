@@ -17,7 +17,7 @@
 
 {{if or .Groups .Inactive .Query}}
 <section class="lib-controlbar" aria-label="Memory filters and sorting">
-  <form class="search lib-query" method="get" action="/console/memories">
+  <form class="search lib-query" method="get" action="/console/memories" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter memories by name, description, kind, or tag" placeholder="Filter names, descriptions, kinds, and tags&hellip;" value="{{.Query}}">
     {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
@@ -25,7 +25,7 @@
   {{$base := "/console/memories"}}{{if .Selected}}{{$base = printf "/console/memories/%s" .Selected.ID}}{{end}}
   <div class="lib-control">
     <span class="lib-control-label">Sort within kind</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "reach"}}on{{end}}" href="{{$base}}?sort=reach&amp;q={{.Query}}">Reach</a>

@@ -17,7 +17,7 @@
 
 {{if or .Groups .Query}}
 <section class="lib-controlbar" aria-label="Note filters and sorting">
-  <form class="search lib-query" method="get" action="/console/notes">
+  <form class="search lib-query" method="get" action="/console/notes" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter notes by title, description, or tag" placeholder="Filter titles, descriptions, and tags&hellip;" value="{{.Query}}">
     {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
@@ -25,7 +25,7 @@
   {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
   <div class="lib-control">
     <span class="lib-control-label">Sort within project</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
     </div>

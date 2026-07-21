@@ -70,6 +70,7 @@
 <script src="/console/static/search.js"></script>
 <script src="/console/static/library.js"></script>
 <script src="/console/static/charts.js"></script>
+<script src="/console/static/navigation.js"></script>
 <script>
 (function () {
   // Static "live" pills (Overview, Projects topbar). #ix-live is excluded --
@@ -90,62 +91,6 @@
   var debounce = null;
   var toastTimer = null;
 
-  // ---- morph: patch the live DOM toward a freshly-fetched copy in place, so
-  // scroll, focus, open <details> and the detail pane survive. Nodes keep their
-  // identity (matched by id where present) -> event listeners on unchanged nodes
-  // are never lost. Wrapped in a try/catch fallback so a morph edge case degrades
-  // to a plain content swap rather than a broken page -- never a full reload.
-  // Elements the morph INSERTS (vs merely patches) are tagged .live-in so CSS
-  // can play a brief enter animation; apply() strips the tag once it has played,
-  // so a later reveal (e.g. switching to a hidden tab) does not replay it.
-  function imp(node) { return document.importNode(node, true); }
-  function ins(node) { var n = imp(node); if (n.nodeType === 1) n.classList.add('live-in'); return n; }
-  function keyOf(node) { return node.nodeType === 1 && node.id ? node.nodeName + '#' + node.id : null; }
-  function syncAttrs(from, to) {
-    var ta = to.attributes, fa = from.attributes, i, a;
-    for (i = 0; i < ta.length; i++) { a = ta[i]; if (from.getAttribute(a.name) !== a.value) from.setAttribute(a.name, a.value); }
-    for (i = fa.length - 1; i >= 0; i--) {
-      a = fa[i];
-      if (to.hasAttribute(a.name)) continue;
-      if (a.name === 'open' && from.nodeName === 'DETAILS') continue; // keep user-toggled disclosure
-      from.removeAttribute(a.name);
-    }
-  }
-  function morphNode(from, to) {
-    if (from.nodeType !== to.nodeType || (from.nodeType === 1 && from.nodeName !== to.nodeName)) { from.replaceWith(imp(to)); return; }
-    if (from.nodeType !== 1) { if (from.nodeValue !== to.nodeValue) from.nodeValue = to.nodeValue; return; }
-    if (from.hasAttribute('data-live-skip')) return; // JS-owned island: leave it alone
-    syncAttrs(from, to);
-    morphChildren(from, to);
-  }
-  function morphChildren(from, to) {
-    var keyed = {}, o;
-    for (o = from.firstChild; o; o = o.nextSibling) { var k = keyOf(o); if (k) keyed[k] = o; }
-    var oldChild = from.firstChild, newChild = to.firstChild;
-    while (newChild) {
-      var nextNew = newChild.nextSibling, nk = keyOf(newChild);
-      if (nk && keyed[nk]) {
-        var match = keyed[nk]; delete keyed[nk];
-        if (match === oldChild) { oldChild = oldChild.nextSibling; }
-        else { from.insertBefore(match, oldChild); }
-        morphNode(match, newChild);
-      } else if (oldChild) {
-        var ok = keyOf(oldChild);
-        if (ok && keyed[ok]) { from.insertBefore(ins(newChild), oldChild); } // old node needed later
-        else if (!ok && oldChild.nodeType === newChild.nodeType && (oldChild.nodeType !== 1 || oldChild.nodeName === newChild.nodeName)) {
-          morphNode(oldChild, newChild); oldChild = oldChild.nextSibling;
-        } else { from.insertBefore(ins(newChild), oldChild); }
-      } else { from.appendChild(ins(newChild)); }
-      newChild = nextNew;
-    }
-    while (oldChild) { var nx = oldChild.nextSibling; from.removeChild(oldChild); oldChild = nx; }
-    for (var kk in keyed) { if (keyed[kk].parentNode === from) from.removeChild(keyed[kk]); }
-  }
-  function swap(cur, fresh) {
-    try { morphNode(cur, fresh); }
-    catch (e) { cur.replaceChildren.apply(cur, Array.prototype.slice.call(imp(fresh).childNodes)); }
-  }
-
   function fieldFocused() { var a = document.activeElement; return !!(a && a.matches && a.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')); }
   function selecting() { var s = window.getSelection && window.getSelection(); return !!(s && s.type === 'Range' && String(s).trim()); }
   function paneOpen() { return !!document.querySelector('.list-detail-split.detail-open'); }
@@ -158,6 +103,7 @@
   function flashToast(msg) {
     if (!toast) return;
     toast.textContent = msg; toast.hidden = false;
+    toast.classList.remove('error');
     toast.classList.remove('show'); void toast.offsetWidth; toast.classList.add('show'); // restart the enter transition
     if (toastTimer) clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { toast.classList.remove('show'); setTimeout(function () { toast.hidden = true; }, 300); }, 2600);
@@ -170,19 +116,12 @@
       .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
       .then(function (html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
-        if (!doc.querySelector('.sidebar')) { location.reload(); return; } // session expired -> show login
-        var fMain = doc.querySelector('.main'), cMain = document.querySelector('.main');
-        if (!fMain || !cMain) { location.reload(); return; }
-        swap(cMain, fMain);
-        try { if (window.IX && window.IX.enhance) window.IX.enhance(cMain); } catch (e) {}
-        var fc = doc.querySelectorAll('nav.nav .count'), cc = document.querySelectorAll('nav.nav .count');
-        if (fc.length === cc.length) {
-          for (var i = 0; i < cc.length; i++) if (cc[i].textContent !== fc[i].textContent) {
-            cc[i].textContent = fc[i].textContent;
-            // restart the pulse even when the class is still on from a prior update
-            cc[i].classList.remove('bump'); void cc[i].offsetWidth; cc[i].classList.add('bump');
-          }
+        if (!doc.querySelector('.sidebar')) {
+          // Authentication is a real view transition, not a data refresh.
+          location.assign('/console/login?next=' + encodeURIComponent(location.pathname + location.search));
+          return;
         }
+        if (!window.SeamConsole || !window.SeamConsole.patchPage(doc, 'live')) throw new Error('invalid console document');
         setLive(connected); // the morph may have swapped the topbar's live indicator
         n = 0; pending = false; hidePill();
         flashToast('Updated');
@@ -270,7 +209,10 @@
     });
   }
   function load(href) {
-    return fetch(peekURL(href)).then(function (r) { return r.text(); }).then(function (html) {
+    return fetch(peekURL(href)).then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.text();
+    }).then(function (html) {
       var b = pbody(), p = pane(), s = split();
       if (!b || !p || !s) return;
       b.innerHTML = html;
@@ -280,7 +222,9 @@
       p.hidden = false;
       s.classList.add('detail-open');
       b.scrollTop = 0;
-    }).catch(function () {});
+    }).catch(function () {
+      if (window.SeamConsole) window.SeamConsole.flash('Could not update the detail view. The current data is unchanged.', 'error');
+    });
   }
   function teardown() {
     var p = pane(), s = split(), b = pbody();

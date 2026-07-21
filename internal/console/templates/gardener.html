@@ -300,7 +300,8 @@ window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress review and request stat
 (function () {
   function busy(formID, btnID, label) {
     var form = document.getElementById(formID);
-    if (!form) return;
+    if (!form || form._seamBusyWired) return;
+    form._seamBusyWired = true;
     form.addEventListener('submit', function () {
       form.setAttribute('aria-busy', 'true');
       (form.closest('.gardener-request-card') || form).classList.add('is-busy');
@@ -308,31 +309,41 @@ window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress review and request stat
       if (btn) btn.textContent = label;
     });
   }
-  busy('req-form', 'req-go', 'Interpreting…');
-  busy('split-form', 'split-go', 'Planning…');
+  function enhanceGardener() {
+    busy('req-form', 'req-go', 'Interpreting…');
+    busy('split-form', 'split-go', 'Planning…');
 
-  var ta = document.getElementById('req-text');
-  if (ta) {
-    ta.addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') document.getElementById('req-form').requestSubmit();
-    });
-    document.querySelectorAll('[data-request-example]').forEach(function (button) {
-      button.addEventListener('click', function () {
-        ta.value = button.getAttribute('data-request-example');
-        ta.focus();
-        ta.dispatchEvent(new Event('input', { bubbles: true }));
+    var ta = document.getElementById('req-text');
+    if (ta && !ta._seamWired) {
+      ta._seamWired = true;
+      ta.addEventListener('keydown', function (e) {
+        if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') document.getElementById('req-form').requestSubmit();
       });
-    });
-  }
+    }
+    if (ta) {
+      document.querySelectorAll('[data-request-example]').forEach(function (button) {
+        if (button._seamWired) return;
+        button._seamWired = true;
+        button.addEventListener('click', function () {
+          ta.value = button.getAttribute('data-request-example');
+          ta.focus();
+          ta.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+      });
+    }
 
-  // The split follow-up plans whatever is in the ask box, so edits made after
-  // the round-trip still count; the hidden value remains the no-JS fallback.
-  var split = document.getElementById('split-form');
-  if (split && ta) {
-    split.addEventListener('submit', function () {
-      if (ta.value.trim() !== '') document.getElementById('split-instruction').value = ta.value;
-    });
+    // The split follow-up plans whatever is in the ask box, so edits made after
+    // the round-trip still count; the hidden value remains the no-JS fallback.
+    var split = document.getElementById('split-form');
+    if (split && ta && !split._seamInstructionWired) {
+      split._seamInstructionWired = true;
+      split.addEventListener('submit', function () {
+        if (ta.value.trim() !== '') document.getElementById('split-instruction').value = ta.value;
+      });
+    }
   }
+  enhanceGardener();
+  document.addEventListener('seam:content-updated', enhanceGardener);
 })();
 </script>
 {{end}}

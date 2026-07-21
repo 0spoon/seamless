@@ -30,6 +30,9 @@ var libraryJS []byte
 //go:embed static/charts.js
 var chartsJS []byte
 
+//go:embed static/navigation.js
+var navigationJS []byte
+
 //go:embed static/favicon.svg
 var faviconSVG []byte
 

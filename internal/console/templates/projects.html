@@ -45,7 +45,7 @@
 </section>
 
 <section class="lib-controlbar ops-controlbar" aria-label="Project filters and sorting">
-  <form class="search lib-query" method="get" action="/console/projects">
+  <form class="search lib-query" method="get" action="/console/projects" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter projects by slug, name, or description" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
     <input type="hidden" name="group" value="{{.Group}}">
@@ -54,14 +54,14 @@
   </form>
   <div class="lib-control">
     <span class="lib-control-label">View</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
       <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
     </div>
   </div>
   <div class="lib-control">
     <span class="lib-control-label">Order</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
       <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
@@ -69,7 +69,7 @@
   </div>
   <div class="lib-control ops-window-control">
     <span class="lib-control-label">Reach window</span>
-    <div class="seg">
+    <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/projects?group={{$group}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;w={{.Key}}">{{.Label}}</a>{{end}}
     </div>
   </div>

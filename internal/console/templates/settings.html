@@ -390,90 +390,119 @@
 <script>
 window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this control surface
 (function () {
-  var form = document.querySelector('[data-briefing-form]');
-  var state = document.getElementById('brief-state');
-  if (!form || !state || !window.FormData) return;
-  function snapshot() {
+  function snapshot(form) {
     return Array.from(new FormData(form).entries()).map(function (pair) { return pair[0] + '=' + pair[1]; }).sort().join('&');
   }
-  var baseline = snapshot();
-  function reflect() {
-    var dirty = snapshot() !== baseline;
+  function reflectBriefing(form) {
+    var state = document.getElementById('brief-state');
+    if (!state) return;
+    var dirty = snapshot(form) !== form._seamBaseline;
     form.classList.toggle('is-dirty', dirty);
     if (dirty) state.querySelector('span:last-child').textContent = 'Unsaved changes — save to use them for new sessions.';
-    else state.querySelector('span:last-child').textContent = '{{if .BriefingOverridden}}Console override is active for new sessions.{{else}}Currently following the file and environment baseline.{{end}}';
+    else state.querySelector('span:last-child').textContent = form._seamCleanText;
   }
-  form.addEventListener('input', reflect);
-  form.addEventListener('change', reflect);
-})();
-(function () {
-  function refreshFamilyForm(form) {
+  function enhanceBriefing() {
+    var form = document.querySelector('[data-briefing-form]');
+    var state = document.getElementById('brief-state');
+    if (!form || !state || !window.FormData) return;
+    form._seamBaseline = snapshot(form);
+    form._seamCleanText = state.querySelector('span:last-child').textContent;
+    if (!form._seamWired) {
+      form._seamWired = true;
+      form.addEventListener('input', function () { reflectBriefing(form); });
+      form.addEventListener('change', function () { reflectBriefing(form); });
+    }
+    reflectBriefing(form);
+  }
+  function updateFamilyCount(form) {
     var options = Array.from(form.querySelectorAll('[data-family-option]'));
     var count = form.querySelector('[data-family-selection]');
-    var filter = form.querySelector('[data-family-filter]');
     var optionList = form.querySelector('[data-family-options]');
-    function updateCount() {
-      var selected = options.filter(function (option) { return option.querySelector('input[type="checkbox"]').checked; }).length;
-      if (count) {
-        count.textContent = selected + ' selected';
-        count.classList.remove('is-error');
-      }
-      if (optionList) optionList.classList.remove('has-error');
+    var selected = options.filter(function (option) { return option.querySelector('input[type="checkbox"]').checked; }).length;
+    if (count) {
+      count.textContent = selected + ' selected';
+      count.classList.remove('is-error');
     }
-    options.forEach(function (option) {
-      option.querySelector('input[type="checkbox"]').addEventListener('change', updateCount);
-    });
-    if (filter) filter.addEventListener('input', function () {
-      var query = filter.value.trim().toLowerCase();
-      options.forEach(function (option) { option.hidden = query !== '' && option.textContent.toLowerCase().indexOf(query) === -1; });
-    });
-    form.addEventListener('submit', function (event) {
-      if (options.some(function (option) { return option.querySelector('input[type="checkbox"]').checked; })) return;
-      event.preventDefault();
-      if (count) {
-        count.textContent = 'Choose at least one project';
-        count.classList.add('is-error');
-      }
-      if (optionList) optionList.classList.add('has-error');
-      if (filter) filter.focus();
-    });
-    updateCount();
+    if (optionList) optionList.classList.remove('has-error');
+  }
+  function enhanceFamilyForm(form) {
+    if (!form._seamWired) {
+      form._seamWired = true;
+      form.addEventListener('change', function (event) {
+        if (event.target.matches('input[type="checkbox"]')) updateFamilyCount(form);
+      });
+      form.addEventListener('input', function (event) {
+        if (!event.target.matches('[data-family-filter]')) return;
+        var query = event.target.value.trim().toLowerCase();
+        form.querySelectorAll('[data-family-option]').forEach(function (option) {
+          option.hidden = query !== '' && option.textContent.toLowerCase().indexOf(query) === -1;
+        });
+      });
+      form.addEventListener('submit', function (event) {
+        var options = Array.from(form.querySelectorAll('[data-family-option]'));
+        if (options.some(function (option) { return option.querySelector('input[type="checkbox"]').checked; })) return;
+        event.preventDefault();
+        var count = form.querySelector('[data-family-selection]');
+        var optionList = form.querySelector('[data-family-options]');
+        var filter = form.querySelector('[data-family-filter]');
+        if (count) {
+          count.textContent = 'Choose at least one project';
+          count.classList.add('is-error');
+        }
+        if (optionList) optionList.classList.add('has-error');
+        if (filter) filter.focus();
+      });
+    }
+    updateFamilyCount(form);
   }
   function closeDialog(dialog) {
     if (typeof dialog.close === 'function') dialog.close();
     else dialog.removeAttribute('open');
   }
-  document.querySelectorAll('[data-family-form]').forEach(refreshFamilyForm);
-  document.querySelectorAll('[data-dialog-open]').forEach(function (button) {
-    button.addEventListener('click', function () {
-      var dialog = document.getElementById(button.getAttribute('data-dialog-open'));
-      if (!dialog) return;
-      if (typeof dialog.showModal === 'function') dialog.showModal();
-      else dialog.setAttribute('open', '');
-      var name = dialog.querySelector('input[name="name"]');
-      if (name) name.focus();
+  function enhanceFamilies() {
+    document.querySelectorAll('[data-family-form]').forEach(enhanceFamilyForm);
+    document.querySelectorAll('[data-dialog-open]').forEach(function (button) {
+      if (button._seamWired) return;
+      button._seamWired = true;
+      button.addEventListener('click', function () {
+        var dialog = document.getElementById(button.getAttribute('data-dialog-open'));
+        if (!dialog) return;
+        if (typeof dialog.showModal === 'function') dialog.showModal();
+        else dialog.setAttribute('open', '');
+        var name = dialog.querySelector('input[name="name"]');
+        if (name) name.focus();
+      });
     });
-  });
-  document.querySelectorAll('.family-dialog').forEach(function (dialog) {
-    dialog.querySelectorAll('[data-dialog-close]').forEach(function (button) {
-      button.addEventListener('click', function () { closeDialog(dialog); });
+    document.querySelectorAll('.family-dialog').forEach(function (dialog) {
+      dialog.querySelectorAll('[data-dialog-close]').forEach(function (button) {
+        if (button._seamWired) return;
+        button._seamWired = true;
+        button.addEventListener('click', function () { closeDialog(dialog); });
+      });
+      if (dialog._seamWired) return;
+      dialog._seamWired = true;
+      dialog.addEventListener('click', function (event) {
+        if (event.target === dialog) closeDialog(dialog);
+      });
+      dialog.addEventListener('close', function () {
+        var form = dialog.querySelector('[data-family-form]');
+        if (!form) return;
+        form.reset();
+        var filter = form.querySelector('[data-family-filter]');
+        if (filter) {
+          filter.value = '';
+          filter.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        updateFamilyCount(form);
+      });
     });
-    dialog.addEventListener('click', function (event) {
-      if (event.target === dialog) closeDialog(dialog);
-    });
-    dialog.addEventListener('close', function () {
-      var form = dialog.querySelector('[data-family-form]');
-      if (!form) return;
-      form.reset();
-      var filter = form.querySelector('[data-family-filter]');
-      if (filter) {
-        filter.value = '';
-        filter.dispatchEvent(new Event('input'));
-      }
-      var count = form.querySelector('[data-family-selection]');
-      if (count) count.textContent = form.querySelectorAll('input[name="members"]:checked').length + ' selected';
-    });
-  });
+  }
+  function enhanceSettings() {
+    enhanceBriefing();
+    enhanceFamilies();
+  }
+  enhanceSettings();
+  document.addEventListener('seam:content-updated', enhanceSettings);
 })();
 </script>
 {{end}}
