@@ -33,6 +33,15 @@ const linkExpandFrom = 5
 // the semantic floor untouched.
 const favoriteBoost = 1.15
 
+// recallUtilityBoost scales the utility multiplier on a fused score:
+// 1 + boost*utility, so the range is [1.0, 1.10). Like favoriteBoost it is
+// applied post-fusion, after link expansion -- it can promote a proven memory
+// past near-ties (adjacent RRF ranks differ by ~1.5-3%) but can never
+// resurrect an item the candidate queries already excluded, and it stays
+// strictly below favoriteBoost so an explicit star always beats implicit
+// demand. Console Search never enters this path.
+const recallUtilityBoost = 0.10
+
 // Hit is one recall result. Kind tells the agent how to read it: a memory by its
 // Name (memory_read), a note by its ID (notes_read).
 type Hit struct {
@@ -225,12 +234,22 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		return nil, err
 	}
 
-	// Favorite boost, then one re-rank covering both the boost and any link
+	// Favorite and utility boosts, then one re-rank covering both and any link
 	// neighbors. Hydration misses (an id in acc but not in mems/notes) read as
 	// unfavorited zero values and are skipped in the assembly loop below anyway.
+	// A failed utility read costs the boost, never the recall (same posture as
+	// every other stats consumer on an agent-facing path).
+	utility, err := store.UtilityScores(ctx, s.db)
+	if err != nil {
+		s.logger.Warn("retrieve: utility scores unavailable, recall unboosted", "error", err)
+		utility = nil
+	}
 	for id, f := range acc {
 		if (f.kind == "note" && notes[id].Favorite) || (f.kind != "note" && mems[id].Favorite) {
 			f.score *= favoriteBoost
+		}
+		if u := utility[id]; u > 0 {
+			f.score *= 1 + recallUtilityBoost*u
 		}
 	}
 	ordered = rankFused(acc)

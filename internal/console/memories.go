@@ -18,8 +18,9 @@ import (
 
 // memorySortKeys are the accepted ?sort values on the memories list. name is the
 // default (preserving the by-name order within each kind group); recent orders by
-// last-updated, reach by injection count, favorites floats starred rows first.
-var memorySortKeys = []string{"name", "recent", "reach", "favorites"}
+// last-updated, reach by injection count, utility by the decayed demand score,
+// favorites floats starred rows first.
+var memorySortKeys = []string{"name", "recent", "reach", "utility", "favorites"}
 
 // errNoFiles is returned when a write action needs the files subsystem but the
 // console was built without it (should not happen in serve).
@@ -42,6 +43,7 @@ type memoryRow struct {
 	Favorite     bool         `json:"favorite,omitempty"`
 	Injects      int          `json:"injects"`
 	Reads        int          `json:"reads"`
+	Utility      float64      `json:"utility,omitempty"`
 	LastInjected *time.Time   `json:"lastInjected,omitempty"`
 	AbsPath      string       `json:"absPath"`
 	EditURL      template.URL `json:"-"` // vscode://file link; template.URL so it survives sanitization
@@ -224,8 +226,9 @@ func toMemoryRow(m core.Memory, stat store.RetrievalStat, nameByID map[string]st
 		Model:      m.Model, // Harness is filled by the caller (it needs a session resolver)
 		Favorite:   m.Favorite,
 		ReplacedBy: nameByID[m.SupersededBy], ReplacedByID: m.SupersededBy,
-		Injects: stat.InjectCount, Reads: stat.ReadCount, LastInjected: stat.LastInjectedAt,
-		AbsPath: abs, EditURL: edit,
+		Injects: stat.InjectCount, Reads: stat.ReadCount, Utility: stat.Utility,
+		LastInjected: stat.LastInjectedAt,
+		AbsPath:      abs, EditURL: edit,
 	}
 }
 
@@ -298,6 +301,13 @@ func sortMemoryRows(rows []memoryRow, sortKey string) {
 		sort.SliceStable(rows, func(i, j int) bool {
 			if rows[i].Injects != rows[j].Injects {
 				return rows[i].Injects > rows[j].Injects
+			}
+			return rows[i].Name < rows[j].Name
+		})
+	case "utility":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if rows[i].Utility != rows[j].Utility {
+				return rows[i].Utility > rows[j].Utility
 			}
 			return rows[i].Name < rows[j].Name
 		})

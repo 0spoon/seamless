@@ -111,6 +111,8 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	t.Setenv("SEAMLESS_PLAN_CAPTURE_INJECT_RELATED", "false")
 	t.Setenv("SEAMLESS_GARDENER_STALE_PLAN_DAYS", "21")
 	t.Setenv("SEAMLESS_SEARCH_SEMANTIC_FLOOR", "0.45")
+	t.Setenv("SEAMLESS_BRIEFING_UTILITY_WEIGHT", "0.8")
+	t.Setenv("SEAMLESS_BRIEFING_UTILITY_MODE", "off")
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Gardener.Enabled)
@@ -124,6 +126,8 @@ func TestLoadFrom_EnvOnlyNoFile(t *testing.T) {
 	require.False(t, cfg.PlanCapture.AutoTask)
 	require.False(t, cfg.PlanCapture.InjectRelated)
 	require.Equal(t, 0.45, cfg.Search.SemanticFloor)
+	require.Equal(t, 0.8, cfg.Briefing.UtilityWeight)
+	require.Equal(t, "off", cfg.Briefing.UtilityMode)
 	require.Equal(t, "", cfg.SourcePath())
 }
 
@@ -299,6 +303,11 @@ func TestValidate(t *testing.T) {
 		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
 		{"negative-briefing-stage-window", func(c *Config) { c.Briefing.StageUnknownMaxAgeDays = -1 }, true},
 		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},
+		{"utility-weight-one-ok", func(c *Config) { c.Briefing.UtilityWeight = 1 }, false},
+		{"negative-utility-weight", func(c *Config) { c.Briefing.UtilityWeight = -0.1 }, true},
+		{"utility-weight-above-one", func(c *Config) { c.Briefing.UtilityWeight = 1.1 }, true},
+		{"empty-utility-mode-ok", func(c *Config) { c.Briefing.UtilityMode = "" }, false},
+		{"unknown-utility-mode", func(c *Config) { c.Briefing.UtilityMode = "sideways" }, true},
 		{"zero-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 0 }, false},
 		{"one-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 1 }, false},
 		{"negative-semantic-floor", func(c *Config) { c.Search.SemanticFloor = -0.1 }, true},

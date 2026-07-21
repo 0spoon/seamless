@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -104,7 +105,20 @@ type Briefing struct {
 	// (constraints and stages excluded) into the briefing as a low-priority
 	// "Sibling memories" section. Off by default to avoid crowding.
 	IncludeSiblingMemories bool `yaml:"include_sibling_memories" json:"includeSiblingMemories"`
+	// UtilityWeight is utility's share of the briefing memory-index sort key:
+	// (1-w)*recency + w*utility, both half-life-decayed to [0,1). 0 = pure
+	// recency (the legacy order); constraints, stages, and favorites are pinned
+	// regardless. Applies only where utility ranking is active (UtilityMode).
+	UtilityWeight float64 `yaml:"utility_weight" json:"utilityWeight"`
+	// UtilityMode gates the briefing's utility re-ordering: "auto" (default)
+	// activates per project once the gardener's readiness latch trips, "on"
+	// activates everywhere immediately, "off" disables it everywhere. The
+	// bounded recall/prompt-recall boosts are not gated by this.
+	UtilityMode string `yaml:"utility_mode" json:"utilityMode"`
 }
+
+// UtilityModes are the accepted briefing.utility_mode values.
+var UtilityModes = []string{"auto", "on", "off"}
 
 // Validate rejects hard-invalid briefing knobs. Shared by the file/env load
 // path and the console's settings form.
@@ -126,6 +140,15 @@ func (b Briefing) Validate() error {
 		if f.v < 0 {
 			return fmt.Errorf("config: briefing.%s must be >= 0", f.name)
 		}
+	}
+	if b.UtilityWeight < 0 || b.UtilityWeight > 1 {
+		return fmt.Errorf("config: briefing.utility_weight must be in [0, 1]")
+	}
+	// Absent (empty) means the default; present-but-unrecognized is an error,
+	// never a silent fallback.
+	if b.UtilityMode != "" && !slices.Contains(UtilityModes, b.UtilityMode) {
+		return fmt.Errorf("config: briefing.utility_mode invalid %q: valid values are %s",
+			b.UtilityMode, strings.Join(UtilityModes, ", "))
 	}
 	return nil
 }
@@ -256,6 +279,8 @@ func Defaults() Config {
 			HardCapMultiplier:      2,
 			IncludeParentMemories:  true,
 			SiblingFindingsCount:   2,
+			UtilityWeight:          0.4,
+			UtilityMode:            "auto",
 		},
 		Search: Search{SemanticFloor: 0.3},
 		LLM: LLM{
@@ -441,6 +466,10 @@ func (c *Config) applyEnv() error {
 	if err := envBool("SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES", &c.Briefing.IncludeSiblingMemories); err != nil {
 		return err
 	}
+	if err := envFloat("SEAMLESS_BRIEFING_UTILITY_WEIGHT", &c.Briefing.UtilityWeight); err != nil {
+		return err
+	}
+	envStr("SEAMLESS_BRIEFING_UTILITY_MODE", &c.Briefing.UtilityMode)
 	if err := envFloat("SEAMLESS_SEARCH_SEMANTIC_FLOOR", &c.Search.SemanticFloor); err != nil {
 		return err
 	}

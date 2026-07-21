@@ -3,6 +3,8 @@ package retrieve
 import (
 	"context"
 	"fmt"
+	"math"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -71,6 +73,11 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		return text, ids, nil
 	}
 
+	// Utility blend runs after the partition (pinned sections are already out)
+	// and before the trims, so the MemoryMaxItems head-slice and the budget
+	// drop order both follow the blended ranking rather than raw recency.
+	index = s.utilityRankedIndex(ctx, project, index, cfg)
+
 	// Recency/count trims run AFTER the kind partition above, so constraints and
 	// pinned stages are exempt (the never-drop invariant).
 	index, omitted := trimMemoryIndex(index, cfg, time.Now())
@@ -133,6 +140,65 @@ func (s *Service) effectiveBriefing(ctx context.Context) config.Briefing {
 		return s.briefing
 	}
 	return cfg
+}
+
+// briefingRecencyHalfLifeDays is the half-life of the recency term in the
+// blended index sort key. It matches the utility score's own half-life (store
+// side) so the two terms decay on the same clock.
+const briefingRecencyHalfLifeDays = 14.0
+
+// utilityRankedIndex re-orders the briefing memory index by the blended
+// recency+utility key when utility ranking is active for the project (mode
+// "on", or "auto" with the gardener's readiness latch / owner force). Both
+// state and score reads are failure-soft: the briefing must never fail -- or
+// change composition -- because a stats read did. With weight 0 or inactive
+// state the index is returned untouched (the legacy recency order).
+func (s *Service) utilityRankedIndex(ctx context.Context, project string, index []core.Memory, cfg config.Briefing) []core.Memory {
+	if cfg.UtilityWeight <= 0 || len(index) < 2 {
+		return index
+	}
+	activation, err := store.GetUtilityActivation(ctx, s.db)
+	if err != nil {
+		s.logger.Warn("retrieve: utility activation unavailable, briefing keeps recency order", "error", err)
+		return index
+	}
+	if !activation.Active(project, cfg.UtilityMode) {
+		return index
+	}
+	utility, err := store.UtilityScores(ctx, s.db)
+	if err != nil {
+		s.logger.Warn("retrieve: utility scores unavailable, briefing keeps recency order", "error", err)
+		return index
+	}
+	return rankMemoryIndex(index, utility, cfg.UtilityWeight, time.Now())
+}
+
+// rankMemoryIndex sorts the index by (1-w)*recency + w*utility, both in [0,1)
+// (recency decays with briefingRecencyHalfLifeDays). Ties break Updated desc
+// then ID desc, replicating ActiveMemoriesForScope's SQL order so w=0 or
+// all-zero utility reproduces the legacy ordering exactly.
+func rankMemoryIndex(index []core.Memory, utility map[string]float64, weight float64, now time.Time) []core.Memory {
+	key := func(m core.Memory) float64 {
+		days := now.Sub(m.Updated).Hours() / 24
+		if days < 0 {
+			days = 0
+		}
+		recency := math.Exp2(-days / briefingRecencyHalfLifeDays)
+		return (1-weight)*recency + weight*utility[m.ID]
+	}
+	out := make([]core.Memory, len(index))
+	copy(out, index)
+	sort.Slice(out, func(i, j int) bool {
+		ki, kj := key(out[i]), key(out[j])
+		if ki != kj {
+			return ki > kj
+		}
+		if !out[i].Updated.Equal(out[j].Updated) {
+			return out[i].Updated.After(out[j].Updated)
+		}
+		return out[i].ID > out[j].ID
+	})
+	return out
 }
 
 // trimMemoryIndex applies the recency filter (MemoryMaxAgeDays) and item cap

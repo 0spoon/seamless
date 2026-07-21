@@ -36,13 +36,18 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return errResult("recall", err)
 	}
 	// Record what was surfaced so read-after-inject stats can be derived later.
+	// item_scores rides along (parallel to item_ids, which is already in rank
+	// order) so future scoring can weigh how confidently each hit ranked --
+	// dropping the score here would lose it forever, the log being append-only.
 	if len(hits) > 0 {
 		ids := make([]string, len(hits))
+		scores := make([]float64, len(hits))
 		for i, h := range hits {
 			ids[i] = h.ID
+			scores[i] = h.Score
 		}
 		s.record(ctx, core.EventInjected, s.boundSession(ctx), project, "",
-			map[string]any{"query": query, "item_ids": ids, "source": "recall"})
+			map[string]any{"query": query, "item_ids": ids, "item_scores": scores, "source": "recall"})
 	}
 	return jsonResult(map[string]any{"hits": hits})
 }

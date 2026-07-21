@@ -32,6 +32,13 @@ const (
 	promptMinTokenLen = 3
 	promptMaxHits     = 3
 
+	// promptUtilityBoost scales the utility nudge on the SORT KEY only:
+	// sortKey = idfScore * (1 + boost*utility). Both floors gate on the raw IDF
+	// score before any sorting, so a sub-threshold hit can never be resurrected
+	// by popularity -- utility only picks among already-qualified candidates
+	// for the promptMaxHits cap.
+	promptUtilityBoost = 0.15
+
 	// promptCorpusRefreshTimeout bounds a background rebuild. It is generous
 	// (the pass is one indexed read plus tokenization) and exists only so a
 	// wedged store cannot hold the single-flight claim forever.
@@ -98,6 +105,7 @@ type promptCand struct {
 	updatedAt   time.Time
 	tokens      []string
 	tokenSet    map[string]struct{}
+	utility     float64
 }
 
 type promptHit struct {
@@ -106,6 +114,7 @@ type promptHit struct {
 	description string
 	updatedAt   time.Time
 	score       float64
+	utility     float64
 }
 
 // PromptRecall matches a user's prompt against the active memory index for the
@@ -242,6 +251,14 @@ func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promp
 	if err != nil {
 		return nil, err
 	}
+	// Utility is a ranking nudge, never a gate: an unreadable stats table costs
+	// the boost, not the corpus. The corpus TTL caches the lookup, so the
+	// user-prompt-submit hook itself never pays for it.
+	utility, err := store.UtilityScores(ctx, s.db)
+	if err != nil {
+		s.logger.Warn("retrieve: utility scores unavailable, prompt corpus unboosted", "error", err)
+		utility = nil
+	}
 	cands := make([]promptCand, 0, len(mems))
 	df := make(map[string]int)
 	for _, m := range mems {
@@ -258,7 +275,7 @@ func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promp
 		}
 		cands = append(cands, promptCand{
 			id: m.ID, name: m.Name, description: m.Description, updatedAt: m.Updated,
-			tokens: toks, tokenSet: set,
+			tokens: toks, tokenSet: set, utility: utility[m.ID],
 		})
 	}
 	numDocs := len(cands)
@@ -295,12 +312,16 @@ func scorePrompt(promptTokens []string, c *promptCorpus) []promptHit {
 		}
 		hits = append(hits, promptHit{
 			id: cand.id, name: cand.name, description: cand.description,
-			updatedAt: cand.updatedAt, score: score,
+			updatedAt: cand.updatedAt, score: score, utility: cand.utility,
 		})
 	}
+	// The floors above gate on the raw IDF score; utility only nudges the sort
+	// key among qualified hits (see promptUtilityBoost).
+	sortKey := func(h promptHit) float64 { return h.score * (1 + promptUtilityBoost*h.utility) }
 	sort.Slice(hits, func(i, j int) bool {
-		if hits[i].score != hits[j].score {
-			return hits[i].score > hits[j].score
+		ki, kj := sortKey(hits[i]), sortKey(hits[j])
+		if ki != kj {
+			return ki > kj
 		}
 		return hits[i].updatedAt.After(hits[j].updatedAt)
 	})

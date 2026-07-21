@@ -94,6 +94,18 @@ type RetrievalReport struct {
 	Top              []MemoryStat    `json:"top"`       // most-injected active memories, with sessions reached
 	Trend            []TrendBucket   `json:"trend"`
 	Hourly           bool            `json:"hourly"` // trend granularity: hourly (24h window) vs daily
+
+	// Loop health: whether what briefings push is what agents actually pull.
+	// Demand = query-gated signals only (recall hits, prompt matches, explicit
+	// reads); passive briefing injections are exposure, not demand.
+	BriefingSurfaced   int          `json:"briefingSurfaced"`   // distinct active memories briefings surfaced in the window
+	DemandedOfSurfaced int          `json:"demandedOfSurfaced"` // of those, how many also saw demand in the window
+	DemandRate         int          `json:"demandRate"`         // DemandedOfSurfaced / BriefingSurfaced, rounded %
+	WasteShare         int          `json:"wasteShare"`         // % of injected tokens spent on memories with no demand in 30d
+	PromptMatches      int          `json:"promptMatches"`      // prompt-recall injections in the window
+	RecallMisses       int          `json:"recallMisses"`       // hook.prompt (matched nothing) events in the window
+	MissRate           int          `json:"missRate"`           // RecallMisses / (RecallMisses+PromptMatches), rounded %
+	DeadWeight         []MemoryStat `json:"deadWeight"`         // most-briefing-injected active memories with no demand in 30d
 }
 
 // injection is one (session, memory) injection occurrence within the window.
@@ -104,8 +116,11 @@ type injection struct {
 }
 
 // memMeta is the naming/classification an injected id needs to appear in the
-// per-kind and most-injected breakdowns.
-type memMeta struct{ kind, name, project string }
+// per-kind, most-injected, and dead-weight breakdowns.
+type memMeta struct {
+	kind, name, project string
+	created, updated    time.Time
+}
 
 // BuildRetrievalReport computes the windowed retrieval-reach rollup in a single
 // pass over the injection event stream: total injection volume, how many distinct
@@ -147,8 +162,8 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 		rep.RetiredInWindow += n
 	}
 
-	args := []any{string(core.EventInjected)}
-	q := `SELECT ts, session_id, item_id, payload FROM events WHERE kind = ?`
+	args := []any{string(core.EventInjected), string(core.EventMemoryRead)}
+	q := `SELECT ts, kind, session_id, item_id, payload FROM events WHERE kind IN (?, ?)`
 	if !w.Since.IsZero() {
 		q += ` AND ts >= ?`
 		args = append(args, core.FormatTime(w.Since))
@@ -161,26 +176,63 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 	defer func() { _ = rows.Close() }()
 
 	var injections []injection
-	sessions := map[string]struct{}{} // distinct sessions reached (any injection)
+	sessions := map[string]struct{}{}         // distinct sessions reached (any injection)
+	briefingSurfaced := map[string]struct{}{} // active memories session-start briefings surfaced
+	briefingInj := map[string]int{}           // briefing item-level inject counts (dead-weight sort)
+	windowDemand := map[string]struct{}{}     // item ids with query-gated demand inside the window
+	memTokens := map[string]float64{}         // per-item injected-token attribution
 	var earliest time.Time
 	for rows.Next() {
-		var tsStr, sessionID, itemID, payload string
-		if err := rows.Scan(&tsStr, &sessionID, &itemID, &payload); err != nil {
+		var tsStr, kind, sessionID, itemID, payload string
+		if err := rows.Scan(&tsStr, &kind, &sessionID, &itemID, &payload); err != nil {
 			return rep, fmt.Errorf("store.BuildRetrievalReport: scan: %w", err)
 		}
 		ts, err := core.ParseTime(tsStr)
 		if err != nil {
 			return rep, fmt.Errorf("store.BuildRetrievalReport: parse ts: %w", err)
 		}
+		if core.EventKind(kind) == core.EventMemoryRead {
+			// Reads feed the demand side only -- never injection volume, trend,
+			// or session reach.
+			if itemID != "" {
+				windowDemand[itemID] = struct{}{}
+			}
+			continue
+		}
+
+		var p injectedPayload
+		if payload != "" && payload != "{}" {
+			if err := json.Unmarshal([]byte(payload), &p); err != nil {
+				p = injectedPayload{}
+			}
+		}
+		_, class := injectedUtilityWeight(p)
+		if class == "prompt" {
+			rep.PromptMatches++
+		}
 		sess := injectedSessionKey(sessionID, payload)
 		if sess != "" {
 			sessions[sess] = struct{}{}
 		}
-		rep.InjectedTokens += injectedTokenCost(payload)
-		for _, id := range injectedItemIDs(itemID, payload) {
+		ids := injectedItemIDs(itemID, payload)
+		cost := injectedTokenCost(payload)
+		rep.InjectedTokens += cost
+		for _, id := range ids {
 			injections = append(injections, injection{session: sess, item: id, at: ts})
 			if earliest.IsZero() || ts.Before(earliest) {
 				earliest = ts
+			}
+			// Token attribution is approximate: an event records one cost for
+			// its whole content block, so each item carries an equal share.
+			memTokens[id] += float64(cost) / float64(len(ids))
+			if class != "" {
+				windowDemand[id] = struct{}{}
+			}
+			if p.Hook == "session-start" {
+				if _, active := meta[id]; active {
+					briefingSurfaced[id] = struct{}{}
+				}
+				briefingInj[id]++
 			}
 		}
 	}
@@ -281,8 +333,85 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 		rep.Top = rep.Top[:topN]
 	}
 
+	// Loop health. The waste and dead-weight sides judge demand over a fixed
+	// trailing 30d horizon regardless of the selected window, so the 24h view
+	// does not brand every quiet-today memory as waste.
+	demand30, err := DemandItemIDsSince(ctx, db, time.Now().UTC().Add(-30*24*time.Hour))
+	if err != nil {
+		return rep, err
+	}
+	rep.BriefingSurfaced = len(briefingSurfaced)
+	for id := range briefingSurfaced {
+		if _, ok := windowDemand[id]; ok {
+			rep.DemandedOfSurfaced++
+		}
+	}
+	if rep.BriefingSurfaced > 0 {
+		rep.DemandRate = int(float64(rep.DemandedOfSurfaced)/float64(rep.BriefingSurfaced)*100 + 0.5)
+	}
+	if rep.InjectedTokens > 0 {
+		var waste float64
+		for id, tok := range memTokens {
+			if _, active := meta[id]; !active {
+				continue
+			}
+			if _, ok := demand30[id]; !ok {
+				waste += tok
+			}
+		}
+		rep.WasteShare = int(waste/float64(rep.InjectedTokens)*100 + 0.5)
+	}
+	rep.RecallMisses, err = countEventsSince(ctx, db, core.EventHookPrompt, w.Since)
+	if err != nil {
+		return rep, err
+	}
+	if total := rep.RecallMisses + rep.PromptMatches; total > 0 {
+		rep.MissRate = int(float64(rep.RecallMisses)/float64(total)*100 + 0.5)
+	}
+	for id := range briefingSurfaced {
+		if _, ok := demand30[id]; ok {
+			continue
+		}
+		m := meta[id]
+		// Constraints and stages are pinned into every briefing by design, so
+		// exposure-without-demand is their normal state, not a finding -- left
+		// in, they would permanently crowd the table (the gardener's dead-weight
+		// pass protects them for the same reason).
+		if m.kind == string(core.KindConstraint) || m.kind == string(core.KindStage) {
+			continue
+		}
+		rep.DeadWeight = append(rep.DeadWeight, MemoryStat{
+			ID: id, Name: m.name, Kind: m.kind, Project: m.project,
+			Injects: briefingInj[id], Updated: m.updated,
+		})
+	}
+	sort.Slice(rep.DeadWeight, func(i, j int) bool {
+		if rep.DeadWeight[i].Injects != rep.DeadWeight[j].Injects {
+			return rep.DeadWeight[i].Injects > rep.DeadWeight[j].Injects
+		}
+		return rep.DeadWeight[i].ID < rep.DeadWeight[j].ID
+	})
+	if len(rep.DeadWeight) > 8 {
+		rep.DeadWeight = rep.DeadWeight[:8]
+	}
+
 	rep.Trend = buildTrend(injections, w, rep.Hourly, earliest, time.Now())
 	return rep, nil
+}
+
+// countEventsSince counts events of one kind at or after since (zero = all).
+func countEventsSince(ctx context.Context, db *sql.DB, kind core.EventKind, since time.Time) (int, error) {
+	q := `SELECT COUNT(*) FROM events WHERE kind = ?`
+	args := []any{string(kind)}
+	if !since.IsZero() {
+		q += ` AND ts >= ?`
+		args = append(args, core.FormatTime(since))
+	}
+	var n int
+	if err := db.QueryRowContext(ctx, q, args...).Scan(&n); err != nil {
+		return 0, fmt.Errorf("store.countEventsSince: %w", err)
+	}
+	return n, nil
 }
 
 // ProjectRetrievalTrend builds the injection trend for a single project's active
@@ -496,21 +625,110 @@ func memoryChurn(ctx context.Context, db *sql.DB, since time.Time) (created, ret
 // the report can name and classify injected ids without a per-row query.
 func activeMemoryMeta(ctx context.Context, db *sql.DB) (map[string]memMeta, error) {
 	rows, err := db.QueryContext(ctx,
-		`SELECT id, kind, name, project FROM memories_index WHERE invalid_at IS NULL`)
+		`SELECT id, kind, name, project, created_at, updated_at FROM memories_index WHERE invalid_at IS NULL`)
 	if err != nil {
 		return nil, fmt.Errorf("store.activeMemoryMeta: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 	out := map[string]memMeta{}
 	for rows.Next() {
-		var id, kind, name, project string
-		if err := rows.Scan(&id, &kind, &name, &project); err != nil {
+		var id, kind, name, project, createdStr, updatedStr string
+		if err := rows.Scan(&id, &kind, &name, &project, &createdStr, &updatedStr); err != nil {
 			return nil, fmt.Errorf("store.activeMemoryMeta: scan: %w", err)
 		}
-		out[id] = memMeta{kind: kind, name: name, project: project}
+		created, err := core.ParseTime(createdStr)
+		if err != nil {
+			return nil, fmt.Errorf("store.activeMemoryMeta: parse created_at: %w", err)
+		}
+		updated, err := core.ParseTime(updatedStr)
+		if err != nil {
+			return nil, fmt.Errorf("store.activeMemoryMeta: parse updated_at: %w", err)
+		}
+		out[id] = memMeta{kind: kind, name: name, project: project, created: created, updated: updated}
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store.activeMemoryMeta: %w", err)
+	}
+	return out, nil
+}
+
+// DemandItemIDsSince returns every item id that saw query-gated demand -- a
+// recall hit, a prompt-recall match, or an explicit read -- since the cutoff.
+// Passive briefing injections do not count, mirroring the utility score.
+func DemandItemIDsSince(ctx context.Context, db *sql.DB, since time.Time) (map[string]struct{}, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT kind, item_id, payload FROM events
+		WHERE kind IN (?, ?) AND ts >= ?`,
+		string(core.EventInjected), string(core.EventMemoryRead), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.demandItemIDsSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]struct{}{}
+	for rows.Next() {
+		var kind, itemID, payload string
+		if err := rows.Scan(&kind, &itemID, &payload); err != nil {
+			return nil, fmt.Errorf("store.demandItemIDsSince: scan: %w", err)
+		}
+		switch core.EventKind(kind) {
+		case core.EventInjected:
+			var p injectedPayload
+			if payload == "" || payload == "{}" {
+				continue
+			}
+			if err := json.Unmarshal([]byte(payload), &p); err != nil {
+				continue
+			}
+			if _, class := injectedUtilityWeight(p); class == "" {
+				continue
+			}
+			for _, id := range injectedItemIDs(itemID, payload) {
+				out[id] = struct{}{}
+			}
+		case core.EventMemoryRead:
+			if itemID != "" {
+				out[itemID] = struct{}{}
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.demandItemIDsSince: %w", err)
+	}
+	return out, nil
+}
+
+// BriefingExposureSince counts, per item id, session-start briefing injections
+// since the cutoff -- the exposure denominator for dead-weight detection.
+func BriefingExposureSince(ctx context.Context, db *sql.DB, since time.Time) (map[string]int, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT item_id, payload FROM events WHERE kind = ? AND ts >= ?`,
+		string(core.EventInjected), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.BriefingExposureSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]int{}
+	for rows.Next() {
+		var itemID, payload string
+		if err := rows.Scan(&itemID, &payload); err != nil {
+			return nil, fmt.Errorf("store.BriefingExposureSince: scan: %w", err)
+		}
+		if payload == "" || payload == "{}" {
+			continue
+		}
+		var p injectedPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			continue
+		}
+		if p.Hook != "session-start" {
+			continue
+		}
+		for _, id := range injectedItemIDs(itemID, payload) {
+			out[id]++
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.BriefingExposureSince: %w", err)
 	}
 	return out, nil
 }

@@ -40,6 +40,13 @@ func runUsage(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 			fmt.Fprintf(e.stdout, "    %-32s %dx\n", str(m["name"]), int(num(m["count"])))
 		}
 	}
+	if top, ok := ret["topUtility"].([]any); ok && len(top) > 0 {
+		fmt.Fprintln(e.stdout, "  highest utility (decayed demand):")
+		for _, t := range top {
+			m, _ := t.(map[string]any)
+			fmt.Fprintf(e.stdout, "    %-32s %.2f\n", str(m["name"]), num(m["score"]))
+		}
+	}
 	printCounts(e.stdout, "proposals", out["gardenerPending"])
 	return nil
 }

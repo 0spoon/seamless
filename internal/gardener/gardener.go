@@ -146,6 +146,10 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 		s.logger.Warn("gardener: rebuild retrieval stats", "error", err)
 	}
 
+	// Latch utility ranking on for projects whose demand history just matured;
+	// runs against the same event state the stats above were built from.
+	s.evaluateUtilityActivation(ctx)
+
 	// Bound the event log: prune transport-level Interactions events past the
 	// retention window. Runs before the stat-independent passes and never touches
 	// domain events, so retrieval stats (built above) are unaffected.
@@ -175,10 +179,11 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	}
 	res.Merges = run("dedup", s.proposeMerges)
 	res.Archives = run("staleness", s.proposeArchives)
-	// Stale-stage proposals are archive proposals too (same kind, same key
-	// namespace, so the two passes never double-propose one memory); they fold
-	// into the Archives count and are told apart in Failed by pass name.
+	// Stale-stage and dead-weight proposals are archive proposals too (same
+	// kind, same key namespace, so the passes never double-propose one memory);
+	// they fold into the Archives count and are told apart in Failed by name.
 	res.Archives += run("stale-stage", s.proposeStaleStages)
+	res.Archives += run("dead-weight", s.proposeDeadWeight)
 	res.Digests = run("digest", s.proposeDigests)
 	res.StalePlans = run("stale-plan", s.proposeStalePlans)
 

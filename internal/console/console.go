@@ -139,6 +139,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/settings", s.auth(s.settings))
 	handle("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
 	handle("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
+	handle("POST /console/settings/utility", s.auth(s.settingsUtilityForce))
 	handle("POST /console/settings/families/save", s.auth(s.settingsFamilySave))
 	handle("POST /console/settings/families/delete", s.auth(s.settingsFamilyDelete))
 	handle("GET /console/events", s.auth(s.sse))

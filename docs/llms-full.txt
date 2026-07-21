@@ -5523,6 +5523,8 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.include_parent_memories` | bool | `true` |
 | `briefing.sibling_findings_count` | int | `2` |
 | `briefing.include_sibling_memories` | bool | - |
+| `briefing.utility_weight` | float64 | `0.4` |
+| `briefing.utility_mode` | string | `auto` |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -5647,6 +5649,16 @@ briefing:
   # section (their constraints/stages never cross over). Off by default.
   # env: SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES
   include_sibling_memories: false
+  # Utility's share of the memory-index sort key: (1-w)*recency + w*utility,
+  # where utility is the time-decayed demand score from retrieval_stats.
+  # 0 = pure recency (legacy). Constraints/stages/favorites stay pinned.
+  # env: SEAMLESS_BRIEFING_UTILITY_WEIGHT
+  utility_weight: 0.4
+  # Gate for the briefing's utility re-ordering: auto = per project once the
+  # gardener's readiness latch trips; on = everywhere now; off = never. The
+  # bounded recall/prompt-recall utility boosts are always on.
+  # env: SEAMLESS_BRIEFING_UTILITY_MODE
+  utility_mode: auto
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

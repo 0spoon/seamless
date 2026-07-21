@@ -13,6 +13,13 @@ type NamedCount struct {
 	Count int    `json:"count"`
 }
 
+// NamedScore pairs an item's name with a float score, for "top N" lists.
+type NamedScore struct {
+	ID    string  `json:"id"`
+	Name  string  `json:"name"`
+	Score float64 `json:"score"`
+}
+
 // UsageSummary is a point-in-time roll-up of activity across the store, backing
 // the usage_summary MCP tool and (later) the console's overview. It is derived
 // entirely from the DB-of-record tables and the event log.
@@ -28,6 +35,7 @@ type UsageSummary struct {
 		Injections  int          `json:"injections"`
 		Reads       int          `json:"reads"`
 		TopInjected []NamedCount `json:"topInjected"`
+		TopUtility  []NamedScore `json:"topUtility"` // highest decayed-demand scores
 	} `json:"retrieval"`
 	GardenerPending map[string]int `json:"gardenerPending"` // kind -> count
 	EventsByKind    map[string]int `json:"eventsByKind"`
@@ -71,7 +79,37 @@ func GetUsageSummary(ctx context.Context, db *sql.DB) (UsageSummary, error) {
 	if u.Retrieval.TopInjected, err = topInjected(ctx, db, 5); err != nil {
 		return u, err
 	}
+	if u.Retrieval.TopUtility, err = topUtility(ctx, db, 5); err != nil {
+		return u, err
+	}
 	return u, nil
+}
+
+// topUtility returns the active memories with the highest utility scores.
+func topUtility(ctx context.Context, db *sql.DB, limit int) ([]NamedScore, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT rs.item_id, m.name, rs.utility
+		FROM retrieval_stats rs
+		JOIN memories_index m ON m.id = rs.item_id AND m.invalid_at IS NULL
+		WHERE rs.utility > 0
+		ORDER BY rs.utility DESC, rs.item_id ASC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store.topUtility: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []NamedScore
+	for rows.Next() {
+		var ns NamedScore
+		if err := rows.Scan(&ns.ID, &ns.Name, &ns.Score); err != nil {
+			return nil, fmt.Errorf("store.topUtility: scan: %w", err)
+		}
+		out = append(out, ns)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.topUtility: %w", err)
+	}
+	return out, nil
 }
 
 // countBy runs a "SELECT key, COUNT(*) ... GROUP BY key" query into a map.

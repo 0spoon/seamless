@@ -29,6 +29,7 @@
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "reach"}}on{{end}}" href="{{$base}}?sort=reach&amp;q={{.Query}}">Reach</a>
+      <a class="{{if eq .Sort "utility"}}on{{end}}" href="{{$base}}?sort=utility&amp;q={{.Query}}" title="Time-decayed demand score: recall hits, prompt matches, explicit reads">Utility</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
   </div>
@@ -120,6 +121,7 @@
     <div class="reader-facts">
       <span class="fact">injected {{.Injects}}&times;{{if .LastInjected}} &middot; last <span title="{{ts .LastInjected}}">{{ago .LastInjected}}</span>{{end}}</span>
       <span class="fact" title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under injected), so agents rarely re-read a memory they already have.">read {{.Reads}}&times;</span>
+      {{if .Utility}}<span class="fact" title="Time-decayed demand score in [0,1): recall hits, prompt matches, explicit reads. Feeds briefing ordering and recall ranking.{{with .UtilityParts}} Breakdown &mdash; read {{printf "%.1f" .Read}} &middot; recall {{printf "%.1f" .Recall}} &middot; prompt {{printf "%.1f" .Prompt}}{{end}}">utility {{printf "%.2f" .Utility}}</span>{{end}}
       {{if .Source}}<span class="fact">source {{if .SourceID}}<a href="/console/sessions/{{.SourceID}}">{{.Source}}</a>{{else}}{{.Source}}{{end}}</span>{{end}}
       <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
       <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>

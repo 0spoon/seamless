@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
@@ -66,6 +68,19 @@ type workspaceScope struct {
 	Families         []workspaceFamily `json:"families"`
 }
 
+// utilityProjectRow is one project's utility-activation status for the
+// Settings table: where its demand history stands against the readiness
+// thresholds, whether the gardener latch has tripped, and any owner force.
+type utilityProjectRow struct {
+	Project        string     `json:"project"` // "" = global scope
+	Status         string     `json:"status"`  // active|armed|building|forced-off
+	Forced         string     `json:"forced,omitempty"`
+	ReadyAt        *time.Time `json:"readyAt,omitempty"`
+	RecentEvents   int        `json:"recentEvents"`
+	RecentMemories int        `json:"recentMemories"`
+	AgeDays        int        `json:"ageDays"` // days since the first demand event
+}
+
 // settingsData is the payload for the Settings page. Briefing carries the
 // effective briefing knobs (file/env base + the console override row), while
 // FamilyEditors supplies the other intentionally editable control surface.
@@ -76,6 +91,8 @@ type settingsData struct {
 	Gardener           config.Gardener       `json:"gardener"`
 	Briefing           config.Briefing       `json:"briefing"`
 	BriefingOverridden bool                  `json:"briefingOverridden"`
+	UtilityRows        []utilityProjectRow   `json:"utilityRows"`
+	UtilityReady       [3]int                `json:"utilityReady"` // thresholds: events, memories, age days
 	Projects           []core.Project        `json:"projects"`
 	RepoMap            []repoMapping         `json:"repoMap"`
 	Families           []familyGroup         `json:"families"`
@@ -110,6 +127,11 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	utilityRows, err := s.utilityActivationRows(ctx, projects)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 
 	s.render(w, r, "settings", pageData{
 		Title:  "Settings",
@@ -120,6 +142,8 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			Gardener:           s.cfg.GardenerCfg,
 			Briefing:           briefing,
 			BriefingOverridden: overridden,
+			UtilityRows:        utilityRows,
+			UtilityReady:       [3]int{store.UtilityReadyMinEvents, store.UtilityReadyMinMemories, store.UtilityReadyMinAgeDays},
 			Projects:           projects,
 			RepoMap:            sortedRepoMap(repoMap),
 			Families:           sortedFamilies(families),
@@ -129,6 +153,116 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			FamilyOptions:      familyOptions,
 		},
 	})
+}
+
+// utilityActivationRows joins the activation state with each scope's demand
+// progress so the Settings table can say WHY a project is or is not ranked by
+// utility yet. Every registered project appears, plus the global scope and any
+// slug that exists only in the demand or activation maps.
+func (s *Service) utilityActivationRows(ctx context.Context, projects []core.Project) ([]utilityProjectRow, error) {
+	now := time.Now().UTC()
+	activation, err := store.GetUtilityActivation(ctx, s.cfg.DB)
+	if err != nil {
+		return nil, err
+	}
+	demand, err := store.UtilityDemandByProject(ctx, s.cfg.DB, now, store.UtilityReadyWindow)
+	if err != nil {
+		return nil, err
+	}
+
+	slugs := map[string]struct{}{"": {}}
+	for _, p := range projects {
+		if !p.Retired() {
+			slugs[p.Slug] = struct{}{}
+		}
+	}
+	for slug := range demand {
+		slugs[slug] = struct{}{}
+	}
+	for slug := range activation.Projects {
+		slugs[slug] = struct{}{}
+	}
+
+	rows := make([]utilityProjectRow, 0, len(slugs))
+	for slug := range slugs {
+		st := activation.Projects[slug]
+		d := demand[slug]
+		row := utilityProjectRow{
+			Project: slug, Forced: st.Forced, ReadyAt: st.ReadyAt,
+			RecentEvents: d.RecentEvents, RecentMemories: d.RecentMemories,
+		}
+		if !d.Earliest.IsZero() {
+			row.AgeDays = int(now.Sub(d.Earliest).Hours() / 24)
+		}
+		switch {
+		case st.Forced == "off":
+			row.Status = "forced-off"
+		case st.Forced == "on" || st.ReadyAt != nil:
+			row.Status = "active"
+		case d.Ready(now):
+			row.Status = "armed" // latches on the next gardener pass
+		default:
+			row.Status = "building"
+		}
+		rows = append(rows, row)
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if (rows[i].Status == "active") != (rows[j].Status == "active") {
+			return rows[i].Status == "active"
+		}
+		if rows[i].RecentEvents != rows[j].RecentEvents {
+			return rows[i].RecentEvents > rows[j].RecentEvents
+		}
+		return rows[i].Project < rows[j].Project
+	})
+	return rows, nil
+}
+
+// settingsUtilityForce sets or clears the owner's per-project force: "on" and
+// "off" win over the gardener latch; "auto" clears the force and defers to it.
+func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := r.ParseForm(); err != nil {
+		settingsFlash(w, r, "could not read the form")
+		return
+	}
+	project := strings.TrimSpace(r.PostFormValue("project"))
+	if project != "" {
+		if err := validate.Name(project); err != nil {
+			settingsFlash(w, r, "project: "+err.Error())
+			return
+		}
+	}
+	force := r.PostFormValue("force")
+	switch force {
+	case "on", "off", "auto":
+	default:
+		settingsFlash(w, r, fmt.Sprintf("force invalid %q: valid values are on, off, auto", force))
+		return
+	}
+
+	ctx := r.Context()
+	activation, err := store.GetUtilityActivation(ctx, s.cfg.DB)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	st := activation.Projects[project]
+	if force == "auto" {
+		st.Forced = ""
+	} else {
+		st.Forced = force
+	}
+	activation.Projects[project] = st
+	if err := store.SetUtilityActivation(ctx, s.cfg.DB, activation); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	scope := project
+	if scope == "" {
+		scope = "the global scope"
+	}
+	settingsNotice(w, r, fmt.Sprintf("Utility ranking for %s set to %s.", scope, force))
 }
 
 // settingsBriefingSave persists the briefing form as the runtime override row
@@ -144,7 +278,18 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 	b := config.Briefing{
 		IncludeParentMemories:  r.PostFormValue("include_parent_memories") != "",
 		IncludeSiblingMemories: r.PostFormValue("include_sibling_memories") != "",
+		UtilityMode:            r.PostFormValue("utility_mode"),
 	}
+	weightStr := strings.TrimSpace(r.PostFormValue("utility_weight"))
+	if weightStr == "" {
+		weightStr = "0"
+	}
+	weight, err := strconv.ParseFloat(weightStr, 64)
+	if err != nil {
+		settingsFlash(w, r, "utility_weight must be a number between 0 and 1")
+		return
+	}
+	b.UtilityWeight = weight
 	for name, dst := range map[string]*int{
 		"memory_max_age_days":        &b.MemoryMaxAgeDays,
 		"memory_max_items":           &b.MemoryMaxItems,

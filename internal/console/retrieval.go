@@ -35,6 +35,16 @@ type retrievalData struct {
 	TopInjected      []store.MemoryStat   `json:"topInjected"`
 	Stale            []store.MemoryStat   `json:"stale"`
 	StaleDays        int                  `json:"staleDays"`
+
+	// Loop health (closed-loop retrieval): push vs pull, and its token cost.
+	BriefingSurfaced   int                `json:"briefingSurfaced"`
+	DemandedOfSurfaced int                `json:"demandedOfSurfaced"`
+	DemandRate         int                `json:"demandRate"`
+	WasteShare         int                `json:"wasteShare"`
+	PromptMatches      int                `json:"promptMatches"`
+	RecallMisses       int                `json:"recallMisses"`
+	MissRate           int                `json:"missRate"`
+	DeadWeight         []store.MemoryStat `json:"deadWeight"`
 }
 
 func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
@@ -74,6 +84,10 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			ByKind: report.ByKind, ByProject: report.ByProject, Trend: report.Trend, TrendMax: trendMax,
 			TopInjected: report.Top, Stale: staleStats(stale), StaleDays: staleWindowDays,
+			BriefingSurfaced: report.BriefingSurfaced, DemandedOfSurfaced: report.DemandedOfSurfaced,
+			DemandRate: report.DemandRate, WasteShare: report.WasteShare,
+			PromptMatches: report.PromptMatches, RecallMisses: report.RecallMisses, MissRate: report.MissRate,
+			DeadWeight: report.DeadWeight,
 		},
 	})
 }

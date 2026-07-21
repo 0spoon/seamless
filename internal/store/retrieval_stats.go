@@ -6,30 +6,88 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
 
+// Utility scoring constants. Utility is a time-decayed sum of QUERY-GATED demand
+// signals -- events where the agent (or its prompt) asked and this memory
+// answered -- normalized to [0,1). Passive briefing (session-start) injections
+// deliberately carry no weight: they are exposure, not demand, and crediting
+// them would let the briefing reinforce its own ranking. All values are
+// retroactively retunable -- utility is rebuilt from the full event log, so a
+// changed weight or half-life recomputes history on the next pass.
+const (
+	utilityHalfLifeDays = 14.0 // decay half-life for every signal class
+	utilitySaturation   = 4.0  // raw score at which utility reaches 0.5
+	utilityWeightRead   = 3.0  // explicit memory_read: deliberate full-body pull
+	utilityWeightRecall = 1.5  // recall-tool hit: agent-initiated query match
+	utilityWeightPrompt = 1.0  // prompt-recall match: query-gated but automated
+)
+
+// UtilityComponents is the decayed raw demand per signal class, kept alongside
+// the normalized score so the console can show WHY a memory ranks where it does.
+type UtilityComponents struct {
+	Read   float64 `json:"read,omitempty"`
+	Recall float64 `json:"recall,omitempty"`
+	Prompt float64 `json:"prompt,omitempty"`
+}
+
+// IsZero reports no demand in any class (exported for display-layer callers).
+func (c UtilityComponents) IsZero() bool { return c.Read == 0 && c.Recall == 0 && c.Prompt == 0 }
+
+// raw is the un-normalized decayed demand total.
+func (c UtilityComponents) raw() float64 { return c.Read + c.Recall + c.Prompt }
+
 // RetrievalStat mirrors one retrieval_stats row: how often an item has been
-// surfaced (injected) to an agent and read back, and when last. It is a
-// materialized projection of the append-only event log, rebuilt by
-// RebuildRetrievalStats -- the events table is the source of truth.
+// surfaced (injected) to an agent and read back, when last, and its time-decayed
+// utility score. It is a materialized projection of the append-only event log,
+// rebuilt by RebuildRetrievalStats -- the events table is the source of truth.
 type RetrievalStat struct {
 	ItemID         string
 	InjectCount    int
 	ReadCount      int
 	LastInjectedAt *time.Time
 	LastReadAt     *time.Time
+	Utility        float64
+	Components     UtilityComponents
 }
 
 // injectedPayload is the shape RebuildRetrievalStats reads out of a
 // retrieval.injected event's payload: recall records the surfaced item ids here
 // (the item_id column is reserved for single-item events like memory.read).
+// Hook and Source classify the injection for utility scoring: source "recall"
+// and hook "user-prompt-submit" are query-gated demand; hook "session-start"
+// (and anything unrecognized) is passive exposure.
 type injectedPayload struct {
 	ItemIDs         []string `json:"item_ids"`
 	ClaudeSessionID string   `json:"claude_session_id"`
 	ExternalClient  string   `json:"external_client"`
+	Hook            string   `json:"hook"`
+	Source          string   `json:"source"`
+}
+
+// injectedUtilityWeight maps an injection payload to its utility weight.
+func injectedUtilityWeight(p injectedPayload) (weight float64, class string) {
+	switch {
+	case p.Source == "recall":
+		return utilityWeightRecall, "recall"
+	case p.Hook == "user-prompt-submit":
+		return utilityWeightPrompt, "prompt"
+	default:
+		return 0, ""
+	}
+}
+
+// utilityDecay is the exponential decay factor for a signal age days old.
+func utilityDecay(age time.Duration) float64 {
+	days := age.Hours() / 24
+	if days < 0 {
+		days = 0
+	}
+	return math.Exp2(-days / utilityHalfLifeDays)
 }
 
 // RebuildRetrievalStats recomputes the entire retrieval_stats table from the
@@ -38,10 +96,17 @@ type injectedPayload struct {
 // events contribute inject_count + last_injected_at (per item id, whether the id
 // is in the item_id column or the payload's item_ids array), and memory.read
 // events contribute read_count + last_read_at. Events are read oldest-first so
-// the last-seen timestamp wins.
+// the last-seen timestamp wins. The same walk accumulates the utility score:
+// each query-gated signal adds its class weight decayed by the event's age.
 func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
+	return rebuildRetrievalStats(ctx, db, time.Now().UTC())
+}
+
+// rebuildRetrievalStats is RebuildRetrievalStats with an injectable decay
+// anchor, so tests can pin `now` instead of sleeping.
+func rebuildRetrievalStats(ctx context.Context, db *sql.DB, now time.Time) error {
 	rows, err := db.QueryContext(ctx, `
-		SELECT ts, kind, item_id, payload FROM events
+		SELECT ts, kind, session_id, item_id, payload FROM events
 		WHERE kind IN (?, ?)
 		ORDER BY ts ASC, id ASC`,
 		string(core.EventInjected), string(core.EventMemoryRead))
@@ -59,10 +124,35 @@ func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
 		}
 		return s
 	}
+	// Utility counts each (item, session, signal class) once per session, so a
+	// topic hammered eight times in one session is one unit of demand, not
+	// eight. Events without a resolvable session (old rows) count individually.
+	seen := map[string]struct{}{}
+	credit := func(s *RetrievalStat, class, session string, weight float64, ts time.Time) {
+		if weight == 0 {
+			return
+		}
+		if session != "" {
+			key := class + "\x00" + session + "\x00" + s.ItemID
+			if _, dup := seen[key]; dup {
+				return
+			}
+			seen[key] = struct{}{}
+		}
+		w := weight * utilityDecay(now.Sub(ts))
+		switch class {
+		case "read":
+			s.Components.Read += w
+		case "recall":
+			s.Components.Recall += w
+		case "prompt":
+			s.Components.Prompt += w
+		}
+	}
 
 	for rows.Next() {
-		var tsStr, kind, itemID, payload string
-		if err := rows.Scan(&tsStr, &kind, &itemID, &payload); err != nil {
+		var tsStr, kind, sessionID, itemID, payload string
+		if err := rows.Scan(&tsStr, &kind, &sessionID, &itemID, &payload); err != nil {
 			return fmt.Errorf("store.RebuildRetrievalStats: scan: %w", err)
 		}
 		ts, err := core.ParseTime(tsStr)
@@ -71,11 +161,22 @@ func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
 		}
 		switch core.EventKind(kind) {
 		case core.EventInjected:
+			var p injectedPayload
+			if payload != "" && payload != "{}" {
+				// Best-effort: an unparseable payload still counts via the
+				// item_id column below, it just cannot classify for utility.
+				if err := json.Unmarshal([]byte(payload), &p); err != nil {
+					p = injectedPayload{}
+				}
+			}
+			weight, class := injectedUtilityWeight(p)
+			session := injectedSessionKey(sessionID, payload)
 			for _, id := range injectedItemIDs(itemID, payload) {
 				s := stat(id)
 				s.InjectCount++
 				t := ts
 				s.LastInjectedAt = &t
+				credit(s, class, session, weight, ts)
 			}
 		case core.EventMemoryRead:
 			if itemID == "" {
@@ -85,10 +186,19 @@ func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
 			s.ReadCount++
 			t := ts
 			s.LastReadAt = &t
+			credit(s, "read", sessionID, utilityWeightRead, ts)
 		}
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("store.RebuildRetrievalStats: rows: %w", err)
+	}
+
+	// Normalize: saturating ratio keeps utility in [0,1) and outlier-robust --
+	// the one memory with hundreds of hits cannot dominate the blend.
+	for _, s := range stats {
+		if raw := s.Components.raw(); raw > 0 {
+			s.Utility = raw / (raw + utilitySaturation)
+		}
 	}
 
 	return replaceRetrievalStats(ctx, db, stats)
@@ -127,11 +237,20 @@ func replaceRetrievalStats(ctx context.Context, db *sql.DB, stats map[string]*Re
 		return fmt.Errorf("store.RebuildRetrievalStats: clear: %w", err)
 	}
 	for _, s := range stats {
+		var components any
+		if !s.Components.IsZero() {
+			b, err := json.Marshal(s.Components)
+			if err != nil {
+				return fmt.Errorf("store.RebuildRetrievalStats: marshal components %s: %w", s.ItemID, err)
+			}
+			components = string(b)
+		}
 		if _, err := tx.ExecContext(ctx, `
-			INSERT INTO retrieval_stats (item_id, inject_count, read_count, last_injected_at, last_read_at)
-			VALUES (?, ?, ?, ?, ?)`,
+			INSERT INTO retrieval_stats (item_id, inject_count, read_count, last_injected_at, last_read_at, utility, utility_components)
+			VALUES (?, ?, ?, ?, ?, ?, ?)`,
 			s.ItemID, s.InjectCount, s.ReadCount,
-			formatTimePtr(s.LastInjectedAt), formatTimePtr(s.LastReadAt)); err != nil {
+			formatTimePtr(s.LastInjectedAt), formatTimePtr(s.LastReadAt),
+			s.Utility, components); err != nil {
 			return fmt.Errorf("store.RebuildRetrievalStats: insert %s: %w", s.ItemID, err)
 		}
 	}
@@ -147,11 +266,12 @@ func GetRetrievalStat(ctx context.Context, db *sql.DB, itemID string) (Retrieval
 	var (
 		s                      RetrievalStat
 		lastInjected, lastRead sql.NullString
+		components             sql.NullString
 	)
 	err := db.QueryRowContext(ctx, `
-		SELECT item_id, inject_count, read_count, last_injected_at, last_read_at
+		SELECT item_id, inject_count, read_count, last_injected_at, last_read_at, utility, utility_components
 		FROM retrieval_stats WHERE item_id = ?`, itemID).
-		Scan(&s.ItemID, &s.InjectCount, &s.ReadCount, &lastInjected, &lastRead)
+		Scan(&s.ItemID, &s.InjectCount, &s.ReadCount, &lastInjected, &lastRead, &s.Utility, &components)
 	if errors.Is(err, sql.ErrNoRows) {
 		return RetrievalStat{}, false, nil
 	}
@@ -165,6 +285,11 @@ func GetRetrievalStat(ctx context.Context, db *sql.DB, itemID string) (Retrieval
 	if s.LastReadAt, perr = nullTimePtr(lastRead); perr != nil {
 		return RetrievalStat{}, false, fmt.Errorf("store.GetRetrievalStat: last_read_at: %w", perr)
 	}
+	if components.Valid && components.String != "" {
+		if err := json.Unmarshal([]byte(components.String), &s.Components); err != nil {
+			return RetrievalStat{}, false, fmt.Errorf("store.GetRetrievalStat: utility_components: %w", err)
+		}
+	}
 	return s, true, nil
 }
 
@@ -173,7 +298,7 @@ func GetRetrievalStat(ctx context.Context, db *sql.DB, itemID string) (Retrieval
 // instead of N GetRetrievalStat calls.
 func AllRetrievalStats(ctx context.Context, db *sql.DB) (map[string]RetrievalStat, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT item_id, inject_count, read_count, last_injected_at, last_read_at
+		SELECT item_id, inject_count, read_count, last_injected_at, last_read_at, utility, utility_components
 		FROM retrieval_stats`)
 	if err != nil {
 		return nil, fmt.Errorf("store.AllRetrievalStats: %w", err)
@@ -184,8 +309,9 @@ func AllRetrievalStats(ctx context.Context, db *sql.DB) (map[string]RetrievalSta
 		var (
 			s                      RetrievalStat
 			lastInjected, lastRead sql.NullString
+			components             sql.NullString
 		)
-		if err := rows.Scan(&s.ItemID, &s.InjectCount, &s.ReadCount, &lastInjected, &lastRead); err != nil {
+		if err := rows.Scan(&s.ItemID, &s.InjectCount, &s.ReadCount, &lastInjected, &lastRead, &s.Utility, &components); err != nil {
 			return nil, fmt.Errorf("store.AllRetrievalStats: scan: %w", err)
 		}
 		var perr error
@@ -195,9 +321,41 @@ func AllRetrievalStats(ctx context.Context, db *sql.DB) (map[string]RetrievalSta
 		if s.LastReadAt, perr = nullTimePtr(lastRead); perr != nil {
 			return nil, fmt.Errorf("store.AllRetrievalStats: last_read_at: %w", perr)
 		}
+		if components.Valid && components.String != "" {
+			if err := json.Unmarshal([]byte(components.String), &s.Components); err != nil {
+				return nil, fmt.Errorf("store.AllRetrievalStats: utility_components: %w", err)
+			}
+		}
 		out[s.ItemID] = s
 	}
 	return out, rows.Err()
+}
+
+// UtilityScores loads item id -> normalized utility for every item with nonzero
+// demand. It is the single wiring point from the stats projection into the
+// ranking paths (briefing, prompt-recall, recall), which read the stored score
+// as-is -- rebuilt hourly by the gardener and on console loads -- and never
+// replay the event log themselves.
+func UtilityScores(ctx context.Context, db *sql.DB) (map[string]float64, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT item_id, utility FROM retrieval_stats WHERE utility > 0`)
+	if err != nil {
+		return nil, fmt.Errorf("store.UtilityScores: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]float64{}
+	for rows.Next() {
+		var id string
+		var u float64
+		if err := rows.Scan(&id, &u); err != nil {
+			return nil, fmt.Errorf("store.UtilityScores: scan: %w", err)
+		}
+		out[id] = u
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.UtilityScores: %w", err)
+	}
+	return out, nil
 }
 
 // StaleMemories returns active memories that have seen no activity since cutoff:

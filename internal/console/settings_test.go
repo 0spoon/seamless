@@ -76,6 +76,8 @@ func TestSettingsPage(t *testing.T) {
 	require.Contains(t, page, `id="workspace-registry"`)
 	require.Contains(t, page, `class="brief-group memory-group"`)
 	require.Contains(t, page, `class="brief-group family-group"`)
+	require.Contains(t, page, `class="brief-group utility-group"`)
+	require.Contains(t, page, `id="utility-mode"`)
 	require.Contains(t, page, `class="registry-scroll workspace-directory"`)
 	require.Contains(t, page, `class="workspace-row" data-workspace-scope="seamless"`)
 	require.Contains(t, page, `class="workspace-route" title="/Users/x/repos/seamless"`)
@@ -97,6 +99,10 @@ func TestSettingsStyles_ControlPlaneContracts(t *testing.T) {
 	require.Contains(t, css, ".settings-jumpbar")
 	require.Contains(t, css, "position: sticky")
 	require.Contains(t, css, ".briefing-groups")
+	require.Contains(t, css, ".brief-group.utility-group {")
+	require.Contains(t, css, "grid-column: 1 / -1; display: grid;",
+		"the closed-loop card must span the settings grid instead of collapsing to one track")
+	require.Contains(t, css, ".brief-number select {")
 	require.Contains(t, css, ".is-dirty .brief-state")
 	require.Contains(t, css, ".registry-scroll { max-height:")
 	require.Contains(t, css, ".workspace-row { display: grid;")
@@ -250,6 +256,8 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 		"hard_cap_multiplier":        {"2"},
 		"sibling_findings_count":     {"0"},
 		"include_sibling_memories":   {"1"},
+		"utility_weight":             {"0.7"},
+		"utility_mode":               {"on"},
 	}.Encode())
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "notice=")
@@ -265,6 +273,8 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	require.Equal(t, 10, data.Briefing.StageUnknownMaxAgeDays)
 	require.False(t, data.Briefing.IncludeParentMemories)
 	require.True(t, data.Briefing.IncludeSiblingMemories)
+	require.Equal(t, 0.7, data.Briefing.UtilityWeight, "the form round-trips the weight, never zeroes it")
+	require.Equal(t, "on", data.Briefing.UtilityMode)
 
 	// The saved override is what the retrieval service will read.
 	eff, overridden, err := store.BriefingConfig(context.Background(), db, config.Defaults().Briefing)
@@ -279,6 +289,12 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	rr = postForm(mux, "/console/settings/briefing", "findings_count=three")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "error=")
+	rr = postForm(mux, "/console/settings/briefing", "utility_weight=1.5")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+	rr = postForm(mux, "/console/settings/briefing", "utility_mode=sideways")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
 	getJSON(t, mux, "/console/settings?format=json", &data)
 	require.Equal(t, 5, data.Briefing.FindingsCount)
 
@@ -290,4 +306,53 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	require.False(t, data.BriefingOverridden)
 	require.Equal(t, 3, data.Briefing.FindingsCount)
 	require.True(t, data.Briefing.IncludeParentMemories)
+	require.Equal(t, 0.4, data.Briefing.UtilityWeight)
+	require.Equal(t, "auto", data.Briefing.UtilityMode)
+}
+
+// The per-project force endpoint flips a scope's activation override and the
+// Settings payload reflects it; garbage force values flash instead of saving.
+func TestSettingsUtilityForce(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	svc, err := New(Config{DB: db, APIKey: testKey, BriefingCfg: config.Defaults().Briefing})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	rr := postForm(mux, "/console/settings/utility", url.Values{
+		"project": {"seamless"}, "force": {"on"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	var row *utilityProjectRow
+	for i := range data.UtilityRows {
+		if data.UtilityRows[i].Project == "seamless" {
+			row = &data.UtilityRows[i]
+		}
+	}
+	require.NotNil(t, row, "the forced scope appears in the activation table")
+	require.Equal(t, "active", row.Status)
+	require.Equal(t, "on", row.Forced)
+
+	// Clearing the force reverts to the latch (unset here -> building).
+	rr = postForm(mux, "/console/settings/utility", url.Values{
+		"project": {"seamless"}, "force": {"auto"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	a, err := store.GetUtilityActivation(context.Background(), db)
+	require.NoError(t, err)
+	require.Empty(t, a.Projects["seamless"].Forced)
+
+	// An unrecognized force value is an error, never a silent default.
+	rr = postForm(mux, "/console/settings/utility", url.Values{
+		"project": {"seamless"}, "force": {"sideways"},
+	}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
 }

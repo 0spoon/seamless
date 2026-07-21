@@ -201,6 +201,69 @@
       </article>
     </div>
   </section>
+
+  <section class="retrieval-zone" aria-labelledby="retrieval-loop-title">
+    <header class="retrieval-zone-head">
+      <div class="retrieval-zone-index">05</div>
+      <div>
+        <div class="retrieval-zone-kicker">Loop health</div>
+        <h2 id="retrieval-loop-title">Push versus pull</h2>
+        <p>Briefings push context; demand is an agent pulling it back &mdash; a recall hit, a prompt match, an explicit read. Healthy retrieval pushes what gets pulled.</p>
+      </div>
+      <span class="retrieval-zone-meta">{{.WindowLabel}}</span>
+    </header>
+
+    <div class="retrieval-loop-grid">
+      <article class="retrieval-panel retrieval-loop-stat">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon brand">{{icon "trending-up"}}</span>
+          <div><span>{{.WindowLabel}}</span><h3>Demand rate</h3></div>
+        </header>
+        <div class="retrieval-loop-value"><strong>{{if .BriefingSurfaced}}{{.DemandRate}}%{{else}}&mdash;{{end}}</strong></div>
+        <p>{{if .BriefingSurfaced}}{{.DemandedOfSurfaced}} of {{.BriefingSurfaced}} briefed memories were also pulled by a query. Rising = briefings carry what agents want.{{else}}No briefing injections in this window yet.{{end}}</p>
+      </article>
+
+      <article class="retrieval-panel retrieval-loop-stat">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon pop">{{icon "gauge"}}</span>
+          <div><span>vs 30d demand</span><h3>Waste share</h3></div>
+        </header>
+        <div class="retrieval-loop-value"><strong>{{if .InjectedTokens}}{{.WasteShare}}%{{else}}&mdash;{{end}}</strong></div>
+        <p>{{if .InjectedTokens}}Share of injected tokens spent on memories with no query-gated demand in 30 days. Falling = less irrelevant context.{{else}}No injected tokens in this window yet.{{end}}</p>
+      </article>
+
+      <article class="retrieval-panel retrieval-loop-stat">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon warn">{{icon "triangle-alert"}}</span>
+          <div><span>{{.WindowLabel}}</span><h3>Recall-miss rate</h3></div>
+        </header>
+        <div class="retrieval-loop-value"><strong>{{if or .RecallMisses .PromptMatches}}{{.MissRate}}%{{else}}&mdash;{{end}}</strong></div>
+        <p>{{if or .RecallMisses .PromptMatches}}{{.RecallMisses}} prompts matched nothing vs {{.PromptMatches}} that matched. Falling = the knowledge base covers what gets asked.{{else}}No prompt-recall activity in this window yet.{{end}}</p>
+      </article>
+    </div>
+
+    <article class="retrieval-panel retrieval-deadweight-panel{{if not .DeadWeight}} healthy{{end}}">
+      <header class="retrieval-panel-head">
+        <span class="retrieval-panel-icon {{if .DeadWeight}}warn{{else}}ok{{end}}">{{if .DeadWeight}}{{icon "triangle-alert"}}{{else}}{{icon "check"}}{{end}}</span>
+        <div><span>Exposure without demand</span><h3>{{if .DeadWeight}}Dead weight{{else}}No dead weight{{end}}</h3></div>
+        <small>{{if .DeadWeight}}{{len .DeadWeight}} memor{{if eq (len .DeadWeight) 1}}y{{else}}ies{{end}} &middot; gardener proposes, you dispose{{else}}every briefed memory earned demand{{end}}</small>
+      </header>
+      {{if .DeadWeight}}
+      <div class="retrieval-stale-list">
+        {{range .DeadWeight}}
+        <div class="retrieval-stale-row">
+          <span class="retrieval-stale-mark"></span>
+          <div class="retrieval-memory-copy"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span><i class="kind">{{.Kind}}</i>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></div>
+          <div class="retrieval-memory-metrics"><strong>{{.Injects}}</strong><span>briefed</span></div>
+          <time title="{{ts .Updated}}">updated {{ago .Updated}}</time>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="retrieval-healthy-state"><span class="retrieval-healthy-mark">{{icon "check"}}</span><strong>Everything briefings push has been pulled.</strong><p>No memory surfaced in this window went 30 days without a recall hit, prompt match, or read.</p></div>
+      {{end}}
+    </article>
+  </section>
 </div>
 {{end}}
 {{end}}

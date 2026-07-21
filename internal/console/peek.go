@@ -51,18 +51,22 @@ type memoryDetail struct {
 	Reads        int           `json:"reads"`
 	LastInjected *time.Time    `json:"lastInjected,omitempty"`
 	LastRead     *time.Time    `json:"lastRead,omitempty"`
-	Source       string        `json:"sourceSession,omitempty"`   // session name
-	SourceID     string        `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
-	Model        string        `json:"model,omitempty"`           // producing model, as the provider names it
-	Harness      string        `json:"harness,omitempty"`         // producing client, resolved from the source session
-	Favorite     bool          `json:"favorite,omitempty"`
-	ReplacedBy   string        `json:"replacedBy,omitempty"` // name of the superseder
-	ReplacedByID string        `json:"replacedById,omitempty"`
-	Supersedes   []memoryRef   `json:"supersedes,omitempty"` // reverse: memories this replaced
-	FilePath     string        `json:"filePath"`
-	AbsPath      string        `json:"absPath"`
-	EditURL      template.URL  `json:"-"`
-	CanArchive   bool          `json:"-"`
+	// Utility is the normalized time-decayed demand score ranking feeds on;
+	// UtilityParts is its per-signal breakdown so the number is inspectable.
+	Utility      float64                  `json:"utility,omitempty"`
+	UtilityParts *store.UtilityComponents `json:"utilityParts,omitempty"`
+	Source       string                   `json:"sourceSession,omitempty"`   // session name
+	SourceID     string                   `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
+	Model        string                   `json:"model,omitempty"`           // producing model, as the provider names it
+	Harness      string                   `json:"harness,omitempty"`         // producing client, resolved from the source session
+	Favorite     bool                     `json:"favorite,omitempty"`
+	ReplacedBy   string                   `json:"replacedBy,omitempty"` // name of the superseder
+	ReplacedByID string                   `json:"replacedById,omitempty"`
+	Supersedes   []memoryRef              `json:"supersedes,omitempty"` // reverse: memories this replaced
+	FilePath     string                   `json:"filePath"`
+	AbsPath      string                   `json:"absPath"`
+	EditURL      template.URL             `json:"-"`
+	CanArchive   bool                     `json:"-"`
 }
 
 // memoryDetailData projects an index row into the full detail payload: body
@@ -103,6 +107,11 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 	} else if found {
 		d.Injects, d.Reads = stat.InjectCount, stat.ReadCount
 		d.LastInjected, d.LastRead = stat.LastInjectedAt, stat.LastReadAt
+		d.Utility = stat.Utility
+		if !stat.Components.IsZero() {
+			c := stat.Components
+			d.UtilityParts = &c
+		}
 	}
 
 	// Provenance: SourceSession holds a session name (ambient stamps) or a

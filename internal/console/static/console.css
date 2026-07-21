@@ -3212,6 +3212,14 @@ a.overview-event-project:hover { color: var(--brand); }
 .brief-group.activity-group { --group-accent: var(--ok); grid-column: span 7; }
 .brief-group.planning-group { --group-accent: var(--pop); grid-column: span 5; }
 .brief-group.family-group { --group-accent: var(--k-decision); grid-column: span 7; }
+.brief-group.utility-group {
+  grid-column: 1 / -1; display: grid;
+  grid-template-columns: minmax(230px, .65fr) minmax(480px, 1.35fr);
+  grid-template-areas: "heading heading" "copy fields"; gap: 10px 24px; align-items: start;
+}
+.utility-group > header { grid-area: heading; }
+.brief-group.utility-group > p { grid-area: copy; min-height: 0; max-width: 48ch; margin: 0; }
+.utility-group > .brief-fields { grid-area: fields; }
 .brief-group.ceiling-group { --group-accent: var(--warn); grid-column: 1 / -1; }
 .brief-group > header { display: flex; align-items: center; gap: 9px; }
 .brief-group-icon { display: inline-flex; align-items: center; justify-content: center; width: 29px; height: 29px; border-radius: var(--radius-sm); color: var(--group-accent); background: color-mix(in oklab, var(--group-accent) 12%, var(--surface)); }
@@ -3231,6 +3239,11 @@ a.overview-event-project:hover { color: var(--brand); }
   width: 100%; min-width: 0; padding: 8px 9px; border: 0; outline: 0; background: transparent; color: var(--ink);
   font: 600 var(--text-sm)/1 var(--font-mono); font-variant-numeric: tabular-nums;
 }
+.brief-number select {
+  width: 100%; min-width: 0; padding: 7px 30px 7px 9px; border: 0; outline: 0; border-radius: inherit;
+  background-color: transparent; color: var(--ink); font: 600 var(--text-xs)/1.25 var(--font-sans); cursor: pointer;
+}
+.brief-number select option { background: var(--surface); color: var(--ink); }
 .brief-number i { display: flex; align-items: center; padding: 0 8px; border-left: 1px solid var(--border); color: var(--faint); background: var(--surface-2); font-size: var(--text-2xs); font-style: normal; white-space: nowrap; }
 .family-fields { grid-template-columns: minmax(130px, .75fr) minmax(250px, 1.65fr); align-items: start; }
 .brief-toggles { display: grid; gap: 7px; }
@@ -3259,6 +3272,21 @@ a.overview-event-project:hover { color: var(--brand); }
 .is-dirty .brief-actions { border-color: color-mix(in oklab, var(--pop) 35%, var(--border)); }
 .is-dirty .brief-state { color: var(--pop-strong); font-weight: 650; }
 .is-dirty .state-dot { background: var(--pop); box-shadow: 0 0 0 4px var(--pop-soft); }
+
+.utility-activation { margin-top: 12px; }
+.utility-activation-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
+.utility-activation-table th {
+  padding: 8px 14px; border-bottom: 1px solid var(--border); color: var(--faint);
+  text-align: left; font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.utility-activation-table td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--muted); vertical-align: middle; }
+.utility-activation-table tr:last-child td { border-bottom: none; }
+.utility-activation-table td:first-child { color: var(--ink-2); font-family: var(--font-mono); }
+.utility-activation-table small { color: var(--faint); }
+.utility-status-active { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, var(--border)); background: var(--ok-soft); }
+.utility-status-armed { color: var(--pop-strong); border-color: color-mix(in oklab, var(--pop) 40%, var(--border)); background: var(--pop-soft); }
+.utility-status-forced-off { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, var(--border)); background: color-mix(in oklab, var(--warn) 9%, var(--surface)); }
+.utility-force-form { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .registry-zone-head > .btn { justify-self: end; }
 .registry-overview { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: -2px 0 12px 60px; }
@@ -3399,6 +3427,8 @@ a.overview-event-project:hover { color: var(--brand); }
   .gardener-runtime { grid-template-columns: 1fr; }
   .gardener-cadence { border-right: 0; border-bottom: 1px solid var(--border); }
   .gardener-rules { padding: 10px 14px 14px; }
+  .brief-group.utility-group { grid-template-columns: 1fr; grid-template-areas: "heading" "copy" "fields"; gap: 8px; }
+  .brief-group.utility-group > p { max-width: none; margin-bottom: 5px; }
   .workspace-columns { display: none; }
   .workspace-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .workspace-cell-label { display: block; margin-bottom: 8px; }
@@ -3636,10 +3666,20 @@ a.overview-event-project:hover { color: var(--brand); }
 .retrieval-healthy-state strong { font-family: var(--font-display); font-size: var(--text-md); }
 .retrieval-healthy-state p { max-width: 44ch; margin: 6px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
 
+.retrieval-loop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; margin-bottom: 14px; }
+.retrieval-loop-stat { display: flex; flex-direction: column; }
+.retrieval-loop-value { padding: 16px 14px 0; }
+.retrieval-loop-value strong { font-family: var(--font-display); font-size: clamp(30px, 3.4vw, 44px); font-weight: 700; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.retrieval-loop-stat > p { margin: 6px 0 0; padding: 0 14px 14px; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+.retrieval-deadweight-panel { border-color: color-mix(in oklab, var(--warn) 25%, var(--border)); }
+.retrieval-deadweight-panel.healthy { border-color: color-mix(in oklab, var(--ok) 25%, var(--border)); }
+.retrieval-deadweight-panel .retrieval-stale-row { grid-template-columns: 28px minmax(0, 1fr) auto auto; }
+
 @media (max-width: 1080px) {
   .retrieval-hero { grid-template-columns: 1fr; }
   .retrieval-instrument { grid-template-columns: 112px minmax(0, 1fr); border-top: 1px solid color-mix(in oklab, var(--brand) 20%, var(--border)); border-left: 0; }
   .retrieval-analysis-grid, .retrieval-pressure-grid { grid-template-columns: 1fr; }
+  .retrieval-loop-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 760px) {

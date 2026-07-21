@@ -202,6 +202,27 @@
             </div>
           </section>
 
+          <section class="brief-group utility-group">
+            <header><span class="brief-group-icon">{{icon "trending-up"}}</span><div><span>Closed loop</span><h4>Utility ranking</h4></div></header>
+            <p>Blend each memory&rsquo;s time-decayed demand score into the index order, so workhorses outlast dead weight.</p>
+            <div class="brief-fields two">
+              <label class="brief-field" for="utility-weight">
+                <span>Utility weight</span>
+                <span class="brief-number"><input id="utility-weight" type="number" name="utility_weight" min="0" max="1" step="0.1" value="{{.Briefing.UtilityWeight}}" aria-describedby="utility-weight-help"><i>of sort key</i></span>
+                <small id="utility-weight-help">0 restores pure recency ordering</small>
+              </label>
+              <label class="brief-field" for="utility-mode">
+                <span>Activation</span>
+                <span class="brief-number"><select id="utility-mode" name="utility_mode" aria-describedby="utility-mode-help">
+                  <option value="auto"{{if eq .Briefing.UtilityMode "auto"}} selected{{end}}>auto &mdash; per project when ready</option>
+                  <option value="on"{{if eq .Briefing.UtilityMode "on"}} selected{{end}}>on &mdash; everywhere now</option>
+                  <option value="off"{{if eq .Briefing.UtilityMode "off"}} selected{{end}}>off &mdash; never</option>
+                </select></span>
+                <small id="utility-mode-help">auto arms each project once its demand history matures</small>
+              </label>
+            </div>
+          </section>
+
           <section class="brief-group ceiling-group">
             <header><span class="brief-group-icon">{{icon "gauge"}}</span><div><span>Last-resort bound</span><h4>Safety ceiling</h4></div></header>
             <div class="ceiling-layout">
@@ -230,6 +251,38 @@
       </form>
       {{if .BriefingOverridden}}<form id="brief-reset" method="post" action="/console/settings/briefing/reset"></form>{{end}}
     </article>
+
+    {{if .UtilityRows}}
+    <article class="briefing-workbench utility-activation" aria-labelledby="utility-activation-title">
+      <header class="briefing-workbench-head">
+        <div>
+          <div class="briefing-title"><span class="runtime-icon pop">{{icon "trending-up"}}</span><div><span>Closed loop</span><h3 id="utility-activation-title">Utility activation by scope</h3></div></div>
+        </div>
+        <p>In auto mode a scope&rsquo;s briefing switches to utility-blended ordering once its demand history matures: first demand &ge;{{index .UtilityReady 2}}d old, &ge;{{index .UtilityReady 0}} demand events and &ge;{{index .UtilityReady 1}} memories touched in 30d. The gardener latches it on its next pass; force overrides both ways.</p>
+      </header>
+      <table class="utility-activation-table">
+        <thead><tr><th>Scope</th><th>Status</th><th>Demand (30d)</th><th>History</th><th>Override</th></tr></thead>
+        <tbody>
+          {{range .UtilityRows}}
+          <tr>
+            <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}</td>
+            <td><span class="badge utility-status-{{.Status}}">{{.Status}}{{if .Forced}} (forced){{end}}</span>{{if .ReadyAt}} <small title="{{ts .ReadyAt}}">armed {{ago .ReadyAt}}</small>{{end}}</td>
+            <td>{{.RecentEvents}} events &middot; {{.RecentMemories}} memories</td>
+            <td>{{if .AgeDays}}{{.AgeDays}}d of demand{{else}}no demand yet{{end}}</td>
+            <td>
+              <form method="post" action="/console/settings/utility" class="utility-force-form">
+                <input type="hidden" name="project" value="{{.Project}}">
+                {{if ne .Forced "on"}}<button class="btn small" name="force" value="on" type="submit">Force on</button>{{end}}
+                {{if ne .Forced "off"}}<button class="btn small" name="force" value="off" type="submit">Force off</button>{{end}}
+                {{if .Forced}}<button class="btn small" name="force" value="auto" type="submit">Auto</button>{{end}}
+              </form>
+            </td>
+          </tr>
+          {{end}}
+        </tbody>
+      </table>
+    </article>
+    {{end}}
   </section>
 
   <section class="settings-zone" id="workspace-registry">

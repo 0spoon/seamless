@@ -79,6 +79,112 @@ func TestRebuildRetrievalStats_FromEvents(t *testing.T) {
 	require.False(t, ok)
 }
 
+// getStat fetches a stats row that must exist.
+func getStat(t *testing.T, db *sql.DB, id string) RetrievalStat {
+	t.Helper()
+	s, ok, err := GetRetrievalStat(context.Background(), db, id)
+	require.NoError(t, err)
+	require.True(t, ok, "stats row for %s", id)
+	return s
+}
+
+// Utility weighs query-gated demand only: an explicit read outranks a recall
+// hit outranks a prompt match, and a briefing injection -- pure exposure --
+// counts for the inject counters but never for utility.
+func TestRebuildRetrievalStats_UtilityWeightsBySource(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	ts := now.Add(-time.Hour)
+
+	insertEvent(t, db, core.EventMemoryRead, "READ", "{}", ts)
+	insertEvent(t, db, core.EventInjected, "", `{"item_ids":["RECALL"],"source":"recall"}`, ts)
+	insertEvent(t, db, core.EventInjected, "", `{"item_ids":["PROMPT"],"hook":"user-prompt-submit"}`, ts)
+	insertEvent(t, db, core.EventInjected, "", `{"item_ids":["BRIEF"],"hook":"session-start"}`, ts)
+
+	require.NoError(t, rebuildRetrievalStats(ctx, db, now))
+
+	read, recall, prompt, brief := getStat(t, db, "READ"), getStat(t, db, "RECALL"), getStat(t, db, "PROMPT"), getStat(t, db, "BRIEF")
+	require.Greater(t, read.Utility, recall.Utility)
+	require.Greater(t, recall.Utility, prompt.Utility)
+	require.Greater(t, prompt.Utility, 0.0)
+	require.Zero(t, brief.Utility, "briefing exposure is not demand")
+	require.Equal(t, 1, brief.InjectCount, "the injection still counts as reach")
+
+	require.Greater(t, read.Components.Read, 0.0)
+	require.Zero(t, read.Components.Recall)
+	require.Greater(t, recall.Components.Recall, 0.0)
+	require.Greater(t, prompt.Components.Prompt, 0.0)
+
+	scores, err := UtilityScores(ctx, db)
+	require.NoError(t, err)
+	require.Contains(t, scores, "READ")
+	require.NotContains(t, scores, "BRIEF", "zero-utility rows stay out of the ranking map")
+}
+
+// The same signal is worth less the older it is: two half-lives quarter it.
+func TestRebuildRetrievalStats_UtilityDecay(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+
+	insertEvent(t, db, core.EventMemoryRead, "FRESH", "{}", now.Add(-time.Hour))
+	insertEvent(t, db, core.EventMemoryRead, "OLD", "{}", now.Add(-28*24*time.Hour))
+
+	require.NoError(t, rebuildRetrievalStats(ctx, db, now))
+
+	fresh, old := getStat(t, db, "FRESH"), getStat(t, db, "OLD")
+	require.Greater(t, fresh.Utility, old.Utility)
+	require.InDelta(t, utilityWeightRead/4, old.Components.Read, 0.01,
+		"28 days = two half-lives = a quarter of the weight")
+}
+
+// Utility saturates: no volume of demand reaches 1.0, so one hot memory cannot
+// dominate the briefing blend.
+func TestRebuildRetrievalStats_UtilityBounded(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+
+	// Sessionless events count individually (no dedup key), so this is 200
+	// full-weight reads.
+	for i := 0; i < 200; i++ {
+		insertEvent(t, db, core.EventMemoryRead, "HOT", "{}", now.Add(-time.Minute))
+	}
+	require.NoError(t, rebuildRetrievalStats(ctx, db, now))
+
+	hot := getStat(t, db, "HOT")
+	require.Less(t, hot.Utility, 1.0)
+	require.Greater(t, hot.Utility, 0.9)
+}
+
+// A signal class credits an item once per session: hammering one topic eight
+// times in a session is one unit of demand, not eight.
+func TestRebuildRetrievalStats_UtilityPerSessionDedup(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
+	ts := now.Add(-time.Hour)
+
+	for i := 0; i < 5; i++ {
+		insertEvent(t, db, core.EventInjected, "",
+			`{"item_ids":["BURST"],"hook":"user-prompt-submit","claude_session_id":"s1"}`, ts)
+	}
+	insertEvent(t, db, core.EventInjected, "",
+		`{"item_ids":["SPREAD"],"hook":"user-prompt-submit","claude_session_id":"s1"}`, ts)
+	insertEvent(t, db, core.EventInjected, "",
+		`{"item_ids":["SPREAD"],"hook":"user-prompt-submit","claude_session_id":"s2"}`, ts)
+
+	require.NoError(t, rebuildRetrievalStats(ctx, db, now))
+
+	burst, spread := getStat(t, db, "BURST"), getStat(t, db, "SPREAD")
+	require.Equal(t, 5, burst.InjectCount, "inject counters keep every event")
+	require.InDelta(t, utilityWeightPrompt*utilityDecay(time.Hour), burst.Components.Prompt, 0.001,
+		"five same-session prompt matches credit once")
+	require.Greater(t, spread.Utility, burst.Utility,
+		"two sessions of demand beat five repeats in one")
+}
+
 func TestStaleMemories(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()
