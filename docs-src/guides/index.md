@@ -10,7 +10,10 @@ and walks the shortest honest path through it, including the failure modes.
 If you are connecting a client, start with
 [Integrate your agent](/guides/integrate-your-agent/) - the MCP handshake, the
 stdio bridge, session binding, and the scope discipline that keeps writes
-landing in the right project. Once an agent is writing,
+landing in the right project. If the client is Cursor, Cline, Windsurf, or
+Zed, [Connect Cursor, Cline, Windsurf & Zed](/guides/mcp-clients/) has the
+verified config block for each, plus the capability table that says plainly
+what a client without hooks gives up. Once an agent is writing,
 [Write memories that get recalled](/guides/write-good-memories/) is the guide
 that pays for itself: the description line is the retrieval surface, and the
 difference between a store that compounds and one that fills with noise is

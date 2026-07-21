@@ -39,6 +39,7 @@ sections:
     pages:
       - index.md
       - integrate-your-agent.md
+      - mcp-clients.md
       - write-good-memories.md
       - coordinate-agents.md
       - plan-mode.md
