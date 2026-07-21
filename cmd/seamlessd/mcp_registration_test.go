@@ -223,7 +223,7 @@ func TestReconcileCodexMCP_StateMachine(t *testing.T) {
 			fake := newFakeCodex(t, tt.initial, tt.afterAdd, tt.mode)
 			result, reconcileErr := reconcileCodexMCP(context.Background(), execMCPCommandRunner{
 				client: "codex", path: fake.path, timeout: tt.timeout,
-			}, want.Transport.Command, codexMCPConfigPath(want.Transport.Args))
+			}, want.Transport.Command, mcpBridgeConfigPath(want.Transport.Args))
 			if tt.wantErr != "" {
 				require.ErrorContains(t, reconcileErr, tt.wantErr)
 				require.NotContains(t, reconcileErr.Error(), "fixture-secret-must-stay-hidden")

@@ -29,6 +29,18 @@ func claudeRuntimeChecks() []check {
 	return checks
 }
 
+// claudeDesktopAppDetected reports whether the Claude desktop app itself is
+// present. Only macOS has a known install location to probe; on Windows the
+// desktop config file's existence is the detection signal, so callers must
+// treat false as "not proven present", never "proven absent".
+func claudeDesktopAppDetected() bool {
+	if runtime.GOOS != "darwin" {
+		return false
+	}
+	info, err := os.Stat(macOSClaudeAppBundle)
+	return err == nil && info.IsDir()
+}
+
 func discoverClaudeRuntimes() []runtimeCandidate {
 	var candidates []runtimeCandidate
 	if path, err := exec.LookPath("claude"); err == nil {

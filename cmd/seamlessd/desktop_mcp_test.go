@@ -408,3 +408,147 @@ func TestReconcileClaudeDesktopMCP_RejectsRelativePaths(t *testing.T) {
 	require.ErrorContains(t, err, "not absolute")
 	require.NoFileExists(t, path)
 }
+
+// writeDesktopDoctorFixture lays down a runnable desired state for the doctor
+// tests: an executable seam binary, a config file, and the desktop config
+// holding the given mcpServers entry (or no file when entry is nil).
+func writeDesktopDoctorFixture(t *testing.T, entry any) (path, seamBin, configPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	seamBin = filepath.Join(dir, seamBinName())
+	writeTestExecutable(t, seamBin)
+	configPath = filepath.Join(dir, "seamless.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte("mcp:\n  api_key: \"k\"\n"), 0o600))
+	path = filepath.Join(dir, "claude_desktop_config.json")
+	if entry != nil {
+		blob, err := json.Marshal(map[string]any{"mcpServers": map[string]any{"seamless": entry}})
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(path, blob, 0o600))
+	}
+	return path, seamBin, configPath
+}
+
+// With neither the app nor a desktop config file present there is nothing to
+// diagnose: no lines at all, symmetric with claudeRuntimeChecks, so a machine
+// without the Claude app is never nagged about its chat surface.
+func TestClaudeDesktopChecksFor_QuietWithoutAppOrConfig(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	require.Empty(t, claudeDesktopChecksFor(path, false, seamBin, configPath))
+}
+
+// The app being present without a registration is informational, never a
+// warning: the chat surface is explicit opt-in (--client claude-desktop), so
+// an unregistered app is a choice, not drift. The line names both the
+// automatic command and the manual Settings > Developer fallback.
+func TestClaudeDesktopChecksFor_AppWithoutRegistrationIsInfo(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	checks := claudeDesktopChecksFor(path, true, seamBin, configPath)
+	require.Len(t, checks, 1)
+	require.Equal(t, statusInfo, checks[0].status)
+	require.Equal(t, "claude desktop mcp", checks[0].name)
+	require.Contains(t, checks[0].detail, "not registered")
+	require.Contains(t, checks[0].detail, "seamlessd install-hooks --client claude-desktop")
+	require.Contains(t, checks[0].detail, "Settings > Developer > Edit Config")
+}
+
+// A desktop config file alone triggers diagnosis even when the app was not
+// detected: app detection is macOS-only, so on Windows (and for custom
+// layouts) the file is the only evidence there is a chat surface to check.
+func TestClaudeDesktopChecksFor_ConfigFileAloneTriggersDiagnosis(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	require.NoError(t, os.WriteFile(path, []byte(`{"mcpServers":{}}`), 0o600))
+	checks := claudeDesktopChecksFor(path, false, seamBin, configPath)
+	require.Len(t, checks, 1)
+	require.Equal(t, statusInfo, checks[0].status)
+	require.Contains(t, checks[0].detail, "not registered")
+}
+
+// An exact runnable registration is OK, but the detail must state that the
+// running app's loaded state is unverifiable: the app reads the config only at
+// startup and exposes no way to ask what it loaded, so "registered but not
+// restarted" cannot be told apart from "live" -- doctor says so instead of
+// guessing.
+func TestClaudeDesktopMCPCheck_ExactReportsLoadedStateUnverifiable(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	want, err := desiredClaudeDesktopMCPServer(seamBin, configPath)
+	require.NoError(t, err)
+	blob, err := json.Marshal(map[string]any{"mcpServers": map[string]any{"seamless": want}})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, blob, 0o600))
+
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusOK, chk.status)
+	require.Contains(t, chk.detail, "exact stdio bridge (seam mcp-proxy)")
+	require.Contains(t, chk.detail, path)
+	require.Contains(t, chk.detail, "unverifiable")
+	require.Contains(t, chk.detail, "reads the config at startup")
+}
+
+func TestClaudeDesktopMCPCheck_OwnedDriftWarnsStale(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t,
+		claudeDesktopMCPServer{Command: "/old/bin/seam", Args: []string{"mcp-proxy"}})
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "owned registration is stale")
+	require.Contains(t, chk.detail, "bridge command differs")
+	require.Contains(t, chk.detail, "seamlessd install-hooks --client claude-desktop")
+}
+
+// A foreign server squatting the reserved name is diagnosed but the fix stays
+// manual: doctor points at the app's own config editor, mirroring the
+// reconciler's refusal to repair over an entry it cannot prove it owns.
+func TestClaudeDesktopMCPCheck_ForeignEntryWarnsIncompatible(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t,
+		claudeDesktopMCPServer{Command: "npx", Args: []string{"-y", "other-memory-server"}})
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "incompatible registration")
+	require.Contains(t, chk.detail, "Settings > Developer > Edit Config")
+}
+
+func TestClaudeDesktopMCPCheck_UnrecognizedShapeWarns(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, "http://127.0.0.1:8081/api/mcp")
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "unrecognized shape")
+	require.Contains(t, chk.detail, "Settings > Developer > Edit Config")
+}
+
+func TestClaudeDesktopMCPCheck_UnreadableConfigWarns(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	require.NoError(t, os.WriteFile(path, []byte(`{"mcpServers":[]}`), 0o600))
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "cannot inspect")
+	require.Contains(t, chk.detail, "mcpServers is not an object")
+}
+
+// An exact entry whose targets are gone is non-operational even though the
+// registration matches desired state: the comparator and the runnability probe
+// stay separate results, same as codex mcp.
+func TestClaudeDesktopMCPCheck_ExactButMissingBridgeIsNotRunnable(t *testing.T) {
+	path, seamBin, configPath := writeDesktopDoctorFixture(t, nil)
+	require.NoError(t, os.Remove(seamBin))
+	want, err := desiredClaudeDesktopMCPServer(seamBin, configPath)
+	require.NoError(t, err)
+	blob, err := json.Marshal(map[string]any{"mcpServers": map[string]any{"seamless": want}})
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, blob, 0o600))
+
+	chk := claudeDesktopMCPCheck(path, seamBin, configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "not runnable")
+	require.Contains(t, chk.detail, "bridge executable is missing")
+}
+
+// Desired state is built from what install-hooks would write NOW; when that
+// cannot be computed the check says so rather than falling back to paths read
+// from the existing entry, which would make uniform drift look current.
+func TestClaudeDesktopMCPCheck_RelativeSeamBinCannotBuildDesired(t *testing.T) {
+	path, _, configPath := writeDesktopDoctorFixture(t,
+		claudeDesktopMCPServer{Command: "/opt/seam", Args: []string{"mcp-proxy"}})
+	chk := claudeDesktopMCPCheck(path, "seam", configPath)
+	require.Equal(t, statusWarn, chk.status)
+	require.Contains(t, chk.detail, "cannot build desired registration")
+	require.Contains(t, chk.detail, "not absolute")
+}

@@ -533,16 +533,17 @@ func codexAppMCPSetupHint(seamBin, configPath string) string {
 		seamlessMCPName, seamBin, strings.Join(quotedArgs, " "))
 }
 
-// codexMCPPathProblems checks the local paths that an exact registration will
-// execute. It is kept separate from the state comparator: installation may
-// intentionally be staged before the binary exists, while doctor must call
-// that state non-operational.
-func codexMCPPathProblems(want codexMCPState) []string {
+// mcpBridgePathProblems checks the local paths that an exact registration will
+// execute -- the same stdio bridge whichever surface holds it (Codex CLI store
+// or Claude desktop config). It is kept separate from the state comparators:
+// installation may intentionally be staged before the binary exists, while
+// doctor must call that state non-operational.
+func mcpBridgePathProblems(command string, args []string) []string {
 	var problems []string
-	if !commandPathExists(want.Transport.Command) {
+	if !commandPathExists(command) {
 		problems = append(problems, "bridge executable is missing")
 	}
-	if configPath := codexMCPConfigPath(want.Transport.Args); configPath != "" {
+	if configPath := mcpBridgeConfigPath(args); configPath != "" {
 		if info, err := os.Stat(configPath); err != nil || info.IsDir() {
 			problems = append(problems, "config path is missing")
 		}
@@ -559,7 +560,7 @@ func commandPathExists(command string) bool {
 	return err == nil
 }
 
-func codexMCPConfigPath(args []string) string {
+func mcpBridgeConfigPath(args []string) string {
 	for i := 0; i+1 < len(args); i++ {
 		if args[i] == "--config" {
 			return args[i+1]

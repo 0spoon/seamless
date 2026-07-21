@@ -103,6 +103,7 @@ func doctor(args []string) error {
 	checks = append(checks, mcpToolsCheck())
 	checks = append(checks, claudeRuntimeChecks()...)
 	checks = append(checks, hooksCheck(cfg))
+	checks = append(checks, claudeDesktopChecks(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))...)
 	checks = append(checks, codexChecks(cfg, db)...)
 	checks = append(checks, gardenerCheck(cfg))
 
@@ -415,12 +416,94 @@ func codexMCPCheckWithRunner(ctx context.Context, runner mcpCommandRunner, seamB
 		return check{statusWarn, "codex mcp",
 			"registration has an unknown classification; run: codex mcp get seamless --json"}
 	}
-	if problems := codexMCPPathProblems(want); len(problems) > 0 {
+	if problems := mcpBridgePathProblems(want.Transport.Command, want.Transport.Args); len(problems) > 0 {
 		return check{statusWarn, "codex mcp", fmt.Sprintf(
 			"exact registration is not runnable (%s; repair the targets, then run: seamlessd install-hooks --client codex)",
 			strings.Join(problems, ", "))}
 	}
 	return check{statusOK, "codex mcp", "exact enabled stdio bridge (seam mcp-proxy); target paths exist"}
+}
+
+// claudeDesktopChecks reports the Claude app chat surface: whether the desktop
+// config's reserved mcpServers entry matches the same desired stdio bridge
+// install-hooks --client claude-desktop would write now -- never paths
+// recovered from the entry itself, which would make uniform drift
+// tautologically current. It emits no lines at all (symmetric with
+// claudeRuntimeChecks) when neither the app nor a desktop config file is
+// present, and it never FAILs: the chat surface is an optional, explicit
+// opt-in target.
+func claudeDesktopChecks(seamBin, configPath string) []check {
+	path, err := defaultClaudeDesktopConfigPath()
+	if err != nil {
+		// No known config location (no macOS/Windows app layout, or no home):
+		// the app cannot be installed here, so there is nothing to diagnose.
+		return nil
+	}
+	return claudeDesktopChecksFor(path, claudeDesktopAppDetected(), seamBin, configPath)
+}
+
+func claudeDesktopChecksFor(path string, appDetected bool, seamBin, configPath string) []check {
+	info, statErr := os.Lstat(path)
+	configExists := statErr == nil && !info.IsDir()
+	if !appDetected && !configExists {
+		return nil
+	}
+	return []check{claudeDesktopMCPCheck(path, seamBin, configPath)}
+}
+
+// claudeDesktopMCPCheck compares the desktop config's reserved entry with the
+// desired stdio bridge. Everything here is file evidence: the app reads the
+// config only at startup and exposes no way to ask what it actually loaded, so
+// even an exact entry reports the running app's state as unverifiable rather
+// than assumed. An absent entry is informational, not drift -- the chat
+// surface is never auto-selected by install-hooks.
+func claudeDesktopMCPCheck(path, seamBin, configPath string) check {
+	want, err := desiredClaudeDesktopMCPServer(seamBin, configPath)
+	if err != nil {
+		return check{statusWarn, "claude desktop mcp", "cannot build desired registration: " + err.Error() +
+			"; install the seam CLI, then run: seamlessd install-hooks --client claude-desktop"}
+	}
+	_, servers, _, err := loadClaudeDesktopConfig(path)
+	if err != nil {
+		return check{statusWarn, "claude desktop mcp", fmt.Sprintf(
+			"cannot inspect %s: %v; fix or restore the JSON, then run: seamlessd install-hooks --client claude-desktop", path, err)}
+	}
+	raw, present := servers[seamlessMCPName]
+	if !present {
+		return check{statusInfo, "claude desktop mcp",
+			"chat surface not registered; opt in with: seamlessd install-hooks --client claude-desktop; or " +
+				claudeDesktopMCPSetupHint(seamBin, configPath)}
+	}
+	got, parseErr := parseClaudeDesktopMCPServer(raw)
+	if parseErr != nil {
+		return check{statusWarn, "claude desktop mcp", fmt.Sprintf(
+			"reserved name has an unrecognized shape in %s (%v); remove it in the Claude app (Settings > Developer > Edit Config), then run: seamlessd install-hooks --client claude-desktop",
+			path, parseErr)}
+	}
+	class, drift := classifyClaudeDesktopMCP(got, want)
+	switch class {
+	case mcpRegIncompatible:
+		return check{statusWarn, "claude desktop mcp", fmt.Sprintf(
+			"reserved name has an incompatible registration (%s); remove it in the Claude app (Settings > Developer > Edit Config), then run: seamlessd install-hooks --client claude-desktop",
+			strings.Join(drift, ", "))}
+	case mcpRegOwnedDrifted:
+		return check{statusWarn, "claude desktop mcp", fmt.Sprintf(
+			"owned registration is stale (%s; run: seamlessd install-hooks --client claude-desktop)",
+			strings.Join(drift, ", "))}
+	case mcpRegExact:
+		// Continue to the local target checks below.
+	default:
+		return check{statusWarn, "claude desktop mcp",
+			"registration has an unknown classification; inspect " + path}
+	}
+	if problems := mcpBridgePathProblems(want.Command, want.Args); len(problems) > 0 {
+		return check{statusWarn, "claude desktop mcp", fmt.Sprintf(
+			"exact registration is not runnable (%s; repair the targets, then run: seamlessd install-hooks --client claude-desktop)",
+			strings.Join(problems, ", "))}
+	}
+	return check{statusOK, "claude desktop mcp", fmt.Sprintf(
+		"exact stdio bridge (seam mcp-proxy) in %s; target paths exist; whether the running app has loaded it is unverifiable (the app reads the config at startup)",
+		path)}
 }
 
 // gardenerCheck reports the gardener ticker configuration.
