@@ -1,0 +1,6 @@
+# seamless-robots-v1
+User-agent: *
+Allow: /
+Content-Signal: search=yes, ai-input=yes, ai-train=yes
+
+Sitemap: https://thereisnospoon.org/sitemap.xml

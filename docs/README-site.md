@@ -10,6 +10,8 @@ hand-written landing page at `/`, and the generated documentation site at
 index.html              the landing page (single file, no build step)
 CNAME                   custom domain: thereisnospoon.org
 .nojekyll               disable Jekyll (it would skip our _-prefixed paths)
+sitemap.xml             GENERATED (docsgen): the landing page + every docs page
+robots.txt              GENERATED (docsgen): crawl policy + the sitemap pointer
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
 static/favicon.svg      the 0spoon mark (an empty set)
@@ -41,6 +43,15 @@ make docs           # regenerate docs/docs/ from docs-src/
 make docs-serve     # regenerate and serve at 127.0.0.1:8899/docs/
 make docs-check     # fail if the committed output is stale (part of `make check`)
 ```
+
+docsgen also writes two crawler files at the site root: `sitemap.xml` (the
+landing page plus every docs page, no lastmod -- there is no deterministic date
+source) and `robots.txt` (whose `# seamless-robots-v1` marker is how you can
+tell from outside whether the live host serves this file or Cloudflare's
+managed one). Unlike `docs/docs/` these are written in place, never deleted,
+and the rest of this directory is not docsgen's to touch. Both are diffed by
+`make docs-check`, so adding or removing a page keeps the sitemap current
+automatically.
 
 **The drift rule:** because the output is committed and `make check` runs
 `docs-check`, any change to `docs-src/` must be followed by `make docs` and the

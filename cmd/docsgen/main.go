@@ -10,6 +10,11 @@
 //	docsgen -src docs-src -out docs/docs      # regenerate (what `make docs` runs)
 //	docsgen -serve 127.0.0.1:8899             # regenerate, then serve docs/ locally
 //
+// Besides the docs tree, every run refreshes two crawler files at the site root
+// (-site, default docs/): sitemap.xml, naming the landing page and every docs
+// page, and robots.txt, which points crawlers at it. Both are committed and
+// gated by `make docs-check`, so the sitemap cannot go stale against the nav.
+//
 // Two pages are generated rather than authored, via a `generate:` key in their
 // frontmatter (see generators.go): the MCP tool reference reads mcp.Catalog(),
 // and the configuration reference reflects over config.Defaults(). Both derive
@@ -26,16 +31,17 @@ import (
 func main() {
 	src := flag.String("src", "docs-src", "directory of authored markdown sources")
 	out := flag.String("out", filepath.Join("docs", "docs"), "output directory for generated HTML (contents are replaced)")
+	site := flag.String("site", "docs", "site root receiving sitemap.xml and robots.txt (files are overwritten, nothing is deleted)")
 	serve := flag.String("serve", "", "after generating, serve the site root on this address (e.g. 127.0.0.1:8899)")
 	flag.Parse()
 
-	if err := run(*src, *out, *serve); err != nil {
+	if err := run(*src, *out, *site, *serve); err != nil {
 		fmt.Fprintln(os.Stderr, "docsgen:", err)
 		os.Exit(1)
 	}
 }
 
-func run(src, out, serveAddr string) error {
+func run(src, out, siteDir, serveAddr string) error {
 	// The generators read repo files by relative path (seamless.yaml.example),
 	// and agent shells do not reliably inherit a cwd. Fail with a clear message
 	// rather than a confusing "no such file" three layers down.
@@ -53,7 +59,10 @@ func run(src, out, serveAddr string) error {
 	if err := writeSite(out, site); err != nil {
 		return err
 	}
-	fmt.Printf("docsgen: wrote %d pages to %s\n", len(site.Pages), out)
+	if err := writeSiteRoot(siteDir, site); err != nil {
+		return err
+	}
+	fmt.Printf("docsgen: wrote %d pages to %s, sitemap.xml + robots.txt to %s\n", len(site.Pages), out, siteDir)
 
 	if serveAddr != "" {
 		// The docs live at <root>/docs/, so serve the parent: the same relative

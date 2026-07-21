@@ -72,16 +72,19 @@ CONFIG_ADDR   = $(shell sed -n 's/^addr:[[:space:]]*"\{0,1\}\([^"[:space:]]*\).*
 ADDR          = $(or $(CONFIG_ADDR),$(DEFAULT_ADDR))
 
 # Documentation site (cmd/docsgen). DOCS_OUT is committed; `make check` fails if
-# it drifts from DOCS_SRC.
+# it drifts from DOCS_SRC. SITE_ROOT is the directory GitHub Pages serves;
+# docsgen additionally writes sitemap.xml and robots.txt there (overwriting
+# those two files only, never deleting), and docs-check gates both.
 DOCS_SRC  := docs-src
 DOCS_OUT  := docs/docs
+SITE_ROOT := docs
 DOCS_ADDR ?= 127.0.0.1:8899
 
 # The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).
 # It lives at the site root because GitHub Pages serves docs/ verbatim, so this
-# path IS the published URL -- there is no copy to keep in step. docsgen never
-# touches it: it owns $(DOCS_OUT) only. PS_INSTALLER is the Windows companion,
-# served the same way at /install.ps1.
+# path IS the published URL -- there is no copy to keep in step. docsgen does
+# not touch it: beyond $(DOCS_OUT) it owns only the two named crawler files.
+# PS_INSTALLER is the Windows companion, served the same way at /install.ps1.
 INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
@@ -189,18 +192,22 @@ fmt-check:
 # mcp.Catalog(), the config reference reflects config.Defaults()), so a tool or
 # key that changes makes the committed output stale -- which docs-check catches.
 docs:
-	$(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out $(DOCS_OUT)
+	$(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out $(DOCS_OUT) -site $(SITE_ROOT)
 
 # Staleness gate. Regenerates into a temp dir and diffs, rather than rewriting
 # the working tree and running `git diff`: this never mutates what you are
 # editing, and -r catches untracked files that git diff cannot see (a page
-# deleted from docs-src/ still committed under docs/docs/).
+# deleted from docs-src/ still committed under docs/docs/). The site-root files
+# are diffed by name -- the rest of $(SITE_ROOT) is hand-written and not ours to
+# compare -- so a stale committed sitemap fails the gate like any stale page.
 docs-check:
 	@tmp=$$(mktemp -d) || exit 1; \
 	    trap 'rm -rf "$$tmp"' EXIT; \
-	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" >/dev/null || exit 1; \
-	    diff -r "$$tmp/docs" $(DOCS_OUT) > "$$tmp/diff" 2>&1 \
-	        || { echo "docs drift: $(DOCS_OUT) does not match $(DOCS_SRC) (run 'make docs' and commit)"; \
+	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" -site "$$tmp" >/dev/null || exit 1; \
+	    { diff -r "$$tmp/docs" $(DOCS_OUT) && \
+	      diff "$$tmp/sitemap.xml" $(SITE_ROOT)/sitemap.xml && \
+	      diff "$$tmp/robots.txt" $(SITE_ROOT)/robots.txt; } > "$$tmp/diff" 2>&1 \
+	        || { echo "docs drift: $(DOCS_OUT) or the site-root crawler files do not match $(DOCS_SRC) (run 'make docs' and commit)"; \
 	             head -40 "$$tmp/diff"; exit 1; }
 
 docs-serve: docs

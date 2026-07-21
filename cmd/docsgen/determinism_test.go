@@ -11,15 +11,19 @@ import (
 )
 
 // renderRepoSite generates the real docs-src into a temp dir and returns every
-// output file keyed by its relative path.
+// output file keyed by its relative path. The site-root files (sitemap.xml,
+// robots.txt) are included under their bare names -- no docs page shares them --
+// so they get the same byte-equality and no-timestamp coverage as the pages.
 func renderRepoSite(t *testing.T) map[string]string {
 	t.Helper()
-	out := filepath.Join(t.TempDir(), "docs")
+	dir := t.TempDir()
+	out := filepath.Join(dir, "docs")
 
 	site, err := loadSite("docs-src")
 	require.NoError(t, err)
 	require.NoError(t, renderPages(site))
 	require.NoError(t, writeSite(out, site))
+	require.NoError(t, writeSiteRoot(dir, site))
 
 	files := make(map[string]string)
 	require.NoError(t, filepath.WalkDir(out, func(p string, d os.DirEntry, err error) error {
@@ -37,6 +41,11 @@ func renderRepoSite(t *testing.T) map[string]string {
 		files[filepath.ToSlash(rel)] = string(raw)
 		return nil
 	}))
+	for _, name := range []string{"sitemap.xml", "robots.txt"} {
+		raw, err := os.ReadFile(filepath.Join(dir, name))
+		require.NoError(t, err)
+		files[name] = string(raw)
+	}
 	return files
 }
 
@@ -77,9 +86,6 @@ func TestOutputHasNoBuildTimestamp(t *testing.T) {
 		now.Format("Jan 2, 2006"), // Jul 15, 2026
 	}
 	for name, body := range renderRepoSite(t) {
-		if !strings.HasSuffix(name, ".html") {
-			continue
-		}
 		for _, stamp := range today {
 			require.NotContains(t, body, stamp,
 				"%s contains today's date (%s): a build timestamp makes docs-check drift on its own", name, stamp)
