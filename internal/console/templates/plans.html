@@ -29,7 +29,7 @@
     {{if .Ready}}<a class="status-ready" href="#rg-ready">{{.Ready}} ready</a>{{end}}
     {{if .Done}}<a href="#rg-done">{{.Done}} done</a>{{end}}
   </div>
-  <div class="lib-control-note"><strong>Browse structure</strong><span>Phase &rarr; plan</span></div>
+  <div class="lib-control-note"><strong>Browse structure</strong><span>Phase &rarr; plan; newest first within each phase</span></div>
 </section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/plans/{{.Selected.Row.Slug}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Plans">

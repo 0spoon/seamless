@@ -173,9 +173,9 @@ func noteMatches(row noteRow, q string) bool {
 }
 
 // buildNoteGroups orders the project->notes map: global ("") first, then
-// projects alphabetically. Within a group notes keep ListNotes' newest-first
-// order for sort=recent, sort by title for sort=name, or float starred rows
-// (keeping newest-first within each partition) for sort=favorites.
+// projects alphabetically. Within a group notes sort newest-updated first for
+// sort=recent, by title for sort=name, or float starred rows (keeping
+// newest-first within each partition) for sort=favorites.
 func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProjectGroup {
 	projects := make([]string, 0, len(byProject))
 	for p := range byProject {
@@ -190,6 +190,14 @@ func buildNoteGroups(byProject map[string][]noteRow, sortKey string) []noteProje
 	groups := make([]noteProjectGroup, 0, len(projects))
 	for _, p := range projects {
 		rows := byProject[p]
+		// Establish recency explicitly rather than relying on a store query's
+		// incidental input order. The other modes are stable overrides of it.
+		sort.SliceStable(rows, func(i, j int) bool {
+			if !rows[i].Updated.Equal(rows[j].Updated) {
+				return rows[i].Updated.After(rows[j].Updated)
+			}
+			return rows[i].ID > rows[j].ID
+		})
 		switch sortKey {
 		case "name":
 			sort.SliceStable(rows, func(i, j int) bool {

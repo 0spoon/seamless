@@ -26,7 +26,7 @@
       {{if .Closed}}<a href="#rg-closed">{{add (len .Closed) .ClosedMore}} closed</a>{{end}}
     </div>
   </div>
-  <div class="lib-control-note"><strong>Queue order</strong><span>In progress &rarr; ready &rarr; blocked</span></div>
+  <div class="lib-control-note"><strong>Queue order</strong><span>In progress &rarr; ready &rarr; blocked; newest first within each state</span></div>
 </nav>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/tasks/{{.Selected.ID}}"{{end}}>
   <nav class="lib-rail" aria-label="Tasks">
@@ -68,7 +68,7 @@
           {{range .Blocked}}
           <a class="rail-item{{if and $sel (eq .ID $sel.ID)}} selected{{end}}" id="ri-{{.ID}}" href="/console/tasks/{{.ID}}" data-title="{{.Title}}" data-context="Blocked"{{if and $sel (eq .ID $sel.ID)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; blocked by {{len .Blockers}}</span>
+            <span class="ri-meta"><span class="mono">{{shortID .ID}}</span> &middot; {{if .Project}}{{.Project}}{{else}}global{{end}} &middot; blocked by {{len .Blockers}} &middot; <span title="{{ts .Created}}">{{ago .Created}}</span></span>
           </a>
           {{end}}
         </div>

@@ -20,14 +20,14 @@
   <form class="search lib-query" method="get" action="/console/memories" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter memories by name, description, kind, or tag" placeholder="Filter names, descriptions, kinds, and tags&hellip;" value="{{.Query}}">
-    {{if ne .Sort "name"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
+    {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
   </form>
   {{$base := "/console/memories"}}{{if .Selected}}{{$base = printf "/console/memories/%s" .Selected.ID}}{{end}}
   <div class="lib-control">
     <span class="lib-control-label">Sort within kind</span>
     <div class="seg" data-seam-query>
-      <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "reach"}}on{{end}}" href="{{$base}}?sort=reach&amp;q={{.Query}}">Reach</a>
       <a class="{{if eq .Sort "utility"}}on{{end}}" href="{{$base}}?sort=utility&amp;q={{.Query}}" title="Time-decayed demand score: recall hits, prompt matches, explicit reads">Utility</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>

@@ -1315,9 +1315,9 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 
 .peek-kv { display: grid; grid-template-columns: auto 1fr; gap: 7px 14px; font-size: var(--text-sm); margin: 0; }
 .peek-kv dt { color: var(--muted); margin: 0; }
-.peek-kv dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; word-break: break-word; }
+.peek-kv dd { margin: 0; text-align: left; font-variant-numeric: tabular-nums; word-break: break-word; }
 .peek-kv dd.mono { font-family: var(--font-mono); font-size: var(--text-2xs); word-break: break-all; }
-.peek-kv .peek-tags { text-align: right; }
+.peek-kv .peek-tags { text-align: left; }
 
 .peek-section { display: flex; flex-direction: column; gap: 8px; }
 .peek-section h3 { font-family: var(--font-display); font-size: var(--text-sm); margin: 0; font-weight: 600; display: flex; align-items: center; gap: 8px; }
@@ -3754,3 +3754,221 @@ button.star.on .ico { fill: currentColor; }
 .ri-star { display: inline-flex; vertical-align: -2px; margin-right: 4px; color: var(--warn, #eab308); }
 .ri-star .ico { width: 12px; height: 12px; fill: currentColor; }
 .search-result-titleline .ri-star .ico { width: 13px; height: 13px; }
+
+/* ===========================================================================
+   SESSION REVIEW WORKSPACE
+
+   The split-view summary and full detail page share one review hierarchy:
+   outcome first, signals second, execution trace third, provenance last. The
+   session-specific fact layouts keep labels beside their values instead of
+   stretching a two-column definition list across the available width.
+   =========================================================================== */
+
+/* Compact session summary loaded into the Sessions split view. */
+.session-peek { gap: 18px; }
+.session-peek-topline {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding-bottom: 12px; border-bottom: 1px solid var(--border);
+}
+.session-peek-badges { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.session-peek-updated { color: var(--faint); font-size: var(--text-2xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.session-peek-identity { display: flex; flex-direction: column; gap: 11px; }
+.session-peek .peek-title {
+  display: flex; align-items: center; gap: 7px; margin: 0;
+  font-family: var(--font-mono); font-size: var(--text-lg); line-height: 1.28;
+}
+.session-peek-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; }
+.session-peek-facts > span {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0;
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.session-peek-facts small {
+  color: var(--faint); font-size: 9px; font-weight: 700; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+.session-peek-facts strong {
+  max-width: 100%; overflow: hidden; color: var(--ink-2); font-family: var(--font-mono); font-size: var(--text-xs);
+  font-weight: 600; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap;
+}
+.session-peek-outcome {
+  display: flex; flex-direction: column; gap: 10px; padding: 14px;
+  border: 1px solid color-mix(in oklab, var(--brand) 20%, var(--border)); border-radius: var(--radius-md);
+  background: linear-gradient(145deg, color-mix(in oklab, var(--brand) 6%, var(--surface)), var(--surface));
+}
+.session-peek-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.session-peek-section-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.session-peek-section-head > div > span {
+  color: var(--brand); font-size: 9px; font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+.session-peek-section-head h3 { margin: 0; color: var(--ink); font-family: var(--font-display); font-size: var(--text-md); font-weight: 650; }
+.session-peek-signal {
+  padding: 3px 7px; border-radius: var(--radius-pill); background: var(--brand-soft); color: var(--brand);
+  font-size: 9px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap;
+}
+.session-peek-outcome .prose { max-height: 245px; background: color-mix(in oklab, var(--surface-2) 72%, transparent); }
+.session-peek-empty { margin: 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
+.session-peek-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.session-peek-metric {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "label value" "note value";
+  align-items: center; gap: 1px 12px; min-width: 0; padding: 10px 11px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.session-peek-metric > span { grid-area: label; color: var(--muted); font-size: var(--text-2xs); font-weight: 650; }
+.session-peek-metric > strong {
+  grid-area: value; color: var(--ink); font-family: var(--font-display); font-size: var(--text-lg); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.session-peek-metric > small { grid-area: note; overflow: hidden; color: var(--faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.session-peek-footer {
+  display: flex; align-items: center; gap: 6px 12px; flex-wrap: wrap; padding-top: 12px;
+  border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-2xs); font-variant-numeric: tabular-nums;
+}
+.session-peek-footer > span:not(:last-child)::before { content: ""; display: inline-block; width: 4px; height: 4px; margin-right: 6px; border-radius: 50%; background: var(--border-strong); vertical-align: 2px; }
+.session-peek-footer .session-peek-id { margin-left: auto; color: var(--faint); font-family: var(--font-mono); }
+
+/* Full session detail: one compact identity band, review summary, then the
+   execution trace beside a sticky inspector. */
+.session-page { min-width: 0; }
+.session-crumb { margin-bottom: 10px; }
+.session-detail-hero {
+  position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  margin-bottom: 16px; padding: 18px 20px; border: 1px solid color-mix(in oklab, var(--brand) 23%, var(--border));
+  border-radius: var(--radius-lg); background:
+    radial-gradient(circle at 88% 120%, color-mix(in oklab, var(--brand) 11%, transparent) 0, transparent 34%),
+    linear-gradient(135deg, color-mix(in oklab, var(--brand) 6%, var(--surface)), var(--surface) 56%);
+  box-shadow: var(--shadow-sm);
+}
+.session-detail-identity { display: flex; align-items: flex-start; gap: 14px; min-width: 0; }
+.session-detail-tile { width: 42px; height: 42px; flex: none; border-radius: 12px; color: var(--brand); background: var(--brand-soft); }
+.session-detail-tile .ico { width: 19px; height: 19px; }
+.session-detail-heading { min-width: 0; }
+.session-detail-eyebrow {
+  display: block; margin-bottom: 3px; color: var(--brand); font-size: 9px; font-weight: 750;
+  letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+.session-detail-title-row { display: flex; align-items: center; gap: 7px; min-width: 0; flex-wrap: wrap; }
+.session-detail-title-row h1 {
+  overflow: hidden; margin: 0 3px 0 0; color: var(--ink); font-family: var(--font-mono); font-size: var(--text-xl);
+  font-weight: 650; letter-spacing: -.025em; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap;
+}
+.session-detail-facts { display: flex; align-items: center; gap: 5px 14px; min-width: 0; flex-wrap: wrap; margin-top: 8px; color: var(--muted); font-size: var(--text-xs); }
+.session-detail-facts > span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.session-detail-facts .ico { width: 12px; height: 12px; color: var(--brand); flex: none; }
+.session-detail-facts .mono { font-size: var(--text-2xs); }
+.session-detail-star { align-self: flex-start; }
+.session-detail-star button.star { width: 30px; height: 30px; border: 1px solid var(--border); background: var(--surface-2); }
+
+.session-review-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(330px, .46fr); gap: 16px; margin-bottom: 16px; }
+.session-review-grid > .card, .session-workspace .card { border-radius: var(--radius-lg); }
+.session-outcome-card, .session-scorecard, .session-timeline-card, .session-inspector > .card { padding: 19px; }
+.session-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 13px; }
+.session-card-head > div { min-width: 0; }
+.card .session-card-head h2 {
+  margin: 1px 0 0; color: var(--ink); font-family: var(--font-display); font-size: var(--text-lg);
+  font-weight: 650; letter-spacing: var(--tracking-tight); line-height: 1.25; text-transform: none;
+}
+.session-card-head p { margin: 4px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.45; }
+.session-card-eyebrow {
+  color: var(--brand); font-size: 9px; font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase;
+}
+.session-review-cue, .session-card-count {
+  display: inline-flex; align-items: center; min-height: 23px; padding: 3px 8px; border-radius: var(--radius-pill);
+  background: var(--brand-soft); color: var(--brand); font-size: var(--text-2xs); font-weight: 650; white-space: nowrap;
+}
+.session-findings { max-height: 460px; padding: 15px 17px; background: var(--surface-2); font-size: var(--text-sm); line-height: 1.7; }
+.session-outcome-empty, .session-timeline-empty {
+  display: flex; align-items: flex-start; gap: 12px; min-height: 104px; padding: 16px;
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface-2);
+}
+.session-outcome-empty > span, .session-timeline-empty > span {
+  display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; flex: none;
+  border-radius: 10px; background: var(--brand-soft); color: var(--brand);
+}
+.session-outcome-empty .ico, .session-timeline-empty .ico { width: 16px; height: 16px; }
+.session-outcome-empty strong, .session-timeline-empty strong { display: block; color: var(--ink-2); font-size: var(--text-sm); }
+.session-outcome-empty p, .session-timeline-empty p { max-width: 52ch; margin: 4px 0 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+.session-review-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.session-review-metric {
+  display: flex; flex-direction: column; align-items: flex-start; min-width: 0; padding: 10px 11px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.session-review-metric > span { color: var(--muted); font-size: var(--text-2xs); font-weight: 650; }
+.session-review-metric > strong {
+  margin-top: 5px; color: var(--ink); font-family: var(--font-display); font-size: var(--text-xl); line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.session-review-metric > small { width: 100%; overflow: hidden; margin-top: 4px; color: var(--faint); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+
+.session-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.session-primary { min-width: 0; }
+.session-inspector { position: sticky; top: 18px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.session-timeline-head { align-items: center; }
+.session-timeline-card .ix-volume { background: var(--surface-2); }
+.session-timeline-controls { margin-bottom: 14px; }
+.session-timeline-controls .ix-filters { flex-wrap: wrap; }
+.session-timeline-card .ix-feed { gap: 7px; }
+.session-timeline-empty { min-height: 150px; align-items: center; }
+
+.session-work-section + .session-work-section { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--border); }
+.session-work-section h3 {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 7px;
+  color: var(--muted); font-size: var(--text-2xs); font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.session-work-section h3 span { color: var(--faint); font-weight: 550; font-variant-numeric: tabular-nums; }
+.session-entity-list { display: flex; flex-direction: column; }
+.session-entity-list a {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 8px; min-width: 0;
+  padding: 7px 0; border-bottom: 1px solid var(--border); color: var(--ink-2); font-size: var(--text-xs);
+}
+.session-entity-list a:first-child { padding-top: 1px; }
+.session-entity-list a:last-child { padding-bottom: 0; border-bottom: 0; }
+.session-entity-list a:hover { color: var(--brand); text-decoration: none; }
+.session-entity-list a > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-entity-list a > small { max-width: 116px; overflow: hidden; color: var(--faint); font-family: var(--font-mono); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.session-inspector-empty { color: var(--muted); font-size: var(--text-xs); font-style: italic; line-height: 1.5; }
+
+.session-meta-list { display: flex; flex-direction: column; gap: 0; margin: 0; }
+.session-meta-list > div {
+  display: grid; grid-template-columns: 72px minmax(0, 1fr); align-items: baseline; gap: 9px;
+  padding: 6px 0; border-bottom: 1px solid var(--border); font-size: var(--text-xs);
+}
+.session-meta-list > div:last-child { border-bottom: 0; padding-bottom: 0; }
+.session-meta-list dt { margin: 0; color: var(--muted); }
+.session-meta-list dd { min-width: 0; margin: 0; color: var(--ink-2); text-align: left; font-variant-numeric: tabular-nums; word-break: break-word; }
+.session-meta-list dd.mono { font-family: var(--font-mono); font-size: var(--text-2xs); }
+.session-meta-list dd .copy-btn { margin-left: 3px; }
+.session-token-total { color: var(--brand); font-family: var(--font-display); font-size: var(--text-xl); font-variant-numeric: tabular-nums; }
+.session-token-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.session-token-grid > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 7px 8px; border-radius: var(--radius-xs); background: var(--surface-2); }
+.session-token-grid span { color: var(--muted); font-size: 9px; }
+.session-token-grid strong { color: var(--ink-2); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 1120px) {
+  .session-review-grid { grid-template-columns: minmax(0, 1fr) 310px; }
+  .session-workspace { grid-template-columns: minmax(0, 1fr) 310px; }
+}
+
+@media (max-width: 920px) {
+  .session-review-grid, .session-workspace { grid-template-columns: 1fr; }
+  .session-inspector { position: static; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
+  .session-work-card { grid-row: span 2; }
+}
+
+@media (max-width: 640px) {
+  .session-detail-hero { align-items: flex-start; padding: 15px; }
+  .session-detail-identity { gap: 10px; }
+  .session-detail-tile { width: 36px; height: 36px; border-radius: 10px; }
+  .session-detail-title-row h1 { width: 100%; font-size: var(--text-lg); white-space: normal; word-break: break-word; }
+  .session-detail-star { position: absolute; top: 13px; right: 13px; }
+  .session-review-grid { gap: 12px; }
+  .session-outcome-card, .session-scorecard, .session-timeline-card, .session-inspector > .card { padding: 15px; }
+  .session-inspector { display: flex; }
+  .session-timeline-head { align-items: flex-start; }
+  .session-card-count { margin-top: 2px; }
+  .session-peek-topline { align-items: flex-start; }
+  .session-peek-facts { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 430px) {
+  .session-review-metrics, .session-peek-metrics { grid-template-columns: 1fr; }
+  .session-peek-footer .session-peek-id { width: 100%; margin-left: 0; padding-top: 4px; }
+}

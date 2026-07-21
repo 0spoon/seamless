@@ -1,142 +1,176 @@
 {{define "content"}}
 {{with .Data}}
-<div class="crumb"><a href="/console/sessions">Sessions</a> <span class="faint">/</span> <b>{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</b> {{copyBtn .Session.ID}}</div>
+<div class="session-page">
+  <div class="crumb session-crumb"><a href="/console/sessions">Sessions</a> <span class="faint">/</span> <b>{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</b> {{copyBtn .Session.ID}}</div>
 
-<div class="detail-head">
-  <div class="title-row">
-    <span class="tile">{{icon "terminal"}}</span>
-    <h1 style="font-family:var(--font-mono);font-size:var(--text-xl)">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h1>
-    {{if eq .Session.Status "active"}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">completed</span>{{end}}
-    {{if .Session.Ambient}}<span class="kind">ambient</span>{{end}}
-    {{agentPill .Harness .Session.Model}}
-    <span class="chip-parent">{{icon "git-branch"}}{{if .Session.ProjectSlug}}{{.Session.ProjectSlug}}{{else}}global{{end}}</span>
-    <form class="star-form" method="post" action="/console/favorites/session/{{.Session.ID}}">
+  <header class="session-detail-hero">
+    <div class="session-detail-identity">
+      <span class="tile session-detail-tile">{{icon "terminal"}}</span>
+      <div class="session-detail-heading">
+        <span class="session-detail-eyebrow">Agent workspace</span>
+        <div class="session-detail-title-row">
+          <h1>{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}</h1>
+          {{if eq .Session.Status "active"}}
+            {{if .Live}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="badge warn">idle</span>{{end}}
+          {{else if eq .Session.Status "expired"}}
+            <span class="badge">expired</span>
+          {{else}}
+            <span class="badge accent">completed</span>
+          {{end}}
+          {{if .Session.Ambient}}<span class="kind faint">ambient</span>{{end}}
+          {{agentPill .Harness .Session.Model}}
+        </div>
+        <div class="session-detail-facts">
+          <span>{{icon "folder-tree"}}{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</span>
+          <span>{{icon "timer"}}{{if .Duration}}{{.Duration}}{{else}}duration unavailable{{end}}</span>
+          <span>updated <time title="{{ts .Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</time></span>
+          {{if .Session.Source}}<span class="mono">{{.Session.Source}}</span>{{end}}
+        </div>
+      </div>
+    </div>
+    <form class="star-form session-detail-star" method="post" action="/console/favorites/session/{{.Session.ID}}">
       <input type="hidden" name="favorite" value="{{if .Session.Favorite}}0{{else}}1{{end}}">
       <input type="hidden" name="next" value="/console/sessions/{{.Session.ID}}">
       <button class="star{{if .Session.Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Session.Favorite}}true{{else}}false{{end}}" title="{{if .Session.Favorite}}Unstar{{else}}Star{{end}} this session">{{icon "star"}}</button>
     </form>
-  </div>
-</div>
+  </header>
 
-<div class="drail">
-  <div class="dcol">
-    <div class="card">
-      <h2>Findings</h2>
-      {{if .Findings}}<div class="prose">{{.FindingsHTML}}</div>{{else}}<div class="empty">No findings recorded yet</div>{{end}}
-    </div>
+  <section class="session-review-grid" aria-label="Session review">
+    <article class="card session-outcome-card">
+      <header class="session-card-head">
+        <div><span class="session-card-eyebrow">Session outcome</span><h2>{{if .Findings}}Findings{{else if eq .Session.Status "active"}}Work in progress{{else}}No recorded findings{{end}}</h2></div>
+        {{if .Findings}}<span class="session-review-cue">Start here</span>{{end}}
+      </header>
+      {{if .Findings}}
+        <div class="prose session-findings">{{.FindingsHTML}}</div>
+      {{else if eq .Session.Status "active"}}
+        <div class="session-outcome-empty"><span>{{icon "activity"}}</span><div><strong>The agent is still working</strong><p>Findings will appear as they are recorded or harvested at session end.</p></div></div>
+      {{else}}
+        <div class="session-outcome-empty"><span>{{icon "file-text"}}</span><div><strong>No reviewable summary was captured</strong><p>Use the activity timeline below to reconstruct what happened.</p></div></div>
+      {{end}}
+    </article>
 
-    <!-- data-live-skip: the volume histogram is JS-drawn, and the kind filter +
-         row expand/clamp state are client-owned -- a live morph would clobber
-         all three. This card stays a page-load snapshot; the rest of the page
-         (findings, activity counts, claims) refreshes live. -->
-    <div class="card" data-live-skip>
-      <h2>Timeline <span class="h2-meta">{{len .Interactions}} interaction{{if ne (len .Interactions) 1}}s{{end}}</span></h2>
-      {{if .Interactions}}
-      <div class="ix-volume empty" id="ix-svol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
-      <div class="ix-controls">
-        <div class="ix-filters" id="ix-skinds">
-          <button class="ix-seg active" type="button" data-cat="all">All <span class="n">{{len .Interactions}}</span></button>
-          <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
-          <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
-          <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
-          <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
-          <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
-        </div>
+    <aside class="card session-scorecard">
+      <header class="session-card-head"><div><span class="session-card-eyebrow">At a glance</span><h2>Review signals</h2></div></header>
+      <div class="session-review-metrics">
+        <div class="session-review-metric"><span>Interactions</span><strong>{{len .Interactions}}</strong><small>{{.ToolCalls}} tool call{{if ne .ToolCalls 1}}s{{end}}</small></div>
+        <div class="session-review-metric"><span>Context used</span><strong>{{.Injected}}</strong><small>{{if .Injected}}{{.ReadBack}} read back &middot; {{pct .ReadBack .Injected}}%{{else}}none injected{{end}}</small></div>
+        <div class="session-review-metric"><span>Memory activity</span><strong>{{add .Reads .Writes}}</strong><small>{{.Writes}} writes &middot; {{.Reads}} reads</small></div>
+        <div class="session-review-metric"><span>Model tokens</span><strong>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Total}}{{else}}&mdash;{{end}}</strong><small>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Output}} output{{else}}not harvested{{end}}</small></div>
       </div>
-      <div class="ix-feed" id="ix-sfeed">
-        {{range .Interactions}}
-        <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
-          <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when" title="{{ts .TS}}">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .Ambient}}<span class="badge">ambient</span>{{end}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .DurationMS}}<span class="ix-meta">{{.DurationMS}}ms</span>{{else if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
-          <div class="ix-body">
-            {{if or .DurationMS .Items .IsError}}
-            <div class="ix-highlights">
-              {{if .DurationMS}}<span class="ix-chip"><span class="ix-chip-k">took</span><span class="ix-chip-v">{{.DurationMS}}ms</span></span>{{end}}
-              {{if .Items}}<span class="ix-chip"><span class="ix-chip-k">surfaced</span><span class="ix-chip-v">{{.Items}}</span></span>{{end}}
-              {{if .IsError}}<span class="ix-chip danger"><span class="ix-chip-k">status</span><span class="ix-chip-v">error</span></span>{{end}}
-            </div>
-            {{end}}
-            {{if .Request}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "subagent.captured"}}Prompt{{else}}Request{{end}}">{{.Request}}</pre>{{end}}
-            {{if .Response}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "retrieval.injected"}}Injected content{{else if hasPrefix .Kind "plan."}}Plan content{{else if eq .Kind "subagent.captured"}}Report{{else}}Response{{end}}">{{.Response}}</pre>{{end}}
-            <div class="ix-links"><a href="/console/events/{{.ID}}" data-peek>event &rarr;</a></div>
+    </aside>
+  </section>
+
+  <div class="session-workspace">
+    <main class="session-primary">
+      <!-- data-live-skip: the volume histogram is JS-drawn, and the kind filter +
+           row expand/clamp state are client-owned -- a live morph would clobber
+           all three. This card stays a page-load snapshot; the review and
+           inspector cards continue to refresh live. -->
+      <section class="card session-timeline-card" data-live-skip>
+        <header class="session-card-head session-timeline-head">
+          <div><span class="session-card-eyebrow">Trace</span><h2>Activity timeline</h2><p>Inspect calls, injected context, plans, and errors in execution order.</p></div>
+          <span class="session-card-count">{{len .Interactions}} interaction{{if ne (len .Interactions) 1}}s{{end}}</span>
+        </header>
+        {{if .Interactions}}
+        <div class="ix-volume empty" id="ix-svol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
+        <div class="ix-controls session-timeline-controls">
+          <div class="ix-filters" id="ix-skinds">
+            <button class="ix-seg active" type="button" data-cat="all">All <span class="n">{{len .Interactions}}</span></button>
+            <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
+            <button class="ix-seg" type="button" data-cat="tool"><span class="dot tool"></span>Tools</button>
+            <button class="ix-seg" type="button" data-cat="inject"><span class="dot inject"></span>Injections</button>
+            <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
+            <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
           </div>
-        </details>
-        {{end}}
-      </div>
-      {{else}}<div class="empty">No interactions recorded for this session</div>{{end}}
-    </div>
-  </div>
-
-  <div class="dside">
-    <div class="card">
-      <h2>Session</h2>
-      <dl class="kv">
-        <dt>Status</dt><dd>{{if eq .Session.Status "active"}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="kind">completed</span>{{end}}</dd>
-        <dt>Project</dt><dd class="mono">{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd>
-        <dt>Source</dt><dd class="mono">{{if .Session.Source}}{{.Session.Source}}{{else}}&mdash;{{end}}</dd>
-        <dt title="LLM powering this session's agent, as the provider names it">Model</dt><dd class="mono">{{if .Session.Model}}{{.Session.Model}}{{else}}&mdash;{{end}}</dd>
-        <dt>Ambient</dt><dd class="muted">{{if .Session.Ambient}}yes{{else}}no{{end}}</dd>
-        <dt>Started</dt><dd title="{{ts .Session.CreatedAt}}">{{ago .Session.CreatedAt}}</dd>
-        <dt>Updated</dt><dd title="{{ts .Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd>
-        <dt>CWD</dt><dd class="mono">{{if .Session.CWD}}{{.Session.CWD}}{{copyBtn .Session.CWD}}{{else}}&mdash;{{end}}</dd>
-        <dt>Agent</dt><dd class="mono">{{if .Session.ExternalSessionID}}{{shortID .Session.ExternalSessionID}}{{copyBtn .Session.ExternalSessionID}}{{else}}&mdash;{{end}}</dd>
-      </dl>
-    </div>
-
-    <div class="card">
-      <h2>Activity</h2>
-      <dl class="kv">
-        <dt>Tool calls</dt><dd>{{.ToolCalls}}</dd>
-        <dt>Memory writes</dt><dd>{{.Writes}}</dd>
-        <dt>Memory reads</dt><dd>{{.Reads}}</dd>
-        <dt title="Times a memory was injected into this session's context (briefings + recall hits).">Injected</dt><dd>{{.Injected}}</dd>
-        <dt title="Memories this session re-read after they were injected -- the read-after-inject signal.">Read back</dt><dd>{{.ReadBack}}{{if .Injected}} <span class="muted">&middot; {{pct .ReadBack .Injected}}%</span>{{end}}</dd>
-      </dl>
-    </div>
-
-    {{with .Session.Tokens}}{{if .Total}}
-    <div class="card">
-      <h2 title="Real model token consumption harvested from the agent's transcript -- the actual burn, not the ~4 bytes/token injection estimate.">Model tokens</h2>
-      <dl class="kv">
-        <dt title="Fresh (uncached) input the model processed.">Input</dt><dd>{{compactNum .Input}}</dd>
-        <dt title="Input served from the prompt cache (cache read).">Cached input</dt><dd>{{compactNum .Cached}}</dd>
-        {{if .CacheCreation}}<dt title="Input written to the prompt cache (Claude Code only).">Cache write</dt><dd>{{compactNum .CacheCreation}}</dd>{{end}}
-        <dt title="Tokens the model produced.">Output</dt><dd>{{compactNum .Output}}</dd>
-        <dt>Total</dt><dd><b>{{compactNum .Total}}</b></dd>
-      </dl>
-    </div>
-    {{end}}{{end}}
-
-    <div class="card">
-      <h2>Claimed task{{if ne (len .ClaimedTasks) 1}}s{{end}}{{if .ClaimedTasks}} <span class="h2-meta">{{len .ClaimedTasks}}</span>{{end}}</h2>
-      {{if .ClaimedTasks}}
-      <div style="display:flex;flex-direction:column;gap:12px">
-        {{range .ClaimedTasks}}
-        <div id="{{.ID}}">
-          <a href="/console/tasks/{{.ID}}" data-peek>{{.Title}}</a>
-          <div class="muted" style="font-size:var(--text-2xs);margin-top:3px">{{if .PlanSlug}}plan:{{.PlanSlug}}{{end}}{{if and .PlanSlug .LeaseLeft}} &middot; {{end}}{{if .LeaseLeft}}<span class="claim-sm">{{icon "timer"}}{{.LeaseLeft}} left</span>{{end}}</div>
         </div>
+        <div class="ix-feed" id="ix-sfeed">
+          {{range .Interactions}}
+          <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
+            <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when" title="{{ts .TS}}">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .Ambient}}<span class="badge">ambient</span>{{end}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .DurationMS}}<span class="ix-meta">{{.DurationMS}}ms</span>{{else if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
+            <div class="ix-body">
+              {{if or .DurationMS .Items .IsError}}
+              <div class="ix-highlights">
+                {{if .DurationMS}}<span class="ix-chip"><span class="ix-chip-k">took</span><span class="ix-chip-v">{{.DurationMS}}ms</span></span>{{end}}
+                {{if .Items}}<span class="ix-chip"><span class="ix-chip-k">surfaced</span><span class="ix-chip-v">{{.Items}}</span></span>{{end}}
+                {{if .IsError}}<span class="ix-chip danger"><span class="ix-chip-k">status</span><span class="ix-chip-v">error</span></span>{{end}}
+              </div>
+              {{end}}
+              {{if .Request}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "subagent.captured"}}Prompt{{else}}Request{{end}}">{{.Request}}</pre>{{end}}
+              {{if .Response}}<pre class="ix-raw" data-ix-title="{{if eq .Kind "retrieval.injected"}}Injected content{{else if hasPrefix .Kind "plan."}}Plan content{{else if eq .Kind "subagent.captured"}}Report{{else}}Response{{end}}">{{.Response}}</pre>{{end}}
+              <div class="ix-links"><a href="/console/events/{{.ID}}" data-peek>event &rarr;</a></div>
+            </div>
+          </details>
+          {{end}}
+        </div>
+        {{else}}
+          <div class="session-timeline-empty"><span>{{icon "activity"}}</span><div><strong>No interactions recorded</strong><p>This session has no captured calls or lifecycle events to review.</p></div></div>
         {{end}}
-      </div>
-      {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">No task claimed by this session.</div>{{end}}
-    </div>
+      </section>
+    </main>
 
-    <div class="card">
-      <h2>Memories written <span class="h2-meta">{{len .Memories}}</span></h2>
-      {{if .Memories}}
-      <div class="rail-list">
-        {{range .Memories}}<div id="{{.ID}}" class="row"><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="kind">{{.Kind}}</span></div>{{end}}
-      </div>
-      {{else}}<div class="muted" style="font-size:var(--text-sm);font-style:italic">Nothing durable yet &mdash; findings are harvested on session end.</div>{{end}}
-    </div>
+    <aside class="session-inspector" aria-label="Session inspector">
+      <section class="card session-work-card">
+        <header class="session-card-head"><div><span class="session-card-eyebrow">Outputs</span><h2>Work products</h2></div></header>
+        {{if or .ClaimedTasks .Memories .Trials}}
+          {{if .ClaimedTasks}}
+          <div class="session-work-section">
+            <h3>Claimed tasks <span>{{len .ClaimedTasks}}</span></h3>
+            <div class="session-entity-list">
+              {{range .ClaimedTasks}}
+              <a id="{{.ID}}" href="/console/tasks/{{.ID}}" data-peek><span>{{.Title}}</span><small>{{if .PlanSlug}}plan:{{.PlanSlug}}{{end}}{{if and .PlanSlug .LeaseLeft}} &middot; {{end}}{{if .LeaseLeft}}{{.LeaseLeft}}{{end}}</small></a>
+              {{end}}
+            </div>
+          </div>
+          {{end}}
+          {{if .Memories}}
+          <div class="session-work-section">
+            <h3>Memories written <span>{{len .Memories}}</span></h3>
+            <div class="session-entity-list">
+              {{range .Memories}}<a id="{{.ID}}" href="/console/memories/{{.ID}}" data-peek><span>{{.Name}}</span><small>{{.Kind}}</small></a>{{end}}
+            </div>
+          </div>
+          {{end}}
+          {{if .Trials}}
+          <div class="session-work-section">
+            <h3>Trials recorded <span>{{len .Trials}}</span></h3>
+            <div class="session-entity-list">
+              {{range .Trials}}<a id="{{.ID}}" href="/console/trials/{{.ID}}"><span>{{.Title}}</span><small>{{.Lab}}{{if .Outcome}} &middot; {{.Outcome}}{{end}}</small></a>{{end}}
+            </div>
+          </div>
+          {{end}}
+        {{else}}
+          <div class="session-inspector-empty">Nothing durable yet. Findings and memories are usually harvested when the session ends.</div>
+        {{end}}
+      </section>
 
-    {{if .Trials}}
-    <div class="card">
-      <h2>Trials recorded <span class="h2-meta">{{len .Trials}}</span></h2>
-      <div class="rail-list">
-        {{range .Trials}}<div id="{{.ID}}" class="row"><a href="/console/trials/{{.ID}}">{{.Title}}</a><span class="kind">{{.Lab}}</span>{{if .Outcome}}<span class="badge {{outcomeTone .Outcome}}">{{.Outcome}}</span>{{end}}</div>{{end}}
-      </div>
-    </div>
-    {{end}}
+      <section class="card session-meta-card">
+        <header class="session-card-head"><div><span class="session-card-eyebrow">Provenance</span><h2>Session details</h2></div></header>
+        <dl class="session-meta-list">
+          <div><dt>Project</dt><dd class="mono">{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd></div>
+          <div><dt>Source</dt><dd class="mono">{{if .Session.Source}}{{.Session.Source}}{{else}}&mdash;{{end}}</dd></div>
+          <div><dt title="LLM powering this session's agent, as the provider names it">Model</dt><dd class="mono">{{if .Session.Model}}{{.Session.Model}}{{else}}&mdash;{{end}}</dd></div>
+          <div><dt>Mode</dt><dd>{{if .Session.Ambient}}ambient{{else}}explicit{{end}}</dd></div>
+          <div><dt>Duration</dt><dd>{{if .Duration}}{{.Duration}}{{else}}&mdash;{{end}}</dd></div>
+          <div><dt>Started</dt><dd title="{{ts .Session.CreatedAt}}">{{ago .Session.CreatedAt}}</dd></div>
+          <div><dt>Updated</dt><dd title="{{ts .Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd></div>
+          <div class="session-meta-wide"><dt>CWD</dt><dd class="mono">{{if .Session.CWD}}{{.Session.CWD}}{{copyBtn .Session.CWD}}{{else}}&mdash;{{end}}</dd></div>
+          <div><dt>Agent</dt><dd class="mono">{{if .Session.ExternalSessionID}}{{shortID .Session.ExternalSessionID}}{{copyBtn .Session.ExternalSessionID}}{{else}}&mdash;{{end}}</dd></div>
+        </dl>
+      </section>
+
+      {{with .Session.Tokens}}{{if .Total}}
+      <section class="card session-token-card">
+        <header class="session-card-head"><div><span class="session-card-eyebrow">Consumption</span><h2 title="Real model token consumption harvested from the agent transcript">Model tokens</h2></div><strong class="session-token-total">{{compactNum .Total}}</strong></header>
+        <div class="session-token-grid">
+          <div><span>Input</span><strong>{{compactNum .Input}}</strong></div>
+          <div><span>Cached</span><strong>{{compactNum .Cached}}</strong></div>
+          {{if .CacheCreation}}<div><span>Cache write</span><strong>{{compactNum .CacheCreation}}</strong></div>{{end}}
+          <div><span>Output</span><strong>{{compactNum .Output}}</strong></div>
+        </div>
+      </section>
+      {{end}}{{end}}
+    </aside>
   </div>
 </div>
 {{end}}

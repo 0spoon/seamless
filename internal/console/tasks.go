@@ -73,7 +73,11 @@ func (s *Service) tasksPage(ctx context.Context) (tasksData, error) {
 
 	closed := append(done, dropped...)
 	sort.Slice(closed, func(i, j int) bool {
-		return closedBefore(closed[j], closed[i]) // newest-closed first
+		a, b := closedAt(closed[i]), closedAt(closed[j])
+		if !a.Equal(b) {
+			return a.After(b)
+		}
+		return closed[i].ID > closed[j].ID
 	})
 	closedMore := 0
 	if len(closed) > closedLimit {
@@ -88,13 +92,11 @@ func (s *Service) tasksPage(ctx context.Context) (tasksData, error) {
 		Closed:     taskRows(closed),
 		ClosedMore: closedMore,
 	}
-	// Starred tasks float to the top of their status bucket (stable, so each
-	// bucket's own order holds within the partitions). A no-op until something
-	// is starred -- the buckets have no user-selectable sort to interact with.
-	for _, bucket := range [][]taskRow{data.Ready, data.InProgress, data.Blocked, data.Closed} {
-		sort.SliceStable(bucket, func(i, j int) bool {
-			return bucket[i].Favorite && !bucket[j].Favorite
-		})
+	// The agent-facing ready/blocked queries are deliberately oldest-first for
+	// fair claiming. The console is a review surface: within each open-state rail
+	// group, match the timestamp shown on the row and present newest-created first.
+	for _, bucket := range [][]taskRow{data.Ready, data.InProgress, data.Blocked} {
+		sortTaskRowsNewest(bucket)
 	}
 	return data, nil
 }
@@ -176,17 +178,24 @@ func taskDetailJSON(t core.Task) map[string]any {
 	}
 }
 
-// closedBefore reports whether a closed before b (by ClosedAt, falling back to
-// UpdatedAt so tasks with a missing close time still order sensibly).
-func closedBefore(a, b core.Task) bool {
-	return closedAt(a).Before(closedAt(b))
-}
-
+// closedAt returns the rail timestamp for a terminal task. Legacy rows without
+// closed_at fall back to their final update rather than sorting at time zero.
 func closedAt(t core.Task) time.Time {
 	if t.ClosedAt != nil {
 		return *t.ClosedAt
 	}
 	return t.UpdatedAt
+}
+
+// sortTaskRowsNewest orders an open-state rail group by the creation timestamp
+// displayed on each row. ID is the deterministic newest-first tie-breaker.
+func sortTaskRowsNewest(rows []taskRow) {
+	sort.Slice(rows, func(i, j int) bool {
+		if !rows[i].Created.Equal(rows[j].Created) {
+			return rows[i].Created.After(rows[j].Created)
+		}
+		return rows[i].ID > rows[j].ID
+	})
 }
 
 func taskRows(tasks []core.Task) []taskRow {

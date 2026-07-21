@@ -56,6 +56,53 @@ func TestTasksPage_ReadyBlockedClosed(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "ship the widget")
 }
 
+func TestTasksPage_RailGroupsOrderNewestFirst(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	base := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
+
+	create := func(title string, status core.TaskStatus, created, updated time.Time, closed *time.Time, deps ...string) string {
+		t.Helper()
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: id, ProjectSlug: "seamless", Title: title, Status: status,
+			DependsOn: deps, CreatedAt: created, UpdatedAt: updated, ClosedAt: closed,
+		}))
+		return id
+	}
+
+	// Give every older row a star. Stars remain visible metadata, but must not
+	// displace a newer row when the rail has no explicit alternate sort mode.
+	oldInProgress := create("old in progress", core.TaskInProgress, base, base.Add(8*time.Hour), nil)
+	create("new in progress", core.TaskInProgress, base.Add(time.Hour), base.Add(time.Hour), nil)
+	oldReady := create("old ready", core.TaskOpen, base, base, nil)
+	create("new ready", core.TaskOpen, base.Add(time.Hour), base.Add(time.Hour), nil)
+	oldBlocked := create("old blocked", core.TaskOpen, base, base, nil, oldInProgress)
+	create("new blocked", core.TaskOpen, base.Add(time.Hour), base.Add(time.Hour), nil, oldInProgress)
+	closedOld, closedNew := base.Add(2*time.Hour), base.Add(3*time.Hour)
+	oldClosed := create("old closed", core.TaskDone, base, closedOld, &closedOld)
+	create("new closed", core.TaskDone, base.Add(time.Hour), closedNew, &closedNew)
+	for _, id := range []string{oldInProgress, oldReady, oldBlocked, oldClosed} {
+		require.NoError(t, store.SetTaskFavorite(ctx, db, id, true))
+	}
+
+	var data tasksData
+	getJSON(t, mux, "/console/tasks?format=json", &data)
+	titles := func(rows []taskRow) []string {
+		out := make([]string, len(rows))
+		for i := range rows {
+			out[i] = rows[i].Title
+		}
+		return out
+	}
+	require.Equal(t, []string{"new in progress", "old in progress"}, titles(data.InProgress))
+	require.Equal(t, []string{"new ready", "old ready"}, titles(data.Ready))
+	require.Equal(t, []string{"new blocked", "old blocked"}, titles(data.Blocked))
+	require.Equal(t, []string{"new closed", "old closed"}, titles(data.Closed))
+	require.True(t, data.Ready[1].Favorite, "the older star remains visible without changing recency order")
+}
+
 func ptrStatus(s core.TaskStatus) *core.TaskStatus { return &s }
 
 // TestTaskRelease_OwnerOverride covers the console release-lock button: the peek

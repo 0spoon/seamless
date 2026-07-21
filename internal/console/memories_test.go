@@ -98,3 +98,40 @@ func TestMemoriesPage_GroupsAndArchive(t *testing.T) {
 	require.Contains(t, page.Body.String(), "This memory is archived.")
 	require.Contains(t, page.Body.String(), "It no longer enters agent context.")
 }
+
+func TestMemoriesPage_DefaultSortIsRecentWithinKind(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	base := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
+	write := func(name string, updated time.Time) {
+		t.Helper()
+		id, err := core.NewID()
+		require.NoError(t, err)
+		_, err = mgr.WriteMemory(context.Background(), core.Memory{
+			ID: id, Kind: core.KindGotcha, Name: name, Description: name,
+			Project: "seamless", Body: "body", Created: updated,
+			Updated: updated, ValidFrom: updated,
+		})
+		require.NoError(t, err)
+	}
+
+	write("alpha-old", base)
+	write("zeta-new", base.Add(time.Hour))
+
+	var recent memoriesData
+	getJSON(t, mux, "/console/memories?format=json", &recent)
+	require.Equal(t, "recent", recent.Sort)
+	require.Len(t, recent.Groups, 1)
+	require.Len(t, recent.Groups[0].Kinds, 1)
+	require.Equal(t, []string{"zeta-new", "alpha-old"}, []string{
+		recent.Groups[0].Kinds[0].Memories[0].Name,
+		recent.Groups[0].Kinds[0].Memories[1].Name,
+	})
+
+	// An explicit alternate mode still overrides the default.
+	var byName memoriesData
+	getJSON(t, mux, "/console/memories?sort=name&format=json", &byName)
+	require.Equal(t, []string{"alpha-old", "zeta-new"}, []string{
+		byName.Groups[0].Kinds[0].Memories[0].Name,
+		byName.Groups[0].Kinds[0].Memories[1].Name,
+	})
+}

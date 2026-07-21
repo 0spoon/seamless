@@ -83,6 +83,32 @@ func TestPlans_ListAndDetail(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, do(mux, req).Code)
 }
 
+func TestPlansPage_PhaseRowsOrderNewestFirst(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	base := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
+	write := func(slug, title string, updated time.Time, favorite bool) {
+		t.Helper()
+		id, err := core.NewID()
+		require.NoError(t, err)
+		_, err = mgr.WriteNote(context.Background(), core.Note{
+			ID: id, Slug: "narrative-" + slug, Title: title, Project: "demo",
+			Body: "# " + title, Tags: []string{plans.SlugTag(slug), "created-by:agent"},
+			Favorite: favorite, Created: updated, Updated: updated,
+		})
+		require.NoError(t, err)
+	}
+
+	write("old-plan", "Old favorite plan", base, true)
+	write("new-plan", "New plan", base.Add(time.Hour), false)
+
+	var data plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &data)
+	require.Len(t, data.Rows, 2)
+	require.Equal(t, "new-plan", data.Rows[0].Slug)
+	require.Equal(t, "old-plan", data.Rows[1].Slug)
+	require.True(t, data.Rows[1].Favorite, "an older star stays marked without jumping ahead of newer activity")
+}
+
 // seedComposedPlan writes a plain plans-as-composition plan: a narrative note
 // tagged plan:<slug> (no cc-plan capture) plus a supporting note, in project demo.
 func seedComposedPlan(t *testing.T, mgr *files.Manager, slug string) core.Note {

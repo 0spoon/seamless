@@ -1,28 +1,71 @@
 {{define "peek-body"}}
-<article class="peek-entity">
-  <header class="peek-head">
-    <span class="badge {{if eq .Session.Status "active"}}ok{{end}}">{{.Session.Status}}</span>
-    {{if .Session.Ambient}}<span class="kind faint">ambient</span>{{end}}
-    {{agentPill .Harness .Session.Model}}
+<article class="peek-entity session-peek">
+  <header class="session-peek-topline">
+    <div class="session-peek-badges">
+      {{if eq .Session.Status "active"}}
+        {{if .Live}}<span class="badge ok"><span class="live-dot"></span>active</span>{{else}}<span class="badge warn">idle</span>{{end}}
+      {{else if eq .Session.Status "expired"}}
+        <span class="badge">expired</span>
+      {{else}}
+        <span class="badge accent">completed</span>
+      {{end}}
+      {{if .Session.Ambient}}<span class="kind faint">ambient</span>{{end}}
+      {{agentPill .Harness .Session.Model}}
+    </div>
+    <span class="session-peek-updated" title="{{ts .Session.UpdatedAt}}">updated {{ago .Session.UpdatedAt}}</span>
   </header>
-  <h2 class="peek-title">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}{{copyBtn .Session.ID}}</h2>
 
-  <dl class="peek-kv">
-    <dt>Project</dt><dd>{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd>
-    <dt>Source</dt><dd>{{.Session.Source}}</dd>
-    <dt>Injected</dt><dd>{{.Injected}}</dd>
-    <dt>Read back</dt><dd>{{.ReadBack}}</dd>
-    <dt>Tool calls</dt><dd>{{.ToolCalls}}</dd>
-    <dt>Writes / reads</dt><dd>{{.Writes}} / {{.Reads}}</dd>
-    <dt>Updated</dt><dd title="{{ts .Session.UpdatedAt}}">{{ago .Session.UpdatedAt}}</dd>
-  </dl>
+  <div class="session-peek-identity">
+    <h2 class="peek-title">{{if .Session.Name}}{{.Session.Name}}{{else}}{{shortID .Session.ID}}{{end}}{{copyBtn .Session.ID}}</h2>
+    <div class="session-peek-facts">
+      <span><small>Project</small><strong>{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</strong></span>
+      <span><small>Source</small><strong>{{if .Session.Source}}{{.Session.Source}}{{else}}&mdash;{{end}}</strong></span>
+      <span><small>Duration</small><strong>{{if .Duration}}{{.Duration}}{{else}}&mdash;{{end}}</strong></span>
+    </div>
+  </div>
 
-  {{if .Findings}}
-  <section class="peek-section">
-    <h3>Findings</h3>
-    <div class="prose">{{.FindingsHTML}}</div>
+  <section class="session-peek-outcome">
+    <div class="session-peek-section-head">
+      <div><span>Session outcome</span><h3>{{if .Findings}}Findings{{else if eq .Session.Status "active"}}Work in progress{{else}}No recorded findings{{end}}</h3></div>
+      {{if .Findings}}<span class="session-peek-signal">review first</span>{{end}}
+    </div>
+    {{if .Findings}}
+      <div class="prose">{{.FindingsHTML}}</div>
+    {{else if eq .Session.Status "active"}}
+      <p class="session-peek-empty">This run is still active. Findings will appear here as the agent records or harvests them.</p>
+    {{else}}
+      <p class="session-peek-empty">The session ended without a reviewable summary.</p>
+    {{end}}
   </section>
-  {{end}}
 
+  <section class="session-peek-metrics" aria-label="Session review metrics">
+    <div class="session-peek-metric">
+      <span>Interactions</span>
+      <strong>{{len .Interactions}}</strong>
+      <small>{{.ToolCalls}} tool call{{if ne .ToolCalls 1}}s{{end}}</small>
+    </div>
+    <div class="session-peek-metric">
+      <span>Context used</span>
+      <strong>{{.Injected}}</strong>
+      <small>{{if .Injected}}{{.ReadBack}} read back &middot; {{pct .ReadBack .Injected}}%{{else}}none injected{{end}}</small>
+    </div>
+    <div class="session-peek-metric">
+      <span>Durable output</span>
+      <strong>{{len .Memories}}</strong>
+      <small>{{.Writes}} write event{{if ne .Writes 1}}s{{end}}</small>
+    </div>
+    <div class="session-peek-metric">
+      <span>Model tokens</span>
+      <strong>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Total}}{{else}}&mdash;{{end}}</strong>
+      <small>{{if .Session.Tokens.Total}}{{compactNum .Session.Tokens.Output}} output{{else}}not harvested{{end}}</small>
+    </div>
+  </section>
+
+  <footer class="session-peek-footer">
+    <span>{{len .ClaimedTasks}} claimed task{{if ne (len .ClaimedTasks) 1}}s{{end}}</span>
+    <span>{{len .Memories}} memor{{if eq (len .Memories) 1}}y{{else}}ies{{end}}</span>
+    <span>{{len .Trials}} trial{{if ne (len .Trials) 1}}s{{end}}</span>
+    <span class="session-peek-id">{{shortID .Session.ID}}</span>
+  </footer>
 </article>
 {{end}}

@@ -63,6 +63,8 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	require.Equal(t, 1, detail.Injected)
 	require.Equal(t, 1, detail.ReadBack, "injected item was later read -> read-after-inject")
 	require.Len(t, detail.Timeline, 3)
+	require.False(t, detail.Live, "completed sessions are never live")
+	require.Equal(t, "1h", detail.Duration)
 
 	// HTML list renders
 	reqL := httptest.NewRequest(http.MethodGet, "/console/sessions", nil)
@@ -77,6 +79,24 @@ func TestSessionsPage_ListAndDetail(t *testing.T) {
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Contains(t, rr.Body.String(), "found the bug in the watcher")
+}
+
+func TestSessionDuration_UsesNowOnlyForActiveSessions(t *testing.T) {
+	start := time.Date(2026, time.July, 21, 10, 0, 0, 0, time.UTC)
+	now := start.Add(27*time.Hour + 42*time.Minute)
+
+	require.Equal(t, "1d 3h", sessionDuration(core.Session{
+		Status: core.SessionActive, CreatedAt: start, UpdatedAt: start.Add(time.Minute),
+	}, now), "an active duration runs through now, not its last heartbeat")
+	require.Equal(t, "1h 15m", sessionDuration(core.Session{
+		Status: core.SessionCompleted, CreatedAt: start, UpdatedAt: start.Add(75 * time.Minute),
+	}, now), "a terminal duration stops at the final update")
+	require.Equal(t, "<1m", sessionDuration(core.Session{
+		Status: core.SessionCompleted, CreatedAt: start, UpdatedAt: start.Add(20 * time.Second),
+	}, now))
+	require.Empty(t, sessionDuration(core.Session{
+		Status: core.SessionCompleted, CreatedAt: start, UpdatedAt: start.Add(-time.Minute),
+	}, now), "invalid stored chronology does not render a plausible duration")
 }
 
 // TestSessionsPage_LiveIdleExpired covers the liveness split the reaper feeds:

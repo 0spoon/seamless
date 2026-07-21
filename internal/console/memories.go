@@ -16,11 +16,11 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// memorySortKeys are the accepted ?sort values on the memories list. name is the
-// default (preserving the by-name order within each kind group); recent orders by
-// last-updated, reach by injection count, utility by the decayed demand score,
-// favorites floats starred rows first.
-var memorySortKeys = []string{"name", "recent", "reach", "utility", "favorites"}
+// memorySortKeys are the accepted ?sort values on the memories list. recent is
+// the default (newest-updated within each kind group); name orders A-Z, reach by
+// injection count, utility by the decayed demand score, and favorites floats
+// starred rows first.
+var memorySortKeys = []string{"recent", "name", "reach", "utility", "favorites"}
 
 // errNoFiles is returned when a write action needs the files subsystem but the
 // console was built without it (should not happen in serve).
@@ -124,6 +124,7 @@ func (s *Service) memoriesPage(ctx context.Context, sortKey, query string) (memo
 		}
 	}
 
+	sortMemoryRows(inactive, sortKey)
 	return memoriesData{
 		Groups:        buildGroups(active, sortKey),
 		Inactive:      inactive,
@@ -132,13 +133,13 @@ func (s *Service) memoriesPage(ctx context.Context, sortKey, query string) (memo
 		Query:         query,
 		Sort:          sortKey,
 		CanArchive:    s.cfg.Files != nil,
-		QS:            listQS(query, sortKey, "name"),
+		QS:            listQS(query, sortKey, "recent"),
 	}, nil
 }
 
 func (s *Service) memoriesList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
-	sortKey, query, ok := s.parseSortQuery(w, r, memorySortKeys, "name")
+	sortKey, query, ok := s.parseSortQuery(w, r, memorySortKeys, "recent")
 	if !ok {
 		return
 	}
@@ -277,12 +278,14 @@ func buildGroups(active map[string]map[string][]memoryRow, sortKey string) []pro
 	return groups
 }
 
-// sortMemoryRows orders the rows within a kind group per the ?sort key: name
-// (A-Z, the default), recent (newest-updated first), reach (most-injected
-// first), or favorites (starred first). Ties fall back to name for a stable,
-// readable order.
+// sortMemoryRows orders the rows within a kind group per the ?sort key: recent
+// (newest-updated first, the default), name (A-Z), reach (most-injected
+// first), utility (highest decayed demand first), or favorites (starred first).
+// Ties fall back to name for a stable, readable order.
 func sortMemoryRows(rows []memoryRow, sortKey string) {
 	switch sortKey {
+	case "name":
+		sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 	case "favorites":
 		sort.SliceStable(rows, func(i, j int) bool {
 			if rows[i].Favorite != rows[j].Favorite {
@@ -311,8 +314,6 @@ func sortMemoryRows(rows []memoryRow, sortKey string) {
 			}
 			return rows[i].Name < rows[j].Name
 		})
-	default: // name
-		sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
 	}
 }
 

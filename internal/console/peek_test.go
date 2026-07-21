@@ -305,10 +305,18 @@ func TestSessionAndEventPeekFragments(t *testing.T) {
 	// Session peek: fragment (no layout), full page (layout), with content.
 	sp := getPeek(t, mux, "/console/sessions/SESS1?peek=1")
 	require.Equal(t, http.StatusOK, sp.Code)
-	require.NotContains(t, sp.Body.String(), "<html")
-	require.Contains(t, sp.Body.String(), "cc/peek1234")
-	require.Contains(t, sp.Body.String(), "the finding text")
-	require.Contains(t, getPeek(t, mux, "/console/sessions/SESS1").Body.String(), "<html")
+	spBody := sp.Body.String()
+	require.NotContains(t, spBody, "<html")
+	require.Contains(t, spBody, "cc/peek1234")
+	require.Contains(t, spBody, "the finding text")
+	require.Contains(t, spBody, `class="session-peek-metrics"`)
+	require.Contains(t, spBody, `class="session-peek-outcome"`)
+	require.NotContains(t, spBody, `class="peek-kv"`, "session facts use compact grouped values, not a stretched definition list")
+	fullBody := getPeek(t, mux, "/console/sessions/SESS1").Body.String()
+	require.Contains(t, fullBody, "<html")
+	require.Contains(t, fullBody, `class="session-review-grid"`)
+	require.Contains(t, fullBody, `class="session-workspace"`)
+	require.Contains(t, fullBody, "Activity timeline")
 
 	// Event peek: fragment shows the injected content + session peek link.
 	ep := getPeek(t, mux, "/console/events/"+evID+"?peek=1")
@@ -316,4 +324,13 @@ func TestSessionAndEventPeekFragments(t *testing.T) {
 	require.NotContains(t, ep.Body.String(), "<html")
 	require.Contains(t, ep.Body.String(), "briefing text")
 	require.Contains(t, ep.Body.String(), "/console/sessions/SESS1")
+}
+
+func TestPeekFacts_KeepValuesBesideLabels(t *testing.T) {
+	css := string(consoleCSS)
+	require.Contains(t, css, ".peek-kv dd { margin: 0; text-align: left;",
+		"shared peek facts should not push values to the far edge of a wide card")
+	require.Contains(t, css, ".session-meta-list > div {")
+	require.Contains(t, css, "grid-template-columns: 72px minmax(0, 1fr)",
+		"the full session inspector uses a compact label column")
 }

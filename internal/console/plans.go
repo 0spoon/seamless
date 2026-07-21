@@ -208,9 +208,8 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 	}
 	// Total is every plan regardless of window -- the headline the sidebar badge
 	// must agree with. Window-filter last so it applies uniformly across sources,
-	// then sort: starred plans first, newest-updated within each partition (the
-	// template's phase grouping runs after this, so favorites float within each
-	// phase group).
+	// then sort newest-updated first. The template's phase grouping preserves that
+	// order within each phase.
 	total := len(rows)
 	kept := rows[:0]
 	for _, row := range rows {
@@ -219,12 +218,6 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 		}
 	}
 	slices.SortFunc(kept, func(a, b planRow) int {
-		if a.Favorite != b.Favorite {
-			if a.Favorite {
-				return -1
-			}
-			return 1
-		}
 		if !a.Updated.Equal(b.Updated) {
 			return b.Updated.Compare(a.Updated)
 		}

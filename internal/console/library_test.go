@@ -83,6 +83,19 @@ func TestNotesLibrary_AutoSelectsNewest(t *testing.T) {
 	require.Contains(t, body, "data-auto-url=")
 }
 
+func TestBuildNoteGroups_RecentOrdersNewestFirst(t *testing.T) {
+	base := time.Date(2026, time.July, 20, 12, 0, 0, 0, time.UTC)
+	groups := buildNoteGroups(map[string][]noteRow{
+		"seamless": {
+			{ID: "OLD", Title: "Old", Updated: base},
+			{ID: "NEW", Title: "New", Updated: base.Add(time.Hour)},
+		},
+	}, "recent")
+
+	require.Len(t, groups, 1)
+	require.Equal(t, []string{"NEW", "OLD"}, []string{groups[0].Notes[0].ID, groups[0].Notes[1].ID})
+}
+
 func TestNotesLibrary_DetailPageAndReaderFragment(t *testing.T) {
 	_, mgr, mux := newConsoleWithFiles(t)
 	n := writeNote(t, mgr, "seamless", "n-doc", "Doc Note", "full document body")

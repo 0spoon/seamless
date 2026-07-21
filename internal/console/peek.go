@@ -186,7 +186,7 @@ func (s *Service) memoryDetail(w http.ResponseWriter, r *http.Request) {
 		s.renderReader(w, r, "memories", "memory-reader", d)
 		return
 	}
-	sortKey, query, ok2 := s.parseSortQuery(w, r, memorySortKeys, "name")
+	sortKey, query, ok2 := s.parseSortQuery(w, r, memorySortKeys, "recent")
 	if !ok2 {
 		return
 	}

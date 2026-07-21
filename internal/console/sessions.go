@@ -187,6 +187,8 @@ func sessionSortName(row sessionRow) string {
 type sessionDetail struct {
 	Session      core.Session     `json:"session"`
 	Harness      string           `json:"harness,omitempty"` // client discriminator (claude-code|codex)
+	Live         bool             `json:"live"`              // active and heartbeated within the configured idle window
+	Duration     string           `json:"duration"`          // compact wall-clock span for review surfaces
 	Findings     string           `json:"findings"`
 	FindingsHTML template.HTML    `json:"-"`
 	Timeline     []eventRow       `json:"timeline"`
@@ -310,8 +312,10 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	now := time.Now().UTC()
 	data := sessionDetail{
-		Session: sess, Harness: harnessOf(sess), Findings: sess.Findings, Timeline: timeline,
+		Session: sess, Harness: harnessOf(sess), Live: sess.LiveAsOf(now, s.cfg.SessionIdleTTL),
+		Duration: sessionDuration(sess, now), Findings: sess.Findings, Timeline: timeline,
 		Interactions: interactions, IxVolumeJSON: ixVolume,
 		ToolCalls: toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
@@ -322,7 +326,6 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	// the T2b relation joins. Best-effort: a legacy non-ULID session id or empty
 	// name (the joins guard against mis-keyed calls) leaves the panel empty
 	// rather than failing the whole detail page.
-	now := time.Now().UTC()
 	if held, herr := store.TasksClaimedBy(ctx, s.cfg.DB, sess.ID); herr == nil {
 		for _, t := range held {
 			if !t.ClaimLive(now) {
@@ -359,6 +362,39 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 		Active: "sessions",
 		Data:   data,
 	})
+}
+
+// sessionDuration returns the compact wall-clock span shown on session review
+// surfaces. Active sessions run through now; terminal sessions stop at their
+// final update. Seconds are intentionally suppressed because heartbeat timing
+// is operational noise at this level.
+func sessionDuration(sess core.Session, now time.Time) string {
+	end := sess.UpdatedAt
+	if sess.Status == core.SessionActive {
+		end = now
+	}
+	if sess.CreatedAt.IsZero() || end.IsZero() || end.Before(sess.CreatedAt) {
+		return ""
+	}
+	d := end.Sub(sess.CreatedAt)
+	if d < time.Minute {
+		return "<1m"
+	}
+	days := int(d / (24 * time.Hour))
+	hours := int(d/time.Hour) % 24
+	minutes := int(d/time.Minute) % 60
+	switch {
+	case days > 0 && hours > 0:
+		return fmt.Sprintf("%dd %dh", days, hours)
+	case days > 0:
+		return fmt.Sprintf("%dd", days)
+	case hours > 0 && minutes > 0:
+		return fmt.Sprintf("%dh %dm", hours, minutes)
+	case hours > 0:
+		return fmt.Sprintf("%dh", hours)
+	default:
+		return fmt.Sprintf("%dm", minutes)
+	}
 }
 
 // injectedEventItemIDs pulls the item ids an injection event surfaced (recall
