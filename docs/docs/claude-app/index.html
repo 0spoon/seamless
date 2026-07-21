@@ -18,12 +18,13 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Claude app chat setup","item":"https://thereisnospoon.org/docs/claude-app/"}]},{"@type":"TechArticle","headline":"Claude app chat setup - Seamless docs","description":"Register the seam mcp-proxy bridge in claude_desktop_config.json, restart the app, and run the session loop explicitly - a chat has no hooks and no cwd.","url":"https://thereisnospoon.org/docs/claude-app/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=dbdac09c">
-<link rel="stylesheet" href="../static/docs.css?v=cfbe7e45">
+<link rel="stylesheet" href="../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -174,7 +175,13 @@
 
   <main class="docs-main" id="content">
     <article class="prose">
-  <p class="eyebrow">Getting started</p>
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="../">Docs</a></li>
+    <li aria-current="page">Claude app chat setup</li>
+  </ol>
+</nav>
+
   <h1>Claude app chat setup</h1>
   <p class="lede">Register the seam mcp-proxy bridge in claude_desktop_config.json, restart the app, and run the session loop explicitly - a chat has no hooks and no cwd.</p>
   <p>The Claude desktop app hosts two different Seamless surfaces, and they are wired

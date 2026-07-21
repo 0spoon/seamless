@@ -218,14 +218,32 @@ a.nav-head.current { color: var(--brand); }
    PROSE
    ========================================================================== */
 .prose { max-width: 46rem; }
-.prose .eyebrow {
+.prose .breadcrumb {
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
-  color: var(--pop);
   margin: 0 0 8px;
 }
+.prose .breadcrumb ol {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+}
+.prose .breadcrumb li + li::before {
+  content: "/";
+  margin-right: 4px;
+  color: var(--muted);
+}
+.prose .breadcrumb a {
+  color: var(--muted);
+  text-decoration: none;
+}
+.prose .breadcrumb a:hover { color: var(--pop); }
+.prose .breadcrumb [aria-current="page"] { color: var(--pop); }
 .prose h1 {
   font-family: var(--font-display);
   font-size: clamp(30px, 4vw, 40px);

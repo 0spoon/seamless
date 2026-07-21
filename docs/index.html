@@ -6,12 +6,122 @@
 <title>Seamless - your agents share a brain. You can read it.</title>
 <meta name="description" content="Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans - markdown files in a folder you own, indexed by one Go binary, curated with you in the loop.">
 <link rel="canonical" href="https://thereisnospoon.org/">
+<meta name="robots" content="max-image-preview:large, max-snippet:-1">
+<meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://thereisnospoon.org/">
 <meta property="og:title" content="Seamless - your agents share a brain. You can read it.">
 <meta property="og:description" content="A local-first coordination substrate for fleets of coding agents: memory, tasks, and plans as markdown files you own. One Go binary. No black box.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
+<!-- Structured data for entity extraction. The FAQPage duplicates the visible
+     #faq section by design; scripts/site-check.sh gates the two against each
+     other (question count and summary-to-name mapping), so edit both or the
+     check names the drift. No date fields anywhere: there is no deterministic
+     date source in this repo, and a fake one is worse than none. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://thereisnospoon.org/#org",
+      "name": "Seamless",
+      "url": "https://thereisnospoon.org/"
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://thereisnospoon.org/#website",
+      "name": "Seamless",
+      "url": "https://thereisnospoon.org/",
+      "publisher": {"@id": "https://thereisnospoon.org/#org"}
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://thereisnospoon.org/#app",
+      "name": "Seamless",
+      "description": "Local-first shared memory and task coordination for AI coding agents. One Go binary, MCP server, markdown files you own. Hooks for Claude Code and Codex CLI.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux, Windows",
+      "url": "https://thereisnospoon.org/",
+      "downloadUrl": "https://github.com/0spoon/seamless/releases",
+      "license": "https://github.com/0spoon/seamless/blob/main/LICENSE",
+      "isAccessibleForFree": true,
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "publisher": {"@id": "https://thereisnospoon.org/#org"}
+    },
+    {
+      "@type": "FAQPage",
+      "@id": "https://thereisnospoon.org/#faq",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Why not just use Dosu?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Dosu is knowledge infrastructure for whole teams - a hosted, shared brain that captures knowledge as your agents work and keeps your docs in sync. If you need a team-wide solution, it's an excellent one. Seamless is the local-first counterpart, aimed at one person and their fleet: files in git on your own disk, no account, no cloud."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why not just use Mem0 or Zep?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "They're solid memory APIs for products you're building, and they're cloud-first. Seamless is for the agents you run - it lives on your machine, binds to localhost, and needs no account. Different job."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why not just use Anthropic's built-in memory?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Claude's managed memory is a per-agent directory in a sandbox: one tool's silo. Seamless is shared ground across every agent you run - plus tasks, plans, atomic claiming, and a console. And it's yours: files on your disk, not files in someone's sandbox."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why not just use agentmemory?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless is one Go binary; the source of truth is markdown in git; and forgetting is a proposal you approve - never a curve you're on."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why not just use Supermemory?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Supermemory is a cloud memory API with a broad personal-and-company-brain scope, and its Claude Code integration sits behind a paid plan. Seamless is free, local, and narrowly aimed at one job: a fleet of coding agents sharing one legible brain."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Where are the benchmarks?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Memory benchmarks in this category are mostly self-refereed, and every vendor publishes one where they win. We don't play. Judge Seamless differently: open the folder, read what your agents wrote, diff it in git. Legibility is the benchmark."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it phone home?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. Localhost bind, a static bearer key, no telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either - view source; it's a static file."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">

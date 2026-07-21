@@ -18,12 +18,13 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Domain invariants","item":"https://thereisnospoon.org/docs/internals/invariants/"}]},{"@type":"TechArticle","headline":"Domain invariants - Seamless docs","description":"The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.","url":"https://thereisnospoon.org/docs/internals/invariants/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=dbdac09c">
-<link rel="stylesheet" href="../../static/docs.css?v=cfbe7e45">
+<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -174,7 +175,14 @@
 
   <main class="docs-main" id="content">
     <article class="prose">
-  <p class="eyebrow">Internals</p>
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="../../">Docs</a></li>
+    <li><a href="../../internals/">Internals</a></li>
+    <li aria-current="page">Domain invariants</li>
+  </ol>
+</nav>
+
   <h1>Domain invariants</h1>
   <p class="lede">The rules plausible-looking code breaks - supersession, scope resolution, FTS and LIKE escaping, LLM degradation - and why each exists.</p>
   <p>These are the rules that reasonable code violates. Every one of them has a

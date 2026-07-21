@@ -18,6 +18,8 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
+{{with .JSONLD}}{{.}}
+{{end -}}
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="{{.Root}}static/favicon.svg">
@@ -99,4 +101,19 @@
 <script src="{{.DocsRoot}}static/docs.js{{.Assets.DocsJS}}"></script>
 </body>
 </html>
+{{end}}
+
+{{/* breadcrumb renders the visible trail the JSON-LD BreadcrumbList mirrors:
+     linked ancestors from Page.Breadcrumbs, then the page itself as the
+     unlinked current item. The docs home has no trail and renders nothing. */}}
+{{define "breadcrumb" -}}
+{{if .Breadcrumbs -}}
+<nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    {{range .Breadcrumbs}}<li><a href="{{$.DocsRoot}}{{.URL}}">{{.Title}}</a></li>
+    {{end -}}
+    <li aria-current="page">{{.Title}}</li>
+  </ol>
+</nav>
+{{end -}}
 {{end}}

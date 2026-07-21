@@ -10,13 +10,16 @@
 # run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
-# Five assertions, each one a thing a machine can actually verify:
+# Eight assertions, each one a thing a machine can actually verify:
 #
 #   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
 #   2. every surface that teaches installing teaches the SAME two commands
 #   3. every `seamlessd <sub>` the page names in a command context is real
 #   4. each copy button copies the command it visibly shows
 #   5. each static asset carries a content-hash ?v= cache-buster that matches
+#   6. the head is complete and the canonical matches docs/CNAME
+#   7. exactly one JSON-LD block, braces balanced, with the required types
+#   8. the JSON-LD FAQPage mirrors the visible #faq section
 #
 # Deliberately not a prose linter: claims like "one binary, no ceremony" are the
 # author's problem. Commands are checkable, so these are checked.
@@ -116,5 +119,84 @@ for asset in site.css site.js scenes.js scenes-player.js; do
 	fi
 done
 
+# 6. Head completeness. The docs pages get their head from docsgen and
+#    cmd/docsgen/seo_test.go gates them; the landing page head is hand-written,
+#    so only this check notices when the front door loses a tag or the canonical
+#    drifts from the host GitHub Pages actually serves (docs/CNAME).
+canon_host="https://$(tr -d '[:space:]' <docs/CNAME)/"
+grep -qF "<link rel=\"canonical\" href=\"$canon_host\">" "$PAGE" ||
+	err "$PAGE canonical does not match docs/CNAME [$canon_host]"
+for tag in \
+	'<meta name="description" content="' \
+	'<meta name="robots" content="max-image-preview:large, max-snippet:-1">' \
+	'<meta property="og:site_name" content="Seamless">' \
+	'<meta property="og:type" content="' \
+	'<meta property="og:url" content="' \
+	'<meta property="og:title" content="' \
+	'<meta property="og:description" content="' \
+	'<meta property="og:image" content="' \
+	'<meta property="og:image:width" content="' \
+	'<meta property="og:image:height" content="' \
+	'<meta property="og:image:alt" content="' \
+	'<meta name="twitter:card" content="'; do
+	grep -qF "$tag" "$PAGE" || err "$PAGE head is missing $tag"
+done
+
+# 7. The JSON-LD block. Shell cannot validate JSON without a tool dependency
+#    this script deliberately avoids, so balanced braces plus the required type
+#    strings is the honest ceiling here; cmd/docsgen/seo_test.go does the real
+#    json.Unmarshal round-trip for the generated pages. Date fields are banned
+#    outright: there is no deterministic date source in this repo.
+ld=$(sed -n '/<script type="application\/ld+json">/,/<\/script>/p' "$PAGE")
+blocks=$(grep -c '<script type="application/ld+json">' "$PAGE" || true)
+if [ "$blocks" != 1 ] || [ -z "$ld" ]; then
+	err "$PAGE must carry exactly one JSON-LD block, found $blocks"
+else
+	open=$(printf '%s\n' "$ld" | grep -o '{' | wc -l | tr -d '[:space:]')
+	close=$(printf '%s\n' "$ld" | grep -o '}' | wc -l | tr -d '[:space:]')
+	[ "$open" = "$close" ] ||
+		err "the JSON-LD block's braces do not balance ($open open vs $close close)"
+	for typ in SoftwareApplication FAQPage; do
+		printf '%s\n' "$ld" | grep -qF "\"@type\": \"$typ\"" ||
+			err "the JSON-LD block declares no $typ"
+	done
+	if printf '%s\n' "$ld" | grep -qE 'datePublished|dateModified'; then
+		err "the JSON-LD block carries a date field; there is no deterministic date source"
+	fi
+fi
+
+# 8. The FAQPage mirrors the visible #faq section, or the JSON-LD quietly lies
+#    the first time someone edits an answer. These assertions compare text
+#    across an HTML-entity boundary: the page writes &hellip; while the JSON
+#    carries literal UTF-8, so the shell normalizes the HTML side over the one
+#    entity the summaries actually use, folding the section's shared "Why not
+#    just use..." stem into the ellipsis-continuation summaries
+#    (&hellip;Dosu? maps to the Question name "Why not just use Dosu?").
+#
+#    The extraction below reads 'grep -oE '"name": "[^"]*"'', which stops at
+#    the FIRST double quote -- escaped or not. A JSON-escaped \" inside any
+#    string would silently truncate the extracted value and let a broken check
+#    pass, so any escaped quote in the block is a hard failure, not a style
+#    preference.
+faq_count=$(grep -c '<details class="rv">' "$PAGE" || true)
+q_count=$(printf '%s\n' "$ld" | grep -c '"@type": "Question"' || true)
+[ "$faq_count" = "$q_count" ] ||
+	err "$PAGE shows $faq_count FAQ entries but the JSON-LD has $q_count Questions"
+if printf '%s\n' "$ld" | grep -q '\\"'; then
+	err "the JSON-LD block contains an escaped double quote, which this gate cannot parse; rephrase without quotes"
+else
+	names=$(printf '%s\n' "$ld" | grep -oE '"name": "[^"]*"' | sed 's/^"name": "//; s/"$//')
+	while IFS= read -r s; do
+		case "$s" in
+		'&hellip;'*) want="Why not just use ${s#&hellip;}" ;;
+		*) want="$s" ;;
+		esac
+		printf '%s\n' "$names" | grep -qxF "$want" ||
+			err "FAQ summary [$s] has no JSON-LD Question named [$want]"
+	done <<EOF
+$(grep -oE '<summary>[^<]*</summary>' "$PAGE" | sed 's/<summary>//; s|</summary>||')
+EOF
+fi
+
 [ "$fail" -eq 0 ] || exit 1
-echo "site-check: $PAGE agrees with the installer and the CLI"
+echo "site-check: $PAGE agrees with the installer, the CLI, and its own structured data"

@@ -18,12 +18,13 @@
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Internals","item":"https://thereisnospoon.org/docs/internals/"},{"@type":"ListItem","position":3,"name":"Architecture","item":"https://thereisnospoon.org/docs/internals/architecture/"}]},{"@type":"TechArticle","headline":"Architecture - Seamless docs","description":"The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.","url":"https://thereisnospoon.org/docs/internals/architecture/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=dbdac09c">
-<link rel="stylesheet" href="../../static/docs.css?v=cfbe7e45">
+<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -174,7 +175,14 @@
 
   <main class="docs-main" id="content">
     <article class="prose">
-  <p class="eyebrow">Internals</p>
+  <nav class="breadcrumb" aria-label="Breadcrumb">
+  <ol>
+    <li><a href="../../">Docs</a></li>
+    <li><a href="../../internals/">Internals</a></li>
+    <li aria-current="page">Architecture</li>
+  </ol>
+</nav>
+
   <h1>Architecture</h1>
   <p class="lede">The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.</p>
   <p>Seamless is one Go binary (<code>seamlessd</code>) plus a CLI (<code>seam</code>). Inside it, the code

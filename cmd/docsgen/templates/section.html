@@ -1,5 +1,6 @@
 {{define "content" -}}
 <article class="prose">
+  {{template "breadcrumb" .}}
   <h1>{{.Title}}</h1>
   {{with .Description}}<p class="lede">{{.}}</p>{{end}}
 </article>
