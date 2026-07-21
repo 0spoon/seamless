@@ -1101,6 +1101,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .gardener-proposal.tone-ok { --proposal-tone: var(--ok); --proposal-soft: var(--ok-soft); }
 .gardener-proposal.tone-warn { --proposal-tone: var(--warn); --proposal-soft: var(--warn-soft); }
 .gardener-proposal.tone-pop { --proposal-tone: var(--pop-strong); --proposal-soft: var(--pop-soft); }
+.gardener-proposal.tone-danger { --proposal-tone: var(--danger); --proposal-soft: var(--danger-soft); }
 .gardener-proposal-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--border); background: color-mix(in oklab, var(--proposal-tone) 3.5%, var(--surface)); }
 .gardener-proposal-icon { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: var(--radius-sm); color: var(--proposal-tone); background: var(--proposal-soft); }
 .gardener-proposal-icon .ico { width: 17px; height: 17px; }
@@ -1125,6 +1126,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .proposal-object-icon.warn { color: var(--warn); background: var(--warn-soft); }
 .proposal-object-icon.ok { color: var(--ok); background: var(--ok-soft); }
 .proposal-object-icon.brand { color: var(--brand); background: var(--brand-soft); }
+.proposal-object-icon.danger { color: var(--danger); background: var(--danger-soft); }
 .proposal-object-icon .ico { width: 16px; height: 16px; }
 .proposal-object > div:nth-child(2) { display: flex; flex-direction: column; min-width: 0; }
 .proposal-object > div:nth-child(2) > span { color: var(--faint); font-size: var(--text-2xs); font-weight: 650; letter-spacing: var(--tracking-wide); text-transform: uppercase; }

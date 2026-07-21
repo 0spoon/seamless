@@ -27,6 +27,7 @@ const (
 	ProposalSplit        = "split"         // set up child/shared projects + family for a project split
 	ProposalAbandonPlan  = "abandon_plan"  // retag a never-approved captured plan plan-status:abandoned
 	ProposalMemoryWanted = "memory_wanted" // agents repeatedly searched for knowledge that does not exist
+	ProposalToolError    = "tool_error"    // agents keep hitting the same tool-call or hook-stage error
 )
 
 // ProposalKinds lists every valid proposal kind. This is the canonical set:
@@ -35,6 +36,7 @@ const (
 var ProposalKinds = []string{
 	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
 	ProposalReproject, ProposalSplit, ProposalAbandonPlan, ProposalMemoryWanted,
+	ProposalToolError,
 }
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

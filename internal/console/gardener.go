@@ -96,6 +96,9 @@ type proposalCard struct {
 
 	// MemoryWanted (open a task to write knowledge agents searched for in vain).
 	MemoryWanted *memoryWantedView `json:"memoryWanted,omitempty"`
+
+	// ToolError (open a task to fix an error agents keep hitting).
+	ToolError *toolErrorView `json:"toolError,omitempty"`
 }
 
 // memoryWantedView is the memory_wanted projection: the recurring zero-hit
@@ -106,6 +109,20 @@ type memoryWantedView struct {
 	MissCount      int      `json:"missCount"`
 	SessionCount   int      `json:"sessionCount"`
 	LastMissedAt   string   `json:"lastMissedAt,omitempty"`
+	SuggestedTitle string   `json:"suggestedTitle"`
+}
+
+// toolErrorView is the tool_error projection: the recurring agent-facing error
+// pattern, badged by surface (a failing tool call vs a fail-open hook stage).
+type toolErrorView struct {
+	Project        string   `json:"project,omitempty"`
+	Surface        string   `json:"surface"` // "tool" | "hook"
+	Key            string   `json:"key"`     // tool name or hook stage label
+	Signature      string   `json:"signature,omitempty"`
+	Examples       []string `json:"examples"`
+	ErrorCount     int      `json:"errorCount"`
+	SessionCount   int      `json:"sessionCount"`
+	LastSeenAt     string   `json:"lastSeenAt,omitempty"`
 	SuggestedTitle string   `json:"suggestedTitle"`
 }
 
@@ -340,6 +357,19 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			SuggestedTitle: payloadStr(p.Payload, "suggested_title"),
 		}
 		c.Reason = payloadStr(p.Payload, "reason")
+	case store.ProposalToolError:
+		c.ToolError = &toolErrorView{
+			Project:        payloadStr(p.Payload, "project"),
+			Surface:        payloadStr(p.Payload, "surface"),
+			Key:            payloadStr(p.Payload, "name"),
+			Signature:      payloadStr(p.Payload, "signature"),
+			Examples:       payloadStrList(p.Payload, "examples"),
+			ErrorCount:     int(payloadFloat(p.Payload, "error_count")),
+			SessionCount:   int(payloadFloat(p.Payload, "session_count")),
+			LastSeenAt:     payloadStr(p.Payload, "last_seen_at"),
+			SuggestedTitle: payloadStr(p.Payload, "suggested_title"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalSplit:
 		sv := &splitView{
 			Source:       payloadStr(p.Payload, "source_project"),
@@ -380,6 +410,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
 	case store.ProposalMemoryWanted:
 		return "Write a missing memory", "Knowledge gap", "search", "pop"
+	case store.ProposalToolError:
+		return "Fix a recurring error", "Error pattern", "triangle-alert", "danger"
 	default:
 		return "Review a knowledge change", "Proposal", "sprout", "brand"
 	}

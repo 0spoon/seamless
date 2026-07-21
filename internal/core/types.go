@@ -356,6 +356,7 @@ const (
 	EventToolCall         EventKind = "tool.call"   // MCP tool invocation, logged live by the middleware (also the shape used by import)
 	EventHookPrompt       EventKind = "hook.prompt" // a UserPromptSubmit that matched no memory (recall miss)
 	EventRecallMiss       EventKind = "recall.miss" // a recall tool call that returned zero hits (payload: query, scope, limit, source)
+	EventHookError        EventKind = "hook.error"  // a hook-stage failure swallowed fail-open (payload: stage, error, client)
 
 	// Claude Code plan-mode capture (PostToolUse/PermissionRequest/SubagentStop hooks).
 	EventPlanCaptured     EventKind = "plan.captured"     // a plan-file iteration landed as a cc-plan note

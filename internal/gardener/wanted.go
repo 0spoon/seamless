@@ -12,7 +12,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -202,7 +201,7 @@ func (s *Service) applyMemoryWanted(ctx context.Context, p store.Proposal, now t
 		return nil, errors.New("memory_wanted proposal missing suggested_title")
 	}
 	project := payloadString(p.Payload, "project")
-	title := "Write a memory: " + events.Truncate(topic, memoryWantedTitleRunes)
+	title := "Write a memory: " + truncateLabel(topic, memoryWantedTitleRunes)
 
 	open, err := store.ListTasks(ctx, s.db, project, core.TaskOpen)
 	if err != nil {

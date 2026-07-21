@@ -49,6 +49,8 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyAbandonPlan(ctx, p, now)
 	case store.ProposalMemoryWanted:
 		result, err = s.applyMemoryWanted(ctx, p, now)
+	case store.ProposalToolError:
+		result, err = s.applyToolError(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}

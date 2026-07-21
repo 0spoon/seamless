@@ -291,6 +291,22 @@
   {{end}}
   {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
   <div class="proposal-assurance">{{icon "check"}} Opens a task in the queue; nothing is written until someone writes the memory.</div>
+{{else if eq .Kind "tool_error"}}
+  {{with .ToolError}}
+  <div class="proposal-signal">Agents keep hitting this error &mdash; {{.ErrorCount}} time{{if ne .ErrorCount 1}}s{{end}}{{if gt .SessionCount 1}} across {{.SessionCount}} sessions{{end}}.</div>
+  <div class="proposal-object">
+    <span class="proposal-object-icon danger">{{icon "triangle-alert"}}</span>
+    <div><span>{{if eq .Surface "hook"}}Hook stage failing fail-open{{else}}Tool returning this error{{end}}</span><strong>{{.Key}}</strong>{{if .Signature}}<p>{{.Signature}}</p>{{end}}</div>
+    <div class="proposal-object-tags"><span class="badge danger">{{.Surface}}</span><span>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></div>
+  </div>
+  <div class="proposal-query-list"><span>Recent examples</span><div>{{range .Examples}}<em>{{.}}</em>{{end}}</div></div>
+  <div class="proposal-object outcome">
+    <span class="proposal-object-icon danger">{{icon "triangle-alert"}}</span>
+    <div><span>Task the apply opens</span><strong>Fix recurring error: {{.SuggestedTitle}}</strong></div>
+  </div>
+  {{end}}
+  {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "check"}} Opens a task in the queue; nothing changes until someone fixes the surface.</div>
 {{else if eq .Kind "split"}}
   {{with .Split}}
   <div class="proposal-topology">

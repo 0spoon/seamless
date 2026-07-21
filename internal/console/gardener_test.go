@@ -113,14 +113,23 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 		"reason":          "knowledge gap: recall found nothing 3x across 2 sessions in 14d",
 	})
 	require.NoError(t, err)
+	toolErrP, err := store.CreateProposal(ctx, db, store.ProposalToolError, map[string]any{
+		"key": "tool_error:seamless:abcd1234abcd1234", "project": "seamless",
+		"surface": "tool", "name": "tasks_add", "signature": "unknown parameter <v>",
+		"examples":    []string{`tasks_add: unknown parameter "titel"`},
+		"error_count": 3.0, "session_count": 2.0,
+		"suggested_title": "tasks_add: unknown parameter <v>",
+		"reason":          "recurring tool error: tasks_add returned this error 3x across 2 sessions in 14d",
+	})
+	require.NoError(t, err)
 
 	// Cards render, one per kind.
 	var data gardenerData
 	getJSON(t, mux, "/console/gardener?format=json", &data)
-	require.Len(t, data.Cards, 4)
-	require.Equal(t, 4, data.PendingCount)
+	require.Len(t, data.Cards, 5)
+	require.Equal(t, 5, data.PendingCount)
 	require.Zero(t, data.RequestedCount)
-	require.Equal(t, 4, data.BackgroundCount)
+	require.Equal(t, 5, data.BackgroundCount)
 	byKind := map[string]proposalCard{}
 	for _, c := range data.Cards {
 		byKind[c.Kind] = c
@@ -138,6 +147,16 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	require.Equal(t, 3, byKind["memory_wanted"].MemoryWanted.MissCount)
 	require.Equal(t, 2, byKind["memory_wanted"].MemoryWanted.SessionCount)
 	require.Equal(t, "chroma boot race", byKind["memory_wanted"].MemoryWanted.SuggestedTitle)
+	require.Equal(t, "Fix a recurring error", byKind["tool_error"].Label)
+	require.Equal(t, "triangle-alert", byKind["tool_error"].Icon)
+	require.Equal(t, "danger", byKind["tool_error"].Tone)
+	require.Equal(t, "tool", byKind["tool_error"].ToolError.Surface)
+	require.Equal(t, "tasks_add", byKind["tool_error"].ToolError.Key)
+	require.Equal(t, "unknown parameter <v>", byKind["tool_error"].ToolError.Signature)
+	require.Equal(t, []string{`tasks_add: unknown parameter "titel"`}, byKind["tool_error"].ToolError.Examples)
+	require.Equal(t, 3, byKind["tool_error"].ToolError.ErrorCount)
+	require.Equal(t, 2, byKind["tool_error"].ToolError.SessionCount)
+	require.Equal(t, "tasks_add: unknown parameter <v>", byKind["tool_error"].ToolError.SuggestedTitle)
 
 	// The HTML is a two-stage trust surface: the propose-only contract is
 	// explicit before the request composer, and decisions expose their effects
@@ -176,6 +195,17 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	require.Len(t, tasks, 1)
 	require.Equal(t, "Write a memory: chroma boot race", tasks[0].Title)
 	require.Equal(t, "gardener", tasks[0].CreatedBy)
+
+	// Apply the tool-error -> a fix task appears and the proposal is applied.
+	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+toolErrP.ID+"/apply").Code)
+	p, _, err = store.ProposalByID(ctx, db, toolErrP.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalApplied, p.Status)
+	tasks, err = store.ListTasks(ctx, db, "seamless", core.TaskOpen)
+	require.NoError(t, err)
+	require.Len(t, tasks, 2)
+	titles := []string{tasks[0].Title, tasks[1].Title}
+	require.Contains(t, titles, "Fix recurring error: tasks_add: unknown parameter <v>")
 
 	// Apply the archive whose memory is missing -> flash error, proposal stays pending.
 	rr := post(mux, "/console/gardener/"+archiveP.ID+"/apply")

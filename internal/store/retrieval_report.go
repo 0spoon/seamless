@@ -748,6 +748,103 @@ func RecallMissesSince(ctx context.Context, db *sql.DB, since time.Time) ([]Reca
 	return out, nil
 }
 
+// AgentError is one agent-facing failure read back out of the event log: an
+// MCP/CLI tool call that returned an error (surface "tool") or a hook-stage
+// failure swallowed fail-open (surface "hook"). The gardener's tool-error pass
+// clusters these into proposals.
+type AgentError struct {
+	TS        time.Time
+	SessionID string
+	Project   string
+	Surface   string         // "tool" | "hook"
+	Key       string         // surface "tool": tool name; surface "hook": stage label
+	Error     string         // first line of the error, as the payload recorded it
+	Args      map[string]any // surface "tool" only: the call's (truncated) arguments
+}
+
+// ToolErrorsSince returns the failed tool.call events at or after the cutoff,
+// oldest first. Rows without an error or tool name are unusable for clustering
+// and are skipped.
+func ToolErrorsSince(ctx context.Context, db *sql.DB, since time.Time) ([]AgentError, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT ts, session_id, project_slug, payload FROM events
+		WHERE kind = ? AND ts >= ? ORDER BY ts`,
+		string(core.EventToolCall), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.ToolErrorsSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []AgentError
+	for rows.Next() {
+		var ts, sessionID, project, payload string
+		if err := rows.Scan(&ts, &sessionID, &project, &payload); err != nil {
+			return nil, fmt.Errorf("store.ToolErrorsSince: scan: %w", err)
+		}
+		var p struct {
+			Tool    string         `json:"tool"`
+			IsError bool           `json:"is_error"`
+			Error   string         `json:"error"`
+			Args    map[string]any `json:"args"`
+		}
+		if payload == "" || json.Unmarshal([]byte(payload), &p) != nil ||
+			!p.IsError || p.Tool == "" || p.Error == "" {
+			continue
+		}
+		at, err := core.ParseTime(ts)
+		if err != nil {
+			continue
+		}
+		out = append(out, AgentError{
+			TS: at, SessionID: sessionID, Project: project,
+			Surface: "tool", Key: p.Tool, Error: p.Error, Args: p.Args,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.ToolErrorsSince: %w", err)
+	}
+	return out, nil
+}
+
+// HookErrorsSince returns the hook.error events at or after the cutoff, oldest
+// first. Rows without a stage or error are skipped.
+func HookErrorsSince(ctx context.Context, db *sql.DB, since time.Time) ([]AgentError, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT ts, session_id, project_slug, payload FROM events
+		WHERE kind = ? AND ts >= ? ORDER BY ts`,
+		string(core.EventHookError), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.HookErrorsSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []AgentError
+	for rows.Next() {
+		var ts, sessionID, project, payload string
+		if err := rows.Scan(&ts, &sessionID, &project, &payload); err != nil {
+			return nil, fmt.Errorf("store.HookErrorsSince: scan: %w", err)
+		}
+		var p struct {
+			Stage string `json:"stage"`
+			Error string `json:"error"`
+		}
+		if payload == "" || json.Unmarshal([]byte(payload), &p) != nil ||
+			p.Stage == "" || p.Error == "" {
+			continue
+		}
+		at, err := core.ParseTime(ts)
+		if err != nil {
+			continue
+		}
+		out = append(out, AgentError{
+			TS: at, SessionID: sessionID, Project: project,
+			Surface: "hook", Key: p.Stage, Error: p.Error,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.HookErrorsSince: %w", err)
+	}
+	return out, nil
+}
+
 // RecallHitQuery is the (project, query) of one successful recall tool call.
 type RecallHitQuery struct {
 	Project string

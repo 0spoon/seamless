@@ -227,14 +227,14 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// the explicit session_start tool resolves the same cwd and does surface the
 	// error, and that is the path where a wrong binding actually sticks.
 	if _, err := store.RegisterProjectForCWD(ctx, h.db, p.CWD); err != nil {
-		h.logger.Warn("hooks: register project for cwd; scope falls back to global", "cwd", p.CWD, "error", err)
+		h.recordHookError(ctx, "register-project", client, err, "cwd", p.CWD)
 	}
 
 	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
 		CWD: p.CWD, Source: p.Source, AgentType: p.AgentType,
 	})
 	if err != nil {
-		h.logger.Warn("hooks: session-start briefing failed", "error", err)
+		h.recordHookError(ctx, "session-start-briefing", client, err)
 		briefing, injectedIDs = "", nil // never block the agent
 	}
 	injected := briefing != ""
@@ -327,7 +327,7 @@ func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
 		if _, err := store.SetAmbientSessionTokens(
 			ctx, h.db, ClientCodex.externalIdentity(), p.SessionID, usage, time.Now().UTC(),
 		); err != nil {
-			h.logger.Warn("hooks: codex stop token harvest", "external_session_id", p.SessionID, "error", err)
+			h.recordHookError(ctx, "codex-stop-token-harvest", ClientCodex, err, "external_session_id", p.SessionID)
 		}
 	}
 
@@ -338,7 +338,7 @@ func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
 	if _, err := store.UpdateAmbientFindings(
 		ctx, h.db, ClientCodex.externalIdentity(), p.SessionID, findings, time.Now().UTC(),
 	); err != nil {
-		h.logger.Warn("hooks: codex stop harvest", "external_session_id", p.SessionID, "error", err)
+		h.recordHookError(ctx, "codex-stop-findings-harvest", ClientCodex, err, "external_session_id", p.SessionID)
 	}
 }
 
@@ -359,7 +359,7 @@ func (h *Handler) harvestClaudeTokens(ctx context.Context, client Client, extern
 	if _, err := store.SetAmbientSessionTokens(
 		ctx, h.db, client.externalIdentity(), externalSessionID, usage, now,
 	); err != nil {
-		h.logger.Warn("hooks: session-end token harvest", "external_session_id", externalSessionID, "error", err)
+		h.recordHookError(ctx, "session-end-token-harvest", client, err, "external_session_id", externalSessionID)
 	}
 }
 
@@ -378,7 +378,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hoo
 	externalClient := client.externalIdentity()
 	project, err := store.ResolveProjectForCWD(ctx, h.db, p.CWD)
 	if err != nil {
-		h.logger.Warn("hooks: ambient project resolve", "error", err)
+		h.recordHookError(ctx, "ambient-project-resolve", client, err, "cwd", p.CWD)
 		project = ""
 	}
 
@@ -388,7 +388,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hoo
 	resumed, found, err := store.ReactivateAmbientSession(
 		ctx, h.db, externalClient, p.SessionID, project, now)
 	if err != nil {
-		h.logger.Warn("hooks: ambient resume", "error", err)
+		h.recordHookError(ctx, "ambient-resume", client, err)
 		return ""
 	}
 	if found {
@@ -422,7 +422,7 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hoo
 				return existing.Name
 			}
 		}
-		h.logger.Warn("hooks: ambient create", "error", err)
+		h.recordHookError(ctx, "ambient-create", client, err)
 		return ""
 	}
 	h.recordSession(ctx, core.EventSessionStarted, sess, map[string]any{"ambient": true})
@@ -443,7 +443,7 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 	sessions, err := store.ActiveSessionsByExternalIdentity(
 		ctx, h.db, client.externalIdentity(), p.SessionID)
 	if err != nil {
-		h.logger.Warn("hooks: session-end lookup", "error", err)
+		h.recordHookError(ctx, "session-end-lookup", client, err)
 		return
 	}
 
@@ -463,12 +463,12 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 			h.harvestClaudeTokens(ctx, client, p.SessionID, p.TranscriptPath, now)
 		}
 		if err := store.UpdateSession(ctx, h.db, sess); err != nil {
-			h.logger.Warn("hooks: session-end complete", "session", sess.ID, "error", err)
+			h.recordHookError(ctx, "session-end-complete", client, err, "session", sess.ID)
 			continue
 		}
 		released, rerr := store.ReleaseClaimsForSession(ctx, h.db, sess.ID, now)
 		if rerr != nil {
-			h.logger.Warn("hooks: session-end release claims", "session", sess.ID, "error", rerr)
+			h.recordHookError(ctx, "session-end-release-claims", client, rerr, "session", sess.ID)
 		}
 		h.recordSession(ctx, core.EventSessionEnded, sess, map[string]any{
 			"ambient": sess.Ambient, "harvested": sess.Ambient, "linked": !sess.Ambient,
@@ -535,7 +535,7 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 
 	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
 	if err != nil {
-		h.logger.Warn("hooks: user-prompt-submit recall failed", "error", err)
+		h.recordHookError(ctx, "prompt-recall", client, err)
 		out, injectedIDs = "", nil
 	}
 	if out == "" {
@@ -591,7 +591,7 @@ func (h *Handler) recordInjection(ctx context.Context, hook string, client Clien
 		ProjectSlug: project,
 		Payload:     payload,
 	}); err != nil {
-		h.logger.Warn("hooks: record injection", "error", err)
+		h.recordHookError(ctx, "record-injection", client, err)
 	}
 }
 
@@ -614,7 +614,7 @@ func (h *Handler) recordHookPrompt(ctx context.Context, client Client, claudeSes
 			"prompt":          events.Truncate(prompt, h.maxEventChars), "matched": false,
 		},
 	}); err != nil {
-		h.logger.Warn("hooks: record hook prompt", "error", err)
+		h.recordHookError(ctx, "record-hook-prompt", client, err)
 	}
 }
 
@@ -631,7 +631,7 @@ func (h *Handler) touchAmbient(ctx context.Context, client Client, claudeSession
 	if err := store.TouchAmbientSession(
 		ctx, h.db, client.externalIdentity(), claudeSessionID, time.Now().UTC(),
 	); err != nil {
-		h.logger.Warn("hooks: ambient heartbeat", "error", err)
+		h.recordHookError(ctx, "ambient-heartbeat", client, err)
 	}
 }
 
@@ -658,7 +658,7 @@ func (h *Handler) setAmbientModel(ctx context.Context, client Client, claudeSess
 	if err := store.SetAmbientSessionModel(
 		ctx, h.db, client.externalIdentity(), claudeSessionID, model,
 	); err != nil {
-		h.logger.Warn("hooks: ambient model", "error", err)
+		h.recordHookError(ctx, "ambient-model", client, err)
 	}
 }
 
@@ -673,7 +673,7 @@ func (h *Handler) ambientRef(ctx context.Context, client Client, claudeSessionID
 	sess, ok, err := store.AmbientSessionByExternalIdentity(
 		ctx, h.db, client.externalIdentity(), claudeSessionID)
 	if err != nil {
-		h.logger.Warn("hooks: ambient ref lookup", "error", err)
+		h.recordHookError(ctx, "ambient-ref-lookup", client, err)
 		return "", ""
 	}
 	if !ok {
@@ -692,7 +692,7 @@ func (h *Handler) ambientModel(ctx context.Context, client Client, claudeSession
 	sess, ok, err := store.AmbientSessionByExternalIdentity(
 		ctx, h.db, client.externalIdentity(), claudeSessionID)
 	if err != nil {
-		h.logger.Warn("hooks: ambient model lookup", "error", err)
+		h.recordHookError(ctx, "ambient-model-lookup", client, err)
 		return ""
 	}
 	if !ok {
@@ -713,12 +713,46 @@ func (h *Handler) ambientDisplayName(ctx context.Context, client Client, externa
 		sess, ok, err := store.AmbientSessionByExternalIdentity(
 			ctx, h.db, client.externalIdentity(), externalSessionID)
 		if err != nil {
-			h.logger.Warn("hooks: ambient display-name lookup", "error", err)
+			h.recordHookError(ctx, "ambient-display-name-lookup", client, err)
 		} else if ok {
 			return sess.Name
 		}
 	}
 	return ambientName(client, externalSessionID)
+}
+
+// recordHookError logs a swallowed hook-stage failure (the package's fail-open
+// contract: warn and continue) and, best-effort, emits a hook.error event so
+// the gardener's tool-error pass can notice failures that recur. stage is a
+// stable curated label -- it is the aggregation key, so it must never embed
+// per-request values; those ride in attrs (log only) and the payload's error
+// text. Emission never affects fail-open: with no recorder, or a recorder
+// failure, the log line is all that happens. client may be zero (an internal
+// caller with no request client in scope); the payload then omits it.
+func (h *Handler) recordHookError(ctx context.Context, stage string, client Client, err error, attrs ...any) {
+	h.logger.Warn("hooks: "+stage, append(attrs, "error", err)...)
+	if h.events == nil {
+		return
+	}
+	payload := map[string]any{"stage": stage, "error": firstLine(err.Error())}
+	if client != "" {
+		payload["client"] = client.externalIdentity()
+	}
+	if _, rerr := h.events.Record(ctx, core.Event{
+		Kind: core.EventHookError, Payload: payload,
+	}); rerr != nil {
+		h.logger.Debug("hooks: record hook error", "stage", stage, "error", rerr)
+	}
+}
+
+// firstLine returns the first line of s, trimmed -- the compact error text a
+// hook.error payload carries (mirroring the mcp middleware's tool.call errors,
+// which the same gardener pass consumes).
+func firstLine(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }
 
 // recordSession appends a session lifecycle event for an ambient session.
@@ -729,7 +763,7 @@ func (h *Handler) recordSession(ctx context.Context, kind core.EventKind, sess c
 	if _, err := h.events.Record(ctx, core.Event{
 		Kind: kind, SessionID: sess.ID, ProjectSlug: sess.ProjectSlug, Payload: payload,
 	}); err != nil {
-		h.logger.Warn("hooks: record session event", "kind", kind, "error", err)
+		h.recordHookError(ctx, "record-session-event", "", err, "kind", kind)
 	}
 }
 

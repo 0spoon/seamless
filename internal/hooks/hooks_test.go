@@ -738,3 +738,44 @@ func TestInstallAdoptsAndDedupesUnmarkedHooks(t *testing.T) {
 		require.Contains(t, a, "unchanged")
 	}
 }
+
+// TestHookErrorEventOnSwallowedFailure forces a swallowed hook-stage failure --
+// an ambient display-name collision owned by a different identity, which
+// ensureAmbientSession cannot resolve by resuming -- and asserts the fail-open
+// contract holds (200) while exactly one hook.error event records the stage.
+func TestHookErrorEventOnSwallowedFailure(t *testing.T) {
+	ts, db := newHandlerServer(t)
+
+	name := ambientName(ClientClaudeCode, "sess-collide")
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateSession(context.Background(), db, core.Session{
+		ID: id, Name: name, Status: core.SessionActive,
+		ExternalSessionID: "someone-else", ExternalClient: "codex",
+		Ambient: true, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	resp, _ := post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": "sess-collide", "cwd": "/work/demo", "source": "startup"})
+	require.Equal(t, http.StatusOK, resp.StatusCode, "fail-open: the hook still answers 200")
+
+	rows, err := db.Query(`SELECT payload FROM events WHERE kind = 'hook.error'`)
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var payloads []map[string]any
+	for rows.Next() {
+		var raw string
+		require.NoError(t, rows.Scan(&raw))
+		var p map[string]any
+		require.NoError(t, json.Unmarshal([]byte(raw), &p))
+		payloads = append(payloads, p)
+	}
+	require.NoError(t, rows.Err())
+	require.Len(t, payloads, 1, "exactly one hook.error for the one swallowed failure")
+	require.Equal(t, "ambient-create", payloads[0]["stage"])
+	require.Equal(t, "claude-code", payloads[0]["client"])
+	errText, _ := payloads[0]["error"].(string)
+	require.NotEmpty(t, errText)
+	require.NotContains(t, errText, "\n", "payload error is first-line only")
+}

@@ -13,7 +13,7 @@ import (
 
 func gardenerProposalsTool() mcp.Tool {
 	return mcp.NewTool("gardener_proposals",
-		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, set up a project split, abandon a never-approved captured plan, or write a memory agents keep searching for in vain). Review, then apply or dismiss each with gardener_apply. Read-only."),
+		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only."),
 		mcp.WithString("kind", enumOf(store.ProposalKinds), mcp.Description("filter by proposal kind (default: all pending)")),
 	)
 }
@@ -122,7 +122,7 @@ func (s *Server) handleGardenerSplit(ctx context.Context, req mcp.CallToolReques
 
 func gardenerApplyTool() mcp.Tool {
 	return mcp.NewTool("gardener_apply",
-		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory); action=dismiss discards it. A dismissed proposal is never re-raised."),
+		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory; tool_error -> open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
 		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),
 	)

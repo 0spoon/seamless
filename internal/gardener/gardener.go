@@ -4,7 +4,8 @@
 // live gate (stale-stage), memories briefings keep injecting without any
 // demand (dead-weight), captured plans that were never approved (stale-plan),
 // recall queries that keep missing because nobody wrote the memory
-// (memory-wanted), and rolls recent sessions into a monthly digest. Every pass
+// (memory-wanted), errors agents keep hitting on tool calls or hook stages
+// (tool-error), and rolls recent sessions into a monthly digest. Every pass
 // only ever writes a gardener_proposals row for the owner to apply or dismiss
 // -- it never mutates a memory on its own. The passes run on a ticker and are
 // also invokable on demand (RunOnce).
@@ -42,9 +43,9 @@ type Config struct {
 	DigestDays     int
 	Interval       time.Duration
 	// ToolEventRetentionDays prunes transport-level Interactions events
-	// (tool.call, hook.prompt, recall.miss) older than this many days on each
-	// pass. 0 disables pruning -- deliberately not defaulted, since 0 means
-	// "keep forever".
+	// (tool.call, hook.prompt, recall.miss, hook.error) older than this many
+	// days on each pass. 0 disables pruning -- deliberately not defaulted,
+	// since 0 means "keep forever".
 	ToolEventRetentionDays int
 	// StalePlanDays proposes abandoning captured Claude Code plans still in
 	// draft/presented after this many days. 0 disables the pass -- deliberately
@@ -127,6 +128,7 @@ type PassResult struct {
 	Digests      int `json:"digests"`
 	StalePlans   int `json:"stalePlans"`
 	MemoryWanted int `json:"memoryWanted"`
+	ToolError    int `json:"toolError"`
 	// Failed names the passes that errored, in run order. A failing pass leaves
 	// its count at 0, which is shaped exactly like "nothing to propose"; this is
 	// the only thing that tells the two apart. Read it before trusting a zero.
@@ -135,7 +137,7 @@ type PassResult struct {
 
 // Total is the number of proposals created across all passes.
 func (r PassResult) Total() int {
-	return r.Merges + r.Archives + r.Digests + r.StalePlans + r.MemoryWanted
+	return r.Merges + r.Archives + r.Digests + r.StalePlans + r.MemoryWanted + r.ToolError
 }
 
 // OK reports whether every pass ran to completion. A zero Total means "nothing
@@ -193,6 +195,7 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	res.Digests = run("digest", s.proposeDigests)
 	res.StalePlans = run("stale-plan", s.proposeStalePlans)
 	res.MemoryWanted = run("memory-wanted", s.proposeMemoryWanted)
+	res.ToolError = run("tool-error", s.proposeToolError)
 
 	switch {
 	case !res.OK():
@@ -200,24 +203,26 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 		// the run's output to trust, which no single pass warning can convey.
 		s.logger.Warn("gardener pass incomplete", "failed", res.Failed, "merges", res.Merges,
 			"archives", res.Archives, "digests", res.Digests, "stale_plans", res.StalePlans,
-			"memory_wanted", res.MemoryWanted)
+			"memory_wanted", res.MemoryWanted, "tool_errors", res.ToolError)
 	case res.Total() > 0:
 		s.logger.Info("gardener pass complete", "merges", res.Merges, "archives", res.Archives,
-			"digests", res.Digests, "stale_plans", res.StalePlans, "memory_wanted", res.MemoryWanted)
+			"digests", res.Digests, "stale_plans", res.StalePlans, "memory_wanted", res.MemoryWanted,
+			"tool_errors", res.ToolError)
 	}
 	return res, nil
 }
 
 // pruneToolEvents deletes transport-level Interactions events (tool.call,
-// hook.prompt, recall.miss) older than the retention window, keeping the event
-// log bounded. Domain events are never touched. A non-positive retention or nil
-// recorder disables it. Best-effort: a failure is logged, not returned.
+// hook.prompt, recall.miss, hook.error) older than the retention window,
+// keeping the event log bounded. Domain events are never touched. A
+// non-positive retention or nil recorder disables it. Best-effort: a failure
+// is logged, not returned.
 func (s *Service) pruneToolEvents(ctx context.Context) {
 	if s.events == nil || s.cfg.ToolEventRetentionDays <= 0 {
 		return
 	}
 	cutoff := s.now().UTC().AddDate(0, 0, -s.cfg.ToolEventRetentionDays)
-	n, err := s.events.PruneKinds(ctx, []core.EventKind{core.EventToolCall, core.EventHookPrompt, core.EventRecallMiss}, cutoff)
+	n, err := s.events.PruneKinds(ctx, []core.EventKind{core.EventToolCall, core.EventHookPrompt, core.EventRecallMiss, core.EventHookError}, cutoff)
 	if err != nil {
 		s.logger.Warn("gardener: prune tool events", "error", err)
 		return
