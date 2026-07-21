@@ -44,6 +44,7 @@ type retrievalData struct {
 	PromptMatches      int                `json:"promptMatches"`
 	RecallMisses       int                `json:"recallMisses"`
 	MissRate           int                `json:"missRate"`
+	ToolMisses         int                `json:"toolMisses"`
 	DeadWeight         []store.MemoryStat `json:"deadWeight"`
 }
 
@@ -87,6 +88,7 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 			BriefingSurfaced: report.BriefingSurfaced, DemandedOfSurfaced: report.DemandedOfSurfaced,
 			DemandRate: report.DemandRate, WasteShare: report.WasteShare,
 			PromptMatches: report.PromptMatches, RecallMisses: report.RecallMisses, MissRate: report.MissRate,
+			ToolMisses: report.ToolMisses,
 			DeadWeight: report.DeadWeight,
 		},
 	})

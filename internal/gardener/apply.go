@@ -13,10 +13,11 @@ import (
 
 // Apply carries out a pending proposal and marks it applied. The effect depends
 // on the kind: an archive retires the memory (invalid, but still readable), a
-// merge supersedes the "drop" memory by the "keep" memory, and a digest writes
-// the summary as a note. If the effect cannot be carried out (e.g. a referenced
-// memory has since been deleted), the proposal is left pending and an error is
-// returned, so the owner can retry or dismiss.
+// merge supersedes the "drop" memory by the "keep" memory, a digest writes the
+// summary as a note, and a memory_wanted opens a task to write the missing
+// knowledge. If the effect cannot be carried out (e.g. a referenced memory has
+// since been deleted), the proposal is left pending and an error is returned,
+// so the owner can retry or dismiss.
 func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) {
 	p, ok, err := store.ProposalByID(ctx, s.db, id)
 	if err != nil {
@@ -46,6 +47,8 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applySplit(ctx, p, now)
 	case store.ProposalAbandonPlan:
 		result, err = s.applyAbandonPlan(ctx, p, now)
+	case store.ProposalMemoryWanted:
+		result, err = s.applyMemoryWanted(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}

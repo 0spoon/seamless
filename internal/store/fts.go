@@ -103,13 +103,53 @@ func FTSSearchSnippetsSince(ctx context.Context, db *sql.DB, query string, kinds
 	return ftsSearch(ctx, db, query, kinds, projects, since, limit, true)
 }
 
-// ftsSearch is the shared body of both FTS entry points. withSnippet adds the
-// snippet() projection; everything else about the query is identical.
+// FTSSearchAllTerms is FTSSearch with AND semantics: a hit must contain every
+// term. The OR of ftsQuery maximizes recall for ranking pipelines, but a
+// presence probe -- "does knowledge covering all of this exist?" -- needs
+// precision instead: with OR, any item sharing one common word would count.
+// The gardener's memory-wanted liveness guard is the canonical caller. Terms
+// are sanitized exactly like ftsQuery's tokens (split, short tokens dropped,
+// quoted); unusable input yields no hits, not an error.
+func FTSSearchAllTerms(ctx context.Context, db *sql.DB, terms []string, kinds, projects []string, limit int) ([]SearchHit, error) {
+	quoted := make([]string, 0, len(terms))
+	for _, term := range terms {
+		fields := strings.FieldsFunc(term, func(r rune) bool {
+			return !unicode.IsLetter(r) && !unicode.IsNumber(r)
+		})
+		for _, f := range fields {
+			if len([]rune(f)) < 2 {
+				continue
+			}
+			quoted = append(quoted, `"`+f+`"`)
+		}
+	}
+	if len(quoted) == 0 {
+		return nil, nil
+	}
+	// Adjacent quoted terms are an implicit AND in FTS5.
+	hits, err := ftsSearchMatch(ctx, db, strings.Join(quoted, " "), kinds, projects, time.Time{}, limit, false)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SearchHit, len(hits))
+	for i, h := range hits {
+		out[i] = h.SearchHit
+	}
+	return out, nil
+}
+
+// ftsSearch is the shared body of the free-text FTS entry points. withSnippet
+// adds the snippet() projection; everything else about the query is identical.
 func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
+	return ftsSearchMatch(ctx, db, ftsQuery(query), kinds, projects, since, limit, withSnippet)
+}
+
+// ftsSearchMatch runs a pre-built FTS5 MATCH expression. match must already be
+// sanitized (quoted terms only); an empty match yields no hits.
+func ftsSearchMatch(ctx context.Context, db *sql.DB, match string, kinds, projects []string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
 	if limit <= 0 {
 		limit = 10
 	}
-	match := ftsQuery(query)
 	if match == "" {
 		return nil, nil
 	}

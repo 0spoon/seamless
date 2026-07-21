@@ -252,9 +252,24 @@ found, <code>gardener_apply</code> to act on one.</p>
 <td>A <code>stage</code> memory whose <code>Status:</code> header is done, missing, or unrecognized, unchanged for <code>gardener.stale_stage_days</code> (14)</td>
 <td><strong>archive</strong>: a stage that gates nothing should not hold a permanent briefing pin</td>
 </tr>
+<tr>
+<td><strong>dead-weight</strong></td>
+<td>A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read</td>
+<td><strong>archive</strong>: exposure without demand means it costs tokens and steers nothing</td>
+</tr>
+<tr>
+<td><strong>memory-wanted</strong></td>
+<td>The same recall query returned zero hits in 2+ sessions inside 14 days</td>
+<td><strong>memory_wanted</strong>: write the knowledge agents keep searching for; applying opens a task in the queue</td>
+</tr>
 </tbody>
 </table>
 </div>
+<p>The memory-wanted pass is the one place the gardener asks <em>for</em> knowledge
+instead of curating what exists: recurring zero-hit <code>recall</code> queries are demand
+for a memory nobody wrote, grouped per project so a one-off miss never fires.
+Applying the proposal opens a task (&quot;Write a memory: ...&quot;) in the ready queue -
+the memory itself is only ever written by whoever picks the task up.</p>
 <p>Two more proposal types come from requests rather than the timer:</p>
 <ul>
 <li><strong>reproject</strong> - a memory filed under the wrong project, moved to a project that

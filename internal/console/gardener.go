@@ -93,6 +93,20 @@ type proposalCard struct {
 
 	// AbandonPlan (retag a never-approved captured plan).
 	AbandonPlan *abandonPlanView `json:"abandonPlan,omitempty"`
+
+	// MemoryWanted (open a task to write knowledge agents searched for in vain).
+	MemoryWanted *memoryWantedView `json:"memoryWanted,omitempty"`
+}
+
+// memoryWantedView is the memory_wanted projection: the recurring zero-hit
+// recall queries that evidence a knowledge gap.
+type memoryWantedView struct {
+	Project        string   `json:"project,omitempty"`
+	Queries        []string `json:"queries"`
+	MissCount      int      `json:"missCount"`
+	SessionCount   int      `json:"sessionCount"`
+	LastMissedAt   string   `json:"lastMissedAt,omitempty"`
+	SuggestedTitle string   `json:"suggestedTitle"`
 }
 
 // abandonPlanView is the abandon_plan projection: the stale captured plan.
@@ -316,6 +330,16 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			Status: payloadStr(p.Payload, "plan_status"),
 		}
 		c.Reason = payloadStr(p.Payload, "reason")
+	case store.ProposalMemoryWanted:
+		c.MemoryWanted = &memoryWantedView{
+			Project:        payloadStr(p.Payload, "project"),
+			Queries:        payloadStrList(p.Payload, "queries"),
+			MissCount:      int(payloadFloat(p.Payload, "miss_count")),
+			SessionCount:   int(payloadFloat(p.Payload, "session_count")),
+			LastMissedAt:   payloadStr(p.Payload, "last_missed_at"),
+			SuggestedTitle: payloadStr(p.Payload, "suggested_title"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalSplit:
 		sv := &splitView{
 			Source:       payloadStr(p.Payload, "source_project"),
@@ -354,9 +378,34 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Restructure a project", "Project topology", "split", "pop"
 	case store.ProposalAbandonPlan:
 		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
+	case store.ProposalMemoryWanted:
+		return "Write a missing memory", "Knowledge gap", "search", "pop"
 	default:
 		return "Review a knowledge change", "Proposal", "sprout", "brand"
 	}
+}
+
+// payloadStrList reads a string-array field from a payload map (a JSON
+// round-trip delivers it as []any; a same-process payload may still hold the
+// original []string).
+func payloadStrList(p map[string]any, key string) []string {
+	if p == nil {
+		return nil
+	}
+	if ss, ok := p[key].([]string); ok {
+		return ss
+	}
+	raw, ok := p[key].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(raw))
+	for _, v := range raw {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // payloadBool reads a boolean field from a payload map (false if absent).

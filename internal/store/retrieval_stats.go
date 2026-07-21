@@ -67,6 +67,7 @@ type injectedPayload struct {
 	ExternalClient  string   `json:"external_client"`
 	Hook            string   `json:"hook"`
 	Source          string   `json:"source"`
+	Query           string   `json:"query"` // recall's search text; hit-signature suppression reads it
 }
 
 // injectedUtilityWeight maps an injection payload to its utility weight.

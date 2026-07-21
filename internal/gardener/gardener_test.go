@@ -83,6 +83,7 @@ func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
 	mustRec("01B", old, core.EventHookPrompt)    // old transport -> pruned
 	mustRec("01C", old, core.EventMemoryWritten) // old domain -> kept
 	mustRec("01D", fresh, core.EventToolCall)    // fresh transport -> kept
+	mustRec("01E", old, core.EventRecallMiss)    // old transport -> pruned
 
 	g := New(db, nil, nil, nil, rec, Config{ToolEventRetentionDays: 30}, slog.Default())
 	g.now = func() time.Time { return now }
@@ -98,6 +99,7 @@ func TestPruneToolEvents_OnlyOldTransport(t *testing.T) {
 	require.True(t, kinds[core.EventMemoryWritten], "domain event survives")
 	require.True(t, kinds[core.EventToolCall], "fresh transport event survives")
 	require.False(t, kinds[core.EventHookPrompt], "old transport event pruned")
+	require.False(t, kinds[core.EventRecallMiss], "old recall miss pruned")
 
 	// Retention 0 disables pruning entirely (no-op).
 	g0 := New(db, nil, nil, nil, rec, Config{ToolEventRetentionDays: 0}, slog.Default())

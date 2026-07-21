@@ -105,6 +105,7 @@ type RetrievalReport struct {
 	PromptMatches      int          `json:"promptMatches"`      // prompt-recall injections in the window
 	RecallMisses       int          `json:"recallMisses"`       // hook.prompt (matched nothing) events in the window
 	MissRate           int          `json:"missRate"`           // RecallMisses / (RecallMisses+PromptMatches), rounded %
+	ToolMisses         int          `json:"toolMisses"`         // recall.miss (zero-hit recall calls) events in the window
 	DeadWeight         []MemoryStat `json:"deadWeight"`         // most-briefing-injected active memories with no demand in 30d
 }
 
@@ -367,6 +368,10 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 	}
 	if total := rep.RecallMisses + rep.PromptMatches; total > 0 {
 		rep.MissRate = int(float64(rep.RecallMisses)/float64(total)*100 + 0.5)
+	}
+	rep.ToolMisses, err = countEventsSince(ctx, db, core.EventRecallMiss, w.Since)
+	if err != nil {
+		return rep, err
 	}
 	for id := range briefingSurfaced {
 		if _, ok := demand30[id]; ok {
@@ -693,6 +698,94 @@ func DemandItemIDsSince(ctx context.Context, db *sql.DB, since time.Time) (map[s
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("store.demandItemIDsSince: %w", err)
+	}
+	return out, nil
+}
+
+// RecallMiss is one zero-hit recall tool call read back out of the event log:
+// an agent deliberately searched and found nothing. The gardener's
+// memory-wanted pass clusters these into proposals.
+type RecallMiss struct {
+	TS        time.Time
+	SessionID string
+	Project   string
+	Query     string
+}
+
+// RecallMissesSince returns the recall.miss events at or after the cutoff,
+// oldest first. Rows whose payload carries no query text are unusable for
+// clustering and are skipped.
+func RecallMissesSince(ctx context.Context, db *sql.DB, since time.Time) ([]RecallMiss, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT ts, session_id, project_slug, payload FROM events
+		WHERE kind = ? AND ts >= ? ORDER BY ts`,
+		string(core.EventRecallMiss), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.RecallMissesSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []RecallMiss
+	for rows.Next() {
+		var ts, sessionID, project, payload string
+		if err := rows.Scan(&ts, &sessionID, &project, &payload); err != nil {
+			return nil, fmt.Errorf("store.RecallMissesSince: scan: %w", err)
+		}
+		var p struct {
+			Query string `json:"query"`
+		}
+		if payload == "" || json.Unmarshal([]byte(payload), &p) != nil || p.Query == "" {
+			continue
+		}
+		at, err := core.ParseTime(ts)
+		if err != nil {
+			continue
+		}
+		out = append(out, RecallMiss{TS: at, SessionID: sessionID, Project: project, Query: p.Query})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.RecallMissesSince: %w", err)
+	}
+	return out, nil
+}
+
+// RecallHitQuery is the (project, query) of one successful recall tool call.
+type RecallHitQuery struct {
+	Project string
+	Query   string
+}
+
+// RecallHitQueriesSince returns the query text of every recall tool call that
+// surfaced hits since the cutoff. The memory-wanted pass uses these to suppress
+// miss groups whose query also succeeds sometimes -- an intermittent miss is a
+// ranking problem, not a knowledge gap.
+func RecallHitQueriesSince(ctx context.Context, db *sql.DB, since time.Time) ([]RecallHitQuery, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT project_slug, payload FROM events WHERE kind = ? AND ts >= ?`,
+		string(core.EventInjected), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.RecallHitQueriesSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []RecallHitQuery
+	for rows.Next() {
+		var project, payload string
+		if err := rows.Scan(&project, &payload); err != nil {
+			return nil, fmt.Errorf("store.RecallHitQueriesSince: scan: %w", err)
+		}
+		if payload == "" || payload == "{}" {
+			continue
+		}
+		var p injectedPayload
+		if err := json.Unmarshal([]byte(payload), &p); err != nil {
+			continue
+		}
+		if p.Source != "recall" || p.Query == "" {
+			continue
+		}
+		out = append(out, RecallHitQuery{Project: project, Query: p.Query})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.RecallHitQueriesSince: %w", err)
 	}
 	return out, nil
 }

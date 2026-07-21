@@ -19,13 +19,14 @@ const (
 
 // Proposal kinds (mirrors the gardener_proposals.kind CHECK constraint).
 const (
-	ProposalMerge       = "merge"
-	ProposalArchive     = "archive"
-	ProposalDigest      = "digest"
-	ProposalConsolidate = "consolidate"
-	ProposalReproject   = "reproject"    // move one memory to another project
-	ProposalSplit       = "split"        // set up child/shared projects + family for a project split
-	ProposalAbandonPlan = "abandon_plan" // retag a never-approved captured plan plan-status:abandoned
+	ProposalMerge        = "merge"
+	ProposalArchive      = "archive"
+	ProposalDigest       = "digest"
+	ProposalConsolidate  = "consolidate"
+	ProposalReproject    = "reproject"     // move one memory to another project
+	ProposalSplit        = "split"         // set up child/shared projects + family for a project split
+	ProposalAbandonPlan  = "abandon_plan"  // retag a never-approved captured plan plan-status:abandoned
+	ProposalMemoryWanted = "memory_wanted" // agents repeatedly searched for knowledge that does not exist
 )
 
 // ProposalKinds lists every valid proposal kind. This is the canonical set:
@@ -33,7 +34,7 @@ const (
 // cannot reach the store while staying invisible at the boundary.
 var ProposalKinds = []string{
 	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
-	ProposalReproject, ProposalSplit, ProposalAbandonPlan,
+	ProposalReproject, ProposalSplit, ProposalAbandonPlan, ProposalMemoryWanted,
 }
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

@@ -104,14 +104,23 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 		"session_count": 4.0, "title": "seamless digest 2026-07", "body": "## Findings\n- did the thing",
 	})
 	require.NoError(t, err)
+	wantedP, err := store.CreateProposal(ctx, db, store.ProposalMemoryWanted, map[string]any{
+		"key": "memory_wanted:seamless:boot-chroma-race", "project": "seamless",
+		"signature":  "boot-chroma-race",
+		"queries":    []string{"chroma boot race", "race during chroma boot"},
+		"miss_count": 3.0, "session_count": 2.0,
+		"suggested_title": "chroma boot race",
+		"reason":          "knowledge gap: recall found nothing 3x across 2 sessions in 14d",
+	})
+	require.NoError(t, err)
 
 	// Cards render, one per kind.
 	var data gardenerData
 	getJSON(t, mux, "/console/gardener?format=json", &data)
-	require.Len(t, data.Cards, 3)
-	require.Equal(t, 3, data.PendingCount)
+	require.Len(t, data.Cards, 4)
+	require.Equal(t, 4, data.PendingCount)
 	require.Zero(t, data.RequestedCount)
-	require.Equal(t, 3, data.BackgroundCount)
+	require.Equal(t, 4, data.BackgroundCount)
 	byKind := map[string]proposalCard{}
 	for _, c := range data.Cards {
 		byKind[c.Kind] = c
@@ -123,6 +132,12 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	require.Equal(t, "git-merge", byKind["merge"].Icon)
 	require.Equal(t, 4, byKind["digest"].SessionCount)
 	require.Equal(t, "old-note", byKind["archive"].Archive.Name)
+	require.Equal(t, "Write a missing memory", byKind["memory_wanted"].Label)
+	require.Equal(t, "search", byKind["memory_wanted"].Icon)
+	require.Equal(t, []string{"chroma boot race", "race during chroma boot"}, byKind["memory_wanted"].MemoryWanted.Queries)
+	require.Equal(t, 3, byKind["memory_wanted"].MemoryWanted.MissCount)
+	require.Equal(t, 2, byKind["memory_wanted"].MemoryWanted.SessionCount)
+	require.Equal(t, "chroma boot race", byKind["memory_wanted"].MemoryWanted.SuggestedTitle)
 
 	// The HTML is a two-stage trust surface: the propose-only contract is
 	// explicit before the request composer, and decisions expose their effects
@@ -150,6 +165,17 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	p, _, err = store.ProposalByID(ctx, db, digestP.ID)
 	require.NoError(t, err)
 	require.Equal(t, store.ProposalApplied, p.Status)
+
+	// Apply the memory-wanted -> an open task appears and the proposal is applied.
+	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+wantedP.ID+"/apply").Code)
+	p, _, err = store.ProposalByID(ctx, db, wantedP.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalApplied, p.Status)
+	tasks, err := store.ListTasks(ctx, db, "seamless", core.TaskOpen)
+	require.NoError(t, err)
+	require.Len(t, tasks, 1)
+	require.Equal(t, "Write a memory: chroma boot race", tasks[0].Title)
+	require.Equal(t, "gardener", tasks[0].CreatedBy)
 
 	// Apply the archive whose memory is missing -> flash error, proposal stays pending.
 	rr := post(mux, "/console/gardener/"+archiveP.ID+"/apply")

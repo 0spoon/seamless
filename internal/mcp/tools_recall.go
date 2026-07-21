@@ -7,8 +7,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/retrieve"
 )
+
+// recallMissQueryMax bounds the query text stored on a recall.miss event; the
+// miss log is transport-class telemetry, not a transcript.
+const recallMissQueryMax = 500
 
 func recallTool() mcp.Tool {
 	return mcp.NewTool("recall",
@@ -48,6 +53,12 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 		}
 		s.record(ctx, core.EventInjected, s.boundSession(ctx), project, "",
 			map[string]any{"query": query, "item_ids": ids, "item_scores": scores, "source": "recall"})
+	} else {
+		// A zero-hit recall is demand for knowledge that does not exist -- the
+		// signal the gardener's memory-wanted pass clusters into proposals.
+		s.record(ctx, core.EventRecallMiss, s.boundSession(ctx), project, "",
+			map[string]any{"query": events.Truncate(query, recallMissQueryMax), "scope": argString(req, "scope"),
+				"limit": argInt(req, "limit", 10), "source": "recall"})
 	}
 	return jsonResult(map[string]any{"hits": hits})
 }

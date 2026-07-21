@@ -240,6 +240,15 @@
         <div class="retrieval-loop-value"><strong>{{if or .RecallMisses .PromptMatches}}{{.MissRate}}%{{else}}&mdash;{{end}}</strong></div>
         <p>{{if or .RecallMisses .PromptMatches}}{{.RecallMisses}} prompts matched nothing vs {{.PromptMatches}} that matched. Falling = the knowledge base covers what gets asked.{{else}}No prompt-recall activity in this window yet.{{end}}</p>
       </article>
+
+      <article class="retrieval-panel retrieval-loop-stat">
+        <header class="retrieval-panel-head">
+          <span class="retrieval-panel-icon pop">{{icon "search"}}</span>
+          <div><span>{{.WindowLabel}}</span><h3>Agent search misses</h3></div>
+        </header>
+        <div class="retrieval-loop-value"><strong>{{if .ToolMisses}}{{.ToolMisses}}{{else}}&mdash;{{end}}</strong></div>
+        <p>{{if .ToolMisses}}Recall calls that found nothing. Recurring misses become the gardener's memory-wanted proposals.{{else}}No zero-hit recall calls in this window.{{end}}</p>
+      </article>
     </div>
 
     <article class="retrieval-panel retrieval-deadweight-panel{{if not .DeadWeight}} healthy{{end}}">

@@ -199,3 +199,26 @@ func TestFTSSearch_SnippetVariantMatchesPlainOrdering(t *testing.T) {
 		require.Equal(t, plain[i].Score, snips[i].Score, "hit %d: score must match", i)
 	}
 }
+
+func TestFTSSearchAllTerms_ANDSemantics(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	insertFTSRow(t, db, "F1", "memory", "", "", "full-match", "", "the zeta protocol handshake sequence")
+	insertFTSRow(t, db, "P1", "memory", "", "", "partial-match", "", "an unrelated protocol note")
+
+	// Every term must be present: the partial match stays out.
+	hits, err := FTSSearchAllTerms(ctx, db, []string{"zeta", "protocol", "handshake"}, nil, nil, 10)
+	require.NoError(t, err)
+	require.Equal(t, []string{"F1"}, hitIDs(hits))
+
+	// The OR entry point would have surfaced both -- the contrast under test.
+	orHits, err := FTSSearch(ctx, db, "zeta protocol handshake", nil, nil, 10)
+	require.NoError(t, err)
+	require.Len(t, orHits, 2)
+
+	// Unusable terms (too short, punctuation-only) yield no hits, not an error.
+	hits, err = FTSSearchAllTerms(ctx, db, []string{"a", "--"}, nil, nil, 10)
+	require.NoError(t, err)
+	require.Empty(t, hits)
+}

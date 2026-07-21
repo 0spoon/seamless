@@ -1161,6 +1161,10 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .proposal-source-list > span { padding-top: 4px; color: var(--danger); font-size: var(--text-2xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; }
 .proposal-source-list > div { display: flex; flex-wrap: wrap; gap: 6px; }
 .proposal-source-list a { padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--danger) 22%, var(--border)); border-radius: var(--radius-pill); color: var(--danger); background: var(--danger-soft); font-size: var(--text-xs); }
+.proposal-query-list { display: grid; grid-template-columns: 135px minmax(0, 1fr); align-items: start; gap: 10px; }
+.proposal-query-list > span { padding-top: 4px; color: var(--muted); font-size: var(--text-2xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.proposal-query-list > div { display: flex; flex-wrap: wrap; gap: 6px; }
+.proposal-query-list em { padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--pop) 22%, var(--border)); border-radius: var(--radius-pill); color: var(--pop-strong); background: var(--pop-soft); font-size: var(--text-xs); font-style: normal; }
 .proposal-moving-memory { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: var(--text-sm); }
 .proposal-moving-memory .ico { width: 15px; height: 15px; color: var(--brand); }
 .proposal-moving-memory a { color: var(--ink); font-family: var(--font-display); font-weight: 650; }
@@ -1260,7 +1264,7 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
   .gardener-proposal-actions form, .gardener-proposal-actions .btn { width: 100%; }
   .proposal-object { grid-template-columns: auto minmax(0, 1fr); }
   .proposal-object-tags { grid-column: 2; align-items: flex-start; flex-direction: row !important; flex-wrap: wrap; }
-  .proposal-reason, .proposal-source-list { grid-template-columns: 1fr; gap: 4px; }
+  .proposal-reason, .proposal-source-list, .proposal-query-list { grid-template-columns: 1fr; gap: 4px; }
   .proposal-target-projects { grid-template-columns: 1fr; }
   .gardener-retarget { grid-template-columns: 1fr; }
   .gardener-retarget .btn { width: 100%; }
@@ -3666,7 +3670,7 @@ a.overview-event-project:hover { color: var(--brand); }
 .retrieval-healthy-state strong { font-family: var(--font-display); font-size: var(--text-md); }
 .retrieval-healthy-state p { max-width: 44ch; margin: 6px 0 0; color: var(--muted); font-size: var(--text-sm); line-height: 1.5; }
 
-.retrieval-loop-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; align-items: stretch; margin-bottom: 14px; }
+.retrieval-loop-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: stretch; margin-bottom: 14px; }
 .retrieval-loop-stat { display: flex; flex-direction: column; }
 .retrieval-loop-value { padding: 16px 14px 0; }
 .retrieval-loop-value strong { font-family: var(--font-display); font-size: clamp(30px, 3.4vw, 44px); font-weight: 700; letter-spacing: -0.02em; color: var(--ink); font-variant-numeric: tabular-nums; }

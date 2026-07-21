@@ -279,6 +279,18 @@
   {{end}}
   {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
   <div class="proposal-assurance">{{icon "file-text"}} Re-tags the capture as abandoned; the plan note is not deleted.</div>
+{{else if eq .Kind "memory_wanted"}}
+  {{with .MemoryWanted}}
+  <div class="proposal-signal">Agents searched for this and recall returned nothing &mdash; {{.MissCount}} miss{{if ne .MissCount 1}}es{{end}} across {{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}}.</div>
+  <div class="proposal-query-list"><span>Searched, not found</span><div>{{range .Queries}}<em>{{.}}</em>{{end}}</div></div>
+  <div class="proposal-object outcome">
+    <span class="proposal-object-icon pop">{{icon "search"}}</span>
+    <div><span>Task the apply opens</span><strong>Write a memory: {{.SuggestedTitle}}</strong></div>
+    <div class="proposal-object-tags"><span>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span></div>
+  </div>
+  {{end}}
+  {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "check"}} Opens a task in the queue; nothing is written until someone writes the memory.</div>
 {{else if eq .Kind "split"}}
   {{with .Split}}
   <div class="proposal-topology">
