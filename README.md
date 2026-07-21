@@ -1,13 +1,24 @@
 # Seamless
 
-Local-first memory and coordination substrate for AI coding agents.
+[![Go Report Card](https://goreportcard.com/badge/github.com/0spoon/seamless)](https://goreportcard.com/report/github.com/0spoon/seamless)
+[![Latest release](https://img.shields.io/github/v/release/0spoon/seamless)](https://github.com/0spoon/seamless/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![MCP](https://img.shields.io/badge/MCP-compatible-6f42c1)](https://thereisnospoon.org/docs/reference/mcp/)
 
-Seamless gives a fleet of agents (Claude Code, Codex, and any MCP-compatible
-client) a shared, durable memory and a way to divide work without colliding: memories with
-a supersession lifecycle, hybrid recall, a dependency-aware task queue with
-lease-based claiming, captured plans, and research trials. Durable knowledge is
-stored as markdown files on disk; a single Go binary indexes it, serves it over
-MCP, and renders a web console for inspection.
+An AI coding agent rediscovers the same constraint every session, because
+nothing it learns survives the context window. Run two agents against the same
+backlog and they pick the same step and build it twice. And the products that
+promise to fix this keep your project's memory in someone else's database.
+
+Seamless is a local-first memory and coordination substrate for AI coding
+agents. Works with Claude Code, Codex CLI, and any MCP client.
+
+It gives a fleet of agents a shared, durable memory and a way to divide work
+without colliding: memories with a supersession lifecycle, hybrid recall, a
+dependency-aware task queue with lease-based claiming, captured plans, and
+research trials. Durable knowledge is stored as markdown files on disk; a
+single Go binary indexes it, serves it over MCP, and renders a web console for
+inspection.
 
 **Full documentation: [thereisnospoon.org/docs/](https://thereisnospoon.org/docs/)**
 &nbsp;·&nbsp; Website: [thereisnospoon.org](https://thereisnospoon.org) (source in
@@ -26,6 +37,50 @@ MCP, and renders a web console for inspection.
   Supersession preserves provenance, so nothing is silently rewritten.
 - **One binary, no ceremony.** Static Go binary, no CGO, pure-Go SQLite, no
   Node, no separate vector engine, no cloud account.
+
+## How it compares
+
+The agent-memory space splits into a few recognizable categories. By category,
+because categories do not go stale:
+
+| | Seamless | Cloud memory APIs | Built-in agent memory | Knowledge-graph servers |
+|---|---|---|---|---|
+| Storage format | Markdown files on your disk; SQLite as a rebuildable index | Their database, reached by API key | Vendor-managed store inside one product | A graph database, often a separate server |
+| Runs where | Your machine, localhost only | Their cloud | The vendor's product | Your machine or theirs |
+| Account required | No | Yes | The vendor's | Usually no |
+| Multi-agent coordination | Task queue, lease-based claiming, shared plans | None | None -- one agent, one store | Shared reads at best |
+| Forgetting policy | Supersession with provenance; a gardener proposes, a human disposes | Automatic summarization you do not control | Vendor-defined | Manual |
+| Runtime | One static Go binary | HTTP SDK against their service | None (built in) | Node or Python, plus the database |
+
+For the version with product names and receipts, see
+[the full comparison](https://thereisnospoon.org/compare/).
+
+## Real transcripts
+
+Four pairs of real, unedited Claude Code sessions -- identical prompt,
+identical repo, with and without Seamless:
+
+- **[Cold start](https://thereisnospoon.org/scenarios/cold-start/)** -- one
+  session continues yesterday's plan from an injected briefing; the other
+  re-derives the work from a `TODO` and re-ships a bug the project had already
+  fixed once.
+- **[Constraint violation](https://thereisnospoon.org/scenarios/constraint-violation/)** --
+  a security scanner demands `SameSite=Strict`, which the team already learned
+  breaks external-link logins. One session ships the regression anyway; one
+  refuses and cites the recorded constraint.
+- **[Token safety](https://thereisnospoon.org/scenarios/token-safety/)** --
+  told to persist refresh tokens, one agent mirrors the in-memory map into a
+  raw-token SQL column; the other reads a recorded rule first and stores only
+  SHA-256 hashes.
+- **[Task collision](https://thereisnospoon.org/scenarios/task-collision/)** --
+  two live agents race for the same plan step. One claim wins, the other
+  bounces with the holder's name and pivots to the next ready step.
+
+## What Seamless is not
+
+Not a hosted team knowledge base, not a RAG framework, not a benchmark winner:
+it is memory and coordination for one owner's fleet of agents, on that owner's
+machine.
 
 ## Quick start
 
@@ -48,6 +103,9 @@ the daemon as a per-user service -- launchd on macOS, systemd `--user` on Linux,
 at-logon Scheduled Task on Windows. Upgrade any time with `seamlessd update`
 (re-runs the installer for you; `--check` reports installed vs latest): your
 config and `~/.seamless` are never touched.
+
+(Why `seam`? The CLI keeps the short name of Seam v1, the decommissioned
+private predecessor Seamless was rebuilt from the ground up to replace.)
 
 Then just start the selected client in a git repo. There is no project to create
 and no repo to register: the session-start hook resolves your cwd to its git
