@@ -20,7 +20,7 @@
       <div class="retrieval-instrument-copy">
         <span>Window reach</span>
         {{if .ActiveMemories}}<strong>{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
-        <small>{{.WindowLabel}} observation window</small>
+        <small>{{.WindowLabel}} observation window{{if .CreatedInWindow}} &middot; +{{.CreatedInWindow}} new{{end}}{{if .RetiredInWindow}} &middot; &minus;{{.RetiredInWindow}} retired{{end}}</small>
       </div>
       <div class="retrieval-hero-metrics" aria-label="Retrieval volume and cost">
         <div><strong>{{.Injections}}</strong><span>memory injections</span></div>
@@ -133,7 +133,7 @@
       <article class="retrieval-scope-row">
         <div class="retrieval-scope-identity">
           <span class="retrieval-scope-icon">{{if .Project}}{{icon "box"}}{{else}}{{icon "database"}}{{end}}</span>
-          <div>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}<small>{{.Surfaced}} of {{.Active}} active memories surfaced</small></div>
+          <div>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}<small>{{.Surfaced}} of {{.Active}} active memories surfaced{{if .Created}} &middot; +{{.Created}} new{{end}}{{if .Retired}} &middot; &minus;{{.Retired}} retired{{end}}</small></div>
         </div>
         <div class="retrieval-scope-reach">
           <div><strong>{{.ReachRate}}%</strong><span>reach</span></div>

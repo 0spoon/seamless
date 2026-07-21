@@ -23,6 +23,8 @@ type retrievalData struct {
 	ActiveMemories   int                  `json:"activeMemories"`
 	ReachRate        int                  `json:"reachRate"`
 	SessionsReached  int                  `json:"sessionsReached"`
+	CreatedInWindow  int                  `json:"createdInWindow"`
+	RetiredInWindow  int                  `json:"retiredInWindow"`
 	Window           string               `json:"window"`
 	WindowLabel      string               `json:"windowLabel"`
 	Windows          []windowOption       `json:"-"`
@@ -68,7 +70,8 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 			MemoriesSurfaced: report.MemoriesSurfaced,
 			ActiveMemories:   report.ActiveMemories, ReachRate: report.ReachRate,
 			SessionsReached: report.SessionsReached,
-			Window:          win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+			CreatedInWindow: report.CreatedInWindow, RetiredInWindow: report.RetiredInWindow,
+			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			ByKind: report.ByKind, ByProject: report.ByProject, Trend: report.Trend, TrendMax: trendMax,
 			TopInjected: report.Top, Stale: staleStats(stale), StaleDays: staleWindowDays,
 		},

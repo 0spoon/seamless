@@ -62,10 +62,51 @@ func TestBuildRetrievalReport_ByProject(t *testing.T) {
 	require.Equal(t, 50, rep.ReachRate)       // 2/4
 
 	// Sorted by active desc, then surfaced desc: alpha(2), beta(1 surfaced), global(0).
+	// The all-time window counts every seeded memory as created in-window.
 	require.Len(t, rep.ByProject, 3)
-	require.Equal(t, ProjectReach{Project: "alpha", Surfaced: 1, Active: 2, ReachRate: 50, Injects: 1}, rep.ByProject[0])
-	require.Equal(t, ProjectReach{Project: "beta", Surfaced: 1, Active: 1, ReachRate: 100, Injects: 2}, rep.ByProject[1])
-	require.Equal(t, ProjectReach{Project: "", Surfaced: 0, Active: 1, ReachRate: 0, Injects: 0}, rep.ByProject[2])
+	require.Equal(t, ProjectReach{Project: "alpha", Surfaced: 1, Active: 2, ReachRate: 50, Injects: 1, Created: 2}, rep.ByProject[0])
+	require.Equal(t, ProjectReach{Project: "beta", Surfaced: 1, Active: 1, ReachRate: 100, Injects: 2, Created: 1}, rep.ByProject[1])
+	require.Equal(t, ProjectReach{Project: "", Surfaced: 0, Active: 1, ReachRate: 0, Injects: 0, Created: 1}, rep.ByProject[2])
+	require.Equal(t, 4, rep.CreatedInWindow)
+	require.Zero(t, rep.RetiredInWindow)
+}
+
+// retireMemoryRow stamps invalid_at directly (lifecycle owns that field in
+// production code; the report only reads it).
+func retireMemoryRow(t *testing.T, db *sql.DB, id string, at time.Time) {
+	t.Helper()
+	_, err := db.ExecContext(context.Background(),
+		`UPDATE memories_index SET invalid_at = ? WHERE id = ?`, core.FormatTime(at), id)
+	require.NoError(t, err)
+}
+
+// The churn counters contextualize the window-independent reach denominator:
+// created_at and invalid_at are counted against the window, over active and
+// retired rows alike.
+func TestBuildRetrievalReport_Churn(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	seedMemoryRowProject(t, db, "OLD", "old-active", "alpha", now.Add(-48*time.Hour))   // predates the 24h window
+	seedMemoryRowProject(t, db, "NEW", "new-active", "alpha", now.Add(-time.Hour))      // created in window
+	seedMemoryRowProject(t, db, "GONE", "old-retired", "alpha", now.Add(-48*time.Hour)) // retired in window
+	retireMemoryRow(t, db, "GONE", now.Add(-2*time.Hour))
+	seedMemoryRowProject(t, db, "BLIP", "new-retired", "alpha", now.Add(-3*time.Hour)) // created AND retired in window
+	retireMemoryRow(t, db, "BLIP", now.Add(-time.Hour))
+
+	day, err := BuildRetrievalReport(ctx, db, ResolveRetrievalWindow("24h", now), 12)
+	require.NoError(t, err)
+	require.Equal(t, 2, day.ActiveMemories, "retired rows leave the denominator")
+	require.Equal(t, 2, day.CreatedInWindow, "NEW + BLIP")
+	require.Equal(t, 2, day.RetiredInWindow, "GONE + BLIP")
+	require.Len(t, day.ByProject, 1)
+	require.Equal(t, ProjectReach{Project: "alpha", Active: 2, Created: 2, Retired: 2}, day.ByProject[0])
+
+	all, err := BuildRetrievalReport(ctx, db, ResolveRetrievalWindow("all", now), 12)
+	require.NoError(t, err)
+	require.Equal(t, 4, all.CreatedInWindow, "all-time counts every row ever created")
+	require.Equal(t, 2, all.RetiredInWindow)
 }
 
 func TestProjectRetrievalTrend(t *testing.T) {

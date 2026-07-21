@@ -43,6 +43,13 @@ func TestRetrievalPage_RatesAndLists(t *testing.T) {
 	require.Equal(t, 1, data.ByProject[0].Active)
 	require.Equal(t, 100, data.ByProject[0].ReachRate)
 	require.Equal(t, 2, data.ByProject[0].Injects)
+	require.Equal(t, 1, data.ByProject[0].Created, "the just-written memory is in-window churn")
+	require.Equal(t, 1, data.CreatedInWindow)
+	require.Zero(t, data.RetiredInWindow)
+
+	// The churn annotation renders beside the denominator (hero + project row).
+	body := getHTMLBody(t, mux, "/console/retrieval")
+	require.Contains(t, body, "+1 new")
 	require.Len(t, data.TopInjected, 1)
 	require.Equal(t, m.ID, data.TopInjected[0].ID)
 	require.Equal(t, 2, data.TopInjected[0].Sessions)

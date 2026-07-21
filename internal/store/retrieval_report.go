@@ -69,6 +69,8 @@ type ProjectReach struct {
 	Active    int    `json:"active"`    // total active memories in this project (reach denominator)
 	ReachRate int    `json:"reachRate"` // Surfaced / Active, rounded %
 	Injects   int    `json:"injects"`   // injection volume attributable to this project's memories
+	Created   int    `json:"created"`   // memories created within the window (incl. since-retired ones)
+	Retired   int    `json:"retired"`   // memories retired (superseded/archived) within the window
 }
 
 // RetrievalReport is the retrieval-REACH rollup for a window, computed live from
@@ -85,6 +87,8 @@ type RetrievalReport struct {
 	ActiveMemories   int             `json:"activeMemories"`   // total active memories (reach denominator)
 	ReachRate        int             `json:"reachRate"`        // MemoriesSurfaced / ActiveMemories, rounded %
 	SessionsReached  int             `json:"sessionsReached"`  // distinct sessions that received >=1 injection
+	CreatedInWindow  int             `json:"createdInWindow"`  // memories created within the window (incl. since-retired ones)
+	RetiredInWindow  int             `json:"retiredInWindow"`  // memories retired (superseded/archived) within the window
 	ByKind           []KindReach     `json:"byKind"`
 	ByProject        []ProjectReach  `json:"byProject"` // reach sliced per project (denominator = that project's active memories)
 	Top              []MemoryStat    `json:"top"`       // most-injected active memories, with sessions reached
@@ -127,6 +131,20 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 	activeByProject := map[string]int{}
 	for _, m := range meta {
 		activeByProject[m.project]++
+	}
+
+	// The denominator is "active as of now" in every window, so on its own it says
+	// nothing about how the knowledge base is changing; the churn counts put it in
+	// context ("152 active, +27 new / -11 retired this window").
+	createdBy, retiredBy, err := memoryChurn(ctx, db, w.Since)
+	if err != nil {
+		return rep, err
+	}
+	for _, n := range createdBy {
+		rep.CreatedInWindow += n
+	}
+	for _, n := range retiredBy {
+		rep.RetiredInWindow += n
 	}
 
 	args := []any{string(core.EventInjected)}
@@ -220,7 +238,9 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 	})
 
 	// Every project with active memories appears (largest knowledge base first),
-	// including those at 0% reach -- that gap is the point of the breakdown.
+	// including those at 0% reach -- that gap is the point of the breakdown. A
+	// project whose last memory retired inside the window drops off the list; its
+	// churn still counts in the global RetiredInWindow.
 	rep.ByProject = make([]ProjectReach, 0, len(activeByProject))
 	for proj, active := range activeByProject {
 		surfaced := len(projMems[proj])
@@ -230,6 +250,7 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 		}
 		rep.ByProject = append(rep.ByProject, ProjectReach{
 			Project: proj, Surfaced: surfaced, Active: active, ReachRate: rate, Injects: projInj[proj],
+			Created: createdBy[proj], Retired: retiredBy[proj],
 		})
 	}
 	sort.Slice(rep.ByProject, func(i, j int) bool {
@@ -434,6 +455,41 @@ func bucketKey(t time.Time, hourly bool) string {
 		return t.Local().Format("2006-01-02T15")
 	}
 	return t.Local().Format("2006-01-02")
+}
+
+// memoryChurn counts, per project, the memories created and the memories retired
+// (invalid_at stamped by supersession or archive) within the window. Counts cover
+// every index row, active or not, so a memory created and retired inside the same
+// window appears in both. A zero since means all time.
+func memoryChurn(ctx context.Context, db *sql.DB, since time.Time) (created, retired map[string]int, err error) {
+	// The empty string sorts below every stored timestamp, so the zero (all-time)
+	// bound matches every row without a second query shape.
+	bound := ""
+	if !since.IsZero() {
+		bound = core.FormatTime(since)
+	}
+	rows, err := db.QueryContext(ctx, `
+		SELECT project,
+			SUM(CASE WHEN created_at >= ? THEN 1 ELSE 0 END),
+			SUM(CASE WHEN invalid_at IS NOT NULL AND invalid_at >= ? THEN 1 ELSE 0 END)
+		FROM memories_index GROUP BY project`, bound, bound)
+	if err != nil {
+		return nil, nil, fmt.Errorf("store.memoryChurn: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	created, retired = map[string]int{}, map[string]int{}
+	for rows.Next() {
+		var project string
+		var c, r int
+		if err := rows.Scan(&project, &c, &r); err != nil {
+			return nil, nil, fmt.Errorf("store.memoryChurn: scan: %w", err)
+		}
+		created[project], retired[project] = c, r
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("store.memoryChurn: %w", err)
+	}
+	return created, retired, nil
 }
 
 // activeMemoryMeta loads id -> (kind, name, project) for every active memory, so
