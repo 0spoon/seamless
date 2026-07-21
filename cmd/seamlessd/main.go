@@ -266,7 +266,7 @@ func runServe(args []string) error {
 	})
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec, Retrieve: ret,
-		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir,
+		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir, ConfigPath: absConfigPath(cfg.SourcePath()),
 		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		Logger:         logger,

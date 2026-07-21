@@ -100,6 +100,30 @@ func TestLogin_WrongKeyRerendersWithError(t *testing.T) {
 	require.Empty(t, rr.Result().Cookies())
 }
 
+func TestLogin_LandingGuidance(t *testing.T) {
+	const configPath = "/Users/owner/.config/seamless/seamless.yaml"
+	svc, err := New(Config{APIKey: testKey, ConfigPath: configPath})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	rr := do(mux, httptest.NewRequest(http.MethodGet, "/console/login", nil))
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.Contains(t, body, "See what your agents remember.")
+	require.Contains(t, body, `data-copy="seamlessd console-open"`)
+	require.Contains(t, body, "opens your default browser with the console cookie already set")
+	require.Contains(t, body, "https://thereisnospoon.org/docs/quickstart/")
+	require.Contains(t, body, "https://thereisnospoon.org/docs/reference/console/")
+	require.Contains(t, body, "https://thereisnospoon.org/docs/reference/configuration/")
+	require.Contains(t, body, configPath)
+	require.Contains(t, body, "vscode://file"+configPath)
+	require.Contains(t, body, "mcp.api_key")
+	require.Contains(t, body, "SEAMLESS_MCP_API_KEY")
+	require.Contains(t, body, "true first run")
+	require.Contains(t, body, "never edits an existing config automatically")
+}
+
 func TestLogin_CorrectKeySetsCookieAndGrantsAccess(t *testing.T) {
 	mux := newTestMux(t)
 

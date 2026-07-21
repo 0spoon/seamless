@@ -48,6 +48,7 @@ type Config struct {
 	Retrieve    *retrieve.Service
 	APIKey      string
 	DataDir     string // for resolving memory/note file paths to absolute editor links
+	ConfigPath  string // absolute path of the config file this daemon loaded; empty when config is env-only
 	Budgets     config.Budgets
 	GardenerCfg config.Gardener // for the Settings page (read-only display)
 	// BriefingCfg is the file/env briefing base the Settings page edits: the
@@ -265,9 +266,28 @@ func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/console/login", http.StatusSeeOther)
 }
 
+type loginData struct {
+	Error         string
+	Next          string
+	ConfigPath    string
+	ConfigEditURL template.URL
+	HasConfigFile bool
+}
+
 // renderLogin renders the standalone login page (no nav chrome).
 func (s *Service) renderLogin(w http.ResponseWriter, r *http.Request, errMsg string) {
-	data := map[string]string{"Error": errMsg, "Next": safeNext(r.URL.Query().Get("next"))}
+	configPath := strings.TrimSpace(s.cfg.ConfigPath)
+	var configEditURL template.URL
+	if configPath != "" {
+		_, configEditURL = absAndEditURL("", configPath)
+	}
+	data := loginData{
+		Error:         errMsg,
+		Next:          safeNext(r.URL.Query().Get("next")),
+		ConfigPath:    configPath,
+		ConfigEditURL: configEditURL,
+		HasConfigFile: configPath != "",
+	}
 	tmpl := s.pages["login"]
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := tmpl.ExecuteTemplate(w, "login", data); err != nil {
