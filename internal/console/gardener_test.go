@@ -73,6 +73,18 @@ func post(mux *http.ServeMux, path string) *httptest.ResponseRecorder {
 	return do(mux, req)
 }
 
+func TestProposalPresentation_CoversCanonicalKinds(t *testing.T) {
+	for _, kind := range store.ProposalKinds {
+		t.Run(kind, func(t *testing.T) {
+			label, eyebrow, iconName, tone := proposalPresentation(kind)
+			require.NotEqual(t, "Review a knowledge change", label, "a canonical kind must not fall through to generic review copy")
+			require.NotEmpty(t, eyebrow)
+			require.NotEmpty(t, iconName)
+			require.NotEmpty(t, tone)
+		})
+	}
+}
+
 func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	ctx, db, mux := newConsoleWithGardener(t)
 
@@ -97,14 +109,34 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	var data gardenerData
 	getJSON(t, mux, "/console/gardener?format=json", &data)
 	require.Len(t, data.Cards, 3)
+	require.Equal(t, 3, data.PendingCount)
+	require.Zero(t, data.RequestedCount)
+	require.Equal(t, 3, data.BackgroundCount)
 	byKind := map[string]proposalCard{}
 	for _, c := range data.Cards {
 		byKind[c.Kind] = c
 	}
 	require.Equal(t, "keep-me", byKind["merge"].Keep.Name)
 	require.InDelta(t, 0.91, byKind["merge"].Score, 0.001)
+	require.Equal(t, 91, byKind["merge"].ScorePercent)
+	require.Equal(t, "Merge duplicate memories", byKind["merge"].Label)
+	require.Equal(t, "git-merge", byKind["merge"].Icon)
 	require.Equal(t, 4, byKind["digest"].SessionCount)
 	require.Equal(t, "old-note", byKind["archive"].Archive.Name)
+
+	// The HTML is a two-stage trust surface: the propose-only contract is
+	// explicit before the request composer, and decisions expose their effects
+	// before the Apply gate.
+	req := httptest.NewRequest(http.MethodGet, "/console/gardener", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	body := do(mux, req).Body.String()
+	require.Contains(t, body, "Propose-only by design.")
+	require.Contains(t, body, `aria-label="How Gardener changes knowledge"`)
+	require.Contains(t, body, `id="gardener-ask-title"`)
+	require.Contains(t, body, `id="gardener-review-title"`)
+	require.Contains(t, body, "Found by a background Gardener pass")
+	require.Contains(t, body, "Dismiss suggestion")
+	require.Contains(t, body, "Apply change")
 
 	// Dismiss the merge -> gone from pending.
 	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+mergeP.ID+"/dismiss").Code)
@@ -262,8 +294,18 @@ func TestGardenerSplit_CreatesPlanGroup(t *testing.T) {
 	require.Equal(t, "split-arctop-app", data.Groups[0].Slug)
 	require.Len(t, data.Groups[0].Cards, 3)
 	require.Equal(t, "split", data.Groups[0].Cards[0].Kind, "the setup card sorts first")
+	require.Equal(t, 2, data.Groups[0].MoveCount)
+	require.Equal(t, "split into ios and android", data.Groups[0].Request)
 	require.NotEmpty(t, data.Groups[0].Targets, "reproject cards have retarget options")
 	require.Empty(t, data.Cards, "plan proposals do not pollute the loose grid")
+
+	req := httptest.NewRequest(http.MethodGet, "/console/gardener", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	body := do(mux, req).Body.String()
+	require.Contains(t, body, "Project restructuring plan")
+	require.Contains(t, body, "Setup is applied first")
+	require.Contains(t, body, "Apply whole plan")
+	require.Contains(t, body, `class="gardener-retarget"`)
 }
 
 // A request recognized as a split of a known project chains straight into split

@@ -1,161 +1,342 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
-    <h1>Settings</h1>
-    <div class="sub">Running configuration &mdash; briefing injection is tunable, the rest is read-only</div>
-  </div>
-</div>
+<div class="settings-page" data-settings>
+  <header class="lib-hero settings-hero">
+    <div class="lib-hero-copy">
+      <div class="lib-eyebrow">{{icon "settings"}} System control plane</div>
+      <h1>Settings</h1>
+      <div class="sub">Understand the running profile, shape what every new agent session receives, and inspect how workspaces are connected.</div>
+    </div>
+    <div class="settings-mode{{if .BriefingOverridden}} override{{end}}" aria-label="Active briefing configuration source">
+      <span>Briefing source</span>
+      <strong>{{if .BriefingOverridden}}Console override{{else}}File + env{{end}}</strong>
+      <small>{{if .BriefingOverridden}}runtime layer active{{else}}baseline active{{end}}</small>
+    </div>
+  </header>
 
-<div class="conf-grid section">
-  <div class="card">
-    <h2>Storage</h2>
-    <dl class="kv">
-      <dt>Data dir</dt><dd class="mono">{{.DataDir}}{{copyBtn .DataDir}}</dd>
-    </dl>
-  </div>
+  <nav class="settings-jumpbar" aria-label="Settings sections">
+    <a href="#runtime-profile">
+      <span class="settings-jump-icon">{{icon "server"}}</span>
+      <span><b>01</b><strong>Runtime</strong><small>loaded profile</small></span>
+    </a>
+    <a href="#briefing-recipe">
+      <span class="settings-jump-icon">{{icon "brain"}}</span>
+      <span><b>02</b><strong>Briefing</strong><small>editable recipe</small></span>
+    </a>
+    <a href="#workspace-registry">
+      <span class="settings-jump-icon">{{icon "folder-tree"}}</span>
+      <span><b>03</b><strong>Registry</strong><small>{{len .Projects}} project scopes</small></span>
+    </a>
+    <div class="settings-jump-key"><span><i class="key-dot read"></i>read only</span><span><i class="key-dot edit"></i>editable</span></div>
+  </nav>
 
-  <div class="card">
-    <h2>Budgets</h2>
-    <dl class="kv">
-      <dt>Max briefing tokens</dt><dd>{{.Budgets.MaxBriefingTokens}}</dd>
-      <dt>Recall budget tokens</dt><dd>{{.Budgets.RecallBudgetTokens}}</dd>
-      <dt>Tool event cap</dt><dd>{{if .Budgets.ToolEventMaxChars}}{{.Budgets.ToolEventMaxChars}} chars{{else}}unlimited{{end}}</dd>
-    </dl>
-  </div>
-
-  <div class="card">
-    <h2>Gardener <span class="h2-meta">{{if .Gardener.Enabled}}enabled &middot; every {{.Gardener.IntervalMinutes}}m{{else}}disabled{{end}}</span></h2>
-    <dl class="kv">
-      <dt>Enabled</dt><dd>{{if .Gardener.Enabled}}<span class="badge ok">yes</span>{{else}}<span class="badge">no</span>{{end}}</dd>
-      <dt>Interval</dt><dd>{{.Gardener.IntervalMinutes}}m</dd>
-      <dt>Dedup threshold</dt><dd>{{.Gardener.DedupThreshold}}</dd>
-      <dt>Staleness</dt><dd>{{.Gardener.StalenessDays}}d</dd>
-      <dt>Digest window</dt><dd>{{.Gardener.DigestDays}}d</dd>
-      <dt>Tool event retention</dt><dd>{{if .Gardener.ToolEventRetentionDays}}{{.Gardener.ToolEventRetentionDays}}d{{else}}disabled{{end}}</dd>
-      <dt>Stale plan cutoff</dt><dd>{{if .Gardener.StalePlanDays}}{{.Gardener.StalePlanDays}}d{{else}}disabled{{end}}</dd>
-      <dt>Session idle TTL</dt><dd>{{if .Gardener.SessionIdleMinutes}}{{.Gardener.SessionIdleMinutes}}m{{else}}45m (default){{end}}</dd>
-    </dl>
-  </div>
-</div>
-
-<div class="section">
-  <div class="card brief-form">
-    <form method="post" action="/console/settings/briefing">
-      <h2>Briefing injection <span class="h2-meta">{{if .BriefingOverridden}}console override active{{else}}matches file/env config{{end}}</span></h2>
-      <p class="fnote">Tunes what the SessionStart <span class="mono">&lt;seam-briefing&gt;</span> auto-injects.
-        Saving stores a runtime override in the database (the config file is never written) and applies from the
-        next session start &mdash; no restart needed. Constraints and active-plan rollups are never
-        filtered, whatever is set here; a pinned stage is exempt too while its Status header marks a
-        live gate.</p>
-      <div class="fgrid">
-        <label class="f">Memory index max items
-          <input type="number" name="memory_max_items" min="0" value="{{.Briefing.MemoryMaxItems}}">
-          <span class="fhelp">cap on index lines &middot; 0 = budget-only</span>
-        </label>
-        <label class="f">Memory index max age
-          <input type="number" name="memory_max_age_days" min="0" value="{{.Briefing.MemoryMaxAgeDays}}">
-          <span class="fhelp">days &middot; 0 = no recency filter</span>
-        </label>
-        <label class="f">Recent findings
-          <input type="number" name="findings_count" min="0" value="{{.Briefing.FindingsCount}}">
-          <span class="fhelp">findings injected &middot; 0 hides the section</span>
-        </label>
-        <label class="f">Findings max age
-          <input type="number" name="findings_max_age_days" min="0" value="{{.Briefing.FindingsMaxAgeDays}}">
-          <span class="fhelp">days &middot; 0 = no age filter</span>
-        </label>
-        <label class="f">Ready task titles
-          <input type="number" name="ready_tasks_shown" min="0" value="{{.Briefing.ReadyTasksShown}}">
-          <span class="fhelp">titles on the ready line &middot; 0 hides it</span>
-        </label>
-        <label class="f">Pending plan window
-          <input type="number" name="pending_plan_max_days" min="0" value="{{.Briefing.PendingPlanMaxDays}}">
-          <span class="fhelp">days a captured plan stays &ldquo;awaiting approval&rdquo; &middot; 0 = no cutoff</span>
-        </label>
-        <label class="f">Gateless stage window
-          <input type="number" name="stage_unknown_max_age_days" min="0" value="{{.Briefing.StageUnknownMaxAgeDays}}">
-          <span class="fhelp">days a stage with no live Status gate stays pinned &middot; 0 = forever</span>
-        </label>
-        <label class="f">Sibling findings
-          <input type="number" name="sibling_findings_count" min="0" value="{{.Briefing.SiblingFindingsCount}}">
-          <span class="fhelp">findings from family projects &middot; 0 hides the section</span>
-        </label>
-        <label class="f">Hard cap multiplier
-          <input type="number" name="hard_cap_multiplier" min="0" value="{{.Briefing.HardCapMultiplier}}">
-          <span class="fhelp">&times; max briefing tokens = truncation ceiling &middot; 0 = 2</span>
-        </label>
+  <section class="settings-zone" id="runtime-profile">
+    <header class="settings-zone-head">
+      <div class="settings-zone-index">01</div>
+      <div>
+        <div class="settings-zone-kicker">Running now</div>
+        <h2>Runtime profile</h2>
+        <p>Values loaded by the daemon. Change these through the config file or environment, then restart.</p>
       </div>
-      <div class="fchecks">
-        <label class="fcheck">
-          <input type="checkbox" name="include_parent_memories" value="1"{{if .Briefing.IncludeParentMemories}} checked{{end}}>
-          Include parent memories
-          <span class="fhelp">a child project inherits its shared parent&rsquo;s memories</span>
-        </label>
-        <label class="fcheck">
-          <input type="checkbox" name="include_sibling_memories" value="1"{{if .Briefing.IncludeSiblingMemories}} checked{{end}}>
-          Include sibling memories
-          <span class="fhelp">fold family projects&rsquo; memories in as a low-priority section</span>
-        </label>
+      <span class="settings-access">{{icon "lock"}} Read only</span>
+    </header>
+
+    <div class="runtime-grid">
+      <article class="runtime-card storage-card">
+        <header class="runtime-card-head">
+          <span class="runtime-icon brand">{{icon "database"}}</span>
+          <div><span>Storage</span><h3>Local data home</h3></div>
+          <span class="badge brand">source of truth</span>
+        </header>
+        <div class="storage-path">
+          <span class="mono">{{.DataDir}}</span>{{copyBtn .DataDir}}
+        </div>
+        <p>Durable files and the rebuildable local index share this root.</p>
+      </article>
+
+      <article class="runtime-card budgets-card">
+        <header class="runtime-card-head">
+          <span class="runtime-icon pop">{{icon "gauge"}}</span>
+          <div><span>Guardrails</span><h3>Context budgets</h3></div>
+        </header>
+        <div class="budget-grid">
+          <div class="budget-stat brand">
+            <strong>{{.Budgets.MaxBriefingTokens}}</strong><span>tokens</span>
+            <small>max briefing</small>
+          </div>
+          <div class="budget-stat ok">
+            <strong>{{.Budgets.RecallBudgetTokens}}</strong><span>tokens</span>
+            <small>recall response</small>
+          </div>
+          <div class="budget-stat pop">
+            <strong>{{if .Budgets.ToolEventMaxChars}}{{.Budgets.ToolEventMaxChars}}{{else}}&infin;{{end}}</strong><span>{{if .Budgets.ToolEventMaxChars}}chars{{else}}no cap{{end}}</span>
+            <small>tool event body</small>
+          </div>
+        </div>
+      </article>
+
+      <article class="runtime-card gardener-runtime{{if .Gardener.Enabled}} is-live{{end}}">
+        <div class="gardener-cadence">
+          <span class="runtime-icon ok">{{icon "sprout"}}</span>
+          <div class="gardener-state"><span class="live-dot"></span>{{if .Gardener.Enabled}}Gardener enabled{{else}}Gardener paused{{end}}</div>
+          <strong>{{if .Gardener.Enabled}}every {{.Gardener.IntervalMinutes}}<small>min</small>{{else}}paused{{end}}</strong>
+          <p>{{if .Gardener.Enabled}}Background review runs on this cadence.{{else}}Automated review is disabled in the running profile.{{end}}</p>
+        </div>
+        <div class="gardener-rules" aria-label="Gardener policy">
+          <div><span>Dedup threshold</span><strong>{{.Gardener.DedupThreshold}}</strong></div>
+          <div><span>Memory staleness</span><strong>{{.Gardener.StalenessDays}}d</strong></div>
+          <div><span>Digest window</span><strong>{{.Gardener.DigestDays}}d</strong></div>
+          <div><span>Tool event retention</span><strong>{{if .Gardener.ToolEventRetentionDays}}{{.Gardener.ToolEventRetentionDays}}d{{else}}off{{end}}</strong></div>
+          <div><span>Stale plan cutoff</span><strong>{{if .Gardener.StalePlanDays}}{{.Gardener.StalePlanDays}}d{{else}}off{{end}}</strong></div>
+          <div><span>Session idle TTL</span><strong>{{if .Gardener.SessionIdleMinutes}}{{.Gardener.SessionIdleMinutes}}m{{else}}45m{{end}}</strong></div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="settings-zone" id="briefing-recipe">
+    <header class="settings-zone-head">
+      <div class="settings-zone-index">02</div>
+      <div>
+        <div class="settings-zone-kicker">Agent handoff</div>
+        <h2>Briefing recipe</h2>
+        <p>Choose the context packed into <span class="mono">&lt;seam-briefing&gt;</span> at the start of a session.</p>
       </div>
-      <div class="btn-row frow-actions">
-        <button class="btn primary" type="submit">Save briefing settings</button>
-        {{if .BriefingOverridden}}
-        <button class="btn" type="submit" form="brief-reset"
-          onclick="return confirm('Clear the console override and go back to the file/env configuration?');">Reset to file config</button>
+      <span class="settings-access editable">{{icon "settings"}} Editable here</span>
+    </header>
+
+    <article class="briefing-workbench">
+      <header class="briefing-workbench-head">
+        <div>
+          <div class="briefing-title"><span class="runtime-icon brand">{{icon "brain"}}</span><div><span>Context assembly</span><h3>Briefing injection</h3></div></div>
+          <p>Saving creates a database-backed runtime layer; it never rewrites your config file and needs no daemon restart.</p>
+        </div>
+        <div class="config-flow" aria-label="Configuration precedence">
+          <span class="config-node{{if not .BriefingOverridden}} active{{end}}">File + env</span>
+          {{icon "arrow-right"}}
+          <span class="config-node{{if .BriefingOverridden}} active{{end}}">Console override</span>
+          {{icon "arrow-right"}}
+          <span class="config-node destination">Next session</span>
+        </div>
+      </header>
+
+      <form method="post" action="/console/settings/briefing" data-briefing-form>
+        <div class="briefing-groups">
+          <section class="brief-group memory-group">
+            <header><span class="brief-group-icon">{{icon "database"}}</span><div><span>Durable context</span><h4>Memory index</h4></div></header>
+            <p>Shape the compact memory directory without touching protected constraints.</p>
+            <div class="brief-fields two">
+              <label class="brief-field" for="memory-max-items">
+                <span>Maximum lines</span>
+                <span class="brief-number"><input id="memory-max-items" type="number" name="memory_max_items" min="0" value="{{.Briefing.MemoryMaxItems}}" aria-describedby="memory-max-items-help"><i>items</i></span>
+                <small id="memory-max-items-help">0 uses the token budget only</small>
+              </label>
+              <label class="brief-field" for="memory-max-age">
+                <span>Recency window</span>
+                <span class="brief-number"><input id="memory-max-age" type="number" name="memory_max_age_days" min="0" value="{{.Briefing.MemoryMaxAgeDays}}" aria-describedby="memory-max-age-help"><i>days</i></span>
+                <small id="memory-max-age-help">0 keeps memories of every age</small>
+              </label>
+            </div>
+          </section>
+
+          <section class="brief-group activity-group">
+            <header><span class="brief-group-icon">{{icon "activity"}}</span><div><span>Fresh signal</span><h4>Recent work</h4></div></header>
+            <p>Control the short operational tail that tells an agent what just happened.</p>
+            <div class="brief-fields three">
+              <label class="brief-field" for="findings-count">
+                <span>Recent findings</span>
+                <span class="brief-number"><input id="findings-count" type="number" name="findings_count" min="0" value="{{.Briefing.FindingsCount}}" aria-describedby="findings-count-help"><i>items</i></span>
+                <small id="findings-count-help">0 hides the section</small>
+              </label>
+              <label class="brief-field" for="findings-max-age">
+                <span>Finding window</span>
+                <span class="brief-number"><input id="findings-max-age" type="number" name="findings_max_age_days" min="0" value="{{.Briefing.FindingsMaxAgeDays}}" aria-describedby="findings-max-age-help"><i>days</i></span>
+                <small id="findings-max-age-help">0 has no age filter</small>
+              </label>
+              <label class="brief-field" for="ready-tasks-shown">
+                <span>Ready task titles</span>
+                <span class="brief-number"><input id="ready-tasks-shown" type="number" name="ready_tasks_shown" min="0" value="{{.Briefing.ReadyTasksShown}}" aria-describedby="ready-tasks-shown-help"><i>titles</i></span>
+                <small id="ready-tasks-shown-help">0 hides the ready line</small>
+              </label>
+            </div>
+          </section>
+
+          <section class="brief-group planning-group">
+            <header><span class="brief-group-icon">{{icon "map"}}</span><div><span>Open loops</span><h4>Planning horizon</h4></div></header>
+            <p>Keep current plans and stages visible without carrying stale work forever.</p>
+            <div class="brief-fields two">
+              <label class="brief-field" for="pending-plan-window">
+                <span>Pending plan window</span>
+                <span class="brief-number"><input id="pending-plan-window" type="number" name="pending_plan_max_days" min="0" value="{{.Briefing.PendingPlanMaxDays}}" aria-describedby="pending-plan-window-help"><i>days</i></span>
+                <small id="pending-plan-window-help">0 keeps every awaiting plan</small>
+              </label>
+              <label class="brief-field" for="stage-unknown-window">
+                <span>Gateless stage window</span>
+                <span class="brief-number"><input id="stage-unknown-window" type="number" name="stage_unknown_max_age_days" min="0" value="{{.Briefing.StageUnknownMaxAgeDays}}" aria-describedby="stage-unknown-window-help"><i>days</i></span>
+                <small id="stage-unknown-window-help">0 pins them forever</small>
+              </label>
+            </div>
+          </section>
+
+          <section class="brief-group family-group">
+            <header><span class="brief-group-icon">{{icon "git-fork"}}</span><div><span>Shared lineage</span><h4>Project family</h4></div></header>
+            <p>Let related scopes contribute lower-priority context to the current project.</p>
+            <div class="brief-fields family-fields">
+              <label class="brief-field" for="sibling-findings-count">
+                <span>Sibling findings</span>
+                <span class="brief-number"><input id="sibling-findings-count" type="number" name="sibling_findings_count" min="0" value="{{.Briefing.SiblingFindingsCount}}" aria-describedby="sibling-findings-count-help"><i>items</i></span>
+                <small id="sibling-findings-count-help">0 hides the section</small>
+              </label>
+              <div class="brief-toggles">
+                <label class="brief-toggle">
+                  <input type="checkbox" name="include_parent_memories" value="1"{{if .Briefing.IncludeParentMemories}} checked{{end}}>
+                  <span class="brief-switch" aria-hidden="true"></span>
+                  <span><strong>Parent memories</strong><small>inherit the shared parent&rsquo;s memory index</small></span>
+                </label>
+                <label class="brief-toggle">
+                  <input type="checkbox" name="include_sibling_memories" value="1"{{if .Briefing.IncludeSiblingMemories}} checked{{end}}>
+                  <span class="brief-switch" aria-hidden="true"></span>
+                  <span><strong>Sibling memories</strong><small>add a low-priority family memory section</small></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="brief-group ceiling-group">
+            <header><span class="brief-group-icon">{{icon "gauge"}}</span><div><span>Last-resort bound</span><h4>Safety ceiling</h4></div></header>
+            <div class="ceiling-layout">
+              <label class="brief-field" for="hard-cap-multiplier">
+                <span>Hard cap multiplier</span>
+                <span class="brief-number"><input id="hard-cap-multiplier" type="number" name="hard_cap_multiplier" min="0" value="{{.Briefing.HardCapMultiplier}}" aria-describedby="hard-cap-multiplier-help"><i>&times; budget</i></span>
+                <small id="hard-cap-multiplier-help">0 uses the safe default of 2&times;</small>
+              </label>
+              <div class="brief-guardrail">{{icon "lock"}}<span><strong>Protected context stays protected.</strong> Constraints and active-plan rollups are never filtered; a pinned stage is also exempt while its Status header marks a live gate.</span></div>
+            </div>
+          </section>
+        </div>
+
+        <footer class="brief-actions">
+          <div class="brief-state" id="brief-state" role="status" aria-live="polite">
+            <span class="state-dot"></span>
+            <span>{{if .BriefingOverridden}}Console override is active for new sessions.{{else}}Currently following the file and environment baseline.{{end}}</span>
+          </div>
+          <div class="btn-row">
+            {{if .BriefingOverridden}}
+            <button class="btn" type="submit" form="brief-reset" onclick="return confirm('Clear the console override and go back to the file/env configuration?');">Reset to file + env</button>
+            {{end}}
+            <button class="btn primary" type="submit">{{icon "check"}} Save briefing recipe</button>
+          </div>
+        </footer>
+      </form>
+      {{if .BriefingOverridden}}<form id="brief-reset" method="post" action="/console/settings/briefing/reset"></form>{{end}}
+    </article>
+  </section>
+
+  <section class="settings-zone" id="workspace-registry">
+    <header class="settings-zone-head registry-zone-head">
+      <div class="settings-zone-index">03</div>
+      <div>
+        <div class="settings-zone-kicker">Scope topology</div>
+        <h2>Workspace registry</h2>
+        <p>Each row joins a knowledge scope to the repo paths that select it and the relationships that widen its briefings.</p>
+      </div>
+      <a class="btn small" href="/console/projects">Open project explorer {{icon "arrow-right"}}</a>
+    </header>
+
+    <div class="registry-stats" aria-label="Workspace registry summary">
+      <div><strong>{{len .Projects}}</strong><span>registered scopes</span></div>
+      <div><strong>{{len .RepoMap}}</strong><span>arrival routes</span></div>
+      <div><strong>{{len .Families}}</strong><span>project families</span></div>
+    </div>
+
+    <section class="registry-panel workspace-panel">
+      <header class="registry-panel-head">
+        <span class="runtime-icon brand">{{icon "folder-tree"}}</span>
+        <div><span>Scope + arrival + lineage</span><h3>Workspace directory</h3></div>
+        <span class="registry-count">{{len .Workspaces}} scope rows</span>
+      </header>
+      {{if .Workspaces}}
+      <div class="workspace-columns" aria-hidden="true">
+        <span>Project scope</span><span>Arrival routes</span><span>Family context</span>
+      </div>
+      <div class="registry-scroll workspace-directory" tabindex="0" aria-label="Workspace scopes, arrival routes, and project families">
+        {{range .Workspaces}}
+        <article class="workspace-row{{if not .Registered}} is-referenced{{end}}{{if .Retired}} is-retired{{end}}" data-workspace-scope="{{.Slug}}">
+          <div class="workspace-cell workspace-identity">
+            <span class="workspace-cell-label">Project scope</span>
+            <div class="workspace-identity-main">
+              <span class="registry-project-icon">{{icon "box"}}</span>
+              <div class="workspace-project-copy">
+                <div class="workspace-project-title">
+                  {{if .Registered}}<a class="mono" href="/console/projects/{{.Slug}}">{{.Slug}}</a>{{else}}<span class="mono">{{.Slug}}</span>{{end}}
+                  {{if .Retired}}<span class="registry-status retired">retired</span>{{else if not .Registered}}<span class="registry-status referenced">referenced</span>{{end}}
+                </div>
+                {{if and .Name (ne .Name .Slug)}}<strong>{{.Name}}</strong>{{end}}
+                {{if .Description}}<small>{{.Description}}</small>{{else if not .Registered}}<small class="faint">Referenced by workspace metadata; not registered yet.</small>{{else}}<small class="faint">No description yet</small>{{end}}
+              </div>
+              {{copyBtn .Slug}}
+            </div>
+          </div>
+
+          <div class="workspace-cell workspace-routes">
+            <span class="workspace-cell-label">Arrival routes</span>
+            {{if .Repos}}
+            <div class="workspace-route-list">
+              {{range .Repos}}<div class="workspace-route" title="{{.}}"><span class="repo-path-icon">{{icon "folder-open"}}</span><span class="mono">{{.}}</span>{{copyBtn .}}</div>{{end}}
+            </div>
+            {{else}}<div class="workspace-none">{{icon "link"}}<span>No repo arrival route</span></div>{{end}}
+          </div>
+
+          <div class="workspace-cell workspace-lineage">
+            <span class="workspace-cell-label">Family context</span>
+            {{if .ParentSlug}}
+            <div class="workspace-parent">{{icon "git-branch"}}<span>Inherits parent {{if .ParentRegistered}}<a class="mono" href="/console/projects/{{.ParentSlug}}">{{.ParentSlug}}</a>{{else}}<span class="mono referenced">{{.ParentSlug}}</span>{{end}}</span></div>
+            {{end}}
+            {{if .Families}}
+              {{range .Families}}
+              <div class="workspace-family">
+                <div class="workspace-family-title">{{icon "git-fork"}}<strong>{{.Name}}</strong><small>{{.MemberCount}} scopes</small></div>
+                {{if .Peers}}
+                <div class="workspace-family-peers"><span>shares with</span>{{range .Peers}}{{if .Registered}}<a class="mono" href="/console/projects/{{.Slug}}">{{.Slug}}</a>{{else}}<span class="mono referenced">{{.Slug}}</span>{{end}}{{end}}</div>
+                {{else}}<small class="workspace-only-member">Only member of this family</small>{{end}}
+              </div>
+              {{end}}
+            {{else if not .ParentSlug}}<div class="workspace-none">{{icon "git-fork"}}<span>No family membership</span></div>{{end}}
+          </div>
+        </article>
         {{end}}
       </div>
-    </form>
-    {{if .BriefingOverridden}}<form id="brief-reset" method="post" action="/console/settings/briefing/reset"></form>{{end}}
-  </div>
-</div>
+      {{else}}<div class="registry-empty">No workspace scopes registered or referenced yet.</div>{{end}}
 
-<div class="section">
-  <h2>Projects <span class="count">{{len .Projects}}</span></h2>
-  {{if .Projects}}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Slug</th><th>Name</th><th>Description</th></tr></thead>
-      <tbody>
-        {{range .Projects}}
-        <tr><td class="mono"><a href="/console/projects/{{.Slug}}" data-peek>{{.Slug}}</a>{{copyBtn .Slug}}</td><td>{{.Name}}</td><td class="muted">{{.Description}}</td></tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{else}}<div class="empty">No projects registered</div>{{end}}
-</div>
+      {{if .UnboundRepos}}
+      <aside class="workspace-unbound">
+        <span class="workspace-unbound-icon">{{icon "triangle-alert"}}</span>
+        <div><strong>Unbound arrival routes</strong><p>These repo paths do not resolve to a project scope.</p><div>{{range .UnboundRepos}}<span class="mono">{{.}}</span>{{end}}</div></div>
+      </aside>
+      {{end}}
+    </section>
+  </section>
+</div><!-- .settings-page -->
 
-<div class="section">
-  <h2>Repo &rarr; project map <span class="count">{{len .RepoMap}}</span></h2>
-  {{if .RepoMap}}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Repo path</th><th>Project</th></tr></thead>
-      <tbody>
-        {{range .RepoMap}}
-        <tr><td class="mono">{{.Repo}}{{copyBtn .Repo}}</td><td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}&mdash;{{end}}</td></tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{else}}<div class="empty">No repo mappings yet &mdash; they are learned as agents work in new repos</div>{{end}}
-</div>
-
-<div class="section">
-  <h2>Project families <span class="count">{{len .Families}}</span></h2>
-  {{if .Families}}
-  <div class="table-wrap">
-    <table>
-      <thead><tr><th>Family</th><th>Members</th></tr></thead>
-      <tbody>
-        {{range .Families}}
-        <tr><td>{{.Name}}</td><td>{{range .Members}}<a href="/console/projects/{{.}}" data-peek class="badge">{{.}}</a> {{end}}</td></tr>
-        {{end}}
-      </tbody>
-    </table>
-  </div>
-  {{else}}<div class="empty">No project families configured</div>{{end}}
-</div>
+<script>
+window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this control surface
+(function () {
+  var form = document.querySelector('[data-briefing-form]');
+  var state = document.getElementById('brief-state');
+  if (!form || !state || !window.FormData) return;
+  function snapshot() {
+    return Array.from(new FormData(form).entries()).map(function (pair) { return pair[0] + '=' + pair[1]; }).sort().join('&');
+  }
+  var baseline = snapshot();
+  function reflect() {
+    var dirty = snapshot() !== baseline;
+    form.classList.toggle('is-dirty', dirty);
+    if (dirty) state.querySelector('span:last-child').textContent = 'Unsaved changes — save to use them for new sessions.';
+    else state.querySelector('span:last-child').textContent = '{{if .BriefingOverridden}}Console override is active for new sessions.{{else}}Currently following the file and environment baseline.{{end}}';
+  }
+  form.addEventListener('input', reflect);
+  form.addEventListener('change', reflect);
+})();
+</script>
 {{end}}
 {{end}}

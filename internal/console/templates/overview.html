@@ -1,122 +1,247 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
-    <h1>Overview</h1>
-    <div class="sub">Local-first agent memory &amp; coordination substrate</div>
-  </div>
-  <span class="live"><span class="live-dot"></span> live</span>
-</div>
+<div class="overview-page" data-overview>
+  <header class="overview-hero topbar">
+    <div class="overview-hero-copy">
+      <div class="overview-eyebrow">{{icon "brain"}} Seamless &middot; local context layer</div>
+      <h1>Shared context,<br><span>alive between agents.</span></h1>
+      <p class="sub">Memory, handoffs, and active work stay close to the code &mdash; ready for the next agent without starting over.</p>
+      <div class="overview-hero-actions">
+        <a class="btn primary" href="/console/projects">Explore projects {{icon "arrow-right"}}</a>
+        <a class="overview-watch-link" href="/console/interactions"><span class="live-dot"></span>Watch live interactions</a>
+      </div>
+    </div>
 
-<div class="win-tabs win-tabs-page">
-  {{range .Windows}}<a class="win-tab{{if .Active}} active{{end}}" href="?w={{.Key}}">{{.Label}}</a>{{end}}
-</div>
+    <div class="overview-hero-signal" aria-label="Context reach in the {{.WindowLabel}} window">
+      <div class="overview-signal-top">
+        <span class="live overview-live"><span class="live-dot"></span>system live</span>
+        <span class="overview-window-chip">{{.WindowLabel}}</span>
+      </div>
+      <div class="overview-signal-score">
+        {{if .ActiveMemories}}<strong>{{.ReachRate}}<sup>%</sup></strong>{{else}}<strong class="is-empty">&mdash;</strong>{{end}}
+        <span>memory reach</span>
+        <small>{{if .Injections}}{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories entered an agent context{{else if .ActiveMemories}}Waiting for the first context handoff in this window{{else}}Write a memory to begin the shared context layer{{end}}</small>
+      </div>
+      <div class="overview-context-path" aria-label="Context circulation summary">
+        <div><span>01</span><strong>{{.ActiveMemories}}</strong><small>active memories</small></div>
+        <i aria-hidden="true">&rarr;</i>
+        <div><span>02</span><strong>{{.MemoriesSurfaced}}</strong><small>surfaced</small></div>
+        <i aria-hidden="true">&rarr;</i>
+        <div><span>03</span><strong>{{.SessionsReached}}</strong><small>sessions reached</small></div>
+      </div>
+      <div class="overview-signal-foot"><span>{{.Injections}} context injection{{if ne .Injections 1}}s{{end}}</span><a href="/console/retrieval">Open retrieval report {{icon "arrow-right"}}</a></div>
+    </div>
+  </header>
 
-<div class="ov-grid">
-  <div class="ov-main">
+  <section class="overview-windowbar" aria-label="Overview time window">
+    <div class="overview-window-copy">
+      <span>Observation window</span>
+      <strong>How context moved over {{.WindowLabel}}</strong>
+    </div>
+    <nav class="overview-window-tabs" aria-label="Choose observation window">
+      {{range .Windows}}<a class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="page"{{end}} href="?w={{.Key}}">{{.Label}}</a>{{end}}
+    </nav>
+    <div class="overview-window-note"><strong>{{.CovTotal}}</strong> session{{if ne .CovTotal 1}}s{{end}} observed</div>
+  </section>
 
-    <div class="card">
-      <h2>Retrieval health <span class="h2-meta">{{.WindowLabel}} &middot; <a href="/console/retrieval">details &rarr;</a></span></h2>
-      {{if .Injections}}
-      <div class="hero-banner">
-        <div class="hero-num">
-          <span class="big">{{.ReachRate}}%</span>
-          <span class="cap" title="Share of active memories surfaced to an agent at least once in this window (distinct memories surfaced / active memories).">Memory reach</span>
-          <span class="sub">{{.MemoriesSurfaced}} of {{.ActiveMemories}} <span title="a memory was included in at least one briefing or recall">memories surfaced</span> &middot; {{.Injections}} <span title="total times any memory was injected into an agent's context">injections</span> across {{.SessionsReached}} sessions</span>
+  <section class="overview-stage overview-circulation" aria-labelledby="overview-circulation-title">
+    <header class="overview-stage-head">
+      <div class="overview-stage-index">01</div>
+      <div class="overview-stage-title">
+        <span>Context circulation</span>
+        <h2 id="overview-circulation-title">Is knowledge reaching the work?</h2>
+      </div>
+      <p>Reach measures distribution. Continuity measures whether sessions leave durable knowledge behind.</p>
+    </header>
+
+    <div class="overview-vitals-grid">
+      <article class="overview-vital reach-vital">
+        <header class="overview-vital-head">
+          <span class="overview-vital-icon">{{icon "gauge"}}</span>
+          <div><span>Distribution</span><h3>Memory reach</h3></div>
+          <a href="/console/retrieval">Inspect {{icon "arrow-right"}}</a>
+        </header>
+        <div class="overview-vital-summary">
+          <div class="overview-vital-number brand">
+            {{if .ActiveMemories}}<strong>{{.ReachRate}}%</strong>{{else}}<strong>&mdash;</strong>{{end}}
+            <span>of active memories surfaced</span>
+          </div>
+          <div class="overview-mini-facts">
+            <div><strong>{{.MemoriesSurfaced}}</strong><span>distinct memories</span></div>
+            <div><strong>{{.Injections}}</strong><span>total injections</span></div>
+            <div><strong>{{.SessionsReached}}</strong><span>sessions reached</span></div>
+          </div>
         </div>
-        {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="empty">No injections in this window</div>{{end}}
-      </div>
-      {{else}}<div class="empty">No injections in this window</div>{{end}}
-    </div>
-
-    <div class="card">
-      <h2>Knowledge coverage <span class="h2-meta">share of sessions that retained knowledge &middot; {{.WindowLabel}}</span></h2>
-      {{if .CovTotal}}
-      <div class="hero-banner">
-        <div class="hero-num">
-          <span class="big ok">{{.Coverage}}%</span>
-          <span class="cap">Sessions covered</span>
-          <span class="sub">{{.Covered}} of {{.CovTotal}}{{range .CoverageRows}} &middot; {{.Label}} {{.Count}}{{end}}</span>
+        <div class="overview-chart">
+          {{if .Trend}}{{areaChart .Trend}}{{else}}<div class="overview-chart-empty">{{icon "activity"}}<span>No retrieval activity in this window yet.</span></div>{{end}}
         </div>
-        {{if .CoverageTrend}}{{coverageTrend .CoverageTrend}}{{else}}<div class="empty">No sessions in this window</div>{{end}}
+      </article>
+
+      <article class="overview-vital continuity-vital">
+        <header class="overview-vital-head">
+          <span class="overview-vital-icon">{{icon "brain"}}</span>
+          <div><span>Retention</span><h3>Knowledge continuity</h3></div>
+          <span class="overview-vital-period">{{.WindowLabel}}</span>
+        </header>
+        <div class="overview-vital-summary">
+          <div class="overview-vital-number ok">
+            {{if .CovTotal}}<strong>{{.Coverage}}%</strong>{{else}}<strong>&mdash;</strong>{{end}}
+            <span>{{if .CovTotal}}{{.Covered}} of {{.CovTotal}} sessions retained knowledge{{else}}No sessions observed yet{{end}}</span>
+          </div>
+          <div class="overview-retention-channels" aria-label="Retention channels">
+            {{range .CoverageRows}}<div><i style="background:{{.Color}}"></i><span>{{.Label}}</span><strong>{{.Count}}</strong></div>{{end}}
+          </div>
+        </div>
+        <div class="overview-chart">
+          {{if .CoverageTrend}}{{coverageTrend .CoverageTrend}}{{else}}<div class="overview-chart-empty">{{icon "brain"}}<span>No session continuity signal in this window yet.</span></div>{{end}}
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="overview-stage overview-atlas" aria-labelledby="overview-atlas-title">
+    <header class="overview-stage-head">
+      <div class="overview-stage-index">02</div>
+      <div class="overview-stage-title">
+        <span>System atlas</span>
+        <h2 id="overview-atlas-title">Every layer of the shared workspace</h2>
       </div>
-      {{else}}<div class="empty">No sessions in this window</div>{{end}}
-    </div>
+      <p>Move from durable context to the agents and queues using it now.</p>
+    </header>
 
-    <div class="card">
-      <h2>Projects at a glance <span class="h2-meta"><a href="/console/projects">all projects &rarr;</a></span></h2>
-      {{if .Projects}}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>Project</th><th>Reach</th><th class="num">Sessions</th><th class="num">Open</th><th class="num">Memories</th><th>Active</th></tr></thead>
-          <tbody>
-            {{range .Projects}}
-            <tr id="p-{{.Slug}}" class="row-link" data-href="/console/projects/{{.Slug}}">
-              <td><a class="mono" href="/console/projects/{{.Slug}}">{{.Slug}}</a>{{if .Live}} <span class="work-dot"><span class="live-dot"></span>{{.Live}}</span>{{end}}</td>
-              <td>{{if .HasReach}}<span style="color:var(--brand);font-weight:700">{{.ReachRate}}%</span>{{else}}<span class="faint">&mdash;</span>{{end}}</td>
-              <td class="num">{{.Sessions}}</td>
-              <td class="num{{if not .OpenTasks}} zero{{end}}">{{.OpenTasks}}</td>
-              <td class="num">{{.Memories}}</td>
-              <td class="muted">{{ago .LastActive}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+    <div class="overview-atlas-grid">
+      <a class="overview-atlas-node" data-tone="brand" href="/console/memories">
+        <span class="overview-atlas-icon">{{icon "database"}}</span>
+        <span class="overview-atlas-count">{{.Memories}}</span>
+        <strong>Active memories</strong>
+        <small>durable knowledge in circulation</small>
+        <span class="overview-atlas-open">Browse library {{icon "arrow-right"}}</span>
+      </a>
+      <a class="overview-atlas-node" data-tone="violet" href="/console/notes">
+        <span class="overview-atlas-icon">{{icon "file-text"}}</span>
+        <span class="overview-atlas-count">{{.Notes}}</span>
+        <strong>Working notes</strong>
+        <small>long-form plans and handoffs</small>
+        <span class="overview-atlas-open">Open notes {{icon "arrow-right"}}</span>
+      </a>
+      <a class="overview-atlas-node" data-tone="ok" href="/console/sessions">
+        <span class="overview-atlas-icon">{{icon "terminal"}}</span>
+        <span class="overview-atlas-count">{{.SessTotal}}</span>
+        <strong>Agent sessions</strong>
+        <small>{{if .SessActive}}{{.SessActive}} live now{{else}}no live sessions{{end}}</small>
+        <span class="overview-atlas-open">Open workspaces {{icon "arrow-right"}}</span>
+      </a>
+      <a class="overview-atlas-node" data-tone="warn" href="/console/tasks">
+        <span class="overview-atlas-icon">{{icon "list-checks"}}</span>
+        <span class="overview-atlas-count">{{.TasksOpen}}</span>
+        <strong>Open tasks</strong>
+        <small>{{.TasksInProg}} currently in progress</small>
+        <span class="overview-atlas-open">View queue {{icon "arrow-right"}}</span>
+      </a>
+      <a class="overview-atlas-node" data-tone="pop" href="/console/gardener">
+        <span class="overview-atlas-icon">{{icon "sprout"}}</span>
+        <span class="overview-atlas-count">{{.Pending}}</span>
+        <strong>Gardener proposals</strong>
+        <small>{{if .Pending}}waiting for review{{else}}knowledge layer is clear{{end}}</small>
+        <span class="overview-atlas-open">Review proposals {{icon "arrow-right"}}</span>
+      </a>
+    </div>
+  </section>
+
+  <section class="overview-stage overview-workspaces" aria-labelledby="overview-workspaces-title">
+    <header class="overview-stage-head">
+      <div class="overview-stage-index">03</div>
+      <div class="overview-stage-title">
+        <span>Workspace pulse</span>
+        <h2 id="overview-workspaces-title">Where agents and context are moving</h2>
       </div>
-      {{else}}<div class="empty">No projects yet</div>{{end}}
-    </div>
+      <p>Recently active project scopes, paired with the knowledge they reuse most.</p>
+    </header>
 
-    <div>
-      <h2 class="flow-title">Recent activity</h2>
-      {{if .Recent}}
-      <div class="table-wrap">
-        <table>
-          <thead><tr><th>When</th><th>Event</th><th>Project</th><th>Detail</th></tr></thead>
-          <tbody>
-            {{range .Recent}}
-            <tr id="{{.ID}}" class="row-link" data-href="/console/events/{{.ID}}">
-              <td class="muted" title="{{ts .When}}">{{ago .When}}</td>
-              <td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td>
-              <td class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}">{{.Project}}</a>{{else}}&mdash;{{end}}</td>
-              <td>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}">{{shortID .SessionID}}</a>{{copyBtn .SessionID}}{{end}}</td>
-            </tr>
-            {{end}}
-          </tbody>
-        </table>
+    <div class="overview-workspace-grid">
+      <section class="overview-project-panel" aria-labelledby="overview-projects-title">
+        <header class="overview-panel-head">
+          <div><span>Project field</span><h3 id="overview-projects-title">Recently active workspaces</h3></div>
+          <a href="/console/projects">Open project explorer {{icon "arrow-right"}}</a>
+        </header>
+        {{if .Projects}}
+        <div class="overview-project-table table-wrap">
+          <table>
+            <thead><tr><th>Workspace</th><th>Context reach</th><th class="num">Sessions</th><th class="num">Tasks</th></tr></thead>
+            <tbody>
+              {{range .Projects}}
+              <tr id="p-{{.Slug}}" class="row-link" data-href="/console/projects/{{.Slug}}">
+                <td>
+                  <div class="overview-project-name">
+                    <span class="overview-project-icon">{{icon "folder-tree"}}</span>
+                    <span><a class="mono" href="/console/projects/{{.Slug}}">{{.Slug}}</a><small>{{if .Live}}<span class="live-dot"></span>{{.Live}} working now{{else}}active {{ago .LastActive}}{{end}}</small></span>
+                  </div>
+                </td>
+                <td>
+                  <div class="overview-project-reach">
+                    <div><strong>{{if .HasReach}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><span>{{.Memories}} memories</span></div>
+                    <div class="overview-reach-track"><span style="width:{{if .HasReach}}{{.ReachRate}}{{else}}0{{end}}%"></span></div>
+                  </div>
+                </td>
+                <td class="num"><strong>{{.Sessions}}</strong><span>sessions</span></td>
+                <td class="num{{if not .OpenTasks}} zero{{end}}"><strong>{{.OpenTasks}}</strong><span>open</span></td>
+              </tr>
+              {{end}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}<div class="overview-empty dotgrid"><span class="overview-empty-icon">{{icon "folder-tree"}}</span><strong>No project activity yet</strong><span>Project scopes appear here as agents begin working.</span></div>{{end}}
+      </section>
+
+      <aside class="overview-intelligence" aria-label="Knowledge intelligence">
+        <section class="overview-insight">
+          <header class="overview-panel-head compact">
+            <div><span>Memory fabric</span><h3>Composition by kind</h3></div>
+            {{if .Memories}}<strong class="overview-panel-total">{{.Memories}}</strong>{{end}}
+          </header>
+          {{if .MemByKind}}{{kindLegend .MemByKind}}{{else}}<div class="overview-empty compact"><span>No memories yet.</span></div>{{end}}
+        </section>
+
+        <section class="overview-insight reuse-insight">
+          <header class="overview-panel-head compact">
+            <div><span>Context gravity</span><h3>Most reused knowledge</h3></div>
+          </header>
+          {{if .TopInjected}}
+          <ol class="overview-reuse-list">
+            {{range .TopInjected}}<li><span class="overview-reuse-rank"></span><a href="/console/memories/{{.ID}}">{{.Name}}</a><strong>{{.Count}}&times;</strong></li>{{end}}
+          </ol>
+          {{else}}<div class="overview-empty compact"><span>No injections recorded yet.</span></div>{{end}}
+        </section>
+      </aside>
+    </div>
+  </section>
+
+  <section class="overview-stage overview-activity" aria-labelledby="overview-activity-title">
+    <header class="overview-stage-head">
+      <div class="overview-stage-index">04</div>
+      <div class="overview-stage-title">
+        <span>Live ledger</span>
+        <h2 id="overview-activity-title">Recent system activity</h2>
       </div>
-      {{else}}<div class="empty">No activity yet</div>{{end}}
+      <p><a href="/console/interactions">Follow the full interaction stream {{icon "arrow-right"}}</a></p>
+    </header>
+
+    {{if .Recent}}
+    <div class="overview-activity-list">
+      {{range .Recent}}
+      <article id="{{.ID}}" class="overview-activity-row row-link" data-href="/console/events/{{.ID}}">
+        <time title="{{ts .When}}"><strong>{{ago .When}}</strong><span>{{ts .When}}</span></time>
+        <span class="overview-event-icon {{evtTone .Kind}}">{{icon (evtIcon .Kind)}}</span>
+        <div class="overview-event-copy">
+          <div><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a>{{if .Project}}<a class="overview-event-project" href="/console/projects/{{.Project}}">{{.Project}}</a>{{else}}<span class="overview-event-project">global</span>{{end}}</div>
+          <p>{{.Summary}}{{if .SessionID}} <a class="mono-id" href="/console/sessions/{{.SessionID}}">{{shortID .SessionID}}</a>{{copyBtn .SessionID}}{{end}}</p>
+        </div>
+        <span class="overview-row-open">{{icon "arrow-right"}}</span>
+      </article>
+      {{end}}
     </div>
-
-  </div>
-
-  <div class="ov-rail">
-
-    <div class="card">
-      <h2>Counts</h2>
-      <div class="rail-kv">
-        <div class="row"><span class="k">Active memories</span><span class="v">{{.Memories}}</span></div>
-        <div class="row"><span class="k">Notes</span><span class="v">{{.Notes}}</span></div>
-        <div class="row"><span class="k">Sessions</span><span class="v">{{.SessTotal}}{{if .SessActive}} <span class="v-sub">&middot; {{.SessActive}} live</span>{{end}}</span></div>
-        <div class="row"><span class="k">Open tasks</span><span class="v{{if not .TasksOpen}} zero{{end}}">{{.TasksOpen}}</span></div>
-        <div class="row"><span class="k">Pending proposals</span><span class="v{{if not .Pending}} zero{{end}}">{{.Pending}}</span></div>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Memories by kind{{if .Memories}} <span class="h2-meta">{{.Memories}}</span>{{end}}</h2>
-      {{if .MemByKind}}{{kindLegend .MemByKind}}{{else}}<div class="empty">No memories yet</div>{{end}}
-    </div>
-
-    <div class="card">
-      <h2>Most injected</h2>
-      {{if .TopInjected}}
-      <div class="rail-list">
-        {{range .TopInjected}}<div class="row"><a href="/console/memories/{{.ID}}">{{.Name}}</a><span class="n">{{.Count}}&times;</span></div>{{end}}
-      </div>
-      {{else}}<div class="empty">No injections recorded</div>{{end}}
-    </div>
-
-  </div>
-</div>
+    {{else}}<div class="overview-empty dotgrid"><span class="overview-empty-icon">{{icon "activity"}}</span><strong>No activity yet</strong><span>Agent sessions, memory writes, and retrieval events will appear here.</span></div>{{end}}
+  </section>
+</div><!-- .overview-page -->
 {{end}}
 {{end}}

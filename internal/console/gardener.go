@@ -50,20 +50,26 @@ type splitView struct {
 
 // proposalCard is a display projection of one gardener proposal.
 type proposalCard struct {
-	ID        string    `json:"id"`
-	Kind      string    `json:"kind"`
-	Source    string    `json:"source,omitempty"` // "request" => owner asked for it
-	Plan      string    `json:"plan,omitempty"`   // plan slug => part of a reviewed batch (e.g. a split)
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Kind        string    `json:"kind"`
+	Label       string    `json:"label"`
+	Eyebrow     string    `json:"eyebrow"`
+	Icon        string    `json:"icon"`
+	Tone        string    `json:"tone"`
+	Source      string    `json:"source,omitempty"`      // "request" => owner asked for it
+	RequestText string    `json:"requestText,omitempty"` // the owner ask that produced the proposal
+	Plan        string    `json:"plan,omitempty"`        // plan slug => part of a reviewed batch (e.g. a split)
+	CreatedAt   time.Time `json:"createdAt"`
 
 	// Archive
 	Archive *memBrief `json:"archive,omitempty"`
 	Reason  string    `json:"reason,omitempty"`
 
 	// Merge
-	Score float64   `json:"score,omitempty"`
-	Keep  *memBrief `json:"keep,omitempty"`
-	Drop  *memBrief `json:"drop,omitempty"`
+	Score        float64   `json:"score,omitempty"`
+	ScorePercent int       `json:"scorePercent,omitempty"`
+	Keep         *memBrief `json:"keep,omitempty"`
+	Drop         *memBrief `json:"drop,omitempty"`
 
 	// Digest. Preview is the raw body text (JSON); Body is the full rendered
 	// markdown the card shows.
@@ -102,9 +108,11 @@ type abandonPlanView struct {
 // console reviews them together: the setup card first, then the per-memory
 // reproject cards, with Targets listing the projects a reproject may retarget to.
 type planGroup struct {
-	Slug    string         `json:"slug"`
-	Cards   []proposalCard `json:"cards"`
-	Targets []projectOpt   `json:"targets"`
+	Slug      string         `json:"slug"`
+	Request   string         `json:"request,omitempty"`
+	MoveCount int            `json:"moveCount"`
+	Cards     []proposalCard `json:"cards"`
+	Targets   []projectOpt   `json:"targets"`
 }
 
 // projectOpt is one entry in the request-scope selector.
@@ -116,15 +124,18 @@ type projectOpt struct {
 // gardenerData is the payload for the Gardener page. Groups holds plan-batched
 // proposals (a split's setup + reproject cards); Cards holds the rest.
 type gardenerData struct {
-	Groups     []planGroup    `json:"groups,omitempty"`
-	Cards      []proposalCard `json:"cards"`
-	CanAct     bool           `json:"-"`
-	CanRequest bool           `json:"canRequest"` // an LLM chat client is configured
-	Projects   []projectOpt   `json:"projects,omitempty"`
-	Scope      string         `json:"scope,omitempty"`    // selected request scope (project slug)
-	SplitReq   string         `json:"splitReq,omitempty"` // split request awaiting a source project (renders the picker follow-up)
-	Notice     string         `json:"notice,omitempty"`   // positive flash
-	Error      string         `json:"error,omitempty"`    // failure flash
+	Groups          []planGroup    `json:"groups,omitempty"`
+	Cards           []proposalCard `json:"cards"`
+	PendingCount    int            `json:"pendingCount"`
+	RequestedCount  int            `json:"requestedCount"`
+	BackgroundCount int            `json:"backgroundCount"`
+	CanAct          bool           `json:"-"`
+	CanRequest      bool           `json:"canRequest"` // an LLM chat client is configured
+	Projects        []projectOpt   `json:"projects,omitempty"`
+	Scope           string         `json:"scope,omitempty"`    // selected request scope (project slug)
+	SplitReq        string         `json:"splitReq,omitempty"` // split request awaiting a source project (renders the picker follow-up)
+	Notice          string         `json:"notice,omitempty"`   // positive flash
+	Error           string         `json:"error,omitempty"`    // failure flash
 }
 
 func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
@@ -139,19 +150,28 @@ func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
 		cards = append(cards, s.toProposalCard(ctx, p))
 	}
 	groups, ungrouped := groupByPlan(cards)
+	requested := 0
+	for _, c := range cards {
+		if c.Source == "request" {
+			requested++
+		}
+	}
 	s.render(w, r, "gardener", pageData{
 		Title:  "Gardener",
 		Active: "gardener",
 		Data: gardenerData{
-			Groups:     groups,
-			Cards:      ungrouped,
-			CanAct:     s.cfg.Gardener != nil,
-			CanRequest: s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
-			Projects:   s.projectOptions(ctx),
-			Scope:      r.URL.Query().Get("project"),
-			SplitReq:   r.URL.Query().Get("split"),
-			Notice:     r.URL.Query().Get("notice"),
-			Error:      r.URL.Query().Get("error"),
+			Groups:          groups,
+			Cards:           ungrouped,
+			PendingCount:    len(cards),
+			RequestedCount:  requested,
+			BackgroundCount: len(cards) - requested,
+			CanAct:          s.cfg.Gardener != nil,
+			CanRequest:      s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
+			Projects:        s.projectOptions(ctx),
+			Scope:           r.URL.Query().Get("project"),
+			SplitReq:        r.URL.Query().Get("split"),
+			Notice:          r.URL.Query().Get("notice"),
+			Error:           r.URL.Query().Get("error"),
 		},
 	})
 }
@@ -180,6 +200,14 @@ func groupByPlan(cards []proposalCard) (groups []planGroup, ungrouped []proposal
 	for i := range groups {
 		sortGroupCards(groups[i].Cards)
 		groups[i].Targets = planTargets(groups[i].Cards)
+		for _, c := range groups[i].Cards {
+			if groups[i].Request == "" && c.RequestText != "" {
+				groups[i].Request = c.RequestText
+			}
+			if c.Reproject != nil {
+				groups[i].MoveCount++
+			}
+		}
 	}
 	return groups, ungrouped
 }
@@ -237,9 +265,11 @@ func (s *Service) projectOptions(ctx context.Context) []projectOpt {
 }
 
 func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposalCard {
+	label, eyebrow, iconName, tone := proposalPresentation(p.Kind)
 	c := proposalCard{
-		ID: p.ID, Kind: p.Kind, CreatedAt: p.CreatedAt,
-		Source: payloadStr(p.Payload, "source"), Plan: payloadStr(p.Payload, "plan"),
+		ID: p.ID, Kind: p.Kind, Label: label, Eyebrow: eyebrow, Icon: iconName, Tone: tone,
+		CreatedAt: p.CreatedAt, Source: payloadStr(p.Payload, "source"),
+		RequestText: snippet(payloadStr(p.Payload, "request_text"), 260), Plan: payloadStr(p.Payload, "plan"),
 	}
 	switch p.Kind {
 	case store.ProposalArchive:
@@ -251,6 +281,7 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalMerge:
 		c.Score = payloadFloat(p.Payload, "score")
+		c.ScorePercent = int(c.Score*100 + 0.5)
 		c.Keep = briefFrom(payloadMap(p.Payload, "keep"))
 		c.Drop = briefFrom(payloadMap(p.Payload, "drop"))
 	case store.ProposalDigest:
@@ -302,6 +333,30 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 		c.Split = sv
 	}
 	return c
+}
+
+// proposalPresentation turns store-facing proposal kinds into the outcome-first
+// language used at the review gate. The raw kind still renders as compact
+// provenance, while these fields tell the owner what approving the card means.
+func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
+	switch kind {
+	case store.ProposalArchive:
+		return "Archive a memory", "Active context", "archive", "warn"
+	case store.ProposalMerge:
+		return "Merge duplicate memories", "Duplicate signal", "git-merge", "brand"
+	case store.ProposalDigest:
+		return "Publish an activity digest", "New note", "file-text", "ok"
+	case store.ProposalConsolidate:
+		return "Consolidate into one memory", "Synthesis", "database", "brand"
+	case store.ProposalReproject:
+		return "Move a memory", "Scope correction", "folder-tree", "pop"
+	case store.ProposalSplit:
+		return "Restructure a project", "Project topology", "split", "pop"
+	case store.ProposalAbandonPlan:
+		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
+	default:
+		return "Review a knowledge change", "Proposal", "sprout", "brand"
+	}
 }
 
 // payloadBool reads a boolean field from a payload map (false if absent).

@@ -7,10 +7,12 @@ import (
 	"net/url"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -22,7 +24,12 @@ func TestSettingsPage(t *testing.T) {
 
 	_, err = store.EnsureProject(ctx, db, "seamless", "Seamless")
 	require.NoError(t, err)
+	_, err = store.EnsureProject(ctx, db, "seam", "Seam CLI")
+	require.NoError(t, err)
 	require.NoError(t, store.AddRepoMapping(ctx, db, "/Users/x/repos/seamless", "seamless"))
+	require.NoError(t, store.SetProjectFamilies(ctx, db, map[string][]string{
+		"seam-tools": {"seam", "seamless"},
+	}))
 
 	svc, err := New(Config{
 		DB: db, APIKey: testKey, DataDir: "/home/.seamless",
@@ -43,16 +50,91 @@ func TestSettingsPage(t *testing.T) {
 	require.Equal(t, 45, data.Gardener.SessionIdleMinutes)
 	require.Equal(t, 3, data.Briefing.FindingsCount)
 	require.False(t, data.BriefingOverridden)
-	require.Len(t, data.Projects, 1)
+	require.Len(t, data.Projects, 2)
 	require.Len(t, data.RepoMap, 1)
+	require.Len(t, data.Families, 1)
+	require.Len(t, data.Workspaces, 2)
 	require.Equal(t, "/Users/x/repos/seamless", data.RepoMap[0].Repo)
+	require.Equal(t, "seam", data.Workspaces[0].Slug)
+	require.Equal(t, "seamless", data.Workspaces[0].Families[0].Peers[0].Slug)
+	require.Equal(t, []string{"/Users/x/repos/seamless"}, data.Workspaces[1].Repos)
 
 	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), "/Users/x/repos/seamless")
-	require.Contains(t, rr.Body.String(), "Briefing injection")
+	page := rr.Body.String()
+	require.Contains(t, page, "/Users/x/repos/seamless")
+	require.Contains(t, page, "Briefing injection")
+	require.Contains(t, page, `class="settings-page" data-settings`)
+	require.Contains(t, page, `aria-label="Settings sections"`)
+	require.Contains(t, page, `id="runtime-profile"`)
+	require.Contains(t, page, `id="briefing-recipe"`)
+	require.Contains(t, page, `id="workspace-registry"`)
+	require.Contains(t, page, `class="brief-group memory-group"`)
+	require.Contains(t, page, `class="brief-group family-group"`)
+	require.Contains(t, page, `class="registry-scroll workspace-directory"`)
+	require.Contains(t, page, `class="workspace-row" data-workspace-scope="seamless"`)
+	require.Contains(t, page, `class="workspace-route" title="/Users/x/repos/seamless"`)
+	require.Contains(t, page, `class="workspace-family"`)
+	require.Contains(t, page, `Scope + arrival + lineage`)
+	require.NotContains(t, page, `class="repos-panel"`)
+	require.NotContains(t, page, `class="families-panel"`)
+	require.Contains(t, page, `window.SEAM_NO_LIVE_REFRESH = true`)
+	require.Contains(t, page, `data-briefing-form`)
+}
+
+func TestSettingsStyles_ControlPlaneContracts(t *testing.T) {
+	css := string(consoleCSS)
+
+	require.Contains(t, css, ".settings-jumpbar")
+	require.Contains(t, css, "position: sticky")
+	require.Contains(t, css, ".briefing-groups")
+	require.Contains(t, css, ".is-dirty .brief-state")
+	require.Contains(t, css, ".registry-scroll { max-height:")
+	require.Contains(t, css, ".workspace-row { display: grid;")
+	require.Contains(t, css, ".workspace-cell-label")
+	require.Contains(t, css, "@media (max-width: 520px)")
+}
+
+func TestBuildWorkspaceRegistry_JoinsSourcesAndPreservesReferences(t *testing.T) {
+	retiredAt := time.Now().UTC()
+	projects := []core.Project{
+		{Slug: "app", Name: "App", ParentSlug: "shared"},
+		{Slug: "shared", Name: "Shared"},
+		{Slug: "old", Name: "Old", RetiredAt: &retiredAt},
+	}
+	repoMap := map[string]string{
+		"/repos/z-app":  "app",
+		"/repos/a-app":  "app",
+		"/repos/future": "future",
+		"/repos/global": "",
+	}
+	families := map[string][]string{
+		"solo":  {"shared"},
+		"suite": {"future", "app", "app"},
+	}
+
+	workspaces, unbound := buildWorkspaceRegistry(projects, repoMap, families)
+
+	require.Len(t, workspaces, 4)
+	require.Equal(t, []string{"app", "shared", "old", "future"}, []string{
+		workspaces[0].Slug,
+		workspaces[1].Slug,
+		workspaces[2].Slug,
+		workspaces[3].Slug,
+	})
+	require.Equal(t, []string{"/repos/a-app", "/repos/z-app"}, workspaces[0].Repos)
+	require.True(t, workspaces[0].ParentRegistered)
+	require.Equal(t, "suite", workspaces[0].Families[0].Name)
+	require.Equal(t, 2, workspaces[0].Families[0].MemberCount)
+	require.Equal(t, workspaceFamilyMember{Slug: "future", Registered: false}, workspaces[0].Families[0].Peers[0])
+	require.Empty(t, workspaces[1].Families[0].Peers)
+	require.True(t, workspaces[2].Retired)
+	require.False(t, workspaces[3].Registered)
+	require.Equal(t, []string{"/repos/future"}, workspaces[3].Repos)
+	require.Equal(t, workspaceFamilyMember{Slug: "app", Registered: true}, workspaces[3].Families[0].Peers[0])
+	require.Equal(t, []string{"/repos/global"}, unbound)
 }
 
 func TestSettingsBriefingSaveAndReset(t *testing.T) {

@@ -1,185 +1,311 @@
 {{define "content"}}
 {{with .Data}}
-<div class="topbar">
-  <div>
-    <h1>Gardener</h1>
-    <div class="sub">{{len .Cards}} loose proposal{{if ne (len .Cards) 1}}s{{end}}{{if .Groups}} &middot; {{len .Groups}} plan{{if ne (len .Groups) 1}}s{{end}}{{end}} awaiting review</div>
-  </div>
-</div>
-
-{{if .CanRequest}}
-<div class="card req-card">
-  <h2>Ask the gardener <span class="h2-meta">natural language &rarr; proposals</span></h2>
-  <form method="post" action="/console/gardener/request" id="req-form">
-    <textarea class="field" name="request" id="req-text" rows="3" aria-label="Describe what the gardener should propose"
-      placeholder="e.g. the two auth-flow memories are duplicates &mdash; keep the newer one; archive anything about the old port 8080; or split arctop-app into ios and android">{{.SplitReq}}</textarea>
-    <div class="req-row">
-      {{$scope := .Scope}}
-      <select class="req-scope" name="project" aria-label="Request scope">
-        <option value="">All projects</option>
-        {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
-      </select>
-      <span class="req-note">Creates reviewable proposals &mdash; nothing changes until you apply.</span>
-      <button class="btn primary" type="submit" id="req-go">Generate proposals</button>
+<div class="gardener-page">
+  <header class="gardener-hero">
+    <div class="gardener-hero-copy">
+      <div class="gardener-eyebrow">{{icon "sprout"}} Knowledge stewardship</div>
+      <h1>Gardener</h1>
+      <div class="sub">Keep shared knowledge coherent without giving up control of what changes.</div>
+      <div class="gardener-contract">
+        <span class="gardener-contract-icon">{{icon "lock"}}</span>
+        <div><strong>Propose-only by design.</strong><span>The gardener can prepare a change, but only you can let it alter the knowledge your agents receive.</span></div>
+      </div>
     </div>
-  </form>
-  {{if .SplitReq}}
-  <form class="req-followup" method="post" action="/console/gardener/split" id="split-form">
-    <span class="followup-lbl">This reads like a project split &mdash; which project should be split?</span>
-    <input type="hidden" name="instruction" id="split-instruction" value="{{.SplitReq}}">
-    <select class="req-scope" name="source" aria-label="Project to split" required>
-      <option value="">Choose a project&hellip;</option>
-      {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
-    </select>
-    <button class="btn primary" type="submit" id="split-go">Plan split</button>
-  </form>
-  {{end}}
-</div>
-{{else}}
-<div class="card req-card">
-  <h2>Ask the gardener <span class="h2-meta">unavailable</span></h2>
-  <div class="prop-note">Natural-language requests need an LLM chat client. Configure a provider (an API key) to enable this.</div>
-</div>
-{{end}}
 
-{{/* Plan groups: a split's setup card + its per-memory reproject cards. */}}
-{{range .Groups}}
-<div class="plan-group">
-  <div class="plan-head">
-    <div class="plan-title"><span class="kind brand">plan</span> <span class="plan-slug">{{.Slug}}</span>
-      <span class="sub">{{len .Cards}} proposal{{if ne (len .Cards) 1}}s{{end}}</span></div>
-    {{if $.Data.CanAct}}
-    <form method="post" action="/console/gardener/plan/{{.Slug}}/apply"
-      onsubmit="return confirm('Apply every proposal in this plan? Projects are created and memories moved.');">
-      <button class="btn small primary" type="submit">Apply whole plan</button>
+    <aside class="gardener-queue" aria-label="Gardener review queue">
+      <div class="gardener-queue-score">
+        <span>Awaiting your decision</span>
+        <strong>{{.PendingCount}}</strong>
+        <small>proposal{{if ne .PendingCount 1}}s{{end}} in the review gate</small>
+      </div>
+      <div class="gardener-queue-breakdown">
+        <div><strong>{{len .Groups}}</strong><span>change batch{{if ne (len .Groups) 1}}es{{end}}</span></div>
+        <div><strong>{{.RequestedCount}}</strong><span>asked by you</span></div>
+        <div><strong>{{.BackgroundCount}}</strong><span>found in review</span></div>
+      </div>
+      <ol class="gardener-contract-flow" aria-label="How Gardener changes knowledge">
+        <li><span>1</span><div><strong>Inspect</strong><small>find drift</small></div></li>
+        <li><span>2</span><div><strong>Propose</strong><small>show impact</small></div></li>
+        <li><span>3</span><div><strong>You decide</strong><small>apply or dismiss</small></div></li>
+      </ol>
+    </aside>
+  </header>
+
+  <section class="gardener-zone" aria-labelledby="gardener-ask-title">
+    <header class="gardener-zone-head">
+      <span class="gardener-zone-index">01</span>
+      <div>
+        <div class="gardener-zone-kicker">Aim the maintenance pass</div>
+        <h2 id="gardener-ask-title">Ask for a cleanup</h2>
+        <p>Describe the outcome in plain language. The response lands in the review queue, never directly in your knowledge.</p>
+      </div>
+      <span class="gardener-access">{{icon "lock"}} Proposal only</span>
+    </header>
+
+    {{if .CanRequest}}
+    <form class="gardener-request-card" method="post" action="/console/gardener/request" id="req-form">
+      <label class="gardener-request-label" for="req-text">
+        <span>What should be tidied?</span>
+        <small>Name the memories, topic, or project when you know it. You can also ask for a project split here.</small>
+      </label>
+      <textarea class="field gardener-request-input" name="request" id="req-text" rows="4"
+        placeholder="For example: the two auth-flow memories overlap — keep the newer one and archive anything that still refers to port 8080">{{.SplitReq}}</textarea>
+
+      <div class="gardener-examples" aria-label="Request examples">
+        <span>Try a pattern</span>
+        <button type="button" data-request-example="Find duplicate memories about authentication and propose which one should stay active.">Merge duplicates</button>
+        <button type="button" data-request-example="Find guidance about the old port 8080 and propose archiving anything that is no longer true.">Archive old guidance</button>
+        <button type="button" data-request-example="Find memories filed under the wrong project and propose where they belong.">Correct scope</button>
+        <button type="button" data-request-example="Split the current app project into platform-specific child projects with shared knowledge in a parent.">Split a project</button>
+      </div>
+
+      <footer class="gardener-request-footer">
+        {{$scope := .Scope}}
+        <label class="gardener-scope" for="req-scope">
+          <span>Look within</span>
+          <select name="project" id="req-scope">
+            <option value="">All projects</option>
+            {{range .Projects}}<option value="{{.Slug}}"{{if eq .Slug $scope}} selected{{end}}>{{.Label}}</option>{{end}}
+          </select>
+        </label>
+        <div class="gardener-request-safety">{{icon "check"}} Nothing changes until a proposal is applied.</div>
+        <button class="btn primary gardener-generate" type="submit" id="req-go">{{icon "sprout"}} Prepare proposals</button>
+      </footer>
+
+      {{if .SplitReq}}
+      <div class="gardener-split-followup" role="status">
+        <span class="gardener-followup-icon">{{icon "split"}}</span>
+        <div><strong>One detail before the split can be planned</strong><span>This reads like a project split &mdash; which project should be split?</span></div>
+      </div>
+      {{end}}
+    </form>
+    {{if .SplitReq}}
+    <form class="gardener-split-controls" method="post" action="/console/gardener/split" id="split-form">
+      <input type="hidden" name="instruction" id="split-instruction" value="{{.SplitReq}}">
+      <label for="split-source">Source project</label>
+      <select name="source" id="split-source" required>
+        <option value="">Choose a project&hellip;</option>
+        {{range .Projects}}<option value="{{.Slug}}">{{.Label}}</option>{{end}}
+      </select>
+      <button class="btn primary" type="submit" id="split-go">Plan the split {{icon "arrow-right"}}</button>
     </form>
     {{end}}
-  </div>
-  {{$targets := .Targets}}
-  <div class="grid-2">
-    {{range .Cards}}
-    <div class="card">
-      <div class="prop-head">
-        <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
-        <span class="when" title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</span>
+    {{else}}
+    <article class="gardener-request-card gardener-request-unavailable">
+      <span class="gardener-unavailable-icon">{{icon "brain"}}</span>
+      <div><strong>Natural-language cleanup is not connected.</strong><p>Configure an LLM chat provider to aim the gardener from this screen. Background proposals can still be reviewed below.</p></div>
+      <a class="btn small" href="/console/settings">Review settings {{icon "arrow-right"}}</a>
+    </article>
+    {{end}}
+  </section>
+
+  <section class="gardener-zone gardener-review-zone" id="review-queue" aria-labelledby="gardener-review-title">
+    <header class="gardener-zone-head">
+      <span class="gardener-zone-index">02</span>
+      <div>
+        <div class="gardener-zone-kicker">Human review gate</div>
+        <h2 id="gardener-review-title">Decide what changes</h2>
+        <p>Read the evidence and resulting state together. Apply approves the change; dismiss closes the suggestion without touching knowledge.</p>
       </div>
-      {{template "cardKindBody" .}}
-      {{if and (eq .Kind "reproject") $.Data.CanAct $targets}}
-      {{$to := .Reproject.To}}
-      <form class="retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
-        <span class="retarget-lbl">move to</span>
-        <select class="req-scope" name="to" aria-label="Retarget project">
-          {{range $targets}}<option value="{{.Slug}}"{{if eq .Slug $to}} selected{{end}}>{{.Label}}</option>{{end}}
-        </select>
-        <button class="btn small" type="submit">Retarget</button>
-      </form>
-      {{end}}
-      {{if $.Data.CanAct}}
-      <div class="btn-row prop-foot">
-        <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
-          <button class="btn small primary" type="submit">Apply</button>
+      <span class="gardener-review-count"><strong>{{.PendingCount}}</strong> pending</span>
+    </header>
+
+    {{if or .Groups .Cards}}
+    <div class="gardener-review-rule">{{icon "lock"}} <span>Every item below is inert until you cross its Apply gate. Linked memories and projects open in the detail reader.</span></div>
+
+    {{/* Plan groups: a split setup plus its per-memory moves, reviewed as one change set. */}}
+    {{range .Groups}}
+    <section class="gardener-batch" aria-labelledby="batch-{{.Slug}}">
+      <header class="gardener-batch-head">
+        <span class="gardener-batch-icon">{{icon "split"}}</span>
+        <div class="gardener-batch-copy">
+          <div class="gardener-batch-kicker">Project restructuring plan</div>
+          <h3 id="batch-{{.Slug}}">{{.Slug}}</h3>
+          {{if .Request}}<p>&ldquo;{{.Request}}&rdquo;</p>{{else}}<p>A coordinated setup and move sequence, reviewed as one change set.</p>{{end}}
+        </div>
+        <div class="gardener-batch-facts">
+          <span><strong>{{len .Cards}}</strong> steps</span>
+          <span><strong>{{.MoveCount}}</strong> memor{{if eq .MoveCount 1}}y{{else}}ies{{end}} moving</span>
+          <span><strong>{{len .Targets}}</strong> destinations</span>
+        </div>
+        {{if $.Data.CanAct}}
+        <form method="post" action="/console/gardener/plan/{{.Slug}}/apply"
+          onsubmit="return confirm('Apply every proposal in this plan? Projects are created first, then memories are moved.');">
+          <button class="btn primary" type="submit">{{icon "check"}} Apply whole plan</button>
         </form>
-        <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal?');">
-          <button class="btn small" type="submit">Dismiss</button>
-        </form>
-      </div>
+        {{end}}
+      </header>
+      <div class="gardener-batch-order">{{icon "list-checks"}} Setup is applied first, then each memory move. You can retarget or approve steps individually.</div>
+
+      {{$targets := .Targets}}
+      <ol class="gardener-batch-steps">
+        {{range .Cards}}
+        <li>
+          <article class="gardener-proposal tone-{{.Tone}}">
+            <header class="gardener-proposal-head">
+              <span class="gardener-proposal-icon">{{icon .Icon}}</span>
+              <div class="gardener-proposal-title"><span>{{.Eyebrow}}</span><h4>{{.Label}}</h4></div>
+              <div class="gardener-proposal-meta"><span class="kind">{{.Kind}}</span><time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time></div>
+            </header>
+            <div class="gardener-proposal-body">{{template "cardKindBody" .}}</div>
+
+            {{if and (eq .Kind "reproject") $.Data.CanAct $targets}}
+            {{$to := .Reproject.To}}
+            <form class="gardener-retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
+              <label for="retarget-{{.ID}}">Correction</label>
+              <span>Move this memory to</span>
+              <select id="retarget-{{.ID}}" name="to">
+                {{range $targets}}<option value="{{.Slug}}"{{if eq .Slug $to}} selected{{end}}>{{.Label}}</option>{{end}}
+              </select>
+              <button class="btn small" type="submit">Retarget</button>
+            </form>
+            {{end}}
+
+            {{if $.Data.CanAct}}
+            <footer class="gardener-proposal-actions">
+              <span>Apply only this step</span>
+              <div class="btn-row">
+                <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal? It will be closed without changing knowledge.');">
+                  <button class="btn small" type="submit">Dismiss</button>
+                </form>
+                <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
+                  <button class="btn small primary" type="submit">{{icon "check"}} Apply step</button>
+                </form>
+              </div>
+            </footer>
+            {{end}}
+          </article>
+        </li>
+        {{end}}
+      </ol>
+    </section>
+    {{end}}
+
+    {{if .Cards}}
+    <div class="gardener-loose-head">
+      <div><span>Individual decisions</span><h3>Proposal queue</h3></div>
+      <p>{{len .Cards}} standalone change{{if ne (len .Cards) 1}}s{{end}}, newest first</p>
+    </div>
+    <div class="gardener-proposal-stack">
+      {{range .Cards}}
+      <article class="gardener-proposal tone-{{.Tone}}">
+        <header class="gardener-proposal-head">
+          <span class="gardener-proposal-icon">{{icon .Icon}}</span>
+          <div class="gardener-proposal-title"><span>{{.Eyebrow}}</span><h3>{{.Label}}</h3></div>
+          <div class="gardener-proposal-meta"><span class="kind">{{.Kind}}</span><time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time></div>
+        </header>
+        {{if .RequestText}}<blockquote class="gardener-request-origin"><span>Asked by you</span><p>&ldquo;{{.RequestText}}&rdquo;</p></blockquote>{{else}}<div class="gardener-scan-origin">{{icon "sprout"}} Found by a background Gardener pass</div>{{end}}
+        <div class="gardener-proposal-body">{{template "cardKindBody" .}}</div>
+        {{if $.Data.CanAct}}
+        <footer class="gardener-proposal-actions">
+          <span>Knowledge changes only if applied</span>
+          <div class="btn-row">
+            <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal? It will be closed without changing knowledge.');">
+              <button class="btn" type="submit">Dismiss suggestion</button>
+            </form>
+            <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
+              <button class="btn primary" type="submit">{{icon "check"}} Apply change</button>
+            </form>
+          </div>
+        </footer>
+        {{end}}
+      </article>
       {{end}}
     </div>
     {{end}}
-  </div>
-</div>
-{{end}}
-
-{{if .Cards}}
-<div class="grid-2">
-  {{range .Cards}}
-  <div class="card">
-    <div class="prop-head">
-      <span class="prop-kinds"><span class="kind">{{.Kind}}</span>{{if eq .Source "request"}}<span class="kind brand">from your request</span>{{end}}</span>
-      <span class="when" title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</span>
-    </div>
-    {{template "cardKindBody" .}}
-    {{if $.Data.CanAct}}
-    <div class="btn-row prop-foot">
-      <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
-        <button class="btn small primary" type="submit">Apply</button>
-      </form>
-      <form method="post" action="/console/gardener/{{.ID}}/dismiss">
-        <button class="btn small" type="submit">Dismiss</button>
-      </form>
+    {{else}}
+    <div class="gardener-tidy">
+      <span class="gardener-tidy-illustration"><i></i>{{icon "sprout"}}</span>
+      <div><span>Review queue clear</span><h3>The garden is tidy.</h3><p>No proposed change is waiting on you. Background passes will bring drift here, or you can aim the gardener with a request above.</p></div>
+      <a class="btn small" href="#gardener-ask-title">Ask for a cleanup {{icon "arrow-right"}}</a>
     </div>
     {{end}}
-  </div>
-  {{end}}
-</div>
-{{else if not .Groups}}
-<div class="empty dotgrid"><span class="empty-ico ok">{{icon "sprout"}}</span><div>No pending proposals &mdash; the garden is tidy.</div></div>
-{{end}}
+  </section>
+</div><!-- .gardener-page -->
 {{end}}
 {{end}}
 
-{{/* cardKindBody renders the kind-specific body of one proposal card (. is the card). */}}
+{{/* cardKindBody renders the concrete before/after state for one proposal. */}}
 {{define "cardKindBody"}}
 {{if eq .Kind "archive"}}
   {{with .Archive}}
-  <div class="prop-row"><a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.Kind}}</span></div>
-  {{if .Description}}<div class="prop-desc">{{.Description}}</div>{{end}}
+  <div class="proposal-object">
+    <span class="proposal-object-icon warn">{{icon "archive"}}</span>
+    <div><span>Memory leaving active context</span><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{if .Description}}<p>{{.Description}}</p>{{end}}</div>
+    <div class="proposal-object-tags"><span>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span><span>{{.Kind}}</span></div>
+  </div>
   {{end}}
-  <div class="badge warn">{{.Reason}}</div>
+  {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "archive"}} History stays readable; active indexes and briefings stop surfacing it.</div>
 {{else if eq .Kind "merge"}}
-  {{if eq .Source "request"}}
-  <div class="prop-note">Requested merge &mdash; keep the first, supersede the second.</div>
-  {{else}}
-  <div class="prop-note">Similarity {{printf "%.2f" .Score}} &mdash; keep the newer, supersede the older.</div>
-  {{end}}
-  {{with .Keep}}<div class="prop-row"><span class="badge ok">keep</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
-  {{with .Drop}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span>{{if .Description}}<span class="desc">{{.Description}}</span>{{end}}</div>{{end}}
+  <div class="proposal-signal">{{if eq .Source "request"}}You chose which version should survive.{{else}}The background pass measured {{.ScorePercent}}% similarity between these memories.{{end}}</div>
+  <div class="proposal-compare">
+    {{with .Keep}}<div class="proposal-memory keep"><span>Keep active</span><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><small>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</small></div>{{end}}
+    <div class="proposal-merge-arrow">{{icon "git-merge"}}<span>supersedes</span></div>
+    {{with .Drop}}<div class="proposal-memory drop"><span>Replace with kept memory</span><a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><small>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}{{if .Description}} &middot; {{.Description}}{{end}}</small></div>{{end}}
+  </div>
+  <div class="proposal-assurance">{{icon "link"}} The superseded memory stays readable and points to the kept memory.</div>
 {{else if eq .Kind "digest"}}
-  <div class="prop-title">{{.Title}}</div>
-  <div class="prop-note">{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</div>
-  <div class="prose">{{.Body}}</div>
+  <div class="proposal-document-head"><span class="proposal-object-icon ok">{{icon "file-text"}}</span><div><span>New note</span><strong>{{.Title}}</strong><small>{{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}} &middot; {{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; {{.Month}}</small></div></div>
+  <div class="prose proposal-prose">{{.Body}}</div>
+  <div class="proposal-assurance">{{icon "check"}} Creates a digest note; the source sessions remain unchanged.</div>
 {{else if eq .Kind "consolidate"}}
-  <div class="prop-note">Consolidate {{len .Sources}} memor{{if eq (len .Sources) 1}}y{{else}}ies{{end}} into one new memory.</div>
-  <div class="prop-row"><span class="badge ok">new</span> <span class="name">{{.NewName}}</span> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="kind faint">{{.NewKind}}</span></div>
-  {{if .NewDesc}}<div class="prop-desc">{{.NewDesc}}</div>{{end}}
-  {{range .Sources}}<div class="prop-row"><span class="badge danger">drop</span> <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a></div>{{end}}
-  {{if .Body}}<div class="prose">{{.Body}}</div>{{end}}
+  <div class="proposal-signal">Synthesize {{len .Sources}} memor{{if eq (len .Sources) 1}}y{{else}}ies{{end}} into one durable source of truth.</div>
+  <div class="proposal-object outcome">
+    <span class="proposal-object-icon brand">{{icon "database"}}</span>
+    <div><span>New active memory</span><strong>{{.NewName}}</strong>{{if .NewDesc}}<p>{{.NewDesc}}</p>{{end}}</div>
+    <div class="proposal-object-tags"><span>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span><span>{{.NewKind}}</span></div>
+  </div>
+  <div class="proposal-source-list"><span>Superseded sources</span><div>{{range .Sources}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{end}}</div></div>
+  {{if .Body}}<div class="prose proposal-prose">{{.Body}}</div>{{end}}
 {{else if eq .Kind "reproject"}}
   {{with .Reproject}}
-  <div class="prop-row">
-    <a href="/console/memories/{{.ID}}" data-peek class="name">{{.Name}}</a>
-    <span class="muted move-arrow">{{if .From}}<a href="/console/projects/{{.From}}" data-peek>{{.From}}</a>{{else}}global{{end}} <span class="arrow">&rarr;</span> <strong>{{.To}}</strong></span>
+  <div class="proposal-moving-memory">{{icon "brain"}} <a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a></div>
+  <div class="proposal-move-map">
+    <div><span>From</span><strong>{{if .From}}<a href="/console/projects/{{.From}}" data-peek>{{.From}}</a>{{else}}global{{end}}</strong></div>
+    <span class="proposal-path">{{icon "arrow-right"}}</span>
+    <div class="destination"><span>To</span><strong>{{.To}}</strong></div>
   </div>
-  {{if .Rationale}}<div class="prop-desc">{{.Rationale}}</div>{{end}}
+  {{if .Rationale}}<div class="proposal-reason"><span>Why this scope fits</span><p>{{.Rationale}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "folder-tree"}} The memory keeps its identity and history; only its project scope changes.</div>
   {{end}}
 {{else if eq .Kind "abandon_plan"}}
   {{with .AbandonPlan}}
-  <div class="prop-row"><a href="/console/plans/{{.Slug}}" class="name">{{.Title}}</a> <span class="muted">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}}</span> <span class="badge {{planTone .Status}}">{{.Status}}</span></div>
+  <div class="proposal-object">
+    <span class="proposal-object-icon warn">{{icon "archive"}}</span>
+    <div><span>Captured plan leaving the active horizon</span><a href="/console/plans/{{.Slug}}">{{.Title}}</a><p>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; currently {{.Status}}</p></div>
+    <span class="badge {{planTone .Status}}">{{.Status}}</span>
+  </div>
   {{end}}
-  <div class="badge warn">{{.Reason}}</div>
+  {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "file-text"}} Re-tags the capture as abandoned; the plan note is not deleted.</div>
 {{else if eq .Kind "split"}}
   {{with .Split}}
-  <div class="prop-note">Split <strong>{{.Source}}</strong> into:</div>
-  <div class="prop-row split-targets">
-    {{range .Children}}<span class="badge ok">{{.Label}}</span>{{end}}
-    {{if .Shared}}<span class="badge brand">shared &middot; {{.Shared.Label}}</span>{{end}}
+  <div class="proposal-topology">
+    <div class="proposal-project source"><span>Source</span><strong>{{.Source}}</strong><small>{{if .RetireSource}}retires after setup{{else}}stays active{{end}}</small></div>
+    <span class="proposal-topology-arrow">{{icon "split"}}</span>
+    <div class="proposal-target-projects">
+      {{range .Children}}<div><span>Child</span><strong>{{.Label}}</strong><small>{{.Slug}}</small></div>{{end}}
+      {{if .Shared}}<div class="shared"><span>Shared parent</span><strong>{{.Shared.Label}}</strong><small>{{.Shared.Slug}}</small></div>{{end}}
+    </div>
   </div>
-  <div class="prop-desc">Creates the projects, links them as a family{{if .Shared}}, parents the children on the shared project{{end}}{{if .RetireSource}}, and retires {{.Source}}{{end}}.</div>
+  <div class="proposal-assurance">{{icon "git-fork"}} Creates the project family and shared-parent relationship before any memory moves.</div>
   {{end}}
 {{end}}
 {{end}}
 
 {{define "scripts"}}
 <script>
-window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress form state a refresh must not clobber
+window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress review and request state a refresh must not clobber
 (function () {
   function busy(formID, btnID, label) {
     var form = document.getElementById(formID);
     if (!form) return;
     form.addEventListener('submit', function () {
-      (form.closest('.req-card') || form).classList.add('is-busy');
+      form.setAttribute('aria-busy', 'true');
+      (form.closest('.gardener-request-card') || form).classList.add('is-busy');
       var btn = document.getElementById(btnID);
-      if (btn) { btn.textContent = label; }
+      if (btn) btn.textContent = label;
     });
   }
   busy('req-form', 'req-go', 'Interpreting…');
@@ -188,20 +314,23 @@ window.SEAM_NO_LIVE_REFRESH = true; // holds in-progress form state a refresh mu
   var ta = document.getElementById('req-text');
   if (ta) {
     ta.addEventListener('keydown', function (e) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        document.getElementById('req-form').requestSubmit();
-      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') document.getElementById('req-form').requestSubmit();
+    });
+    document.querySelectorAll('[data-request-example]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        ta.value = button.getAttribute('data-request-example');
+        ta.focus();
+        ta.dispatchEvent(new Event('input', { bubbles: true }));
+      });
     });
   }
 
   // The split follow-up plans whatever is in the ask box, so edits made after
-  // the round-trip still count; the hidden input is the no-JS fallback.
+  // the round-trip still count; the hidden value remains the no-JS fallback.
   var split = document.getElementById('split-form');
   if (split && ta) {
     split.addEventListener('submit', function () {
-      if (ta.value.trim() !== '') {
-        document.getElementById('split-instruction').value = ta.value;
-      }
+      if (ta.value.trim() !== '') document.getElementById('split-instruction').value = ta.value;
     });
   }
 })();
