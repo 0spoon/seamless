@@ -319,6 +319,18 @@ func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
 	if h.db == nil || p.SessionID == "" {
 		return
 	}
+	// Real token totals: the rollout carries a cumulative token_count every turn, so
+	// re-reading the latest one each Stop and overwriting is idempotent (Codex has no
+	// SessionEnd, so this is the only place its usage lands). Independent of findings
+	// -- a turn may update one without the other.
+	if usage, ok := codexRolloutTokens(p.TranscriptPath); ok {
+		if _, err := store.SetAmbientSessionTokens(
+			ctx, h.db, ClientCodex.externalIdentity(), p.SessionID, usage, time.Now().UTC(),
+		); err != nil {
+			h.logger.Warn("hooks: codex stop token harvest", "external_session_id", p.SessionID, "error", err)
+		}
+	}
+
 	findings := codexStopFindings(p.LastAssistantMessage, p.TranscriptPath)
 	if findings == "" {
 		return // nothing this turn; the heartbeat kept the session alive
@@ -327,6 +339,27 @@ func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
 		ctx, h.db, ClientCodex.externalIdentity(), p.SessionID, findings, time.Now().UTC(),
 	); err != nil {
 		h.logger.Warn("hooks: codex stop harvest", "external_session_id", p.SessionID, "error", err)
+	}
+}
+
+// harvestClaudeTokens parses the Claude Code transcript for the session's real
+// model token totals and overwrites them on the ambient row. Best-effort by the
+// package's never-block contract: a blank/unparseable transcript records nothing
+// (never an error). It must run while the row is still active -- the caller invokes
+// it before the SessionEnd completion flips the status, so SetAmbientSessionTokens'
+// active-only guard matches.
+func (h *Handler) harvestClaudeTokens(ctx context.Context, client Client, externalSessionID, transcriptPath string, now time.Time) {
+	if h.db == nil || externalSessionID == "" {
+		return
+	}
+	usage, ok := claudeTranscriptTokens(transcriptPath)
+	if !ok {
+		return
+	}
+	if _, err := store.SetAmbientSessionTokens(
+		ctx, h.db, client.externalIdentity(), externalSessionID, usage, now,
+	); err != nil {
+		h.logger.Warn("hooks: session-end token harvest", "external_session_id", externalSessionID, "error", err)
 	}
 }
 
@@ -424,6 +457,10 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 				harvested = harvestFindings(p.TranscriptPath)
 			}
 			sess.Findings = harvested // explicit sessions keep their session_update findings
+			// Overwrite the real token totals while the row is STILL active, before the
+			// UpdateSession below flips it to completed -- SetAmbientSessionTokens guards
+			// on status = 'active'.
+			h.harvestClaudeTokens(ctx, client, p.SessionID, p.TranscriptPath, now)
 		}
 		if err := store.UpdateSession(ctx, h.db, sess); err != nil {
 			h.logger.Warn("hooks: session-end complete", "session", sess.ID, "error", err)

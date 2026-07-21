@@ -48,6 +48,7 @@ type sessionRow struct {
 	Model    string    `json:"model,omitempty"`   // model powering the session, verbatim
 	Live     bool      `json:"live"`
 	Findings string    `json:"findings"`
+	Tokens   int       `json:"tokens"` // real model tokens harvested from the transcript (0 = none)
 	Updated  time.Time `json:"updated"`
 }
 
@@ -136,7 +137,8 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			ID: sess.ID, Name: sess.Name, Project: sess.ProjectSlug,
 			Status: string(sess.Status), Source: sess.Source, Ambient: sess.Ambient,
 			Harness: harnessOf(sess), Model: sess.Model,
-			Live: live, Findings: snippet(plain, 120), Updated: sess.UpdatedAt,
+			Live: live, Findings: snippet(plain, 120), Tokens: sess.Tokens.Total,
+			Updated: sess.UpdatedAt,
 		})
 	}
 	if sortKey == "name" {

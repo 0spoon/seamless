@@ -88,6 +88,19 @@
       </dl>
     </div>
 
+    {{with .Session.Tokens}}{{if .Total}}
+    <div class="card">
+      <h2 title="Real model token consumption harvested from the agent's transcript -- the actual burn, not the ~4 bytes/token injection estimate.">Model tokens</h2>
+      <dl class="kv">
+        <dt title="Fresh (uncached) input the model processed.">Input</dt><dd>{{compactNum .Input}}</dd>
+        <dt title="Input served from the prompt cache (cache read).">Cached input</dt><dd>{{compactNum .Cached}}</dd>
+        {{if .CacheCreation}}<dt title="Input written to the prompt cache (Claude Code only).">Cache write</dt><dd>{{compactNum .CacheCreation}}</dd>{{end}}
+        <dt title="Tokens the model produced.">Output</dt><dd>{{compactNum .Output}}</dd>
+        <dt>Total</dt><dd><b>{{compactNum .Total}}</b></dd>
+      </dl>
+    </div>
+    {{end}}{{end}}
+
     <div class="card">
       <h2>Claimed task{{if ne (len .ClaimedTasks) 1}}s{{end}}{{if .ClaimedTasks}} <span class="h2-meta">{{len .ClaimedTasks}}</span>{{end}}</h2>
       {{if .ClaimedTasks}}

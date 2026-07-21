@@ -32,6 +32,7 @@ type ProjectBoardRow struct {
 	Blocked      int       `json:"blocked"`      // open tasks with >=1 open/in_progress blocker (== len(BlockedTasks))
 	Notes        int       `json:"notes"`        // notes project = slug (matches GetProjectCounts.Notes)
 	LastActive   time.Time `json:"lastActive"`   // MAX(sessions.updated_at) for the project; zero when none
+	TokensTotal  int       `json:"tokensTotal"`  // SUM(sessions.total_tokens): real model token burn harvested from transcripts
 	Unregistered bool      `json:"unregistered"` // slug seen in data tables but absent from the projects table
 	ReachRate    int       `json:"reachRate"`    // Surfaced/Active rounded %, from BuildRetrievalReport; 0 when absent
 	Surfaced     int       `json:"surfaced"`     // distinct active memories surfaced >=1x in the window
@@ -82,7 +83,8 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow,
 	sessRows, err := db.QueryContext(ctx, `
 		SELECT project_slug, COUNT(*),
 		       SUM(CASE WHEN status = 'active' AND updated_at >= ? THEN 1 ELSE 0 END),
-		       MAX(updated_at)
+		       MAX(updated_at),
+		       COALESCE(SUM(total_tokens), 0)
 		FROM sessions GROUP BY project_slug`, liveCutoff)
 	if err != nil {
 		return nil, fmt.Errorf("store.ProjectsWithCounts: sessions: %w", err)
@@ -94,8 +96,9 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow,
 				slug        string
 				total, live int
 				lastUpdated sql.NullString
+				tokensTotal int
 			)
-			if err := sessRows.Scan(&slug, &total, &live, &lastUpdated); err != nil {
+			if err := sessRows.Scan(&slug, &total, &live, &lastUpdated, &tokensTotal); err != nil {
 				return fmt.Errorf("scan: %w", err)
 			}
 			last, err := nullTime(lastUpdated)
@@ -106,6 +109,7 @@ func ProjectsWithCounts(ctx context.Context, db *sql.DB, window RetrievalWindow,
 			r.Sessions = total
 			r.LiveSessions = live
 			r.LastActive = last
+			r.TokensTotal = tokensTotal
 		}
 		return sessRows.Err()
 	}(); err != nil {

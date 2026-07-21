@@ -12,7 +12,8 @@ import (
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
-	external_client, cwd, source, model, ambient, metadata, created_at, updated_at`
+	external_client, cwd, source, model, ambient, metadata, created_at, updated_at,
+	input_tokens, cached_input_tokens, cache_creation_tokens, output_tokens, total_tokens`
 
 // ErrSessionNameExists is returned by CreateSession when the name is already
 // taken (sessions.name is UNIQUE). It mirrors ErrSlugExists so a caller racing
@@ -234,6 +235,49 @@ func SetAmbientSessionModel(ctx context.Context, db *sql.DB, externalClient, ext
 		return fmt.Errorf("store.SetAmbientSessionModel: %w", err)
 	}
 	return nil
+}
+
+// SetAmbientSessionTokens overwrites the harvested model token totals on an
+// active ambient session, keyed by authoritative external identity. Like the
+// other targeted ambient writers it is a single-purpose write (only the five
+// token columns + updated_at, never a read-modify-write of the whole row), so a
+// concurrent findings/model update cannot clobber it and vice versa.
+//
+// The totals are absolute cumulative values, so this OVERWRITES rather than
+// accumulates: re-harvesting a resumed session's grown transcript (Claude Code
+// SessionEnd) or re-reading the latest cumulative token_count every turn (Codex
+// Stop) writes the same absolute total again -- idempotent, never double-counted.
+// The active-only + ambient guard means it never revives a completed/expired row
+// and never touches an explicit session. Bumping updated_at doubles as a
+// heartbeat. No-op on an incomplete identity or an empty (all-zero) usage (a turn
+// with no token record leaves any prior harvest intact). Reports whether a row
+// was updated.
+func SetAmbientSessionTokens(
+	ctx context.Context,
+	db *sql.DB,
+	externalClient, externalSessionID string,
+	tokens core.TokenUsage,
+	now time.Time,
+) (bool, error) {
+	if externalClient == "" || externalSessionID == "" || tokens.Empty() {
+		return false, nil
+	}
+	res, err := db.ExecContext(ctx, `
+		UPDATE sessions
+		   SET input_tokens = ?, cached_input_tokens = ?, cache_creation_tokens = ?,
+		       output_tokens = ?, total_tokens = ?, updated_at = ?
+		 WHERE ambient = 1 AND external_client = ? AND claude_session_id = ?
+		   AND status = 'active'`,
+		tokens.Input, tokens.Cached, tokens.CacheCreation, tokens.Output, tokens.Total,
+		core.FormatTime(now.UTC()), externalClient, externalSessionID)
+	if err != nil {
+		return false, fmt.Errorf("store.SetAmbientSessionTokens: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("store.SetAmbientSessionTokens: rows affected: %w", err)
+	}
+	return n > 0, nil
 }
 
 // UpdateAmbientFindings upserts provisional findings onto an active ambient
@@ -674,6 +718,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 	if err := rows.Scan(
 		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
 		&s.ExternalClient, &s.CWD, &s.Source, &s.Model, &ambient, &meta, &created, &updated,
+		&s.Tokens.Input, &s.Tokens.Cached, &s.Tokens.CacheCreation, &s.Tokens.Output, &s.Tokens.Total,
 	); err != nil {
 		return core.Session{}, err
 	}

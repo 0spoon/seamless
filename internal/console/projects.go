@@ -29,7 +29,9 @@ type projectRowVM struct {
 	Slug         string
 	Name         string
 	Description  string
+	ParentSlug   string
 	Global       bool
+	Parent       bool
 	Child        bool
 	Retired      bool
 	Unregistered bool
@@ -40,34 +42,61 @@ type projectRowVM struct {
 	OpenTasks    int
 	Blocked      int
 	Memories     int
+	Notes        int
 	Inherited    int // memories a child inherits from its parent's shared briefing
 	ReachRate    int
+	Surfaced     int
+	Active       int
 	HasReach     bool // the project has >=1 active memory (a reach denominator)
 	LastActive   time.Time
+	TokensTotal  int // real model tokens burned across the project's sessions
 }
 
 // projectGroupVM is a family band on the board: a labeled header plus its rows.
 type projectGroupVM struct {
-	Label string
-	Icon  string
-	Count int
-	Note  string // e.g. "parent injects 6 memories into 2 children"
-	Rows  []projectRowVM
+	Label        string
+	Icon         string
+	Count        int
+	Note         string // e.g. "parent injects 6 memories into 2 children"
+	Rows         []projectRowVM
+	Working      int
+	OpenTasks    int
+	Blocked      int
+	Memories     int
+	Notes        int
+	TokensTotal  int
+	ReachRate    int
+	HasReach     bool
+	Unregistered int
 }
 
 // projectsData is the board page payload.
 type projectsData struct {
-	Group       string
-	Sort        string
-	Query       string
-	Window      string
-	WindowLabel string           `json:"-"`
-	Windows     []windowOption   `json:"-"`
-	Groups      []projectGroupVM // family mode
-	Flat        []projectRowVM   // flat mode
-	Projects    int              // # project rows (excludes the global scope)
-	Working     int              // total live sessions across projects
-	Families    int              // # shared-briefing family bands
+	Group        string
+	Sort         string
+	Query        string
+	Window       string
+	WindowLabel  string           `json:"-"`
+	Windows      []windowOption   `json:"-"`
+	Groups       []projectGroupVM // family mode
+	Flat         []projectRowVM   // flat mode
+	Projects     int              // # project rows (excludes the global scope)
+	Working      int              // total live sessions across visible scopes
+	LiveScopes   int              // visible scopes with at least one live session
+	Families     int              // # shared-briefing family bands
+	Sessions     int
+	OpenTasks    int
+	Blocked      int
+	Memories     int
+	Notes        int
+	TokensTotal  int
+	Surfaced     int
+	Active       int
+	ReachRate    int
+	HasReach     bool
+	Attention    int // visible scopes with blocked work or registry drift
+	Unregistered int
+	Retired      int
 }
 
 func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +160,18 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 		retiredRows    []projectRowVM
 		working        int
 		projectCount   int
+		liveScopes     int
+		sessions       int
+		openTasks      int
+		blocked        int
+		memories       int
+		notes          int
+		tokensTotal    int
+		surfaced       int
+		active         int
+		attention      int
+		unregistered   int
+		retired        int
 	)
 	q := strings.ToLower(query)
 	for _, b := range board {
@@ -144,8 +185,28 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 		}
 		vmBySlug[b.Project] = vm
 		working += vm.Working
+		if vm.Working > 0 {
+			liveScopes++
+		}
+		sessions += vm.Sessions
+		openTasks += vm.OpenTasks
+		blocked += vm.Blocked
+		memories += vm.Memories
+		notes += vm.Notes
+		tokensTotal += vm.TokensTotal
+		surfaced += vm.Surfaced
+		active += vm.Active
+		if projectNeedsAttention(vm) {
+			attention++
+		}
 		if !vm.Global {
 			projectCount++
+			if vm.Unregistered {
+				unregistered++
+			}
+			if vm.Retired {
+				retired++
+			}
 		}
 		switch {
 		case vm.Global:
@@ -163,7 +224,23 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 	data := projectsData{
 		Group: group, Sort: sortKey, Query: query,
 		Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
-		Projects: projectCount, Working: working,
+		Projects: projectCount, Working: working, LiveScopes: liveScopes,
+		Sessions: sessions, OpenTasks: openTasks, Blocked: blocked,
+		Memories: memories, Notes: notes, TokensTotal: tokensTotal, Surfaced: surfaced, Active: active,
+		HasReach: active > 0, ReachRate: percent(surfaced, active),
+		Attention: attention, Unregistered: unregistered, Retired: retired,
+	}
+	for parent, children := range childrenOf {
+		if _, ok := vmBySlug[parent]; ok {
+			data.Families++
+			continue
+		}
+		for _, child := range children {
+			if _, ok := vmBySlug[child]; ok {
+				data.Families++
+				break
+			}
+		}
 	}
 
 	if group == "flat" {
@@ -183,9 +260,7 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 	var groups []projectGroupVM
 	if len(rootRows) > 0 {
 		sortRows(rootRows, less)
-		groups = append(groups, projectGroupVM{
-			Label: "Root", Icon: "server", Count: len(rootRows), Rows: rootRows,
-		})
+		groups = append(groups, newProjectGroupVM("Root", "server", "Shared context available to every project", rootRows))
 	}
 
 	parents := make([]string, 0, len(isParent))
@@ -213,27 +288,21 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 		if len(rows) == 0 {
 			continue // whole family filtered out by the query
 		}
-		groups = append(groups, projectGroupVM{
-			Label: parent + " · shared briefing",
-			Icon:  "folder-tree",
-			Count: len(rows),
-			Note:  familyNote(memoriesBySlug[parent], len(kids)),
-			Rows:  rows,
-		})
-		data.Families++
+		groups = append(groups, newProjectGroupVM(
+			parent+" · shared briefing",
+			"folder-tree",
+			familyNote(memoriesBySlug[parent], len(kids)),
+			rows,
+		))
 	}
 
 	if len(standaloneRows) > 0 {
 		sortRows(standaloneRows, less)
-		groups = append(groups, projectGroupVM{
-			Label: "Standalone", Icon: "box", Count: len(standaloneRows), Rows: standaloneRows,
-		})
+		groups = append(groups, newProjectGroupVM("Standalone", "box", "Independent project scopes", standaloneRows))
 	}
 	if len(retiredRows) > 0 {
 		sortRows(retiredRows, less)
-		groups = append(groups, projectGroupVM{
-			Label: "Retired by split", Icon: "archive", Count: len(retiredRows), Rows: retiredRows,
-		})
+		groups = append(groups, newProjectGroupVM("Retired by split", "archive", "Historical scopes kept for lineage", retiredRows))
 	}
 	data.Groups = groups
 	s.render(w, r, "projects", pageData{Title: "Projects", Active: "projects", Data: data})
@@ -247,7 +316,9 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		Slug:         b.Project,
 		Name:         p.Name,
 		Description:  p.Description,
+		ParentSlug:   p.ParentSlug,
 		Global:       b.Project == "",
+		Parent:       parent,
 		Child:        p.ParentSlug != "",
 		Retired:      p.Retired(),
 		Unregistered: b.Unregistered,
@@ -256,9 +327,13 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		OpenTasks:    b.OpenTasks,
 		Blocked:      b.Blocked,
 		Memories:     b.Memories,
+		Notes:        b.Notes,
 		ReachRate:    b.ReachRate,
+		Surfaced:     b.Surfaced,
+		Active:       b.Active,
 		HasReach:     b.Active > 0,
 		LastActive:   b.LastActive,
+		TokensTotal:  b.TokensTotal,
 	}
 	if vm.Name == "" {
 		vm.Name = b.Project
@@ -275,6 +350,34 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		vm.TileClass, vm.TileIcon = "", "box"
 	}
 	return vm
+}
+
+// newProjectGroupVM rolls the same strict project metrics up to a visible
+// family band. Reach is recomputed from surfaced/active counts rather than
+// averaging row percentages, so one tiny project cannot outweigh a large one.
+func newProjectGroupVM(label, icon, note string, rows []projectRowVM) projectGroupVM {
+	g := projectGroupVM{Label: label, Icon: icon, Count: len(rows), Note: note, Rows: rows}
+	var surfaced, active int
+	for _, row := range rows {
+		g.Working += row.Working
+		g.OpenTasks += row.OpenTasks
+		g.Blocked += row.Blocked
+		g.Memories += row.Memories
+		g.Notes += row.Notes
+		g.TokensTotal += row.TokensTotal
+		surfaced += row.Surfaced
+		active += row.Active
+		if row.Unregistered {
+			g.Unregistered++
+		}
+	}
+	g.HasReach = active > 0
+	g.ReachRate = percent(surfaced, active)
+	return g
+}
+
+func projectNeedsAttention(row projectRowVM) bool {
+	return !row.Retired && (row.Blocked > 0 || row.Unregistered)
 }
 
 // familyNote describes a shared-briefing band: the parent injects its active

@@ -42,6 +42,17 @@ func TestProjectsExplorer_ExposesReachWindow(t *testing.T) {
 	require.Contains(t, body, `href="/console/projects?group=family&amp;sort=recent&amp;q=&amp;w=24h"`)
 	require.Contains(t, body, `href="/console/projects?group=family&amp;sort=recent&amp;q=&amp;w=all"`)
 	require.Contains(t, body, "Reach = active memories surfaced")
+	require.Contains(t, body, `class="project-summary-grid"`)
+	require.Contains(t, body, `class="project-hero-reach"`)
+}
+
+func TestProjectsExplorer_AtlasIsResponsive(t *testing.T) {
+	css := string(consoleCSS)
+	require.Contains(t, css, `.ops-page[data-ops="projects"] .ops-hero`)
+	require.Contains(t, css, `grid-template-areas: "main reach knowledge work activity"`)
+	require.Contains(t, css, `grid-template-areas: "main reach activity" "main knowledge work"`)
+	require.Contains(t, css, `grid-template-areas: "main main" "reach activity" "knowledge work"`)
+	require.Contains(t, css, `.project-card { display: flex; flex-direction: column; }`)
 }
 
 func TestInteractionsExplorer_ExposesTraceFiltersAndVisibleCount(t *testing.T) {

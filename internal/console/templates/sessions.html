@@ -68,7 +68,7 @@
       <div class="sess-main">
         <span class="sess-state {{if .Live}}live{{else}}idle{{end}}" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
           {{if .Findings}}<div class="find">{{.Findings}}</div>{{else}}<div class="find faint">Work in progress &mdash; no findings yet</div>{{end}}
         </div>
       </div>
@@ -91,7 +91,7 @@
       <div class="sess-main">
         <span class="sess-state completed" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}</div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}</div>
           <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
         </div>
       </div>
@@ -115,7 +115,7 @@
       <div class="sess-main">
         <span class="sess-state expired" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
           <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
         </div>
       </div>

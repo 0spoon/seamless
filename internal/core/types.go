@@ -189,11 +189,46 @@ type Session struct {
 	// payloads' model field, or a tail-sniff of the Claude Code transcript.
 	// Updated in place when the agent switches models, and stamped onto
 	// memories/notes at write time.
-	Model     string         `json:"model"`
-	Ambient   bool           `json:"ambient"`
+	Model   string `json:"model"`
+	Ambient bool   `json:"ambient"`
+	// Tokens is the real model token consumption harvested from the agent's
+	// transcript (Claude Code at SessionEnd, Codex every Stop) -- the actual burn,
+	// not the injection estimate. Zero until harvested, or for a client with no
+	// transcript token record. See TokenUsage.
+	Tokens    TokenUsage     `json:"tokens"`
 	Metadata  map[string]any `json:"metadata"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
+}
+
+// TokenUsage is a session's cumulative model token consumption, normalized across
+// agent clients so a per-project sum is meaningful. Every field is an absolute
+// cumulative total for the session -- OVERWRITTEN on each harvest, never
+// accumulated -- so re-harvesting a resumed or compacted session's grown
+// transcript cannot double-count.
+//
+// Claude Code fills all four leaf fields from the per-message usage blocks (input
+// and cache-read/cache-creation are distinct there). Codex has no cache-creation
+// notion, so CacheCreation is always 0 and Cached carries its cached_input_tokens.
+// Total is computed the same way for both (Input+Cached+CacheCreation+Output), so
+// the number is comparable regardless of which client produced it.
+type TokenUsage struct {
+	Input         int `json:"input"`         // fresh (uncached) input processed
+	Cached        int `json:"cached"`        // input served from the prompt cache (read)
+	CacheCreation int `json:"cacheCreation"` // input written to the prompt cache (Claude Code only)
+	Output        int `json:"output"`        // tokens the model produced
+	Total         int `json:"total"`         // Input + Cached + CacheCreation + Output
+}
+
+// Empty reports whether no token usage has been harvested (all fields zero).
+func (t TokenUsage) Empty() bool {
+	return t.Input == 0 && t.Cached == 0 && t.CacheCreation == 0 && t.Output == 0 && t.Total == 0
+}
+
+// Normalize sets Total to the sum of the leaf fields, the single definition of
+// "total tokens" shared by both clients.
+func (t *TokenUsage) Normalize() {
+	t.Total = t.Input + t.Cached + t.CacheCreation + t.Output
 }
 
 // FindingNoSummary is the sentinel findings value recorded when a session ends
