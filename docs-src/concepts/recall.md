@@ -42,6 +42,23 @@ store this is simply fast enough, and it buys exactness and one fewer moving
 part. It is a deliberate trade, not an oversight - and it is the kind of thing
 worth saying out loud rather than hiding behind the word "hybrid".
 
+### The utility nudge
+
+Every memory carries a **utility score**: a time-decayed record of query-gated
+demand. An explicit read weighs 3.0, a recall hit 1.5, a prompt match 1.0 - and
+being pushed into a briefing counts for exactly nothing, so exposure can never
+masquerade as usefulness. Scores halve every 14 days.
+
+Recall applies it as a bounded post-fusion multiplier: at most +10%, strictly
+below the +15% favorite boost, so an explicit star always outranks an implicit
+hot streak - and neither can resurrect something the retrievers did not return.
+The ambient `<seam-recall>` injection uses the same score to pick which
+qualified matches fill its three slots - after its overlap and score floors,
+never instead of them. The briefing's memory index blends it with recency once
+a project's demand history matures
+([Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it)).
+One signal, three surfaces, all bounded.
+
 ## The recall triad
 
 This is the part worth internalizing: **searching is only one of three ways your

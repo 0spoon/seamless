@@ -1769,6 +1769,20 @@ present. Everything else - the memory index, sibling findings, sibling memories,
 ready tasks - then packs in render order until the budget runs out; the header
 counts only the findings that actually rendered.
 
+The memory index's own order starts as newest-first - but each memory also
+carries a [utility score](/concepts/recall/#the-utility-nudge), a time-decayed
+record of actual demand (reads, recall hits, prompt matches; being briefed
+counts for nothing), and once a project's demand history matures the index is
+ranked by the blend `(1-w)·recency + w·utility`, both on a 14-day half-life,
+with `briefing.utility_weight` as `w` (default 0.4, 0 restores pure recency).
+The switch is deliberate, not silent: in `briefing.utility_mode: auto` the
+gardener latches it per project only once the project's first demand is at
+least 14 days old and it has shown 20+ demand events and 10+ memories touched
+in 30 days - a young project keeps the recency order, because a utility signal
+with no history behind it is noise. `on`/`off` force it everywhere, and the
+console Settings page shows each scope's progress toward the latch, with a
+per-scope force.
+
 Every knob is tunable in [Configuration](/reference/configuration/), and the
 `briefing:` block is also editable live in the console. Those runtime edits are
 stored in the database and win over both the file and the environment, applying
@@ -1848,6 +1862,23 @@ no approximate nearest neighbours, no vector database. For a personal knowledge
 store this is simply fast enough, and it buys exactness and one fewer moving
 part. It is a deliberate trade, not an oversight - and it is the kind of thing
 worth saying out loud rather than hiding behind the word "hybrid".
+
+### The utility nudge
+
+Every memory carries a **utility score**: a time-decayed record of query-gated
+demand. An explicit read weighs 3.0, a recall hit 1.5, a prompt match 1.0 - and
+being pushed into a briefing counts for exactly nothing, so exposure can never
+masquerade as usefulness. Scores halve every 14 days.
+
+Recall applies it as a bounded post-fusion multiplier: at most +10%, strictly
+below the +15% favorite boost, so an explicit star always outranks an implicit
+hot streak - and neither can resurrect something the retrievers did not return.
+The ambient `<seam-recall>` injection uses the same score to pick which
+qualified matches fill its three slots - after its overlap and score floors,
+never instead of them. The briefing's memory index blends it with recency once
+a project's demand history matures
+([Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it)).
+One signal, three surfaces, all bounded.
 
 ## The recall triad
 
@@ -2413,6 +2444,12 @@ its agents call - runs both legs inside one SQLite file:
   index, no second process.
 - **Fusion:** RRF with `k=60`, over a candidate pool a few multiples of the
   requested limit so the fused order has room to differ from either leg's.
+
+The fused score is the base order, not the final word: a favorite multiplies
+its score by 1.15, and a memory's decayed demand adds a
+[utility nudge](/concepts/recall/#the-utility-nudge) capped at +10%. Both are
+bounded reorderings of what fusion returned - neither can pull in a result the
+legs did not.
 
 Brute-force cosine is a deliberate trade: a personal knowledge store holds
 thousands of memories, not millions of documents, and at that scale a linear
@@ -3039,7 +3076,9 @@ Two mechanical details that follow from this:
 - The matcher requires at least two distinct shared tokens above an IDF-weighted
   floor, drops stopwords and tokens under three characters, and returns at most
   three hits. Descriptions built from common words compete with everything and win
-  nothing. **Rare, specific terms are what score.**
+  nothing. **Rare, specific terms are what score.** Among matches that clear the
+  floors, a memory's [utility](/concepts/recall/#the-utility-nudge) - its record
+  of actually being used - breaks the ties for the three slots.
 - A description over 150 characters is **silently truncated**, not rejected. Write
   to the limit deliberately, or the sentence that mattered gets cut mid-word.
 
@@ -4203,8 +4242,11 @@ rejected as ambiguous rather than silently landing in the global scope. Pass
 ## Recall is the only search tool
 
 There is one search entry point. `recall` fuses FTS5 keyword matching and vector
-similarity with reciprocal rank fusion, scoped to the current project plus global
-items, and packs results into a token budget.
+similarity with reciprocal rank fusion, nudges the fused order by favorite and
+[utility](/concepts/recall/#the-utility-nudge) (both bounded), scoped to the
+current project plus global items, and packs results into a token budget. A call
+that finds nothing is recorded as a miss - recurring misses become the
+gardener's [memory-wanted proposals](/concepts/gardener/#what-it-looks-for).
 
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
@@ -4568,8 +4610,11 @@ Its passes:
 |---|---|
 | dedup | Two memories that say the same thing, above `gardener.dedup_threshold` similarity. Proposes a **merge**: one is kept, the other superseded and pointed at it. |
 | staleness | Memories untouched for `gardener.staleness_days`. Proposes an **archive**: marked invalid, still readable. |
+| stale-stage | A `stage` memory whose gate is done, missing, or unparseable, unchanged for `gardener.stale_stage_days`. Proposes an **archive**. |
+| dead-weight | A memory briefings keep injecting with zero recall hits, prompt matches, or reads. Proposes an **archive**. |
 | digest | Enough recent activity to be worth a summary over `gardener.digest_days`. Proposes a **digest** note. |
 | stale-plan | Plans idle for `gardener.stale_plan_days` with steps still open. |
+| memory-wanted | The same recall query missing across sessions. Proposes a **memory_wanted**: applying opens a task to write the knowledge agents keep searching for. |
 
 Constraints and pinned stages are never age-filtered or staleness-archived. A
 constraint does not become less true by sitting still.
@@ -4595,7 +4640,8 @@ than as a pile of individual moves.
 ## usage_summary
 
 `usage_summary` reports what the store actually contains and what retrieval has
-been doing: memory counts, retrieval statistics, events by kind. It answers "is
+been doing: memory counts, retrieval statistics including the highest-utility
+memories by decayed demand, events by kind. It answers "is
 this thing working, and on how much?" - the same question the console's Overview
 answers, for an agent that cannot open a browser.
 
@@ -4673,7 +4719,7 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 
 ## gardener_apply {#gardener_apply}
 
-Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source); action=dismiss discards it. A dismissed proposal is never re-raised.
+Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory); action=dismiss discards it. A dismissed proposal is never re-raised.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5017,8 +5063,8 @@ seam usage
 
 Activity roll-up from `usage_summary`: active memories broken down by kind, note
 count, session and task counts by status, retrieval injections and reads with a
-read-after-inject percentage, the most-injected items, and pending gardener
-proposals.
+read-after-inject percentage, the most-injected items, the highest-utility
+memories by decayed demand, and pending gardener proposals.
 
 ### seam doctor {#seam_doctor}
 
@@ -5716,7 +5762,8 @@ gardener:
   # apply. Safe to leave enabled.
   # env: SEAMLESS_GARDENER_ENABLED
   enabled: true
-  # Minutes between full gardener passes (dedup + staleness + digest).
+  # Minutes between full gardener passes (dedup, staleness, stale-stage,
+  # dead-weight, digest, stale-plan, memory-wanted).
   # env: SEAMLESS_GARDENER_INTERVAL_MINUTES
   interval_minutes: 60
   # Cosine similarity at/above which two active memories are proposed for a merge.
@@ -6481,16 +6528,18 @@ their lease countdowns, and the memories it produced.
 
 A two-pane library: a rail of memories grouped by project (global first, kinds
 in canonical order, each dot colored by kind) beside a full-height reader.
-Sortable by name, recency, reach, or starred; filterable by a substring of name,
-description, kind, or tag. Inactive memories collapse into an
+Sortable by name, recency, reach, utility, or starred; filterable by a substring
+of name, description, kind, or tag. Inactive memories collapse into an
 archived-and-superseded group at the rail's end, each carrying its status and,
 when superseded, what replaced it.
 
 The reader renders the body uncapped (through the markdown layer, with raw HTML
 disabled and a sanitizer on the output), the metadata - kind, project, tags,
-timestamps, the session that produced it - its reach counts, the `vscode://`
-link straight to the file, and its supersession neighbors in **both**
-directions: what replaced it, and what it replaced. The actions here are
+timestamps, the session that produced it - its reach counts, its
+[utility score](/concepts/recall/#the-utility-nudge) with the per-signal
+demand breakdown behind it, the `vscode://` link straight to the file, and its
+supersession neighbors in **both** directions: what replaced it, and what it
+replaced. The actions here are
 **star** - the flag that pins it into briefings and boosts recall - and
 **archive**.
 
@@ -6600,9 +6649,9 @@ The circulation report: is stored knowledge actually reaching agents, and at
 what cost? The hero pairs the **reach ring** (distinct active memories that
 surfaced, over all active memories) with the window's volume and cost -
 injections, sessions reached, and **estimated tokens injected**. Everything
-except the last zone follows the selectable observation window.
+follows the selectable observation window except where a panel says otherwise.
 
-Four zones below it:
+Five zones below it:
 
 1. **Delivery path** - the funnel as a flow: injections → distinct memories →
    sessions reached, ending in the knowledge-base coverage meter (how many
@@ -6615,6 +6664,20 @@ Four zones below it:
    knowledge**: active memories not updated, injected, or read in 90 days,
    mirroring the gardener's default staleness horizon. Unlike everything else
    on the page, the stale list is all-time, not windowed.
+5. **Loop health** - push versus pull: is what briefings push also what agents
+   pull? **Demand rate** is the share of briefed memories that were also pulled
+   by a query; **waste share** is the share of injected tokens spent on memories
+   with no query-gated demand, judged against a fixed trailing 30 days whatever
+   the window. Two miss stats sit side by side and measure different paths:
+   the **recall-miss rate** is ambient - prompts that matched no memory on the
+   [`<seam-recall>` path](/concepts/recall/#the-recall-triad) - while **agent
+   search misses** are deliberate `recall` calls that found nothing; recurring
+   ones feed the gardener's
+   [memory-wanted pass](/concepts/gardener/#what-it-looks-for). The zone closes
+   with the **dead weight** panel: memories briefings kept injecting without a
+   single recall hit, prompt match, or read in 30 days (constraints and stages
+   exempt as pinned-by-design) - the evidence behind the gardener's dead-weight
+   archive proposals.
 
 Reachable from the Overview's retrieval-health card.
 
@@ -6623,9 +6686,12 @@ Reachable from the Overview's retrieval-health card.
 `/console/gardener`
 
 The review queue. Each pending proposal renders as a card showing exactly what it
-would do - the memory to archive and why, the pair to merge with their similarity
-score, the digest or consolidated memory with its body rendered, the reproject's
-source and destination, the split's children and shared parent.
+would do - the memory to archive and why (whether staleness, a dead stage, or
+dead weight flagged it), the pair to merge with their similarity score, the
+digest or consolidated memory with its body rendered, the reproject's source and
+destination, the split's children and shared parent, and the **knowledge gap**
+card with the queries agents kept searching for in vain - applying that one
+opens a task; nothing is written until someone writes the memory.
 
 Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.
@@ -6643,9 +6709,22 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 
 `/console/settings`
 
-A read-only view of the running configuration - data dir, budgets, gardener
-settings, the registered projects, and the repo→project map - with **two
-editable blocks**: briefing injection and project families.
+A view of the running configuration - data dir, budgets, gardener settings, the
+registered projects, and the repo→project map - with editable blocks for the
+semantic index, briefing injection (including utility ranking), and project
+families.
+
+**Semantic index & storage**: the embedding pipeline and the SQLite database,
+side by side. The embedder card shows the active provider and model - and when
+embeddings are off, the exact cause, with distinct copy for the owner off
+switch, the no-key lexical fallback, and a config error. The off/auto switch is
+a settings row read once at serve start, so the page flags a pending restart
+whenever the stored switch disagrees with the running process. Below it, the
+stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
+table that badges models the running embedder no longer writes as stale -
+**re-embed everything** rewrites the corpus with the active model in the
+background. The database card shows the file path, size on disk including the
+WAL, and schema version.
 
 **Briefing injection**: saving writes a runtime override row in the DB. It
 layers over the file/env values and wins until reset, and it applies from the
@@ -6654,6 +6733,16 @@ next session start - no daemon restart. It never touches your config file, so
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
 silently-dropped save.
+
+The form's **utility ranking** group holds the closed-loop knobs -
+`utility_weight` (utility's share of the briefing sort key; 0 restores pure
+recency) and `utility_mode` (`auto` arms each project as its demand history
+matures, `on` everywhere now, `off` never). Beneath it, the **utility
+activation by scope** table shows each scope's progress toward the auto-mode
+latch - first demand old enough, enough demand events, enough memories touched
+- with a per-scope **force** that overrides the latch in either direction. See
+[Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
+how the blended order behaves once active.
 
 **Project families**: create, rename, edit, or delete the named groupings that
 [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
@@ -6838,11 +6927,15 @@ so losing `seam.db` loses them:
 - `trials` - research lab records with queryable JSON metrics.
 - `events` - the append-only log behind telemetry, the console feed, and
   retrieval stats.
-- `retrieval_stats` - inject/read counters maintained from events.
+- `retrieval_stats` - inject/read counters plus the per-memory time-decayed
+  utility score with its per-signal demand breakdown, rebuilt from events.
 - `projects` - slugs, parent topology, retirement.
-- `gardener_proposals` - pending merge/archive/digest proposals.
-- `settings` - `repo_project_map`, project families, and the runtime briefing
-  overrides the console writes.
+- `gardener_proposals` - pending proposals, one row per kind-and-key
+  (merge, consolidate, archive, digest, reproject, split, abandon-plan,
+  memory-wanted).
+- `settings` - `repo_project_map`, project families, the runtime briefing
+  overrides the console writes, the per-scope utility-activation latch, and the
+  embedder on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and

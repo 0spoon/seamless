@@ -148,7 +148,8 @@ gardener:
   # apply. Safe to leave enabled.
   # env: SEAMLESS_GARDENER_ENABLED
   enabled: true
-  # Minutes between full gardener passes (dedup + staleness + digest).
+  # Minutes between full gardener passes (dedup, staleness, stale-stage,
+  # dead-weight, digest, stale-plan, memory-wanted).
   # env: SEAMLESS_GARDENER_INTERVAL_MINUTES
   interval_minutes: 60
   # Cosine similarity at/above which two active memories are proposed for a merge.

@@ -1,8 +1,10 @@
 // Package gardener runs the propose-only maintenance passes over the memory
 // corpus: it finds near-duplicate memories (dedup), memories that have gone
 // untouched for too long (staleness), stage memories that stopped carrying a
-// live gate (stale-stage), captured plans that were never approved
-// (stale-plan), and rolls recent sessions into a monthly digest. Every pass
+// live gate (stale-stage), memories briefings keep injecting without any
+// demand (dead-weight), captured plans that were never approved (stale-plan),
+// recall queries that keep missing because nobody wrote the memory
+// (memory-wanted), and rolls recent sessions into a monthly digest. Every pass
 // only ever writes a gardener_proposals row for the owner to apply or dismiss
 // -- it never mutates a memory on its own. The passes run on a ticker and are
 // also invokable on demand (RunOnce).

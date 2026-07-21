@@ -122,7 +122,7 @@ func (s *Server) handleGardenerSplit(ctx context.Context, req mcp.CallToolReques
 
 func gardenerApplyTool() mcp.Tool {
 	return mcp.NewTool("gardener_apply",
-		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; split -> create the child/shared projects, link the family, parent the children, retire the source); action=dismiss discards it. A dismissed proposal is never re-raised."),
+		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory); action=dismiss discards it. A dismissed proposal is never re-raised."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
 		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),
 	)

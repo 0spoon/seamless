@@ -41,8 +41,11 @@ Its passes:
 |---|---|
 | dedup | Two memories that say the same thing, above `gardener.dedup_threshold` similarity. Proposes a **merge**: one is kept, the other superseded and pointed at it. |
 | staleness | Memories untouched for `gardener.staleness_days`. Proposes an **archive**: marked invalid, still readable. |
+| stale-stage | A `stage` memory whose gate is done, missing, or unparseable, unchanged for `gardener.stale_stage_days`. Proposes an **archive**. |
+| dead-weight | A memory briefings keep injecting with zero recall hits, prompt matches, or reads. Proposes an **archive**. |
 | digest | Enough recent activity to be worth a summary over `gardener.digest_days`. Proposes a **digest** note. |
 | stale-plan | Plans idle for `gardener.stale_plan_days` with steps still open. |
+| memory-wanted | The same recall query missing across sessions. Proposes a **memory_wanted**: applying opens a task to write the knowledge agents keep searching for. |
 
 Constraints and pinned stages are never age-filtered or staleness-archived. A
 constraint does not become less true by sitting still.
@@ -68,7 +71,8 @@ than as a pile of individual moves.
 ## usage_summary
 
 `usage_summary` reports what the store actually contains and what retrieval has
-been doing: memory counts, retrieval statistics, events by kind. It answers "is
+been doing: memory counts, retrieval statistics including the highest-utility
+memories by decayed demand, events by kind. It answers "is
 this thing working, and on how much?" - the same question the console's Overview
 answers, for an agent that cannot open a browser.
 

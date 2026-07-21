@@ -258,8 +258,11 @@ rejected as ambiguous rather than silently landing in the global scope. Pass
 <code>project: global</code> to write a deliberately cross-project memory.</p>
 <h2 id="recall-is-the-only-search-tool">Recall is the only search tool</h2>
 <p>There is one search entry point. <code>recall</code> fuses FTS5 keyword matching and vector
-similarity with reciprocal rank fusion, scoped to the current project plus global
-items, and packs results into a token budget.</p>
+similarity with reciprocal rank fusion, nudges the fused order by favorite and
+<a href="../../../concepts/recall/#the-utility-nudge">utility</a> (both bounded), scoped to the
+current project plus global items, and packs results into a token budget. A call
+that finds nothing is recorded as a miss - recurring misses become the
+gardener's <a href="../../../concepts/gardener/#what-it-looks-for">memory-wanted proposals</a>.</p>
 <p>It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.</p>

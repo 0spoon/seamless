@@ -245,7 +245,9 @@ memory into the room. But the description is what does the getting.</p>
 <li>The matcher requires at least two distinct shared tokens above an IDF-weighted
 floor, drops stopwords and tokens under three characters, and returns at most
 three hits. Descriptions built from common words compete with everything and win
-nothing. <strong>Rare, specific terms are what score.</strong></li>
+nothing. <strong>Rare, specific terms are what score.</strong> Among matches that clear the
+floors, a memory's <a href="../../concepts/recall/#the-utility-nudge">utility</a> - its record
+of actually being used - breaks the ties for the three slots.</li>
 <li>A description over 150 characters is <strong>silently truncated</strong>, not rejected. Write
 to the limit deliberately, or the sentence that mattered gets cut mid-word.</li>
 </ul>

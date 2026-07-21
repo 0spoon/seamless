@@ -316,8 +316,8 @@ seam usage
 
 Activity roll-up from `usage_summary`: active memories broken down by kind, note
 count, session and task counts by status, retrieval injections and reads with a
-read-after-inject percentage, the most-injected items, and pending gardener
-proposals.
+read-after-inject percentage, the most-injected items, the highest-utility
+memories by decayed demand, and pending gardener proposals.
 
 ### seam doctor {#seam_doctor}
 

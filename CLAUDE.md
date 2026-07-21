@@ -39,8 +39,10 @@ internal/retrieve/ briefing assembler, prompt-context matcher, recall (RRF),
 internal/lifecycle/ supersession, archival, provenance                     [P3]
 # (the dependency-aware ready-queue + lease-based claiming live in
 #  internal/store/tasks*.go -- there is no internal/tasks package)
-internal/gardener/ dedup / staleness / digest / stale-plan passes, plus the
-                   request- and split-driven proposals                     [P4]
+internal/gardener/ the propose-only passes (dedup, staleness, stale-stage,
+                   dead-weight, digest, stale-plan, memory-wanted -- the
+                   canonical list is RunOnce), plus the request- and
+                   split-driven proposals                                  [P4]
 internal/plans/    captured CC plan vocabulary: tags, statuses, tracking task
 internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount [P2+]
 internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
@@ -104,7 +106,8 @@ Single YAML file (`$SEAMLESS_CONFIG`, `~/.config/seamless/seamless.yaml`, or
 `./seamless.yaml`; see `seamless.yaml.example` for every key) with `SEAMLESS_*`
 env overrides -- env wins over file, file over defaults. The `briefing:` block
 tunes what the SessionStart `<seam-briefing>` auto-injects (section counts,
-recency filters, family cross-over, hard-cap multiplier); those knobs are also
+recency filters, family cross-over, hard-cap multiplier, and the
+utility-vs-recency index order via utility_mode/utility_weight); those knobs are also
 editable live in the console (Settings -> Briefing injection), which stores a
 runtime override in the DB that wins over file/env until reset and applies from
 the next session start without a daemon restart. `gardener.session_idle_minutes`

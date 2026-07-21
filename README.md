@@ -32,9 +32,10 @@ inspection.
 - **Files are the source of truth.** Every memory and note is a markdown file
   with YAML frontmatter under `~/.seamless` -- git-diffable, greppable,
   hand-editable. SQLite is a rebuildable index; delete it and lose nothing.
-- **Curation proposes, humans dispose.** The gardener's dedup, staleness, merge,
-  and stale-plan passes only *propose*; applying is an explicit action.
-  Supersession preserves provenance, so nothing is silently rewritten.
+- **Curation proposes, humans dispose.** Every gardener pass -- from
+  deduplicating and archiving to flagging dead weight and knowledge gaps --
+  only *proposes*; applying is an explicit action. Supersession preserves
+  provenance, so nothing is silently rewritten.
 - **One binary, no ceremony.** Static Go binary, no CGO, pure-Go SQLite, no
   Node, no separate vector engine, no cloud account.
 

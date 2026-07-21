@@ -59,8 +59,11 @@ rejected as ambiguous rather than silently landing in the global scope. Pass
 ## Recall is the only search tool
 
 There is one search entry point. `recall` fuses FTS5 keyword matching and vector
-similarity with reciprocal rank fusion, scoped to the current project plus global
-items, and packs results into a token budget.
+similarity with reciprocal rank fusion, nudges the fused order by favorite and
+[utility](/concepts/recall/#the-utility-nudge) (both bounded), scoped to the
+current project plus global items, and packs results into a token budget. A call
+that finds nothing is recorded as a miss - recurring misses become the
+gardener's [memory-wanted proposals](/concepts/gardener/#what-it-looks-for).
 
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration

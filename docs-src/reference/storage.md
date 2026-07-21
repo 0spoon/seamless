@@ -151,11 +151,15 @@ so losing `seam.db` loses them:
 - `trials` - research lab records with queryable JSON metrics.
 - `events` - the append-only log behind telemetry, the console feed, and
   retrieval stats.
-- `retrieval_stats` - inject/read counters maintained from events.
+- `retrieval_stats` - inject/read counters plus the per-memory time-decayed
+  utility score with its per-signal demand breakdown, rebuilt from events.
 - `projects` - slugs, parent topology, retirement.
-- `gardener_proposals` - pending merge/archive/digest proposals.
-- `settings` - `repo_project_map`, project families, and the runtime briefing
-  overrides the console writes.
+- `gardener_proposals` - pending proposals, one row per kind-and-key
+  (merge, consolidate, archive, digest, reproject, split, abandon-plan,
+  memory-wanted).
+- `settings` - `repo_project_map`, project families, the runtime briefing
+  overrides the console writes, the per-scope utility-activation latch, and the
+  embedder on/off switch.
 - `jobs` - the small queue for embeds and LLM digests.
 
 The split is deliberate: durable knowledge is yours in plain markdown, and

@@ -33,6 +33,12 @@ its agents call - runs both legs inside one SQLite file:
 - **Fusion:** RRF with `k=60`, over a candidate pool a few multiples of the
   requested limit so the fused order has room to differ from either leg's.
 
+The fused score is the base order, not the final word: a favorite multiplies
+its score by 1.15, and a memory's decayed demand adds a
+[utility nudge](/concepts/recall/#the-utility-nudge) capped at +10%. Both are
+bounded reorderings of what fusion returned - neither can pull in a result the
+legs did not.
+
 Brute-force cosine is a deliberate trade: a personal knowledge store holds
 thousands of memories, not millions of documents, and at that scale a linear
 scan is faster than the operational cost of an approximate index. The same

@@ -105,6 +105,20 @@ present. Everything else - the memory index, sibling findings, sibling memories,
 ready tasks - then packs in render order until the budget runs out; the header
 counts only the findings that actually rendered.
 
+The memory index's own order starts as newest-first - but each memory also
+carries a [utility score](/concepts/recall/#the-utility-nudge), a time-decayed
+record of actual demand (reads, recall hits, prompt matches; being briefed
+counts for nothing), and once a project's demand history matures the index is
+ranked by the blend `(1-w)·recency + w·utility`, both on a 14-day half-life,
+with `briefing.utility_weight` as `w` (default 0.4, 0 restores pure recency).
+The switch is deliberate, not silent: in `briefing.utility_mode: auto` the
+gardener latches it per project only once the project's first demand is at
+least 14 days old and it has shown 20+ demand events and 10+ memories touched
+in 30 days - a young project keeps the recency order, because a utility signal
+with no history behind it is noise. `on`/`off` force it everywhere, and the
+console Settings page shows each scope's progress toward the latch, with a
+per-scope force.
+
 Every knob is tunable in [Configuration](/reference/configuration/), and the
 `briefing:` block is also editable live in the console. Those runtime edits are
 stored in the database and win over both the file and the environment, applying

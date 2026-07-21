@@ -222,16 +222,18 @@ their lease countdowns, and the memories it produced.
 
 A two-pane library: a rail of memories grouped by project (global first, kinds
 in canonical order, each dot colored by kind) beside a full-height reader.
-Sortable by name, recency, reach, or starred; filterable by a substring of name,
-description, kind, or tag. Inactive memories collapse into an
+Sortable by name, recency, reach, utility, or starred; filterable by a substring
+of name, description, kind, or tag. Inactive memories collapse into an
 archived-and-superseded group at the rail's end, each carrying its status and,
 when superseded, what replaced it.
 
 The reader renders the body uncapped (through the markdown layer, with raw HTML
 disabled and a sanitizer on the output), the metadata - kind, project, tags,
-timestamps, the session that produced it - its reach counts, the `vscode://`
-link straight to the file, and its supersession neighbors in **both**
-directions: what replaced it, and what it replaced. The actions here are
+timestamps, the session that produced it - its reach counts, its
+[utility score](/concepts/recall/#the-utility-nudge) with the per-signal
+demand breakdown behind it, the `vscode://` link straight to the file, and its
+supersession neighbors in **both** directions: what replaced it, and what it
+replaced. The actions here are
 **star** - the flag that pins it into briefings and boosts recall - and
 **archive**.
 
@@ -341,9 +343,9 @@ The circulation report: is stored knowledge actually reaching agents, and at
 what cost? The hero pairs the **reach ring** (distinct active memories that
 surfaced, over all active memories) with the window's volume and cost -
 injections, sessions reached, and **estimated tokens injected**. Everything
-except the last zone follows the selectable observation window.
+follows the selectable observation window except where a panel says otherwise.
 
-Four zones below it:
+Five zones below it:
 
 1. **Delivery path** - the funnel as a flow: injections → distinct memories →
    sessions reached, ending in the knowledge-base coverage meter (how many
@@ -356,6 +358,20 @@ Four zones below it:
    knowledge**: active memories not updated, injected, or read in 90 days,
    mirroring the gardener's default staleness horizon. Unlike everything else
    on the page, the stale list is all-time, not windowed.
+5. **Loop health** - push versus pull: is what briefings push also what agents
+   pull? **Demand rate** is the share of briefed memories that were also pulled
+   by a query; **waste share** is the share of injected tokens spent on memories
+   with no query-gated demand, judged against a fixed trailing 30 days whatever
+   the window. Two miss stats sit side by side and measure different paths:
+   the **recall-miss rate** is ambient - prompts that matched no memory on the
+   [`<seam-recall>` path](/concepts/recall/#the-recall-triad) - while **agent
+   search misses** are deliberate `recall` calls that found nothing; recurring
+   ones feed the gardener's
+   [memory-wanted pass](/concepts/gardener/#what-it-looks-for). The zone closes
+   with the **dead weight** panel: memories briefings kept injecting without a
+   single recall hit, prompt match, or read in 30 days (constraints and stages
+   exempt as pinned-by-design) - the evidence behind the gardener's dead-weight
+   archive proposals.
 
 Reachable from the Overview's retrieval-health card.
 
@@ -364,9 +380,12 @@ Reachable from the Overview's retrieval-health card.
 `/console/gardener`
 
 The review queue. Each pending proposal renders as a card showing exactly what it
-would do - the memory to archive and why, the pair to merge with their similarity
-score, the digest or consolidated memory with its body rendered, the reproject's
-source and destination, the split's children and shared parent.
+would do - the memory to archive and why (whether staleness, a dead stage, or
+dead weight flagged it), the pair to merge with their similarity score, the
+digest or consolidated memory with its body rendered, the reproject's source and
+destination, the split's children and shared parent, and the **knowledge gap**
+card with the queries agents kept searching for in vain - applying that one
+opens a task; nothing is written until someone writes the memory.
 
 Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.
@@ -384,9 +403,22 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 
 `/console/settings`
 
-A read-only view of the running configuration - data dir, budgets, gardener
-settings, the registered projects, and the repo→project map - with **two
-editable blocks**: briefing injection and project families.
+A view of the running configuration - data dir, budgets, gardener settings, the
+registered projects, and the repo→project map - with editable blocks for the
+semantic index, briefing injection (including utility ranking), and project
+families.
+
+**Semantic index & storage**: the embedding pipeline and the SQLite database,
+side by side. The embedder card shows the active provider and model - and when
+embeddings are off, the exact cause, with distinct copy for the owner off
+switch, the no-key lexical fallback, and a config error. The off/auto switch is
+a settings row read once at serve start, so the page flags a pending restart
+whenever the stored switch disagrees with the running process. Below it, the
+stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
+table that badges models the running embedder no longer writes as stale -
+**re-embed everything** rewrites the corpus with the active model in the
+background. The database card shows the file path, size on disk including the
+WAL, and schema version.
 
 **Briefing injection**: saving writes a runtime override row in the DB. It
 layers over the file/env values and wins until reset, and it applies from the
@@ -395,6 +427,16 @@ next session start - no daemon restart. It never touches your config file, so
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
 silently-dropped save.
+
+The form's **utility ranking** group holds the closed-loop knobs -
+`utility_weight` (utility's share of the briefing sort key; 0 restores pure
+recency) and `utility_mode` (`auto` arms each project as its demand history
+matures, `on` everywhere now, `off` never). Beneath it, the **utility
+activation by scope** table shows each scope's progress toward the auto-mode
+latch - first demand old enough, enough demand events, enough memories touched
+- with a per-scope **force** that overrides the latch in either direction. See
+[Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
+how the blended order behaves once active.
 
 **Project families**: create, rename, edit, or delete the named groupings that
 [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from

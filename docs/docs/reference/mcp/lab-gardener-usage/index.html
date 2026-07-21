@@ -232,12 +232,24 @@ one) instead of a single &quot;tidy up&quot; button.</p>
 <td>Memories untouched for <code>gardener.staleness_days</code>. Proposes an <strong>archive</strong>: marked invalid, still readable.</td>
 </tr>
 <tr>
+<td>stale-stage</td>
+<td>A <code>stage</code> memory whose gate is done, missing, or unparseable, unchanged for <code>gardener.stale_stage_days</code>. Proposes an <strong>archive</strong>.</td>
+</tr>
+<tr>
+<td>dead-weight</td>
+<td>A memory briefings keep injecting with zero recall hits, prompt matches, or reads. Proposes an <strong>archive</strong>.</td>
+</tr>
+<tr>
 <td>digest</td>
 <td>Enough recent activity to be worth a summary over <code>gardener.digest_days</code>. Proposes a <strong>digest</strong> note.</td>
 </tr>
 <tr>
 <td>stale-plan</td>
 <td>Plans idle for <code>gardener.stale_plan_days</code> with steps still open.</td>
+</tr>
+<tr>
+<td>memory-wanted</td>
+<td>The same recall query missing across sessions. Proposes a <strong>memory_wanted</strong>: applying opens a task to write the knowledge agents keep searching for.</td>
 </tr>
 </tbody>
 </table>
@@ -260,7 +272,8 @@ creates those projects and a shared parent, so it is planned as a unit rather
 than as a pile of individual moves.</p>
 <h2 id="usage-summary">usage_summary</h2>
 <p><code>usage_summary</code> reports what the store actually contains and what retrieval has
-been doing: memory counts, retrieval statistics, events by kind. It answers &quot;is
+been doing: memory counts, retrieval statistics including the highest-utility
+memories by decayed demand, events by kind. It answers &quot;is
 this thing working, and on how much?&quot; - the same question the console's Overview
 answers, for an agent that cannot open a browser.</p>
 <h2 id="favorite-set">favorite_set</h2>
@@ -483,7 +496,7 @@ updated time - it is metadata, not authorship.</p>
 </table>
 </div>
 <h2 id="gardener_apply">gardener_apply</h2>
-<p>Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source); action=dismiss discards it. A dismissed proposal is never re-raised.</p>
+<p>Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory); action=dismiss discards it. A dismissed proposal is never re-raised.</p>
 <div class="table-wrap">
 <table>
 <thead>

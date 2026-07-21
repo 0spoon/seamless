@@ -35,7 +35,9 @@ Two mechanical details that follow from this:
 - The matcher requires at least two distinct shared tokens above an IDF-weighted
   floor, drops stopwords and tokens under three characters, and returns at most
   three hits. Descriptions built from common words compete with everything and win
-  nothing. **Rare, specific terms are what score.**
+  nothing. **Rare, specific terms are what score.** Among matches that clear the
+  floors, a memory's [utility](/concepts/recall/#the-utility-nudge) - its record
+  of actually being used - breaks the ties for the three slots.
 - A description over 150 characters is **silently truncated**, not rejected. Write
   to the limit deliberately, or the sentence that mattered gets cut mid-word.
 

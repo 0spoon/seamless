@@ -229,6 +229,20 @@ no approximate nearest neighbours, no vector database. For a personal knowledge
 store this is simply fast enough, and it buys exactness and one fewer moving
 part. It is a deliberate trade, not an oversight - and it is the kind of thing
 worth saying out loud rather than hiding behind the word &quot;hybrid&quot;.</p>
+<h3 id="the-utility-nudge">The utility nudge</h3>
+<p>Every memory carries a <strong>utility score</strong>: a time-decayed record of query-gated
+demand. An explicit read weighs 3.0, a recall hit 1.5, a prompt match 1.0 - and
+being pushed into a briefing counts for exactly nothing, so exposure can never
+masquerade as usefulness. Scores halve every 14 days.</p>
+<p>Recall applies it as a bounded post-fusion multiplier: at most +10%, strictly
+below the +15% favorite boost, so an explicit star always outranks an implicit
+hot streak - and neither can resurrect something the retrievers did not return.
+The ambient <code>&lt;seam-recall&gt;</code> injection uses the same score to pick which
+qualified matches fill its three slots - after its overlap and score floors,
+never instead of them. The briefing's memory index blends it with recency once
+a project's demand history matures
+(<a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a>).
+One signal, three surfaces, all bounded.</p>
 <h2 id="the-recall-triad">The recall triad</h2>
 <p>This is the part worth internalizing: <strong>searching is only one of three ways your
 knowledge reaches an agent</strong>, and they are easy to confuse because all three end
@@ -309,7 +323,7 @@ retrieval surface - see <a href="../../concepts/memory/">Memory &amp; notes</a>.
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
+      <li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
     </ul>
   </aside>
   
