@@ -16,6 +16,7 @@ sitemap.xml             GENERATED (docsgen): the landing page + every docs page
 robots.txt              GENERATED (docsgen): crawl policy + the sitemap pointer
 llms.txt                GENERATED (docsgen): the nav as a linked outline for LLMs
 llms-full.txt           GENERATED (docsgen): every page's full source markdown
+<64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
 static/favicon.svg      the 0spoon mark (an empty set)
@@ -122,6 +123,24 @@ then open http://127.0.0.1:8899/.
    `0spoon.github.io` (optional). The `CNAME` file here is already in place.
 3. In Pages settings, set the custom domain and enable Enforce HTTPS once the
    cert is issued.
+
+## Ping IndexNow after a deploy (manual)
+
+```
+make indexnow           # submit the sitemap's URL list; DRY=1 previews the payload
+```
+
+`api.indexnow.org` forwards to Bing, Naver, Seznam and Yandex; Google does not
+participate. The script takes its URL list from the committed `sitemap.xml`
+(docs-check keeps that current) and refuses to ping until the live site serves
+the key file -- the same fetch the engines use to verify host ownership -- so
+run it after a push has actually deployed. Deliberately manual, never CI: a
+ping per commit is the over-submission pattern the engines deprioritize.
+
+The key is public by construction (it proves control of the host, it is not a
+secret) and lives in two places that ship as a pair: `KEY` in
+`scripts/indexnow.sh` and the committed `docs/<key>.txt` it names. Rotate both
+together; the script refuses to run when they disagree.
 
 ## Regenerate the OG card
 

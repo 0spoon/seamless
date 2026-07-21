@@ -77,6 +77,9 @@ make docs-check # fail if the committed docs site is stale (runs inside `check`)
 make docs-serve # regenerate + serve the site at 127.0.0.1:8899/docs/
 make site-check # fail if the hand-written landing page (docs/index.html) drifts
                 # from the installer or the CLI -- docs-check cannot see it
+make indexnow   # submit the sitemap's URLs to the IndexNow engines (manual,
+                # run after a deploy is live; DRY=1 previews the payload)
+make metrics    # GitHub stars + release-asset download counts (needs gh)
 
 # single test
 go test ./internal/validate -run TestTitle -v
