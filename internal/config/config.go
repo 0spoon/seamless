@@ -174,6 +174,21 @@ type LLM struct {
 	Anthropic Anthropic `yaml:"anthropic"`
 }
 
+// EmbeddingModel returns the embedding model the configured provider would
+// use, or "" for a provider with no embeddings API (Anthropic) or an unknown
+// one. It reports configuration, not capability: the provider may still lack
+// the credential to actually serve it.
+func (l LLM) EmbeddingModel() string {
+	switch l.Provider {
+	case ProviderOpenAI:
+		return l.OpenAI.EmbeddingModel
+	case ProviderOllama:
+		return l.Ollama.EmbeddingModel
+	default:
+		return ""
+	}
+}
+
 // OpenAI is the first-class provider (chat + embeddings).
 type OpenAI struct {
 	APIKey         string `yaml:"api_key"`

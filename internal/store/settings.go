@@ -331,6 +331,49 @@ func ClearBriefingConfig(ctx context.Context, db *sql.DB) error {
 	return DeleteSetting(ctx, db, SettingBriefingConfig)
 }
 
+// SettingEmbedderMode is the settings key holding the owner's embedder
+// override. The only stored value is EmbedderModeOff; EmbedderModeAuto clears
+// the row, so "auto" and "no override" are the same state. The daemon reads it
+// once at serve start (main.go resolves the embedder before anything holds it),
+// so a console change applies from the next restart.
+const SettingEmbedderMode = "embedder_mode"
+
+// Embedder override modes. Auto defers to the LLM config (embeddings run when a
+// provider is configured); Off disables them regardless of config.
+const (
+	EmbedderModeAuto = "auto"
+	EmbedderModeOff  = "off"
+)
+
+// EmbedderMode returns the stored embedder override: EmbedderModeOff when the
+// owner switched embeddings off, EmbedderModeAuto otherwise. An unset row or an
+// unrecognized stored value both read as auto -- the override can only ever
+// narrow behavior, never invent a new state.
+func EmbedderMode(ctx context.Context, db *sql.DB) (string, error) {
+	raw, found, err := GetSetting(ctx, db, SettingEmbedderMode)
+	if err != nil {
+		return EmbedderModeAuto, err
+	}
+	if found && strings.TrimSpace(raw) == EmbedderModeOff {
+		return EmbedderModeOff, nil
+	}
+	return EmbedderModeAuto, nil
+}
+
+// SetEmbedderMode persists the embedder override. Auto deletes the row (no
+// override); Off stores it; anything else is rejected.
+func SetEmbedderMode(ctx context.Context, db *sql.DB, mode string) error {
+	switch mode {
+	case EmbedderModeAuto:
+		return DeleteSetting(ctx, db, SettingEmbedderMode)
+	case EmbedderModeOff:
+		return SetSetting(ctx, db, SettingEmbedderMode, EmbedderModeOff)
+	default:
+		return fmt.Errorf("store.SetEmbedderMode: invalid mode %q: valid values are %s, %s",
+			mode, EmbedderModeAuto, EmbedderModeOff)
+	}
+}
+
 // GetSetting returns the value for a settings key. found is false when unset.
 func GetSetting(ctx context.Context, db *sql.DB, key string) (string, bool, error) {
 	return getSettingTx(ctx, db, key)

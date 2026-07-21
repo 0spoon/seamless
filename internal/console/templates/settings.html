@@ -19,13 +19,17 @@
       <span class="settings-jump-icon">{{icon "server"}}</span>
       <span><b>01</b><strong>Runtime</strong><small>loaded profile</small></span>
     </a>
+    <a href="#semantic-index">
+      <span class="settings-jump-icon">{{icon "database"}}</span>
+      <span><b>02</b><strong>Semantic index</strong><small>{{if .Embeddings.Enabled}}{{.Embeddings.Total}} vectors{{else}}embeddings off{{end}}</small></span>
+    </a>
     <a href="#briefing-recipe">
       <span class="settings-jump-icon">{{icon "brain"}}</span>
-      <span><b>02</b><strong>Briefing</strong><small>editable recipe</small></span>
+      <span><b>03</b><strong>Briefing</strong><small>editable recipe</small></span>
     </a>
     <a href="#workspace-registry">
       <span class="settings-jump-icon">{{icon "folder-tree"}}</span>
-      <span><b>03</b><strong>Registry</strong><small>{{len .Projects}} project scopes</small></span>
+      <span><b>04</b><strong>Registry</strong><small>{{len .Projects}} project scopes</small></span>
     </a>
     <div class="settings-jump-key"><span><i class="key-dot read"></i>read only</span><span><i class="key-dot edit"></i>editable</span></div>
   </nav>
@@ -94,9 +98,113 @@
     </div>
   </section>
 
-  <section class="settings-zone" id="briefing-recipe">
+  <section class="settings-zone" id="semantic-index">
     <header class="settings-zone-head">
       <div class="settings-zone-index">02</div>
+      <div>
+        <div class="settings-zone-kicker">Vector recall</div>
+        <h2>Semantic index &amp; storage</h2>
+        <p>Embeddings power the semantic half of recall and search; lexical search keeps working without them. The switch and a model change apply at the next daemon restart.</p>
+      </div>
+      <span class="settings-access editable">{{icon "settings"}} Editable here</span>
+    </header>
+
+    <div class="runtime-grid semantic-grid">
+      {{with .Embeddings}}
+      <article class="runtime-card embedder-card">
+        <header class="runtime-card-head">
+          <span class="runtime-icon {{if .Enabled}}ok{{else if .Misconfigured}}pop{{else}}brand{{end}}">{{icon "activity"}}</span>
+          <div><span>Embedder</span><h3>{{if .Enabled}}Embeddings on{{else}}Embeddings off{{end}}</h3></div>
+          {{if .Enabled}}<span class="badge ok">active</span>{{else if .Misconfigured}}<span class="badge danger">misconfigured</span>{{else}}<span class="badge">disabled</span>{{end}}
+        </header>
+        <div class="embedder-facts">
+          <div><span>Provider</span><strong class="mono">{{if .Provider}}{{.Provider}}{{else}}&mdash;{{end}}</strong></div>
+          <div><span>Embedding model</span><strong class="mono">{{if .Model}}{{.Model}}{{else}}&mdash;{{end}}</strong></div>
+        </div>
+        {{if not .Enabled}}
+        <p class="embedder-reason{{if .Misconfigured}} is-error{{end}}">
+          {{icon "triangle-alert"}}
+          {{if .OverriddenOff}}Switched off from this console; agents fall back to lexical-only recall.{{else if .Misconfigured}}The LLM configuration is broken and needs a fix in the config file: <span class="mono">{{.Reason}}</span>{{else}}No usable embedding provider (typically a missing model or API key), so the daemon fell back to lexical-only recall: <span class="mono">{{.Reason}}</span>{{end}}
+        </p>
+        {{end}}
+        {{if .RestartNeeded}}
+        <p class="embedder-restart">{{icon "timer"}} The stored switch differs from the running state &mdash; restart the daemon to apply it.</p>
+        {{end}}
+        <form method="post" action="/console/settings/embeddings/mode" class="embedder-toggle-form">
+          {{if .ModeOff}}
+          <input type="hidden" name="mode" value="auto">
+          <button class="btn small primary" type="submit">Enable embeddings</button>
+          {{else}}
+          <input type="hidden" name="mode" value="off">
+          <button class="btn small" type="submit" onclick="return confirm('Switch embeddings off? Recall and search degrade to lexical-only after the next restart.');">Switch off</button>
+          {{end}}
+        </form>
+      </article>
+
+      <article class="runtime-card vectors-card">
+        <header class="runtime-card-head">
+          <span class="runtime-icon brand">{{icon "database"}}</span>
+          <div><span>Stored vectors</span><h3>Embedding corpus</h3></div>
+        </header>
+        <div class="budget-grid">
+          <div class="budget-stat brand"><strong>{{.Total}}</strong><span>vectors</span><small>stored</small></div>
+          <div class="budget-stat {{if .Missing}}warn{{else}}ok{{end}}"><strong>{{.Missing}}</strong><span>items</span><small>not embedded</small></div>
+          <div class="budget-stat {{if .Stale}}warn{{else}}ok{{end}}"><strong>{{.Stale}}</strong><span>vectors</span><small>stale model</small></div>
+        </div>
+        {{if .Models}}
+        <table class="embedding-models-table">
+          <thead><tr><th>Model</th><th>Dims</th><th>Memories</th><th>Notes</th><th>Last written</th></tr></thead>
+          <tbody>
+            {{range .Models}}
+            <tr>
+              <td><span class="mono">{{.Model}}</span>{{if .Stale}} <span class="badge warn" title="Not the active model; invisible to semantic search until re-embedded">stale</span>{{end}}</td>
+              <td>{{.Dims}}</td>
+              <td>{{.Memories}}</td>
+              <td>{{.Notes}}</td>
+              <td>{{if .Updated.IsZero}}&mdash;{{else}}{{ago .Updated}}{{end}}</td>
+            </tr>
+            {{end}}
+          </tbody>
+        </table>
+        {{else}}
+        <p class="embedder-empty">No vectors stored yet.{{if .Enabled}} They are written as memories and notes are indexed.{{end}}</p>
+        {{end}}
+        <div class="reembed-row">
+          {{if .Reembed.Running}}
+          <span class="badge pop"><span class="live-dot"></span> re-embedding {{.Reembed.Done}}/{{.Reembed.Total}}{{if .Reembed.Failed}} ({{.Reembed.Failed}} failed){{end}}</span>
+          <small>Refresh the page to update progress.</small>
+          {{else}}
+          <form method="post" action="/console/settings/embeddings/reembed">
+            <button class="btn small" type="submit"{{if not .Enabled}} disabled title="Embeddings are disabled"{{end}} onclick="return confirm('Re-embed every memory and note with the active model? This calls the embedding provider once per item.');">{{icon "loader"}} Re-embed everything</button>
+          </form>
+          {{if not .Reembed.StartedAt.IsZero}}<small>Last pass {{ago .Reembed.FinishedAt}}: {{.Reembed.Done}}/{{.Reembed.Total}} items{{if .Reembed.Failed}}, {{.Reembed.Failed}} failed{{end}}.</small>{{end}}
+          <small>Use after changing the embedding model &mdash; vectors from different models cannot be compared.</small>
+          {{end}}
+        </div>
+      </article>
+      {{end}}
+
+      <article class="runtime-card sqlite-card">
+        {{with .Database}}
+        <header class="runtime-card-head">
+          <span class="runtime-icon pop">{{icon "server"}}</span>
+          <div><span>SQLite</span><h3>Local database</h3></div>
+          <span class="badge brand">rebuildable index</span>
+        </header>
+        <div class="storage-path"><span class="mono">{{.Path}}</span>{{copyBtn .Path}}</div>
+        <div class="embedder-facts">
+          <div><span>Size on disk</span><strong>{{.SizeHuman}}</strong>{{if .WalBytes}}<small>includes WAL</small>{{end}}</div>
+          <div><span>Schema version</span><strong>{{.SchemaVersion}}</strong></div>
+        </div>
+        <p>Sessions, tasks, events, and the vector index live here; durable knowledge stays in markdown files and this database can be rebuilt from them.</p>
+        {{end}}
+      </article>
+    </div>
+  </section>
+
+  <section class="settings-zone" id="briefing-recipe">
+    <header class="settings-zone-head">
+      <div class="settings-zone-index">03</div>
       <div>
         <div class="settings-zone-kicker">Agent handoff</div>
         <h2>Briefing recipe</h2>
@@ -287,7 +395,7 @@
 
   <section class="settings-zone" id="workspace-registry">
     <header class="settings-zone-head registry-zone-head">
-      <div class="settings-zone-index">03</div>
+      <div class="settings-zone-index">04</div>
       <div>
         <div class="settings-zone-kicker">Scope topology</div>
         <h2>Workspace registry</h2>

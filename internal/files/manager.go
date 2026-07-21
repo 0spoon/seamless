@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -23,6 +24,15 @@ import (
 // destroy readable supersession history. Callers free the name (memory_delete)
 // or pick another one.
 var ErrPathOccupied = errors.New("target path belongs to a different item")
+
+// ErrNoEmbedder is returned by StartReembed when no embedder is configured:
+// there is nothing to embed with, so the request is refused rather than
+// silently queued.
+var ErrNoEmbedder = errors.New("no embedder configured")
+
+// ErrReembedRunning is returned by StartReembed while a previous pass is still
+// in flight; only one full re-embed runs at a time.
+var ErrReembedRunning = errors.New("a re-embed pass is already running")
 
 const (
 	// defaultDebounce is how long a file must be quiet before the watcher
@@ -53,6 +63,25 @@ type Manager struct {
 	// outlives the Manager. Start and Close are called from the owner's goroutine
 	// (the daemon's serve path), never concurrently.
 	runDone chan struct{}
+
+	// reembedMu guards the re-embed pass state below. The pass runs in its own
+	// goroutine (started by the console handler), so unlike the embedder field
+	// its lifecycle is not fixed at startup.
+	reembedMu     sync.Mutex
+	reembed       ReembedProgress
+	reembedCancel context.CancelFunc
+	reembedDone   chan struct{}
+}
+
+// ReembedProgress reports the state of the current (or most recent) full
+// re-embed pass. A zero value means no pass has run this process.
+type ReembedProgress struct {
+	Running    bool      `json:"running"`
+	Total      int       `json:"total"`
+	Done       int       `json:"done"`
+	Failed     int       `json:"failed"`
+	StartedAt  time.Time `json:"startedAt"`
+	FinishedAt time.Time `json:"finishedAt"`
 }
 
 // NewManager builds a Manager over dataDir backed by db. It does not touch the
@@ -172,15 +201,130 @@ func (m *Manager) hardenTree(root string) {
 }
 
 // Close stops the watcher and drains its work: after Close returns, no debounce
-// handler is running or will run, and the event-loop goroutine has exited -- so
-// the caller may close the DB the handlers write to. Safe to call more than once,
-// and without a prior Start.
+// handler is running or will run, the event-loop goroutine has exited, and any
+// re-embed pass has been cancelled and drained -- so the caller may close the DB
+// they write to. Safe to call more than once, and without a prior Start.
 func (m *Manager) Close() error {
 	err := m.watcher.close()
+	m.reembedMu.Lock()
+	cancel, done := m.reembedCancel, m.reembedDone
+	m.reembedMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if done != nil {
+		<-done
+	}
 	if m.runDone != nil {
 		<-m.runDone
 	}
 	return err
+}
+
+// StartReembed launches a background pass that re-embeds every indexed memory
+// and note with the current embedder, replacing each item's stored vector (the
+// embeddings row is keyed by item id). This is the migration path after an
+// embedding-model change: vectors from different models are not comparable, so
+// items embedded under the old model are invisible to semantic search until
+// they are re-embedded. It returns how many files were queued. Only one pass
+// runs at a time (ErrReembedRunning), and with no embedder it refuses
+// (ErrNoEmbedder) rather than queueing work that cannot run.
+//
+// The pass outlives the request that triggered it (context.WithoutCancel) and
+// is cancelled by Close, which also waits for it -- so it never touches the DB
+// after shutdown starts.
+func (m *Manager) StartReembed(ctx context.Context) (int, error) {
+	if m.embedder == nil {
+		return 0, fmt.Errorf("files.StartReembed: %w", ErrNoEmbedder)
+	}
+	m.reembedMu.Lock()
+	defer m.reembedMu.Unlock()
+	if m.reembed.Running {
+		return 0, fmt.Errorf("files.StartReembed: %w", ErrReembedRunning)
+	}
+	paths, err := m.indexer.AllFilePaths(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("files.StartReembed: %w", err)
+	}
+
+	runCtx, cancel := context.WithCancel(context.WithoutCancel(ctx))
+	done := make(chan struct{})
+	m.reembedCancel = cancel
+	m.reembedDone = done
+	m.reembed = ReembedProgress{Running: true, Total: len(paths), StartedAt: time.Now().UTC()}
+	go m.runReembed(runCtx, done, paths)
+	return len(paths), nil
+}
+
+// ReembedStatus returns a snapshot of the current or most recent re-embed pass.
+func (m *Manager) ReembedStatus() ReembedProgress {
+	m.reembedMu.Lock()
+	defer m.reembedMu.Unlock()
+	return m.reembed
+}
+
+// runReembed is the re-embed worker: it re-reads each indexed file and embeds
+// it directly (bypassing the content-hash skip, whose whole point is to avoid
+// exactly this work). Index rows are already current, so it does not re-index.
+// Per-file failures are logged and counted, never fatal; a failed embed also
+// clears the file's content hash so the regular reconcile path retries it.
+func (m *Manager) runReembed(ctx context.Context, done chan struct{}, paths []string) {
+	defer close(done)
+	var doneN, failed int
+	for _, rel := range paths {
+		if ctx.Err() != nil {
+			break
+		}
+		if !m.reembedOne(ctx, rel) {
+			failed++
+			m.clearHashForRetry(ctx, rel)
+		}
+		doneN++
+		m.reembedMu.Lock()
+		m.reembed.Done, m.reembed.Failed = doneN, failed
+		m.reembedMu.Unlock()
+	}
+	m.reembedMu.Lock()
+	m.reembed.Running = false
+	m.reembed.FinishedAt = time.Now().UTC()
+	m.reembedMu.Unlock()
+	if ctx.Err() != nil {
+		m.logger.Info("files: re-embed cancelled", "done", doneN, "total", len(paths), "failed", failed)
+		return
+	}
+	m.logger.Info("files: re-embed finished", "total", len(paths), "failed", failed,
+		"model", m.embedder.Model())
+}
+
+// reembedOne re-embeds a single indexed file, reporting success. A file that
+// vanished, no longer parses, or has no id is skipped as a success -- it is not
+// embeddable, so leaving it out of the vector index is the correct state.
+func (m *Manager) reembedOne(ctx context.Context, relPath string) bool {
+	tree, _, ok := treeAndRel(relPath)
+	if !ok || !m.store.Exists(relPath) {
+		return true
+	}
+	content, err := m.store.readFile(relPath)
+	if err != nil {
+		m.logger.Warn("files: reembed: read failed", "file_path", relPath, "error", err)
+		return false
+	}
+	switch tree {
+	case memoryTree:
+		mem, err := ParseMemory(content, relPath)
+		if err != nil || mem.ID == "" {
+			return true
+		}
+		return m.embedItem(ctx, kindMemory, mem.ID, memoryEmbedText(mem))
+	case notesTree:
+		note, err := ParseNote(content, relPath)
+		if err != nil || note.ID == "" {
+			return true
+		}
+		return m.embedItem(ctx, kindNote, note.ID, noteEmbedText(note))
+	default:
+		return true
+	}
 }
 
 // Reconcile brings the index into agreement with the trees on disk: it re-indexes

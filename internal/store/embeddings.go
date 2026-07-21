@@ -247,6 +247,77 @@ func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string
 // larger limit falls back to collecting every row and sorting once.
 const cosineTopKMax = 256
 
+// EmbeddingModelStat is one (model, dims) group of stored vectors: how many
+// items it covers, split by kind, and when a vector in it was last written.
+type EmbeddingModelStat struct {
+	Model    string    `json:"model"`
+	Dims     int       `json:"dims"`
+	Count    int       `json:"count"`
+	Memories int       `json:"memories"`
+	Notes    int       `json:"notes"`
+	Updated  time.Time `json:"updated"`
+}
+
+// EmbeddingStats summarizes the vector index for the console's Settings page:
+// what is stored (grouped by model), how big the embeddable corpus is, and how
+// much of it has no vector at all. Missing counts active memories and notes
+// without an embeddings row; invalidated memories keep their vectors but are
+// not owed one, so they never count as missing.
+type EmbeddingStats struct {
+	Total          int                  `json:"total"`
+	Models         []EmbeddingModelStat `json:"models"`
+	ActiveMemories int                  `json:"activeMemories"`
+	Notes          int                  `json:"notes"`
+	Missing        int                  `json:"missing"`
+}
+
+// GetEmbeddingStats reads the vector-index summary. It is a set of plain
+// aggregate queries -- no BLOB is materialized.
+func GetEmbeddingStats(ctx context.Context, db *sql.DB) (EmbeddingStats, error) {
+	var s EmbeddingStats
+	rows, err := db.QueryContext(ctx, `
+		SELECT model, dims, COUNT(*),
+		       SUM(CASE WHEN kind = 'memory' THEN 1 ELSE 0 END),
+		       SUM(CASE WHEN kind = 'note' THEN 1 ELSE 0 END),
+		       MAX(updated_at)
+		FROM embeddings
+		GROUP BY model, dims
+		ORDER BY COUNT(*) DESC, model, dims`)
+	if err != nil {
+		return EmbeddingStats{}, fmt.Errorf("store.GetEmbeddingStats: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var m EmbeddingModelStat
+		var updated string
+		if err := rows.Scan(&m.Model, &m.Dims, &m.Count, &m.Memories, &m.Notes, &updated); err != nil {
+			return EmbeddingStats{}, fmt.Errorf("store.GetEmbeddingStats: scan: %w", err)
+		}
+		if t, terr := core.ParseTime(updated); terr == nil {
+			m.Updated = t
+		}
+		s.Total += m.Count
+		s.Models = append(s.Models, m)
+	}
+	if err := rows.Err(); err != nil {
+		return EmbeddingStats{}, fmt.Errorf("store.GetEmbeddingStats: %w", err)
+	}
+
+	err = db.QueryRowContext(ctx, `
+		SELECT
+		  (SELECT COUNT(*) FROM memories_index WHERE invalid_at IS NULL),
+		  (SELECT COUNT(*) FROM notes_index),
+		  (SELECT COUNT(*) FROM memories_index mi WHERE mi.invalid_at IS NULL
+		     AND NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.item_id = mi.id))
+		+ (SELECT COUNT(*) FROM notes_index ni
+		     WHERE NOT EXISTS (SELECT 1 FROM embeddings e WHERE e.item_id = ni.id))`).
+		Scan(&s.ActiveMemories, &s.Notes, &s.Missing)
+	if err != nil {
+		return EmbeddingStats{}, fmt.Errorf("store.GetEmbeddingStats: corpus: %w", err)
+	}
+	return s, nil
+}
+
 // placeholders returns "?, ?, ..." with n placeholders for an IN clause.
 func placeholders(n int) string {
 	return strings.TrimSuffix(strings.Repeat("?, ", n), ", ")

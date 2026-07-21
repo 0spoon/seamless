@@ -210,3 +210,91 @@ func TestReconcileEmbeds(t *testing.T) {
 	require.NoError(t, m.Reconcile(ctx))
 	require.Equal(t, 1, indexedCount(t, db, "embeddings"))
 }
+
+// waitReembed polls until the re-embed pass finishes, with a deadline.
+func waitReembed(t *testing.T, m *Manager) ReembedProgress {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if p := m.ReembedStatus(); !p.Running && !p.StartedAt.IsZero() {
+			return p
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("re-embed pass did not finish before the deadline")
+	return ReembedProgress{}
+}
+
+// StartReembed replaces every stored vector with the current embedder's model:
+// the migration path after an embedding-model change.
+func TestReembedAllSwitchesModel(t *testing.T) {
+	m, db := newManager(t)
+	m.SetEmbedder(&fakeEmbedder{model: "old-model"})
+	ctx := context.Background()
+
+	_, err := m.WriteMemory(ctx, sampleMemory())
+	require.NoError(t, err)
+	_, err = m.WriteNote(ctx, core.Note{
+		ID: "01K0NOTE00000000000000000A", Title: "Note", Slug: "note-a",
+		Project: "seam", Body: "note body\n",
+		Created: time.Date(2026, 7, 9, 2, 0, 0, 0, time.UTC),
+		Updated: time.Date(2026, 7, 9, 3, 0, 0, 0, time.UTC),
+	})
+	require.NoError(t, err)
+
+	// Both vectors carry the old model. Swap the embedder (the manager is not
+	// started, so the SetEmbedder ownership contract holds) and re-embed.
+	m.SetEmbedder(&fakeEmbedder{model: "new-model"})
+	total, err := m.StartReembed(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 2, total)
+
+	p := waitReembed(t, m)
+	require.Equal(t, 2, p.Done)
+	require.Zero(t, p.Failed)
+	require.False(t, p.FinishedAt.IsZero())
+
+	var oldCount, newCount int
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM embeddings WHERE model = 'old-model'`).Scan(&oldCount))
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM embeddings WHERE model = 'new-model'`).Scan(&newCount))
+	require.Zero(t, oldCount) // rows are keyed by item id, so the upsert replaced them
+	require.Equal(t, 2, newCount)
+}
+
+// With no embedder there is nothing to re-embed with; the request is refused.
+func TestReembedWithoutEmbedder(t *testing.T) {
+	m, _ := newManager(t)
+	_, err := m.StartReembed(context.Background())
+	require.ErrorIs(t, err, ErrNoEmbedder)
+}
+
+// A failing embedder counts failures and clears content hashes for the regular
+// reconcile retry path, mirroring embed-on-write behavior.
+func TestReembedCountsFailures(t *testing.T) {
+	m, db := newManager(t)
+	m.SetEmbedder(&fakeEmbedder{model: "m1"})
+	ctx := context.Background()
+
+	written, err := m.WriteMemory(ctx, sampleMemory())
+	require.NoError(t, err)
+
+	m.SetEmbedder(&fakeEmbedder{model: "m2", fail: true})
+	total, err := m.StartReembed(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, total)
+
+	p := waitReembed(t, m)
+	require.Equal(t, 1, p.Done)
+	require.Equal(t, 1, p.Failed)
+
+	// The old vector is untouched and the content hash was cleared for retry.
+	var model, hash string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT model FROM embeddings WHERE item_id = ?`, written.ID).Scan(&model))
+	require.Equal(t, "m1", model)
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT content_hash FROM memories_index WHERE id = ?`, written.ID).Scan(&hash))
+	require.Empty(t, hash)
+}

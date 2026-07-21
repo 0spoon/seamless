@@ -222,3 +222,35 @@ func TestMatchProjectPathLongestPrefix(t *testing.T) {
 	require.Equal(t, "outer", matchProjectPath("/a/b/other", m))
 	require.Equal(t, "", matchProjectPath("/z", m))
 }
+
+// The embedder override reads as auto when unset, unknown, or cleared; only
+// "off" round-trips, and invalid modes are rejected on write.
+func TestEmbedderMode(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	mode, err := EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, EmbedderModeAuto, mode) // unset
+
+	require.NoError(t, SetEmbedderMode(ctx, db, EmbedderModeOff))
+	mode, err = EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, EmbedderModeOff, mode)
+
+	require.NoError(t, SetEmbedderMode(ctx, db, EmbedderModeAuto))
+	mode, err = EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, EmbedderModeAuto, mode)
+	_, found, err := GetSetting(ctx, db, SettingEmbedderMode)
+	require.NoError(t, err)
+	require.False(t, found) // auto clears the row rather than storing it
+
+	require.Error(t, SetEmbedderMode(ctx, db, "banana"))
+
+	// A garbage stored value narrows to auto instead of inventing a state.
+	require.NoError(t, SetSetting(ctx, db, SettingEmbedderMode, "sideways"))
+	mode, err = EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, EmbedderModeAuto, mode)
+}

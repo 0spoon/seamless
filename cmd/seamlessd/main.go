@@ -209,13 +209,29 @@ func runServe(args []string) error {
 	}
 	defer func() { _ = mgr.Close() }()
 
+	// The console's off switch is read once, here, before anything holds the
+	// embedder -- so a toggle applies on the next restart, never mid-process.
+	embedMode := store.EmbedderModeAuto
+	if mode, merr := store.EmbedderMode(ctx, db); merr != nil {
+		slog.Warn("embedder mode override unreadable; defaulting to auto", "err", merr)
+	} else {
+		embedMode = mode
+	}
+
 	var embedder llm.Embedder
-	if e, eerr := llm.NewEmbedder(cfg.LLM); eerr != nil {
+	embedRT := console.EmbeddingRuntime{Provider: cfg.LLM.Provider, Model: cfg.LLM.EmbeddingModel()}
+	if embedMode == store.EmbedderModeOff {
+		embedRT.OverriddenOff = true
+		embedRT.Reason = "switched off in the console Settings"
+		slog.Info("embeddings disabled by console override; recall degrades to FTS")
+	} else if e, eerr := llm.NewEmbedder(cfg.LLM); eerr != nil {
 		// Separate a deliberate opt-out (no credential) from a mistake (a
 		// malformed base_url). Both leave recall lexical-only for the life of
 		// the process, and that is the only other symptom the owner ever sees,
 		// so a typo says so at Error rather than blending into the warnings.
+		embedRT.Reason = eerr.Error()
 		if errors.Is(eerr, llm.ErrConfig) {
+			embedRT.Misconfigured = true
 			slog.Error("embeddings disabled by a misconfiguration; recall stays FTS-only until it is fixed", "err", eerr)
 		} else {
 			slog.Warn("embeddings disabled; recall degrades to FTS", "err", eerr)
@@ -223,6 +239,8 @@ func runServe(args []string) error {
 	} else {
 		embedder = e
 		mgr.SetEmbedder(embedder)
+		embedRT.Enabled = true
+		embedRT.Model = embedder.Model()
 		slog.Info("embeddings enabled", "provider", cfg.LLM.Provider, "model", embedder.Model())
 	}
 	if err := mgr.Start(ctx); err != nil {
@@ -267,7 +285,9 @@ func runServe(args []string) error {
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec, Retrieve: ret,
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir, ConfigPath: absConfigPath(cfg.SourcePath()),
+		DBPath:  cfg.DBPath(),
 		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
+		Embedding:      embedRT,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		Logger:         logger,
 	})

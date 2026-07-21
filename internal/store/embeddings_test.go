@@ -283,3 +283,51 @@ func TestUnitVectorNormIsOne(t *testing.T) {
 	require.InDelta(t, 5.0, math.Sqrt(float64(v[0]*v[0]+v[1]*v[1])), 1e-6)
 	require.InDelta(t, 1.0, Cosine(v, v), 1e-6)
 }
+
+// GetEmbeddingStats groups stored vectors by (model, dims) and reports the
+// embeddable corpus with its not-yet-embedded remainder. Invalidated memories
+// keep their vectors (they count in the model groups) but are not owed one, so
+// they never count as missing.
+func TestGetEmbeddingStats(t *testing.T) {
+	db := newEmbedDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC))
+
+	insertMemory(t, db, "01A", "gotcha", "alpha", "d", "seam", "b", now, "")
+	insertMemory(t, db, "01B", "gotcha", "beta", "d", "seam", "b", now, "")
+	insertMemory(t, db, "01C", "gotcha", "gamma", "d", "seam", "b", now, now) // invalid, unembedded
+	insertNoteTags(t, db, "01N", "seam", "[]", now)
+	insertNoteTags(t, db, "01M", "seam", "[]", now) // unembedded
+
+	require.NoError(t, UpsertEmbedding(ctx, db, "01A", "memory", "new-model", []float32{1, 0, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "01B", "memory", "old-model", []float32{1, 0}))
+	require.NoError(t, UpsertEmbedding(ctx, db, "01N", "note", "new-model", []float32{0, 1, 0}))
+
+	s, err := GetEmbeddingStats(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, 3, s.Total)
+	require.Equal(t, 2, s.ActiveMemories)
+	require.Equal(t, 2, s.Notes)
+	require.Equal(t, 1, s.Missing) // 01M only; the invalid 01C is not owed a vector
+
+	require.Len(t, s.Models, 2)
+	require.Equal(t, "new-model", s.Models[0].Model) // biggest group first
+	require.Equal(t, 3, s.Models[0].Dims)
+	require.Equal(t, 2, s.Models[0].Count)
+	require.Equal(t, 1, s.Models[0].Memories)
+	require.Equal(t, 1, s.Models[0].Notes)
+	require.False(t, s.Models[0].Updated.IsZero())
+	require.Equal(t, "old-model", s.Models[1].Model)
+	require.Equal(t, 2, s.Models[1].Dims)
+	require.Equal(t, 1, s.Models[1].Count)
+}
+
+// An empty database yields zeroes, not errors.
+func TestGetEmbeddingStatsEmpty(t *testing.T) {
+	db := newEmbedDB(t)
+	s, err := GetEmbeddingStats(context.Background(), db)
+	require.NoError(t, err)
+	require.Zero(t, s.Total)
+	require.Empty(t, s.Models)
+	require.Zero(t, s.Missing)
+}

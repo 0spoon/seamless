@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -355,4 +357,208 @@ func TestSettingsUtilityForce(t *testing.T) {
 	}.Encode())
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "error=")
+}
+
+// The semantic-index panel joins the startup runtime state, the stored
+// override, and the vector stats, and flags model groups the running embedder
+// no longer writes.
+func TestSettingsEmbeddingsPanel(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "seam.db")
+	db, err := store.Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01A", "memory", "text-embedding-3-large", []float32{1, 0}))
+	require.NoError(t, store.UpsertEmbedding(ctx, db, "01B", "note", "old-model", []float32{0, 1}))
+
+	svc, err := New(Config{
+		DB: db, APIKey: testKey, DBPath: dbPath, BriefingCfg: config.Defaults().Briefing,
+		Embedding: EmbeddingRuntime{Enabled: true, Provider: "openai", Model: "text-embedding-3-large"},
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	e := data.Embeddings
+	require.True(t, e.Enabled)
+	require.Equal(t, "openai", e.Provider)
+	require.Equal(t, "text-embedding-3-large", e.Model)
+	require.False(t, e.ModeOff)
+	require.False(t, e.RestartNeeded)
+	require.Equal(t, 2, e.Total)
+	require.Equal(t, 1, e.Stale) // the old-model vector
+	require.Len(t, e.Models, 2)
+	for _, m := range e.Models {
+		require.Equal(t, m.Model != "text-embedding-3-large", m.Stale)
+	}
+	require.Equal(t, dbPath, data.Database.Path)
+	require.Positive(t, data.Database.SizeBytes)
+	require.NotEmpty(t, data.Database.SizeHuman)
+	require.Positive(t, data.Database.SchemaVersion)
+
+	// The page renders the section with its controls.
+	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	page := rr.Body.String()
+	require.Contains(t, page, `id="semantic-index"`)
+	require.Contains(t, page, `action="/console/settings/embeddings/mode"`)
+	require.Contains(t, page, `action="/console/settings/embeddings/reembed"`)
+	require.Contains(t, page, "text-embedding-3-large")
+	require.Contains(t, page, ">stale</span>")
+
+	// Switching off stores the override and, since this process runs enabled,
+	// the panel reports a pending restart.
+	rr = postForm(mux, "/console/settings/embeddings/mode", url.Values{"mode": {"off"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+	require.Contains(t, rr.Header().Get("Location"), "#semantic-index")
+	mode, err := store.EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, store.EmbedderModeOff, mode)
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.True(t, data.Embeddings.ModeOff)
+	require.True(t, data.Embeddings.RestartNeeded)
+
+	// Clearing it goes back to auto.
+	rr = postForm(mux, "/console/settings/embeddings/mode", url.Values{"mode": {"auto"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	mode, err = store.EmbedderMode(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, store.EmbedderModeAuto, mode)
+
+	// An unknown mode is refused with a flash, not stored.
+	rr = postForm(mux, "/console/settings/embeddings/mode", url.Values{"mode": {"sideways"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+}
+
+// A daemon that started disabled by the override reports the disabled state
+// and, once the switch is cleared, a pending restart to re-enable.
+func TestSettingsEmbeddingsDisabledStates(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	require.NoError(t, store.SetEmbedderMode(ctx, db, store.EmbedderModeOff))
+
+	svc, err := New(Config{
+		DB: db, APIKey: testKey, BriefingCfg: config.Defaults().Briefing,
+		Embedding: EmbeddingRuntime{
+			Provider: "openai", Model: "text-embedding-3-large",
+			Reason: "switched off in the console Settings", OverriddenOff: true,
+		},
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.False(t, data.Embeddings.Enabled)
+	require.True(t, data.Embeddings.ModeOff)
+	require.False(t, data.Embeddings.RestartNeeded) // stored switch matches the process
+
+	rr := postForm(mux, "/console/settings/embeddings/mode", url.Values{"mode": {"auto"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.False(t, data.Embeddings.ModeOff)
+	require.True(t, data.Embeddings.RestartNeeded)
+
+	// Re-embedding is impossible without a files manager (and without an
+	// embedder); the console flashes instead of erroring.
+	rr = postForm(mux, "/console/settings/embeddings/reembed", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
+
+	// The page names the disabled cause for the owner.
+	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	page := do(mux, req).Body.String()
+	require.Contains(t, page, "Embeddings off")
+	require.Contains(t, page, "Switched off from this console")
+}
+
+// stubEmbedder is a minimal llm.Embedder for exercising the console's
+// re-embed trigger end to end.
+type stubEmbedder struct{ model string }
+
+func (s stubEmbedder) Model() string { return s.model }
+func (s stubEmbedder) Embed(context.Context, string) ([]float32, error) {
+	return []float32{1, 0, 0}, nil
+}
+
+// POSTing the re-embed trigger starts the background pass and reports it.
+func TestSettingsEmbeddingsReembedTrigger(t *testing.T) {
+	dir := t.TempDir()
+	db, err := store.Open(filepath.Join(dir, "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+
+	mgr, err := files.NewManager(dir, db, slog.Default())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = mgr.Close() })
+	mgr.SetEmbedder(stubEmbedder{model: "new-model"})
+	_, err = mgr.WriteMemory(ctx, core.Memory{
+		ID: "01K0MEMORY000000000000000A", Kind: core.KindGotcha, Name: "alpha",
+		Description: "d", Project: "seam", Body: "b\n",
+		Created: time.Now().UTC(), Updated: time.Now().UTC(), ValidFrom: time.Now().UTC(),
+	})
+	require.NoError(t, err)
+
+	svc, err := New(Config{
+		DB: db, Files: mgr, APIKey: testKey, BriefingCfg: config.Defaults().Briefing,
+		Embedding: EmbeddingRuntime{Enabled: true, Provider: "openai", Model: "new-model"},
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	rr := postForm(mux, "/console/settings/embeddings/reembed", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	loc := rr.Header().Get("Location")
+	require.Contains(t, loc, "notice=")
+	require.Contains(t, loc, "#semantic-index")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if p := mgr.ReembedStatus(); !p.Running && !p.StartedAt.IsZero() {
+			require.Equal(t, 1, p.Done)
+			require.Zero(t, p.Failed)
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatal("re-embed pass did not finish before the deadline")
+}
+
+// A daemon whose embedder fell back to disabled (no key or model) surfaces the
+// cause on the page rather than silently degrading.
+func TestSettingsEmbeddingsFallbackReason(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	svc, err := New(Config{
+		DB: db, APIKey: testKey, BriefingCfg: config.Defaults().Briefing,
+		Embedding: EmbeddingRuntime{
+			Provider: "openai", Model: "text-embedding-3-large",
+			Reason: "llm.NewEmbedder: openai selected but api_key is empty",
+		},
+	})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	page := do(mux, req).Body.String()
+	require.Contains(t, page, "No usable embedding provider")
+	require.Contains(t, page, "api_key is empty")
+	require.Contains(t, page, "lexical-only recall")
 }

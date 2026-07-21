@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/store"
 	"github.com/0spoon/seamless/internal/validate"
 )
@@ -81,6 +83,65 @@ type utilityProjectRow struct {
 	AgeDays        int        `json:"ageDays"` // days since the first demand event
 }
 
+// EmbeddingRuntime describes the embedder the daemon resolved at serve start.
+// Enabled means vectors are being written and searched this process. When
+// disabled, Reason says why in the owner's terms: their off switch, a missing
+// credential, or a config mistake -- three states that call for three different
+// next actions.
+type EmbeddingRuntime struct {
+	Enabled bool `json:"enabled"`
+	// Provider is the configured llm.provider, shown even when disabled.
+	Provider string `json:"provider"`
+	// Model is the active embedding model when enabled, else the configured one.
+	Model string `json:"model"`
+	// Reason is the human-readable cause when disabled; empty when enabled.
+	Reason string `json:"reason,omitempty"`
+	// Misconfigured marks Reason as a local config error (llm.ErrConfig class)
+	// rather than a deliberate opt-out, so the panel can escalate its tone.
+	Misconfigured bool `json:"misconfigured,omitempty"`
+	// OverriddenOff means this process started with the console off switch set.
+	OverriddenOff bool `json:"overriddenOff,omitempty"`
+}
+
+// embeddingModelRow is one (model, dims) group of stored vectors, flagged
+// stale when it is not the model the running embedder writes -- those vectors
+// are invisible to semantic search until re-embedded.
+type embeddingModelRow struct {
+	Model    string    `json:"model"`
+	Dims     int       `json:"dims"`
+	Count    int       `json:"count"`
+	Memories int       `json:"memories"`
+	Notes    int       `json:"notes"`
+	Updated  time.Time `json:"updated"`
+	Stale    bool      `json:"stale"`
+}
+
+// embeddingsPanel is the Settings page's semantic-index section: the runtime
+// embedder state, the stored corpus grouped by model, the owner's override as
+// currently stored, and the re-embed pass state.
+type embeddingsPanel struct {
+	EmbeddingRuntime
+	// ModeOff is the stored override at render time; RestartNeeded is true when
+	// it disagrees with what this process resolved at startup.
+	ModeOff       bool                  `json:"modeOff"`
+	RestartNeeded bool                  `json:"restartNeeded"`
+	Total         int                   `json:"total"`
+	Missing       int                   `json:"missing"`
+	Stale         int                   `json:"stale"`
+	Models        []embeddingModelRow   `json:"models"`
+	Reembed       files.ReembedProgress `json:"reembed"`
+}
+
+// databasePanel is the Settings page's SQLite block: where the database lives,
+// how big it is on disk (main file plus WAL), and its schema version.
+type databasePanel struct {
+	Path          string `json:"path"`
+	SizeBytes     int64  `json:"sizeBytes"`
+	WalBytes      int64  `json:"walBytes"`
+	SizeHuman     string `json:"sizeHuman"` // main + WAL, formatted
+	SchemaVersion int    `json:"schemaVersion"`
+}
+
 // settingsData is the payload for the Settings page. Briefing carries the
 // effective briefing knobs (file/env base + the console override row), while
 // FamilyEditors supplies the other intentionally editable control surface.
@@ -91,6 +152,8 @@ type settingsData struct {
 	Gardener           config.Gardener       `json:"gardener"`
 	Briefing           config.Briefing       `json:"briefing"`
 	BriefingOverridden bool                  `json:"briefingOverridden"`
+	Embeddings         embeddingsPanel       `json:"embeddings"`
+	Database           databasePanel         `json:"database"`
 	UtilityRows        []utilityProjectRow   `json:"utilityRows"`
 	UtilityReady       [3]int                `json:"utilityReady"` // thresholds: events, memories, age days
 	Projects           []core.Project        `json:"projects"`
@@ -132,12 +195,19 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	embeddings, err := s.embeddingsPanel(ctx)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
 
 	s.render(w, r, "settings", pageData{
 		Title:  "Settings",
 		Active: "settings",
 		Data: settingsData{
 			DataDir:            s.cfg.DataDir,
+			Embeddings:         embeddings,
+			Database:           s.databasePanel(),
 			Budgets:            s.cfg.Budgets,
 			Gardener:           s.cfg.GardenerCfg,
 			Briefing:           briefing,
@@ -333,6 +403,138 @@ func (s *Service) settingsBriefingReset(w http.ResponseWriter, r *http.Request) 
 	settingsNotice(w, r, "Briefing overrides cleared -- back to the file/env configuration.")
 }
 
+// embeddingsPanel assembles the semantic-index section: the startup runtime
+// state from Config, the stored override and vector stats read live, and the
+// re-embed pass state from the files manager (when wired).
+func (s *Service) embeddingsPanel(ctx context.Context) (embeddingsPanel, error) {
+	mode, err := store.EmbedderMode(ctx, s.cfg.DB)
+	if err != nil {
+		return embeddingsPanel{}, err
+	}
+	stats, err := store.GetEmbeddingStats(ctx, s.cfg.DB)
+	if err != nil {
+		return embeddingsPanel{}, err
+	}
+
+	p := embeddingsPanel{
+		EmbeddingRuntime: s.cfg.Embedding,
+		ModeOff:          mode == store.EmbedderModeOff,
+		Total:            stats.Total,
+		Missing:          stats.Missing,
+	}
+	// The override applies at serve start, so the page owes the owner a restart
+	// note exactly when the stored switch disagrees with what this process did:
+	// running but switched off, or held off by an override that is now cleared.
+	p.RestartNeeded = (p.Enabled && p.ModeOff) || (p.OverriddenOff && !p.ModeOff)
+	for _, m := range stats.Models {
+		row := embeddingModelRow{
+			Model: m.Model, Dims: m.Dims, Count: m.Count,
+			Memories: m.Memories, Notes: m.Notes, Updated: m.Updated,
+			Stale: p.Enabled && m.Model != p.Model,
+		}
+		if row.Stale {
+			p.Stale += m.Count
+		}
+		p.Models = append(p.Models, row)
+	}
+	if s.cfg.Files != nil {
+		p.Reembed = s.cfg.Files.ReembedStatus()
+	}
+	return p, nil
+}
+
+// databasePanel reads the SQLite block: schema version from the live
+// connection, sizes from disk. Best-effort on the filesystem side -- a missing
+// WAL (checkpointed) or an unreadable stat renders as zero, not an error.
+func (s *Service) databasePanel() databasePanel {
+	p := databasePanel{Path: s.cfg.DBPath}
+	if v, err := store.SchemaVersion(s.cfg.DB); err == nil {
+		p.SchemaVersion = v
+	}
+	if p.Path == "" {
+		return p
+	}
+	if info, err := os.Stat(p.Path); err == nil {
+		p.SizeBytes = info.Size()
+	}
+	if info, err := os.Stat(p.Path + "-wal"); err == nil {
+		p.WalBytes = info.Size()
+	}
+	p.SizeHuman = humanBytes(p.SizeBytes + p.WalBytes)
+	return p
+}
+
+// humanBytes formats a byte count for display (binary units, one decimal).
+func humanBytes(n int64) string {
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := int64(unit), 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
+// settingsEmbeddingsMode stores or clears the embedder off switch. The switch
+// is read once at serve start, so the flash says when a restart is what makes
+// the change real.
+func (s *Service) settingsEmbeddingsMode(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
+	if err := r.ParseForm(); err != nil {
+		settingsEmbeddingsFlash(w, r, "could not read the form")
+		return
+	}
+	mode := r.PostFormValue("mode")
+	switch mode {
+	case store.EmbedderModeAuto, store.EmbedderModeOff:
+	default:
+		settingsEmbeddingsFlash(w, r, fmt.Sprintf("mode invalid %q: valid values are %s, %s",
+			mode, store.EmbedderModeAuto, store.EmbedderModeOff))
+		return
+	}
+	if err := store.SetEmbedderMode(r.Context(), s.cfg.DB, mode); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	switch {
+	case mode == store.EmbedderModeOff && s.cfg.Embedding.Enabled:
+		settingsEmbeddingsNotice(w, r, "Embeddings switched off -- restart the daemon to apply.")
+	case mode == store.EmbedderModeOff:
+		settingsEmbeddingsNotice(w, r, "Embeddings switched off.")
+	case s.cfg.Embedding.OverriddenOff:
+		settingsEmbeddingsNotice(w, r, "Embeddings switch cleared -- restart the daemon to re-enable them.")
+	default:
+		settingsEmbeddingsNotice(w, r, "Embeddings switch cleared -- back to the configured provider.")
+	}
+}
+
+// settingsEmbeddingsReembed starts the background re-embed pass. The redirect
+// returns immediately; progress renders on the page and the pass survives the
+// request (the files manager owns its lifecycle).
+func (s *Service) settingsEmbeddingsReembed(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Files == nil {
+		settingsEmbeddingsFlash(w, r, "the files subsystem is not available")
+		return
+	}
+	total, err := s.cfg.Files.StartReembed(r.Context())
+	switch {
+	case errors.Is(err, files.ErrNoEmbedder):
+		settingsEmbeddingsFlash(w, r, "embeddings are disabled -- configure a provider (and restart) before re-embedding")
+		return
+	case errors.Is(err, files.ErrReembedRunning):
+		settingsEmbeddingsFlash(w, r, "a re-embed pass is already running")
+		return
+	case err != nil:
+		s.serverError(w, r, err)
+		return
+	}
+	settingsEmbeddingsNotice(w, r, fmt.Sprintf("Re-embedding %d items in the background with %s.",
+		total, s.cfg.Embedding.Model))
+}
+
 // settingsFamilySave creates a family or replaces one family's name and member
 // set. The picker submits a closed list of known project slugs; accepting an
 // arbitrary slug here would let a typo create a plausible but inert family
@@ -461,6 +663,14 @@ func settingsFlash(w http.ResponseWriter, r *http.Request, msg string) {
 
 func settingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
 	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+func settingsEmbeddingsFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#semantic-index", http.StatusSeeOther)
+}
+
+func settingsEmbeddingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#semantic-index", http.StatusSeeOther)
 }
 
 func settingsRegistryFlash(w http.ResponseWriter, r *http.Request, msg string) {

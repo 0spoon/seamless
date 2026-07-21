@@ -49,8 +49,14 @@ type Config struct {
 	APIKey      string
 	DataDir     string // for resolving memory/note file paths to absolute editor links
 	ConfigPath  string // absolute path of the config file this daemon loaded; empty when config is env-only
+	DBPath      string // absolute path of the SQLite database, for the Settings storage panel
 	Budgets     config.Budgets
 	GardenerCfg config.Gardener // for the Settings page (read-only display)
+	// Embedding describes the embedder this process resolved at serve start.
+	// It is fixed for the daemon's life: the console's on/off override and any
+	// config change apply from the next restart, and the Settings page uses the
+	// gap between this and the stored override to say so.
+	Embedding EmbeddingRuntime
 	// BriefingCfg is the file/env briefing base the Settings page edits: the
 	// form's effective values are this plus the store's override row, and a
 	// save writes the override (never the file).
@@ -140,6 +146,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
 	handle("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
 	handle("POST /console/settings/utility", s.auth(s.settingsUtilityForce))
+	handle("POST /console/settings/embeddings/mode", s.auth(s.settingsEmbeddingsMode))
+	handle("POST /console/settings/embeddings/reembed", s.auth(s.settingsEmbeddingsReembed))
 	handle("POST /console/settings/families/save", s.auth(s.settingsFamilySave))
 	handle("POST /console/settings/families/delete", s.auth(s.settingsFamilyDelete))
 	handle("GET /console/events", s.auth(s.sse))
