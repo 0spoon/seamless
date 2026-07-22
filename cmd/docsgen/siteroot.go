@@ -154,13 +154,18 @@ func writeSiteRoot(siteDir string, site *Site) error {
 	return nil
 }
 
-// siteRootFiles is the complete set writeSiteRoot owns, by name.
+// siteRootFiles is the complete set writeSiteRoot owns, by name. index.md is
+// the landing page's markdown twin -- the llms.txt outline under the name the
+// `Accept: text/markdown` edge rewrite expects (see twin.go): every negotiable
+// directory URL, `/` included, maps uniformly to its sibling index.md, which
+// GitHub Pages serves as text/markdown natively.
 func siteRootFiles(site *Site) map[string][]byte {
 	return map[string][]byte{
 		"sitemap.xml":             sitemapXML(site),
 		"robots.txt":              []byte(robotsTxt),
 		"llms.txt":                llmsTxt(site),
 		"llms-full.txt":           llmsFullTxt(site),
+		"index.md":                llmsTxt(site),
 		".well-known/api-catalog": []byte(apiCatalog),
 	}
 }

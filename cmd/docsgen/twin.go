@@ -9,10 +9,12 @@ import (
 // the page's index.html, holding the same untruncated source markdown that
 // llms-full.txt aggregates -- split back out per page so the CDN can serve it
 // for `Accept: text/markdown` content negotiation (see llmstxt.org and
-// Cloudflare's "Markdown for Agents"). The negotiation itself lives at the
-// edge: a Transform Rule rewrites markdown-accepting requests for /docs/...
-// directory URLs to their index.md and stamps Content-Type: text/markdown.
-// HTML stays the default for every request that does not ask.
+// Cloudflare's "Markdown for Agents"). The negotiation itself is one Transform
+// Rule at the edge (documented in SITE.md): markdown-accepting requests for
+// negotiable directory URLs rewrite to their sibling index.md, which GitHub
+// Pages already serves as text/markdown. The site root gets the same twin
+// treatment via siteRootFiles. HTML stays the default for every request that
+// does not ask.
 
 // rootLinkRE matches the destination of an inline markdown link or image whose
 // path is root-absolute. Authored destinations never contain spaces or nested

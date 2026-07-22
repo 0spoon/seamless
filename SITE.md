@@ -16,6 +16,9 @@ sitemap.xml             GENERATED (docsgen): the landing page + every docs page
 robots.txt              GENERATED (docsgen): crawl policy + the sitemap pointer
 llms.txt                GENERATED (docsgen): the nav as a linked outline for LLMs
 llms-full.txt           GENERATED (docsgen): every page's full source markdown
+index.md                GENERATED (docsgen): the landing page's markdown twin
+                        (llms.txt under the name the Accept: text/markdown
+                        rewrite expects; see "Markdown for agents" below)
 .well-known/api-catalog GENERATED (docsgen): RFC 9727 linkset for API discovery
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
@@ -72,7 +75,8 @@ entry points; GitHub Pages serves it as application/octet-stream, so the
 required application/linkset+json content type comes from a Cloudflare
 response-header rule on the zone, not from this repo). Unlike `docs/docs/`
 these are written in place, never deleted, and the rest of this directory is
-not docsgen's to touch. All five are diffed by `make docs-check`, so adding or
+not docsgen's to touch. All six (with the root `index.md` twin, see below) are
+diffed by `make docs-check`, so adding or
 removing a page keeps them current automatically.
 
 ## Markdown for agents (content negotiation)
@@ -84,21 +88,30 @@ root-absolute links rewritten to canonical URLs (see `cmd/docsgen/twin.go`).
 The twins are committed and diffed by `make docs-check` like everything else in
 `docs/docs/`.
 
+The landing page's twin is the site-root `index.md` -- the llms.txt outline
+under the twin name (see `siteRootFiles`), so `/` negotiates exactly like a
+docs page.
+
 They exist so agents sending `Accept: text/markdown` get markdown while
 browsers keep getting HTML. GitHub Pages cannot vary on request headers and the
 zone's Cloudflare plan has no Markdown for Agents setting, so the negotiation
-is three Transform Rules on the zone (like the api-catalog content-type rule,
-zone config, not repo config -- this list is its documentation):
+is one URL rewrite Transform Rule on the zone (like the api-catalog
+content-type rule, zone config, not repo config -- this is its documentation).
+Custom filter expression:
 
-1. URL rewrite, dynamic: requests whose `Accept` contains `text/markdown` for
-   paths starting `/docs/` and ending `/` rewrite to
-   `concat(http.request.uri.path, "index.md")`.
-2. URL rewrite, static: the same `Accept`, path `/`, rewrites to `/llms.txt`
-   (the landing page's markdown representation, llmstxt.org shape).
-3. Response header: for the requests the two rewrites match, set
-   `Content-Type: text/markdown; charset=utf-8`.
+```
+any(http.request.headers["accept"][*] contains "text/markdown")
+and ends_with(http.request.uri.path, "/")
+and (starts_with(http.request.uri.path, "/docs/") or http.request.uri.path eq "/")
+```
 
-Scenario pages and `/compare/` are outside the rules' scope on purpose: they
+with the dynamic path rewrite `concat(http.request.uri.path, "index.md")`. No
+Content-Type rule is needed: GitHub Pages serves `.md` files as text/markdown
+natively. (A response-header transform was tried first and turned out not to
+fire for requests whose URL a rewrite rule had already changed -- serving a
+real `.md` file from origin sidesteps that entirely.)
+
+Scenario pages and `/compare/` are outside the rule's scope on purpose: they
 have no twins, and a rewrite without a target file would turn a working HTML
 response into a 404.
 
