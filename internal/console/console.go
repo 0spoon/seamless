@@ -396,6 +396,21 @@ type overviewData struct {
 	CoverageRows     []coverageRow          // per-channel breakdown (findings/memories/notes/trials), in-window
 	CoverageTrend    []store.CoverageBucket // windowed coverage-rate trend (nil = no in-window sessions)
 	Projects         []projectGlanceRow     // top projects by recent activity ("projects at a glance")
+	Mishaps          []mishapRow            // latest agent-reported mishaps (recurrence review rail)
+}
+
+// mishapRow is one entry in the overview's recurrence-review rail: an
+// agent.mishap event reduced to what triage needs -- what happened, where, and
+// which agent reported it (harness + model + session), so a report traces back
+// to the exact task through its session.
+type mishapRow struct {
+	ID          string
+	When        time.Time
+	Project     string
+	SessionID   string
+	Harness     string // client discriminator (claude-code|codex), for the agent pill
+	Model       string // model powering the reporting session, verbatim
+	Description string
 }
 
 // projectGlanceRow is one row of the overview's "projects at a glance" table: a
@@ -467,6 +482,11 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	recent, err := s.recentEvents(ctx, 12)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	mishaps, err := s.recentMishaps(ctx, 6)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -550,6 +570,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		CovTotal:         cov.Total,
 		CoverageRows:     coverageRows(cov),
 		Projects:         glance,
+		Mishaps:          mishaps,
 	}
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
 }

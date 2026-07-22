@@ -213,6 +213,38 @@
           </ol>
           {{else}}<div class="overview-empty compact"><span>No injections recorded yet.</span></div>{{end}}
         </section>
+
+        <section class="overview-insight mishap-insight{{if .Mishaps}} has-mishaps{{end}}" aria-labelledby="overview-mishaps-title">
+          <header class="overview-panel-head compact">
+            <div><span>Recurrence review</span><h3 id="overview-mishaps-title">Agent-reported mishaps</h3></div>
+            {{if .Mishaps}}<strong class="overview-panel-total warn">{{len .Mishaps}}</strong>{{end}}
+          </header>
+          {{if .Mishaps}}
+          <ul class="overview-mishap-list">
+            {{range .Mishaps}}
+            <li class="overview-mishap-row row-link" data-href="/console/events/{{.ID}}">
+              <span class="overview-mishap-icon">{{icon "triangle-alert"}}</span>
+              <span class="overview-mishap-copy">
+                <a class="overview-mishap-desc" href="/console/events/{{.ID}}">{{.Description}}</a>
+                <span class="overview-mishap-meta">
+                  {{agentPill .Harness .Model}}
+                  {{if .SessionID}}<a class="mono-id" href="/console/sessions/{{.SessionID}}" title="Open the reporting session">{{shortID .SessionID}}</a>{{end}}
+                  {{if .Project}}<a class="overview-event-project" href="/console/projects/{{.Project}}">{{.Project}}</a>{{else}}<span class="overview-event-project">global</span>{{end}}
+                  <time title="{{ts .When}}">{{ago .When}}</time>
+                </span>
+              </span>
+              <span class="overview-row-open">{{icon "arrow-right"}}</span>
+            </li>
+            {{end}}
+          </ul>
+          {{else}}
+          <div class="overview-empty compact mishap-clear">
+            <span class="overview-mishap-clear-icon">{{icon "check"}}</span>
+            <strong>No mishaps reported</strong>
+            <span>Agents self-report incidents at session end &mdash; a quiet rail means clean handoffs.</span>
+          </div>
+          {{end}}
+        </section>
       </aside>
     </div>
   </section>

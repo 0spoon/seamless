@@ -37,6 +37,36 @@ func (s *Service) recentEvents(ctx context.Context, limit int) ([]eventRow, erro
 	return out, nil
 }
 
+// recentMishaps returns the latest agent-reported mishaps as recurrence-review
+// rows for the overview rail, newest first. Each row is attributed to the
+// reporting session's harness and model so the report traces to the exact task.
+func (s *Service) recentMishaps(ctx context.Context, limit int) ([]mishapRow, error) {
+	if s.cfg.Events == nil {
+		return nil, nil
+	}
+	evs, err := s.cfg.Events.ByKinds(ctx, []core.EventKind{core.EventAgentMishap}, "", "", limit)
+	if err != nil {
+		return nil, err
+	}
+	sessOf := s.sourceSessionResolver(ctx)
+	out := make([]mishapRow, 0, len(evs))
+	for _, e := range evs {
+		row := mishapRow{
+			ID:          e.ID,
+			When:        e.TS,
+			Project:     e.ProjectSlug,
+			SessionID:   e.SessionID,
+			Description: snippet(payloadStr(e.Payload, "description"), 160),
+		}
+		if e.SessionID != "" {
+			sess := sessOf(e.SessionID)
+			row.Harness, row.Model = harnessOf(sess), sess.Model
+		}
+		out = append(out, row)
+	}
+	return out, nil
+}
+
 func toEventRow(e core.Event) eventRow {
 	return eventRow{
 		ID:        e.ID,
