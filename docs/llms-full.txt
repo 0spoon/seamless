@@ -6752,7 +6752,7 @@ silently-dropped save.
 The form's **utility ranking** group holds the closed-loop knobs -
 `utility_weight` (utility's share of the briefing sort key; 0 restores pure
 recency) and `utility_mode` (`auto` arms each project as its demand history
-matures, `on` everywhere now, `off` never). Beneath it, the **utility
+matures, `on` everywhere now, `off` never). The same group's **utility
 activation by scope** table lists every scope with each readiness gate against
 its threshold (demand events, memories touched, history age - met gates turn
 green) and, for scopes still building, spells out exactly what remains before

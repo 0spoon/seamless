@@ -3298,11 +3298,15 @@ a.overview-event-project:hover { color: var(--brand); }
 .brief-group.utility-group {
   grid-column: 1 / -1; display: grid;
   grid-template-columns: minmax(230px, .65fr) minmax(480px, 1.35fr);
-  grid-template-areas: "heading heading" "copy fields"; gap: 10px 24px; align-items: start;
+  grid-template-areas: "heading heading" "copy fields" "scopes scopes"; gap: 10px 24px; align-items: start;
 }
 .utility-group > header { grid-area: heading; }
 .brief-group.utility-group > p { grid-area: copy; min-height: 0; max-width: 48ch; margin: 0; }
 .utility-group > .brief-fields { grid-area: fields; }
+.utility-scopes { display: flex; flex-direction: column; grid-area: scopes; gap: 9px; margin-top: 5px; padding-top: 13px; border-top: 1px solid var(--border); }
+.utility-scopes h5 { margin: 0; color: var(--ink); font-family: var(--font-display); font-size: var(--text-sm); line-height: 1.2; }
+.utility-scopes > p { max-width: 680px; margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.4; }
+.utility-scopes-table { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .brief-group.ceiling-group { --group-accent: var(--warn); grid-column: 1 / -1; }
 .brief-group > header { display: flex; align-items: center; gap: 9px; }
 .brief-group-icon { display: inline-flex; align-items: center; justify-content: center; width: 29px; height: 29px; border-radius: var(--radius-sm); color: var(--group-accent); background: color-mix(in oklab, var(--group-accent) 12%, var(--surface)); }
@@ -3356,7 +3360,6 @@ a.overview-event-project:hover { color: var(--brand); }
 .is-dirty .brief-state { color: var(--pop-strong); font-weight: 650; }
 .is-dirty .state-dot { background: var(--pop); box-shadow: 0 0 0 4px var(--pop-soft); }
 
-.utility-activation { margin-top: 12px; }
 .utility-activation-table { width: 100%; border-collapse: collapse; font-size: var(--text-xs); }
 .utility-activation-table th {
   padding: 8px 14px; border-bottom: 1px solid var(--border); color: var(--faint);
@@ -3372,7 +3375,7 @@ a.overview-event-project:hover { color: var(--brand); }
 .utility-gate.met i { color: color-mix(in oklab, var(--ok) 55%, var(--faint)); }
 .utility-remaining { display: block; margin-top: 2px; }
 .utility-mode-note {
-  display: flex; align-items: center; gap: 8px; margin-top: 8px; padding: 8px 11px;
+  display: flex; align-items: center; gap: 8px; margin: 0; padding: 8px 11px;
   border: 1px dashed color-mix(in oklab, var(--warn) 40%, var(--border)); border-radius: var(--radius-sm);
   color: var(--muted); background: color-mix(in oklab, var(--warn) 7%, var(--surface)); font-size: var(--text-xs);
 }
@@ -3381,7 +3384,7 @@ a.overview-event-project:hover { color: var(--brand); }
 .utility-status-active { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 40%, var(--border)); background: var(--ok-soft); }
 .utility-status-armed { color: var(--pop-strong); border-color: color-mix(in oklab, var(--pop) 40%, var(--border)); background: var(--pop-soft); }
 .utility-status-forced-off { color: var(--warn); border-color: color-mix(in oklab, var(--warn) 40%, var(--border)); background: color-mix(in oklab, var(--warn) 9%, var(--surface)); }
-.utility-force-form { display: flex; flex-wrap: wrap; gap: 6px; }
+.utility-force-group { display: inline-flex; flex-wrap: wrap; gap: 6px; }
 
 .registry-zone-head > .btn { justify-self: end; }
 .registry-overview { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; margin: -2px 0 12px 60px; }
@@ -3522,7 +3525,7 @@ a.overview-event-project:hover { color: var(--brand); }
   .gardener-runtime { grid-template-columns: 1fr; }
   .gardener-cadence { border-right: 0; border-bottom: 1px solid var(--border); }
   .gardener-rules { padding: 10px 14px 14px; }
-  .brief-group.utility-group { grid-template-columns: 1fr; grid-template-areas: "heading" "copy" "fields"; gap: 8px; }
+  .brief-group.utility-group { grid-template-columns: 1fr; grid-template-areas: "heading" "copy" "fields" "scopes"; gap: 8px; }
   .brief-group.utility-group > p { max-width: none; margin-bottom: 5px; }
   .workspace-columns { display: none; }
   .workspace-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }

@@ -329,6 +329,42 @@
                 <small id="utility-mode-help">auto arms each project once its demand history matures</small>
               </label>
             </div>
+            {{if .UtilityRows}}
+            <div class="utility-scopes">
+              <h5 id="utility-activation-title">Utility activation by scope</h5>
+              <p>In auto mode a scope&rsquo;s briefing switches to utility-blended ordering once its demand history matures: first demand &ge;{{index .UtilityReady 2}}d old, &ge;{{index .UtilityReady 0}} demand events and &ge;{{index .UtilityReady 1}} memories touched in 30d. The gardener latches it on its next pass; force overrides both ways.</p>
+              {{if ne .Briefing.UtilityMode "auto"}}<p class="utility-mode-note">{{icon "triangle-alert"}} Activation is currently <strong>{{.Briefing.UtilityMode}}</strong> everywhere, so the per-scope state below is dormant &mdash; it takes over when the mode returns to auto.</p>{{end}}
+              <div class="utility-scopes-table">
+                <table class="utility-activation-table">
+                  <thead><tr><th>Scope</th><th>Status</th><th>Demand (30d)</th><th>History</th><th>Override</th></tr></thead>
+                  <tbody>
+                    {{$ready := .UtilityReady}}
+                    {{range $i, $row := .UtilityRows}}
+                    <tr>
+                      <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}</td>
+                      <td><span class="badge utility-status-{{.Status}}">{{.Status}}{{if .Forced}} (forced){{end}}</span>{{if .ReadyAt}} <small title="{{ts .ReadyAt}}">armed {{ago .ReadyAt}}</small>{{end}}</td>
+                      <td>
+                        <span class="utility-gate{{if .EventsOK}} met{{end}}">{{.RecentEvents}}<i>/{{index $ready 0}}</i> events</span> &middot;
+                        <span class="utility-gate{{if .MemoriesOK}} met{{end}}">{{.RecentMemories}}<i>/{{index $ready 1}}</i> memories</span>
+                      </td>
+                      <td>
+                        {{if .AgeDays}}<span class="utility-gate{{if .AgeOK}} met{{end}}">{{.AgeDays}}<i>/{{index $ready 2}}</i>d of demand</span>{{else}}<span class="utility-gate">no demand yet</span>{{end}}
+                        {{if .Remaining}}<small class="utility-remaining">{{.Remaining}}</small>{{end}}
+                      </td>
+                      <td>
+                        <span class="utility-force-group">
+                          {{if ne .Forced "on"}}<button class="btn small" type="submit" form="utility-force-{{$i}}" name="force" value="on">Force on</button>{{end}}
+                          {{if ne .Forced "off"}}<button class="btn small" type="submit" form="utility-force-{{$i}}" name="force" value="off">Force off</button>{{end}}
+                          {{if .Forced}}<button class="btn small" type="submit" form="utility-force-{{$i}}" name="force" value="auto">Auto</button>{{end}}
+                        </span>
+                      </td>
+                    </tr>
+                    {{end}}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            {{end}}
           </section>
 
           <section class="brief-group ceiling-group">
@@ -358,47 +394,8 @@
         </footer>
       </form>
       {{if .BriefingOverridden}}<form id="brief-reset" method="post" action="/console/settings/briefing/reset"></form>{{end}}
+      {{range $i, $row := .UtilityRows}}<form id="utility-force-{{$i}}" method="post" action="/console/settings/utility"><input type="hidden" name="project" value="{{$row.Project}}"></form>{{end}}
     </article>
-
-    {{if .UtilityRows}}
-    <article class="briefing-workbench utility-activation" aria-labelledby="utility-activation-title">
-      <header class="briefing-workbench-head">
-        <div>
-          <div class="briefing-title"><span class="runtime-icon pop">{{icon "trending-up"}}</span><div><span>Closed loop</span><h3 id="utility-activation-title">Utility activation by scope</h3></div></div>
-        </div>
-        <p>In auto mode a scope&rsquo;s briefing switches to utility-blended ordering once its demand history matures: first demand &ge;{{index .UtilityReady 2}}d old, &ge;{{index .UtilityReady 0}} demand events and &ge;{{index .UtilityReady 1}} memories touched in 30d. The gardener latches it on its next pass; force overrides both ways.</p>
-        {{if ne .Briefing.UtilityMode "auto"}}<p class="utility-mode-note">{{icon "triangle-alert"}} Activation is currently <strong>{{.Briefing.UtilityMode}}</strong> everywhere, so the per-scope state below is dormant &mdash; it takes over when the mode returns to auto.</p>{{end}}
-      </header>
-      <table class="utility-activation-table">
-        <thead><tr><th>Scope</th><th>Status</th><th>Demand (30d)</th><th>History</th><th>Override</th></tr></thead>
-        <tbody>
-          {{$ready := .UtilityReady}}
-          {{range .UtilityRows}}
-          <tr>
-            <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}</td>
-            <td><span class="badge utility-status-{{.Status}}">{{.Status}}{{if .Forced}} (forced){{end}}</span>{{if .ReadyAt}} <small title="{{ts .ReadyAt}}">armed {{ago .ReadyAt}}</small>{{end}}</td>
-            <td>
-              <span class="utility-gate{{if .EventsOK}} met{{end}}">{{.RecentEvents}}<i>/{{index $ready 0}}</i> events</span> &middot;
-              <span class="utility-gate{{if .MemoriesOK}} met{{end}}">{{.RecentMemories}}<i>/{{index $ready 1}}</i> memories</span>
-            </td>
-            <td>
-              {{if .AgeDays}}<span class="utility-gate{{if .AgeOK}} met{{end}}">{{.AgeDays}}<i>/{{index $ready 2}}</i>d of demand</span>{{else}}<span class="utility-gate">no demand yet</span>{{end}}
-              {{if .Remaining}}<small class="utility-remaining">{{.Remaining}}</small>{{end}}
-            </td>
-            <td>
-              <form method="post" action="/console/settings/utility" class="utility-force-form">
-                <input type="hidden" name="project" value="{{.Project}}">
-                {{if ne .Forced "on"}}<button class="btn small" name="force" value="on" type="submit">Force on</button>{{end}}
-                {{if ne .Forced "off"}}<button class="btn small" name="force" value="off" type="submit">Force off</button>{{end}}
-                {{if .Forced}}<button class="btn small" name="force" value="auto" type="submit">Auto</button>{{end}}
-              </form>
-            </td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </article>
-    {{end}}
   </section>
 
   <section class="settings-zone" id="workspace-registry">
