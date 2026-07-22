@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"path/filepath"
 	"strings"
 )
@@ -46,6 +47,19 @@ const apiCatalog = `{
   ]
 }
 `
+
+// authMd is /auth.md: the agent-readable statement of how authentication
+// works. The honest content is mostly that it does not: the site has no
+// protected APIs and no authorization server, so there is deliberately no
+// OAuth/OIDC discovery metadata to publish -- fabricated endpoints would send
+// agents into flows that 404. What an agent can actually use is documented
+// instead: the MCP endpoint is per-install on localhost, and the credential is
+// the static bearer key the installer provisions. Embedded from the sibling
+// file rather than declared as a const because the markdown needs backticks,
+// which a raw string literal cannot carry.
+//
+//go:embed auth.md
+var authMd string
 
 // xmlEscaper covers the characters XML 1.0 cannot carry raw in text content.
 // Page URLs are slug-derived and never contain them today; escaping anyway
@@ -166,6 +180,7 @@ func siteRootFiles(site *Site) map[string][]byte {
 		"llms.txt":                llmsTxt(site),
 		"llms-full.txt":           llmsFullTxt(site),
 		"index.md":                llmsTxt(site),
+		"auth.md":                 []byte(authMd),
 		".well-known/api-catalog": []byte(apiCatalog),
 	}
 	// The card is attached by run() (and loadRepoSite in tests); a Site built

@@ -91,6 +91,26 @@ func TestAPICatalogIsWellFormedLinkset(t *testing.T) {
 	require.Equal(t, "text/html", entry.ServiceDoc[0].Type)
 }
 
+// TestAuthMdDocumentsTheRealAuthModel: /auth.md is the agent-readable auth
+// statement. It must lead with the H1 the scanners key on, stay on the
+// canonical host, and keep naming the facts that are true of this codebase:
+// the localhost MCP endpoint (the same URL the server card carries), the
+// bearer-key method, and the deliberate absence of OAuth discovery metadata.
+func TestAuthMdDocumentsTheRealAuthModel(t *testing.T) {
+	require.True(t, strings.HasPrefix(authMd, "# auth.md\n"),
+		"the H1 is the literal filename -- what agent-readiness checks key on")
+	for _, want := range []string{
+		"http://127.0.0.1:8081/api/mcp",
+		"Authorization: Bearer",
+		siteBaseURL + "/install",
+		"/.well-known/openid-configuration",
+		"/.well-known/oauth-authorization-server",
+		"SEAMLESS_MCP_API_KEY",
+	} {
+		require.Contains(t, authMd, want)
+	}
+}
+
 // TestCanonicalHostMatchesCNAME: siteBaseURL is a constant and docs/CNAME is
 // what GitHub Pages actually serves; if they diverge, every sitemap URL points
 // at a host the site no longer lives on.
