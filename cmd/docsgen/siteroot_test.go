@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,6 +56,39 @@ func TestRobotsTxtPointsAtSitemap(t *testing.T) {
 	} {
 		require.Contains(t, robotsTxt, want+"\n")
 	}
+}
+
+// TestAPICatalogIsWellFormedLinkset: /.well-known/api-catalog is RFC 9727's
+// discovery document. It must parse as an RFC 9264 linkset whose hrefs stay on
+// the canonical host and point at pages this generator actually publishes --
+// an agent that trusts the catalog follows them blind.
+func TestAPICatalogIsWellFormedLinkset(t *testing.T) {
+	var doc struct {
+		Linkset []struct {
+			Anchor      string `json:"anchor"`
+			ServiceDesc []struct {
+				Href string `json:"href"`
+				Type string `json:"type"`
+			} `json:"service-desc"`
+			ServiceDoc []struct {
+				Href string `json:"href"`
+				Type string `json:"type"`
+			} `json:"service-doc"`
+		} `json:"linkset"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(apiCatalog), &doc))
+	require.Len(t, doc.Linkset, 1)
+
+	entry := doc.Linkset[0]
+	require.Equal(t, siteBaseURL+"/", entry.Anchor)
+	require.Len(t, entry.ServiceDesc, 1)
+	require.Equal(t, siteBaseURL+"/llms.txt", entry.ServiceDesc[0].Href,
+		"service-desc is the llms.txt this generator emits")
+	require.Equal(t, "text/plain", entry.ServiceDesc[0].Type)
+	require.Len(t, entry.ServiceDoc, 1)
+	require.Equal(t, siteBaseURL+"/docs/", entry.ServiceDoc[0].Href,
+		"service-doc is the docs site this generator renders")
+	require.Equal(t, "text/html", entry.ServiceDoc[0].Type)
 }
 
 // TestCanonicalHostMatchesCNAME: siteBaseURL is a constant and docs/CNAME is

@@ -1,0 +1,13 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://thereisnospoon.org/",
+      "service-desc": [
+        { "href": "https://thereisnospoon.org/llms.txt", "type": "text/plain" }
+      ],
+      "service-doc": [
+        { "href": "https://thereisnospoon.org/docs/", "type": "text/html" }
+      ]
+    }
+  ]
+}

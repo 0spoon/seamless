@@ -24,6 +24,29 @@ Content-Signal: search=yes, ai-input=yes, ai-train=yes
 Sitemap: ` + siteBaseURL + `/sitemap.xml
 `
 
+// apiCatalog is /.well-known/api-catalog (RFC 9727): an RFC 9264 linkset
+// naming the site's machine-readable entry points for agents that discover
+// APIs by well-known URI. One entry, anchored at the site itself: Seamless has
+// no public API endpoint (the MCP server binds to each install's localhost),
+// so the catalog advertises the agent-readable description and the docs, not
+// an endpoint that does not exist. GitHub Pages serves extensionless files as
+// application/octet-stream; the required application/linkset+json content type
+// is set by a Cloudflare response-header rule on the zone, not from this repo.
+const apiCatalog = `{
+  "linkset": [
+    {
+      "anchor": "` + siteBaseURL + `/",
+      "service-desc": [
+        { "href": "` + siteBaseURL + `/llms.txt", "type": "text/plain" }
+      ],
+      "service-doc": [
+        { "href": "` + siteBaseURL + `/docs/", "type": "text/html" }
+      ]
+    }
+  ]
+}
+`
+
 // xmlEscaper covers the characters XML 1.0 cannot carry raw in text content.
 // Page URLs are slug-derived and never contain them today; escaping anyway
 // keeps a future odd filename from producing a silently invalid sitemap.
@@ -134,9 +157,10 @@ func writeSiteRoot(siteDir string, site *Site) error {
 // siteRootFiles is the complete set writeSiteRoot owns, by name.
 func siteRootFiles(site *Site) map[string][]byte {
 	return map[string][]byte{
-		"sitemap.xml":   sitemapXML(site),
-		"robots.txt":    []byte(robotsTxt),
-		"llms.txt":      llmsTxt(site),
-		"llms-full.txt": llmsFullTxt(site),
+		"sitemap.xml":             sitemapXML(site),
+		"robots.txt":              []byte(robotsTxt),
+		"llms.txt":                llmsTxt(site),
+		"llms-full.txt":           llmsFullTxt(site),
+		".well-known/api-catalog": []byte(apiCatalog),
 	}
 }

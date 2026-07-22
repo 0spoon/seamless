@@ -16,6 +16,7 @@ sitemap.xml             GENERATED (docsgen): the landing page + every docs page
 robots.txt              GENERATED (docsgen): crawl policy + the sitemap pointer
 llms.txt                GENERATED (docsgen): the nav as a linked outline for LLMs
 llms-full.txt           GENERATED (docsgen): every page's full source markdown
+.well-known/api-catalog GENERATED (docsgen): RFC 9727 linkset for API discovery
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
@@ -64,11 +65,15 @@ docsgen also writes the crawler files at the site root: `sitemap.xml` (the
 landing page plus every docs page, no lastmod -- there is no deterministic date
 source), `robots.txt` (whose `# seamless-robots-v1` marker is how you can tell
 from outside whether the live host serves this file or Cloudflare's managed
-one), `llms.txt` (the nav as a linked outline, in the llmstxt.org shape), and
-`llms-full.txt` (every page's full source markdown, untruncated). Unlike
-`docs/docs/` these are written in place, never deleted, and the rest of this
-directory is not docsgen's to touch. All four are diffed by `make docs-check`,
-so adding or removing a page keeps them current automatically.
+one), `llms.txt` (the nav as a linked outline, in the llmstxt.org shape),
+`llms-full.txt` (every page's full source markdown, untruncated), and
+`.well-known/api-catalog` (an RFC 9727 linkset naming the machine-readable
+entry points; GitHub Pages serves it as application/octet-stream, so the
+required application/linkset+json content type comes from a Cloudflare
+response-header rule on the zone, not from this repo). Unlike `docs/docs/`
+these are written in place, never deleted, and the rest of this directory is
+not docsgen's to touch. All five are diffed by `make docs-check`, so adding or
+removing a page keeps them current automatically.
 
 **The drift rule:** because the output is committed and `make check` runs
 `docs-check`, any change to `docs-src/` must be followed by `make docs` and the
