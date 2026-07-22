@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"sort"
+	"strings"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
@@ -30,17 +31,24 @@ type eventItem struct {
 
 // eventDetailData is the payload for a single event's detail page.
 type eventDetailData struct {
-	Event   eventRow    `json:"event"`
-	Prompt  string      `json:"prompt,omitempty"`  // user prompt that triggered the event, if any
-	Content string      `json:"content,omitempty"` // verbatim injected/large text, if any
-	Items   []eventItem `json:"items,omitempty"`   // resolved memories the event referenced
-	Fields  []kvPair    `json:"fields,omitempty"`  // remaining scalar payload fields
-	RawJSON string      `json:"rawJson"`           // pretty-printed full payload
+	Event   eventRow       `json:"event"`
+	Trace   interactionRow `json:"trace"`             // rich request/response + session attribution
+	Prompt  string         `json:"prompt,omitempty"`  // user prompt that triggered the event, if any
+	Content string         `json:"content,omitempty"` // verbatim injected/large text, if any
+	Items   []eventItem    `json:"items,omitempty"`   // resolved memories the event referenced
+	Fields  []kvPair       `json:"fields,omitempty"`  // remaining scalar payload fields
+	RawJSON string         `json:"rawJson"`           // pretty-printed full payload
+
+	Eyebrow       string `json:"-"`
+	RequestLabel  string `json:"-"`
+	ResponseLabel string `json:"-"`
+	ReturnHref    string `json:"-"`
+	ReturnLabel   string `json:"-"`
 }
 
-// eventDetail renders one event-log entry in full: the verbatim injected content,
-// any memories it surfaced (resolved to live index entries), the remaining
-// payload fields, and the raw JSON. This is what a Recent-activity row links to.
+// eventDetail renders one event-log entry as a review workspace: promoted
+// request/response evidence, surfaced memories, provenance, decoded payload
+// fields, and the raw JSON. This is what activity and interaction rows link to.
 func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.cfg.Events == nil {
@@ -58,11 +66,20 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	requestLabel, responseLabel := eventBodyLabels(ev.Kind)
+	returnHref, returnLabel := eventReturnLink(ev)
 	data := eventDetailData{
 		Event:   toEventRow(ev),
+		Trace:   eventTrace(ev, s.sessionNamer(ctx)),
 		Prompt:  payloadStr(ev.Payload, "prompt"),
 		Content: payloadStr(ev.Payload, "content"),
 		RawJSON: prettyPayload(ev.Payload),
+
+		Eyebrow:       eventEyebrow(ev.Kind),
+		RequestLabel:  requestLabel,
+		ResponseLabel: responseLabel,
+		ReturnHref:    returnHref,
+		ReturnLabel:   returnLabel,
 	}
 	if items, err := s.resolveEventItems(ctx, ev); err != nil {
 		s.serverError(w, r, err)
@@ -70,11 +87,133 @@ func (s *Service) eventDetail(w http.ResponseWriter, r *http.Request) {
 	} else {
 		data.Items = items
 	}
-	data.Fields = scalarFields(ev.Payload, "content", "item_ids", "prompt")
+	data.Fields = scalarFields(ev.Payload, eventBodyPayloadKeys(ev.Kind)...)
 
 	// No Active nav key: the event detail is a leaf reached from Overview/
 	// Interactions via the crumb, so highlighting a nav item would mislead.
 	s.renderDetail(w, r, "event", pageData{Title: "Event " + shortID(ev.ID), Data: data})
+}
+
+// eventTrace starts with the shared Interactions projection, then promotes the
+// few diagnostic event kinds that do not appear in that feed. Their primary
+// evidence should still be readable without digging through raw JSON.
+func eventTrace(ev core.Event, sessOf func(string) core.Session) interactionRow {
+	row := toInteractionRow(ev, sessOf)
+	switch ev.Kind {
+	case core.EventRecallMiss:
+		row.Label = payloadStr(ev.Payload, "source")
+		row.Request = payloadStr(ev.Payload, "query")
+	case core.EventHookError:
+		row.Label = payloadStr(ev.Payload, "stage")
+		row.Response = payloadStr(ev.Payload, "error")
+		row.IsError = true
+		row.Tone = "danger"
+	case core.EventAgentMishap:
+		row.Response = payloadStr(ev.Payload, "description")
+		row.Tone = "warn"
+	}
+	return row
+}
+
+// eventBodyLabels names the rich request/response panels in the event review
+// workspace. The event feed already extracts the right bodies; these labels keep
+// the detail page conversational instead of exposing transport field names.
+func eventBodyLabels(kind core.EventKind) (request, response string) {
+	switch kind {
+	case core.EventToolCall:
+		return "Request", "Response"
+	case core.EventHookPrompt:
+		return "Prompt", ""
+	case core.EventInjected:
+		return "Prompt", "Injected context"
+	case core.EventRecallMiss:
+		return "Query", ""
+	case core.EventHookError:
+		return "", "Error"
+	case core.EventAgentMishap:
+		return "", "Report"
+	case core.EventSessionEnded:
+		return "", "Session findings"
+	case core.EventPlanCaptured, core.EventPlanApproved:
+		return "", "Plan content"
+	case core.EventSubagentCaptured:
+		return "Prompt", "Agent report"
+	default:
+		return "Request", "Response"
+	}
+}
+
+// eventBodyPayloadKeys lists payload fields already promoted into the primary
+// request/response surface. Leaving them in the inspector would duplicate the
+// longest, least scannable values; the complete object remains under Raw payload.
+func eventBodyPayloadKeys(kind core.EventKind) []string {
+	switch kind {
+	case core.EventToolCall:
+		return []string{"args", "result"}
+	case core.EventHookPrompt:
+		return []string{"prompt"}
+	case core.EventInjected:
+		return []string{"content", "item_ids", "prompt"}
+	case core.EventRecallMiss:
+		return []string{"query"}
+	case core.EventHookError:
+		return []string{"error"}
+	case core.EventAgentMishap:
+		return []string{"description"}
+	case core.EventSessionEnded:
+		return []string{"findings"}
+	case core.EventPlanCaptured, core.EventPlanApproved:
+		return []string{"content"}
+	case core.EventSubagentCaptured:
+		return []string{"content", "prompt"}
+	default:
+		return nil
+	}
+}
+
+// eventEyebrow gives the hero a stable domain cue above the event summary.
+func eventEyebrow(kind core.EventKind) string {
+	s := string(kind)
+	switch {
+	case kind == core.EventToolCall:
+		return "Tool execution"
+	case kind == core.EventInjected:
+		return "Context delivery"
+	case kind == core.EventHookPrompt, kind == core.EventRecallMiss:
+		return "Retrieval check"
+	case kind == core.EventHookError:
+		return "Hook failure"
+	case kind == core.EventAgentMishap:
+		return "Agent report"
+	case strings.HasPrefix(s, "session."):
+		return "Session lifecycle"
+	case strings.HasPrefix(s, "plan."), kind == core.EventSubagentCaptured:
+		return "Plan workflow"
+	case strings.HasPrefix(s, "memory."):
+		return "Knowledge lifecycle"
+	case strings.HasPrefix(s, "note."):
+		return "Note lifecycle"
+	case strings.HasPrefix(s, "task."):
+		return "Task lifecycle"
+	case strings.HasPrefix(s, "trial."):
+		return "Research lifecycle"
+	case strings.HasPrefix(s, "gardener."):
+		return "Gardener action"
+	case strings.HasPrefix(s, "favorite."):
+		return "Curation action"
+	default:
+		return "Activity event"
+	}
+}
+
+// eventReturnLink sends interaction events back to the trace they came from and
+// durable domain events back to the overview activity ledger. Recall twins are
+// hidden from Interactions, so their honest parent remains Overview.
+func eventReturnLink(ev core.Event) (href, label string) {
+	if isInteraction(ev) && !skipInteraction(ev) {
+		return "/console/interactions", "Interactions"
+	}
+	return "/console/", "Overview"
 }
 
 // eventSurfacesMemories reports whether an event's item ids point at memories in

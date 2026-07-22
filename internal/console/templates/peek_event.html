@@ -1,67 +1,96 @@
 {{define "peek-body"}}
-<article class="peek-entity">
-  <header class="peek-head"><span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span></header>
+<article class="peek-entity event-peek">
+  <header class="peek-head"><span class="kind {{.Trace.Tone}}">{{.Event.Kind}}</span><span class="event-peek-time" title="{{ts .Event.When}}">{{ago .Event.When}}</span></header>
   <h2 class="peek-title">{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h2>
+  <p class="event-peek-context">{{.Eyebrow}}{{if .Trace.SessionName}} <span>&middot;</span> {{.Trace.SessionName}}{{end}}</p>
   {{template "detail-body" .}}
 </article>
 {{end}}
 
 {{define "detail-body"}}
-  <dl class="peek-kv">
-    <dt>ID</dt><dd class="mono">{{.Event.ID}}{{copyBtn .Event.ID}}</dd>
-    <dt>When</dt><dd title="{{ts .Event.When}}">{{ago .Event.When}}</dd>
-    <dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}&mdash;{{end}}</dd>
-    <dt>Session</dt><dd>{{if .Event.SessionID}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{shortID .Event.SessionID}}</a>{{copyBtn .Event.SessionID}}{{else}}&mdash;{{end}}</dd>
-    {{if .Event.ItemID}}<dt>Item</dt><dd class="mono">{{.Event.ItemID}}{{copyBtn .Event.ItemID}}</dd>{{end}}
-  </dl>
+<div class="event-workspace">
+  <main class="event-primary">
+    {{if .Trace.Request}}
+    <section class="card event-content-card event-request-card">
+      <header class="event-card-head">
+        <div><span class="event-card-eyebrow">Input</span><h2>{{.RequestLabel}}</h2></div>
+      </header>
+      <pre class="ix-raw" data-ix-title="">{{.Trace.Request}}</pre>
+    </section>
+    {{end}}
 
-  {{if .Prompt}}
-  <section class="peek-section">
-    <h3>Prompt</h3>
-    <pre class="ix-raw" data-ix-title="">{{.Prompt}}</pre>
-  </section>
-  {{end}}
+    {{if .Trace.Response}}
+    <section class="card event-content-card event-response-card">
+      <header class="event-card-head">
+        <div><span class="event-card-eyebrow">{{if eq .Event.Kind "retrieval.injected"}}Delivered{{else}}Output{{end}}</span><h2>{{.ResponseLabel}}</h2></div>
+      </header>
+      <pre class="ix-raw" data-ix-title="">{{.Trace.Response}}</pre>
+    </section>
+    {{end}}
 
-  {{if .Content}}
-  <section class="peek-section">
-    <h3>Injected content</h3>
-    <pre class="ix-raw" data-ix-title="">{{.Content}}</pre>
-  </section>
-  {{end}}
+    {{if .Items}}
+    <section class="card event-memory-card">
+      <header class="event-card-head">
+        <div><span class="event-card-eyebrow">Context set</span><h2>Surfaced memories</h2><p>The durable knowledge included in this delivery, in emitted order.</p></div>
+        <span class="event-card-count">{{len .Items}}</span>
+      </header>
+      <div class="event-memory-grid">
+        {{range .Items}}
+        <div class="event-memory-row{{if .Missing}} is-missing{{end}}">
+          <span class="event-memory-mark">{{if .Missing}}{{icon "triangle-alert"}}{{else}}{{icon "brain"}}{{end}}</span>
+          <div class="event-memory-copy">
+            <div class="event-memory-title">
+              {{if .Missing}}<span class="mono">{{shortID .ID}}</span><span class="badge warn">removed</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a><span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}
+            </div>
+            <p>{{if .Missing}}This memory is no longer in the active index.{{else if .Description}}{{.Description}}{{else}}No description recorded.{{end}}</p>
+            <div class="event-memory-meta"><span>{{if .Missing}}scope unknown{{else if .Project}}{{.Project}}{{else}}global{{end}}</span><span class="mono">{{shortID .ID}}</span></div>
+          </div>
+        </div>
+        {{end}}
+      </div>
+    </section>
+    {{end}}
 
-  {{if .Items}}
-  <section class="peek-section">
-    <h3>Surfaced memories <span class="count">{{len .Items}}</span></h3>
-    <div class="table-wrap">
-      <table>
-        <thead><tr><th>Name</th><th>Kind</th><th>Description</th></tr></thead>
-        <tbody>
-          {{range .Items}}
-          <tr>
-            <td>{{if .Missing}}<span class="mono muted">{{shortID .ID}}</span>{{else}}<a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{end}}</td>
-            <td>{{if .Missing}}<span class="badge warn">removed</span>{{else}}<span class="kind {{evtTone .Kind}}">{{.Kind}}</span>{{end}}</td>
-            <td class="muted">{{if .Missing}}no longer in the index{{else}}{{.Description}}{{end}}</td>
-          </tr>
-          {{end}}
-        </tbody>
-      </table>
-    </div>
-  </section>
-  {{end}}
+    {{if not (or .Trace.Request .Trace.Response .Items)}}
+    <section class="card event-empty-card">
+      <span>{{icon (evtIcon .Event.Kind)}}</span>
+      <div><strong>No captured body for this event</strong><p>The event is fully represented by its provenance and payload fields.</p></div>
+    </section>
+    {{end}}
+  </main>
 
-  {{if .Fields}}
-  <section class="peek-section">
-    <h3>Payload</h3>
-    <dl class="peek-kv">
-      {{range .Fields}}<dt>{{.Key}}</dt><dd class="mono">{{.Value}}</dd>{{end}}
-    </dl>
-  </section>
-  {{end}}
+  <aside class="event-inspector" aria-label="Event inspector">
+    <section class="card event-meta-card">
+      <header class="event-card-head">
+        <div><span class="event-card-eyebrow">Provenance</span><h2>Event details</h2></div>
+      </header>
+      <dl class="event-meta-list">
+        <div><dt>ID</dt><dd class="mono"><span title="{{.Event.ID}}">{{shortID .Event.ID}}</span>{{copyBtn .Event.ID}}</dd></div>
+        <div><dt>Recorded</dt><dd><time title="{{ts .Event.When}}">{{ts .Event.When}}</time> <span class="muted">&middot; {{ago .Event.When}}</span></dd></div>
+        <div><dt>Project</dt><dd>{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}global{{end}}</dd></div>
+        <div><dt>Session</dt><dd>{{if .Event.SessionID}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{if .Trace.SessionName}}{{.Trace.SessionName}}{{else}}{{shortID .Event.SessionID}}{{end}}</a>{{copyBtn .Event.SessionID}}{{else}}&mdash;{{end}}</dd></div>
+        {{if .Event.ItemID}}<div><dt>Item</dt><dd class="mono"><span title="{{.Event.ItemID}}">{{shortID .Event.ItemID}}</span>{{copyBtn .Event.ItemID}}</dd></div>{{end}}
+      </dl>
+    </section>
 
-  {{if .RawJSON}}
-  <details>
-    <summary class="muted">Raw payload</summary>
-    <div style="margin-top:8px"><pre class="ix-raw" data-ix-title="">{{.RawJSON}}</pre></div>
-  </details>
-  {{end}}
+    {{if .Fields}}
+    <section class="card event-payload-card">
+      <header class="event-card-head">
+        <div><span class="event-card-eyebrow">Decoded</span><h2>Payload fields</h2></div>
+        <span class="event-card-count">{{len .Fields}}</span>
+      </header>
+      <dl class="event-field-list">
+        {{range .Fields}}<div><dt>{{.Key}}</dt><dd class="mono">{{.Value}}</dd></div>{{end}}
+      </dl>
+    </section>
+    {{end}}
+
+    {{if .RawJSON}}
+    <details class="card event-raw-card">
+      <summary><span><small>Source data</small><strong>Raw payload</strong></span><span class="event-raw-format">JSON</span></summary>
+      <div class="event-raw-body"><pre class="ix-raw" data-ix-title="">{{.RawJSON}}</pre></div>
+    </details>
+    {{end}}
+  </aside>
+</div>
 {{end}}

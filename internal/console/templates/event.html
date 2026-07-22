@@ -1,19 +1,31 @@
 {{define "content"}}
 {{with .Data}}
-<div class="crumb"><a href="/console/">Overview</a> <span class="faint">/</span> activity <span class="faint">/</span> <b>{{shortID .Event.ID}}</b> {{copyBtn .Event.ID}}</div>
+<div class="event-page">
+  <div class="crumb event-crumb"><a href="{{.ReturnHref}}">{{.ReturnLabel}}</a> <span class="faint">/</span> event <span class="faint">/</span> <b>{{shortID .Event.ID}}</b> {{copyBtn .Event.ID}}</div>
 
-<div class="detail-head">
-  <div class="row-between">
-    <div class="title-row">
-      <span class="tile">{{icon "activity"}}</span>
-      <h1>{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h1>
-      <span class="kind {{evtTone .Event.Kind}}">{{.Event.Kind}}</span>
-      {{if .Event.Project}}<span class="chip-parent">{{icon "git-branch"}}{{.Event.Project}}</span>{{end}}
+  <header class="event-detail-hero{{if .Trace.Tone}} tone-{{.Trace.Tone}}{{end}}{{if .Trace.IsError}} is-error{{end}}">
+    <div class="event-detail-identity">
+      <span class="tile event-detail-tile">{{icon (evtIcon .Event.Kind)}}</span>
+      <div class="event-detail-heading">
+        <span class="event-detail-eyebrow">{{.Eyebrow}}</span>
+        <div class="event-detail-title-row">
+          <h1>{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h1>
+          <span class="kind {{.Trace.Tone}}">{{.Event.Kind}}</span>
+          {{agentPill .Trace.Harness .Trace.Model}}
+          {{if .Trace.IsError}}<span class="badge danger">error</span>{{end}}
+        </div>
+        <div class="event-detail-facts">
+          <span>{{icon "timer"}}<time title="{{ts .Event.When}}">{{ts .Event.When}}</time><small>{{ago .Event.When}}</small></span>
+          <span>{{icon "folder-tree"}}{{if .Event.Project}}<a href="/console/projects/{{.Event.Project}}" data-peek>{{.Event.Project}}</a>{{else}}global{{end}}</span>
+          {{if .Event.SessionID}}<span>{{icon "terminal"}}<a href="/console/sessions/{{.Event.SessionID}}" data-peek>{{if .Trace.SessionName}}{{.Trace.SessionName}}{{else}}{{shortID .Event.SessionID}}{{end}}</a></span>{{end}}
+          {{if .Items}}<span>{{icon "brain"}}{{len .Items}} memor{{if eq (len .Items) 1}}y{{else}}ies{{end}}</span>{{end}}
+          {{if .Trace.DurationMS}}<span>{{icon "activity"}}{{.Trace.DurationMS}} ms</span>{{end}}
+        </div>
+      </div>
     </div>
-    <span class="muted" title="{{ts .Event.When}}">{{ago .Event.When}}</span>
-  </div>
-</div>
+  </header>
 
-<article class="card peek-entity detail-body">{{template "detail-body" .}}</article>
+  {{template "detail-body" .}}
+</div>
 {{end}}
 {{end}}

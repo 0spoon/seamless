@@ -46,6 +46,7 @@ func TestEventDetail_InjectionContentAndItems(t *testing.T) {
 	getJSON(t, mux, "/console/events/"+id+"?format=json", &d)
 	require.Equal(t, id, d.Event.ID)
 	require.Equal(t, "<seam-recall>watcher notes</seam-recall>", d.Content)
+	require.Equal(t, "<seam-recall>watcher notes</seam-recall>", d.Trace.Response)
 	require.Len(t, d.Items, 2)
 	require.Equal(t, "watcher-race", d.Items[0].Name)
 	require.False(t, d.Items[0].Missing)
@@ -67,9 +68,89 @@ func TestEventDetail_InjectionContentAndItems(t *testing.T) {
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	body := rr.Body.String()
-	require.Contains(t, body, "Injected content")
+	require.Contains(t, body, `class="event-detail-hero tone-brand"`)
+	require.Contains(t, body, `class="event-workspace"`)
+	require.Contains(t, body, "Injected context")
 	require.Contains(t, body, "seam-recall")
 	require.Contains(t, body, "watcher-race")
+	require.Contains(t, body, `class="event-memory-grid"`)
+	require.Contains(t, body, `href="/console/interactions"`)
+}
+
+func TestEventDetail_ToolCallPromotesRequestAndResponse(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	id, err := rec.Record(ctx, core.Event{
+		Kind: core.EventToolCall, ProjectSlug: "seamless",
+		Payload: map[string]any{
+			"tool":        "memory_write",
+			"args":        map[string]any{"name": "watcher-race", "kind": "gotcha"},
+			"result":      `{"status":"ok"}`,
+			"duration_ms": float64(14),
+			"is_error":    false,
+		},
+	})
+	require.NoError(t, err)
+
+	var d eventDetailData
+	getJSON(t, mux, "/console/events/"+id+"?format=json", &d)
+	require.Contains(t, d.Trace.Request, `"name": "watcher-race"`)
+	require.Equal(t, `{"status":"ok"}`, d.Trace.Response)
+	require.EqualValues(t, 14, d.Trace.DurationMS)
+	keys := map[string]string{}
+	for _, f := range d.Fields {
+		keys[f.Key] = f.Value
+	}
+	require.NotContains(t, keys, "args")
+	require.NotContains(t, keys, "result")
+	require.Equal(t, "memory_write", keys["tool"])
+
+	req := httptest.NewRequest(http.MethodGet, "/console/events/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.Contains(t, body, `class="card event-content-card event-request-card"`)
+	require.Contains(t, body, `class="card event-content-card event-response-card"`)
+	require.Contains(t, body, ">Request</h2>")
+	require.Contains(t, body, ">Response</h2>")
+	require.Contains(t, body, "watcher-race")
+	require.Contains(t, body, "memory_write")
+}
+
+func TestEventDetail_HookErrorPromotesFailure(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	id, err := events.NewRecorder(db).Record(ctx, core.Event{
+		Kind: core.EventHookError, ProjectSlug: "seamless",
+		Payload: map[string]any{
+			"stage":  "session-start",
+			"client": "claude-code",
+			"error":  "briefing assembly failed",
+		},
+	})
+	require.NoError(t, err)
+
+	var d eventDetailData
+	getJSON(t, mux, "/console/events/"+id+"?format=json", &d)
+	require.True(t, d.Trace.IsError)
+	require.Equal(t, "danger", d.Trace.Tone)
+	require.Equal(t, "briefing assembly failed", d.Trace.Response)
+	for _, f := range d.Fields {
+		require.NotEqual(t, "error", f.Key, "promoted failure should not be duplicated in payload fields")
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/console/events/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.Contains(t, body, `class="event-detail-hero tone-danger is-error"`)
+	require.Contains(t, body, ">Error</h2>")
+	require.Contains(t, body, "briefing assembly failed")
+	require.Contains(t, body, "session-start")
 }
 
 // A task.transition event's ItemID is a task id, not a memory. It must not be
