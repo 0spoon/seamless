@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -341,6 +342,19 @@ func TestSettingsUtilityForce(t *testing.T) {
 	require.NotNil(t, row, "the forced scope appears in the activation table")
 	require.Equal(t, "active", row.Status)
 	require.Equal(t, "on", row.Forced)
+	require.False(t, row.EventsOK)
+	require.False(t, row.MemoriesOK)
+	require.False(t, row.AgeOK)
+	require.Empty(t, row.Remaining, "a forced scope owes no readiness hint")
+
+	// The HTML table renders each gate against its threshold.
+	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	page := do(mux, req)
+	require.Equal(t, http.StatusOK, page.Code)
+	require.Contains(t, page.Body.String(), "Utility activation by scope")
+	require.Contains(t, page.Body.String(), fmt.Sprintf("<i>/%d</i> events", store.UtilityReadyMinEvents))
+	require.Contains(t, page.Body.String(), fmt.Sprintf("<i>/%d</i> memories", store.UtilityReadyMinMemories))
 
 	// Clearing the force reverts to the latch (unset here -> building).
 	rr = postForm(mux, "/console/settings/utility", url.Values{
@@ -357,6 +371,46 @@ func TestSettingsUtilityForce(t *testing.T) {
 	}.Encode())
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "error=")
+}
+
+// utilityRemaining spells out exactly the unmet gates, and stays silent for
+// scopes with no demand at all (the table already says "no demand yet").
+func TestUtilityRemaining(t *testing.T) {
+	now := time.Now().UTC()
+	mk := func(d store.UtilityProjectDemand) utilityProjectRow {
+		row := utilityProjectRow{
+			RecentEvents: d.RecentEvents, RecentMemories: d.RecentMemories,
+			EventsOK:   d.RecentEvents >= store.UtilityReadyMinEvents,
+			MemoriesOK: d.RecentMemories >= store.UtilityReadyMinMemories,
+			AgeOK:      !d.Earliest.IsZero() && now.Sub(d.Earliest) >= store.UtilityReadyMinAgeDays*24*time.Hour,
+		}
+		if !d.Earliest.IsZero() {
+			row.AgeDays = int(now.Sub(d.Earliest).Hours() / 24)
+		}
+		return row
+	}
+
+	noDemand := store.UtilityProjectDemand{}
+	require.Empty(t, utilityRemaining(mk(noDemand), noDemand))
+
+	allShort := store.UtilityProjectDemand{
+		Earliest:     now.Add(-3 * 24 * time.Hour),
+		RecentEvents: store.UtilityReadyMinEvents - 7, RecentMemories: store.UtilityReadyMinMemories - 4,
+	}
+	require.Equal(t, "needs 7 more events, 4 more memories, 11d more history",
+		utilityRemaining(mk(allShort), allShort))
+
+	ageOnly := store.UtilityProjectDemand{
+		Earliest:     now.Add(-11 * 24 * time.Hour),
+		RecentEvents: store.UtilityReadyMinEvents, RecentMemories: store.UtilityReadyMinMemories,
+	}
+	require.Equal(t, "needs 3d more history", utilityRemaining(mk(ageOnly), ageOnly))
+
+	ready := store.UtilityProjectDemand{
+		Earliest:     now.Add(-(store.UtilityReadyMinAgeDays + 1) * 24 * time.Hour),
+		RecentEvents: store.UtilityReadyMinEvents, RecentMemories: store.UtilityReadyMinMemories,
+	}
+	require.Empty(t, utilityRemaining(mk(ready), ready))
 }
 
 // The semantic-index panel joins the startup runtime state, the stored

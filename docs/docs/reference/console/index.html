@@ -644,13 +644,14 @@ silently-dropped save.</p>
 <code>utility_weight</code> (utility's share of the briefing sort key; 0 restores pure
 recency) and <code>utility_mode</code> (<code>auto</code> arms each project as its demand history
 matures, <code>on</code> everywhere now, <code>off</code> never). Beneath it, the <strong>utility
-activation by scope</strong> table shows each scope's progress toward the auto-mode
-latch - first demand old enough, enough demand events, enough memories touched</p>
-<ul>
-<li>with a per-scope <strong>force</strong> that overrides the latch in either direction. See
+activation by scope</strong> table lists every scope with each readiness gate against
+its threshold (demand events, memories touched, history age - met gates turn
+green) and, for scopes still building, spells out exactly what remains before
+auto arms (&quot;needs 7 more events, 3d more history&quot;). A per-scope <strong>force</strong>
+overrides the latch in either direction; when the global mode is <code>on</code> or
+<code>off</code>, the table says the per-scope state is dormant until auto returns. See
 <a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a> for
-how the blended order behaves once active.</li>
-</ul>
+how the blended order behaves once active.</p>
 <p><strong>Project families</strong>: create, rename, edit, or delete the named groupings that
 <a href="../../reference/cli-seamlessd/#seamlessd_family"><code>seamlessd family</code></a> manages from
 the CLI - the same <code>project_families</code> setting, so a change on either surface

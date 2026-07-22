@@ -81,6 +81,13 @@ type utilityProjectRow struct {
 	RecentEvents   int        `json:"recentEvents"`
 	RecentMemories int        `json:"recentMemories"`
 	AgeDays        int        `json:"ageDays"` // days since the first demand event
+	EventsOK       bool       `json:"eventsOK"`
+	MemoriesOK     bool       `json:"memoriesOK"`
+	AgeOK          bool       `json:"ageOK"`
+	// Remaining spells out what still separates this scope from arming
+	// ("needs 7 more events, 3d more history") so the table answers "when
+	// does auto kick in" without mental math against the threshold prose.
+	Remaining string `json:"remaining,omitempty"`
 }
 
 // EmbeddingRuntime describes the embedder the daemon resolved at serve start.
@@ -264,6 +271,9 @@ func (s *Service) utilityActivationRows(ctx context.Context, projects []core.Pro
 		if !d.Earliest.IsZero() {
 			row.AgeDays = int(now.Sub(d.Earliest).Hours() / 24)
 		}
+		row.EventsOK = d.RecentEvents >= store.UtilityReadyMinEvents
+		row.MemoriesOK = d.RecentMemories >= store.UtilityReadyMinMemories
+		row.AgeOK = !d.Earliest.IsZero() && now.Sub(d.Earliest) >= store.UtilityReadyMinAgeDays*24*time.Hour
 		switch {
 		case st.Forced == "off":
 			row.Status = "forced-off"
@@ -271,8 +281,10 @@ func (s *Service) utilityActivationRows(ctx context.Context, projects []core.Pro
 			row.Status = "active"
 		case d.Ready(now):
 			row.Status = "armed" // latches on the next gardener pass
+			row.Remaining = "arms on the next gardener pass"
 		default:
 			row.Status = "building"
+			row.Remaining = utilityRemaining(row, d)
 		}
 		rows = append(rows, row)
 	}
@@ -286,6 +298,29 @@ func (s *Service) utilityActivationRows(ctx context.Context, projects []core.Pro
 		return rows[i].Project < rows[j].Project
 	})
 	return rows, nil
+}
+
+// utilityRemaining phrases the unmet readiness gates for a building scope. A
+// scope with no demand at all gets nothing -- the table already says "no
+// demand yet" and enumerating every gate there would just restate the header.
+func utilityRemaining(row utilityProjectRow, d store.UtilityProjectDemand) string {
+	if d.Earliest.IsZero() {
+		return ""
+	}
+	var needs []string
+	if !row.EventsOK {
+		needs = append(needs, fmt.Sprintf("%d more events", store.UtilityReadyMinEvents-d.RecentEvents))
+	}
+	if !row.MemoriesOK {
+		needs = append(needs, fmt.Sprintf("%d more memories", store.UtilityReadyMinMemories-d.RecentMemories))
+	}
+	if !row.AgeOK {
+		needs = append(needs, fmt.Sprintf("%dd more history", store.UtilityReadyMinAgeDays-row.AgeDays))
+	}
+	if len(needs) == 0 {
+		return ""
+	}
+	return "needs " + strings.Join(needs, ", ")
 }
 
 // settingsUtilityForce sets or clears the owner's per-project force: "on" and

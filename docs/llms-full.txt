@@ -6753,9 +6753,12 @@ The form's **utility ranking** group holds the closed-loop knobs -
 `utility_weight` (utility's share of the briefing sort key; 0 restores pure
 recency) and `utility_mode` (`auto` arms each project as its demand history
 matures, `on` everywhere now, `off` never). Beneath it, the **utility
-activation by scope** table shows each scope's progress toward the auto-mode
-latch - first demand old enough, enough demand events, enough memories touched
-- with a per-scope **force** that overrides the latch in either direction. See
+activation by scope** table lists every scope with each readiness gate against
+its threshold (demand events, memories touched, history age - met gates turn
+green) and, for scopes still building, spells out exactly what remains before
+auto arms ("needs 7 more events, 3d more history"). A per-scope **force**
+overrides the latch in either direction; when the global mode is `on` or
+`off`, the table says the per-scope state is dormant until auto returns. See
 [Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
