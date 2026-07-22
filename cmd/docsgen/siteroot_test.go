@@ -101,6 +101,7 @@ func TestAuthMdDocumentsTheRealAuthModel(t *testing.T) {
 		"the H1 is the literal filename -- what agent-readiness checks key on")
 	for _, want := range []string{
 		"http://127.0.0.1:8081/api/mcp",
+		"http://127.0.0.1:8081/api/a2a",
 		"Authorization: Bearer",
 		siteBaseURL + "/install",
 		"/.well-known/openid-configuration",
@@ -184,9 +185,12 @@ func TestWriteSiteRootNeverDeletes(t *testing.T) {
 	require.NoError(t, os.WriteFile(cname, []byte("thereisnospoon.org"), 0o644))
 
 	home := &Page{Description: "a test site"}
-	card, err := serverCard(&registryMeta{Name: "x/y", Version: "1.0.0", Description: "a test card"})
+	reg := &registryMeta{Name: "x/y", Version: "1.0.0", Description: "a test card"}
+	card, err := serverCard(reg)
 	require.NoError(t, err)
-	site := &Site{Home: home, Pages: []*Page{home, {URL: "quickstart/"}}, ServerCard: card}
+	acard, err := agentCard(reg)
+	require.NoError(t, err)
+	site := &Site{Home: home, Pages: []*Page{home, {URL: "quickstart/"}}, ServerCard: card, AgentCard: acard}
 	require.NoError(t, writeSiteRoot(dir, site))
 
 	require.FileExists(t, landing, "the landing page survives")

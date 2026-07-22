@@ -1,0 +1,67 @@
+{
+  "protocolVersion": "0.3.0",
+  "name": "Seamless",
+  "description": "Local-first shared memory and task coordination for AI coding agents. The one A2A skill is recall: send a text query with message/send and the reply is a completed message carrying the owner's fused memory and note search results. The endpoint is per-install: each Seamless daemon serves A2A locally on the machine it runs on; there is no hosted remote.",
+  "url": "http://127.0.0.1:8081/api/a2a",
+  "preferredTransport": "JSONRPC",
+  "provider": {
+    "organization": "0spoon",
+    "url": "https://thereisnospoon.org"
+  },
+  "version": "0.4.3",
+  "documentationUrl": "https://thereisnospoon.org/docs/",
+  "capabilities": {
+    "streaming": false,
+    "pushNotifications": false,
+    "stateTransitionHistory": false
+  },
+  "securitySchemes": {
+    "bearer": {
+      "type": "http",
+      "scheme": "bearer",
+      "description": "The install's static bearer key (mcp.api_key in seamless.yaml) -- the same credential every local surface shares. See https://thereisnospoon.org/auth.md."
+    }
+  },
+  "security": [
+    {
+      "bearer": []
+    }
+  ],
+  "defaultInputModes": [
+    "text/plain"
+  ],
+  "defaultOutputModes": [
+    "application/json",
+    "text/plain"
+  ],
+  "skills": [
+    {
+      "id": "recall",
+      "name": "Recall",
+      "description": "Search the owner's memories and notes by meaning and keyword (RRF-fused). Send the query as a text part; optional message metadata scopes it (project, scope: all|memories|notes, limit). The reply carries a data part ({\"hits\": [...]}) and a text summary of the same hits.",
+      "tags": [
+        "memory",
+        "search",
+        "knowledge"
+      ],
+      "examples": [
+        "What did we decide about the retry backoff?"
+      ],
+      "inputModes": [
+        "text/plain"
+      ],
+      "outputModes": [
+        "application/json",
+        "text/plain"
+      ]
+    }
+  ],
+  "supportsAuthenticatedExtendedCard": false,
+  "supportedInterfaces": [
+    {
+      "url": "http://127.0.0.1:8081/api/a2a",
+      "transport": "JSONRPC",
+      "protocolBinding": "json-rpc"
+    }
+  ]
+}

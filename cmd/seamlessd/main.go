@@ -31,6 +31,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/0spoon/seamless/internal/a2a"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/console"
 	"github.com/0spoon/seamless/internal/events"
@@ -154,7 +155,8 @@ usage:
 
 // runServe starts the HTTP server and blocks until SIGINT/SIGTERM, then shuts
 // down gracefully. It wires /healthz, the MCP tool endpoint at /api/mcp, the
-// SessionStart/UserPromptSubmit/SessionEnd hooks under /api/hooks, and the
+// A2A endpoint at /api/a2a with its agent card at /.well-known/agent-card.json,
+// the SessionStart/UserPromptSubmit/SessionEnd hooks under /api/hooks, and the
 // server-rendered observability console under /console.
 func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
@@ -277,6 +279,17 @@ func runServe(args []string) error {
 		ToolEventMaxChars:   cfg.Budgets.ToolEventMaxChars,
 		CaptureAllowedPorts: cfg.Capture.AllowedPorts, Logger: logger,
 	})
+	// A2A: the agent-to-agent surface, one recall skill over the same retrieve
+	// service and bearer key as MCP. The endpoint URL in the card is the real
+	// bind address, so a non-default addr: advertises itself correctly.
+	a2aSrv, err := a2a.New(a2a.Config{
+		Retrieve: ret, Events: rec, APIKey: cfg.MCP.APIKey,
+		Version: buildVersion(), Endpoint: "http://" + cfg.Addr + "/api/a2a",
+		Logger: logger,
+	})
+	if err != nil {
+		return fmt.Errorf("seamlessd.serve: a2a: %w", err)
+	}
 	hooksH := hooks.NewHandler(hooks.Config{
 		DB: db, Retrieve: ret, Events: rec, Files: mgr,
 		APIKey: cfg.MCP.APIKey, MaxEventChars: cfg.Budgets.ToolEventMaxChars,
@@ -311,6 +324,10 @@ func runServe(args []string) error {
 	})
 	mux.HandleFunc("/healthz", healthzHandler(db))
 	mux.Handle("/api/mcp", mcpSrv.Handler())
+	mux.Handle("/api/a2a", a2aSrv.Handler())
+	// The agent card is public discovery metadata (RFC 8615); the endpoint it
+	// names is what demands the bearer key.
+	mux.Handle("/.well-known/agent-card.json", a2aSrv.CardHandler())
 	hooksH.Register(mux)
 	consoleSrv.Register(mux)
 

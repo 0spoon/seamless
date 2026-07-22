@@ -51,7 +51,7 @@ func renderRepoSite(t *testing.T) map[string]string {
 	// of llms.txt, which is covered.
 	for _, name := range []string{
 		"sitemap.xml", "robots.txt", "llms.txt", "llms-full.txt",
-		".well-known/api-catalog", serverCardPath,
+		".well-known/api-catalog", serverCardPath, agentCardPath,
 	} {
 		raw, err := os.ReadFile(filepath.Join(dir, name))
 		require.NoError(t, err)

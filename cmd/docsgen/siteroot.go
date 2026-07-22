@@ -183,12 +183,15 @@ func siteRootFiles(site *Site) map[string][]byte {
 		"auth.md":                 []byte(authMd),
 		".well-known/api-catalog": []byte(apiCatalog),
 	}
-	// The card is attached by run() (and loadRepoSite in tests); a Site built
-	// without one omits the file rather than publishing an empty card. The real
-	// render can not silently lose it: docs-check diffs the committed card
+	// The cards are attached by run() (and loadRepoSite in tests); a Site built
+	// without them omits the files rather than publishing empty cards. The real
+	// render can not silently lose them: docs-check diffs the committed cards
 	// against a fresh render by name (SITE_FILES in the Makefile).
 	if len(site.ServerCard) > 0 {
 		files[serverCardPath] = site.ServerCard
+	}
+	if len(site.AgentCard) > 0 {
+		files[agentCardPath] = site.AgentCard
 	}
 	return files
 }

@@ -51,6 +51,9 @@ type Site struct {
 	// from the repo-root server.json (see servercard.go). run() attaches it
 	// like Scenarios; fixture Sites built without one simply omit the file.
 	ServerCard []byte
+	// AgentCard is the rendered /.well-known/agent-card.json -- the A2A twin,
+	// same lifecycle as ServerCard (see agentcard.go).
+	AgentCard []byte
 }
 
 // Section is one sidebar group.

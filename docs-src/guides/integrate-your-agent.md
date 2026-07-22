@@ -203,6 +203,32 @@ If it is durable but you cannot compress it to one line, it is a note with a
 memory pointing at it. See [Write memories that get
 recalled](/guides/write-good-memories/).
 
+## A2A: recall without a session
+
+An agent that speaks [A2A](https://a2a-protocol.org/) instead of MCP gets
+recall over the same daemon and the same key. The live agent card is at
+`http://127.0.0.1:8081/.well-known/agent-card.json` (this site publishes a
+twin at the same path), the endpoint is `/api/a2a` (JSON-RPC), and the one
+skill is `recall`: `message/send` with text parts as the query returns a
+completed message - a text summary plus a data part carrying the same
+`{"hits": [...]}` payload the MCP recall tool returns.
+
+```bash
+curl -s -X POST http://127.0.0.1:8081/api/a2a \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"message/send",
+       "params":{"message":{"kind":"message","messageId":"m1","role":"user",
+                 "parts":[{"kind":"text","text":"why is the console theme split"}],
+                 "metadata":{"project":"seamless","limit":5}}}}'
+```
+
+There is no session binding on this surface: scope comes entirely from message
+metadata. `metadata.project` widens the search from global-only to a project
+plus global, `metadata.scope` narrows the kinds (`all|memories|notes`), and
+`metadata.limit` caps the hits. The rest of A2A - tasks, streaming, push
+notifications - is deliberately absent, and the card declares every one of
+those capabilities false rather than advertising an operation that would fail.
+
 ## The seam CLI as a fallback client
 
 An agent that can run a shell but cannot speak MCP still has the loop. `seam` is

@@ -19,10 +19,15 @@ llms-full.txt           GENERATED (docsgen): every page's full source markdown
 index.md                GENERATED (docsgen): the landing page's markdown twin
                         (llms.txt under the name the Accept: text/markdown
                         rewrite expects; see "Markdown for agents" below)
+auth.md                 GENERATED (docsgen): the agent-readable auth statement
+                        (embedded from cmd/docsgen/auth.md)
 .well-known/api-catalog GENERATED (docsgen): RFC 9727 linkset for API discovery
 .well-known/mcp/server-card.json
                         GENERATED (docsgen): MCP Server Card (SEP-1649),
                         generated from the repo-root server.json
+.well-known/agent-card.json
+                        GENERATED (docsgen): A2A Agent Card -- the twin of the
+                        card each install's daemon serves live (internal/a2a)
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
@@ -82,12 +87,17 @@ and version generated from the repo-root `server.json` so the registry listing
 and the card cannot disagree, plus the streamable-HTTP endpoint every install
 serves on its own machine -- Seamless has no hosted remote, and the card says
 so; the `.json` extension gets application/json from GitHub Pages natively, no
-edge rule needed). Unlike `docs/docs/`
+edge rule needed), `.well-known/agent-card.json` (the A2A Agent Card: the site
+twin of the card each install's daemon serves live at the same path, both
+rendered by `internal/a2a.CardJSON` so the two cannot drift -- the twin carries
+the `server.json` version and the default bind address), and `auth.md` (the
+agent-readable auth statement, embedded from `cmd/docsgen/auth.md`). Unlike
+`docs/docs/`
 these are written in place, never deleted, and the rest of this directory is
-not docsgen's to touch. All seven (with the root `index.md` twin, see below)
+not docsgen's to touch. All nine (with the root `index.md` twin, see below)
 are diffed by `make docs-check` -- `SITE_FILES` in the Makefile is the list --
 so adding or removing a page keeps them current automatically, and a release's
-`server.json` bump makes the committed card stale until `make docs` is rerun.
+`server.json` bump makes the committed cards stale until `make docs` is rerun.
 
 ## Markdown for agents (content negotiation)
 
