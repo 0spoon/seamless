@@ -358,7 +358,7 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 
 	// SessionEnd (a known end) closes BOTH immediately.
 	transcript := writeTranscript(t,
-		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"All done."}]}}`)
+		`{"type":"assistant","isSidechain":false,"message":{"role":"assistant","model":"claude-fable-5","content":[{"type":"text","text":"All done."}]}}`)
 	_, _ = post(t, ts.URL+"/api/hooks/session-end", testKey, map[string]any{
 		"session_id": claudeID, "transcript_path": transcript, "reason": "logout",
 	})
@@ -367,11 +367,13 @@ func TestSessionEndCascade_ClosesLinkedExplicitSession(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, core.SessionCompleted, gotAmb.Status)
 	require.Contains(t, gotAmb.Findings, "All done.", "ambient harvested from transcript")
+	require.Equal(t, "claude-fable-5", gotAmb.Model, "one-turn ambient session gets its final transcript model")
 
 	gotExpl, _, err := store.SessionByID(ctx, db, explID)
 	require.NoError(t, err)
 	require.Equal(t, core.SessionCompleted, gotExpl.Status, "linked explicit session closed immediately")
 	require.Equal(t, "interim progress", gotExpl.Findings, "explicit session keeps its own findings")
+	require.Equal(t, "claude-fable-5", gotExpl.Model, "linked session tracks the same final agent model")
 
 	task, err := store.TaskByID(ctx, db, taskID)
 	require.NoError(t, err)

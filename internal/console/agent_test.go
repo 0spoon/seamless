@@ -73,6 +73,13 @@ func TestAgentPill(t *testing.T) {
 	t.Run("both empty renders nothing", func(t *testing.T) {
 		require.Empty(t, string(agentPill("", "")))
 	})
+	t.Run("harness tone does not recolor the model", func(t *testing.T) {
+		css := string(consoleCSS)
+		require.Contains(t, css, ".agent-pill.cc::before { background: var(--brand); }")
+		require.Contains(t, css, ".agent-pill.cx::before { background: var(--pop-strong); }")
+		require.NotContains(t, css, ".agent-pill.cc { background:")
+		require.NotContains(t, css, ".agent-pill.cx { background:")
+	})
 	t.Run("escapes html in stored strings", func(t *testing.T) {
 		// Exact output pins BOTH contexts: the double-quoted title attribute
 		// (quotes must be escaped, or the payload breaks out of the attribute)

@@ -122,6 +122,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   var maxRows = 500;         // cap on buffered rows; grows as older pages are loaded
   var rows = {};              // id -> {data, el}
   var order = [];            // ids, newest-first
+  var attribution = {};      // session id -> latest non-empty {harness, model}
   var filter = 'all';        // session filter: 'all' | sessionId | '__none__'
   var kindFilter = 'all';    // category filter: 'all' | '__err__' | tool | inject | session | plan
   var paused = false;
@@ -149,6 +150,29 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
 
   function buildRow(d) { return window.IX.buildRow(d); }
 
+  // Session attribution is mutable: a Claude session starts before its
+  // transcript has a model, and a later prompt/end row fills it in. Remember
+  // non-empty values, apply them to sparse future rows, and patch existing cards
+  // from the same session without reloading or rebuilding an open disclosure.
+  function rememberAttribution(d) {
+    if (!d.sessionId) return;
+    var known = attribution[d.sessionId] || { harness: '', model: '' };
+    var changed = false;
+    if (d.harness && d.harness !== known.harness) { known.harness = d.harness; changed = true; }
+    if (d.model && d.model !== known.model) { known.model = d.model; changed = true; }
+    attribution[d.sessionId] = known;
+    if (!d.harness && known.harness) d.harness = known.harness;
+    if (!d.model && known.model) d.model = known.model;
+    if (!changed) return;
+    order.forEach(function (id) {
+      var prior = rows[id];
+      if (!prior || prior.data.sessionId !== d.sessionId) return;
+      if (known.harness) prior.data.harness = known.harness;
+      if (known.model) prior.data.model = known.model;
+      window.IX.setAgentPill(prior.el, prior.data.harness, prior.data.model);
+    });
+  }
+
   // --- Filtering: session and category apply to the rows already in memory ---
   function matches(d) {
     var sess = filter === 'all' ||
@@ -173,6 +197,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   // with a history request, so append/prepend alone can misplace an event.
   function insert(d) {
     if (rows[d.id]) return false; // dedupe
+    rememberAttribution(d);
     var node = buildRow(d);
     rows[d.id] = { data: d, el: node };
     applyFilter(node, d);

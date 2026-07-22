@@ -430,12 +430,13 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hoo
 }
 
 // completeClaudeSessions completes every active session owned by the ending
-// client's full external identity: its ambient row (findings harvested from the
-// transcript) plus any explicit session_start linked to that client/id pair. Because a graceful
-// SessionEnd is a KNOWN end, these close immediately rather than waiting out the idle
-// TTL -- the reaper is only for sessions we get no end signal for. Task claims are
-// released. It is a no-op when nothing is active (an explicit session_end already
-// ran, or a crash left it to the reaper). Never errors: the hook must always 200.
+// client's full external identity: its ambient row (findings and final model
+// harvested from the transcript) plus any explicit session_start linked to that
+// client/id pair. Because a graceful SessionEnd is a KNOWN end, these close
+// immediately rather than waiting out the idle TTL -- the reaper is only for
+// sessions we get no end signal for. Task claims are released. It is a no-op when
+// nothing is active (an explicit session_end already ran, or a crash left it to
+// the reaper). Never errors: the hook must always 200.
 func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p endPayload) {
 	if h.db == nil || p.SessionID == "" {
 		return
@@ -448,8 +449,28 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 	}
 
 	now := time.Now().UTC()
+	// A one-turn Claude session can start before its transcript has an assistant
+	// entry and end before another UserPromptSubmit gives setAmbientModel a chance
+	// to sniff it. SessionEnd is the last reliable point at which the complete
+	// transcript exists. Apply the final main-thread model to the ambient row and
+	// any linked explicit session; an empty sniff preserves their prior values.
+	finalModel := ""
+	if client == ClientClaudeCode {
+		finalModel = transcriptModel(p.TranscriptPath)
+	}
 	harvested := "" // harvest the transcript once, lazily, only when an ambient needs it
 	for _, sess := range sessions {
+		// UpdateSession deliberately does not write model (the live model setter is
+		// targeted so another lifecycle write cannot clobber it). Stamp while the
+		// row is still active, then mirror the successful value into sess so the
+		// session.ended event immediately projects the same attribution.
+		if finalModel != "" {
+			if err := store.SetSessionModel(ctx, h.db, sess.ID, finalModel); err != nil {
+				h.recordHookError(ctx, "session-end-model", client, err, "session", sess.ID)
+			} else {
+				sess.Model = finalModel
+			}
+		}
 		sess.Status = core.SessionCompleted
 		sess.UpdatedAt = now
 		if sess.Ambient {
@@ -639,11 +660,12 @@ func (h *Handler) touchAmbient(ctx context.Context, client Client, claudeSession
 // verbatim as the provider names it ("claude-fable-5", "gpt-5.5"). Codex hook
 // payloads carry the model directly; Claude Code's do not, so its sessions
 // fall back to tail-sniffing the transcript for the last main-thread assistant
-// entry's model id. Called on session-start, every prompt, and stop, so a
-// mid-session model switch updates the row (SetAmbientSessionModel no-ops when
-// the value is unchanged). Best-effort by the package's never-block contract:
-// nothing sniffable leaves the previous attribution in place, and a store
-// error only logs.
+// entry's model id. Called on session-start, every prompt, and stop; SessionEnd
+// performs one final transcript sniff before freezing the row. A mid-session
+// model switch therefore updates the row (SetAmbientSessionModel no-ops when the
+// value is unchanged). Best-effort by the package's never-block contract:
+// nothing sniffable leaves the previous attribution in place, and a store error
+// only logs.
 func (h *Handler) setAmbientModel(ctx context.Context, client Client, claudeSessionID, model, transcriptPath string) {
 	if h.db == nil || claudeSessionID == "" {
 		return

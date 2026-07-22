@@ -246,6 +246,26 @@
     return pill;
   }
 
+  // setAgentPill reconciles one already-rendered row when a session's mutable
+  // attribution becomes known later. Claude ambient sessions commonly start
+  // before the transcript contains an assistant model; a later prompt/end row
+  // should update the earlier live cards in place rather than requiring reload.
+  function setAgentPill(row, harness, model) {
+    var head = row && row.querySelector ? row.querySelector('.ix-row-head') : null;
+    if (!head) return;
+    var old = head.querySelector('.agent-pill');
+    var next = agentPill(harness, model);
+    if (old) {
+      if (next) old.parentNode.replaceChild(next, old);
+      else old.parentNode.removeChild(old);
+      return;
+    }
+    if (!next) return;
+    // Attribution belongs before ambient/error/meta badges, matching buildRow.
+    var anchor = head.querySelector('.badge, .ix-meta');
+    head.insertBefore(next, anchor || null);
+  }
+
   // ---- time / id helpers -----------------------------------------------------
   function rel(ts) {
     var t = Date.parse(ts);
@@ -667,6 +687,7 @@
     iconEl: iconEl,
     evtIcon: evtIcon,
     agentPill: agentPill,
+    setAgentPill: setAgentPill,
     catOf: catOf,
     renderValue: renderValue,
     section: section,

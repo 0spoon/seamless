@@ -249,6 +249,8 @@ func TestInteractions_HTMLShellRenders(t *testing.T) {
 	require.NotContains(t, body, `id="ix-volume"`)
 	require.NotContains(t, body, `fetch('/console/interactions?format=json',`, "opening the screen must not hydrate historical rows")
 	require.Contains(t, body, `last = { ts: new Date().toISOString(), id: '' }`, "the clean feed still anchors reconnect gap-fill")
+	require.Contains(t, body, "function rememberAttribution(d)", "late session models must reconcile existing live rows")
+	require.Contains(t, body, "window.IX.setAgentPill(prior.el", "attribution changes patch the current DOM")
 	require.Contains(t, string(consoleCSS), ".ix-more[hidden] { display: none; }", "the continuation rail must not leak into the live-only state")
 	require.Contains(t, string(consoleCSS), ".ix-kind-control { flex: 0 1 auto;", "history and stream controls should follow the filters instead of being pushed right")
 }
@@ -261,6 +263,7 @@ func TestInteractionsClient_SparseRowsHaveNoFalseDisclosure(t *testing.T) {
 	require.Contains(t, js, "expandable ? 'details' : 'article'")
 	require.Contains(t, js, "row.appendChild(staticMeta(d))")
 	require.Contains(t, js, "Event details \\u2192")
+	require.Contains(t, js, "function setAgentPill(row, harness, model)")
 	require.Contains(t, css, ".ix-static-meta")
 	require.Contains(t, css, ".ix-row > summary::after", "expandable rows expose a disclosure cue that static cards omit")
 }
