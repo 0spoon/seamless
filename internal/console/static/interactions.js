@@ -205,6 +205,15 @@
     return n ? wrap : null;
   }
 
+  function linkChip(label, value, href) {
+    var c = el('a', 'ix-chip ix-chip-link');
+    c.href = href;
+    c.setAttribute('data-peek', '');
+    c.appendChild(el('span', 'ix-chip-k', label));
+    c.appendChild(el('span', 'ix-chip-v', value));
+    return c;
+  }
+
   // ---- agent attribution pill ------------------------------------------------
   // Mirrors agentPill in internal/console/agent.go (tone classes, short labels,
   // model shortening), so live-feed rows match the server-rendered surfaces.
@@ -250,14 +259,42 @@
   }
   function shortId(id) { return id && id.length > 8 ? id.slice(-8) : (id || ''); }
 
+  function sessionHref(id) { return '/console/sessions/' + encodeURIComponent(id); }
+  function eventHref(id) { return '/console/events/' + encodeURIComponent(id); }
+
+  // Sparse lifecycle/marker events have no request or response to inspect. Keep
+  // their useful provenance visible in a compact second line and provide explicit
+  // navigation; presenting a disclosure control with an empty body is a false
+  // affordance.
+  function staticMeta(d) {
+    var meta = el('div', 'ix-static-meta');
+    var facts = el('div', 'ix-static-facts');
+    if (d.sessionId) {
+      facts.appendChild(linkChip('session', d.sessionName || shortId(d.sessionId), sessionHref(d.sessionId)));
+    }
+    if (d.project) facts.appendChild(chip('project', d.project));
+    meta.appendChild(facts);
+
+    var event = el('a', 'ix-static-event', 'Event details \u2192');
+    event.href = eventHref(d.id);
+    event.setAttribute('data-peek', '');
+    meta.appendChild(event);
+    return meta;
+  }
+
   // ---- buildRow (live feed) --------------------------------------------------
   function buildRow(d) {
-    var row = el('details', 'ix-row' + (d.tone ? ' tone-' + d.tone : '') + (d.isError ? ' err' : ''));
+    var expandable = !!(d.request || d.response);
+    var row = el(expandable ? 'details' : 'article',
+      'ix-row' + (d.tone ? ' tone-' + d.tone : '') + (d.isError ? ' err' : '') +
+      (expandable ? ' ix-expandable' : ' ix-static'));
     row.setAttribute('data-id', d.id);
     row.setAttribute('data-session', d.sessionId || '');
     row.setAttribute('data-ts', d.ts || '');
+    row.setAttribute('data-kind', d.kind || '');
+    if (d.isError) row.setAttribute('data-err', '1');
 
-    var sum = el('summary');
+    var sum = el(expandable ? 'summary' : 'div', 'ix-row-head');
     sum.appendChild(iconEl(evtIcon(d.kind), 'ix-type'));
     var when = el('span', 'ix-when', rel(d.ts));
     when.title = d.ts;
@@ -275,6 +312,11 @@
     if (meta.length) sum.appendChild(el('span', 'ix-meta', meta.join(' · ')));
     row.appendChild(sum);
 
+    if (!expandable) {
+      row.appendChild(staticMeta(d));
+      return row;
+    }
+
     var body = el('div', 'ix-body');
     var hl = highlights(d);
     if (hl) body.appendChild(hl);
@@ -291,12 +333,12 @@
     var links = el('div', 'ix-links');
     if (d.sessionId) {
       var sl = el('a', null, (d.sessionName || shortId(d.sessionId)) + ' →');
-      sl.href = '/console/sessions/' + d.sessionId;
+      sl.href = sessionHref(d.sessionId);
       sl.setAttribute('data-peek', '');
       links.appendChild(sl);
     }
     var evl = el('a', null, 'event →');
-    evl.href = '/console/events/' + d.id;
+    evl.href = eventHref(d.id);
     evl.setAttribute('data-peek', '');
     links.appendChild(evl);
     body.appendChild(links);

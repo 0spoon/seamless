@@ -1447,10 +1447,16 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-row.tone-warn { border-left-color: var(--warn); }
 .ix-row.tone-pop { border-left-color: var(--pop); }
 .ix-row.err { border-left-color: var(--danger); }
-.ix-row > summary { display: flex; align-items: center; gap: 10px; padding: 8px 12px; cursor: pointer; list-style: none; }
+.ix-row > summary, .ix-row > .ix-row-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; list-style: none; }
+.ix-row > summary { cursor: pointer; }
 .ix-row > summary::-webkit-details-marker { display: none; }
 .ix-row > summary:hover { background: var(--surface-2); }
 .ix-row[open] > summary { border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.ix-row > summary::after {
+  content: "+"; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; flex: none;
+  color: var(--faint); border: 1px solid var(--border); border-radius: 50%; font-size: 13px; font-weight: 500; line-height: 1;
+}
+.ix-row[open] > summary::after { content: "\2212"; color: var(--brand); border-color: color-mix(in oklab, var(--brand) 35%, var(--border)); }
 .ix-row.ix-located { animation: ix-locate-frame 3.2s var(--ease-out) both; }
 .ix-row.ix-located > summary { animation: ix-locate-wash 3.2s var(--ease-out) both; }
 @keyframes ix-locate-frame {
@@ -1482,6 +1488,16 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .ix-body { padding: 11px 12px; display: flex; flex-direction: column; gap: 8px; }
 .ix-body h2 { font-family: var(--font-display); font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 4px 0 0; font-weight: 600; }
 .ix-links { display: flex; gap: 14px; font-size: var(--text-xs); padding-top: 2px; }
+.ix-static-meta {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 12px 9px 42px;
+  border-top: 1px solid color-mix(in oklab, var(--border) 72%, transparent); background: color-mix(in oklab, var(--surface-2) 42%, transparent);
+}
+.ix-static-facts { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap; }
+.ix-chip-link { text-decoration: none; transition: border-color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out); }
+.ix-chip-link:hover { border-color: color-mix(in oklab, var(--brand) 38%, var(--border)); background: var(--brand-soft); text-decoration: none; }
+.ix-chip-link:focus-visible, .ix-static-event:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.ix-static-event { flex: none; color: var(--brand); font-size: var(--text-2xs); font-weight: 650; white-space: nowrap; }
+.ix-static-event:hover { text-decoration: none; color: var(--brand-strong); }
 .ix-more { display: flex; justify-content: center; padding: 12px 0; }
 .live.off .live-dot { animation: none; background: var(--faint); }
 
@@ -2710,8 +2726,8 @@ a.project-card-name:hover { color: var(--brand); text-decoration: none; }
 .sessions-split.detail-open .sess-row .proj,
 .sessions-split.detail-open .sess-row .src { display: none; }
 
-/* Interaction stream: make the filter hierarchy legible, keep the histogram
-   distinct from the event ledger, and expose the live in-view count. */
+/* Interaction stream: make the filter hierarchy legible, keep history imports
+   explicit, and expose the live in-view count. */
 .ix-total .live { color: var(--ok); font-weight: 650; letter-spacing: 0; text-transform: none; }
 .ix-total .live.off { color: var(--faint); }
 .ix-controls { justify-content: flex-start; gap: 12px 16px; margin: 0 0 18px; }
@@ -2719,6 +2735,9 @@ a.project-card-name:hover { color: var(--brand); text-decoration: none; }
 .ix-controls .ix-filters { margin: 0; }
 .ix-controls .ix-actions { align-items: flex-end; }
 .ix-controls .lib-control-note { margin-left: auto; }
+.ix-history-picker { display: flex; align-items: center; gap: 6px; }
+.ix-history-picker .ops-select { min-width: 132px; }
+.ix-history-note strong { color: var(--brand); }
 .ix-volume-stage { margin-top: 0; }
 .ix-volume-stage .ix-volume { margin: 10px 0 0; padding: 16px 16px 10px; border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
 .ix-volume-stage .ix-vol-track { height: 62px; }
@@ -2728,11 +2747,21 @@ a.project-card-name:hover { color: var(--brand); text-decoration: none; }
 .ix-stream-stage .list-detail-split { margin-top: 10px; }
 .ix-feed { gap: 8px; }
 .ix-row { border-radius: var(--radius-lg); box-shadow: var(--shadow-xs); }
-.ix-row > summary { min-height: 42px; padding: 10px 13px; }
+.ix-row > summary, .ix-row > .ix-row-head { min-height: 42px; padding: 10px 13px; }
 .ix-row[open] { box-shadow: var(--shadow-sm); }
 .ix-row[open] > summary { background: color-mix(in oklab, var(--lib-accent) 5%, var(--surface-2)); }
 .ix-row[open] .ix-body { padding: 14px; gap: 10px; }
-.ix-empty { min-height: 240px; }
+.ix-empty { display: flex; flex-direction: column; min-height: 240px; align-items: center; justify-content: center; gap: 14px; font-style: normal; }
+.ix-empty[hidden] { display: none; }
+.ix-empty .empty-ico {
+  display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 0 auto 11px;
+  border-radius: 14px; color: var(--brand); background: var(--brand-soft); box-shadow: 0 0 0 7px color-mix(in oklab, var(--brand) 6%, transparent);
+}
+.ix-empty .empty-ico .ico { width: 20px; height: 20px; }
+.ix-empty-body { display: flex; flex-direction: column; align-items: center; gap: 7px; }
+.ix-empty-body strong { color: var(--ink); font-family: var(--font-display); font-size: var(--text-md); font-weight: 650; }
+.ix-empty-body p { max-width: 52ch; margin: 0; color: var(--muted); font-size: var(--text-xs); line-height: 1.5; }
+.ix-empty-body .btn { margin-top: 4px; background: color-mix(in oklab, var(--brand) 6%, var(--surface)); }
 .interactions-split.detail-open { grid-template-columns: minmax(520px, 1.15fr) minmax(390px, .85fr); }
 
 @media (max-width: 1180px) {
@@ -2765,6 +2794,9 @@ a.project-card-name:hover { color: var(--brand); text-decoration: none; }
   .ix-session-filter { align-items: flex-start; width: 100%; max-width: none; }
   .ix-session-filter .ix-tabs { justify-content: flex-start; }
   .ix-controls .ix-actions { width: 100%; justify-content: space-between; }
+  .ix-history-control { min-width: 0; }
+  .ix-history-picker { flex-wrap: wrap; }
+  .ix-static-meta { align-items: flex-start; padding-left: 13px; }
 }
 
 /* ===========================================================================

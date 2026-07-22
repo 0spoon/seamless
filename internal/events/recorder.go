@@ -216,6 +216,39 @@ func (r *Recorder) ByKinds(ctx context.Context, kinds []core.EventKind, beforeTS
 	return scanEvents(rows)
 }
 
+// ByKindsAfter returns events of any of the given kinds at or after afterTS,
+// newest first. The optional compound (beforeTS, beforeID) cursor pages farther
+// back without crossing the lower bound. It is the bounded-history query behind
+// the Interactions screen's explicit "add recent" action; keeping the bound in
+// SQL avoids reading an unbounded tail only to discard it in the console layer.
+// An empty kinds slice returns nil; a non-positive limit defaults to 200.
+func (r *Recorder) ByKindsAfter(ctx context.Context, kinds []core.EventKind, afterTS, beforeTS, beforeID string, limit int) ([]core.Event, error) {
+	ph, args := kindArgs(kinds)
+	if ph == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 200
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload
+	      FROM events WHERE kind IN (` + ph + `)`
+	if afterTS != "" {
+		q += ` AND ts >= ?`
+		args = append(args, afterTS)
+	}
+	if beforeTS != "" {
+		q += ` AND (ts < ? OR (ts = ? AND id < ?))`
+		args = append(args, beforeTS, beforeTS, beforeID)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.ByKindsAfter: %w", err)
+	}
+	return scanEvents(rows)
+}
+
 // ByKindsSince returns events of any of the given kinds strictly newer than the
 // (sinceTS, sinceID) cursor, oldest first -- the gap-fill query an SSE client
 // runs after a reconnect to recover rows it missed. An empty kinds slice returns

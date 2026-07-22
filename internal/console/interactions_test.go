@@ -2,6 +2,7 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -132,6 +133,47 @@ func TestInteractions_CursorAndSincePaging(t *testing.T) {
 	require.Equal(t, []string{"01TC2", "01TC1", "01SES", "01ERR"}, ids)
 }
 
+func TestInteractions_BoundedHistoryWindow(t *testing.T) {
+	_, mux, _ := newConsoleWithSession(t, "cc/testsess")
+	after := core.FormatTime(time.Date(2026, 7, 12, 0, 4, 0, 0, time.UTC))
+
+	var data interactionsData
+	getJSON(t, mux, "/console/interactions?format=json&afterTs="+after, &data)
+	require.Equal(t, after, data.AfterTS)
+	require.Len(t, data.Rows, 4)
+	require.Equal(t, []string{"01ERR", "01SES", "01TC1", "01TC2"}, []string{
+		data.Rows[0].ID, data.Rows[1].ID, data.Rows[2].ID, data.Rows[3].ID,
+	})
+}
+
+func TestInteractions_HistoryArgumentsFailClosed(t *testing.T) {
+	_, mux := newConsole(t)
+	get := func(query string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodGet, "/console/interactions?format=json&"+query, nil)
+		req.Header.Set("Authorization", "Bearer "+testKey)
+		req.Header.Set("Accept", "application/json")
+		return do(mux, req)
+	}
+
+	for _, query := range []string{
+		"history=", "history=0", "history=-60", "history=abc", "history=2592001",
+		"afterTs=not-a-time", "before=01A", "beforeTs=2026-07-12T00%3A00%3A00Z",
+		"before=01A&beforeTs=not-a-time",
+		"since=01A", "sinceTs=2026-07-12T00%3A00%3A00Z",
+		"history=60&afterTs=2026-07-12T00%3A00%3A00Z",
+		"history=60&before=01A&beforeTs=2026-07-12T00%3A00%3A00Z",
+	} {
+		rr := get(query)
+		require.Equal(t, http.StatusBadRequest, rr.Code, "query %q must not broaden or change silently", query)
+	}
+
+	rr := get("history=300")
+	require.Equal(t, http.StatusOK, rr.Code)
+	var data interactionsData
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &data))
+	require.NotEmpty(t, data.AfterTS)
+}
+
 func TestInteractions_PlanCaptureRows(t *testing.T) {
 	db, mux := newConsole(t)
 	rec := events.NewRecorder(db)
@@ -192,6 +234,26 @@ func TestInteractions_HTMLShellRenders(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), `id="ix-feed"`)
-	require.Contains(t, rr.Body.String(), "Interactions")
+	body := rr.Body.String()
+	require.Contains(t, body, `id="ix-feed"`)
+	require.Contains(t, body, "Interactions")
+	require.Contains(t, body, `id="ix-history-window"`)
+	require.Contains(t, body, `id="ix-history-load"`)
+	require.Contains(t, body, `id="ix-empty-load"`)
+	require.NotContains(t, body, "Activity range")
+	require.NotContains(t, body, `id="ix-volume"`)
+	require.NotContains(t, body, `fetch('/console/interactions?format=json',`, "opening the screen must not hydrate historical rows")
+	require.Contains(t, body, `last = { ts: new Date().toISOString(), id: '' }`, "the clean feed still anchors reconnect gap-fill")
+}
+
+func TestInteractionsClient_SparseRowsHaveNoFalseDisclosure(t *testing.T) {
+	js := string(interactionsJS)
+	css := string(consoleCSS)
+
+	require.Contains(t, js, "var expandable = !!(d.request || d.response)")
+	require.Contains(t, js, "expandable ? 'details' : 'article'")
+	require.Contains(t, js, "row.appendChild(staticMeta(d))")
+	require.Contains(t, js, "Event details \\u2192")
+	require.Contains(t, css, ".ix-static-meta")
+	require.Contains(t, css, ".ix-row > summary::after", "expandable rows expose a disclosure cue that static cards omit")
 }

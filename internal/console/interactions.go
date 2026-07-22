@@ -159,15 +159,16 @@ func (s *Service) sessionNamer(ctx context.Context) func(string) core.Session {
 	}
 }
 
-// interactionsData is the Interactions screen payload (also the JSON endpoint the
-// screen's JS polls). NextTS/NextID cursor the next (older) page. Volume carries
-// the histogram buckets for the ?volume=<secs> refresh (empty on a rows fetch).
+// interactionsData is the Interactions screen's JSON payload. NextTS/NextID
+// cursor the next (older) page, while AfterTS holds that history import's lower
+// bound. Volume carries histogram buckets for embedded project/session traces.
 type interactionsData struct {
-	Rows   []interactionRow `json:"rows"`
-	Volume []volBucket      `json:"volume,omitempty"`
-	Window int              `json:"window,omitempty"` // seconds the Volume spans (0 = all history)
-	NextTS string           `json:"nextTs,omitempty"`
-	NextID string           `json:"nextId,omitempty"`
+	Rows    []interactionRow `json:"rows"`
+	Volume  []volBucket      `json:"volume,omitempty"`
+	Window  int              `json:"window,omitempty"`  // seconds the Volume spans (0 = all history)
+	AfterTS string           `json:"afterTs,omitempty"` // fixed lower bound for an explicitly loaded history window
+	NextTS  string           `json:"nextTs,omitempty"`
+	NextID  string           `json:"nextId,omitempty"`
 }
 
 // volBucket is one column of the interaction-volume histogram: a time slice with
@@ -184,8 +185,13 @@ type volBucket struct {
 	Prompt   int    `json:"prompt,omitempty"`
 }
 
-// interactionsPageLimit bounds one page / gap-fill batch of the feed.
-const interactionsPageLimit = 200
+// interactionsPageLimit bounds one page / gap-fill batch of the feed. History
+// imports are intentionally bounded too: a user can page within the selected
+// window without one click flooding the browser with an unbounded event log.
+const (
+	interactionsPageLimit     = 200
+	maxHistoryLookbackSeconds = 30 * 24 * 60 * 60
+)
 
 // volBuckets is the histogram column count; volTickCap bounds the "all" window.
 const (
@@ -279,9 +285,10 @@ func (s *Service) interactionVolume(ctx context.Context, project string, windowS
 	return buildVolume(ticks, window, now), nil
 }
 
-// interactions serves the live transport feed: an HTML shell (default) that its
-// JS hydrates from this same handler's JSON (?format=json), paging older via
-// before/beforeTs and gap-filling newer via since/sinceTs after an SSE drop.
+// interactions serves the live transport feed: an empty HTML shell (default)
+// that receives new rows over SSE. JSON callers can explicitly add a bounded
+// history window via history=<seconds>, page within its returned afterTs bound,
+// or gap-fill newer rows via since/sinceTs after an SSE drop.
 func (s *Service) interactions(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	if s.cfg.Events == nil {
@@ -312,13 +319,66 @@ func (s *Service) interactions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Cursors are compound: accepting only one half quietly turns a bounded page
+	// into a different query. since may be empty for the page-load timestamp
+	// anchor, but sinceTs must always name the boundary.
+	hasSince := q.Has("since") || q.Has("sinceTs")
+	hasBefore := q.Has("before") || q.Has("beforeTs")
+	if hasSince && (!q.Has("since") || q.Get("sinceTs") == "") {
+		s.badRequest(w, r, "since and sinceTs must be provided together")
+		return
+	}
+	if hasBefore && (!q.Has("before") || !q.Has("beforeTs") || q.Get("before") == "" || q.Get("beforeTs") == "") {
+		s.badRequest(w, r, "before and beforeTs must be provided together")
+		return
+	}
+	if hasBefore {
+		if parsed, err := core.ParseTime(q.Get("beforeTs")); err != nil || parsed.IsZero() {
+			s.badRequest(w, r, "beforeTs must be an RFC3339 timestamp")
+			return
+		}
+	}
+	if hasSince && (hasBefore || q.Has("history") || q.Has("afterTs")) {
+		s.badRequest(w, r, "since cursor cannot be combined with history paging")
+		return
+	}
+	if hasSince {
+		if _, err := core.ParseTime(q.Get("sinceTs")); err != nil {
+			s.badRequest(w, r, "sinceTs must be an RFC3339 timestamp")
+			return
+		}
+	}
+
+	var afterTS string
+	if q.Has("history") {
+		if q.Has("afterTs") || hasBefore {
+			s.badRequest(w, r, "history starts a window; page it with the returned afterTs and before cursor")
+			return
+		}
+		secs, err := strconv.ParseInt(q.Get("history"), 10, 64)
+		if err != nil || secs <= 0 || secs > maxHistoryLookbackSeconds {
+			s.badRequest(w, r, "history must be a positive number of seconds up to 30 days")
+			return
+		}
+		afterTS = core.FormatTime(time.Now().UTC().Add(-time.Duration(secs) * time.Second))
+	} else if q.Has("afterTs") {
+		parsed, err := core.ParseTime(q.Get("afterTs"))
+		if err != nil || parsed.IsZero() {
+			s.badRequest(w, r, "afterTs must be an RFC3339 timestamp")
+			return
+		}
+		afterTS = core.FormatTime(parsed)
+	}
+
 	name := s.sessionNamer(ctx)
 
-	gapFill := q.Get("since") != "" || q.Get("sinceTs") != ""
+	gapFill := hasSince
 	var evs []core.Event
 	var err error
 	if gapFill {
 		evs, err = s.cfg.Events.ByKindsSince(ctx, interactionKinds, q.Get("sinceTs"), q.Get("since"), interactionsPageLimit)
+	} else if afterTS != "" {
+		evs, err = s.cfg.Events.ByKindsAfter(ctx, interactionKinds, afterTS, q.Get("beforeTs"), q.Get("before"), interactionsPageLimit)
 	} else {
 		evs, err = s.cfg.Events.ByKinds(ctx, interactionKinds, q.Get("beforeTs"), q.Get("before"), interactionsPageLimit)
 	}
@@ -334,7 +394,7 @@ func (s *Service) interactions(w http.ResponseWriter, r *http.Request) {
 		}
 		rows = append(rows, toInteractionRow(e, name))
 	}
-	data := interactionsData{Rows: rows}
+	data := interactionsData{Rows: rows, AfterTS: afterTS}
 	// Older-page cursor: the last (oldest) event of a full descending page. Based
 	// on the raw fetch, not the filtered rows, so paging never stalls on a page
 	// that was all-skipped.

@@ -168,6 +168,32 @@ func TestByKinds_EmptyKindsAndDefaultLimit(t *testing.T) {
 	require.Nil(t, got)
 }
 
+func TestByKindsAfter_BoundsAndPagesNewestFirstAcrossTie(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC)
+	seedTie(t, r, base)
+
+	// The lower bound excludes the two tool calls at base. The non-interaction
+	// memory at +2m remains excluded by kind, leaving only the hook prompt.
+	bounded, err := r.ByKindsAfter(ctx, testInteractionKinds, core.FormatTime(base.Add(time.Minute)), "", "", 10)
+	require.NoError(t, err)
+	require.Len(t, bounded, 1)
+	require.Equal(t, "01C", bounded[0].ID)
+
+	// A bound at base includes the tied rows. Page one is newest-first, and the
+	// cursor continues within the same bound without repeating its last row.
+	page1, err := r.ByKindsAfter(ctx, testInteractionKinds, core.FormatTime(base), "", "", 2)
+	require.NoError(t, err)
+	require.Equal(t, []string{"01C", "01B"}, []string{page1[0].ID, page1[1].ID})
+
+	last := page1[len(page1)-1]
+	page2, err := r.ByKindsAfter(ctx, testInteractionKinds, core.FormatTime(base), core.FormatTime(last.TS), last.ID, 2)
+	require.NoError(t, err)
+	require.Len(t, page2, 1)
+	require.Equal(t, "01A", page2[0].ID)
+}
+
 func TestByKindsSince_StrictlyNewerOldestFirstAcrossTie(t *testing.T) {
 	r := newRecorder(t)
 	ctx := context.Background()

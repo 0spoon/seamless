@@ -4,7 +4,7 @@
   <div class="lib-hero-copy">
     <div class="lib-eyebrow">{{icon "activity"}} Live transport</div>
     <h1>Interactions</h1>
-    <div class="sub">Watch agent prompts, tool calls, injections, session changes, and plan activity as one traceable stream.</div>
+    <div class="sub">Watch new prompts, tool calls, injections, session changes, and plan activity arrive at the top of a clean live stream.</div>
   </div>
   <div class="lib-total ix-total" aria-live="polite">
     <strong id="ix-count">0</strong><span>events in view</span>
@@ -26,39 +26,38 @@
     </div>
   </div>
   <div class="ix-actions">
-    <div class="lib-control">
-      <label class="lib-control-label" for="ix-window">Activity range</label>
-      <select id="ix-window" class="ops-select" aria-label="Time range">
-          <option value="60">1 minute</option>
-          <option value="300">5 minutes</option>
-          <option value="900">15 minutes</option>
-          <option value="3600" selected>1 hour</option>
-          <option value="0">All time</option>
+    <div class="lib-control ix-history-control">
+      <label class="lib-control-label" for="ix-history-window">Add history</label>
+      <div class="ix-history-picker">
+        <select id="ix-history-window" class="ops-select" aria-label="Recent history window">
+          <option value="60">Last minute</option>
+          <option value="300" selected>Last 5 minutes</option>
+          <option value="900">Last 15 minutes</option>
+          <option value="3600">Last hour</option>
+          <option value="14400">Last 4 hours</option>
+          <option value="86400">Last 24 hours</option>
         </select>
+        <button class="btn small primary" type="button" id="ix-history-load">Add recent</button>
+      </div>
     </div>
     <button class="btn small" type="button" id="ix-pause">Pause</button>
   </div>
-  <div class="lib-control-note"><strong>Filter stack</strong><span>Type &rarr; session &rarr; time bucket</span></div>
-</section>
-
-<section class="ops-stage ix-volume-stage" aria-label="Interaction volume">
-  <header class="ops-stage-head">
-    <div class="ops-stage-title"><span class="ops-stage-eyebrow">Activity volume</span><strong>Transport events over the selected range</strong></div>
-    <div class="ops-stage-meta"><span>Select a bar to isolate its time slice</span></div>
-  </header>
-  <div class="ix-volume empty" id="ix-volume" aria-hidden="true"></div>
+  <div class="lib-control-note ix-history-note" aria-live="polite"><strong id="ix-history-status">Live list starts empty</strong><span>History is added without replacing live events</span></div>
 </section>
 
 <section class="ops-stage ix-stream-stage" aria-label="Interaction stream">
   <header class="ops-stage-head ix-stream-head">
-    <div class="ops-stage-title"><span class="ops-stage-eyebrow">Interaction stream</span><strong>Newest events first</strong></div>
+    <div class="ops-stage-title"><span class="ops-stage-eyebrow">Interaction stream</span><strong>Live arrivals appear first</strong></div>
     <div class="ix-session-filter"><span class="lib-control-label">Session lane</span><div class="ix-tabs" id="ix-tabs"></div></div>
   </header>
 <div class="list-detail-split ops-split interactions-split">
   <div class="list-pane">
     <div class="ix-feed" id="ix-feed"></div>
-    <div class="empty dotgrid" id="ix-empty" hidden><span class="empty-ico">{{icon "activity"}}</span><div id="ix-empty-copy">No interactions yet &mdash; run a hooked agent and its calls will stream in here.</div></div>
-    <div class="ix-more" hidden><button class="btn small" type="button" id="ix-older">Load older</button></div>
+    <div class="empty dotgrid ix-empty" id="ix-empty" hidden>
+      <span class="empty-ico">{{icon "activity"}}</span>
+      <div class="ix-empty-body"><strong id="ix-empty-copy">Listening for new interactions</strong><p id="ix-empty-help">New events will appear here at the top. Add a recent window when you need earlier context.</p><button class="btn small" type="button" id="ix-empty-load">Add last 5 minutes</button></div>
+    </div>
+    <div class="ix-more" hidden><button class="btn small" type="button" id="ix-older">Continue loading this window</button></div>
   </div><!-- .list-pane -->
   <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Interaction detail">
     <div class="detail-pane-chrome">
@@ -80,23 +79,26 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   var feed = document.getElementById('ix-feed');
   var tabsEl = document.getElementById('ix-tabs');
   var kindsEl = document.getElementById('ix-kinds');
-  var volEl = document.getElementById('ix-volume');
   var emptyEl = document.getElementById('ix-empty');
+  var emptyLoadBtn = document.getElementById('ix-empty-load');
   var pauseBtn = document.getElementById('ix-pause');
   var olderWrap = document.querySelector('.ix-more');
   var olderBtn = document.getElementById('ix-older');
   var liveEl = document.getElementById('ix-live');
-  var windowSel = document.getElementById('ix-window');
+  var historySel = document.getElementById('ix-history-window');
+  var historyBtn = document.getElementById('ix-history-load');
+  var historyStatus = document.getElementById('ix-history-status');
   var countEl = document.getElementById('ix-count');
   var emptyCopy = document.getElementById('ix-empty-copy');
+  var emptyHelp = document.getElementById('ix-empty-help');
   if (!feed || !window.IX) return;
 
-  // The time range drives both the session-tab activity window and the volume
-  // histogram. Defaults to 1h; the user can narrow to 1m or widen to "all" (0).
-  var windowSecs = 3600;
+  // Remember only the user's preferred import size. Visiting the page never
+  // restores rows: every load starts as a clean, live-only stream.
+  var historySecs = 300;
   try {
-    var savedW = parseInt(localStorage.getItem('ix-window'), 10);
-    if (!isNaN(savedW)) windowSecs = savedW;
+    var savedW = parseInt(localStorage.getItem('ix-history-window'), 10);
+    if ([60, 300, 900, 3600, 14400, 86400].indexOf(savedW) !== -1) historySecs = savedW;
   } catch (e) {}
 
   // This page IS the live view -- suppress the global "refresh" pill.
@@ -108,14 +110,11 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   var order = [];            // ids, newest-first
   var filter = 'all';        // session filter: 'all' | sessionId | '__none__'
   var kindFilter = 'all';    // category filter: 'all' | '__err__' | tool | inject | session | plan
-  var timeSel = null;        // {from,to,idx} selected histogram bucket, or null
-  var volBars = [];          // current histogram bar elements (for selection UI)
   var paused = false;
-  var loaded = false;
-  var preload = [];          // SSE frames that arrived before the initial fetch
   var buffer = [];           // live frames held back while paused / a row is open
-  var cursor = null;         // {ts,id} for the next older page
-  var last = null;           // {ts,id} of the newest row seen (gap-fill anchor)
+  var buffered = {};         // id set keeps reconnect gap-fill from duplicating held rows
+  var cursor = null;         // {ts,id,afterTs} for the next page in an added history window
+  var last = { ts: new Date().toISOString(), id: '' }; // clean-feed / reconnect anchor
 
   function shortId(id) { return window.IX.shortId(id); }
 
@@ -136,36 +135,46 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
 
   function buildRow(d) { return window.IX.buildRow(d); }
 
-  // --- Filtering: session AND category AND selected-time-bucket all apply ---
+  // --- Filtering: session and category apply to the rows already in memory ---
   function matches(d) {
     var sess = filter === 'all' ||
       (filter === '__none__' && !d.sessionId) ||
       filter === d.sessionId;
     var kind = kindFilter === 'all' ||
       (kindFilter === '__err__' ? !!d.isError : cat(d.kind) === kindFilter);
-    var time = true;
-    if (timeSel) {
-      var t = Date.parse(d.ts);
-      time = !isNaN(t) && t >= timeSel.from && t < timeSel.to;
-    }
-    return sess && kind && time;
+    return sess && kind;
   }
 
   function applyFilter(node, d) { node.hidden = !matches(d); }
 
-  function insert(d, atTop) {
-    if (rows[d.id]) return; // dedupe
+  function newer(a, b) { // is a strictly newer than b?
+    if (!b) return true;
+    var at = Date.parse(a.ts), bt = Date.parse(b.ts);
+    if (!isNaN(at) && !isNaN(bt) && at !== bt) return at > bt;
+    if (a.ts !== b.ts) return String(a.ts) > String(b.ts);
+    return String(a.id || '') > String(b.id || '');
+  }
+
+  // Insert by timestamp instead of assuming network arrival order. SSE races
+  // with a history request, so append/prepend alone can misplace an event.
+  function insert(d) {
+    if (rows[d.id]) return false; // dedupe
     var node = buildRow(d);
     rows[d.id] = { data: d, el: node };
     applyFilter(node, d);
-    if (atTop) {
-      feed.insertBefore(node, feed.firstChild);
-      order.unshift(d.id);
-    } else {
+    var at = order.length;
+    for (var i = 0; i < order.length; i++) {
+      if (newer(d, rows[order[i]].data)) { at = i; break; }
+    }
+    if (at === order.length) {
       feed.appendChild(node);
       order.push(d.id);
+    } else {
+      feed.insertBefore(node, rows[order[at]].el);
+      order.splice(at, 0, d.id);
     }
     trim();
+    return true;
   }
 
   function trim() {
@@ -177,30 +186,31 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     }
   }
 
-  function newer(a, b) { // is a strictly newer than b?
-    if (!b) return true;
-    if (a.ts !== b.ts) return a.ts > b.ts;
-    return a.id > b.id;
-  }
-
   function handleLive(d) {
-    if (rows[d.id]) return;
-    if (paused || anyOpen()) { buffer.push(d); reflectBuffer(); return; }
-    insert(d, true);
+    if (rows[d.id] || buffered[d.id]) {
+      if (newer(d, last)) last = { ts: d.ts, id: d.id };
+      return;
+    }
     if (newer(d, last)) last = { ts: d.ts, id: d.id };
+    if (paused || anyOpen()) {
+      buffered[d.id] = true;
+      buffer.push(d);
+      reflectBuffer();
+      return;
+    }
+    insert(d);
     refreshTabs();
     updateEmpty();
   }
 
   function flushBuffer() {
     if (!buffer.length) return;
-    buffer.sort(function (a, b) { return a.ts < b.ts ? -1 : a.ts > b.ts ? 1 : (a.id < b.id ? -1 : 1); });
     buffer.forEach(function (d) {
-      if (rows[d.id]) return;
-      insert(d, true);
+      insert(d);
       if (newer(d, last)) last = { ts: d.ts, id: d.id };
     });
     buffer = [];
+    buffered = {};
     reflectBuffer();
     refreshTabs();
     updateEmpty();
@@ -221,21 +231,16 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     emptyEl.hidden = visible > 0;
     if (emptyCopy) {
       emptyCopy.textContent = order.length
-        ? 'No interactions match the active type, session, and time filters.'
-        : 'No interactions yet — run a hooked agent and its calls will stream in here.';
+        ? 'No interactions match the active type and session filters.'
+        : 'Listening for new interactions';
     }
+    if (emptyHelp) {
+      emptyHelp.textContent = order.length
+        ? 'Adjust the event type or session lane to bring loaded events back into view.'
+        : 'New events will appear here at the top. Add a recent window when you need earlier context.';
+    }
+    if (emptyLoadBtn) emptyLoadBtn.hidden = order.length > 0;
     if (olderWrap) olderWrap.hidden = !cursor;
-  }
-
-  function setWindow(secs) {
-    windowSecs = secs;
-    if (windowSel) windowSel.value = String(secs);
-    try { localStorage.setItem('ix-window', String(secs)); } catch (e) {}
-    // A window change invalidates any selected bucket and re-scopes the chart.
-    timeSel = null;
-    refreshTabs();
-    applyAll();
-    loadVolume();
   }
 
   function refreshTabs() {
@@ -250,16 +255,8 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     var sids = Object.keys(counts).sort(function (a, b) {
       return latest[a] < latest[b] ? 1 : latest[a] > latest[b] ? -1 : 0;
     });
-    var now = Date.now();
-    var visible = []; var hidden = 0;
-    sids.forEach(function (sid) {
-      var fresh = windowSecs === 0 || (now - Date.parse(latest[sid])) / 1000 <= windowSecs;
-      if (fresh || sid === filter) visible.push(sid);
-      else hidden++;
-    });
-
     var tabs = [{ key: 'all', label: 'All', n: order.length }];
-    visible.forEach(function (sid) { tabs.push({ key: sid, label: names[sid], n: counts[sid] }); });
+    sids.forEach(function (sid) { tabs.push({ key: sid, label: names[sid], n: counts[sid] }); });
     if (none) tabs.push({ key: '__none__', label: 'unattributed', n: none });
 
     tabsEl.textContent = '';
@@ -271,13 +268,6 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
       b.onclick = function () { filter = t.key; applyAll(); refreshTabs(); };
       tabsEl.appendChild(b);
     });
-    if (hidden > 0) {
-      var more = el('button', 'ix-tab muted', '+' + hidden + ' older');
-      more.type = 'button';
-      more.title = hidden + ' session' + (hidden === 1 ? '' : 's') + ' with no recent activity - show all';
-      more.onclick = function () { setWindow(0); };
-      tabsEl.appendChild(more);
-    }
   }
 
   function applyAll() {
@@ -300,59 +290,77 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     });
   }
 
-  // --- Volume histogram ---
-  function highlightSel() {
-    for (var i = 0; i < volBars.length; i++) {
-      var selected = !!timeSel &&
-        Number(volBars[i].getAttribute('data-from')) === timeSel.from &&
-        Number(volBars[i].getAttribute('data-to')) === timeSel.to;
-      volBars[i].classList.toggle('sel', selected);
-      if (volBars[i].hasAttribute('aria-pressed')) {
-        volBars[i].setAttribute('aria-pressed', selected ? 'true' : 'false');
+  // --- Explicit history import ---------------------------------------------
+  function historyLabel() {
+    if (!historySel || historySel.selectedIndex < 0) return 'selected window';
+    var label = historySel.options[historySel.selectedIndex].textContent || 'selected window';
+    return label.charAt(0).toLowerCase() + label.slice(1);
+  }
+
+  function syncHistoryChoice() {
+    if (!historySel) return;
+    historySel.value = String(historySecs);
+    if (emptyLoadBtn) emptyLoadBtn.textContent = 'Add ' + historyLabel();
+  }
+
+  function setHistoryBusy(busy) {
+    if (historyBtn) historyBtn.disabled = busy;
+    if (emptyLoadBtn) emptyLoadBtn.disabled = busy;
+    if (olderBtn) olderBtn.disabled = busy;
+  }
+
+  function loadHistory(continueWindow) {
+    if (continueWindow && !cursor) return;
+    var label = historyLabel();
+    var url;
+    if (continueWindow) {
+      url = '/console/interactions?format=json&afterTs=' + encodeURIComponent(cursor.afterTs) +
+        '&before=' + encodeURIComponent(cursor.id) + '&beforeTs=' + encodeURIComponent(cursor.ts);
+    } else {
+      var secs = historySel ? parseInt(historySel.value, 10) : NaN;
+      if (!isFinite(secs) || secs <= 0) {
+        if (historyStatus) historyStatus.textContent = 'Choose a valid history window';
+        return;
       }
+      historySecs = secs;
+      try { localStorage.setItem('ix-history-window', String(secs)); } catch (e) {}
+      url = '/console/interactions?format=json&history=' + encodeURIComponent(String(secs));
     }
-  }
 
-  function onBarSelect(from, to, idx) {
-    if (timeSel && timeSel.from === from && timeSel.to === to) timeSel = null; // toggle off
-    else timeSel = { from: from, to: to, idx: idx };
-    applyAll();
-    highlightSel();
-    if (timeSel) {
-      for (var i = 0; i < order.length; i++) {
-        var row = rows[order[i]];
-        if (row && !row.el.hidden) { window.IX.revealRow(row.el); break; }
-      }
-    }
-  }
-
-  function loadVolume() {
-    fetch('/console/interactions?volume=' + windowSecs, { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        volBars = window.IX.renderVolume(data.volume || [], volEl, { onSelect: onBarSelect });
-        volEl.setAttribute('aria-hidden', volBars.length ? 'false' : 'true');
-        highlightSel();
+    setHistoryBusy(true);
+    if (historyStatus) historyStatus.textContent = continueWindow ? 'Loading more history…' : 'Adding ' + label + '…';
+    fetch(url, { headers: { Accept: 'application/json' } })
+      .then(function (r) {
+        if (!r.ok) throw new Error('history request failed');
+        return r.json();
       })
-      .catch(function () {});
-  }
-
-  // --- Load older (descending page via before/beforeTs) ---
-  function loadOlder() {
-    if (!cursor) return;
-    olderBtn.disabled = true;
-    fetch('/console/interactions?format=json&before=' + encodeURIComponent(cursor.id) +
-          '&beforeTs=' + encodeURIComponent(cursor.ts), { headers: { Accept: 'application/json' } })
-      .then(function (r) { return r.json(); })
       .then(function (data) {
-        var older = data.rows || [];
-        maxRows += older.length;
-        older.forEach(function (d) { insert(d, false); });
-        cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
-        olderBtn.disabled = false;
-        refreshTabs(); updateEmpty();
+        var list = data.rows || [];
+        var unique = list.filter(function (d) { return !rows[d.id]; });
+        maxRows += unique.length;
+        unique.forEach(insert);
+        cursor = data.nextTs && data.afterTs
+          ? { ts: data.nextTs, id: data.nextId, afterTs: data.afterTs }
+          : null;
+        if (historyStatus) {
+          if (unique.length) {
+            historyStatus.textContent = continueWindow
+              ? 'Added ' + unique.length + ' older event' + (unique.length === 1 ? '' : 's')
+              : 'Added ' + unique.length + ' event' + (unique.length === 1 ? '' : 's') + ' from ' + label;
+          } else if (cursor) {
+            historyStatus.textContent = 'No visible events in this batch — more remain';
+          } else {
+            historyStatus.textContent = continueWindow ? 'That window is fully loaded' : 'No additional events in ' + label;
+          }
+        }
+        refreshTabs();
+        updateEmpty();
+        setHistoryBusy(false);
       })
-      .catch(function () { olderBtn.disabled = false; });
+      .catch(function () {
+        if (historyStatus) historyStatus.textContent = 'Could not add history — live streaming is unchanged';
+        setHistoryBusy(false);
+      });
   }
 
   // --- Gap-fill after an SSE reconnect (ascending, since/sinceTs) ---
@@ -362,43 +370,28 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
           '&sinceTs=' + encodeURIComponent(last.ts), { headers: { Accept: 'application/json' } })
       .then(function (r) { return r.json(); })
       .then(function (data) {
-        (data.rows || []).forEach(function (d) {
-          if (rows[d.id]) return;
-          insert(d, true);
-          if (newer(d, last)) last = { ts: d.ts, id: d.id };
-        });
+        (data.rows || []).forEach(handleLive);
         refreshTabs(); updateEmpty();
       })
       .catch(function () {});
   }
 
-  // --- Initial hydrate ---
-  function hydrate(data) {
-    var list = data.rows || [];
-    list.forEach(function (d) { insert(d, false); }); // already newest-first
-    if (list.length) last = { ts: list[0].ts, id: list[0].id };
-    cursor = data.nextTs ? { ts: data.nextTs, id: data.nextId } : null;
-    loaded = true;
-    preload.forEach(handleLive);
-    preload = [];
-    refreshTabs();
-    updateEmpty();
-  }
-
-  // Open the stream first (buffer frames), then hydrate from JSON.
+  // Start with the live stream only. The page-load timestamp anchors gap-fill,
+  // so reconnect recovery never pulls in events from before the user arrived.
   var es;
   if (window.EventSource) {
     es = new EventSource('/console/events?feed=interactions');
     es.onopen = function () {
       if (liveEl) liveEl.classList.remove('off');
-      if (loaded) gapFill();
+      gapFill();
     };
     es.onmessage = function (ev) {
       var d; try { d = JSON.parse(ev.data); } catch (e) { return; }
-      if (!loaded) { preload.push(d); return; }
       handleLive(d);
     };
     es.onerror = function () { if (liveEl) liveEl.classList.add('off'); };
+  } else if (liveEl) {
+    liveEl.classList.add('off');
   }
 
   pauseBtn.onclick = function () {
@@ -406,26 +399,25 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     if (!paused) flushBuffer();
     reflectBuffer();
   };
-  if (windowSel) {
-    windowSel.value = String(windowSecs);
-    windowSel.onchange = function () {
-      var v = parseInt(windowSel.value, 10);
-      setWindow(isNaN(v) ? 0 : v);
+  if (historySel) {
+    historySel.onchange = function () {
+      var v = parseInt(historySel.value, 10);
+      if (isFinite(v) && v > 0) historySecs = v;
+      syncHistoryChoice();
     };
   }
-  // Age idle sessions out of the tab bar, and refresh the histogram, on a timer.
+  if (historyBtn) historyBtn.onclick = function () { loadHistory(false); };
+  if (emptyLoadBtn) emptyLoadBtn.onclick = function () { loadHistory(false); };
+  // Keep the session ordering fresh as live events age and arrive.
   setInterval(function () { if (order.length) refreshTabs(); }, 15000);
-  setInterval(function () { if (!paused) loadVolume(); }, 20000);
-  if (olderBtn) olderBtn.onclick = loadOlder;
+  if (olderBtn) olderBtn.onclick = function () { loadHistory(true); };
   feed.addEventListener('toggle', function () {
     if (!paused && !anyOpen()) flushBuffer();
   }, true);
 
-  loadVolume();
-  fetch('/console/interactions?format=json', { headers: { Accept: 'application/json' } })
-    .then(function (r) { return r.json(); })
-    .then(hydrate)
-    .catch(function () { loaded = true; updateEmpty(); });
+  syncHistoryChoice();
+  refreshTabs();
+  updateEmpty();
 })();
 </script>
 {{end}}
