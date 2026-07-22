@@ -1,0 +1,226 @@
+# Storage and file formats
+
+> The ~/.seamless tree, memory and note frontmatter field by field, what lives only in SQLite, and the rules for hand-editing.
+
+Seamless splits its state in two. Markdown files under the data directory are the
+**source of truth** for durable knowledge. SQLite is the **record** for
+high-churn state and a **rebuildable index** of the files.
+
+Knowing which half a given piece of state lives in tells you whether you can edit
+it by hand, and what happens if you delete it.
+
+## The tree
+
+`data_dir` defaults to `~/.seamless`:
+
+```text
+~/.seamless/
+  seam.db                              SQLite: indexes, sessions, tasks, trials, events, embeddings
+  memory/
+    _global/{name}.md                  project-less memories
+    {project}/{name}.md                one memory per file
+  notes/
+    _global/{slug}.md                  project-less notes
+    {project}/{slug}.md                one note per file
+```
+
+A memory's project is its directory. An empty `project` field means global, and
+the file lands in `memory/_global/`. Notes work the same way, under
+`notes/_global/`. A memory's filename is its `name`; a note's is its `slug`.
+
+## Memory frontmatter
+
+One memory per file, YAML frontmatter plus a markdown body:
+
+```yaml
+---
+id: 01K...
+kind: gotcha
+name: chroma-boot-race
+description: one line, <=150 chars -- the ONLY text shown in indexes
+project: seam
+created: 2026-07-10T18:00:00Z
+updated: 2026-07-10T18:00:00Z
+valid_from: 2026-07-10T18:00:00Z
+invalid_at: null
+superseded_by: null
+source_session: cc/019f7291-7ccbc0d8f16e51a4
+model: claude-fable-5
+tags: [x, y]
+---
+body markdown
+```
+
+Field by field:
+
+| Field | Set by | Meaning |
+|---|---|---|
+| `id` | system | ULID. Never a UUID. The identity every other reference points at. |
+| `kind` | author | One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly. |
+| `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories - a superseded memory coexists with a replacement that reuses its name. |
+| `description` | author | One line, ≤150 chars. **The only text shown in indexes** - write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
+| `project` | author | Project slug. Empty means global, and the file lives under `memory/_global/`. Omitted from the frontmatter when empty. |
+| `created` | system | RFC3339. First write. |
+| `updated` | system | RFC3339. Last write. |
+| `valid_from` | system | RFC3339. Start of the validity window. |
+| `invalid_at` | **system only** | RFC3339 or `null`. `null` means active. Set on supersession or archive; a memory with it set leaves every active index. |
+| `superseded_by` | **system only** | ULID of the replacement, or `null`. |
+| `source_session` | system | Provenance - an ambient session name such as `cc/019f7291-7ccbc0d8f16e51a4`, or the ULID of a bound explicit session. Consumers resolve both; treat names as opaque. |
+| `model` | system | The model that produced the content, verbatim as the provider names it (`claude-fable-5`, `gpt-5.5`). Stamped from the writing session; a rewrite by a known model re-attributes, an unknown one preserves the prior value. Omitted when unknown. |
+| `favorite` | author | `true` when starred (console, `seam fav`, or `favorite_set`). A starred memory is pinned into every briefing and boosted in recall. Omitted when false; hand-editing it works - the watcher reindexes. Starring never bumps `updated`. |
+| `tags` | author | Flow-style list. Omitted when empty. Also the `plan:<slug>` composition key. |
+
+Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
+verbatim through a parse/render round-trip (Obsidian plugin fields and the like
+survive), but is not mirrored to the index.
+
+### The eight kinds
+
+| Kind | Meaning |
+|---|---|
+| `constraint` | A hard rule that must hold. |
+| `runbook` | A procedure to follow. |
+| `protocol` | An interaction or coordination contract. |
+| `gotcha` | A surprising pitfall. |
+| `decision` | A choice and its rationale. |
+| `refuted` | A claim investigated and found false. |
+| `reference` | A durable pointer or fact. |
+| `stage` | A gated stage with status and gate lines. |
+
+### Validity
+
+`invalid_at` is the whole lifecycle in one field. `nil` means active. Anything
+else means the memory has left the briefing, prompt, and recall indexes - while
+staying on disk and readable, as provenance.
+
+A superseded memory is never deleted. It is stamped `invalid_at` and
+`superseded_by`, and keeps a tombstone line in its file body, so the on-disk
+truth stays honest about what replaced what. Its file keeps occupying
+`memory/{project}/{name}.md`; a new memory cannot silently overwrite it (that
+would destroy readable supersession history) and must free the name or pick
+another.
+
+## Note frontmatter
+
+A note is a work artifact - research finding, decision record, meeting summary.
+Unlike a memory it has **no lifecycle and no validity window**:
+
+```yaml
+---
+id: 01K...
+title: Human-facing title
+slug: human-facing-title
+description: one line
+project: seam
+created: 2026-07-10T18:00:00Z
+updated: 2026-07-10T18:00:00Z
+source_url: https://example.com/page
+model: claude-fable-5
+tags: [research, plan:my-feature]
+---
+body markdown
+```
+
+`id`, `title`, `created`, and `updated` are always emitted. `slug`,
+`description`, `project`, `source_url`, `model`, `favorite`, and `tags` are
+omitted when empty (or, for `favorite`, false). `source_url` is set when the
+note came from `capture_url`; `model` is the producing model, stamped exactly
+as for memories; `favorite` marks a starred note, exactly as for memories.
+Empty `project` means `notes/_global/`. Unknown keys round-trip losslessly,
+same as memories.
+
+## What lives only in SQLite
+
+`seam.db` holds two categories of data with very different recovery stories.
+
+**Rebuildable mirrors of the files.** Delete these and they come back:
+
+- `memories_index` - frontmatter mirror, plus `content_hash` and `file_path`.
+- `notes_index` - the same for notes.
+- `fts` - the FTS5 virtual table over both, indexing title, name, description,
+  and body. Self-contained, managed directly by the files layer.
+- `embeddings` - one float32 BLOB vector per item (little-endian), with its model
+  and dims. Brute-force cosine; there is no vector database.
+
+**DB-of-record state that exists nowhere else.** These have no file behind them,
+so losing `seam.db` loses them:
+
+- `sessions` - ambient and explicit sessions, findings, cwd, status.
+- `tasks` and `task_deps` - the ready-queue, plan slugs, claims, and leases.
+- `trials` - research lab records with queryable JSON metrics.
+- `events` - the append-only log behind telemetry, the console feed, and
+  retrieval stats.
+- `retrieval_stats` - inject/read counters plus the per-memory time-decayed
+  utility score with its per-signal demand breakdown, rebuilt from events.
+- `projects` - slugs, parent topology, retirement.
+- `gardener_proposals` - pending proposals, one row per kind-and-key
+  (merge, consolidate, archive, digest, reproject, split, abandon-plan,
+  memory-wanted).
+- `settings` - `repo_project_map`, project families, the runtime briefing
+  overrides the console writes, the per-scope utility-activation latch, and the
+  embedder on/off switch.
+- `jobs` - the small queue for embeds and LLM digests.
+
+The split is deliberate: durable knowledge is yours in plain markdown, and
+high-churn state that would be miserable as files stays in the database.
+
+WAL mode means `seam.db` is normally accompanied by `seam.db-wal` and
+`seam.db-shm`. They are part of the database; copy all three or none.
+
+### Reconciliation
+
+At startup the files layer walks both trees and reconciles them against the
+index: changed and new files are re-indexed, and index rows whose file has been
+deleted are dropped. A watcher then keeps up with out-of-band edits, debounced
+(editors emit several writes per save) and with the application's own writes
+suppressed so there is no re-index loop.
+
+This is why the index is genuinely rebuildable, and why editing a memory in your
+editor works without telling Seamless about it.
+
+## Hand-editing rules
+
+Files are the source of truth, so **hand-editing is allowed and expected**. Open
+a memory in your editor, fix the body, save. The watcher picks it up and
+re-indexes it. Adding tags, tightening a description, correcting a fact - all
+fine.
+
+Two fields are the exception.
+
+**Never hand-stamp `invalid_at` or `superseded_by`.**
+
+These are the lifecycle, and the supersede path enforces invariants a text editor
+cannot:
+
+- `invalid_at` is stamped exactly once. Re-stamping an already-invalid memory
+  rewrites supersession history and is rejected.
+- A `superseded_by` edge must point at an **active** memory. Pointing at an
+  inactive one can form a cycle or a dangling chain, and is rejected.
+- A memory cannot supersede itself.
+
+Use the supersede path instead - `memory_write` with `supersedes` - which stamps
+both fields on the old memory, writes the tombstone line, and points the edge at
+the replacement, atomically and with the invariants checked. Archival goes
+through the same path.
+
+Hand-stamping these fields does not produce an error. It produces a store that
+disagrees with itself: a memory out of the indexes with no valid replacement, or
+a supersession chain that loops. Both are quiet, and both are exactly the kind of
+thing a future agent will trust anyway.
+
+The rest of the rules are mechanical:
+
+- **`id` is identity.** Changing it makes a new memory and orphans every
+  reference to the old one.
+- **`name` and `slug` are filenames.** Rename the file and the field together, or
+  the watcher will treat it as a delete plus an add.
+- **`project` is the directory.** Move the file and change the field together.
+
+## Related
+
+- [Configuration](https://thereisnospoon.org/docs/reference/configuration/) - `data_dir` and the rest of the key
+  set.
+- [MCP API overview](https://thereisnospoon.org/docs/reference/mcp/) - the tools that write these files,
+  including `memory_write`'s `supersedes`.
+- [MCP: tasks](https://thereisnospoon.org/docs/reference/mcp/tasks/) - the ready-queue whose state lives only in
+  `seam.db`.

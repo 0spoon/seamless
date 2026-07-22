@@ -10,6 +10,12 @@
 //	docsgen -src docs-src -out docs/docs      # regenerate (what `make docs` runs)
 //	docsgen -serve 127.0.0.1:8899             # regenerate, then serve docs/ locally
 //
+// Every page is written twice: index.html, and a markdown twin at index.md
+// holding the page's full source markdown (see twin.go). The twins exist for
+// `Accept: text/markdown` content negotiation -- Cloudflare Transform Rules on
+// the zone rewrite markdown-accepting requests for /docs/.../ URLs to their
+// index.md; browsers keep getting the HTML. SITE.md documents the rules.
+//
 // Besides the docs tree, every run refreshes the crawler files at the site root
 // (-site, default docs/): sitemap.xml, naming the landing page and every docs
 // page; robots.txt, which points crawlers at it; and llms.txt / llms-full.txt,

@@ -75,6 +75,33 @@ these are written in place, never deleted, and the rest of this directory is
 not docsgen's to touch. All five are diffed by `make docs-check`, so adding or
 removing a page keeps them current automatically.
 
+## Markdown for agents (content negotiation)
+
+Every docs page is emitted twice: `index.html` and a markdown twin at
+`index.md` -- the page's full source markdown (the same content `llms-full.txt`
+aggregates, split back out per page) led by its title and description, with
+root-absolute links rewritten to canonical URLs (see `cmd/docsgen/twin.go`).
+The twins are committed and diffed by `make docs-check` like everything else in
+`docs/docs/`.
+
+They exist so agents sending `Accept: text/markdown` get markdown while
+browsers keep getting HTML. GitHub Pages cannot vary on request headers and the
+zone's Cloudflare plan has no Markdown for Agents setting, so the negotiation
+is three Transform Rules on the zone (like the api-catalog content-type rule,
+zone config, not repo config -- this list is its documentation):
+
+1. URL rewrite, dynamic: requests whose `Accept` contains `text/markdown` for
+   paths starting `/docs/` and ending `/` rewrite to
+   `concat(http.request.uri.path, "index.md")`.
+2. URL rewrite, static: the same `Accept`, path `/`, rewrites to `/llms.txt`
+   (the landing page's markdown representation, llmstxt.org shape).
+3. Response header: for the requests the two rewrites match, set
+   `Content-Type: text/markdown; charset=utf-8`.
+
+Scenario pages and `/compare/` are outside the rules' scope on purpose: they
+have no twins, and a rewrite without a target file would turn a working HTML
+response into a 404.
+
 **The drift rule:** because the output is committed and `make check` runs
 `docs-check`, any change to `docs-src/` must be followed by `make docs` and the
 result committed in the same change, or the build goes red. That applies to

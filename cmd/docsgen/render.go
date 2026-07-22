@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html/template"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -109,6 +110,10 @@ func writeSite(outDir string, site *Site) error {
 			return err
 		}
 		if err := writeFile(filepath.Join(outDir, filepath.FromSlash(p.Out)), html); err != nil {
+			return err
+		}
+		twin := filepath.Join(outDir, filepath.FromSlash(path.Join(p.URL, "index.md")))
+		if err := writeFile(twin, markdownTwin(p)); err != nil {
 			return err
 		}
 	}

@@ -1,0 +1,312 @@
+# Configuration
+
+> Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.
+
+Seamless reads a single YAML file. Every key also has a `SEAMLESS_*` environment
+override.
+
+## Where the config comes from
+
+The file is looked up in this order, first hit wins:
+
+1. `$SEAMLESS_CONFIG`
+2. `~/.config/seamless/seamless.yaml`
+3. `./seamless.yaml`
+
+## Precedence
+
+Four layers resolve each key. Later layers win:
+
+1. **Defaults** - the built-in values in the table below.
+2. **File** - whatever the YAML sets.
+3. **Environment** - `SEAMLESS_*` overrides the file.
+4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
+   in the database. They win over file *and* env, apply from the next session
+   start without a daemon restart, and stay until reset.
+
+That fourth layer only covers the `briefing:` block. It exists so you can tune
+what agents get injected while they are running, and it is the one place where
+the config file is not the last word - check the console before concluding a
+briefing setting is being ignored.
+
+## Generating a key
+
+`mcp.api_key` guards `/api/mcp` and the console. On a true first run - no
+config file anywhere in the search order and no `SEAMLESS_MCP_API_KEY` in the
+environment - `seamlessd serve` (or `install-hooks`) generates one and writes
+it to `~/.config/seamless/seamless.yaml`, so a fresh install never handles the
+key by hand. An existing config file is never edited, even when its key is
+empty; set one yourself:
+
+```bash
+openssl rand -hex 32
+```
+
+The daemon still starts with an empty key, but every MCP and hook request is
+rejected until one is set - `seamlessd doctor` reports it as a warning.
+
+## Every key
+
+| Key | Type | Default |
+|---|---|---|
+| `addr` | string | `127.0.0.1:8081` |
+| `data_dir` | string | `~/.seamless` |
+| `mcp.api_key` | string | - |
+| `budgets.max_briefing_tokens` | int | `1500` |
+| `budgets.recall_budget_tokens` | int | `1000` |
+| `budgets.tool_event_max_chars` | int | - |
+| `briefing.memory_max_age_days` | int | - |
+| `briefing.memory_max_items` | int | - |
+| `briefing.findings_count` | int | `3` |
+| `briefing.findings_max_age_days` | int | - |
+| `briefing.ready_tasks_shown` | int | `3` |
+| `briefing.pending_plan_max_days` | int | `7` |
+| `briefing.stage_unknown_max_age_days` | int | `7` |
+| `briefing.hard_cap_multiplier` | int | `2` |
+| `briefing.include_parent_memories` | bool | `true` |
+| `briefing.sibling_findings_count` | int | `2` |
+| `briefing.include_sibling_memories` | bool | - |
+| `briefing.utility_weight` | float64 | `0.4` |
+| `briefing.utility_mode` | string | `auto` |
+| `search.semantic_floor` | float64 | `0.3` |
+| `llm.provider` | string | `openai` |
+| `llm.openai.api_key` | string | - |
+| `llm.openai.base_url` | string | `https://api.openai.com/v1` |
+| `llm.openai.chat_model` | string | `gpt-4o` |
+| `llm.openai.embedding_model` | string | `text-embedding-3-large` |
+| `llm.openai.embedding_dims` | int | `3072` |
+| `llm.ollama.base_url` | string | `http://127.0.0.1:11434` |
+| `llm.ollama.chat_model` | string | `llama3.3:latest` |
+| `llm.ollama.embedding_model` | string | `qwen3-embedding:8b` |
+| `llm.ollama.embedding_dims` | int | - |
+| `llm.anthropic.api_key` | string | - |
+| `llm.anthropic.base_url` | string | `https://api.anthropic.com` |
+| `llm.anthropic.chat_model` | string | `claude-sonnet-5` |
+| `gardener.enabled` | bool | `true` |
+| `gardener.interval_minutes` | int | `60` |
+| `gardener.dedup_threshold` | float64 | `0.88` |
+| `gardener.staleness_days` | int | `90` |
+| `gardener.digest_days` | int | `30` |
+| `gardener.tool_event_retention_days` | int | `30` |
+| `gardener.stale_plan_days` | int | `14` |
+| `gardener.stale_stage_days` | int | `14` |
+| `gardener.session_idle_minutes` | int | `45` |
+| `capture.allowed_ports` | []int | `[80, 443]` |
+| `plan_capture.enabled` | bool | `true` |
+| `plan_capture.auto_task` | bool | `true` |
+| `plan_capture.inject_related` | bool | `true` |
+
+## Annotated example
+
+This is `seamless.yaml.example` from the repository, verbatim.
+
+```yaml
+# Seamless configuration example: every key, at its default. Safe to commit --
+# it holds no secrets.
+#
+# `make install` seeds ~/.config/seamless/seamless.yaml from this file when that
+# config does not exist yet, and never overwrites it afterwards. So fill in your
+# secrets THERE, not here: the installed copy is the live one, and the daemon and
+# hooks read it from any directory.
+#
+# Every key also has a SEAMLESS_* environment override, and env wins over the
+# file. Config file search order: $SEAMLESS_CONFIG, ~/.config/seamless/seamless.yaml,
+# ./seamless.yaml (gitignored -- the pre-install layout's config).
+
+# HTTP bind address. Change it here and re-run `make install`: this file is the
+# single source of truth for the bind, and the Makefile reads the port back out
+# of it rather than assuming 8081.
+# env: SEAMLESS_ADDR
+addr: "127.0.0.1:8081"
+
+# Data directory: SQLite database + markdown trees (memory/, notes/). A leading
+# ~ is expanded to the home directory.
+# env: SEAMLESS_DATA_DIR
+data_dir: "~/.seamless"
+
+mcp:
+  # Static bearer key protecting /api/mcp and the console. On a true first run
+  # (no config file anywhere) `seamlessd serve` generates one into
+  # ~/.config/seamless/seamless.yaml; a file you author yourself needs one set
+  # by hand:
+  #   openssl rand -hex 32
+  # An empty key is reported as a warning by `seamlessd doctor`.
+  # env: SEAMLESS_MCP_API_KEY
+  api_key: ""
+
+budgets:
+  # Hard token budget for the SessionStart briefing.
+  # env: SEAMLESS_MAX_BRIEFING_TOKENS
+  max_briefing_tokens: 1500
+  # Default token budget for a recall response.
+  # env: SEAMLESS_RECALL_BUDGET_TOKENS
+  recall_budget_tokens: 1000
+  # Per-field cap (in runes) on captured Interactions transport events (tool-call
+  # args/result, hook prompt, session findings). 0 = unlimited: content is stored
+  # in full and the tool-event retention prune is the growth control. Set a
+  # positive value only as an opt-in guard against pathological payloads.
+  # env: SEAMLESS_TOOL_EVENT_MAX_CHARS
+  tool_event_max_chars: 0
+
+# Briefing injection tunables: what the SessionStart <seam-briefing> auto-injects.
+# Defaults reproduce the built-in behavior; every knob is also editable live in
+# the console (Settings -> Briefing injection), which stores a runtime override
+# in the database that WINS over this file and env until reset. Constraints and
+# active-plan rollups are never filtered by these knobs; a pinned stage is
+# exempt too while its Status header marks a live gate.
+briefing:
+  # Drop memory-index lines not updated within this many days. 0 = no filter.
+  # env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS
+  memory_max_age_days: 0
+  # Cap on memory-index lines before budget packing. 0 = budget-only.
+  # env: SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS
+  memory_max_items: 0
+  # Recent findings injected. 0 hides the section.
+  # env: SEAMLESS_BRIEFING_FINDINGS_COUNT
+  findings_count: 3
+  # Drop findings older than this many days. 0 = no filter.
+  # env: SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS
+  findings_max_age_days: 0
+  # Ready-task titles named on the "Ready tasks" line. 0 hides the line.
+  # env: SEAMLESS_BRIEFING_READY_TASKS_SHOWN
+  ready_tasks_shown: 3
+  # Days a captured, unapproved Claude Code plan earns an "awaiting approval"
+  # line. 0 = no age cutoff.
+  # env: SEAMLESS_BRIEFING_PENDING_PLAN_MAX_DAYS
+  pending_plan_max_days: 7
+  # Grace window (days since last update) a stage memory stays pinned when its
+  # Status header is missing or not a live gate (open|in_progress|blocked).
+  # 0 = pin forever.
+  # env: SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS
+  stage_unknown_max_age_days: 7
+  # Times budgets.max_briefing_tokens = the absolute truncation ceiling. 0 = 2.
+  # env: SEAMLESS_BRIEFING_HARD_CAP_MULTIPLIER
+  hard_cap_multiplier: 2
+  # A child project inherits its shared parent's active memories.
+  # env: SEAMLESS_BRIEFING_INCLUDE_PARENT_MEMORIES
+  include_parent_memories: true
+  # Recent findings from family-member projects. 0 hides the section.
+  # env: SEAMLESS_BRIEFING_SIBLING_FINDINGS_COUNT
+  sibling_findings_count: 2
+  # Fold family members' memories in as a low-priority "Sibling memories"
+  # section (their constraints/stages never cross over). Off by default.
+  # env: SEAMLESS_BRIEFING_INCLUDE_SIBLING_MEMORIES
+  include_sibling_memories: false
+  # Utility's share of the memory-index sort key: (1-w)*recency + w*utility,
+  # where utility is the time-decayed demand score from retrieval_stats.
+  # 0 = pure recency (legacy). Constraints/stages/favorites stay pinned.
+  # env: SEAMLESS_BRIEFING_UTILITY_WEIGHT
+  utility_weight: 0.4
+  # Gate for the briefing's utility re-ordering: auto = per project once the
+  # gardener's readiness latch trips; on = everywhere now; off = never. The
+  # bounded recall/prompt-recall utility boosts are always on.
+  # env: SEAMLESS_BRIEFING_UTILITY_MODE
+  utility_mode: auto
+
+# Console search (the full page's fused semantic+lexical retrieval). Agent
+# recall is not affected by these knobs.
+search:
+  # Minimum cosine similarity a semantic-only hit needs to appear in results;
+  # hits the keyword leg also matched are exempt. Without a floor the cosine leg
+  # is pure nearest-neighbor, so any query -- including nonsense -- fills the
+  # page to its limit. 0 disables the floor. Useful values depend on the
+  # embedding model; 0.3 suits OpenAI text-embedding-3-*.
+  # env: SEAMLESS_SEARCH_SEMANTIC_FLOOR
+  semantic_floor: 0.3
+
+llm:
+  # Primary provider for chat (session digests) and embeddings. OpenAI is the
+  # default and the first-class provider. One of: openai | ollama | anthropic.
+  # env: SEAMLESS_LLM_PROVIDER
+  provider: "openai"
+
+  openai:
+    # env: SEAMLESS_OPENAI_API_KEY
+    api_key: ""
+    base_url: "https://api.openai.com/v1"
+    # Any OpenAI chat model; set to your preferred one.
+    chat_model: "gpt-4o"
+    embedding_model: "text-embedding-3-large"
+    # Native dimensionality of the embedding model. 0 = auto-detect from the
+    # first embedding response (the store records dims per row regardless).
+    embedding_dims: 3072
+
+  ollama:
+    base_url: "http://127.0.0.1:11434"
+    chat_model: "llama3.3:latest"
+    embedding_model: "qwen3-embedding:8b"
+    embedding_dims: 0
+
+  anthropic:
+    # env: SEAMLESS_ANTHROPIC_API_KEY
+    api_key: ""
+    # env: SEAMLESS_ANTHROPIC_BASE_URL
+    base_url: "https://api.anthropic.com"
+    chat_model: "claude-sonnet-5"
+    # Anthropic has no embeddings API; when provider=anthropic, embeddings fall
+    # back to OpenAI if its api_key is set, else Ollama.
+
+gardener:
+  # The gardener only ever proposes; it never mutates memory without an explicit
+  # apply. Safe to leave enabled.
+  # env: SEAMLESS_GARDENER_ENABLED
+  enabled: true
+  # Minutes between full gardener passes (dedup, staleness, stale-stage,
+  # dead-weight, digest, stale-plan, memory-wanted).
+  # env: SEAMLESS_GARDENER_INTERVAL_MINUTES
+  interval_minutes: 60
+  # Cosine similarity at/above which two active memories are proposed for a merge.
+  # env: SEAMLESS_GARDENER_DEDUP_THRESHOLD
+  dedup_threshold: 0.88
+  # Days of no activity (no update, injection, or read) before a memory is
+  # proposed for archiving. Constraints and stages are never archived this way
+  # (dead stages are handled by stale_stage_days below).
+  # env: SEAMLESS_GARDENER_STALENESS_DAYS
+  staleness_days: 90
+  # Trailing window of completed sessions rolled into a monthly digest proposal.
+  # env: SEAMLESS_GARDENER_DIGEST_DAYS
+  digest_days: 30
+  # Age (days) beyond which transport-level Interactions events (tool.call,
+  # hook.prompt) are pruned. 0 disables the prune. Domain events are never pruned.
+  # env: SEAMLESS_TOOL_EVENT_RETENTION_DAYS
+  tool_event_retention_days: 30
+  # Days after which a captured Claude Code plan still in draft/presented is
+  # proposed for abandonment (retag plan-status:abandoned). 0 disables the pass.
+  # env: SEAMLESS_GARDENER_STALE_PLAN_DAYS
+  stale_plan_days: 14
+  # Days without an update after which a stage memory that is not a live gate
+  # (Status done, missing, or unrecognized) is proposed for archiving.
+  # 0 disables the pass.
+  # env: SEAMLESS_GARDENER_STALE_STAGE_DAYS
+  stale_stage_days: 14
+  # Minutes of no activity before an active session counts as dead: the reaper
+  # expires it and the console stops showing it as live. One knob drives both,
+  # so they never drift. Must comfortably exceed a long single agent turn.
+  # 0 = the built-in 45m default.
+  # env: SEAMLESS_GARDENER_SESSION_IDLE_MINUTES
+  session_idle_minutes: 45
+
+capture:
+  # Destination ports the capture_url tool may dial, enforced in the dialer on
+  # the initial URL and on every redirect hop (alongside the private-IP and
+  # scheme guards). This is an SSRF control: widen it only for a host you trust,
+  # and never to reach anything on your own network. An empty list or a missing
+  # key means the 80/443 default -- it does NOT mean "any port". Ports outside
+  # 1-65535 are rejected at startup.
+  # env: SEAMLESS_CAPTURE_ALLOWED_PORTS (comma-separated, e.g. "80,443,8080")
+  allowed_ports: [80, 443]
+
+plan_capture:
+  # Capture Claude Code plan-mode activity via the PostToolUse/SubagentStop/
+  # PermissionRequest hooks: plan-file saves upsert cc-plan notes, planning
+  # subagents cache as cc-agent notes, approval flips the plan note's status.
+  # env: SEAMLESS_PLAN_CAPTURE_ENABLED
+  enabled: true
+  # Create an "Implement plan: ..." tracking task when a plan is approved.
+  # env: SEAMLESS_PLAN_CAPTURE_AUTO_TASK
+  auto_task: true
+  # On a session's first captured plan iteration, return related prior plans and
+  # memories to the planning agent as additionalContext.
+  # env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED
+  inject_related: true
+```
