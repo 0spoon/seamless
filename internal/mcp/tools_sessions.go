@@ -229,6 +229,7 @@ func sessionEndTool() mcp.Tool {
 	return mcp.NewTool("session_end",
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
+		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. Recorded for recurrence review, not blame -- report them even when fully recovered.")),
 		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
 		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
 	)
@@ -266,9 +267,18 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return errResult("session_end", err)
 	}
+	// Self-reported mishaps land as one durable agent.mishap event each -- the
+	// only record of an action no telemetry can observe (the agent confessing it
+	// is the signal). Recorded before session.ended so the session's timeline
+	// reads in order.
+	mishaps := argStrings(req, "mishaps")
+	for _, m := range mishaps {
+		s.record(ctx, core.EventAgentMishap, sess.ID, sess.ProjectSlug, "",
+			map[string]any{"description": events.Truncate(m, s.cfg.ToolEventMaxChars)})
+	}
 	s.record(ctx, core.EventSessionEnded, sess.ID, sess.ProjectSlug, "",
 		map[string]any{"claims_released": released, "findings": events.Truncate(findings, s.cfg.ToolEventMaxChars)})
-	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID, "claims_released": released})
+	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID, "claims_released": released, "mishaps_recorded": len(mishaps)})
 }
 
 // resolveSession loads the session the request targets: an explicit session_id

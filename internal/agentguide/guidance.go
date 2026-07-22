@@ -9,7 +9,7 @@ package agentguide
 // call an individual tool. Keep the first paragraph self-contained and under
 // 512 characters; current Codex clients prioritize that prefix.
 const MCPInstructions = "Use Seamless as durable context. Recall before guessing: call recall before asking users to re-find knowledge. memory_write stores compact durable knowledge; notes_create stores long artifacts. Do not duplicate code, AGENTS.md/CLAUDE.md, or this conversation. If scope is ambiguous, pass project explicitly; project=global is only for cross-project knowledge. Use sessions/findings for handoff. Compose plans as notes + tasks with plan:<slug>. Trust each tool's inputSchema required fields and enums over prose.\n\n" +
-	"For non-trivial work, read injected briefing/recall context before searching again. Use session_start/session_end when an explicit handoff record is useful. Claim shared plan steps with tasks_claim before working them."
+	"For non-trivial work, read injected briefing/recall context before searching again. Use session_start/session_end when an explicit handoff record is useful. If this session caused any mishaps (an action a warning said not to take, live state touched by mistake), self-report them in session_end's mishaps field -- recurrence review is how they get fixed. Claim shared plan steps with tasks_claim before working them."
 
 // BriefingFooter is the compact reminder appended to every ambient briefing.
 // It deliberately names only the two retrieval entry points; MCPInstructions
@@ -32,6 +32,7 @@ func RequiredWorkflowTerms() []string {
 		"plan:<slug>",
 		"tasks_claim",
 		"inputSchema",
+		"mishaps",
 	}
 }
 

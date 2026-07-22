@@ -102,6 +102,8 @@ func eventSummary(e core.Event) string {
 		return label
 	case core.EventHookPrompt:
 		return "prompt (no recall match)"
+	case core.EventAgentMishap:
+		return "mishap: " + snippet(payloadStr(p, "description"), 120)
 	case core.EventPlanCaptured:
 		s := "captured plan " + payloadStr(p, "basename")
 		if it, ok := p["iteration"].(float64); ok {

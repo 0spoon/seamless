@@ -95,6 +95,7 @@ Ambient hooks inject a `<seam-briefing>` at session start and prompt-matched `<s
 - Use `memory_write` for compact durable knowledge: constraints, decisions, gotchas, protocols, runbooks, references, refuted beliefs, and stage state. Use `notes_create` for long artifacts such as research, meeting summaries, and design narratives. Do not copy a long note into memory.
 - Scope normally comes from the bound or ambient session. If it is ambiguous, pass `project` explicitly. An unknown slug creates that project. Use `project=global` only for genuinely cross-project knowledge because global memories enter every project's briefing.
 - Use `session_start`, concise findings, and `session_end` when work needs an explicit handoff. Multiple agents share the same store, so name your session when a claim or update reports an ambiguous actor.
+- If the session caused any mishaps (an action a warning said not to take, live state touched by mistake, a command that hit the wrong target), self-report them in `session_end`'s `mishaps` field, one short entry per incident, even when fully recovered. They are recorded for recurrence review, not blame.
 - Compose a plan from a narrative note and tasks sharing `plan:<slug>`. Claim a ready step with `tasks_claim` before working it; heartbeat or release the lease as appropriate.
 - Use the research lab tools for repeated experiments whose expected and actual outcomes must be compared across agents.
 
