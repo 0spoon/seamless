@@ -39,8 +39,9 @@ MAIN=cmd/seamlessd/main.go
 INSTALL_CMD='curl -fsSL https://thereisnospoon.org/install | sh'
 WIN_INSTALL_CMD='irm https://thereisnospoon.org/install.ps1 | iex'
 
-# Every doc whose job includes telling a new user how to install.
-SURFACES="$PAGE README.md docs-src/quickstart.md docs-src/install.md"
+# Every doc whose job includes telling a new user how to install. webmcp.js is
+# here because its list_agent_resources tool teaches both commands to agents.
+SURFACES="$PAGE README.md docs-src/quickstart.md docs-src/install.md docs/static/webmcp.js"
 
 fail=0
 err() {
@@ -125,8 +126,8 @@ stamped() {
 		fi
 	done
 }
-stamped "$PAGE" site.css site.js scenes.js scenes-player.js
-stamped "$COMPARE" site.css site.js
+stamped "$PAGE" site.css site.js scenes.js scenes-player.js webmcp.js
+stamped "$COMPARE" site.css site.js webmcp.js
 
 # 6. Head completeness. The docs pages get their head from docsgen and
 #    cmd/docsgen/seo_test.go gates them; the landing page head is hand-written,

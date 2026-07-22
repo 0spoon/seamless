@@ -37,6 +37,9 @@ auth.md                 GENERATED (docsgen): the agent-readable auth statement
 scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
 static/site.js          theme toggle, copy buttons, scroll reveals (no deps)
+static/webmcp.js        WebMCP tools for browser agents: search the docs, read
+                        any page as markdown, list the agent endpoints; loaded
+                        by every page, a no-op without a model context
 static/favicon.svg      the 0spoon mark (an empty set)
 static/shots/           console screenshots, dark + light (see below)
 static/og.png           1200x630 social preview card

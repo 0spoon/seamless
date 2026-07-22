@@ -22,7 +22,7 @@ set -eu
 # place.
 PAGES="docs/index.html docs/compare/index.html"
 DIR=docs/static
-ASSETS="site.css site.js scenes.js scenes-player.js"
+ASSETS="site.css site.js scenes.js scenes-player.js webmcp.js"
 
 # First 8 hex of the file's sha256. sha256sum on Linux/CI, shasum on macOS.
 sha8() {

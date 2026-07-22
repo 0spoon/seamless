@@ -25,6 +25,12 @@ const landingCSSPath = "docs/static/site.css"
 // the landing page's shell -- so it is hashed here for the same reason.
 const landingJSPath = "docs/static/site.js"
 
+// landingWebMCPJSPath is the WebMCP tool registration script: it exposes the
+// site's read-only actions (search, read-as-markdown, endpoint discovery) to
+// browser agents. Owned by the landing page's static/ like site.css, loaded by
+// every generated page via its Root prefix, hashed here for the same reason.
+const landingWebMCPJSPath = "docs/static/webmcp.js"
+
 // assetVersions holds the "?v=<hash>" cache-buster suffix for each mutable asset
 // the layout links. The docs pages sit behind the same CDN edge cache as the
 // landing page, which caches static/ for hours while passing HTML through, so a
@@ -32,10 +38,11 @@ const landingJSPath = "docs/static/site.js"
 // until the TTL lapses (see scripts/site-stamp.sh). A per-content ?v= makes a
 // changed asset a new URL the edge never cached.
 type assetVersions struct {
-	SiteCSS string // shared landing stylesheet (via Root)
-	SiteJS  string // shared landing script (scenario pages only)
-	DocsCSS string // docs-only stylesheet (via DocsRoot)
-	DocsJS  string // docs-only script (via DocsRoot)
+	SiteCSS  string // shared landing stylesheet (via Root)
+	SiteJS   string // shared landing script (scenario pages only)
+	WebMCPJS string // shared WebMCP tool script (via Root)
+	DocsCSS  string // docs-only stylesheet (via DocsRoot)
+	DocsJS   string // docs-only script (via DocsRoot)
 }
 
 // assetVersion returns "?v=<first 8 hex of sha256>" for content, or "" when
@@ -70,11 +77,16 @@ func loadAssetVersions() (assetVersions, error) {
 	if err != nil {
 		return assetVersions{}, fmt.Errorf("read %s (docsgen must run from the repo root): %w", landingJSPath, err)
 	}
+	webmcpJS, err := os.ReadFile(landingWebMCPJSPath)
+	if err != nil {
+		return assetVersions{}, fmt.Errorf("read %s (docsgen must run from the repo root): %w", landingWebMCPJSPath, err)
+	}
 	return assetVersions{
-		SiteCSS: assetVersion(siteCSS),
-		SiteJS:  assetVersion(siteJS),
-		DocsCSS: assetVersion(docsCSS),
-		DocsJS:  assetVersion(docsJS),
+		SiteCSS:  assetVersion(siteCSS),
+		SiteJS:   assetVersion(siteJS),
+		WebMCPJS: assetVersion(webmcpJS),
+		DocsCSS:  assetVersion(docsCSS),
+		DocsJS:   assetVersion(docsJS),
 	}, nil
 }
 
