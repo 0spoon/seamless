@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/hooks"
 	agentskills "github.com/0spoon/seamless/internal/skills"
 )
@@ -122,6 +124,67 @@ func TestSummarizeActions(t *testing.T) {
 	// A malformed entry (no ": ") is skipped, not counted.
 	summary, _ = summarizeActions([]string{"garbage", "A: added"})
 	require.Equal(t, "1 added", summary)
+}
+
+func TestInstallCodexHooks_TrustGuidanceOnlyWhenDefinitionsChange(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.Defaults()
+	cfg.MCP.APIKey = "test-key"
+	hooksPath := filepath.Join(dir, "hooks.json")
+
+	first := captureStdout(t, func() error {
+		return installCodexHooks(cfg, hooksPath, "http://127.0.0.1:8081",
+			filepath.Join(dir, "seam"), filepath.Join(dir, "seamless.yaml"), false)
+	})
+	require.Contains(t, first, "5 added")
+	require.Contains(t, first, "trust")
+	require.Contains(t, first, "unverified")
+	require.Contains(t, first, "inspect and approve the current definitions with /hooks")
+
+	second := captureStdout(t, func() error {
+		return installCodexHooks(cfg, hooksPath, "http://127.0.0.1:8081",
+			filepath.Join(dir, "seam"), filepath.Join(dir, "seamless.yaml"), false)
+	})
+	require.Contains(t, second, "5 unchanged")
+	require.NotContains(t, second, "trust")
+	require.NotContains(t, second, "inspect and approve the current definitions with /hooks")
+	require.NotContains(t, second, "<seam-briefing>")
+}
+
+func TestInstallClientSkills_ReportsUnchangedOnIdenticalReinstall(t *testing.T) {
+	opts := agentskills.Options{HomeDir: t.TempDir()}
+
+	first := captureStdout(t, func() error {
+		return installClientSkills(hooks.ClientClaudeCode, opts)
+	})
+	require.Contains(t, first, "onboard  installed")
+	require.Contains(t, first, "research  installed")
+
+	second := captureStdout(t, func() error {
+		return installClientSkills(hooks.ClientClaudeCode, opts)
+	})
+	require.Contains(t, second, "onboard  unchanged")
+	require.Contains(t, second, "research  unchanged")
+	require.NotContains(t, second, "updated")
+}
+
+func captureStdout(t *testing.T, fn func() error) string {
+	t.Helper()
+
+	r, w, err := os.Pipe()
+	require.NoError(t, err)
+	original := os.Stdout
+	os.Stdout = w
+	t.Cleanup(func() { os.Stdout = original })
+
+	runErr := fn()
+	os.Stdout = original
+	require.NoError(t, w.Close())
+	require.NoError(t, runErr)
+	raw, err := io.ReadAll(r)
+	require.NoError(t, err)
+	require.NoError(t, r.Close())
+	return string(raw)
 }
 
 func TestSplitBins(t *testing.T) {

@@ -51,15 +51,28 @@ func TestInstall_ClientMarkersAreIndependent(t *testing.T) {
 	require.FileExists(t, filepath.Join(claude.Root, OnboardName, "agents", "openai.yaml"))
 	require.FileExists(t, filepath.Join(claude.Root, ResearchName, "SKILL.md"))
 	require.FileExists(t, filepath.Join(claude.Root, OnboardMarker))
+	research := filepath.Join(claude.Root, ResearchName, "SKILL.md")
+	researchBefore, err := os.Stat(research)
+	require.NoError(t, err)
+
+	// An identical reinstall reports the truth and leaves the managed files in
+	// place rather than replacing them with byte-identical copies.
+	claudeAgain, err := Install(ClientClaude, opts)
+	require.NoError(t, err)
+	require.Equal(t, ActionUnchanged, claudeAgain.Onboard)
+	require.Equal(t, ActionUnchanged, claudeAgain.Research)
+	researchAfter, err := os.Stat(research)
+	require.NoError(t, err)
+	require.True(t, os.SameFile(researchBefore, researchAfter))
 
 	// Simulate the one-shot skill removing itself after a successful run. An
 	// upgrade must honor this client's marker and leave it gone.
 	require.NoError(t, os.RemoveAll(filepath.Join(claude.Root, OnboardName)))
-	claudeAgain, err := Install(ClientClaude, opts)
+	claudeAfterUse, err := Install(ClientClaude, opts)
 	require.NoError(t, err)
-	require.Equal(t, ActionAlreadyDelivered, claudeAgain.Onboard)
+	require.Equal(t, ActionAlreadyDelivered, claudeAfterUse.Onboard)
 	require.NoDirExists(t, filepath.Join(claude.Root, OnboardName))
-	require.Equal(t, ActionUpdated, claudeAgain.Research)
+	require.Equal(t, ActionUnchanged, claudeAfterUse.Research)
 
 	// Claude's delivered marker must not suppress Codex's first delivery.
 	codex, err := Install(ClientCodex, opts)

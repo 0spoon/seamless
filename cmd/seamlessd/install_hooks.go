@@ -184,6 +184,8 @@ func printSkillAction(label, name, root string, action agentskills.Action, skipE
 		fieldRow(label, green("installed")+dim("  · "+dst))
 	case agentskills.ActionUpdated:
 		fieldRow(label, green("updated")+dim("  · "+dst))
+	case agentskills.ActionUnchanged:
+		fieldRow(label, dim("unchanged  · "+dst))
 	case agentskills.ActionAlreadyDelivered:
 		fieldRow(label, dim("already used; one-shot skill not reinstalled"))
 	case agentskills.ActionSkipped:
@@ -646,8 +648,9 @@ func installClaudeHooks(cfg config.Config, settings, baseURL, seamBin, configPat
 // desktop app, CLI, and IDE extension into $CODEX_HOME/hooks.json. Unless doMCP
 // is false it registers the seam mcp-proxy stdio bridge through the Codex
 // management CLI, or prints the exact app-only settings fallback. It closes by
-// pointing at Codex's hook trust gate, which no config we write can satisfy on
-// the user's behalf (see the codex-hook-contract memory).
+// pointing at Codex's hook trust gate when it changed the hook definitions.
+// No config we write can satisfy that gate on the user's behalf (see the
+// codex-hook-contract memory).
 func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPath string, doMCP bool) error {
 	target := codexHooks
 	if strings.TrimSpace(target) == "" {
@@ -670,13 +673,16 @@ func installCodexHooks(cfg config.Config, codexHooks, baseURL, seamBin, configPa
 			return err
 		}
 	}
-	// Codex ignores hooks until the user trusts them; no config we write can do
-	// that on their behalf (see the codex-hook-contract memory), so flag both the
-	// verified CLI route and the app's missing command instead of implying one UI.
-	fieldRow("trust", yellow("unverified"))
-	fmt.Printf("%s%s\n", fieldCont, dim("CLI: inspect and approve the current definitions with /hooks"))
-	fmt.Printf("%s%s\n", fieldCont, dim("desktop app: /hooks is not available; confirm a repo chat receives <seam-briefing>"))
-	fmt.Printf("%s%s\n", fieldCont, dim("headless: pass --dangerously-bypass-hook-trust"))
+	// Codex ignores new or changed hooks until the user trusts them; no config we
+	// write can do that on their behalf (see the codex-hook-contract memory).
+	// An unchanged install has no new action for the user, so keep routine upgrade
+	// output quiet and leave the always-unverified diagnostic to doctor.
+	if res.Changed {
+		fieldRow("trust", yellow("unverified"))
+		fmt.Printf("%s%s\n", fieldCont, dim("CLI: inspect and approve the current definitions with /hooks"))
+		fmt.Printf("%s%s\n", fieldCont, dim("desktop app: /hooks is not available; confirm a repo chat receives <seam-briefing>"))
+		fmt.Printf("%s%s\n", fieldCont, dim("headless: pass --dangerously-bypass-hook-trust"))
+	}
 	return nil
 }
 

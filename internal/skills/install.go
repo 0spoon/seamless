@@ -5,6 +5,7 @@
 package skills
 
 import (
+	"bytes"
 	"embed"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/files"
@@ -41,6 +43,7 @@ type Action string
 const (
 	ActionInstalled        Action = "installed"
 	ActionUpdated          Action = "updated"
+	ActionUnchanged        Action = "unchanged"
 	ActionAlreadyDelivered Action = "already-delivered"
 	ActionSkipped          Action = "skipped"
 )
@@ -183,6 +186,19 @@ func installOnboard(root string) (Action, error) {
 	if markerExists && !dstExists {
 		return ActionAlreadyDelivered, nil
 	}
+	markerCurrent, err := fileCurrent(marker, nil, 0o644)
+	if err != nil {
+		return "", err
+	}
+	if dstExists {
+		assetsCurrent, err := assetDirCurrent(OnboardName, dst)
+		if err != nil {
+			return "", err
+		}
+		if assetsCurrent && markerCurrent {
+			return ActionUnchanged, nil
+		}
+	}
 
 	action := ActionInstalled
 	if dstExists {
@@ -191,8 +207,10 @@ func installOnboard(root string) (Action, error) {
 	if err := installAssetDir(OnboardName, dst); err != nil {
 		return "", err
 	}
-	if err := files.AtomicWrite(marker, nil, 0o644); err != nil {
-		return "", err
+	if !markerCurrent {
+		if err := files.AtomicWrite(marker, nil, 0o644); err != nil {
+			return "", err
+		}
 	}
 	return action, nil
 }
@@ -203,6 +221,15 @@ func installRecurring(root, name string) (Action, error) {
 	if err != nil {
 		return "", err
 	}
+	if dstExists {
+		current, err := assetDirCurrent(name, dst)
+		if err != nil {
+			return "", err
+		}
+		if current {
+			return ActionUnchanged, nil
+		}
+	}
 	action := ActionInstalled
 	if dstExists {
 		action = ActionUpdated
@@ -211,6 +238,74 @@ func installRecurring(root, name string) (Action, error) {
 		return "", err
 	}
 	return action, nil
+}
+
+// assetDirCurrent reports whether every embedded directory and file exists at
+// dst with the content and permissions installAssetDir would write. Extra files
+// are ignored because installation is overlay-only and does not remove them.
+// Lstat keeps a symlink itself from being mistaken for a matching regular file
+// or directory.
+func assetDirCurrent(name, dst string) (bool, error) {
+	src := path.Join("assets", name)
+	current := true
+	err := fs.WalkDir(assets, src, func(assetPath string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel := strings.TrimPrefix(strings.TrimPrefix(assetPath, src), "/")
+		target := dst
+		if rel != "" {
+			target = filepath.Join(dst, filepath.FromSlash(rel))
+		}
+		if entry.IsDir() {
+			info, err := os.Lstat(target)
+			switch {
+			case os.IsNotExist(err):
+				current = false
+				return nil
+			case err != nil:
+				return fmt.Errorf("stat %s: %w", target, err)
+			case !info.IsDir():
+				current = false
+			}
+			return nil
+		}
+		want, err := assets.ReadFile(assetPath)
+		if err != nil {
+			return fmt.Errorf("read embedded %s: %w", assetPath, err)
+		}
+		matches, err := fileCurrent(target, want, 0o644)
+		if err != nil {
+			return err
+		}
+		if !matches {
+			current = false
+		}
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return current, nil
+}
+
+func fileCurrent(filePath string, want []byte, perm os.FileMode) (bool, error) {
+	info, err := os.Lstat(filePath)
+	switch {
+	case os.IsNotExist(err):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("stat %s: %w", filePath, err)
+	case !info.Mode().IsRegular():
+		return false, nil
+	case runtime.GOOS != "windows" && info.Mode().Perm() != perm:
+		return false, nil
+	}
+	got, err := os.ReadFile(filePath)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", filePath, err)
+	}
+	return bytes.Equal(got, want), nil
 }
 
 func installAssetDir(name, dst string) error {
