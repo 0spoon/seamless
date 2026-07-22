@@ -354,6 +354,33 @@
     for (var i = 0; i < pres.length; i++) {
       var pre = pres[i];
       var sec = section(pre.getAttribute('data-ix-title'), pre.textContent);
+      // Event cards already provide a descriptive header. Move the copy action
+      // into it instead of rendering a second, mostly-empty toolbar above the
+      // value; this keeps full pages and constrained detail panes dense alike.
+      var eventCard = pre.closest ? pre.closest('.event-content-card') : null;
+      var eventHead = eventCard ? eventCard.querySelector('.event-card-head') : null;
+      var sectionHead = sec.querySelector('.ix-section-head');
+      var copy = sectionHead ? sectionHead.querySelector('.ix-copy') : null;
+      if (eventHead && sectionHead && copy) {
+        copy.classList.add('event-card-copy');
+        eventHead.appendChild(copy);
+        sectionHead.remove();
+      }
+      // Raw payload already has the outer <details> disclosure. A second
+      // Show-all clamp only clips the JSON inside the inspector, so remove that
+      // nested disclosure and turn the value itself into a keyboard-scrollable
+      // region.
+      var rawBody = pre.closest ? pre.closest('.event-raw-body') : null;
+      if (rawBody) {
+        var expand = sec.querySelector('.ix-expand');
+        var payload = sec.querySelector('.pre, .pre-json');
+        if (expand) expand.remove();
+        if (payload) {
+          payload.classList.remove('clamp');
+          payload.tabIndex = 0;
+          payload.setAttribute('aria-label', 'Scrollable raw payload');
+        }
+      }
       pre.parentNode.replaceChild(sec, pre);
     }
   }

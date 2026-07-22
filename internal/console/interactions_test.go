@@ -239,11 +239,18 @@ func TestInteractions_HTMLShellRenders(t *testing.T) {
 	require.Contains(t, body, "Interactions")
 	require.Contains(t, body, `id="ix-history-window"`)
 	require.Contains(t, body, `id="ix-history-load"`)
+	require.Contains(t, body, `id="ix-history-feedback" hidden`)
 	require.Contains(t, body, `id="ix-empty-load"`)
+	require.Contains(t, body, `class="ix-more" hidden`)
+	require.Contains(t, body, "Load older events")
+	require.Contains(t, body, `class="detail-pane-label">Inspector</span>`)
 	require.NotContains(t, body, "Activity range")
+	require.NotContains(t, body, "Live list starts empty", "the empty state, not the control row, explains the initial live-only state")
 	require.NotContains(t, body, `id="ix-volume"`)
 	require.NotContains(t, body, `fetch('/console/interactions?format=json',`, "opening the screen must not hydrate historical rows")
 	require.Contains(t, body, `last = { ts: new Date().toISOString(), id: '' }`, "the clean feed still anchors reconnect gap-fill")
+	require.Contains(t, string(consoleCSS), ".ix-more[hidden] { display: none; }", "the continuation rail must not leak into the live-only state")
+	require.Contains(t, string(consoleCSS), ".ix-kind-control { flex: 0 1 auto;", "history and stream controls should follow the filters instead of being pushed right")
 }
 
 func TestInteractionsClient_SparseRowsHaveNoFalseDisclosure(t *testing.T) {
@@ -256,4 +263,15 @@ func TestInteractionsClient_SparseRowsHaveNoFalseDisclosure(t *testing.T) {
 	require.Contains(t, js, "Event details \\u2192")
 	require.Contains(t, css, ".ix-static-meta")
 	require.Contains(t, css, ".ix-row > summary::after", "expandable rows expose a disclosure cue that static cards omit")
+}
+
+func TestInteractionsClient_EventPeekUsesCompactChrome(t *testing.T) {
+	js := string(interactionsJS)
+	css := string(consoleCSS)
+
+	require.Contains(t, js, "copy.classList.add('event-card-copy')", "event copy belongs in the existing card header, not a second toolbar")
+	require.Contains(t, js, "payload.setAttribute('aria-label', 'Scrollable raw payload')", "raw JSON must expose its independent keyboard-scroll region")
+	require.Contains(t, css, ".event-peek .event-primary > .event-content-card { padding: 0; overflow: hidden; }")
+	require.Contains(t, css, ".interactions-split.detail-open .detail-pane-body { padding: 14px; }")
+	require.Contains(t, css, "max-height: min(42vh, 420px); overflow: auto; scrollbar-gutter: stable;")
 }

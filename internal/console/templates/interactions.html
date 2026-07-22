@@ -27,7 +27,7 @@
   </div>
   <div class="ix-actions">
     <div class="lib-control ix-history-control">
-      <label class="lib-control-label" for="ix-history-window">Add history</label>
+      <label class="lib-control-label" for="ix-history-window">History</label>
       <div class="ix-history-picker">
         <select id="ix-history-window" class="ops-select" aria-label="Recent history window">
           <option value="60">Last minute</option>
@@ -37,13 +37,20 @@
           <option value="14400">Last 4 hours</option>
           <option value="86400">Last 24 hours</option>
         </select>
-        <button class="btn small primary" type="button" id="ix-history-load">Add recent</button>
+        <button class="btn small pop" type="button" id="ix-history-load" aria-label="Add selected history window">Add</button>
       </div>
     </div>
-    <button class="btn small" type="button" id="ix-pause">Pause</button>
+    <div class="lib-control ix-stream-control">
+      <span class="lib-control-label">Stream</span>
+      <button class="btn small" type="button" id="ix-pause" aria-pressed="false">Pause</button>
+    </div>
   </div>
-  <div class="lib-control-note ix-history-note" aria-live="polite"><strong id="ix-history-status">Live list starts empty</strong><span>History is added without replacing live events</span></div>
 </section>
+<div class="ix-history-feedback" id="ix-history-feedback" hidden aria-live="polite">
+  <span class="ix-history-feedback-dot" aria-hidden="true"></span>
+  <strong id="ix-history-status"></strong>
+  <span>History is additive; live events stay in place.</span>
+</div>
 
 <section class="ops-stage ix-stream-stage" aria-label="Interaction stream">
   <header class="ops-stage-head ix-stream-head">
@@ -57,12 +64,18 @@
       <span class="empty-ico">{{icon "activity"}}</span>
       <div class="ix-empty-body"><strong id="ix-empty-copy">Listening for new interactions</strong><p id="ix-empty-help">New events will appear here at the top. Add a recent window when you need earlier context.</p><button class="btn small" type="button" id="ix-empty-load">Add last 5 minutes</button></div>
     </div>
-    <div class="ix-more" hidden><button class="btn small" type="button" id="ix-older">Continue loading this window</button></div>
+    <div class="ix-more" hidden>
+      <span>More events remain in this history window</span>
+      <button class="btn small" type="button" id="ix-older">Load older events</button>
+    </div>
   </div><!-- .list-pane -->
   <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Interaction detail">
     <div class="detail-pane-chrome">
-      <a class="detail-open btn small" href="#">open full &nearr;</a>
-      <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+      <span class="detail-pane-label">Inspector</span>
+      <div class="detail-pane-actions">
+        <a class="detail-open btn small" href="#">Open full page &nearr;</a>
+        <button class="detail-close btn small" type="button" aria-label="Close detail">&times;</button>
+      </div>
     </div>
     <div class="detail-pane-body"></div>
   </section>
@@ -87,6 +100,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   var liveEl = document.getElementById('ix-live');
   var historySel = document.getElementById('ix-history-window');
   var historyBtn = document.getElementById('ix-history-load');
+  var historyFeedback = document.getElementById('ix-history-feedback');
   var historyStatus = document.getElementById('ix-history-status');
   var countEl = document.getElementById('ix-count');
   var emptyCopy = document.getElementById('ix-empty-copy');
@@ -217,6 +231,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   }
 
   function reflectBuffer() {
+    pauseBtn.setAttribute('aria-pressed', String(paused));
     pauseBtn.textContent = paused
       ? (buffer.length ? 'Resume · +' + buffer.length : 'Resume')
       : 'Pause';
@@ -309,6 +324,14 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     if (olderBtn) olderBtn.disabled = busy;
   }
 
+  function showHistoryStatus(message, tone) {
+    if (historyStatus) historyStatus.textContent = message;
+    if (historyFeedback) {
+      historyFeedback.hidden = !message;
+      historyFeedback.setAttribute('data-tone', tone || 'neutral');
+    }
+  }
+
   function loadHistory(continueWindow) {
     if (continueWindow && !cursor) return;
     var label = historyLabel();
@@ -319,7 +342,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     } else {
       var secs = historySel ? parseInt(historySel.value, 10) : NaN;
       if (!isFinite(secs) || secs <= 0) {
-        if (historyStatus) historyStatus.textContent = 'Choose a valid history window';
+        showHistoryStatus('Choose a valid history window', 'danger');
         return;
       }
       historySecs = secs;
@@ -328,7 +351,7 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
     }
 
     setHistoryBusy(true);
-    if (historyStatus) historyStatus.textContent = continueWindow ? 'Loading more history…' : 'Adding ' + label + '…';
+    showHistoryStatus(continueWindow ? 'Loading more history…' : 'Adding ' + label + '…', 'neutral');
     fetch(url, { headers: { Accept: 'application/json' } })
       .then(function (r) {
         if (!r.ok) throw new Error('history request failed');
@@ -342,23 +365,21 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
         cursor = data.nextTs && data.afterTs
           ? { ts: data.nextTs, id: data.nextId, afterTs: data.afterTs }
           : null;
-        if (historyStatus) {
-          if (unique.length) {
-            historyStatus.textContent = continueWindow
-              ? 'Added ' + unique.length + ' older event' + (unique.length === 1 ? '' : 's')
-              : 'Added ' + unique.length + ' event' + (unique.length === 1 ? '' : 's') + ' from ' + label;
-          } else if (cursor) {
-            historyStatus.textContent = 'No visible events in this batch — more remain';
-          } else {
-            historyStatus.textContent = continueWindow ? 'That window is fully loaded' : 'No additional events in ' + label;
-          }
+        if (unique.length) {
+          showHistoryStatus(continueWindow
+            ? 'Added ' + unique.length + ' older event' + (unique.length === 1 ? '' : 's')
+            : 'Added ' + unique.length + ' event' + (unique.length === 1 ? '' : 's') + ' from ' + label, 'ok');
+        } else if (cursor) {
+          showHistoryStatus('No visible events in this batch — more remain', 'neutral');
+        } else {
+          showHistoryStatus(continueWindow ? 'That window is fully loaded' : 'No additional events in ' + label, 'neutral');
         }
         refreshTabs();
         updateEmpty();
         setHistoryBusy(false);
       })
       .catch(function () {
-        if (historyStatus) historyStatus.textContent = 'Could not add history — live streaming is unchanged';
+        showHistoryStatus('Could not add history — live streaming is unchanged', 'danger');
         setHistoryBusy(false);
       });
   }
