@@ -33,7 +33,10 @@ import (
 )
 
 const (
-	serverName    = "Seamless"
+	// ServerName is the server name advertised in the MCP initialize handshake.
+	// Exported for docsgen, which mirrors the handshake identity into the
+	// published server card's serverInfo (docs/.well-known/mcp/server-card.json).
+	ServerName    = "Seamless"
 	serverVersion = "0.0.0-dev"
 
 	// ToolCount is the number of MCP tools registered. doctor asserts the actual
@@ -260,7 +263,7 @@ func New(cfg Config) *Server {
 		toolSchemas: make(map[string]mcp.ToolInputSchema),
 	}
 	s.mcp = mcpserver.NewMCPServer(
-		serverName, version,
+		ServerName, version,
 		mcpserver.WithInstructions(agentguide.MCPInstructions),
 		mcpserver.WithToolCapabilities(false),
 		mcpserver.WithRecovery(),

@@ -20,6 +20,9 @@ index.md                GENERATED (docsgen): the landing page's markdown twin
                         (llms.txt under the name the Accept: text/markdown
                         rewrite expects; see "Markdown for agents" below)
 .well-known/api-catalog GENERATED (docsgen): RFC 9727 linkset for API discovery
+.well-known/mcp/server-card.json
+                        GENERATED (docsgen): MCP Server Card (SEP-1649),
+                        generated from the repo-root server.json
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
@@ -73,11 +76,18 @@ one), `llms.txt` (the nav as a linked outline, in the llmstxt.org shape),
 `.well-known/api-catalog` (an RFC 9727 linkset naming the machine-readable
 entry points; GitHub Pages serves it as application/octet-stream, so the
 required application/linkset+json content type comes from a Cloudflare
-response-header rule on the zone, not from this repo). Unlike `docs/docs/`
+response-header rule on the zone, not from this repo), and
+`.well-known/mcp/server-card.json` (the MCP Server Card, SEP-1649: identity
+and version generated from the repo-root `server.json` so the registry listing
+and the card cannot disagree, plus the streamable-HTTP endpoint every install
+serves on its own machine -- Seamless has no hosted remote, and the card says
+so; the `.json` extension gets application/json from GitHub Pages natively, no
+edge rule needed). Unlike `docs/docs/`
 these are written in place, never deleted, and the rest of this directory is
-not docsgen's to touch. All six (with the root `index.md` twin, see below) are
-diffed by `make docs-check`, so adding or
-removing a page keeps them current automatically.
+not docsgen's to touch. All seven (with the root `index.md` twin, see below)
+are diffed by `make docs-check` -- `SITE_FILES` in the Makefile is the list --
+so adding or removing a page keeps them current automatically, and a release's
+`server.json` bump makes the committed card stale until `make docs` is rerun.
 
 ## Markdown for agents (content negotiation)
 

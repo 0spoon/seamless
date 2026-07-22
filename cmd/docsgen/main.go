@@ -69,6 +69,16 @@ func run(src, out, siteDir, serveAddr string) error {
 	if err != nil {
 		return err
 	}
+	// The server card derives from server.json at the repo root, not from
+	// docs-src -- attach it here so a broken registry listing fails the run
+	// before any rendering.
+	reg, err := loadRegistryMeta(serverJSONPath)
+	if err != nil {
+		return err
+	}
+	if site.ServerCard, err = serverCard(reg); err != nil {
+		return err
+	}
 	if err := renderPages(site); err != nil {
 		return err
 	}

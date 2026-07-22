@@ -29,6 +29,10 @@ func loadRepoSite(t *testing.T) *Site {
 	site, err := loadSite("docs-src")
 	require.NoError(t, err)
 	site.Scenarios = loadRepoScenarios(t)
+	reg, err := loadRegistryMeta(serverJSONPath)
+	require.NoError(t, err)
+	site.ServerCard, err = serverCard(reg)
+	require.NoError(t, err)
 	return site
 }
 

@@ -47,6 +47,10 @@ type Site struct {
 	// not docs pages -- they publish at the site root -- but the sitemap and
 	// llms.txt must name them, so the Site carries them. See scenarios.go.
 	Scenarios []*Scenario
+	// ServerCard is the rendered /.well-known/mcp/server-card.json, generated
+	// from the repo-root server.json (see servercard.go). run() attaches it
+	// like Scenarios; fixture Sites built without one simply omit the file.
+	ServerCard []byte
 }
 
 // Section is one sidebar group.

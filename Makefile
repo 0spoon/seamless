@@ -81,7 +81,8 @@ ADDR          = $(or $(CONFIG_ADDR),$(DEFAULT_ADDR))
 DOCS_SRC   := docs-src
 DOCS_OUT   := docs/docs
 SITE_ROOT  := docs
-SITE_FILES := sitemap.xml robots.txt llms.txt llms-full.txt
+SITE_FILES := sitemap.xml robots.txt llms.txt llms-full.txt index.md \
+              .well-known/api-catalog .well-known/mcp/server-card.json
 DOCS_ADDR ?= 127.0.0.1:8899
 
 # The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).

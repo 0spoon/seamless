@@ -164,7 +164,9 @@ func TestWriteSiteRootNeverDeletes(t *testing.T) {
 	require.NoError(t, os.WriteFile(cname, []byte("thereisnospoon.org"), 0o644))
 
 	home := &Page{Description: "a test site"}
-	site := &Site{Home: home, Pages: []*Page{home, {URL: "quickstart/"}}}
+	card, err := serverCard(&registryMeta{Name: "x/y", Version: "1.0.0", Description: "a test card"})
+	require.NoError(t, err)
+	site := &Site{Home: home, Pages: []*Page{home, {URL: "quickstart/"}}, ServerCard: card}
 	require.NoError(t, writeSiteRoot(dir, site))
 
 	require.FileExists(t, landing, "the landing page survives")

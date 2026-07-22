@@ -46,7 +46,13 @@ func renderRepoSite(t *testing.T) map[string]string {
 	}
 	collect(out, "")
 	collect(filepath.Join(dir, "scenarios"), "scenarios/")
-	for _, name := range []string{"sitemap.xml", "robots.txt", "llms.txt", "llms-full.txt"} {
+	// The root index.md twin is deliberately absent here: its key would collide
+	// with the docs home twin collect(out, "") already stored, and it is bytes
+	// of llms.txt, which is covered.
+	for _, name := range []string{
+		"sitemap.xml", "robots.txt", "llms.txt", "llms-full.txt",
+		".well-known/api-catalog", serverCardPath,
+	} {
 		raw, err := os.ReadFile(filepath.Join(dir, name))
 		require.NoError(t, err)
 		files[name] = string(raw)

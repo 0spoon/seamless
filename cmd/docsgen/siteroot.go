@@ -160,7 +160,7 @@ func writeSiteRoot(siteDir string, site *Site) error {
 // directory URL, `/` included, maps uniformly to its sibling index.md, which
 // GitHub Pages serves as text/markdown natively.
 func siteRootFiles(site *Site) map[string][]byte {
-	return map[string][]byte{
+	files := map[string][]byte{
 		"sitemap.xml":             sitemapXML(site),
 		"robots.txt":              []byte(robotsTxt),
 		"llms.txt":                llmsTxt(site),
@@ -168,4 +168,12 @@ func siteRootFiles(site *Site) map[string][]byte {
 		"index.md":                llmsTxt(site),
 		".well-known/api-catalog": []byte(apiCatalog),
 	}
+	// The card is attached by run() (and loadRepoSite in tests); a Site built
+	// without one omits the file rather than publishing an empty card. The real
+	// render can not silently lose it: docs-check diffs the committed card
+	// against a fresh render by name (SITE_FILES in the Makefile).
+	if len(site.ServerCard) > 0 {
+		files[serverCardPath] = site.ServerCard
+	}
+	return files
 }
