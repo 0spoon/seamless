@@ -35,6 +35,8 @@ func loadRepoSite(t *testing.T) *Site {
 	require.NoError(t, err)
 	site.AgentCard, err = agentCard(reg)
 	require.NoError(t, err)
+	site.AgentSkills, err = agentSkills()
+	require.NoError(t, err)
 	return site
 }
 

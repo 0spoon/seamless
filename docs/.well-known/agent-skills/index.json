@@ -1,0 +1,19 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "seam-onboard",
+      "type": "skill-md",
+      "description": "Install Seamless awareness for the current agent client. Use only when the user explicitly asks to onboard Seamless or invokes this skill. Configure the client's hooks and MCP server if needed, ask whether guidance belongs globally or in this project, append a marker-wrapped block to AGENTS.md for Codex or CLAUDE.md for Claude Code, then self-remove.",
+      "url": "https://thereisnospoon.org/.well-known/agent-skills/seam-onboard/SKILL.md",
+      "digest": "sha256:e589aecdd1f93deec8ddc812e09f92dc1744da2f51302fded427e613c4119f48"
+    },
+    {
+      "name": "seam-research",
+      "type": "skill-md",
+      "description": "Run a systematic engineering investigation as a shared Seamless research lab. Use for repeated experiments whose expected and actual results must be compared or outlive the session, including flaky races, firmware bring-up, configuration sweeps, and performance tuning. Do not use for ordinary debugging where one fix ends the investigation.",
+      "url": "https://thereisnospoon.org/.well-known/agent-skills/seam-research/SKILL.md",
+      "digest": "sha256:18a3a025ea86bfa69b833f500a08b0b710a6be683ad0bbb3ac0a17823763c584"
+    }
+  ]
+}

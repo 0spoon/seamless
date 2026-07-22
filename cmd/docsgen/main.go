@@ -82,6 +82,9 @@ func run(src, out, siteDir, serveAddr string) error {
 	if site.AgentCard, err = agentCard(reg); err != nil {
 		return err
 	}
+	if site.AgentSkills, err = agentSkills(); err != nil {
+		return err
+	}
 	if err := renderPages(site); err != nil {
 		return err
 	}

@@ -414,6 +414,16 @@ plus global, <code>metadata.scope</code> narrows the kinds (<code>all|memories|n
 <code>metadata.limit</code> caps the hits. The rest of A2A - tasks, streaming, push
 notifications - is deliberately absent, and the card declares every one of
 those capabilities false rather than advertising an operation that would fail.</p>
+<h2 id="skills-over-the-web">Skills over the web</h2>
+<p>The maintained skills that <code>seamlessd install-hooks</code> delivers to a client's
+skill home (<a href="../../install/"><code>seam-onboard</code></a>, <a href="../../guides/research-trials/"><code>seam-research</code></a>)
+are also published for discovery: this site serves an
+<a href="https://agentskills.io/">Agent Skills</a> index at
+<a href="https://thereisnospoon.org/.well-known/agent-skills/index.json"><code>/.well-known/agent-skills/index.json</code></a>,
+one entry per skill with a <code>sha256:</code> digest of its <code>SKILL.md</code>. The published
+artifacts are the same embedded bytes the installer writes, so a fetched skill
+verifies against its digest and matches what a local install would have
+delivered.</p>
 <h2 id="the-seam-cli-as-a-fallback-client">The seam CLI as a fallback client</h2>
 <p>An agent that can run a shell but cannot speak MCP still has the loop. <code>seam</code> is
 a headless client for the same daemon, authenticating with the same key:</p>
@@ -460,7 +470,7 @@ the failure mode.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#connecting">Connecting</a></li><li class="lvl-3"><a href="#auth-is-enforced-at-the-tool-not-the-transport">Auth is enforced at the tool, not the transport</a></li><li class="lvl-2"><a href="#the-connection-is-the-session-binding">The connection is the session binding</a></li><li class="lvl-2"><a href="#scope-discipline">Scope discipline</a></li><li class="lvl-2"><a href="#when-to-write-a-memory-and-when-to-skip">When to write a memory, and when to skip</a></li><li class="lvl-2"><a href="#a2a-recall-without-a-session">A2A: recall without a session</a></li><li class="lvl-2"><a href="#the-seam-cli-as-a-fallback-client">The seam CLI as a fallback client</a></li><li class="lvl-2"><a href="#verify-the-integration">Verify the integration</a></li>
+      <li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#connecting">Connecting</a></li><li class="lvl-3"><a href="#auth-is-enforced-at-the-tool-not-the-transport">Auth is enforced at the tool, not the transport</a></li><li class="lvl-2"><a href="#the-connection-is-the-session-binding">The connection is the session binding</a></li><li class="lvl-2"><a href="#scope-discipline">Scope discipline</a></li><li class="lvl-2"><a href="#when-to-write-a-memory-and-when-to-skip">When to write a memory, and when to skip</a></li><li class="lvl-2"><a href="#a2a-recall-without-a-session">A2A: recall without a session</a></li><li class="lvl-2"><a href="#skills-over-the-web">Skills over the web</a></li><li class="lvl-2"><a href="#the-seam-cli-as-a-fallback-client">The seam CLI as a fallback client</a></li><li class="lvl-2"><a href="#verify-the-integration">Verify the integration</a></li>
     </ul>
   </aside>
   

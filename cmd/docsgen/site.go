@@ -54,6 +54,10 @@ type Site struct {
 	// AgentCard is the rendered /.well-known/agent-card.json -- the A2A twin,
 	// same lifecycle as ServerCard (see agentcard.go).
 	AgentCard []byte
+	// AgentSkills is the /.well-known/agent-skills/ discovery surface -- the
+	// index plus each published SKILL.md, keyed by site-root-relative path,
+	// same lifecycle as the cards (see skillsindex.go).
+	AgentSkills map[string][]byte
 }
 
 // Section is one sidebar group.

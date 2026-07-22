@@ -2809,6 +2809,18 @@ plus global, `metadata.scope` narrows the kinds (`all|memories|notes`), and
 notifications - is deliberately absent, and the card declares every one of
 those capabilities false rather than advertising an operation that would fail.
 
+## Skills over the web
+
+The maintained skills that `seamlessd install-hooks` delivers to a client's
+skill home ([`seam-onboard`](/install/), [`seam-research`](/guides/research-trials/))
+are also published for discovery: this site serves an
+[Agent Skills](https://agentskills.io/) index at
+[`/.well-known/agent-skills/index.json`](https://thereisnospoon.org/.well-known/agent-skills/index.json),
+one entry per skill with a `sha256:` digest of its `SKILL.md`. The published
+artifacts are the same embedded bytes the installer writes, so a fetched skill
+verifies against its digest and matches what a local install would have
+delivered.
+
 ## The seam CLI as a fallback client
 
 An agent that can run a shell but cannot speak MCP still has the loop. `seam` is

@@ -83,7 +83,10 @@ DOCS_OUT   := docs/docs
 SITE_ROOT  := docs
 SITE_FILES := sitemap.xml robots.txt llms.txt llms-full.txt index.md auth.md \
               .well-known/api-catalog .well-known/mcp/server-card.json \
-              .well-known/agent-card.json
+              .well-known/agent-card.json \
+              .well-known/agent-skills/index.json \
+              .well-known/agent-skills/seam-onboard/SKILL.md \
+              .well-known/agent-skills/seam-research/SKILL.md
 DOCS_ADDR ?= 127.0.0.1:8899
 
 # The one-command installer (curl -fsSL https://thereisnospoon.org/install | sh).

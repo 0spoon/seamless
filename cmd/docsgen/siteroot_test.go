@@ -200,6 +200,53 @@ func TestWriteSiteRootNeverDeletes(t *testing.T) {
 	}
 }
 
+// TestMakefileGatesEverySiteRootFile: docs-check diffs only the files
+// SITE_FILES names, so a site-root file the Makefile does not list is
+// published ungated -- exactly the gap that once left index.md and
+// api-catalog undiffed while SITE.md claimed otherwise. Set equality both
+// ways: everything emitted is gated, everything gated is emitted.
+func TestMakefileGatesEverySiteRootFile(t *testing.T) {
+	repoRoot(t)
+
+	site := loadRepoSite(t)
+	var emitted []string
+	for name := range siteRootFiles(site) {
+		emitted = append(emitted, name)
+	}
+	require.ElementsMatch(t, emitted, makefileSiteFiles(t))
+}
+
+// makefileSiteFiles parses the SITE_FILES assignment out of the Makefile,
+// following backslash continuations.
+func makefileSiteFiles(t *testing.T) []string {
+	t.Helper()
+	raw, err := os.ReadFile("Makefile")
+	require.NoError(t, err)
+
+	lines := strings.Split(string(raw), "\n")
+	for i, line := range lines {
+		if !strings.HasPrefix(line, "SITE_FILES") {
+			continue
+		}
+		_, value, ok := strings.Cut(line, ":=")
+		require.True(t, ok, "SITE_FILES must be a := assignment")
+		var files []string
+		for {
+			value = strings.TrimSpace(value)
+			continued := strings.HasSuffix(value, `\`)
+			files = append(files, strings.Fields(strings.TrimSuffix(value, `\`))...)
+			if !continued {
+				return files
+			}
+			i++
+			require.Less(t, i, len(lines), "SITE_FILES continuation runs off the Makefile")
+			value = lines[i]
+		}
+	}
+	t.Fatal("Makefile has no SITE_FILES assignment")
+	return nil
+}
+
 // TestPageCanonical: canonical URLs are absolute, directory-style, and rooted
 // under the published /docs/ prefix.
 func TestPageCanonical(t *testing.T) {

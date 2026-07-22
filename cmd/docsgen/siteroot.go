@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"maps"
 	"path/filepath"
 	"strings"
 )
@@ -193,5 +194,6 @@ func siteRootFiles(site *Site) map[string][]byte {
 	if len(site.AgentCard) > 0 {
 		files[agentCardPath] = site.AgentCard
 	}
+	maps.Copy(files, site.AgentSkills)
 	return files
 }

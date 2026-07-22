@@ -28,6 +28,11 @@ auth.md                 GENERATED (docsgen): the agent-readable auth statement
 .well-known/agent-card.json
                         GENERATED (docsgen): A2A Agent Card -- the twin of the
                         card each install's daemon serves live (internal/a2a)
+.well-known/agent-skills/
+                        GENERATED (docsgen): Agent Skills discovery index
+                        (index.json) plus each maintained skill's SKILL.md,
+                        published verbatim from the embedded internal/skills
+                        assets
 <64-hex>.txt            the IndexNow key file (see "Ping IndexNow" below)
 scenarios/              GENERATED scenario pages -- do not edit (see below)
 static/site.css         design system, mirrored from internal/console tokens
@@ -90,13 +95,20 @@ so; the `.json` extension gets application/json from GitHub Pages natively, no
 edge rule needed), `.well-known/agent-card.json` (the A2A Agent Card: the site
 twin of the card each install's daemon serves live at the same path, both
 rendered by `internal/a2a.CardJSON` so the two cannot drift -- the twin carries
-the `server.json` version and the default bind address), and `auth.md` (the
-agent-readable auth statement, embedded from `cmd/docsgen/auth.md`). Unlike
-`docs/docs/`
+the `server.json` version and the default bind address),
+`.well-known/agent-skills/` (the Agent Skills Discovery RFC surface: an
+`index.json` naming each maintained skill with a `sha256:` digest, plus each
+skill's `SKILL.md` -- both artifact and digest come from the same embedded
+`internal/skills` bytes `seamlessd install-hooks` delivers, so the published
+skill, its hash, and the installed one are one set of bytes; `.json` and `.md`
+both get their content types from GitHub Pages natively, no edge rule), and
+`auth.md` (the agent-readable auth statement, embedded from
+`cmd/docsgen/auth.md`). Unlike `docs/docs/`
 these are written in place, never deleted, and the rest of this directory is
-not docsgen's to touch. All nine (with the root `index.md` twin, see below)
-are diffed by `make docs-check` -- `SITE_FILES` in the Makefile is the list --
-so adding or removing a page keeps them current automatically, and a release's
+not docsgen's to touch. All twelve (with the root `index.md` twin, see below)
+are diffed by `make docs-check` -- `SITE_FILES` in the Makefile is the list,
+and a docsgen test pins it to exactly the set the generator emits -- so adding
+or removing a page keeps them current automatically, and a release's
 `server.json` bump makes the committed cards stale until `make docs` is rerun.
 
 ## Markdown for agents (content negotiation)
