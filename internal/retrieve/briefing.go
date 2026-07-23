@@ -70,7 +70,8 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	}
 
 	// Constraints are ranked ahead of the tier split (ConstraintMaxFull):
-	// starred first, then the blended recency+utility order. With tiering
+	// starred first, then constraints a recent mishap referenced (most recent
+	// mishap first), then the blended recency+utility order. With tiering
 	// disabled (0) the order stays untouched -- the legacy all-full rendering.
 	constraints = s.rankConstraints(ctx, project, constraints, cfg)
 
@@ -209,37 +210,84 @@ func rankMemories(index []core.Memory, utility map[string]float64, weight float6
 	return out
 }
 
+// mishapPinWindowDays bounds the briefing's mishap promotion: a constraint
+// referenced by an agent.mishap event recorded within this many days is
+// promoted to the head of the full tier (store.RecentMishapItemIDs supplies
+// the references). Older mishaps stop promoting -- the signal is "this rule
+// was violated recently", not a permanent demerit.
+const mishapPinWindowDays = 30
+
+// recentMishapRefs reads the project's mishap-referenced memory ids inside the
+// promotion window. Failure-soft, the utilityRankedMemories posture: an
+// unreadable query costs the promotion, never the briefing. Promotion is a
+// briefing-side ordering signal only, like favorites -- it never feeds utility
+// scores, recall, or search (the closed-loop-utility-signal-contract).
+func (s *Service) recentMishapRefs(ctx context.Context, project string) map[string]time.Time {
+	mishaps, err := store.RecentMishapItemIDs(ctx, s.db, project, mishapPinWindowDays*24*time.Hour)
+	if err != nil {
+		s.logger.Warn("retrieve: recent mishaps unavailable, briefing skips promotion", "error", err)
+		return nil
+	}
+	return mishaps
+}
+
 // rankConstraints orders constraints for the tiered rendering: priority class
 // first (constraintPriority -- starred constraints claim full-tier slots
-// before anything else), then within a class the blended recency+utility order
-// -- the same utilityRankedMemories gate and key as the memory index,
-// degrading to pure recency (the SQL updated_at DESC order) when utility is
-// inactive or weighted 0. ConstraintMaxFull 0 disables tiering, so the input
-// order is returned untouched: the legacy all-full rendering stays exactly as
-// it was, favorites included.
+// before mishap-promoted ones, which claim them before anything else), then
+// within a class the blended recency+utility order -- the same
+// utilityRankedMemories gate and key as the memory index, degrading to pure
+// recency (the SQL updated_at DESC order) when utility is inactive or weighted
+// 0. The mishap class alone re-sorts internally, most recent mishap first.
+// ConstraintMaxFull 0 disables tiering, so the input order is returned
+// untouched: the legacy all-full rendering stays exactly as it was, favorites
+// and mishaps included -- promotion is part of the tier ranking only, and the
+// mishap query is skipped entirely.
 func (s *Service) rankConstraints(ctx context.Context, project string, constraints []core.Memory, cfg config.Briefing) []core.Memory {
 	if cfg.ConstraintMaxFull <= 0 || len(constraints) < 2 {
 		return constraints
 	}
+	mishaps := s.recentMishapRefs(ctx, project)
 	ranked := s.utilityRankedMemories(ctx, project, constraints, cfg)
 	out := make([]core.Memory, len(ranked))
 	copy(out, ranked)
 	slices.SortStableFunc(out, func(a, b core.Memory) int {
-		return cmp.Compare(constraintPriority(a), constraintPriority(b))
+		ca, cb := constraintPriority(a, mishaps), constraintPriority(b, mishaps)
+		if c := cmp.Compare(ca, cb); c != 0 {
+			return c
+		}
+		if ca == constraintClassMishap {
+			// Most recent mishap first; equal stamps keep the blended order
+			// (the sort is stable).
+			return mishaps[b.ID].Compare(mishaps[a.ID])
+		}
+		return 0
 	})
 	return out
 }
 
-// constraintPriority is a constraint's class in the tiered ordering: a lower
-// class claims full-tier slots first, and the blended order (rankConstraints)
-// is preserved within a class. Step 5 of plan:briefing-salience inserts
-// mishap-promoted constraints as a class between favorites and the rest --
-// extend this function rather than re-sorting elsewhere.
-func constraintPriority(m core.Memory) int {
+// Constraint priority classes for the tiered ordering: a lower class claims
+// full-tier slots first, and the blended order (rankConstraints) is preserved
+// within a class -- except the mishap class, which orders by most recent
+// mishap. A star outranks a mishap deliberately: the star is an explicit
+// owner signal, the mishap an implicit one, so a starred constraint sorts as
+// a favorite even when a recent mishap also references it.
+const (
+	constraintClassFavorite = iota // starred by the owner or an agent
+	constraintClassMishap          // referenced by an agent.mishap event within the window
+	constraintClassBlended         // everything else: the blended recency+utility order
+)
+
+// constraintPriority is a constraint's class in the tiered ordering. mishaps
+// maps memory ids to their most recent referencing agent.mishap timestamp
+// (store.RecentMishapItemIDs); nil or empty means no promotion.
+func constraintPriority(m core.Memory, mishaps map[string]time.Time) int {
 	if m.Favorite {
-		return 0
+		return constraintClassFavorite
 	}
-	return 1
+	if _, ok := mishaps[m.ID]; ok {
+		return constraintClassMishap
+	}
+	return constraintClassBlended
 }
 
 // constraintTiers splits ranked constraints at the full-tier boundary: the top
