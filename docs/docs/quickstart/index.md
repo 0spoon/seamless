@@ -60,7 +60,7 @@ cd ~/code/myrepo && codex     # Codex
 ```
 
 `install-hooks` selects the installed clients by default. For Claude Code it
-installs six hooks and registers Streamable HTTP through `claude mcp add-json
+installs seven hooks and registers Streamable HTTP through `claude mcp add-json
 --scope user`. For Codex it installs five hooks and registers the maintained
 `seam mcp-proxy` stdio policy; Codex itself also supports direct Streamable HTTP.
 Both profiles receive `seam-onboard` and `seam-research`. Installed by hand? Run

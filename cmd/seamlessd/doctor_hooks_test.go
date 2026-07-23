@@ -63,7 +63,7 @@ func TestDoctorClientChecksClaudeOnlyRemainDeterministic(t *testing.T) {
 	require.Equal(t, []string{"hooks", "codex"}, checkNames(checks))
 	require.Equal(t, statusOK, checks[0].status)
 	require.Contains(t, checks[0].detail,
-		"current: SessionStart, UserPromptSubmit, SessionEnd, PostToolUse, SubagentStop, PermissionRequest")
+		"current: SessionStart, UserPromptSubmit, SessionEnd, PostToolUse, SubagentStart, SubagentStop, PermissionRequest")
 	require.Equal(t, statusOK, checks[1].status)
 	require.Contains(t, checks[1].detail, "not detected")
 }

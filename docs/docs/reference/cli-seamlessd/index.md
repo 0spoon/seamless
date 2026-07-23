@@ -172,15 +172,16 @@ executable merely containing `hook <event>` is foreign. An already-current file
 is reported as up to date and left untouched. Each event reports `added`,
 `updated`, `adopted`, `deduped`, or `unchanged`.
 
-For Claude Code, six events are installed together: `SessionStart`,
-`UserPromptSubmit`, `SessionEnd`, `PostToolUse`, `SubagentStop`, and
+For Claude Code, seven events are installed together: `SessionStart`,
+`UserPromptSubmit`, `SessionEnd`, `PostToolUse`, `SubagentStart`,
+`SubagentStop`, and
 `PermissionRequest`. All are command hooks that run `seam hook <event>` (exec
 form, no shell) except `UserPromptSubmit`, which is an http hook - Claude Code
 will not run an http hook for SessionStart at all, and at SessionEnd a
 fire-and-forget request races process teardown, so the findings harvest would
-often be lost. The Codex profile is five shell-string command hooks, including
-safe constraint injection and parent-only lifecycle handling for subagents; the
-[hooks reference](https://thereisnospoon.org/docs/reference/hooks/) has both tables.
+often be lost. The Codex profile is five shell-string command hooks. Both
+profiles include safe constraint injection and parent-only lifecycle handling
+for subagents; the [hooks reference](https://thereisnospoon.org/docs/reference/hooks/) has both tables.
 
 ## seamlessd uninstall {#seamlessd_uninstall}
 

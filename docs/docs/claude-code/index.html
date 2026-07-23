@@ -204,7 +204,7 @@ One command installs both.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude
 </span></span></code></pre><p>The explicit flag selects only Claude Code. Omit it to use the normal
 detection-based installer, which prompts on a terminal and can wire Codex too.</p>
-<p>This merges six hook entries into your Claude Code <code>settings.json</code>, preserving
+<p>This merges seven hook entries into your Claude Code <code>settings.json</code>, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.</p>
 <p>It then registers the MCP server with <code>claude mcp add-json --scope user</code>. The
@@ -214,9 +214,10 @@ registration uses <code>seam mcp-headers --config &lt;absolute yaml&gt;</code> a
 registration fails, the hooks still land and the command prints the exact
 invocation to run yourself.</p>
 <p>The hooks are what make sessions <strong>ambient</strong> - an agent gets a briefing at
-startup, its prompts get matched against your memories, its findings get
-harvested at the end, and its plan-mode activity gets captured, all without the
-agent choosing to call anything. See <a href="../concepts/sessions/">Sessions &amp; briefings</a>
+startup, its prompts get matched against your memories, its Task subagents get
+the project's constraints at spawn, its findings get harvested at the end, and
+its plan-mode activity gets captured, all without the agent choosing to call
+anything. See <a href="../concepts/sessions/">Sessions &amp; briefings</a>
 for what that delivers and <a href="../reference/hooks/">the hooks reference</a> for the
 exact table.</p>
 <h3 id="why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</h3>

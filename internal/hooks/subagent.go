@@ -1,8 +1,10 @@
 package hooks
 
-// Subagent lifecycle handling. Codex SubagentStart receives the same
-// constraints-only briefing as a Claude Code child SessionStart while sharing
-// its parent's ambient session. Codex SubagentStop is deliberately limited to a
+// Subagent lifecycle handling. SubagentStart fires for both clients and
+// injects the same constraints-only briefing into the child while sharing its
+// parent's ambient session -- Claude Code emits no SessionStart for Task
+// subagents, so this is a CC child's only injection point.
+// Codex SubagentStop is deliberately limited to a
 // parent heartbeat: it never harvests child output into the parent's findings or
 // creates durable notes. Claude Code's established planning-subagent capture is
 // kept separate and unchanged: during plan-mode activity its transcript (first
@@ -32,9 +34,10 @@ import (
 const maxAgentTitleRunes = 120
 
 // subagentStart injects project constraints into a child without running any
-// ambient-session ensure/reactivation path. The captured Codex contract proves
-// that session_id is the parent id, so a heartbeat is safe; model attribution is
-// intentionally not updated because a child may run a different model.
+// ambient-session ensure/reactivation path. Both contracts (the captured Codex
+// fixtures and Claude Code's documented SubagentStart payload) name session_id
+// as the parent id, so a heartbeat is safe; model attribution is intentionally
+// not updated because a child may run a different model.
 func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
 	if !verifyBearer(r, h.apiKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)

@@ -230,6 +230,47 @@ func TestCodexSubagentStart_ConstraintsOnlyAndParentIdentityIsReadOnly(t *testin
 	require.True(t, foundParentInjection, "SubagentStart injection must be attributed to its parent")
 }
 
+// Claude Code wires the same SubagentStart command hook as Codex (a CC Task
+// subagent gets no SessionStart of its own), so the default claude client must
+// take the identical constraints-only path: same briefing shape, a parent-only
+// heartbeat, and no ambient row for the child.
+func TestClaudeSubagentStart_ConstraintsOnly(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	const parent = "cc-parent-0000-0001"
+
+	_, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": parent, "cwd": "/work/demo", "source": "startup",
+	})
+	require.NoError(t, store.TouchAmbientSession(ctx, db, ClientClaudeCode.externalIdentity(), parent,
+		time.Now().UTC().Add(-time.Hour)))
+	before := requireAmbientSession(t, db, ClientClaudeCode, parent)
+
+	// The documented CC payload: session_id is the parent, the child carries
+	// agent_id/agent_type, and no ?client= param means the claude client.
+	resp, out := post(t, ts.URL+"/api/hooks/subagent-start", testKey, map[string]any{
+		"session_id": parent, "agent_id": "cc-child-1", "agent_type": "Explore",
+		"cwd": "/work/demo", "permission_mode": "default", "hook_event_name": "SubagentStart",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	hso, ok := out["hookSpecificOutput"].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "SubagentStart", hso["hookEventName"])
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.NotContains(t, ac, "chroma-boot-race", "children receive constraints, not the full memory index")
+	require.NotContains(t, ac, "Seam session:", "a child gets no independent ambient identity")
+
+	after := requireAmbientSession(t, db, ClientClaudeCode, parent)
+	require.Equal(t, before.Name, after.Name)
+	require.Equal(t, before.ProjectSlug, after.ProjectSlug)
+	require.True(t, after.UpdatedAt.After(before.UpdatedAt), "SubagentStart heartbeats the parent")
+	_, found, err := store.AmbientSessionByExternalIdentity(
+		ctx, db, ClientClaudeCode.externalIdentity(), "cc-child-1")
+	require.NoError(t, err)
+	require.False(t, found, "SubagentStart must not create an ambient row for the child")
+}
+
 func TestUserPromptSubmitHook(t *testing.T) {
 	ts, _ := newHandlerServer(t)
 	url := ts.URL + "/api/hooks/user-prompt-submit"
@@ -522,6 +563,12 @@ func TestInstallIdempotentAndPreservesUnknownKeys(t *testing.T) {
 	requireCommandHook(t, hooksObj, "PostToolUse", "post-tool-use")
 	requireCommandHook(t, hooksObj, "SubagentStop", "subagent-stop")
 	requireCommandHook(t, hooksObj, "PermissionRequest", "permission-request")
+	// The child-briefing hook mirrors the Codex profile: matcher-free, so every
+	// Task subagent gets the constraints-only briefing.
+	requireCommandHook(t, hooksObj, "SubagentStart", "subagent-start")
+	sas := hooksObj["SubagentStart"].([]any)
+	require.Len(t, sas, 1)
+	require.NotContains(t, sas[0].(map[string]any), "matcher")
 	ptu := hooksObj["PostToolUse"].([]any)
 	require.Len(t, ptu, 1)
 	require.Equal(t, "Write|Edit|MultiEdit|ExitPlanMode", ptu[0].(map[string]any)["matcher"])
@@ -558,7 +605,7 @@ func TestInstalledStatus(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, installedEvents(t, ClientClaudeCode), status.Current)
 	require.Empty(t, status.Stale)
-	require.Len(t, status.Current, 6)
+	require.Len(t, status.Current, 7)
 }
 
 // Claude Code re-serializes settings.json through its own schema when the
@@ -601,7 +648,7 @@ func TestInstalledStatusSurvivesMarkerStripping(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotContains(t, status.Current, "UserPromptSubmit")
-	require.Len(t, status.Current, 5)
+	require.Len(t, status.Current, 6)
 }
 
 // Mirrors the plan-capture dogfood state: an older installer left UNMARKED

@@ -170,9 +170,9 @@ type toolPayload struct {
 	ToolResponse   json.RawMessage `json:"tool_response"`
 }
 
-// subagentPayload is the normalized SubagentStart/SubagentStop shape. Codex
-// names session_id as the PARENT session on both events; the child is identified
-// separately by agent_id. SubagentStop also distinguishes the parent rollout
+// subagentPayload is the normalized SubagentStart/SubagentStop shape. Both
+// clients name session_id as the PARENT session on both events; the child is
+// identified separately by agent_id. Codex SubagentStop also distinguishes the parent rollout
 // (transcript_path) from the child rollout (agent_transcript_path). Claude Code's
 // smaller SubagentStop payload decodes into the same shape with the Codex-only
 // fields left empty, preserving its plan-capture path.

@@ -94,7 +94,7 @@ refreshed on upgrades.
 
 ## The five hooks, and what they inject
 
-Codex installs five hooks against six for Claude Code. Seamless has no verified
+Codex installs five hooks against seven for Claude Code. Seamless has no verified
 Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
 0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
 [below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide

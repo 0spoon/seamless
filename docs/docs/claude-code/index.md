@@ -16,7 +16,7 @@ seamlessd install-hooks --client claude
 The explicit flag selects only Claude Code. Omit it to use the normal
 detection-based installer, which prompts on a terminal and can wire Codex too.
 
-This merges six hook entries into your Claude Code `settings.json`, preserving
+This merges seven hook entries into your Claude Code `settings.json`, preserving
 everything already there and backing the file up once before the first change.
 It is idempotent: an already-current file is left untouched.
 
@@ -28,9 +28,10 @@ registration fails, the hooks still land and the command prints the exact
 invocation to run yourself.
 
 The hooks are what make sessions **ambient** - an agent gets a briefing at
-startup, its prompts get matched against your memories, its findings get
-harvested at the end, and its plan-mode activity gets captured, all without the
-agent choosing to call anything. See [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/)
+startup, its prompts get matched against your memories, its Task subagents get
+the project's constraints at spawn, its findings get harvested at the end, and
+its plan-mode activity gets captured, all without the agent choosing to call
+anything. See [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/)
 for what that delivers and [the hooks reference](https://thereisnospoon.org/docs/reference/hooks/) for the
 exact table.
 

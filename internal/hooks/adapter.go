@@ -125,11 +125,12 @@ func decodeStop(_ Client, body []byte) stopPayload {
 	return p
 }
 
-// decodeSubagentStart normalizes the captured Codex SubagentStart contract into
-// subagentPayload. The event's session_id is the parent external session id;
-// agent_id identifies the child. Field names currently match the internal wire
-// tags, but keeping the decode in the client adapter gives future Codex renames a
-// single home. Tolerant: malformed input leaves the zero payload; the handler
+// decodeSubagentStart normalizes both clients' SubagentStart payloads. Both name
+// every field this hook reads identically (session_id -- the PARENT external
+// session id -- plus agent_id, agent_type, cwd; verified against the Codex
+// fixtures and Claude Code's documented payload), so the decode does not branch
+// on client; keeping it in the adapter gives a future rename a single home.
+// Tolerant: malformed input leaves the zero payload; the handler
 // then acknowledges it with empty context rather than guessing required fields.
 func decodeSubagentStart(_ Client, body []byte) subagentPayload {
 	var p subagentPayload

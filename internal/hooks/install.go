@@ -43,11 +43,18 @@ type hookSpec struct {
 // machine-wide Write/Edit hot path never touches the network for non-plan
 // files. PostToolUse must stay a SINGLE entry (matcher-joined) -- the
 // dedupe/adopt logic assumes one managed entry per event.
+//
+// SubagentStart mirrors the Codex profile: every Task-tool child gets the
+// constraints-only briefing from /api/hooks/subagent-start. Claude Code emits
+// no SessionStart for its subagents (its sources are startup|resume|clear|
+// compact), so without this hook a child runs with zero constraint awareness.
+// No matcher: every agent type is briefed.
 var seamlessHooks = []hookSpec{
 	{Event: "SessionStart", Matcher: "startup|resume|clear|compact", Endpoint: "/api/hooks/session-start", Timeout: 10, CLIArg: "session-start"},
 	{Event: "UserPromptSubmit", Matcher: "", Endpoint: "/api/hooks/user-prompt-submit", Timeout: 5},
 	{Event: "SessionEnd", Matcher: "", Endpoint: "/api/hooks/session-end", Timeout: 10, CLIArg: "session-end"},
 	{Event: "PostToolUse", Matcher: "Write|Edit|MultiEdit|ExitPlanMode", Endpoint: "/api/hooks/post-tool-use", Timeout: 10, CLIArg: "post-tool-use"},
+	{Event: "SubagentStart", Matcher: "", Endpoint: "/api/hooks/subagent-start", Timeout: 10, CLIArg: "subagent-start"},
 	{Event: "SubagentStop", Matcher: "", Endpoint: "/api/hooks/subagent-stop", Timeout: 10, CLIArg: "subagent-stop"},
 	{Event: "PermissionRequest", Matcher: "ExitPlanMode", Endpoint: "/api/hooks/permission-request", Timeout: 10, CLIArg: "permission-request"},
 }

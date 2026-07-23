@@ -19,7 +19,7 @@ First, the honest part.
 
 ## What these clients get, and what they do not
 
-[Hooks](/reference/hooks/) exist for exactly two clients: Claude Code (six
+[Hooks](/reference/hooks/) exist for exactly two clients: Claude Code (seven
 hooks) and Codex (five). Hooks are what makes Seamless *ambient* - a briefing
 injected at session start, prompts matched against stored memories, findings
 harvested when the session ends, all without the agent calling a tool. Every

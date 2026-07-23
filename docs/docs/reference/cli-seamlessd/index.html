@@ -459,15 +459,16 @@ owned entries, and backs the file up once before the first change. An arbitrary
 executable merely containing <code>hook &lt;event&gt;</code> is foreign. An already-current file
 is reported as up to date and left untouched. Each event reports <code>added</code>,
 <code>updated</code>, <code>adopted</code>, <code>deduped</code>, or <code>unchanged</code>.</p>
-<p>For Claude Code, six events are installed together: <code>SessionStart</code>,
-<code>UserPromptSubmit</code>, <code>SessionEnd</code>, <code>PostToolUse</code>, <code>SubagentStop</code>, and
+<p>For Claude Code, seven events are installed together: <code>SessionStart</code>,
+<code>UserPromptSubmit</code>, <code>SessionEnd</code>, <code>PostToolUse</code>, <code>SubagentStart</code>,
+<code>SubagentStop</code>, and
 <code>PermissionRequest</code>. All are command hooks that run <code>seam hook &lt;event&gt;</code> (exec
 form, no shell) except <code>UserPromptSubmit</code>, which is an http hook - Claude Code
 will not run an http hook for SessionStart at all, and at SessionEnd a
 fire-and-forget request races process teardown, so the findings harvest would
-often be lost. The Codex profile is five shell-string command hooks, including
-safe constraint injection and parent-only lifecycle handling for subagents; the
-<a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
+often be lost. The Codex profile is five shell-string command hooks. Both
+profiles include safe constraint injection and parent-only lifecycle handling
+for subagents; the <a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
 <h2 id="seamlessd_uninstall">seamlessd uninstall</h2>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>codex<span class="p">|</span>claude-desktop<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
 </span></span></code></pre><p>Reverses a full install on any supported OS: stops and removes the per-user

@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Hooks - Seamless docs</title>
-<meta name="description" content="The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
+<meta name="description" content="The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/hooks/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/hooks/">
 <meta property="og:title" content="Hooks - Seamless docs">
-<meta property="og:description" content="The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
+<meta property="og:description" content="The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Hooks","item":"https://thereisnospoon.org/docs/reference/hooks/"}]},{"@type":"TechArticle","headline":"Hooks - Seamless docs","description":"The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.","url":"https://thereisnospoon.org/docs/reference/hooks/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Hooks","item":"https://thereisnospoon.org/docs/reference/hooks/"}]},{"@type":"TechArticle","headline":"Hooks - Seamless docs","description":"The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.","url":"https://thereisnospoon.org/docs/reference/hooks/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -196,8 +196,8 @@
 </nav>
 
   <h1>Hooks</h1>
-  <p class="lede">The hooks Seamless installs per client - six for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.</p>
-  <p>Seamless installs hooks for two clients: six for Claude Code (including
+  <p class="lede">The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.</p>
+  <p>Seamless installs hooks for two clients: seven for Claude Code (including
 plan-mode capture) and five for <a href="#codex-local-host-five-hooks">Codex</a>. The
 hooks are what makes sessions ambient - an agent gets a briefing at session
 start, its prompts get matched against stored memories, and its findings get
@@ -212,7 +212,7 @@ CLI or a <code>~/.claude</code>/<code>$CODEX_HOME</code> directory). When neithe
 interactive run warns and asks whether to install at all (defaulting to no), and
 a non-interactive run errors - nothing is wired without an explicit choice. The
 curl installer and <code>make install</code> make the same choice.</p>
-<h2 id="claude-code-six-hooks">Claude Code: six hooks</h2>
+<h2 id="claude-code-seven-hooks">Claude Code: seven hooks</h2>
 <p>Taken from the <code>seamlessHooks</code> definition in <code>internal/hooks/install.go</code>, in
 install order:</p>
 <div class="table-wrap">
@@ -261,6 +261,14 @@ install order:</p>
 <td>Heartbeats the ambient session. Captures plan-file iterations (<code>Write</code>/<code>Edit</code>/<code>MultiEdit</code> under the plans dir) and plan approvals (<code>ExitPlanMode</code>).</td>
 </tr>
 <tr>
+<td><code>SubagentStart</code></td>
+<td>none</td>
+<td>command (<code>seam hook subagent-start</code>)</td>
+<td>10s</td>
+<td><code>/api/hooks/subagent-start</code></td>
+<td>Injects a constraints-only briefing into every Task subagent and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
+</tr>
+<tr>
 <td><code>SubagentStop</code></td>
 <td>none</td>
 <td>command (<code>seam hook subagent-stop</code>)</td>
@@ -282,12 +290,15 @@ install order:</p>
 <p>Timeouts are in seconds, Claude Code's unit. Server-side the briefing and recall
 paths are additionally bounded at 2s and the capture paths at 8s, so a slow store
 cannot spend the whole hook budget.</p>
-<p><code>SessionStart</code> is the only hook with a matcher on session sources. Subagents
-(<code>agent_type</code> set) share the parent's session and get no ambient session of their
-own.</p>
+<p><code>SessionStart</code> is the only hook with a matcher on session sources, and Claude
+Code never fires it for Task subagents - its sources are the main-session ones
+(<code>startup</code>/<code>resume</code>/<code>clear</code>/<code>compact</code>). A child is briefed by <code>SubagentStart</code>
+instead: the same constraints-only briefing the Codex profile injects, keyed off
+the parent's <code>session_id</code>. Subagents share the parent's session and get no
+ambient session of their own.</p>
 <h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>
 <p><code>seamlessd install-hooks --client codex</code> installs five hooks into
-<code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>) instead of the six above.
+<code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>) instead of the seven above.
 The desktop app, CLI, and IDE extension share this profile for the same Codex
 host. Seamless has no verified Claude-style plan-file/<code>ExitPlanMode</code> surface to
 capture from Codex, and Codex emits no <code>SessionEnd</code> event in 0.144.6. The profile
@@ -384,7 +395,7 @@ with no Codex CLI, initialized home, or Seamless Codex configuration is one quie
 <code>not detected</code> line, never a failure. <code>seam doctor</code> covers the other half: it hits
 <code>/healthz</code> and calls <code>tools/list</code>, which proves the endpoint and key are working.</p>
 <h2 id="why-claude-code-uses-two-transports">Why Claude Code uses two transports</h2>
-<p>Five of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
+<p>Six of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
 <code>command</code> for all five - its trust gate applies only to command hooks.) The
 split is not stylistic:</p>
 <ul>
@@ -399,6 +410,9 @@ one Claude Code waits on, which makes the harvest reliable.</li>
 machine-wide on every <code>Write</code>/<code>Edit</code>. The <code>seam</code> CLI pre-filters the payload
 locally and drops non-plan events before any config load or network round-trip,
 so the hot path never touches the network.</li>
+<li><strong><code>SubagentStart</code> mirrors the Codex profile.</strong> Both clients run the same
+<code>seam hook subagent-start</code> command, so the subagent lifecycle stays one
+transport and one code path across profiles.</li>
 <li><strong><code>UserPromptSubmit</code> stays <code>http</code>.</strong> It fires mid-turn, where http is reliable.</li>
 </ul>
 <p>Command hooks work by having Claude Code pipe the event JSON to the command's
@@ -584,7 +598,7 @@ live/schema evidence and the recapture procedure.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#claude-code-six-hooks">Claude Code: six hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

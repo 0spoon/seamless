@@ -234,7 +234,7 @@ step. Start either detected client in any git repo:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude    <span class="c1"># Claude Code</span>
 </span></span><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex     <span class="c1"># Codex</span>
 </span></span></code></pre><p><code>install-hooks</code> selects the installed clients by default. For Claude Code it
-installs six hooks and registers Streamable HTTP through <code>claude mcp add-json --scope user</code>. For Codex it installs five hooks and registers the maintained
+installs seven hooks and registers Streamable HTTP through <code>claude mcp add-json --scope user</code>. For Codex it installs five hooks and registers the maintained
 <code>seam mcp-proxy</code> stdio policy; Codex itself also supports direct Streamable HTTP.
 Both profiles receive <code>seam-onboard</code> and <code>seam-research</code>. Installed by hand? Run
 <code>seamlessd install-hooks</code> yourself first, or select explicitly with <code>--client claude|codex|all</code>.</p>
