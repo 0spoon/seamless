@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -255,24 +255,14 @@ session's ULID. Readers resolve both forms. Do not infer client, scope, or
 liveness from the spelling of <code>source_session</code>.</p>
 <h2 id="an-actual-briefing-annotated">An actual briefing, annotated</h2>
 <p>This is a real briefing, in the order the assembler packs it:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
-</span></span><span class="line"><span class="cl">Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
-</span></span><span class="line"><span class="cl">CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
-</span></span><span class="line"><span class="cl">CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
-</span></span><span class="line"><span class="cl">STAGE: deep-audit-f15-f18-landed -- status unknown
-</span></span><span class="line"><span class="cl">PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
-</span></span><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl">Memories (seamless):
-</span></span><span class="line"><span class="cl">- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem while go&#39;s ./... skips ...
-</span></span><span class="line"><span class="cl">- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
-</span></span><span class="line"><span class="cl">- (+34 older -- use recall)
-</span></span><span class="line"><span class="cl">
-</span></span><span class="line"><span class="cl">Recent findings:
-</span></span><span class="line"><span class="cl">Recall on demand with recall; read a memory with memory_read.
-</span></span><span class="line"><span class="cl">Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
-</span></span><span class="line"><span class="cl">&lt;/seam-briefing&gt;
-</span></span></code></pre><p>Line by line:</p>
+<figure class="doc-figure" aria-labelledby="annotated-briefing-caption">
+  <div class="sample-panel">
+    <div class="sample-panel-head"><span>Actual packing order</span><span>budgeted</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 4 constraints, 58 memories, 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...<br>STAGE: deep-audit-f15-f18-landed -- status unknown<br>PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight<br>PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- use recall)<br><br><span class="sample-strong">Recent findings:</span><br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
+  </div>
+  <figcaption id="annotated-briefing-caption">Pinned constraints and live work lead; the budgeted memory index and recent findings follow; retrieval guidance and session identity close the envelope.</figcaption>
+</figure>
+<p>Line by line:</p>
 <ul>
 <li><strong>The header</strong> counts what exists, so an agent knows how much it is <em>not</em> being
 shown.</li>

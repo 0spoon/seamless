@@ -48,11 +48,13 @@ version each could have been.
 
 **A gotcha.**
 
-```text
-BAD   description: notes about gofmt
-GOOD  description: gofmt walks the filesystem while go's ./... skips dot-dirs:
-      `gofmt -w .` rewrites other agents' .claude/worktrees mid-edit. Use make fmt.
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="gofmt-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>notes about gofmt</code></p></div>
+    <div class="comparison-card good"><span>Retrievable</span><p>gofmt walks the filesystem while Go's <code>./...</code> skips dot-dirs: <code>gofmt -w .</code> rewrites other agents' <code>.claude/worktrees</code> mid-edit. Use <code>make fmt</code>.</p></div>
+  </div>
+  <figcaption id="gofmt-description-caption">The useful description carries the trigger, rare search terms, mechanism, and fix.</figcaption>
+</figure>
 
 The bad one shares no rare token with any prompt an agent would write. The good
 one carries `gofmt`, `dot-dirs`, `worktrees` - an agent typing "why did my
@@ -61,19 +63,23 @@ contains the fix*. The body never has to open.
 
 **Another gotcha, where the description is the whole answer.**
 
-```text
-BAD   description: seamlessd gotcha
-GOOD  description: pkill -f 'seamlessd serve' kills the user's launchd daemon
-      too, not just your dev instance; match the port or pid instead.
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="daemon-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>seamlessd gotcha</code></p></div>
+    <div class="comparison-card good"><span>Actionable</span><p><code>pkill -f 'seamlessd serve'</code> kills the user's launchd daemon too, not just your dev instance; match the port or pid instead.</p></div>
+  </div>
+  <figcaption id="daemon-description-caption">A reader can avoid the incident without opening the body.</figcaption>
+</figure>
 
 **A constraint.**
 
-```text
-BAD   description: rules for errcheck
-GOOD  description: errcheck runs with check-blank: every `_`-discarded error is
-      either in exclude-functions or carries //nolint with a reason. No third category.
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="errcheck-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>rules for errcheck</code></p></div>
+    <div class="comparison-card good"><span>Decision-complete</span><p>errcheck runs with check-blank: every <code>_</code>-discarded error is either in exclude-functions or carries <code>//nolint</code> with a reason. No third category.</p></div>
+  </div>
+  <figcaption id="errcheck-description-caption">Pinned briefing space should carry the rule itself, not a pointer saying that rules exist.</figcaption>
+</figure>
 
 A constraint is pinned into every briefing and never dropped for budget. That is
 expensive real estate, and "rules for errcheck" spends it to tell an agent that

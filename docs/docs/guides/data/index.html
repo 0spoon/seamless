@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -201,11 +201,16 @@
 that is the feature. This page is mostly about knowing which half of
 <code>~/.seamless</code> is precious and which half regenerates.</p>
 <h2 id="what-is-precious-and-what-is-not">What is precious, and what is not</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">~/.seamless/
-</span></span><span class="line"><span class="cl">  memory/{project|_global}/{name}.md   PRECIOUS -- source of truth
-</span></span><span class="line"><span class="cl">  notes/{project|_global}/{slug}.md    PRECIOUS -- source of truth
-</span></span><span class="line"><span class="cl">  seam.db                              MIXED (see below)
-</span></span></code></pre><p><code>seam.db</code> holds two different kinds of thing, and conflating them is what makes
+<figure class="doc-figure" data-tone="warn" aria-labelledby="backup-map-caption">
+  <span class="figure-kicker">Backup priorities</span>
+  <div class="doc-flow">
+    <div class="flow-node emphasis"><span class="flow-step">Precious</span><strong>memory/{project|_global}/{name}.md</strong><small>Source of truth for durable memory.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Precious</span><strong>notes/{project|_global}/{slug}.md</strong><small>Source of truth for long-form artifacts.</small></div>
+    <div class="flow-node warn"><span class="flow-step">Mixed</span><strong>seam.db</strong><small>Rebuildable search mirrors plus irreplaceable session, task, trial, and event history.</small></div>
+  </div>
+  <figcaption id="backup-map-caption">Back up the whole directory. The file trees are always authoritative; parts of SQLite are authoritative too.</figcaption>
+</figure>
+<p><code>seam.db</code> holds two different kinds of thing, and conflating them is what makes
 people either over-protect it or under-protect it:</p>
 <div class="table-wrap">
 <table>

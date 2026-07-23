@@ -9,12 +9,15 @@ that is the feature. This page is mostly about knowing which half of
 
 ## What is precious, and what is not
 
-```text
-~/.seamless/
-  memory/{project|_global}/{name}.md   PRECIOUS -- source of truth
-  notes/{project|_global}/{slug}.md    PRECIOUS -- source of truth
-  seam.db                              MIXED (see below)
-```
+<figure class="doc-figure" data-tone="warn" aria-labelledby="backup-map-caption">
+  <span class="figure-kicker">Backup priorities</span>
+  <div class="doc-flow">
+    <div class="flow-node emphasis"><span class="flow-step">Precious</span><strong>memory/{project|_global}/{name}.md</strong><small>Source of truth for durable memory.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Precious</span><strong>notes/{project|_global}/{slug}.md</strong><small>Source of truth for long-form artifacts.</small></div>
+    <div class="flow-node warn"><span class="flow-step">Mixed</span><strong>seam.db</strong><small>Rebuildable search mirrors plus irreplaceable session, task, trial, and event history.</small></div>
+  </div>
+  <figcaption id="backup-map-caption">Back up the whole directory. The file trees are always authoritative; parts of SQLite are authoritative too.</figcaption>
+</figure>
 
 `seam.db` holds two different kinds of thing, and conflating them is what makes
 people either over-protect it or under-protect it:

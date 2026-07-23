@@ -164,7 +164,7 @@ table.cmp { border-collapse: collapse; width: 100%; min-width: 1080px; font-size
     <div class="cmp-head">
       <p class="kicker">fair questions, longer answers</p>
       <h1>Seamless vs. the alternatives</h1>
-      <p>Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans, stored as markdown files you own and indexed by one Go binary. This page compares it with the tools people actually weigh it against - <a href="#agent-teams">Claude Code's Agent Teams</a>, <a href="#claude-mem">claude-mem</a>, <a href="#anthropic-memory">Anthropic's built-in memory</a>, <a href="#mem0-zep">Mem0 and Zep</a>, <a href="#dosu">Dosu</a>, <a href="#agentmemory">agentmemory</a>, and <a href="#supermemory">Supermemory</a>.</p>
+      <p>Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans, stored as markdown files you own and indexed by one local Go daemon. This page compares it with the tools people actually weigh it against - <a href="#agent-teams">Claude Code's Agent Teams</a>, <a href="#claude-mem">claude-mem</a>, <a href="#anthropic-memory">Anthropic's built-in memory</a>, <a href="#mem0-zep">Mem0 and Zep</a>, <a href="#dosu">Dosu</a>, <a href="#agentmemory">agentmemory</a>, and <a href="#supermemory">Supermemory</a>.</p>
       <p>Several of these are excellent, and for plenty of people the right answer is one of them; every section below ends with exactly when that is. What you will not find here is an accuracy benchmark. Memory benchmarks in this category are self-refereed, every vendor publishes one where they win, and we don't play. Legibility is the benchmark: open the folder, read what your agents wrote.</p>
     </div>
   </div>
@@ -194,12 +194,12 @@ table.cmp { border-collapse: collapse; width: 100%; min-width: 1080px; font-size
         <tbody>
           <tr class="self">
             <th scope="row">Seamless</th>
-            <td>markdown files in git; SQLite is a rebuildable index</td>
+            <td>markdown files in git; SQLite indexes them and stores operational state</td>
             <td>your machine, localhost only</td>
             <td>none</td>
             <td>ready-queue, lease claiming, shared plans</td>
             <td>proposals only - you approve</td>
-            <td>one Go binary, no CGO</td>
+            <td>Go daemon + CLI, no CGO</td>
             <td>free, MIT</td>
           </tr>
           <tr>
@@ -327,7 +327,7 @@ table.cmp { border-collapse: collapse; width: 100%; min-width: 1080px; font-size
         <h2>Dosu</h2>
         <p class="what">team knowledge infrastructure</p>
         <p><a href="https://dosu.dev">Dosu</a> is knowledge infrastructure for whole teams: a hosted, shared brain that captures knowledge as your agents and engineers work, answers questions with it, and keeps your documentation in sync with the code. For an organization, that docs-that-heal loop is genuinely hard to replicate, and Dosu does it well.</p>
-        <p>Seamless is the local-first counterpart, scoped to one person and their fleet. The knowledge lives in a folder in git on your own disk rather than in a vendor's cloud; there is no account and nothing leaves your machine. And it adds what a team-knowledge product does not try to: coordination primitives - a dependency-aware ready-queue, lease-based claiming, shared plans - for the agents actually doing the work.</p>
+        <p>Seamless is the local-first counterpart, scoped to one person and their fleet. Durable knowledge lives in a folder in git on your own disk rather than in a vendor's cloud, and there is no Seamless account. Model calls leave the machine only when you configure a remote provider; Ollama keeps them local. Seamless also adds what a team-knowledge product does not try to: coordination primitives - a dependency-aware ready-queue, lease-based claiming, shared plans - for the agents actually doing the work.</p>
         <div class="choose"><b>choose them instead if</b><p>A whole team needs shared, managed knowledge with documentation kept in sync, and having a vendor run it is a feature rather than a concern.</p></div>
       </article>
 
@@ -335,7 +335,7 @@ table.cmp { border-collapse: collapse; width: 100%; min-width: 1080px; font-size
         <h2>agentmemory</h2>
         <p class="what">the feature-maximal local memory runtime</p>
         <p>agentmemory is the most feature-dense local memory system in the field, and on raw memory features it out-ships us: triple-hybrid retrieval (BM25 plus vectors plus a graph), a dozen ambient hooks, 53 MCP tools, contradiction detection, tiered consolidation, session replay, and benchmark results it publishes proudly. It runs locally on SQLite, embeds offline for free, and is Apache-2.0.</p>
-        <p>The disagreement is philosophical, and worth stating plainly. agentmemory automates the lifecycle: Ebbinghaus-style decay, TTLs, and importance eviction decide what fades, and its database is the source of truth, with Obsidian export as a secondary view. Seamless holds the opposite bet: markdown files are the truth, forgetting is a proposal you approve, and the whole system stays small enough to read - one Go binary against a Node 20 runtime plus its separate engine. Whether 53 tools is a feature or a smell is exactly the question to ask yourself.</p>
+        <p>The disagreement is philosophical, and worth stating plainly. agentmemory automates the lifecycle: Ebbinghaus-style decay, TTLs, and importance eviction decide what fades, and its database is the source of truth, with Obsidian export as a secondary view. Seamless holds the opposite bet: markdown files are the truth for durable knowledge, forgetting is a proposal you approve, and the whole system stays small enough to read - two small Go binaries against a Node 20 runtime plus its separate engine. Whether 53 tools is a feature or a smell is exactly the question to ask yourself.</p>
         <div class="choose"><b>choose them instead if</b><p>You want the most automated, most feature-complete local memory available, and you are comfortable letting a decay curve do the forgetting.</p></div>
       </article>
 

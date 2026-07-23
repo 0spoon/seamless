@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -255,22 +255,34 @@ to the limit deliberately, or the sentence that mattered gets cut mid-word.</li>
 <p>These are real memories from this repository's own store, paired with the vague
 version each could have been.</p>
 <p><strong>A gotcha.</strong></p>
-<pre class="chroma"><code><span class="line"><span class="cl">BAD   description: notes about gofmt
-</span></span><span class="line"><span class="cl">GOOD  description: gofmt walks the filesystem while go&#39;s ./... skips dot-dirs:
-</span></span><span class="line"><span class="cl">      `gofmt -w .` rewrites other agents&#39; .claude/worktrees mid-edit. Use make fmt.
-</span></span></code></pre><p>The bad one shares no rare token with any prompt an agent would write. The good
+<figure class="doc-figure" data-tone="ok" aria-labelledby="gofmt-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>notes about gofmt</code></p></div>
+    <div class="comparison-card good"><span>Retrievable</span><p>gofmt walks the filesystem while Go's <code>./...</code> skips dot-dirs: <code>gofmt -w .</code> rewrites other agents' <code>.claude/worktrees</code> mid-edit. Use <code>make fmt</code>.</p></div>
+  </div>
+  <figcaption id="gofmt-description-caption">The useful description carries the trigger, rare search terms, mechanism, and fix.</figcaption>
+</figure>
+<p>The bad one shares no rare token with any prompt an agent would write. The good
 one carries <code>gofmt</code>, <code>dot-dirs</code>, <code>worktrees</code> - an agent typing &quot;why did my
 formatter touch files I didn't edit&quot; hits it, and the description <em>already
 contains the fix</em>. The body never has to open.</p>
 <p><strong>Another gotcha, where the description is the whole answer.</strong></p>
-<pre class="chroma"><code><span class="line"><span class="cl">BAD   description: seamlessd gotcha
-</span></span><span class="line"><span class="cl">GOOD  description: pkill -f &#39;seamlessd serve&#39; kills the user&#39;s launchd daemon
-</span></span><span class="line"><span class="cl">      too, not just your dev instance; match the port or pid instead.
-</span></span></code></pre><p><strong>A constraint.</strong></p>
-<pre class="chroma"><code><span class="line"><span class="cl">BAD   description: rules for errcheck
-</span></span><span class="line"><span class="cl">GOOD  description: errcheck runs with check-blank: every `_`-discarded error is
-</span></span><span class="line"><span class="cl">      either in exclude-functions or carries //nolint with a reason. No third category.
-</span></span></code></pre><p>A constraint is pinned into every briefing and never dropped for budget. That is
+<figure class="doc-figure" data-tone="ok" aria-labelledby="daemon-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>seamlessd gotcha</code></p></div>
+    <div class="comparison-card good"><span>Actionable</span><p><code>pkill -f 'seamlessd serve'</code> kills the user's launchd daemon too, not just your dev instance; match the port or pid instead.</p></div>
+  </div>
+  <figcaption id="daemon-description-caption">A reader can avoid the incident without opening the body.</figcaption>
+</figure>
+<p><strong>A constraint.</strong></p>
+<figure class="doc-figure" data-tone="ok" aria-labelledby="errcheck-description-caption">
+  <div class="comparison-grid">
+    <div class="comparison-card bad"><span>Vague</span><p><code>rules for errcheck</code></p></div>
+    <div class="comparison-card good"><span>Decision-complete</span><p>errcheck runs with check-blank: every <code>_</code>-discarded error is either in exclude-functions or carries <code>//nolint</code> with a reason. No third category.</p></div>
+  </div>
+  <figcaption id="errcheck-description-caption">Pinned briefing space should carry the rule itself, not a pointer saying that rules exist.</figcaption>
+</figure>
+<p>A constraint is pinned into every briefing and never dropped for budget. That is
 expensive real estate, and &quot;rules for errcheck&quot; spends it to tell an agent that
 rules exist.</p>
 <p>The pattern in every good one: <strong>symptom or trigger, then the mechanism, then the

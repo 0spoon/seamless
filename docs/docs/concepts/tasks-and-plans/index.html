@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -216,22 +216,23 @@ time.</p>
 <h2 id="claiming-the-part-that-makes-parallelism-safe">Claiming: the part that makes parallelism safe</h2>
 <p>Two agents that both call <code>tasks_ready</code> see the same task. Both will try to take
 it. Exactly one wins:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">agent A: tasks_claim 01K...           agent B: tasks_claim 01K...
-</span></span><span class="line"><span class="cl">            │                                     │
-</span></span><span class="line"><span class="cl">            ▼                                     ▼
-</span></span><span class="line"><span class="cl">   ┌──────────────────┐                  ┌──────────────────┐
-</span></span><span class="line"><span class="cl">   │ ready → in_progress │               │ error: already   │
-</span></span><span class="line"><span class="cl">   │ lease_expires_at =  │               │ claimed by A     │
-</span></span><span class="line"><span class="cl">   │   now + 900s        │               └──────────────────┘
-</span></span><span class="line"><span class="cl">   └──────────────────┘                            │
-</span></span><span class="line"><span class="cl">            │                                      ▼
-</span></span><span class="line"><span class="cl">            │                            B claims the next ready task
-</span></span><span class="line"><span class="cl">            ▼
-</span></span><span class="line"><span class="cl">   A works... re-claims to heartbeat (lease refreshed)
-</span></span><span class="line"><span class="cl">            │
-</span></span><span class="line"><span class="cl">            ├─ tasks_release / tasks_update done / session_end → freed
-</span></span><span class="line"><span class="cl">            └─ A crashes → lease expires → reclaimable by anyone
-</span></span></code></pre><p>Four rules carry the whole model:</p>
+<figure class="doc-figure" data-tone="ok" aria-labelledby="claim-race-caption">
+  <span class="figure-kicker">Atomic claim race</span>
+  <div class="flow-split">
+    <section class="flow-lane">
+      <div class="flow-lane-head">Agent A</div>
+      <div class="flow-node"><span class="flow-step">tasks_claim 01K…</span><strong>Claim wins</strong><small><code>ready → in_progress</code><br>lease expires at now + 900s</small></div>
+      <div class="flow-node success"><span class="flow-step">while working</span><strong>Heartbeat or finish</strong><small>Re-claim refreshes the lease; release, close, or session end frees it.</small></div>
+    </section>
+    <section class="flow-lane">
+      <div class="flow-lane-head">Agent B</div>
+      <div class="flow-node error"><span class="flow-step">tasks_claim 01K…</span><strong>Claim is refused</strong><small>Error names Agent A as the live holder.</small></div>
+      <div class="flow-node"><span class="flow-step">next action</span><strong>Take another ready task</strong><small>If A crashes, the expired lease makes this task reclaimable by id.</small></div>
+    </section>
+  </div>
+  <figcaption id="claim-race-caption"><strong>Both agents may see the same ready row; only one can own it.</strong> The loser pivots without duplicating work.</figcaption>
+</figure>
+<p>Four rules carry the whole model:</p>
 <ol>
 <li><strong>Claiming is atomic.</strong> The loser gets an error naming the holder, not a
 corrupted second claim.</li>

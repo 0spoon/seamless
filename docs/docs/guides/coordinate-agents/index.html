@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -219,14 +219,17 @@ once:</p>
 work abandoned on purpose should not wedge the queue forever. Cycles are rejected
 at creation rather than discovered at scheduling time.</p>
 <p>Every worker then runs the same loop, and needs no knowledge of the others:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">session_start                  ─▶ required: a claim is attributed to a session
-</span></span><span class="line"><span class="cl">loop:
-</span></span><span class="line"><span class="cl">  tasks_ready                  ─▶ what can be done right now
-</span></span><span class="line"><span class="cl">  tasks_claim &lt;id&gt;             ─▶ exactly one worker wins
-</span></span><span class="line"><span class="cl">    ├─ won  → work → tasks_update status=done
-</span></span><span class="line"><span class="cl">    └─ lost → discard the list, tasks_ready again
-</span></span><span class="line"><span class="cl">session_end                    ─▶ releases anything still held
-</span></span></code></pre><p><code>tasks_claim</code> fails with <em>no active session to claim as</em> if the connection has no
+<figure class="doc-figure" data-tone="ok" aria-labelledby="worker-loop-caption">
+  <span class="figure-kicker">Worker loop</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">session_start</span><strong>Establish identity</strong><small>Every claim is attributable to a live session.</small></div>
+    <div class="flow-node"><span class="flow-step">tasks_ready</span><strong>Read actionable work</strong><small>Dependencies are already resolved.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">tasks_claim</span><strong>Race atomically</strong><small>Win and work, or lose and refresh the ready list.</small></div>
+    <div class="flow-node success"><span class="flow-step">finish</span><strong>Close and hand off</strong><small>Update the task; <code>session_end</code> releases any claim still held.</small></div>
+  </div>
+  <figcaption id="worker-loop-caption">Workers coordinate through shared state, so the planner never has to remain alive as a referee.</figcaption>
+</figure>
+<p><code>tasks_claim</code> fails with <em>no active session to claim as</em> if the connection has no
 session. That is not incidental strictness: the claim records <strong>who</strong> holds the
 task, and a claim by nobody could never be released, reclaimed, or attributed.</p>
 <h3 id="what-the-loser-of-a-race-sees">What the loser of a race sees</h3>

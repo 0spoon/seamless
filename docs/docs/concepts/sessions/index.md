@@ -48,6 +48,7 @@ liveness from the spelling of `source_session`.
 This is a real briefing, in the order the assembler packs it:
 
 ```text
+Actual packing order budgeted
 <seam-briefing>
 Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
@@ -55,16 +56,15 @@ CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
 STAGE: deep-audit-f15-f18-landed -- status unknown
 PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-
 Memories (seamless):
-- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem while go's ./... skips ...
+- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
 - (+34 older -- use recall)
-
 Recent findings:
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
+Pinned constraints and live work lead; the budgeted memory index and recent findings follow; retrieval guidance and session identity close the envelope.
 ```
 
 Line by line:

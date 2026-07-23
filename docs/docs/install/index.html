@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -196,12 +196,12 @@
 
   <h1>Install &amp; deploy</h1>
   <p class="lede">The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.</p>
-  <p>Installing Seamless is one command: a script downloads a single Go binary for
-macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
-service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
-no database server, no Go toolchain. The <a href="../quickstart/">Quickstart</a> runs that
-command and moves on; this page is what it did, and what to do when you want to
-steer it yourself.</p>
+  <p>Installing Seamless is one command: a script downloads a release archive
+containing the <code>seamlessd</code> daemon and <code>seam</code> CLI for macOS, Linux, or Windows,
+verifies its SHA-256, and registers the daemon as a per-user service - launchd,
+systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
+or Go toolchain. The <a href="../quickstart/">Quickstart</a> runs that command and moves on;
+this page is what it did, and what to do when you want to steer it yourself.</p>
 <h2 id="one-instance-per-machine">One instance per machine</h2>
 <p>There is <strong>one instance</strong>: port <code>8081</code>, data dir <code>~/.seamless</code>. One daemon, one
 database, one set of files.</p>
@@ -479,7 +479,11 @@ reach it.</li>
 <li><strong>SSRF guards on capture.</strong> <code>capture_url</code> is the one tool that makes an
 outbound request on an agent's behalf, and its destination ports are restricted
 to <code>capture.allowed_ports</code> (80 and 443 by default) - never &quot;any port&quot;.</li>
-<li><strong>No telemetry.</strong> Nothing phones home.</li>
+<li><strong>No product telemetry.</strong> Seamless sends no usage or analytics data. The
+outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
+Ollama to keep model calls local), URLs an agent explicitly asks
+<code>capture_url</code> to fetch, and the GitHub release check and download that an
+explicit <code>seamlessd update</code> performs.</li>
 <li><strong>Release authenticity has two layers.</strong> Every installer verifies the
 archive's SHA-256 against <code>checksums.txt</code>. When <code>cosign</code> is installed it also
 verifies the manifest's keyless signature against this repository's release

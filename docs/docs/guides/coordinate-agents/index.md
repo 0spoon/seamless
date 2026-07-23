@@ -35,13 +35,12 @@ at creation rather than discovered at scheduling time.
 Every worker then runs the same loop, and needs no knowledge of the others:
 
 ```text
-session_start                  ─▶ required: a claim is attributed to a session
-loop:
-  tasks_ready                  ─▶ what can be done right now
-  tasks_claim <id>             ─▶ exactly one worker wins
-    ├─ won  → work → tasks_update status=done
-    └─ lost → discard the list, tasks_ready again
-session_end                    ─▶ releases anything still held
+Worker loop
+session_start Establish identity Every claim is attributable to a live session.
+tasks_ready Read actionable work Dependencies are already resolved.
+tasks_claim Race atomically Win and work, or lose and refresh the ready list.
+finish Close and hand off Update the task; session_end releases any claim still held.
+Workers coordinate through shared state, so the planner never has to remain alive as a referee.
 ```
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no

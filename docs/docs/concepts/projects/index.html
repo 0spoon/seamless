@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -204,11 +204,17 @@ find it.</p>
 scope resolves from where the agent already is.</p>
 <h2 id="the-precedence-chain">The precedence chain</h2>
 <p>For a durable write, scope resolves in this order - first hit wins:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">1. explicit project argument   ─┐
-</span></span><span class="line"><span class="cl">2. the bound session&#39;s project  ├─▶  a project slug
-</span></span><span class="line"><span class="cl">3. the ambient session&#39;s project┘
-</span></span><span class="line"><span class="cl">4. nothing resolved  ──────────────▶  REJECTED (fail closed)
-</span></span></code></pre><p>Worked through, rung by rung:</p>
+<figure class="doc-figure" data-tone="warn" aria-labelledby="scope-precedence-caption">
+  <span class="figure-kicker">First match wins</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node emphasis"><span class="flow-step">1 · strongest</span><strong>Explicit project</strong><small>The caller named the scope.</small></div>
+    <div class="flow-node"><span class="flow-step">2</span><strong>Bound session</strong><small>The MCP connection inherited a project.</small></div>
+    <div class="flow-node"><span class="flow-step">3</span><strong>Sole ambient</strong><small>The local hook session is unambiguous.</small></div>
+    <div class="flow-node error"><span class="flow-step">4 · no match</span><strong>Reject the write</strong><small>Never guess global when nothing resolved.</small></div>
+  </div>
+  <figcaption id="scope-precedence-caption"><strong>Precedence is also the safety model.</strong> Broader fallback stops before it could silently create machine-wide knowledge.</figcaption>
+</figure>
+<p>Worked through, rung by rung:</p>
 <p><strong>1. An explicit <code>project</code> argument.</strong> You said it, so it happens. This is also
 how you deliberately reach another project (<code>project: otherrepo</code>) or the global
 scope (<code>project: global</code>). A slug Seamless has never seen is <strong>not</strong> an error: the

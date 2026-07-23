@@ -89,13 +89,13 @@ behavior.
 
 That session's context now opens with an injected briefing:
 
-```text
-<seam-briefing>
-Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
-...
-</seam-briefing>
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="quickstart-briefing-caption">
+  <div class="sample-panel">
+    <div class="sample-panel-head"><span>Injected context</span><span>SessionStart</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 4 constraints, 58 memories, 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br><span class="sample-muted">...<br>&lt;/seam-briefing&gt;</span></div>
+  </div>
+  <figcaption id="quickstart-briefing-caption">Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.</figcaption>
+</figure>
 
 If you see that block, the loop is closed: the hook resolved your cwd to a
 project, the daemon assembled a briefing within its token budget, and the agent

@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -375,6 +375,10 @@ The channels overlap, so the shares need not sum to 100%.</li>
 <li><strong>Projects at a glance</strong> - the top projects by recent activity, drawn from the
 same batched query the Projects board uses, so a row here reconciles with a row
 there exactly.</li>
+<li><strong>Agent-reported mishaps</strong> - recent incidents agents explicitly supplied to
+<code>session_end</code>, attributed through the reporting session's harness and model.
+Warning tones appear only when reports exist; an empty rail is a positive
+&quot;No mishaps reported&quot; state.</li>
 <li><strong>Recent activity</strong> - the last twelve events, each linking to its detail page.</li>
 </ul>
 <p>Live sessions are counted TTL-aware (active <em>and</em> heartbeated within the idle
@@ -382,15 +386,21 @@ threshold), so the headline matches the Sessions screen rather than the raw
 <code>active</code> count that an idle session inflates until the reaper runs.</p>
 <h2 id="interactions">Interactions</h2>
 <p><code>/console/interactions</code></p>
-<p>The live feed of what agents are actually doing: MCP tool calls, hook injections,
-recall-miss prompts, session lifecycle, and the plan-mode capture stream. Rows
-carry the full request and response bodies - the tool's arguments and result, or
-the exact injected text - so you can read what an agent asked for and what it got
-without a second fetch.</p>
-<p>The feed streams over SSE and pages backwards through history. A recall via the
-MCP tool records both a <code>retrieval.injected</code> and a <code>tool.call</code>; the injected twin
-is dropped here because the tool call carries the same content plus its
-arguments. Session lifecycle twins are kept on purpose, as feed markers.</p>
+<p>The clean live feed of what agents are actually doing: MCP tool calls, hook
+injections, recall-miss prompts, session lifecycle, and the plan-mode capture
+stream. A fresh page starts empty and listens from that moment forward; merely
+visiting never restores old rows.</p>
+<p>History is explicit and additive. Choose a recent window and select <strong>Add</strong> when
+earlier context is useful; live rows stay in place, and <strong>Load older events</strong>
+paginates only inside that chosen window. Filters operate over the rows already
+in memory, by event category and session lane. Pausing buffers new arrivals
+rather than discarding them.</p>
+<p>Each compact row expands just enough to expose its request/result or injected
+text. Selecting the inspector keeps that context beside the stream and links to
+the full event page. A recall via the MCP tool records both a
+<code>retrieval.injected</code> and a <code>tool.call</code>; the injected twin is dropped here because
+the tool call carries the same content plus its arguments. Session lifecycle
+twins are kept on purpose, as feed markers.</p>
 <h2 id="search">Search</h2>
 <p><code>/console/search</code></p>
 <p>One query across every entity the console can link to. Memories and notes come
@@ -662,10 +672,12 @@ yet.</p>
 <a href="../../concepts/sessions/">Sessions &amp; briefings</a> for what they tune.</p>
 <h2 id="event-detail">Event detail</h2>
 <p><code>/console/events/{id}</code></p>
-<p>What a Recent-activity or timeline row links to: one event-log entry in full - the
-verbatim injected content, the memories it surfaced resolved to their live index
-entries (or flagged missing if the id no longer resolves), the remaining payload
-fields, and the raw JSON.</p>
+<p>What a Recent-activity or timeline row links to: a compact event review workspace
+with the event's agent/session attribution, verbatim injected or transport
+content, surfaced memories resolved to their live index entries (or flagged
+missing), remaining payload fields, and raw JSON. The Interactions inspector
+uses the same content model in a side pane; opening the full page adds context
+without changing the underlying event.</p>
 <h2 id="errors">Errors</h2>
 <p>A bad or stale URL renders a styled, layout-wrapped error page with a way back,
 rather than dropping you on a bare <code>404 page not found</code>. A 404 names the missing

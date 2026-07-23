@@ -134,8 +134,8 @@ seam task list [--id ID] [--project P] [--status S] [--plan S]
 Calls `tasks_list`. `--status` filters to `open`, `in_progress`, `done`, or
 `dropped`. `--id` loads a single task by its globally-unique id and ignores the
 project, status, and plan filters. `--plan` lists a plan's steps instead of the
-default non-plan tasks. Bare `seam task` with no subcommand is the same as
-`seam task list`.
+default non-plan tasks. Bare `seam task` is not an alias: it names the available
+task subcommands and exits 2. Use `seam task list` when listing is what you mean.
 
 ### seam task add {#seam_task_add}
 

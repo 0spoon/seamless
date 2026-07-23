@@ -68,3 +68,12 @@ gardener's [memory-wanted proposals](/concepts/gardener/#what-it-looks-for).
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.
+
+## Results and failures
+
+| Call | Success result | Failure that matters |
+|---|---|---|
+| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
+| `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
+| `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
+| `session_end` | Confirmation of the close - `session_id`, `claims_released`, `mishaps_recorded`; findings persist for the next briefing | A missing/ambiguous session is an error rather than a fabricated successful close |

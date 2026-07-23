@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -204,15 +204,21 @@ high-churn state and a <strong>rebuildable index</strong> of the files.</p>
 it by hand, and what happens if you delete it.</p>
 <h2 id="the-tree">The tree</h2>
 <p><code>data_dir</code> defaults to <code>~/.seamless</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">~/.seamless/
-</span></span><span class="line"><span class="cl">  seam.db                              SQLite: indexes, sessions, tasks, trials, events, embeddings
-</span></span><span class="line"><span class="cl">  memory/
-</span></span><span class="line"><span class="cl">    _global/{name}.md                  project-less memories
-</span></span><span class="line"><span class="cl">    {project}/{name}.md                one memory per file
-</span></span><span class="line"><span class="cl">  notes/
-</span></span><span class="line"><span class="cl">    _global/{slug}.md                  project-less notes
-</span></span><span class="line"><span class="cl">    {project}/{slug}.md                one note per file
-</span></span></code></pre><p>A memory's project is its directory. An empty <code>project</code> field means global, and
+<figure class="doc-figure" aria-labelledby="storage-tree-caption">
+  <span class="figure-kicker">On-disk layout</span>
+  <div class="doc-tree">
+    <div class="tree-root"><code>~/.seamless/</code><span class="tree-note">Owner-only local data directory</span></div>
+    <div class="tree-branch"><code>seam.db</code><span class="tree-note">Indexes, sessions, tasks, trials, events, and embeddings</span></div>
+    <div class="tree-branch"><code>memory/</code><span class="tree-note">Durable memory tree</span></div>
+    <div class="tree-leaf"><code>_global/{name}.md</code><span class="tree-note">Machine-wide memories</span></div>
+    <div class="tree-leaf"><code>{project}/{name}.md</code><span class="tree-note">One project memory per file</span></div>
+    <div class="tree-branch"><code>notes/</code><span class="tree-note">Durable note tree</span></div>
+    <div class="tree-leaf"><code>_global/{slug}.md</code><span class="tree-note">Machine-wide notes</span></div>
+    <div class="tree-leaf"><code>{project}/{slug}.md</code><span class="tree-note">One project note per file</span></div>
+  </div>
+  <figcaption id="storage-tree-caption">Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.</figcaption>
+</figure>
+<p>A memory's project is its directory. An empty <code>project</code> field means global, and
 the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <code>notes/_global/</code>. A memory's filename is its <code>name</code>; a note's is its <code>slug</code>.</p>
 <h2 id="memory-frontmatter">Memory frontmatter</h2>

@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -208,14 +208,18 @@ free: <a href="../../reference/hooks/">hooks</a> open a session, inject a briefi
 findings without the agent deciding to. Any other client is wired up by hand.
 This page is that loop.</p>
 <h2 id="the-loop">The loop</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">session_start   ─▶ bind the connection, get the briefing
-</span></span><span class="line"><span class="cl">     │
-</span></span><span class="line"><span class="cl">     ├─ recall / memory_read     ─▶ pull what the briefing summarized
-</span></span><span class="line"><span class="cl">     ├─ ... do the work ...
-</span></span><span class="line"><span class="cl">     ├─ memory_write / notes_create ─▶ what should outlive this run
-</span></span><span class="line"><span class="cl">     │
-</span></span><span class="line"><span class="cl">session_end     ─▶ persist findings for the next agent&#39;s briefing
-</span></span></code></pre><p>Four of those five steps are optional in the narrow sense that the tools work
+<figure class="doc-figure" aria-labelledby="agent-loop-caption">
+  <span class="figure-kicker">The integration loop</span>
+  <div class="doc-flow cols-5">
+    <div class="flow-node"><span class="flow-step">1 · session_start</span><strong>Bind scope</strong><small>Read the project briefing.</small></div>
+    <div class="flow-node"><span class="flow-step">2 · recall</span><strong>Pull detail</strong><small>Open what the briefing summarized.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">3 · work</span><strong>Use the context</strong><small>Keep the session current while acting.</small></div>
+    <div class="flow-node"><span class="flow-step">4 · durable writes</span><strong>Save what outlives the run</strong><small><code>memory_write</code> or <code>notes_create</code></small></div>
+    <div class="flow-node success"><span class="flow-step">5 · session_end</span><strong>Hand off findings</strong><small>Feed the next agent's briefing.</small></div>
+  </div>
+  <figcaption id="agent-loop-caption">Binding, retrieval, durable writes, and a final handoff turn an MCP connection into a useful shared session.</figcaption>
+</figure>
+<p>Four of those five steps are optional in the narrow sense that the tools work
 without them. They are not optional in the sense that matters: <strong><code>session_start</code>
 is what makes every later call know its scope</strong>, and <code>session_end</code> is the only
 thing that turns this run into something the next agent is told about. An agent

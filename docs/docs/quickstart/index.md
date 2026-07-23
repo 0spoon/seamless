@@ -89,11 +89,13 @@ behavior.
 That session's context now opens with an injected briefing:
 
 ```text
+Injected context SessionStart
 <seam-briefing>
 Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 ...
 </seam-briefing>
+Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.
 ```
 
 If you see that block, the loop is closed: the hook resolved your cwd to a

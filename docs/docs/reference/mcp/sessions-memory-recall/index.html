@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -266,6 +266,40 @@ gardener's <a href="../../../concepts/gardener/#what-it-looks-for">memory-wanted
 <p>It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.</p>
+<h2 id="results-and-failures">Results and failures</h2>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Call</th>
+<th>Success result</th>
+<th>Failure that matters</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>session_start</code></td>
+<td><code>session_id</code>, <code>name</code>, resolved <code>project</code>, explanatory <code>scope</code>, and <code>briefing</code>; resumed/adopted sessions also say <code>resumed: true</code></td>
+<td>Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly</td>
+</tr>
+<tr>
+<td><code>memory_write</code></td>
+<td>Stable <code>id</code>, canonical <code>name</code>, resolved <code>project</code>, <code>updated</code>, optional <code>similar</code>, and optional <code>superseded</code></td>
+<td>An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target</td>
+</tr>
+<tr>
+<td><code>recall</code></td>
+<td><code>hits</code>, possibly empty</td>
+<td>Remote embedder failures degrade to lexical-only; local request/config construction errors surface</td>
+</tr>
+<tr>
+<td><code>session_end</code></td>
+<td>Confirmation of the close - <code>session_id</code>, <code>claims_released</code>, <code>mishaps_recorded</code>; findings persist for the next briefing</td>
+<td>A missing/ambiguous session is an error rather than a fabricated successful close</td>
+</tr>
+</tbody>
+</table>
+</div>
 <h2 id="session_start">session_start</h2>
 <p>Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.</p>
 <div class="table-wrap">
@@ -579,7 +613,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete?</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
+      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete?</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
     </ul>
   </aside>
   

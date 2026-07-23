@@ -17,13 +17,13 @@ This page is that loop.
 ## The loop
 
 ```text
-session_start   ─▶ bind the connection, get the briefing
-     │
-     ├─ recall / memory_read     ─▶ pull what the briefing summarized
-     ├─ ... do the work ...
-     ├─ memory_write / notes_create ─▶ what should outlive this run
-     │
-session_end     ─▶ persist findings for the next agent's briefing
+The integration loop
+1 · session_start Bind scope Read the project briefing.
+2 · recall Pull detail Open what the briefing summarized.
+3 · work Use the context Keep the session current while acting.
+4 · durable writes Save what outlives the run memory_write or notes_create
+5 · session_end Hand off findings Feed the next agent's briefing.
+Binding, retrieval, durable writes, and a final handoff turn an MCP connection into a useful shared session.
 ```
 
 Four of those five steps are optional in the narrow sense that the tools work

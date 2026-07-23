@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -262,6 +262,11 @@ found, <code>gardener_apply</code> to act on one.</p>
 <td>The same recall query returned zero hits in 2+ sessions inside 14 days</td>
 <td><strong>memory_wanted</strong>: write the knowledge agents keep searching for; applying opens a task in the queue</td>
 </tr>
+<tr>
+<td><strong>tool-error</strong></td>
+<td>The same normalized tool or hook error, 3+ times inside 14 days and still recent; tool errors must span 2+ sessions</td>
+<td><strong>tool_error</strong>: investigate and fix the recurring failure; applying opens a task with the observed error evidence</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -270,6 +275,12 @@ instead of curating what exists: recurring zero-hit <code>recall</code> queries 
 for a memory nobody wrote, grouped per project so a one-off miss never fires.
 Applying the proposal opens a task (&quot;Write a memory: ...&quot;) in the ready queue -
 the memory itself is only ever written by whoever picks the task up.</p>
+<p>The tool-error pass closes the other side of that loop. A single failure may be
+a typo; the same normalized error again and again is evidence of a broken
+workflow. It also watches hook errors, which are swallowed fail-open and never
+reach an agent - recurrence here is the one place they surface. Applying its
+proposal opens a repair task rather than pretending the gardener can fix code
+or configuration itself.</p>
 <p>Two more proposal types come from requests rather than the timer:</p>
 <ul>
 <li><strong>reproject</strong> - a memory filed under the wrong project, moved to a project that

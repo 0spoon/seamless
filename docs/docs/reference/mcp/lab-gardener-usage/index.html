@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -251,6 +251,10 @@ one) instead of a single &quot;tidy up&quot; button.</p>
 <td>memory-wanted</td>
 <td>The same recall query missing across sessions. Proposes a <strong>memory_wanted</strong>: applying opens a task to write the knowledge agents keep searching for.</td>
 </tr>
+<tr>
+<td>tool-error</td>
+<td>The same normalized tool or hook error recurring (tool errors across 2+ sessions). Proposes a <strong>tool_error</strong>: applying opens an investigation task with the observed evidence.</td>
+</tr>
 </tbody>
 </table>
 </div>
@@ -285,6 +289,13 @@ lives in the file's frontmatter (<code>favorite: true</code>), so it survives an
 rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
 a task-only plan (no note) cannot be starred. Starring never bumps an item's
 updated time - it is metadata, not authorship.</p>
+<h2 id="applying-is-an-explicit-boundary">Applying is an explicit boundary</h2>
+<p><code>gardener_apply</code> accepts only <code>apply</code> or <code>dismiss</code>. Dismissal closes the proposal
+without changing its target. Apply performs the proposal's typed action and
+returns that real outcome; it never substitutes a plausible dummy when the
+target disappeared or a file/store mutation failed. Memory-changing actions
+route through the lifecycle/files services, so supersession, atomic Markdown
+writes, and occupied-path protections remain the same as direct tools.</p>
 <h2 id="lab_open">lab_open</h2>
 <p>Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.</p>
 <div class="table-wrap">
@@ -583,7 +594,7 @@ updated time - it is metadata, not authorship.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-research-lab">The research lab</a></li><li class="lvl-2"><a href="#the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</a></li><li class="lvl-2"><a href="#splits-are-a-different-thing">Splits are a different thing</a></li><li class="lvl-2"><a href="#usage-summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite-set">favorite_set</a></li><li class="lvl-2"><a href="#lab_open">lab_open</a></li><li class="lvl-2"><a href="#trial_record">trial_record</a></li><li class="lvl-2"><a href="#trial_query">trial_query</a></li><li class="lvl-2"><a href="#gardener_proposals">gardener_proposals</a></li><li class="lvl-2"><a href="#gardener_request">gardener_request</a></li><li class="lvl-2"><a href="#gardener_split">gardener_split</a></li><li class="lvl-2"><a href="#gardener_apply">gardener_apply</a></li><li class="lvl-2"><a href="#usage_summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite_set">favorite_set</a></li>
+      <li class="lvl-2"><a href="#the-research-lab">The research lab</a></li><li class="lvl-2"><a href="#the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</a></li><li class="lvl-2"><a href="#splits-are-a-different-thing">Splits are a different thing</a></li><li class="lvl-2"><a href="#usage-summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite-set">favorite_set</a></li><li class="lvl-2"><a href="#applying-is-an-explicit-boundary">Applying is an explicit boundary</a></li><li class="lvl-2"><a href="#lab_open">lab_open</a></li><li class="lvl-2"><a href="#trial_record">trial_record</a></li><li class="lvl-2"><a href="#trial_query">trial_query</a></li><li class="lvl-2"><a href="#gardener_proposals">gardener_proposals</a></li><li class="lvl-2"><a href="#gardener_request">gardener_request</a></li><li class="lvl-2"><a href="#gardener_split">gardener_split</a></li><li class="lvl-2"><a href="#gardener_apply">gardener_apply</a></li><li class="lvl-2"><a href="#usage_summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite_set">favorite_set</a></li>
     </ul>
   </aside>
   

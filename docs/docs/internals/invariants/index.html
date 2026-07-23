@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -312,8 +312,16 @@ project. The guidance and the behavior are the same fix; either alone is a lie.<
 a new failure: the typo already created a scope on disk, and a row the console
 lists is where a wrong one can be noticed and merged.</p>
 <h3 id="precedence-and-no-guessing">Precedence, and no guessing</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">explicit project  →  the bound session&#39;s project  →  the sole unambiguous ambient
-</span></span></code></pre><p>Ambient sessions spanning more than one project are <code>errAmbiguousScope</code>, not a
+<figure class="doc-figure" data-tone="warn" aria-labelledby="scope-guard-caption">
+  <span class="figure-kicker">Scope resolution</span>
+  <div class="doc-flow">
+    <div class="flow-node emphasis"><span class="flow-step">1</span><strong>Explicit project</strong></div>
+    <div class="flow-node"><span class="flow-step">2</span><strong>Bound session project</strong></div>
+    <div class="flow-node"><span class="flow-step">3</span><strong>Sole unambiguous ambient</strong></div>
+  </div>
+  <figcaption id="scope-guard-caption">Resolution stops at the first available scope; ambiguity is an error, never a fourth fallback.</figcaption>
+</figure>
+<p>Ambient sessions spanning more than one project are <code>errAmbiguousScope</code>, not a
 guess. Inheriting the machine-latest ambient in that situation is exactly how a
 write bleeds into a concurrent agent's project - and the agent that wrote it will
 never see the mistake, because from its side the call succeeded.</p>

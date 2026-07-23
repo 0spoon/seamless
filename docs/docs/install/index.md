@@ -2,12 +2,12 @@
 
 > The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.
 
-Installing Seamless is one command: a script downloads a single Go binary for
-macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
-service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
-no database server, no Go toolchain. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) runs that
-command and moves on; this page is what it did, and what to do when you want to
-steer it yourself.
+Installing Seamless is one command: a script downloads a release archive
+containing the `seamlessd` daemon and `seam` CLI for macOS, Linux, or Windows,
+verifies its SHA-256, and registers the daemon as a per-user service - launchd,
+systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
+or Go toolchain. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) runs that command and moves on;
+this page is what it did, and what to do when you want to steer it yourself.
 
 ## One instance per machine
 
@@ -335,7 +335,11 @@ What you are accepting when you run this:
 - **SSRF guards on capture.** `capture_url` is the one tool that makes an
   outbound request on an agent's behalf, and its destination ports are restricted
   to `capture.allowed_ports` (80 and 443 by default) - never "any port".
-- **No telemetry.** Nothing phones home.
+- **No product telemetry.** Seamless sends no usage or analytics data. The
+  outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
+  Ollama to keep model calls local), URLs an agent explicitly asks
+  `capture_url` to fetch, and the GitHub release check and download that an
+  explicit `seamlessd update` performs.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release

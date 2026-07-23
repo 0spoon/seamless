@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -203,19 +203,17 @@ one time in thirty. A config that works on one machine.</p>
 <p>Agents are bad at this in a specific way: each one starts fresh, re-derives the
 same first three hypotheses, and tries them again. A <strong>lab</strong> is where that stops.</p>
 <h2 id="the-loop">The loop</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">lab_open        ── name the investigation; binds it to your connection
-</span></span><span class="line"><span class="cl">    │
-</span></span><span class="line"><span class="cl">    ▼
-</span></span><span class="line"><span class="cl">trial_query     ── what has already been tried? (read BEFORE you try anything)
-</span></span><span class="line"><span class="cl">    │
-</span></span><span class="line"><span class="cl">    ▼
-</span></span><span class="line"><span class="cl">trial_record    ── what you tried, what you expected, what actually happened
-</span></span><span class="line"><span class="cl">    │
-</span></span><span class="line"><span class="cl">    └──▶ repeat
-</span></span><span class="line"><span class="cl">    │
-</span></span><span class="line"><span class="cl">    ▼
-</span></span><span class="line"><span class="cl">memory_write    ── distill: the finding, as a gotcha or a decision
-</span></span></code></pre><p><code>lab_open</code> binds the lab to the connection the same way <code>session_start</code> binds a
+<figure class="doc-figure" data-tone="ok" aria-labelledby="research-loop-caption">
+  <span class="figure-kicker">Evidence loop</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">1 · lab_open</span><strong>Name and bind the investigation</strong><small>Several sessions can share the same lab.</small></div>
+    <div class="flow-node"><span class="flow-step">2 · trial_query</span><strong>Read before trying</strong><small>See prior outcomes and avoid repeated dead ends.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">3 · trial_record</span><strong>Expected vs actual</strong><small>Record the change, outcome, evidence, and metrics; query again before the next trial.</small></div>
+    <div class="flow-node success"><span class="flow-step">4 · memory_write</span><strong>Distill the durable finding</strong><small>Close the loop with a gotcha, decision, or protocol.</small></div>
+  </div>
+  <figcaption id="research-loop-caption">Trials are the working evidence; memory is the compact conclusion that future agents need.</figcaption>
+</figure>
+<p><code>lab_open</code> binds the lab to the connection the same way <code>session_start</code> binds a
 project, so <code>trial_record</code> inherits it without you naming the lab every time.</p>
 <h2 id="record-the-expectation-not-just-the-result">Record the expectation, not just the result</h2>
 <p>The field that earns its keep is <strong>what you expected</strong>. A trial that says &quot;tried

@@ -35,15 +35,16 @@ at creation rather than discovered at scheduling time.
 
 Every worker then runs the same loop, and needs no knowledge of the others:
 
-```text
-session_start                  ─▶ required: a claim is attributed to a session
-loop:
-  tasks_ready                  ─▶ what can be done right now
-  tasks_claim <id>             ─▶ exactly one worker wins
-    ├─ won  → work → tasks_update status=done
-    └─ lost → discard the list, tasks_ready again
-session_end                    ─▶ releases anything still held
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="worker-loop-caption">
+  <span class="figure-kicker">Worker loop</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">session_start</span><strong>Establish identity</strong><small>Every claim is attributable to a live session.</small></div>
+    <div class="flow-node"><span class="flow-step">tasks_ready</span><strong>Read actionable work</strong><small>Dependencies are already resolved.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">tasks_claim</span><strong>Race atomically</strong><small>Win and work, or lose and refresh the ready list.</small></div>
+    <div class="flow-node success"><span class="flow-step">finish</span><strong>Close and hand off</strong><small>Update the task; <code>session_end</code> releases any claim still held.</small></div>
+  </div>
+  <figcaption id="worker-loop-caption">Workers coordinate through shared state, so the planner never has to remain alive as a referee.</figcaption>
+</figure>
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no
 session. That is not incidental strictness: the claim records **who** holds the

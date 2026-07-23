@@ -12,20 +12,16 @@ same first three hypotheses, and tries them again. A **lab** is where that stops
 
 ## The loop
 
-```text
-lab_open        ── name the investigation; binds it to your connection
-    │
-    ▼
-trial_query     ── what has already been tried? (read BEFORE you try anything)
-    │
-    ▼
-trial_record    ── what you tried, what you expected, what actually happened
-    │
-    └──▶ repeat
-    │
-    ▼
-memory_write    ── distill: the finding, as a gotcha or a decision
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="research-loop-caption">
+  <span class="figure-kicker">Evidence loop</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">1 · lab_open</span><strong>Name and bind the investigation</strong><small>Several sessions can share the same lab.</small></div>
+    <div class="flow-node"><span class="flow-step">2 · trial_query</span><strong>Read before trying</strong><small>See prior outcomes and avoid repeated dead ends.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">3 · trial_record</span><strong>Expected vs actual</strong><small>Record the change, outcome, evidence, and metrics; query again before the next trial.</small></div>
+    <div class="flow-node success"><span class="flow-step">4 · memory_write</span><strong>Distill the durable finding</strong><small>Close the loop with a gotcha, decision, or protocol.</small></div>
+  </div>
+  <figcaption id="research-loop-caption">Trials are the working evidence; memory is the compact conclusion that future agents need.</figcaption>
+</figure>
 
 `lab_open` binds the lab to the connection the same way `session_start` binds a
 project, so `trial_record` inherits it without you naming the lab every time.

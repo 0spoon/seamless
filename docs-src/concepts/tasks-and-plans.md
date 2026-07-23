@@ -29,23 +29,22 @@ time.
 Two agents that both call `tasks_ready` see the same task. Both will try to take
 it. Exactly one wins:
 
-```text
-agent A: tasks_claim 01K...           agent B: tasks_claim 01K...
-            │                                     │
-            ▼                                     ▼
-   ┌──────────────────┐                  ┌──────────────────┐
-   │ ready → in_progress │               │ error: already   │
-   │ lease_expires_at =  │               │ claimed by A     │
-   │   now + 900s        │               └──────────────────┘
-   └──────────────────┘                            │
-            │                                      ▼
-            │                            B claims the next ready task
-            ▼
-   A works... re-claims to heartbeat (lease refreshed)
-            │
-            ├─ tasks_release / tasks_update done / session_end → freed
-            └─ A crashes → lease expires → reclaimable by anyone
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="claim-race-caption">
+  <span class="figure-kicker">Atomic claim race</span>
+  <div class="flow-split">
+    <section class="flow-lane">
+      <div class="flow-lane-head">Agent A</div>
+      <div class="flow-node"><span class="flow-step">tasks_claim 01K…</span><strong>Claim wins</strong><small><code>ready → in_progress</code><br>lease expires at now + 900s</small></div>
+      <div class="flow-node success"><span class="flow-step">while working</span><strong>Heartbeat or finish</strong><small>Re-claim refreshes the lease; release, close, or session end frees it.</small></div>
+    </section>
+    <section class="flow-lane">
+      <div class="flow-lane-head">Agent B</div>
+      <div class="flow-node error"><span class="flow-step">tasks_claim 01K…</span><strong>Claim is refused</strong><small>Error names Agent A as the live holder.</small></div>
+      <div class="flow-node"><span class="flow-step">next action</span><strong>Take another ready task</strong><small>If A crashes, the expired lease makes this task reclaimable by id.</small></div>
+    </section>
+  </div>
+  <figcaption id="claim-race-caption"><strong>Both agents may see the same ready row; only one can own it.</strong> The loser pivots without duplicating work.</figcaption>
+</figure>
 
 Four rules carry the whole model:
 

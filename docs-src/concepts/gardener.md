@@ -40,12 +40,20 @@ found, `gardener_apply` to act on one.
 | **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 | **dead-weight** | A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read | **archive**: exposure without demand means it costs tokens and steers nothing |
 | **memory-wanted** | The same recall query returned zero hits in 2+ sessions inside 14 days | **memory_wanted**: write the knowledge agents keep searching for; applying opens a task in the queue |
+| **tool-error** | The same normalized tool or hook error, 3+ times inside 14 days and still recent; tool errors must span 2+ sessions | **tool_error**: investigate and fix the recurring failure; applying opens a task with the observed error evidence |
 
 The memory-wanted pass is the one place the gardener asks *for* knowledge
 instead of curating what exists: recurring zero-hit `recall` queries are demand
 for a memory nobody wrote, grouped per project so a one-off miss never fires.
 Applying the proposal opens a task ("Write a memory: ...") in the ready queue -
 the memory itself is only ever written by whoever picks the task up.
+
+The tool-error pass closes the other side of that loop. A single failure may be
+a typo; the same normalized error again and again is evidence of a broken
+workflow. It also watches hook errors, which are swallowed fail-open and never
+reach an agent - recurrence here is the one place they surface. Applying its
+proposal opens a repair task rather than pretending the gardener can fix code
+or configuration itself.
 
 Two more proposal types come from requests rather than the timer:
 

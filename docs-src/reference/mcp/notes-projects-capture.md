@@ -62,3 +62,12 @@ tool that makes an outbound request on an agent's behalf, so it is guarded:
 destination ports are restricted to `capture.allowed_ports` (80 and 443 by
 default, never "any port"), and the fetcher refuses to be talked into reaching
 things it should not. See [Configuration](/reference/configuration/).
+
+Scope resolves before the network fetch, so an ambiguous durable destination
+fails without making a request. Success returns the note's `id`, `slug`, `title`,
+resolved `project`, and `source_url` - the URL as requested; redirects are
+followed but do not rewrite it. The fetcher validates the initial URL and every
+redirect, rejecting non-HTTP schemes, private/loopback destinations, and
+disallowed ports. Size is bounded by truncation rather than rejection: at most
+2 MB of the response is read, and the stored readable body is capped again at
+50,000 runes with a visible `[content truncated]` marker.

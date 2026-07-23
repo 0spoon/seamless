@@ -29,21 +29,15 @@ Two agents that both call `tasks_ready` see the same task. Both will try to take
 it. Exactly one wins:
 
 ```text
-agent A: tasks_claim 01K...           agent B: tasks_claim 01K...
-            │                                     │
-            ▼                                     ▼
-   ┌──────────────────┐                  ┌──────────────────┐
-   │ ready → in_progress │               │ error: already   │
-   │ lease_expires_at =  │               │ claimed by A     │
-   │   now + 900s        │               └──────────────────┘
-   └──────────────────┘                            │
-            │                                      ▼
-            │                            B claims the next ready task
-            ▼
-   A works... re-claims to heartbeat (lease refreshed)
-            │
-            ├─ tasks_release / tasks_update done / session_end → freed
-            └─ A crashes → lease expires → reclaimable by anyone
+Atomic claim race
+Agent A
+tasks_claim 01K… Claim wins ready → in_progress
+lease expires at now + 900s
+while working Heartbeat or finish Re-claim refreshes the lease; release, close, or session end frees it.
+Agent B
+tasks_claim 01K… Claim is refused Error names Agent A as the live holder.
+next action Take another ready task If A crashes, the expired lease makes this task reclaimable by id.
+Both agents may see the same ready row; only one can own it. The loser pivots without duplicating work.
 ```
 
 Four rules carry the whole model:

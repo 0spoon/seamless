@@ -12,18 +12,12 @@ same first three hypotheses, and tries them again. A **lab** is where that stops
 ## The loop
 
 ```text
-lab_open        ── name the investigation; binds it to your connection
-    │
-    ▼
-trial_query     ── what has already been tried? (read BEFORE you try anything)
-    │
-    ▼
-trial_record    ── what you tried, what you expected, what actually happened
-    │
-    └──▶ repeat
-    │
-    ▼
-memory_write    ── distill: the finding, as a gotcha or a decision
+Evidence loop
+1 · lab_open Name and bind the investigation Several sessions can share the same lab.
+2 · trial_query Read before trying See prior outcomes and avoid repeated dead ends.
+3 · trial_record Expected vs actual Record the change, outcome, evidence, and metrics; query again before the next trial.
+4 · memory_write Distill the durable finding Close the loop with a gotcha, decision, or protocol.
+Trials are the working evidence; memory is the compact conclusion that future agents need.
 ```
 
 `lab_open` binds the lab to the connection the same way `session_start` binds a

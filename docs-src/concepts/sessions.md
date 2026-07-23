@@ -48,25 +48,13 @@ liveness from the spelling of `source_session`.
 
 This is a real briefing, in the order the assembler packs it:
 
-```text
-<seam-briefing>
-Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
-CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
-STAGE: deep-audit-f15-f18-landed -- status unknown
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
-PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-
-Memories (seamless):
-- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem while go's ./... skips ...
-- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
-- (+34 older -- use recall)
-
-Recent findings:
-Recall on demand with recall; read a memory with memory_read.
-Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
-</seam-briefing>
-```
+<figure class="doc-figure" aria-labelledby="annotated-briefing-caption">
+  <div class="sample-panel">
+    <div class="sample-panel-head"><span>Actual packing order</span><span>budgeted</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 4 constraints, 58 memories, 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...<br>STAGE: deep-audit-f15-f18-landed -- status unknown<br>PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight<br>PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- use recall)<br><br><span class="sample-strong">Recent findings:</span><br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
+  </div>
+  <figcaption id="annotated-briefing-caption">Pinned constraints and live work lead; the budgeted memory index and recent findings follow; retrieval guidance and session identity close the envelope.</figcaption>
+</figure>
 
 Line by line:
 

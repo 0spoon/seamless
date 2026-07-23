@@ -14,12 +14,16 @@ scope resolves from where the agent already is.
 
 For a durable write, scope resolves in this order - first hit wins:
 
-```text
-1. explicit project argument   ─┐
-2. the bound session's project  ├─▶  a project slug
-3. the ambient session's project┘
-4. nothing resolved  ──────────────▶  REJECTED (fail closed)
-```
+<figure class="doc-figure" data-tone="warn" aria-labelledby="scope-precedence-caption">
+  <span class="figure-kicker">First match wins</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node emphasis"><span class="flow-step">1 · strongest</span><strong>Explicit project</strong><small>The caller named the scope.</small></div>
+    <div class="flow-node"><span class="flow-step">2</span><strong>Bound session</strong><small>The MCP connection inherited a project.</small></div>
+    <div class="flow-node"><span class="flow-step">3</span><strong>Sole ambient</strong><small>The local hook session is unambiguous.</small></div>
+    <div class="flow-node error"><span class="flow-step">4 · no match</span><strong>Reject the write</strong><small>Never guess global when nothing resolved.</small></div>
+  </div>
+  <figcaption id="scope-precedence-caption"><strong>Precedence is also the safety model.</strong> Broader fallback stops before it could silently create machine-wide knowledge.</figcaption>
+</figure>
 
 Worked through, rung by rung:
 

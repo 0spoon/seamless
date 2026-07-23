@@ -32,19 +32,18 @@ the agent that executes it can read the research that justified it.
 
 ## A plan's life
 
-```text
-   you enter plan mode
-        │
-        ▼
-   plan file saved ────────▶ note cc-plan-<name>, tag plan-status:draft
-        │                    (re-saved → same note, next iteration)
-        ▼
-   Claude presents it ─────▶ plan-status:presented
-        │                    briefing shows: PLAN (awaiting approval): <slug>
-        ├── you approve ───▶ plan-status:approved + tracking task created
-        │                    briefing shows: PLAN: <slug> -- 2/3 done, 1 claimable
-        └── you don't ─────▶ plan-status:abandoned
-```
+<figure class="doc-figure" data-tone="pop" aria-labelledby="plan-lifecycle-caption">
+  <span class="figure-kicker">Captured-plan lifecycle</span>
+  <div class="doc-flow cols-2">
+    <div class="flow-node"><span class="flow-step">1 · plan mode</span><strong>Plan file saved</strong><small>Upserts <code>cc-plan-&lt;name&gt;</code> with <code>plan-status:draft</code>; later saves create iterations.</small></div>
+    <div class="flow-node no-arrow"><span class="flow-step">2 · presented</span><strong>Awaiting approval</strong><small>The briefing names the presented plan.</small></div>
+  </div>
+  <div class="flow-split flow-outcomes">
+    <div class="flow-node success no-arrow"><span class="flow-step">3a · approved</span><strong>Tracking begins</strong><small>Status becomes approved and an implementation task is created.</small></div>
+    <div class="flow-node warn no-arrow"><span class="flow-step">3b · abandoned</span><strong>Closed deliberately</strong><small>An unapproved plan can be marked abandoned instead of lingering.</small></div>
+  </div>
+  <figcaption id="plan-lifecycle-caption">A captured plan remains one composition across edits; approval changes its state and opens the execution loop.</figcaption>
+</figure>
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
 `draft`, `presented`, `approved`, `abandoned`.

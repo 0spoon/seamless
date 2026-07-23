@@ -85,15 +85,15 @@ cost one-time.
 Memories are not appended forever, and they are not silently overwritten. When
 something stops being true, the replacement **supersedes** it:
 
-```text
-memory_write name=new-truth supersedes=old-truth
-   |
-   +-- old-truth: invalid_at = now, superseded_by = <new id>
-   |              leaves the briefing; leaves recall
-   |              STILL on disk, still readable, pointing at its replacement
-   |
-   +-- new-truth: active, indexed, in the next briefing
-```
+<figure class="doc-figure" data-tone="warn" aria-labelledby="supersession-caption">
+  <span class="figure-kicker">Explicit supersession</span>
+  <div class="doc-flow">
+    <div class="flow-node"><span class="flow-step">memory_write</span><strong>new-truth supersedes old-truth</strong><small>The replacement is written first.</small></div>
+    <div class="flow-node warn"><span class="flow-step">old-truth</span><strong>Invalid, preserved</strong><small><code>invalid_at = now</code><br><code>superseded_by = new id</code><br>Leaves briefing and recall; remains readable on disk.</small></div>
+    <div class="flow-node success"><span class="flow-step">new-truth</span><strong>Active and indexed</strong><small>Eligible for recall and the next briefing.</small></div>
+  </div>
+  <figcaption id="supersession-caption">Replacement changes which memory is active without erasing the historical record.</figcaption>
+</figure>
 
 The old memory leaves every index but stays readable. An agent following an old
 reference lands on it, sees that it is invalid, and finds the pointer to what

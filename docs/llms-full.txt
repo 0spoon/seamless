@@ -1,6 +1,6 @@
 # Seamless
 
-> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
+> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.
 
 ---
 
@@ -14,8 +14,9 @@ a **shared, persistent brain** for Claude Code, Codex, and any other MCP client
 you run. Memory survives the end of a conversation, tasks can be handed from one
 agent to another, and plans get executed together. All of it is stored as
 markdown files in a directory you own, indexed by one SQLite database, and
-served over MCP by a single Go binary on your machine - no cloud service, no
-external vector database, no account.
+served over MCP by the local `seamlessd` daemon. The companion `seam` CLI gives
+headless agents a direct interface. There is no hosted Seamless service,
+external vector database, or account.
 
 Its clients are agents. You are the observer and editor - there is a console, but
 nothing in Seamless requires you to be in the loop for agents to use it. And it
@@ -41,8 +42,9 @@ hosted team knowledge base.
 read, `grep`, edit, and put in git. The database is a rebuildable index over
 them, plus the record for high-churn state (sessions, tasks, events).
 
-**Local-first.** One binary, one SQLite file, bound to loopback. No external
-database, no cloud dependency, no telemetry.
+**Local-first.** One daemon process, one SQLite file, bound to loopback. No
+external database, no required cloud service, and no outbound product
+telemetry.
 
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
@@ -154,11 +156,13 @@ behavior.
 That session's context now opens with an injected briefing:
 
 ```text
+Injected context SessionStart
 <seam-briefing>
 Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 ...
 </seam-briefing>
+Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.
 ```
 
 If you see that block, the loop is closed: the hook resolved your cwd to a
@@ -189,12 +193,12 @@ seamlessd console-open                               # opens pre-authenticated
 URL: https://thereisnospoon.org/docs/install/
 
 
-Installing Seamless is one command: a script downloads a single Go binary for
-macOS, Linux, or Windows, verifies its SHA-256, and registers a per-user
-service - launchd, systemd, or a Scheduled Task - bound to loopback. No Docker,
-no database server, no Go toolchain. The [Quickstart](/quickstart/) runs that
-command and moves on; this page is what it did, and what to do when you want to
-steer it yourself.
+Installing Seamless is one command: a script downloads a release archive
+containing the `seamlessd` daemon and `seam` CLI for macOS, Linux, or Windows,
+verifies its SHA-256, and registers the daemon as a per-user service - launchd,
+systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
+or Go toolchain. The [Quickstart](/quickstart/) runs that command and moves on;
+this page is what it did, and what to do when you want to steer it yourself.
 
 ## One instance per machine
 
@@ -522,7 +526,11 @@ What you are accepting when you run this:
 - **SSRF guards on capture.** `capture_url` is the one tool that makes an
   outbound request on an agent's behalf, and its destination ports are restricted
   to `capture.allowed_ports` (80 and 443 by default) - never "any port".
-- **No telemetry.** Nothing phones home.
+- **No product telemetry.** Seamless sends no usage or analytics data. The
+  outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
+  Ollama to keep model calls local), URLs an agent explicitly asks
+  `capture_url` to fetch, and the GitHub release check and download that an
+  explicit `seamlessd update` performs.
 - **Release authenticity has two layers.** Every installer verifies the
   archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
   verifies the manifest's keyless signature against this repository's release
@@ -708,10 +716,12 @@ Then start a Claude Code session in a mapped repo and look for the injected
 block:
 
 ```text
+Injected context myrepo
 <seam-briefing>
 Seam project: myrepo -- 4 constraints, 58 memories, 3 recent findings.
 ...
 </seam-briefing>
+The project name is the useful proof: the ambient session resolved to the repository you opened.
 ```
 
 If it is there, the whole loop is closed: the hook resolved your cwd to a
@@ -1175,6 +1185,32 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.3 {#v0-4-3}
+
+Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.3)
+
+### Features
+
+- feat(console): per-gate readiness in the utility activation table
+
+### Other
+
+- refactor(console): merge the utility activation table into the Closed loop group
+
+## v0.4.2 {#v0-4-2}
+
+Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.2)
+
+### Features
+
+- feat(sessions): self-reported mishaps at session_end
+- feat(gardener): add the tool-error pass -- recurring agent-facing errors become fix tasks
+- feat(console): make the interaction-volume histogram interactive
+
+### Fixes
+
+- fix(console): locate timeline events in place
+
 ## v0.4.1 {#v0-4-1}
 
 Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.1)
@@ -1430,9 +1466,10 @@ nothing in Seamless rewrites your knowledge behind your back.
 URL: https://thereisnospoon.org/docs/concepts/how-it-works/
 
 
-Seamless is a local-first memory and coordination system for coding agents,
-built as one Go binary holding one SQLite database and one directory of
-markdown files, bound to loopback on your machine. Agents reach it over MCP,
+Seamless is a local-first memory and coordination system for coding agents.
+The release ships a daemon (`seamlessd`) and its headless client (`seam`); one
+daemon process owns one SQLite database and one directory of markdown files,
+bound to loopback on your machine. Agents reach it over MCP,
 hooks make sessions ambient for Claude Code and Codex, and you watch through a
 read-mostly console. It is deliberately not a distributed system - one
 instance, one port, one data directory per machine. Everything below follows
@@ -1441,13 +1478,15 @@ from that.
 ## One daemon, three surfaces
 
 ```text
-                    ┌──────────────────────────┐
-   agents  ────MCP──▶                          │
-                    │        seamlessd         │──▶  ~/.seamless/memory/*.md
-   hooks   ───HTTP──▶   (one process, :8081)   │──▶  ~/.seamless/notes/*.md
-                    │                          │──▶  ~/.seamless/seam.db
-   you     ─browser─▶                          │
-                    └──────────────────────────┘
+Local architecture
+MCP Agents Tools and session binding
+Command → HTTP Hooks Ambient context and harvest
+Browser You Read-mostly console
+seamlessd one local process · 127.0.0.1:8081
+Durable truth memory/*.md
+Durable truth notes/*.md
+State + indexes seam.db
+One daemon, three interfaces. Agents and hooks write through the same process; humans inspect the resulting state in the console.
 ```
 
 - **Agents** speak MCP at `/api/mcp`. This is the primary interface; the clients
@@ -1483,12 +1522,12 @@ folder of markdown files that a human - or any other tool - can read.
 ## The write path
 
 ```text
-memory_write
-   │
-   ├─▶ validate name, scope (fail closed if ambiguous)
-   ├─▶ write the markdown file       ← the durable act
-   ├─▶ index it: FTS row + embedding
-   └─▶ append an event
+Write path
+1 · request memory_write Validate name, content, and scope
+2 · durable act Atomic Markdown write Fail closed when scope is ambiguous
+3 · rebuildable FTS + embedding Index the exact file content
+4 · observable Append event Record what happened
+The file is the durable boundary. SQLite mirrors make the knowledge searchable and observable.
 ```
 
 The file write is the one that matters. Indexing after it can fail and be
@@ -1497,9 +1536,11 @@ rebuilt; the file is already on disk.
 ## The read path
 
 ```text
-SessionStart hook ─▶ resolve cwd → project ─▶ assemble briefing (budgeted) ─▶ inject
-UserPromptSubmit  ─▶ match prompt against memories ─▶ inject <seam-recall>
-recall            ─▶ FTS5 + cosine ─▶ RRF fuse ─▶ budget ─▶ return
+Three retrieval paths
+SessionStart cwd → project → budgeted briefing → inject Baseline context before the first action
+UserPromptSubmit prompt match → <seam-recall> → inject Focused context for the current request
+recall FTS5 + cosine → RRF fusion → budget → return Explicit search initiated by the agent
+Automatic briefing, prompt-matched injection, and explicit recall share the same knowledge but answer different moments in an agent run.
 ```
 
 All three are covered in [Recall](/concepts/recall/) and
@@ -1512,8 +1553,9 @@ All three are covered in [Recall](/concepts/recall/) and
   is how a store fills with noise.
 - **Not a vector database.** Vectors are float32 blobs in SQLite, scanned
   exactly. No ANN index, no separate service.
-- **Not a cloud service.** No account, no sync, no telemetry. The bind is
-  loopback and the key is static.
+- **Not a cloud service.** No account, no sync, and no outbound product
+  telemetry. The local event and retrieval telemetry shown in the console never
+  leaves the machine. The bind is loopback and the key is static.
 - **Not autonomous.** The gardener proposes; you decide. Nothing rewrites your
   knowledge behind your back.
 - **Not a chat memory.** It is not trying to remember your conversation. It
@@ -1610,13 +1652,13 @@ Memories are not appended forever, and they are not silently overwritten. When
 something stops being true, the replacement **supersedes** it:
 
 ```text
-memory_write name=new-truth supersedes=old-truth
-   |
-   +-- old-truth: invalid_at = now, superseded_by = <new id>
-   |              leaves the briefing; leaves recall
-   |              STILL on disk, still readable, pointing at its replacement
-   |
-   +-- new-truth: active, indexed, in the next briefing
+Explicit supersession
+memory_write new-truth supersedes old-truth The replacement is written first.
+old-truth Invalid, preserved invalid_at = now
+superseded_by = new id
+Leaves briefing and recall; remains readable on disk.
+new-truth Active and indexed Eligible for recall and the next briefing.
+Replacement changes which memory is active without erasing the historical record.
 ```
 
 The old memory leaves every index but stays readable. An agent following an old
@@ -1727,6 +1769,7 @@ liveness from the spelling of `source_session`.
 This is a real briefing, in the order the assembler packs it:
 
 ```text
+Actual packing order budgeted
 <seam-briefing>
 Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
@@ -1734,16 +1777,15 @@ CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
 STAGE: deep-audit-f15-f18-landed -- status unknown
 PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-
 Memories (seamless):
-- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem while go's ./... skips ...
+- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
 - (+34 older -- use recall)
-
 Recent findings:
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
+Pinned constraints and live work lead; the budgeted memory index and recent findings follow; retrieval guidance and session identity close the envelope.
 ```
 
 Line by line:
@@ -1974,21 +2016,15 @@ Two agents that both call `tasks_ready` see the same task. Both will try to take
 it. Exactly one wins:
 
 ```text
-agent A: tasks_claim 01K...           agent B: tasks_claim 01K...
-            │                                     │
-            ▼                                     ▼
-   ┌──────────────────┐                  ┌──────────────────┐
-   │ ready → in_progress │               │ error: already   │
-   │ lease_expires_at =  │               │ claimed by A     │
-   │   now + 900s        │               └──────────────────┘
-   └──────────────────┘                            │
-            │                                      ▼
-            │                            B claims the next ready task
-            ▼
-   A works... re-claims to heartbeat (lease refreshed)
-            │
-            ├─ tasks_release / tasks_update done / session_end → freed
-            └─ A crashes → lease expires → reclaimable by anyone
+Atomic claim race
+Agent A
+tasks_claim 01K… Claim wins ready → in_progress
+lease expires at now + 900s
+while working Heartbeat or finish Re-claim refreshes the lease; release, close, or session end frees it.
+Agent B
+tasks_claim 01K… Claim is refused Error names Agent A as the live holder.
+next action Take another ready task If A crashes, the expired lease makes this task reclaimable by id.
+Both agents may see the same ready row; only one can own it. The loser pivots without duplicating work.
 ```
 
 Four rules carry the whole model:
@@ -2103,10 +2139,12 @@ scope resolves from where the agent already is.
 For a durable write, scope resolves in this order - first hit wins:
 
 ```text
-1. explicit project argument   ─┐
-2. the bound session's project  ├─▶  a project slug
-3. the ambient session's project┘
-4. nothing resolved  ──────────────▶  REJECTED (fail closed)
+First match wins
+1 · strongest Explicit project The caller named the scope.
+2 Bound session The MCP connection inherited a project.
+3 Sole ambient The local hook session is unambiguous.
+4 · no match Reject the write Never guess global when nothing resolved.
+Precedence is also the safety model. Broader fallback stops before it could silently create machine-wide knowledge.
 ```
 
 Worked through, rung by rung:
@@ -2252,12 +2290,20 @@ found, `gardener_apply` to act on one.
 | **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 | **dead-weight** | A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read | **archive**: exposure without demand means it costs tokens and steers nothing |
 | **memory-wanted** | The same recall query returned zero hits in 2+ sessions inside 14 days | **memory_wanted**: write the knowledge agents keep searching for; applying opens a task in the queue |
+| **tool-error** | The same normalized tool or hook error, 3+ times inside 14 days and still recent; tool errors must span 2+ sessions | **tool_error**: investigate and fix the recurring failure; applying opens a task with the observed error evidence |
 
 The memory-wanted pass is the one place the gardener asks *for* knowledge
 instead of curating what exists: recurring zero-hit `recall` queries are demand
 for a memory nobody wrote, grouped per project so a one-off miss never fires.
 Applying the proposal opens a task ("Write a memory: ...") in the ready queue -
 the memory itself is only ever written by whoever picks the task up.
+
+The tool-error pass closes the other side of that loop. A single failure may be
+a typo; the same normalized error again and again is evidence of a broken
+workflow. It also watches hook errors, which are swallowed fail-open and never
+reach an agent - recurrence here is the one place they surface. Applying its
+proposal opens a repair task rather than pretending the gardener can fix code
+or configuration itself.
 
 Two more proposal types come from requests rather than the timer:
 
@@ -2598,13 +2644,13 @@ This page is that loop.
 ## The loop
 
 ```text
-session_start   ─▶ bind the connection, get the briefing
-     │
-     ├─ recall / memory_read     ─▶ pull what the briefing summarized
-     ├─ ... do the work ...
-     ├─ memory_write / notes_create ─▶ what should outlive this run
-     │
-session_end     ─▶ persist findings for the next agent's briefing
+The integration loop
+1 · session_start Bind scope Read the project briefing.
+2 · recall Pull detail Open what the briefing summarized.
+3 · work Use the context Keep the session current while acting.
+4 · durable writes Save what outlives the run memory_write or notes_create
+5 · session_end Hand off findings Feed the next agent's briefing.
+Binding, retrieval, durable writes, and a final handoff turn an MCP connection into a useful shared session.
 ```
 
 Four of those five steps are optional in the narrow sense that the tools work
@@ -3142,9 +3188,9 @@ version each could have been.
 **A gotcha.**
 
 ```text
-BAD   description: notes about gofmt
-GOOD  description: gofmt walks the filesystem while go's ./... skips dot-dirs:
-      `gofmt -w .` rewrites other agents' .claude/worktrees mid-edit. Use make fmt.
+Vague notes about gofmt
+Retrievable gofmt walks the filesystem while Go's ./... skips dot-dirs: gofmt -w . rewrites other agents' .claude/worktrees mid-edit. Use make fmt .
+The useful description carries the trigger, rare search terms, mechanism, and fix.
 ```
 
 The bad one shares no rare token with any prompt an agent would write. The good
@@ -3155,17 +3201,17 @@ contains the fix*. The body never has to open.
 **Another gotcha, where the description is the whole answer.**
 
 ```text
-BAD   description: seamlessd gotcha
-GOOD  description: pkill -f 'seamlessd serve' kills the user's launchd daemon
-      too, not just your dev instance; match the port or pid instead.
+Vague seamlessd gotcha
+Actionable pkill -f 'seamlessd serve' kills the user's launchd daemon too, not just your dev instance; match the port or pid instead.
+A reader can avoid the incident without opening the body.
 ```
 
 **A constraint.**
 
 ```text
-BAD   description: rules for errcheck
-GOOD  description: errcheck runs with check-blank: every `_`-discarded error is
-      either in exclude-functions or carries //nolint with a reason. No third category.
+Vague rules for errcheck
+Decision-complete errcheck runs with check-blank: every _ -discarded error is either in exclude-functions or carries //nolint with a reason. No third category.
+Pinned briefing space should carry the rule itself, not a pointer saying that rules exist.
 ```
 
 A constraint is pinned into every briefing and never dropped for budget. That is
@@ -3306,13 +3352,12 @@ at creation rather than discovered at scheduling time.
 Every worker then runs the same loop, and needs no knowledge of the others:
 
 ```text
-session_start                  ─▶ required: a claim is attributed to a session
-loop:
-  tasks_ready                  ─▶ what can be done right now
-  tasks_claim <id>             ─▶ exactly one worker wins
-    ├─ won  → work → tasks_update status=done
-    └─ lost → discard the list, tasks_ready again
-session_end                    ─▶ releases anything still held
+Worker loop
+session_start Establish identity Every claim is attributable to a live session.
+tasks_ready Read actionable work Dependencies are already resolved.
+tasks_claim Race atomically Win and work, or lose and refresh the ready list.
+finish Close and hand off Update the task; session_end releases any claim still held.
+Workers coordinate through shared state, so the planner never has to remain alive as a referee.
 ```
 
 `tasks_claim` fails with *no active session to claim as* if the connection has no
@@ -3532,17 +3577,12 @@ the agent that executes it can read the research that justified it.
 ## A plan's life
 
 ```text
-   you enter plan mode
-        │
-        ▼
-   plan file saved ────────▶ note cc-plan-<name>, tag plan-status:draft
-        │                    (re-saved → same note, next iteration)
-        ▼
-   Claude presents it ─────▶ plan-status:presented
-        │                    briefing shows: PLAN (awaiting approval): <slug>
-        ├── you approve ───▶ plan-status:approved + tracking task created
-        │                    briefing shows: PLAN: <slug> -- 2/3 done, 1 claimable
-        └── you don't ─────▶ plan-status:abandoned
+Captured-plan lifecycle
+1 · plan mode Plan file saved Upserts cc-plan-<name> with plan-status:draft ; later saves create iterations.
+2 · presented Awaiting approval The briefing names the presented plan.
+3a · approved Tracking begins Status becomes approved and an implementation task is created.
+3b · abandoned Closed deliberately An unapproved plan can be marked abandoned instead of lingering.
+A captured plan remains one composition across edits; approval changes its state and opens the execution loop.
 ```
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
@@ -3616,18 +3656,12 @@ same first three hypotheses, and tries them again. A **lab** is where that stops
 ## The loop
 
 ```text
-lab_open        ── name the investigation; binds it to your connection
-    │
-    ▼
-trial_query     ── what has already been tried? (read BEFORE you try anything)
-    │
-    ▼
-trial_record    ── what you tried, what you expected, what actually happened
-    │
-    └──▶ repeat
-    │
-    ▼
-memory_write    ── distill: the finding, as a gotcha or a decision
+Evidence loop
+1 · lab_open Name and bind the investigation Several sessions can share the same lab.
+2 · trial_query Read before trying See prior outcomes and avoid repeated dead ends.
+3 · trial_record Expected vs actual Record the change, outcome, evidence, and metrics; query again before the next trial.
+4 · memory_write Distill the durable finding Close the loop with a gotcha, decision, or protocol.
+Trials are the working evidence; memory is the compact conclusion that future agents need.
 ```
 
 `lab_open` binds the lab to the connection the same way `session_start` binds a
@@ -3714,10 +3748,11 @@ that is the feature. This page is mostly about knowing which half of
 ## What is precious, and what is not
 
 ```text
-~/.seamless/
-  memory/{project|_global}/{name}.md   PRECIOUS -- source of truth
-  notes/{project|_global}/{slug}.md    PRECIOUS -- source of truth
-  seam.db                              MIXED (see below)
+Backup priorities
+Precious memory/{project|_global}/{name}.md Source of truth for durable memory.
+Precious notes/{project|_global}/{slug}.md Source of truth for long-form artifacts.
+Mixed seam.db Rebuildable search mirrors plus irreplaceable session, task, trial, and event history.
+Back up the whole directory. The file trees are always authoritative; parts of SQLite are authoritative too.
 ```
 
 `seam.db` holds two different kinds of thing, and conflating them is what makes
@@ -4304,6 +4339,15 @@ It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.
 
+## Results and failures
+
+| Call | Success result | Failure that matters |
+|---|---|---|
+| `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
+| `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
+| `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
+| `session_end` | Confirmation of the close - `session_id`, `claims_released`, `mishaps_recorded`; findings persist for the next briefing | A missing/ambiguous session is an error rather than a fabricated successful close |
+
 ## session_start {#session_start}
 
 Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again.
@@ -4445,6 +4489,15 @@ destination ports are restricted to `capture.allowed_ports` (80 and 443 by
 default, never "any port"), and the fetcher refuses to be talked into reaching
 things it should not. See [Configuration](/reference/configuration/).
 
+Scope resolves before the network fetch, so an ambiguous durable destination
+fails without making a request. Success returns the note's `id`, `slug`, `title`,
+resolved `project`, and `source_url` - the URL as requested; redirects are
+followed but do not rewrite it. The fetcher validates the initial URL and every
+redirect, rejecting non-HTTP schemes, private/loopback destinations, and
+disallowed ports. Size is bounded by truncation rather than rejection: at most
+2 MB of the response is read, and the stored readable body is capped again at
+50,000 runes with a visible `[content truncated]` marker.
+
 ## notes_create {#notes_create}
 
 Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent.
@@ -4561,6 +4614,21 @@ the default `tasks_ready` and `tasks_list`. That keeps a twelve-step plan from
 burying the handful of tasks that are actually loose work. Pass `plan=<slug>` to
 either tool to see that plan's steps instead.
 
+## Results and refusal modes
+
+Every successful task mutation returns the resulting task row, including its id,
+status, dependency state, claim holder, and lease fields when present.
+
+| Call | Refuses when |
+|---|---|
+| `tasks_add` | A blocker is missing or the new dependency would create a cycle |
+| `tasks_update` | Nothing was supplied to change, a new dependency is invalid, or another live session holds the task |
+| `tasks_claim` | The task is blocked, closed, or held by another live claimant; each error names the actual cause |
+| `tasks_release` | The acting session is not the holder; force release exists only on the owner console/CLI surface |
+
+An expired claim is not reported as live. Claiming that task by id succeeds at
+the exact lease boundary, even while its status remains `in_progress`.
+
 ## tasks_add {#tasks_add}
 
 Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker.
@@ -4668,6 +4736,7 @@ Its passes:
 | digest | Enough recent activity to be worth a summary over `gardener.digest_days`. Proposes a **digest** note. |
 | stale-plan | Plans idle for `gardener.stale_plan_days` with steps still open. |
 | memory-wanted | The same recall query missing across sessions. Proposes a **memory_wanted**: applying opens a task to write the knowledge agents keep searching for. |
+| tool-error | The same normalized tool or hook error recurring (tool errors across 2+ sessions). Proposes a **tool_error**: applying opens an investigation task with the observed evidence. |
 
 Constraints and pinned stages are never age-filtered or staleness-archived. A
 constraint does not become less true by sitting still.
@@ -4708,6 +4777,15 @@ lives in the file's frontmatter (`favorite: true`), so it survives an index
 rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
 a task-only plan (no note) cannot be starred. Starring never bumps an item's
 updated time - it is metadata, not authorship.
+
+## Applying is an explicit boundary
+
+`gardener_apply` accepts only `apply` or `dismiss`. Dismissal closes the proposal
+without changing its target. Apply performs the proposal's typed action and
+returns that real outcome; it never substitutes a plausible dummy when the
+target disappeared or a file/store mutation failed. Memory-changing actions
+route through the lifecycle/files services, so supersession, atomic Markdown
+writes, and occupied-path protections remain the same as direct tools.
 
 ## lab_open {#lab_open}
 
@@ -4935,8 +5013,8 @@ seam task list [--id ID] [--project P] [--status S] [--plan S]
 Calls `tasks_list`. `--status` filters to `open`, `in_progress`, `done`, or
 `dropped`. `--id` loads a single task by its globally-unique id and ignores the
 project, status, and plan filters. `--plan` lists a plan's steps instead of the
-default non-plan tasks. Bare `seam task` with no subcommand is the same as
-`seam task list`.
+default non-plan tasks. Bare `seam task` is not an alias: it names the available
+task subcommands and exits 2. Use `seam task list` when listing is what you mean.
 
 ### seam task add {#seam_task_add}
 
@@ -6490,6 +6568,10 @@ The landing page and the health check. It carries:
 - **Projects at a glance** - the top projects by recent activity, drawn from the
   same batched query the Projects board uses, so a row here reconciles with a row
   there exactly.
+- **Agent-reported mishaps** - recent incidents agents explicitly supplied to
+  `session_end`, attributed through the reporting session's harness and model.
+  Warning tones appear only when reports exist; an empty rail is a positive
+  "No mishaps reported" state.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
@@ -6500,16 +6582,23 @@ threshold), so the headline matches the Sessions screen rather than the raw
 
 `/console/interactions`
 
-The live feed of what agents are actually doing: MCP tool calls, hook injections,
-recall-miss prompts, session lifecycle, and the plan-mode capture stream. Rows
-carry the full request and response bodies - the tool's arguments and result, or
-the exact injected text - so you can read what an agent asked for and what it got
-without a second fetch.
+The clean live feed of what agents are actually doing: MCP tool calls, hook
+injections, recall-miss prompts, session lifecycle, and the plan-mode capture
+stream. A fresh page starts empty and listens from that moment forward; merely
+visiting never restores old rows.
 
-The feed streams over SSE and pages backwards through history. A recall via the
-MCP tool records both a `retrieval.injected` and a `tool.call`; the injected twin
-is dropped here because the tool call carries the same content plus its
-arguments. Session lifecycle twins are kept on purpose, as feed markers.
+History is explicit and additive. Choose a recent window and select **Add** when
+earlier context is useful; live rows stay in place, and **Load older events**
+paginates only inside that chosen window. Filters operate over the rows already
+in memory, by event category and session lane. Pausing buffers new arrivals
+rather than discarding them.
+
+Each compact row expands just enough to expose its request/result or injected
+text. Selecting the inspector keeps that context beside the stream and links to
+the full event page. A recall via the MCP tool records both a
+`retrieval.injected` and a `tool.call`; the injected twin is dropped here because
+the tool call carries the same content plus its arguments. Session lifecycle
+twins are kept on purpose, as feed markers.
 
 ## Search
 
@@ -6814,10 +6903,12 @@ See [Configuration](/reference/configuration/) for what each knob does, and
 
 `/console/events/{id}`
 
-What a Recent-activity or timeline row links to: one event-log entry in full - the
-verbatim injected content, the memories it surfaced resolved to their live index
-entries (or flagged missing if the id no longer resolves), the remaining payload
-fields, and the raw JSON.
+What a Recent-activity or timeline row links to: a compact event review workspace
+with the event's agent/session attribution, verbatim injected or transport
+content, surfaced memories resolved to their live index entries (or flagged
+missing), remaining payload fields, and raw JSON. The Interactions inspector
+uses the same content model in a side pane; opening the full page adds context
+without changing the underlying event.
 
 ## Errors
 
@@ -6847,14 +6938,16 @@ it by hand, and what happens if you delete it.
 `data_dir` defaults to `~/.seamless`:
 
 ```text
-~/.seamless/
-  seam.db                              SQLite: indexes, sessions, tasks, trials, events, embeddings
-  memory/
-    _global/{name}.md                  project-less memories
-    {project}/{name}.md                one memory per file
-  notes/
-    _global/{slug}.md                  project-less notes
-    {project}/{slug}.md                one note per file
+On-disk layout
+~/.seamless/ Owner-only local data directory
+seam.db Indexes, sessions, tasks, trials, events, and embeddings
+memory/ Durable memory tree
+_global/{name}.md Machine-wide memories
+{project}/{name}.md One project memory per file
+notes/ Durable note tree
+_global/{slug}.md Machine-wide notes
+{project}/{slug}.md One project note per file
+Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
 A memory's project is its directory. An empty `project` field means global, and
@@ -7262,10 +7355,11 @@ hard way.
 URL: https://thereisnospoon.org/docs/internals/architecture/
 
 
-Seamless is one Go binary (`seamlessd`) plus a CLI (`seam`). Inside it, the code
-is arranged so that the direction of every dependency is obvious from the package
-name. This page is the map: the layers, who owns what, and how a write and a read
-actually travel through them.
+Seamless ships two Go binaries: the `seamlessd` daemon and the `seam` CLI. The
+daemon owns the database and serves MCP, hooks, and the console; the CLI is a
+headless client of that daemon. Inside the codebase, dependencies are arranged
+so their direction is obvious from the package name. This page is the map: the
+layers, who owns what, and how a write and a read actually travel through them.
 
 If you are looking for the conceptual model rather than the code, start at
 [How Seamless works](/concepts/how-it-works/).
@@ -7273,16 +7367,12 @@ If you are looking for the conceptual model rather than the code, start at
 ## The layering
 
 ```text
-cmd/seamlessd, cmd/seam, cmd/docsgen
-  │
-  ▼  API surfaces - speak HTTP, own no domain logic
-internal/{mcp, hooks, console}
-  │
-  ▼  domains - the business logic
-internal/{retrieve, lifecycle, gardener, files, plans, capture, importer}
-  │
-  ▼  foundations - leaves, or nearly so
-internal/{store, events, llm, markdown, core, config, validate}
+Dependency direction
+Entry points cmd/seamlessd · cmd/seam · cmd/docsgen Wire dependencies and process boundaries.
+API surfaces internal/mcp · hooks · console Translate HTTP, MCP, hooks, and UI requests; own no domain policy.
+Domains retrieve · lifecycle · gardener · files · plans · capture · importer Business rules and reusable workflows.
+Foundations store · events · llm · markdown · core · config · validate Leaves, or nearly so; never reach upward.
+Imports move downward. Shared behavior moves into a lower layer rather than sideways through another surface.
 ```
 
 Two rules make this hold, and both are load-bearing:
@@ -7327,24 +7417,12 @@ the layering.
 ## Trace: `memory_write`, from tool call to file on disk
 
 ```text
-agent ──▶ POST /api/mcp  (bearer key)
-            │
-            ▼  internal/mcp: handleMemoryWrite
-      1. validate name / kind / description / body
-      2. resolveWriteScope(project)          ← fails closed, never guesses
-      3. resolveMemory(project, name)        ← update in place, or new ULID
-      4. DedupHint (new names only)          ← advisory; errors swallowed
-            │
-            ▼  internal/files: Manager.WriteMemory
-      5. ensurePathFree(relPath, id)         ← ErrPathOccupied, not a clobber
-      6. suppress(relPath)                   ← the watcher ignores our own write
-      7. Store.WriteMemory → RenderMemory → AtomicWrite   ◀── THE DURABLE ACT
-      8. Indexer.IndexMemory                 ← memories_index upsert + FTS row
-      9. embedItem                           ← best-effort; failure clears the hash
-            │
-            ▼  internal/mcp
-     10. events.Record(memory.written)
-     11. supersedes= → lifecycle.Supersede   ← only if asked
+memory_write trace
+MCP boundary · 1–4 Validate and resolve Check content; fail closed on scope; reuse or mint the ULID; request an advisory dedup hint.
+Files boundary · 5–6 Protect the path Reject another item's path and suppress the watcher's echo.
+Durable + index · 7–9 Atomic file, FTS, vector Render and atomically write Markdown; synchronously index; embed best-effort with hash retry.
+Domain outcome · 10–11 Record and supersede Append memory.written ; invoke lifecycle supersession only when requested.
+The path crosses the MCP surface once, the files domain once, then returns to record the outcome and optional lifecycle change.
 ```
 
 Five things in that path are decisions, not mechanics:
@@ -7377,36 +7455,18 @@ as success to an agent, which would then leave two contradictory memories live.
 ## Trace: SessionStart, from Claude Code to injected briefing
 
 ```text
-Claude Code SessionStart
-    │  seam hook session-start  (stdin JSON → HTTP, bearer key)
-    ▼
-POST /api/hooks/session-start          internal/hooks: sessionStart
-    │
-    1. verifyBearer                     ← the ONLY non-2xx this endpoint returns
-    2. ctx, cancel = WithTimeout(2s)    ← a slow store cannot stall the turn
-    3. store.RegisterProjectForCWD      ← grow the repo→project map
-    │
-    ▼  internal/retrieve: Briefing
-    4. effectiveBriefing                ← file/env base + console override row
-    5. ResolveProjectForCWD             ← cwd → project slug
-    6. familyMemoryScope                ← a child folds in its shared parent
-    7. ActiveMemoriesForScope           ← WHERE invalid_at IS NULL
-    8. partition: constraints | stages | index
-       └─ subagent (agent_type set)? → constraints only, return
-    9. trimMemoryIndex                  ← AFTER the partition: pinned kinds exempt
-   10. findings, ready tasks, sibling findings/memories, plan rollups, pending plans
-   11. assembleBriefing                 ← pack against the budget, then hard-cap
-    │
-    ▼  back in internal/hooks
-   12. ensureAmbientSession             ← create or resume cc/{prefix}
-   13. injectAmbientLine                ← appended before </seam-briefing>
-   14. events.Record(retrieval.injected) ← records exactly what was sent
-   15. 200 { continue, hookSpecificOutput.additionalContext }
+SessionStart trace
+Claude → hook · 1–3 Authenticate, bound, map seam hook session-start forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.
+Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents stop at constraints.
+Pack · 9–11 Trim only eligible context Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.
+Hook response · 12–15 Bind, inject, record Create or resume the ambient session, append its line, record the exact text sent, and return additionalContext .
+The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.
 ```
 
 The contract that shapes this path is **fail open**. Every error between steps 3
 and 13 is logged and swallowed; the briefing degrades to empty and the agent
-proceeds. Only a bad bearer key returns non-2xx. A memory system that can block
+proceeds. Only a bad bearer key or a malformed `client` query parameter - both
+request defects, not retrieval work - return non-2xx. A memory system that can block
 an agent from working is worse than no memory system, so the failure mode is
 chosen deliberately: silence, not obstruction. The cost is that hook failure is
 invisible, which is why `seamlessd doctor` and `seam doctor` exist - see
@@ -7845,7 +7905,11 @@ lists is where a wrong one can be noticed and merged.
 ### Precedence, and no guessing
 
 ```text
-explicit project  →  the bound session's project  →  the sole unambiguous ambient
+Scope resolution
+1 Explicit project
+2 Bound session project
+3 Sole unambiguous ambient
+Resolution stops at the first available scope; ambiguity is an error, never a fourth fallback.
 ```
 
 Ambient sessions spanning more than one project are `errAmbiguousScope`, not a

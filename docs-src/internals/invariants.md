@@ -136,9 +136,15 @@ lists is where a wrong one can be noticed and merged.
 
 ### Precedence, and no guessing
 
-```text
-explicit project  →  the bound session's project  →  the sole unambiguous ambient
-```
+<figure class="doc-figure" data-tone="warn" aria-labelledby="scope-guard-caption">
+  <span class="figure-kicker">Scope resolution</span>
+  <div class="doc-flow">
+    <div class="flow-node emphasis"><span class="flow-step">1</span><strong>Explicit project</strong></div>
+    <div class="flow-node"><span class="flow-step">2</span><strong>Bound session project</strong></div>
+    <div class="flow-node"><span class="flow-step">3</span><strong>Sole unambiguous ambient</strong></div>
+  </div>
+  <figcaption id="scope-guard-caption">Resolution stops at the first available scope; ambiguity is an error, never a fourth fallback.</figcaption>
+</figure>
 
 Ambient sessions spanning more than one project are `errAmbiguousScope`, not a
 guess. Inheriting the machine-latest ambient in that situation is exactly how a

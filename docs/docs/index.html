@@ -5,14 +5,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Seamless documentation</title>
-<meta name="description" content="A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.">
+<meta name="description" content="A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://thereisnospoon.org/docs/">
 <meta property="og:title" content="Seamless documentation">
-<meta property="og:description" content="A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.">
+<meta property="og:description" content="A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -23,7 +23,7 @@
 <link rel="icon" type="image/svg+xml" href="../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="">
 
@@ -187,14 +187,15 @@
   <main class="docs-main" id="content">
     <article class="prose home-intro">
   <h1>What is Seamless?</h1>
-  <p class="lede">A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.</p>
+  <p class="lede">A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.</p>
   <p>Seamless is a local-first memory and coordination system for coding agents -
 a <strong>shared, persistent brain</strong> for Claude Code, Codex, and any other MCP client
 you run. Memory survives the end of a conversation, tasks can be handed from one
 agent to another, and plans get executed together. All of it is stored as
 markdown files in a directory you own, indexed by one SQLite database, and
-served over MCP by a single Go binary on your machine - no cloud service, no
-external vector database, no account.</p>
+served over MCP by the local <code>seamlessd</code> daemon. The companion <code>seam</code> CLI gives
+headless agents a direct interface. There is no hosted Seamless service,
+external vector database, or account.</p>
 <p>Its clients are agents. You are the observer and editor - there is a console, but
 nothing in Seamless requires you to be in the loop for agents to use it. And it
 is one instance on one machine, bound to loopback: a personal substrate, not a
@@ -216,8 +217,9 @@ is inspectable. The files are plain markdown; the store is not a black box.</li>
 <p><strong>Files are the source of truth.</strong> Durable knowledge lives in markdown you can
 read, <code>grep</code>, edit, and put in git. The database is a rebuildable index over
 them, plus the record for high-churn state (sessions, tasks, events).</p>
-<p><strong>Local-first.</strong> One binary, one SQLite file, bound to loopback. No external
-database, no cloud dependency, no telemetry.</p>
+<p><strong>Local-first.</strong> One daemon process, one SQLite file, bound to loopback. No
+external database, no required cloud service, and no outbound product
+telemetry.</p>
 <p><strong>Propose, don't act.</strong> The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.</p>
 <h2 id="where-to-go-next">Where to go next</h2>

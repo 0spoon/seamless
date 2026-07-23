@@ -85,13 +85,13 @@ Memories are not appended forever, and they are not silently overwritten. When
 something stops being true, the replacement **supersedes** it:
 
 ```text
-memory_write name=new-truth supersedes=old-truth
-   |
-   +-- old-truth: invalid_at = now, superseded_by = <new id>
-   |              leaves the briefing; leaves recall
-   |              STILL on disk, still readable, pointing at its replacement
-   |
-   +-- new-truth: active, indexed, in the next briefing
+Explicit supersession
+memory_write new-truth supersedes old-truth The replacement is written first.
+old-truth Invalid, preserved invalid_at = now
+superseded_by = new id
+Leaves briefing and recall; remains readable on disk.
+new-truth Active and indexed Eligible for recall and the next briefing.
+Replacement changes which memory is active without erasing the historical record.
 ```
 
 The old memory leaves every index but stays readable. An agent following an old

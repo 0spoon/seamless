@@ -14,14 +14,16 @@ it by hand, and what happens if you delete it.
 `data_dir` defaults to `~/.seamless`:
 
 ```text
-~/.seamless/
-  seam.db                              SQLite: indexes, sessions, tasks, trials, events, embeddings
-  memory/
-    _global/{name}.md                  project-less memories
-    {project}/{name}.md                one memory per file
-  notes/
-    _global/{slug}.md                  project-less notes
-    {project}/{slug}.md                one note per file
+On-disk layout
+~/.seamless/ Owner-only local data directory
+seam.db Indexes, sessions, tasks, trials, events, and embeddings
+memory/ Durable memory tree
+_global/{name}.md Machine-wide memories
+{project}/{name}.md One project memory per file
+notes/ Durable note tree
+_global/{slug}.md Machine-wide notes
+{project}/{slug}.md One project note per file
+Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.
 ```
 
 A memory's project is its directory. An empty `project` field means global, and

@@ -75,6 +75,33 @@ sections:
 	require.Contains(t, grid, "- [MCP]("+siteBaseURL+"/docs/reference/mcp/): ")
 }
 
+// TestTextifyFigures: the markdown representations flatten authored figures
+// to fenced text -- tags become spaces, <br> a line break, entities unescape,
+// blank lines drop, and the caption survives. Surrounding markdown is
+// untouched.
+func TestTextifyFigures(t *testing.T) {
+	md := "before\n\n" +
+		"<figure class=\"doc-figure\" data-tone=\"ok\" aria-labelledby=\"c\">\n" +
+		"  <span class=\"figure-kicker\">Write path</span>\n" +
+		"  <div class=\"doc-flow cols-2\">\n" +
+		"    <div class=\"flow-node\"><span class=\"flow-step\">1 · request</span><strong>memory_write</strong><small>Validate &amp; resolve</small></div>\n" +
+		"    <div class=\"flow-node\"><span class=\"flow-step\">2</span><strong>inject</strong><small><span class=\"sample-muted\">&lt;seam-briefing&gt;</span><br>line two</small></div>\n" +
+		"  </div>\n" +
+		"  <figcaption id=\"c\">The file is the durable boundary.</figcaption>\n" +
+		"</figure>\n\nafter\n"
+
+	got := textifyFigures(md)
+	require.NotContains(t, got, "<figure")
+	require.NotContains(t, got, "flow-node")
+	require.Contains(t, got, "before\n\n```text\nWrite path\n")
+	require.Contains(t, got, "1 · request memory_write Validate & resolve\n")
+	require.Contains(t, got, "2 inject <seam-briefing>\nline two\n")
+	require.Contains(t, got, "The file is the durable boundary.\n```\n\nafter\n")
+
+	plain := "no figures here, just `code` and <em>inline html</em>\n"
+	require.Equal(t, plain, textifyFigures(plain))
+}
+
 // TestAbsolutizeRootLinks covers the destination families rewriteDocLinks
 // distinguishes: docs-root paths, site-root scenario paths, fragments,
 // scheme-relative and already-relative destinations.

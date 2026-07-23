@@ -162,10 +162,12 @@ Then start a Claude Code session in a mapped repo and look for the injected
 block:
 
 ```text
+Injected context myrepo
 <seam-briefing>
 Seam project: myrepo -- 4 constraints, 58 memories, 3 recent findings.
 ...
 </seam-briefing>
+The project name is the useful proof: the ambient session resolved to the repository you opened.
 ```
 
 If it is there, the whole loop is closed: the hook resolved your cwd to a

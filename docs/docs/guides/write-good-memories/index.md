@@ -48,9 +48,9 @@ version each could have been.
 **A gotcha.**
 
 ```text
-BAD   description: notes about gofmt
-GOOD  description: gofmt walks the filesystem while go's ./... skips dot-dirs:
-      `gofmt -w .` rewrites other agents' .claude/worktrees mid-edit. Use make fmt.
+Vague notes about gofmt
+Retrievable gofmt walks the filesystem while Go's ./... skips dot-dirs: gofmt -w . rewrites other agents' .claude/worktrees mid-edit. Use make fmt .
+The useful description carries the trigger, rare search terms, mechanism, and fix.
 ```
 
 The bad one shares no rare token with any prompt an agent would write. The good
@@ -61,17 +61,17 @@ contains the fix*. The body never has to open.
 **Another gotcha, where the description is the whole answer.**
 
 ```text
-BAD   description: seamlessd gotcha
-GOOD  description: pkill -f 'seamlessd serve' kills the user's launchd daemon
-      too, not just your dev instance; match the port or pid instead.
+Vague seamlessd gotcha
+Actionable pkill -f 'seamlessd serve' kills the user's launchd daemon too, not just your dev instance; match the port or pid instead.
+A reader can avoid the incident without opening the body.
 ```
 
 **A constraint.**
 
 ```text
-BAD   description: rules for errcheck
-GOOD  description: errcheck runs with check-blank: every `_`-discarded error is
-      either in exclude-functions or carries //nolint with a reason. No third category.
+Vague rules for errcheck
+Decision-complete errcheck runs with check-blank: every _ -discarded error is either in exclude-functions or carries //nolint with a reason. No third category.
+Pinned briefing space should carry the rule itself, not a pointer saying that rules exist.
 ```
 
 A constraint is pinned into every briefing and never dropped for budget. That is

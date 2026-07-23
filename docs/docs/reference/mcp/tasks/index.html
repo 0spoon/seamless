@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -224,6 +224,39 @@ did not claim; the point is that well-behaved agents do not collide.</p>
 the default <code>tasks_ready</code> and <code>tasks_list</code>. That keeps a twelve-step plan from
 burying the handful of tasks that are actually loose work. Pass <code>plan=&lt;slug&gt;</code> to
 either tool to see that plan's steps instead.</p>
+<h2 id="results-and-refusal-modes">Results and refusal modes</h2>
+<p>Every successful task mutation returns the resulting task row, including its id,
+status, dependency state, claim holder, and lease fields when present.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Call</th>
+<th>Refuses when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>tasks_add</code></td>
+<td>A blocker is missing or the new dependency would create a cycle</td>
+</tr>
+<tr>
+<td><code>tasks_update</code></td>
+<td>Nothing was supplied to change, a new dependency is invalid, or another live session holds the task</td>
+</tr>
+<tr>
+<td><code>tasks_claim</code></td>
+<td>The task is blocked, closed, or held by another live claimant; each error names the actual cause</td>
+</tr>
+<tr>
+<td><code>tasks_release</code></td>
+<td>The acting session is not the holder; force release exists only on the owner console/CLI surface</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>An expired claim is not reported as live. Claiming that task by id succeeds at
+the exact lease boundary, even while its status remains <code>in_progress</code>.</p>
 <h2 id="tasks_add">tasks_add</h2>
 <p>Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker.</p>
 <div class="table-wrap">
@@ -493,7 +526,7 @@ either tool to see that plan's steps instead.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#how-claiming-works">How claiming works</a></li><li class="lvl-2"><a href="#plan-steps-are-not-queue-items">Plan steps are not queue items</a></li><li class="lvl-2"><a href="#tasks_add">tasks_add</a></li><li class="lvl-2"><a href="#tasks_update">tasks_update</a></li><li class="lvl-2"><a href="#tasks_ready">tasks_ready</a></li><li class="lvl-2"><a href="#tasks_list">tasks_list</a></li><li class="lvl-2"><a href="#tasks_claim">tasks_claim</a></li><li class="lvl-2"><a href="#tasks_release">tasks_release</a></li>
+      <li class="lvl-2"><a href="#how-claiming-works">How claiming works</a></li><li class="lvl-2"><a href="#plan-steps-are-not-queue-items">Plan steps are not queue items</a></li><li class="lvl-2"><a href="#results-and-refusal-modes">Results and refusal modes</a></li><li class="lvl-2"><a href="#tasks_add">tasks_add</a></li><li class="lvl-2"><a href="#tasks_update">tasks_update</a></li><li class="lvl-2"><a href="#tasks_ready">tasks_ready</a></li><li class="lvl-2"><a href="#tasks_list">tasks_list</a></li><li class="lvl-2"><a href="#tasks_claim">tasks_claim</a></li><li class="lvl-2"><a href="#tasks_release">tasks_release</a></li>
     </ul>
   </aside>
   

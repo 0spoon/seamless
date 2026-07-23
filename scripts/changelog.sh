@@ -23,6 +23,12 @@ set -eu
 
 OUT="docs-src/changelog.md"
 REPO_URL="https://github.com/0spoon/seamless"
+MODE="write"
+case "${1:-}" in
+	"") ;;
+	--check) MODE="check" ;;
+	*) echo "usage: scripts/changelog.sh [--check]" >&2; exit 2 ;;
+esac
 
 # Tag dates are formatted in UTC so the page does not depend on the timezone of
 # whoever cut the release.
@@ -110,6 +116,16 @@ EOF
 	done
 } >"$tmp"
 
-mv "$tmp" "$OUT"
 count=$(printf '%s\n' "$tags" | wc -l | tr -d ' ')
-echo "changelog: wrote $OUT ($count releases, newest $(printf '%s\n' "$tags" | head -1))"
+newest=$(printf '%s\n' "$tags" | head -1)
+if [ "$MODE" = "check" ]; then
+	if ! cmp -s "$tmp" "$OUT"; then
+		echo "changelog drift: $OUT does not include the current tag history (run 'make changelog')" >&2
+		diff -u "$OUT" "$tmp" | sed -n '1,80p' >&2 || true
+		exit 1
+	fi
+	echo "changelog-check: $OUT covers $count releases through $newest"
+else
+	mv "$tmp" "$OUT"
+	echo "changelog: wrote $OUT ($count releases, newest $newest)"
+fi

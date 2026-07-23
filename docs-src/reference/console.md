@@ -131,6 +131,10 @@ The landing page and the health check. It carries:
 - **Projects at a glance** - the top projects by recent activity, drawn from the
   same batched query the Projects board uses, so a row here reconciles with a row
   there exactly.
+- **Agent-reported mishaps** - recent incidents agents explicitly supplied to
+  `session_end`, attributed through the reporting session's harness and model.
+  Warning tones appear only when reports exist; an empty rail is a positive
+  "No mishaps reported" state.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
@@ -141,16 +145,23 @@ threshold), so the headline matches the Sessions screen rather than the raw
 
 `/console/interactions`
 
-The live feed of what agents are actually doing: MCP tool calls, hook injections,
-recall-miss prompts, session lifecycle, and the plan-mode capture stream. Rows
-carry the full request and response bodies - the tool's arguments and result, or
-the exact injected text - so you can read what an agent asked for and what it got
-without a second fetch.
+The clean live feed of what agents are actually doing: MCP tool calls, hook
+injections, recall-miss prompts, session lifecycle, and the plan-mode capture
+stream. A fresh page starts empty and listens from that moment forward; merely
+visiting never restores old rows.
 
-The feed streams over SSE and pages backwards through history. A recall via the
-MCP tool records both a `retrieval.injected` and a `tool.call`; the injected twin
-is dropped here because the tool call carries the same content plus its
-arguments. Session lifecycle twins are kept on purpose, as feed markers.
+History is explicit and additive. Choose a recent window and select **Add** when
+earlier context is useful; live rows stay in place, and **Load older events**
+paginates only inside that chosen window. Filters operate over the rows already
+in memory, by event category and session lane. Pausing buffers new arrivals
+rather than discarding them.
+
+Each compact row expands just enough to expose its request/result or injected
+text. Selecting the inspector keeps that context beside the stream and links to
+the full event page. A recall via the MCP tool records both a
+`retrieval.injected` and a `tool.call`; the injected twin is dropped here because
+the tool call carries the same content plus its arguments. Session lifecycle
+twins are kept on purpose, as feed markers.
 
 ## Search
 
@@ -455,10 +466,12 @@ See [Configuration](/reference/configuration/) for what each knob does, and
 
 `/console/events/{id}`
 
-What a Recent-activity or timeline row links to: one event-log entry in full - the
-verbatim injected content, the memories it surfaced resolved to their live index
-entries (or flagged missing if the id no longer resolves), the remaining payload
-fields, and the raw JSON.
+What a Recent-activity or timeline row links to: a compact event review workspace
+with the event's agent/session attribution, verbatim injected or transport
+content, surfaced memories resolved to their live index entries (or flagged
+missing), remaining payload fields, and raw JSON. The Interactions inspector
+uses the same content model in a side pane; opening the full page adds context
+without changing the underlying event.
 
 ## Errors
 

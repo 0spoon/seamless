@@ -3,9 +3,10 @@ title: How Seamless works
 description: One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.
 ---
 
-Seamless is a local-first memory and coordination system for coding agents,
-built as one Go binary holding one SQLite database and one directory of
-markdown files, bound to loopback on your machine. Agents reach it over MCP,
+Seamless is a local-first memory and coordination system for coding agents.
+The release ships a daemon (`seamlessd`) and its headless client (`seam`); one
+daemon process owns one SQLite database and one directory of markdown files,
+bound to loopback on your machine. Agents reach it over MCP,
 hooks make sessions ambient for Claude Code and Codex, and you watch through a
 read-mostly console. It is deliberately not a distributed system - one
 instance, one port, one data directory per machine. Everything below follows
@@ -13,15 +14,32 @@ from that.
 
 ## One daemon, three surfaces
 
-```text
-                    ┌──────────────────────────┐
-   agents  ────MCP──▶                          │
-                    │        seamlessd         │──▶  ~/.seamless/memory/*.md
-   hooks   ───HTTP──▶   (one process, :8081)   │──▶  ~/.seamless/notes/*.md
-                    │                          │──▶  ~/.seamless/seam.db
-   you     ─browser─▶                          │
-                    └──────────────────────────┘
-```
+<figure class="doc-figure" aria-labelledby="daemon-map-caption">
+  <span class="figure-kicker">Local architecture</span>
+  <div class="system-map">
+    <div class="map-column">
+      <div class="flow-node"><span class="flow-step">MCP</span><strong>Agents</strong><small>Tools and session binding</small></div>
+      <div class="flow-node"><span class="flow-step">Command → HTTP</span><strong>Hooks</strong><small>Ambient context and harvest</small></div>
+      <div class="flow-node"><span class="flow-step">Browser</span><strong>You</strong><small>Read-mostly console</small></div>
+    </div>
+    <div class="system-core">
+      <svg class="system-core-glyph" viewBox="0 0 100 100" role="img" aria-label="One central daemon connecting three local interfaces to three stores">
+        <circle class="orbit" cx="50" cy="50" r="38"/>
+        <path class="orbit" d="M17 31L42 45M17 69L42 55M83 24L58 44M83 50H59M83 76L58 56"/>
+        <circle class="hub" cx="50" cy="50" r="13"/>
+        <circle class="node" cx="16" cy="30" r="4"/><circle class="node" cx="16" cy="70" r="4"/>
+        <circle class="node" cx="84" cy="23" r="4"/><circle class="node" cx="84" cy="50" r="4"/><circle class="node" cx="84" cy="77" r="4"/>
+      </svg>
+      <strong>seamlessd</strong><small>one local process · 127.0.0.1:8081</small>
+    </div>
+    <div class="map-column">
+      <div class="flow-node"><span class="flow-step">Durable truth</span><strong>memory/*.md</strong></div>
+      <div class="flow-node"><span class="flow-step">Durable truth</span><strong>notes/*.md</strong></div>
+      <div class="flow-node"><span class="flow-step">State + indexes</span><strong>seam.db</strong></div>
+    </div>
+  </div>
+  <figcaption id="daemon-map-caption"><strong>One daemon, three interfaces.</strong> Agents and hooks write through the same process; humans inspect the resulting state in the console.</figcaption>
+</figure>
 
 - **Agents** speak MCP at `/api/mcp`. This is the primary interface; the clients
   of Seamless are programs, not people.
@@ -55,25 +73,31 @@ folder of markdown files that a human - or any other tool - can read.
 
 ## The write path
 
-```text
-memory_write
-   │
-   ├─▶ validate name, scope (fail closed if ambiguous)
-   ├─▶ write the markdown file       ← the durable act
-   ├─▶ index it: FTS row + embedding
-   └─▶ append an event
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="write-path-caption">
+  <span class="figure-kicker">Write path</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">1 · request</span><strong>memory_write</strong><small>Validate name, content, and scope</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">2 · durable act</span><strong>Atomic Markdown write</strong><small>Fail closed when scope is ambiguous</small></div>
+    <div class="flow-node"><span class="flow-step">3 · rebuildable</span><strong>FTS + embedding</strong><small>Index the exact file content</small></div>
+    <div class="flow-node success"><span class="flow-step">4 · observable</span><strong>Append event</strong><small>Record what happened</small></div>
+  </div>
+  <figcaption id="write-path-caption"><strong>The file is the durable boundary.</strong> SQLite mirrors make the knowledge searchable and observable.</figcaption>
+</figure>
 
 The file write is the one that matters. Indexing after it can fail and be
 rebuilt; the file is already on disk.
 
 ## The read path
 
-```text
-SessionStart hook ─▶ resolve cwd → project ─▶ assemble briefing (budgeted) ─▶ inject
-UserPromptSubmit  ─▶ match prompt against memories ─▶ inject <seam-recall>
-recall            ─▶ FTS5 + cosine ─▶ RRF fuse ─▶ budget ─▶ return
-```
+<figure class="doc-figure" data-tone="pop" aria-labelledby="read-path-caption">
+  <span class="figure-kicker">Three retrieval paths</span>
+  <div class="doc-stack">
+    <div class="flow-node"><span class="flow-step">SessionStart</span><strong>cwd → project → budgeted briefing → inject</strong><small>Baseline context before the first action</small></div>
+    <div class="flow-node"><span class="flow-step">UserPromptSubmit</span><strong>prompt match → &lt;seam-recall&gt; → inject</strong><small>Focused context for the current request</small></div>
+    <div class="flow-node"><span class="flow-step">recall</span><strong>FTS5 + cosine → RRF fusion → budget → return</strong><small>Explicit search initiated by the agent</small></div>
+  </div>
+  <figcaption id="read-path-caption">Automatic briefing, prompt-matched injection, and explicit recall share the same knowledge but answer different moments in an agent run.</figcaption>
+</figure>
 
 All three are covered in [Recall](/concepts/recall/) and
 [Sessions & briefings](/concepts/sessions/).
@@ -85,8 +109,9 @@ All three are covered in [Recall](/concepts/recall/) and
   is how a store fills with noise.
 - **Not a vector database.** Vectors are float32 blobs in SQLite, scanned
   exactly. No ANN index, no separate service.
-- **Not a cloud service.** No account, no sync, no telemetry. The bind is
-  loopback and the key is static.
+- **Not a cloud service.** No account, no sync, and no outbound product
+  telemetry. The local event and retrieval telemetry shown in the console never
+  leaves the machine. The bind is loopback and the key is static.
 - **Not autonomous.** The gardener proposes; you decide. Nothing rewrites your
   knowledge behind your back.
 - **Not a chat memory.** It is not trying to remember your conversation. It

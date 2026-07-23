@@ -14,10 +14,12 @@ scope resolves from where the agent already is.
 For a durable write, scope resolves in this order - first hit wins:
 
 ```text
-1. explicit project argument   ─┐
-2. the bound session's project  ├─▶  a project slug
-3. the ambient session's project┘
-4. nothing resolved  ──────────────▶  REJECTED (fail closed)
+First match wins
+1 · strongest Explicit project The caller named the scope.
+2 Bound session The MCP connection inherited a project.
+3 Sole ambient The local hook session is unambiguous.
+4 · no match Reject the write Never guess global when nothing resolved.
+Precedence is also the safety model. Broader fallback stops before it could silently create machine-wide knowledge.
 ```
 
 Worked through, rung by rung:

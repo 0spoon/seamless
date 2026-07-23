@@ -16,9 +16,9 @@ agents. Works with Claude Code, Codex CLI, and any MCP client.
 It gives a fleet of agents a shared, durable memory and a way to divide work
 without colliding: memories with a supersession lifecycle, hybrid recall, a
 dependency-aware task queue with lease-based claiming, captured plans, and
-research trials. Durable knowledge is stored as markdown files on disk; a
-single Go binary indexes it, serves it over MCP, and renders a web console for
-inspection.
+research trials. Durable knowledge is stored as markdown files on disk; the
+`seamlessd` daemon indexes it, serves it over MCP, and renders a web console,
+while the companion `seam` CLI gives headless agents a direct interface.
 
 **Full documentation: [thereisnospoon.org/docs/](https://thereisnospoon.org/docs/)**
 &nbsp;·&nbsp; Website: [thereisnospoon.org](https://thereisnospoon.org) (source in
@@ -31,13 +31,15 @@ inspection.
   composed of notes and steps, so agents divide labor instead of colliding.
 - **Files are the source of truth.** Every memory and note is a markdown file
   with YAML frontmatter under `~/.seamless` -- git-diffable, greppable,
-  hand-editable. SQLite is a rebuildable index; delete it and lose nothing.
+  hand-editable. SQLite indexes those files and also stores operational state
+  such as sessions, tasks, trials, and events, so back up the whole data
+  directory.
 - **Curation proposes, humans dispose.** Every gardener pass -- from
   deduplicating and archiving to flagging dead weight and knowledge gaps --
   only *proposes*; applying is an explicit action. Supersession preserves
   provenance, so nothing is silently rewritten.
-- **One binary, no ceremony.** Static Go binary, no CGO, pure-Go SQLite, no
-  Node, no separate vector engine, no cloud account.
+- **Small, self-contained runtime.** A static Go daemon and CLI, no CGO,
+  pure-Go SQLite, no Node, no separate vector engine, no cloud account.
 
 ## How it compares
 
@@ -46,12 +48,12 @@ because categories do not go stale:
 
 | | Seamless | Cloud memory APIs | Built-in agent memory | Knowledge-graph servers |
 |---|---|---|---|---|
-| Storage format | Markdown files on your disk; SQLite as a rebuildable index | Their database, reached by API key | Vendor-managed store inside one product | A graph database, often a separate server |
+| Storage format | Markdown files on your disk; SQLite indexes them and stores operational state | Their database, reached by API key | Vendor-managed store inside one product | A graph database, often a separate server |
 | Runs where | Your machine, localhost only | Their cloud | The vendor's product | Your machine or theirs |
 | Account required | No | Yes | The vendor's | Usually no |
 | Multi-agent coordination | Task queue, lease-based claiming, shared plans | None | None -- one agent, one store | Shared reads at best |
 | Forgetting policy | Supersession with provenance; a gardener proposes, a human disposes | Automatic summarization you do not control | Vendor-defined | Manual |
-| Runtime | One static Go binary | HTTP SDK against their service | None (built in) | Node or Python, plus the database |
+| Runtime | Static Go daemon and CLI | HTTP SDK against their service | None (built in) | Node or Python, plus the database |
 
 For the version with product names and receipts, see
 [the full comparison](https://thereisnospoon.org/compare/).

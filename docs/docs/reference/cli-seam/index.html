@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -280,8 +280,8 @@ queue - plan steps are excluded from the default view. Prints
 </span></span></code></pre><p>Calls <code>tasks_list</code>. <code>--status</code> filters to <code>open</code>, <code>in_progress</code>, <code>done</code>, or
 <code>dropped</code>. <code>--id</code> loads a single task by its globally-unique id and ignores the
 project, status, and plan filters. <code>--plan</code> lists a plan's steps instead of the
-default non-plan tasks. Bare <code>seam task</code> with no subcommand is the same as
-<code>seam task list</code>.</p>
+default non-plan tasks. Bare <code>seam task</code> is not an alias: it names the available
+task subcommands and exits 2. Use <code>seam task list</code> when listing is what you mean.</p>
 <h3 id="seam_task_add">seam task add</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">seam task add --title T <span class="o">[</span>--body B<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--depends id,id<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
 </span></span></code></pre><p>Calls <code>tasks_add</code>. <code>--title</code> is required. <code>--depends</code> takes a comma-separated

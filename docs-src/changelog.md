@@ -15,6 +15,32 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.3 {#v0-4-3}
+
+Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.3)
+
+### Features
+
+- feat(console): per-gate readiness in the utility activation table
+
+### Other
+
+- refactor(console): merge the utility activation table into the Closed loop group
+
+## v0.4.2 {#v0-4-2}
+
+Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.2)
+
+### Features
+
+- feat(sessions): self-reported mishaps at session_end
+- feat(gardener): add the tool-error pass -- recurring agent-facing errors become fix tasks
+- feat(console): make the interaction-volume histogram interactive
+
+### Fixes
+
+- fix(console): locate timeline events in place
+
 ## v0.4.1 {#v0-4-1}
 
 Released 2026-07-21 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.1)

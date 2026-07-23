@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -246,18 +246,19 @@ when a plan was informed by four research subagents, their findings are usually
 lost the moment the planning turn ends. Here they stay attached to the plan, so
 the agent that executes it can read the research that justified it.</p>
 <h2 id="a-plans-life">A plan's life</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">   you enter plan mode
-</span></span><span class="line"><span class="cl">        │
-</span></span><span class="line"><span class="cl">        ▼
-</span></span><span class="line"><span class="cl">   plan file saved ────────▶ note cc-plan-&lt;name&gt;, tag plan-status:draft
-</span></span><span class="line"><span class="cl">        │                    (re-saved → same note, next iteration)
-</span></span><span class="line"><span class="cl">        ▼
-</span></span><span class="line"><span class="cl">   Claude presents it ─────▶ plan-status:presented
-</span></span><span class="line"><span class="cl">        │                    briefing shows: PLAN (awaiting approval): &lt;slug&gt;
-</span></span><span class="line"><span class="cl">        ├── you approve ───▶ plan-status:approved + tracking task created
-</span></span><span class="line"><span class="cl">        │                    briefing shows: PLAN: &lt;slug&gt; -- 2/3 done, 1 claimable
-</span></span><span class="line"><span class="cl">        └── you don&#39;t ─────▶ plan-status:abandoned
-</span></span></code></pre><p>The statuses are stored as a <code>plan-status:&lt;value&gt;</code> tag on the note:
+<figure class="doc-figure" data-tone="pop" aria-labelledby="plan-lifecycle-caption">
+  <span class="figure-kicker">Captured-plan lifecycle</span>
+  <div class="doc-flow cols-2">
+    <div class="flow-node"><span class="flow-step">1 · plan mode</span><strong>Plan file saved</strong><small>Upserts <code>cc-plan-&lt;name&gt;</code> with <code>plan-status:draft</code>; later saves create iterations.</small></div>
+    <div class="flow-node no-arrow"><span class="flow-step">2 · presented</span><strong>Awaiting approval</strong><small>The briefing names the presented plan.</small></div>
+  </div>
+  <div class="flow-split flow-outcomes">
+    <div class="flow-node success no-arrow"><span class="flow-step">3a · approved</span><strong>Tracking begins</strong><small>Status becomes approved and an implementation task is created.</small></div>
+    <div class="flow-node warn no-arrow"><span class="flow-step">3b · abandoned</span><strong>Closed deliberately</strong><small>An unapproved plan can be marked abandoned instead of lingering.</small></div>
+  </div>
+  <figcaption id="plan-lifecycle-caption">A captured plan remains one composition across edits; approval changes its state and opens the execution loop.</figcaption>
+</figure>
+<p>The statuses are stored as a <code>plan-status:&lt;value&gt;</code> tag on the note:
 <code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>.</p>
 <h2 id="why-unapproved-plans-show-up-in-the-briefing">Why unapproved plans show up in the briefing</h2>
 <p>A captured-but-unapproved plan appears in briefings as:</p>

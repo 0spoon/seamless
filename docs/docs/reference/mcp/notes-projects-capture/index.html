@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -265,6 +265,14 @@ tool that makes an outbound request on an agent's behalf, so it is guarded:
 destination ports are restricted to <code>capture.allowed_ports</code> (80 and 443 by
 default, never &quot;any port&quot;), and the fetcher refuses to be talked into reaching
 things it should not. See <a href="../../../reference/configuration/">Configuration</a>.</p>
+<p>Scope resolves before the network fetch, so an ambiguous durable destination
+fails without making a request. Success returns the note's <code>id</code>, <code>slug</code>, <code>title</code>,
+resolved <code>project</code>, and <code>source_url</code> - the URL as requested; redirects are
+followed but do not rewrite it. The fetcher validates the initial URL and every
+redirect, rejecting non-HTTP schemes, private/loopback destinations, and
+disallowed ports. Size is bounded by truncation rather than rejection: at most
+2 MB of the response is read, and the stored readable body is capped again at
+50,000 runes with a visible <code>[content truncated]</code> marker.</p>
 <h2 id="notes_create">notes_create</h2>
 <p>Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent.</p>
 <div class="table-wrap">

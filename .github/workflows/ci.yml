@@ -18,13 +18,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      # test-race needs real history for nothing, but `make build` stamps the
-      # binary with `git rev-parse --short HEAD` and `make fmt-check` lists
-      # tracked files with `git ls-files`; both need the checkout's .git.
+      # fetch-depth: 0 because `make docs-check` runs scripts/changelog.sh
+      # --check, which rebuilds the changelog from every v* tag and the commit
+      # ranges between them -- the default shallow, tagless checkout sees
+      # neither (release.yml fetches full history for the same reason).
+      # `make build` (`git rev-parse`) and `make fmt-check` (`git ls-files`)
+      # also need the checkout's .git.
       # Pinned to full commit SHAs (see release.yml) so a retagged upstream
       # action cannot change what runs here; the comment is the readable
       # version and dependabot bumps both together.
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       # go-version-file reads go.mod's `toolchain` line, so the security
       # toolchain floor (go1.25.12, audit M1) is set in exactly one place.

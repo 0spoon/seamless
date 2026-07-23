@@ -34,6 +34,7 @@ Its passes:
 | digest | Enough recent activity to be worth a summary over `gardener.digest_days`. Proposes a **digest** note. |
 | stale-plan | Plans idle for `gardener.stale_plan_days` with steps still open. |
 | memory-wanted | The same recall query missing across sessions. Proposes a **memory_wanted**: applying opens a task to write the knowledge agents keep searching for. |
+| tool-error | The same normalized tool or hook error recurring (tool errors across 2+ sessions). Proposes a **tool_error**: applying opens an investigation task with the observed evidence. |
 
 Constraints and pinned stages are never age-filtered or staleness-archived. A
 constraint does not become less true by sitting still.
@@ -74,6 +75,15 @@ lives in the file's frontmatter (`favorite: true`), so it survives an index
 rebuild and can be hand-edited. A plan's favorite lives on its primary note, so
 a task-only plan (no note) cannot be starred. Starring never bumps an item's
 updated time - it is metadata, not authorship.
+
+## Applying is an explicit boundary
+
+`gardener_apply` accepts only `apply` or `dismiss`. Dismissal closes the proposal
+without changing its target. Apply performs the proposal's typed action and
+returns that real outcome; it never substitutes a plausible dummy when the
+target disappeared or a file/store mutation failed. Memory-changing actions
+route through the lifecycle/files services, so supersession, atomic Markdown
+writes, and occupied-path protections remain the same as direct tools.
 
 ## lab_open {#lab_open}
 

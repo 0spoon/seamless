@@ -24,7 +24,7 @@
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
 <script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=01775f4b">
+<link rel="stylesheet" href="../../static/docs.css?v=1b93211d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -306,14 +306,16 @@ cost one-time.</p>
 <h2 id="supersession-how-the-store-stays-honest">Supersession: how the store stays honest</h2>
 <p>Memories are not appended forever, and they are not silently overwritten. When
 something stops being true, the replacement <strong>supersedes</strong> it:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">memory_write name=new-truth supersedes=old-truth
-</span></span><span class="line"><span class="cl">   |
-</span></span><span class="line"><span class="cl">   +-- old-truth: invalid_at = now, superseded_by = &lt;new id&gt;
-</span></span><span class="line"><span class="cl">   |              leaves the briefing; leaves recall
-</span></span><span class="line"><span class="cl">   |              STILL on disk, still readable, pointing at its replacement
-</span></span><span class="line"><span class="cl">   |
-</span></span><span class="line"><span class="cl">   +-- new-truth: active, indexed, in the next briefing
-</span></span></code></pre><p>The old memory leaves every index but stays readable. An agent following an old
+<figure class="doc-figure" data-tone="warn" aria-labelledby="supersession-caption">
+  <span class="figure-kicker">Explicit supersession</span>
+  <div class="doc-flow">
+    <div class="flow-node"><span class="flow-step">memory_write</span><strong>new-truth supersedes old-truth</strong><small>The replacement is written first.</small></div>
+    <div class="flow-node warn"><span class="flow-step">old-truth</span><strong>Invalid, preserved</strong><small><code>invalid_at = now</code><br><code>superseded_by = new id</code><br>Leaves briefing and recall; remains readable on disk.</small></div>
+    <div class="flow-node success"><span class="flow-step">new-truth</span><strong>Active and indexed</strong><small>Eligible for recall and the next briefing.</small></div>
+  </div>
+  <figcaption id="supersession-caption">Replacement changes which memory is active without erasing the historical record.</figcaption>
+</figure>
+<p>The old memory leaves every index but stays readable. An agent following an old
 reference lands on it, sees that it is invalid, and finds the pointer to what
 replaced it. That is provenance: the store can tell you not just what it believes
 but what it used to believe and what changed its mind.</p>

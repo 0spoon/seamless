@@ -14,16 +14,20 @@ it by hand, and what happens if you delete it.
 
 `data_dir` defaults to `~/.seamless`:
 
-```text
-~/.seamless/
-  seam.db                              SQLite: indexes, sessions, tasks, trials, events, embeddings
-  memory/
-    _global/{name}.md                  project-less memories
-    {project}/{name}.md                one memory per file
-  notes/
-    _global/{slug}.md                  project-less notes
-    {project}/{slug}.md                one note per file
-```
+<figure class="doc-figure" aria-labelledby="storage-tree-caption">
+  <span class="figure-kicker">On-disk layout</span>
+  <div class="doc-tree">
+    <div class="tree-root"><code>~/.seamless/</code><span class="tree-note">Owner-only local data directory</span></div>
+    <div class="tree-branch"><code>seam.db</code><span class="tree-note">Indexes, sessions, tasks, trials, events, and embeddings</span></div>
+    <div class="tree-branch"><code>memory/</code><span class="tree-note">Durable memory tree</span></div>
+    <div class="tree-leaf"><code>_global/{name}.md</code><span class="tree-note">Machine-wide memories</span></div>
+    <div class="tree-leaf"><code>{project}/{name}.md</code><span class="tree-note">One project memory per file</span></div>
+    <div class="tree-branch"><code>notes/</code><span class="tree-note">Durable note tree</span></div>
+    <div class="tree-leaf"><code>_global/{slug}.md</code><span class="tree-note">Machine-wide notes</span></div>
+    <div class="tree-leaf"><code>{project}/{slug}.md</code><span class="tree-note">One project note per file</span></div>
+  </div>
+  <figcaption id="storage-tree-caption">Markdown is durable knowledge; the database combines rebuildable indexes with high-churn operational state.</figcaption>
+</figure>
 
 A memory's project is its directory. An empty `project` field means global, and
 the file lands in `memory/_global/`. Notes work the same way, under

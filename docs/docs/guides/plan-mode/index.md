@@ -32,17 +32,12 @@ the agent that executes it can read the research that justified it.
 ## A plan's life
 
 ```text
-   you enter plan mode
-        │
-        ▼
-   plan file saved ────────▶ note cc-plan-<name>, tag plan-status:draft
-        │                    (re-saved → same note, next iteration)
-        ▼
-   Claude presents it ─────▶ plan-status:presented
-        │                    briefing shows: PLAN (awaiting approval): <slug>
-        ├── you approve ───▶ plan-status:approved + tracking task created
-        │                    briefing shows: PLAN: <slug> -- 2/3 done, 1 claimable
-        └── you don't ─────▶ plan-status:abandoned
+Captured-plan lifecycle
+1 · plan mode Plan file saved Upserts cc-plan-<name> with plan-status:draft ; later saves create iterations.
+2 · presented Awaiting approval The briefing names the presented plan.
+3a · approved Tracking begins Status becomes approved and an implementation task is created.
+3b · abandoned Closed deliberately An unapproved plan can be marked abandoned instead of lingering.
+A captured plan remains one composition across edits; approval changes its state and opens the execution loop.
 ```
 
 The statuses are stored as a `plan-status:<value>` tag on the note:

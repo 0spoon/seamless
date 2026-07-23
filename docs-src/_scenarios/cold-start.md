@@ -24,7 +24,7 @@ gotcha is one `memory_read` away at the moment it matters.
 
 [Seamless](/) is a local-first memory and coordination substrate for coding
 agents: persistent memory, dependency-aware tasks, and shared plans, stored as
-markdown files you own and indexed by one Go binary. The transcripts below are
+markdown files you own and indexed by one local daemon. The transcripts below are
 the recorded sessions, unedited - whole steps are collapsed into fast-forward
 markers, but no line is reworded. The session id is on each pane.
 

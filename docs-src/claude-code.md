@@ -162,12 +162,13 @@ hooks, no `CLAUDE.md`, an explicit opt-in MCP registration of its own. See
 Then start a Claude Code session in a mapped repo and look for the injected
 block:
 
-```text
-<seam-briefing>
-Seam project: myrepo -- 4 constraints, 58 memories, 3 recent findings.
-...
-</seam-briefing>
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="claude-briefing-caption">
+  <div class="sample-panel">
+    <div class="sample-panel-head"><span>Injected context</span><span>myrepo</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: myrepo</span> -- 4 constraints, 58 memories, 3 recent findings.<br><span class="sample-muted">...<br>&lt;/seam-briefing&gt;</span></div>
+  </div>
+  <figcaption id="claude-briefing-caption">The project name is the useful proof: the ambient session resolved to the repository you opened.</figcaption>
+</figure>
 
 If it is there, the whole loop is closed: the hook resolved your cwd to a
 project, the daemon assembled a briefing within its token budget, and the agent

@@ -3,28 +3,27 @@ title: Architecture
 description: The package layering, what each package owns, two data-flow traces through the real code, and the things Seamless deliberately does not have.
 ---
 
-Seamless is one Go binary (`seamlessd`) plus a CLI (`seam`). Inside it, the code
-is arranged so that the direction of every dependency is obvious from the package
-name. This page is the map: the layers, who owns what, and how a write and a read
-actually travel through them.
+Seamless ships two Go binaries: the `seamlessd` daemon and the `seam` CLI. The
+daemon owns the database and serves MCP, hooks, and the console; the CLI is a
+headless client of that daemon. Inside the codebase, dependencies are arranged
+so their direction is obvious from the package name. This page is the map: the
+layers, who owns what, and how a write and a read actually travel through them.
 
 If you are looking for the conceptual model rather than the code, start at
 [How Seamless works](/concepts/how-it-works/).
 
 ## The layering
 
-```text
-cmd/seamlessd, cmd/seam, cmd/docsgen
-  │
-  ▼  API surfaces - speak HTTP, own no domain logic
-internal/{mcp, hooks, console}
-  │
-  ▼  domains - the business logic
-internal/{retrieve, lifecycle, gardener, files, plans, capture, importer}
-  │
-  ▼  foundations - leaves, or nearly so
-internal/{store, events, llm, markdown, core, config, validate}
-```
+<figure class="doc-figure" aria-labelledby="layering-caption">
+  <span class="figure-kicker">Dependency direction</span>
+  <div class="doc-stack">
+    <div class="flow-node"><span class="flow-step">Entry points</span><strong>cmd/seamlessd · cmd/seam · cmd/docsgen</strong><small>Wire dependencies and process boundaries.</small></div>
+    <div class="flow-node"><span class="flow-step">API surfaces</span><strong>internal/mcp · hooks · console</strong><small>Translate HTTP, MCP, hooks, and UI requests; own no domain policy.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Domains</span><strong>retrieve · lifecycle · gardener · files · plans · capture · importer</strong><small>Business rules and reusable workflows.</small></div>
+    <div class="flow-node"><span class="flow-step">Foundations</span><strong>store · events · llm · markdown · core · config · validate</strong><small>Leaves, or nearly so; never reach upward.</small></div>
+  </div>
+  <figcaption id="layering-caption">Imports move downward. Shared behavior moves into a lower layer rather than sideways through another surface.</figcaption>
+</figure>
 
 Two rules make this hold, and both are load-bearing:
 
@@ -67,26 +66,16 @@ the layering.
 
 ## Trace: `memory_write`, from tool call to file on disk
 
-```text
-agent ──▶ POST /api/mcp  (bearer key)
-            │
-            ▼  internal/mcp: handleMemoryWrite
-      1. validate name / kind / description / body
-      2. resolveWriteScope(project)          ← fails closed, never guesses
-      3. resolveMemory(project, name)        ← update in place, or new ULID
-      4. DedupHint (new names only)          ← advisory; errors swallowed
-            │
-            ▼  internal/files: Manager.WriteMemory
-      5. ensurePathFree(relPath, id)         ← ErrPathOccupied, not a clobber
-      6. suppress(relPath)                   ← the watcher ignores our own write
-      7. Store.WriteMemory → RenderMemory → AtomicWrite   ◀── THE DURABLE ACT
-      8. Indexer.IndexMemory                 ← memories_index upsert + FTS row
-      9. embedItem                           ← best-effort; failure clears the hash
-            │
-            ▼  internal/mcp
-     10. events.Record(memory.written)
-     11. supersedes= → lifecycle.Supersede   ← only if asked
-```
+<figure class="doc-figure" data-tone="ok" aria-labelledby="memory-trace-caption">
+  <span class="figure-kicker">memory_write trace</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">MCP boundary · 1–4</span><strong>Validate and resolve</strong><small>Check content; fail closed on scope; reuse or mint the ULID; request an advisory dedup hint.</small></div>
+    <div class="flow-node"><span class="flow-step">Files boundary · 5–6</span><strong>Protect the path</strong><small>Reject another item's path and suppress the watcher's echo.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Durable + index · 7–9</span><strong>Atomic file, FTS, vector</strong><small>Render and atomically write Markdown; synchronously index; embed best-effort with hash retry.</small></div>
+    <div class="flow-node success"><span class="flow-step">Domain outcome · 10–11</span><strong>Record and supersede</strong><small>Append <code>memory.written</code>; invoke lifecycle supersession only when requested.</small></div>
+  </div>
+  <figcaption id="memory-trace-caption">The path crosses the MCP surface once, the files domain once, then returns to record the outcome and optional lifecycle change.</figcaption>
+</figure>
 
 Five things in that path are decisions, not mechanics:
 
@@ -117,37 +106,21 @@ as success to an agent, which would then leave two contradictory memories live.
 
 ## Trace: SessionStart, from Claude Code to injected briefing
 
-```text
-Claude Code SessionStart
-    │  seam hook session-start  (stdin JSON → HTTP, bearer key)
-    ▼
-POST /api/hooks/session-start          internal/hooks: sessionStart
-    │
-    1. verifyBearer                     ← the ONLY non-2xx this endpoint returns
-    2. ctx, cancel = WithTimeout(2s)    ← a slow store cannot stall the turn
-    3. store.RegisterProjectForCWD      ← grow the repo→project map
-    │
-    ▼  internal/retrieve: Briefing
-    4. effectiveBriefing                ← file/env base + console override row
-    5. ResolveProjectForCWD             ← cwd → project slug
-    6. familyMemoryScope                ← a child folds in its shared parent
-    7. ActiveMemoriesForScope           ← WHERE invalid_at IS NULL
-    8. partition: constraints | stages | index
-       └─ subagent (agent_type set)? → constraints only, return
-    9. trimMemoryIndex                  ← AFTER the partition: pinned kinds exempt
-   10. findings, ready tasks, sibling findings/memories, plan rollups, pending plans
-   11. assembleBriefing                 ← pack against the budget, then hard-cap
-    │
-    ▼  back in internal/hooks
-   12. ensureAmbientSession             ← create or resume cc/{prefix}
-   13. injectAmbientLine                ← appended before </seam-briefing>
-   14. events.Record(retrieval.injected) ← records exactly what was sent
-   15. 200 { continue, hookSpecificOutput.additionalContext }
-```
+<figure class="doc-figure" data-tone="pop" aria-labelledby="sessionstart-trace-caption">
+  <span class="figure-kicker">SessionStart trace</span>
+  <div class="doc-flow cols-4">
+    <div class="flow-node"><span class="flow-step">Claude → hook · 1–3</span><strong>Authenticate, bound, map</strong><small><code>seam hook session-start</code> forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.</small></div>
+    <div class="flow-node"><span class="flow-step">Retrieve · 4–8</span><strong>Resolve effective scope</strong><small>Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents stop at constraints.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">Pack · 9–11</span><strong>Trim only eligible context</strong><small>Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.</small></div>
+    <div class="flow-node success"><span class="flow-step">Hook response · 12–15</span><strong>Bind, inject, record</strong><small>Create or resume the ambient session, append its line, record the exact text sent, and return <code>additionalContext</code>.</small></div>
+  </div>
+  <figcaption id="sessionstart-trace-caption">The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.</figcaption>
+</figure>
 
 The contract that shapes this path is **fail open**. Every error between steps 3
 and 13 is logged and swallowed; the briefing degrades to empty and the agent
-proceeds. Only a bad bearer key returns non-2xx. A memory system that can block
+proceeds. Only a bad bearer key or a malformed `client` query parameter - both
+request defects, not retrieval work - return non-2xx. A memory system that can block
 an agent from working is worse than no memory system, so the failure mode is
 chosen deliberately: silence, not obstruction. The cost is that hook failure is
 invisible, which is why `seamlessd doctor` and `seam doctor` exist - see

@@ -1,10 +1,10 @@
 # Seamless
 
-> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
+> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.
 
 ## Getting started
 
-- [What is Seamless?](https://thereisnospoon.org/docs/): A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
+- [What is Seamless?](https://thereisnospoon.org/docs/): A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.
 - [Quickstart](https://thereisnospoon.org/docs/quickstart/): Install Seamless with one command, start Claude Code or Codex in a repo, and confirm the first briefing lands.
 - [Install & deploy](https://thereisnospoon.org/docs/install/): The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.
 - [Claude Code setup](https://thereisnospoon.org/docs/claude-code/): Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.

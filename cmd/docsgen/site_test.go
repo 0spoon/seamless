@@ -3,6 +3,8 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -41,6 +43,65 @@ func TestPageURL(t *testing.T) {
 
 	_, err := pageURL("notes.txt")
 	require.Error(t, err, "non-markdown sources are rejected")
+}
+
+// TestRepoDocumentationContracts pins the hand-authored statements most likely
+// to drift behind fast-moving code. Generated MCP/config material already reads
+// its contracts from Go; these assertions cover narrative promises that cannot.
+func TestRepoDocumentationContracts(t *testing.T) {
+	repoRoot(t)
+
+	read := func(path string) string {
+		t.Helper()
+		raw, err := os.ReadFile(path)
+		require.NoError(t, err)
+		return string(raw)
+	}
+
+	cli := read("docs-src/reference/cli-seam.md")
+	require.Contains(t, cli, "Bare `seam task` is not an alias")
+	require.NotContains(t, cli, "Bare `seam task` with no subcommand is the same as")
+
+	console := read("docs-src/reference/console.md")
+	for _, phrase := range []string{"fresh page starts empty", "History is explicit and additive", "Agent-reported mishaps"} {
+		require.Contains(t, console, phrase)
+	}
+
+	gardener := read("docs-src/concepts/gardener.md")
+	require.Contains(t, gardener, "**tool-error**")
+
+	var figures, captions int
+	labelRE := regexp.MustCompile(`aria-labelledby="([^"]+)"`)
+	require.NoError(t, filepath.WalkDir("docs-src", func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || filepath.Ext(path) != ".md" {
+			return err
+		}
+		body := read(path)
+		require.NotContains(t, body, "┌", "%s: use an explanatory figure, not a box drawing", path)
+		require.NotContains(t, body, "│", "%s: use an explanatory figure, not a box drawing", path)
+		require.NotContains(t, body, "└", "%s: use an explanatory figure, not a box drawing", path)
+		require.NotContains(t, body, `class="step"`,
+			"%s: .step is the landing page's numbered-chip class (site.css); figures use flow-step", path)
+		figures += strings.Count(body, `<figure class="doc-figure"`)
+		captions += strings.Count(body, "<figcaption")
+		for _, block := range strings.Split(body, `<figure class="doc-figure"`)[1:] {
+			figure := strings.SplitN(block, "</figure>", 2)[0]
+			label := labelRE.FindStringSubmatch(figure)
+			require.Len(t, label, 2, "%s: every explanatory figure names its caption", path)
+			require.Contains(t, figure, `<figcaption id="`+label[1]+`">`,
+				"%s: aria-labelledby must resolve to the figure caption", path)
+		}
+		return nil
+	}))
+	require.GreaterOrEqual(t, figures, 15)
+	require.Equal(t, figures, captions, "every explanatory figure has one caption")
+
+	for _, path := range []string{"README.md", "docs-src/index.md", "docs-src/install.md", "docs/index.html", "docs/compare/index.html", "server.json"} {
+		body := strings.ToLower(read(path))
+		for _, stale := range []string{"one go binary", "single go binary", "delete the database and lose nothing"} {
+			require.NotContains(t, body, stale, "%s: stale deployment/storage claim", path)
+		}
+	}
 }
 
 // TestLoadSiteDerivesNav pins the derived state every template depends on: the

@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Seamless - your agents share a brain. You can read it.</title>
-<meta name="description" content="Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans - markdown files in a folder you own, indexed by one Go binary, curated with you in the loop.">
+<meta name="description" content="Seamless is a local-first coordination substrate for the coding agents you run: persistent memory, dependency-aware tasks, and shared plans - markdown files in a folder you own, indexed by one local Go daemon, curated with you in the loop.">
 <link rel="canonical" href="https://thereisnospoon.org/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://thereisnospoon.org/">
 <meta property="og:title" content="Seamless - your agents share a brain. You can read it.">
-<meta property="og:description" content="A local-first coordination substrate for fleets of coding agents: memory, tasks, and plans as markdown files you own. One Go binary. No black box.">
+<meta property="og:description" content="A local-first coordination substrate for fleets of coding agents: memory, tasks, and plans as markdown files you own. One Go daemon plus CLI. No black box.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -43,7 +43,7 @@
       "@type": "SoftwareApplication",
       "@id": "https://thereisnospoon.org/#app",
       "name": "Seamless",
-      "description": "Local-first shared memory and task coordination for AI coding agents. One Go binary, MCP server, markdown files you own. Hooks for Claude Code and Codex CLI.",
+      "description": "Local-first shared memory and task coordination for AI coding agents. One Go daemon plus CLI, MCP server, and markdown files you own. Hooks for Claude Code and Codex CLI.",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "macOS, Linux, Windows",
       "url": "https://thereisnospoon.org/",
@@ -98,7 +98,7 @@
           "name": "Why not just use agentmemory?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless is one Go binary; the source of truth is markdown in git; and forgetting is a proposal you approve - never a curve you're on."
+            "text": "agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless uses a self-contained Go daemon plus CLI; durable knowledge has markdown in git as its source of truth; and forgetting is a proposal you approve - never a curve you're on."
           }
         },
         {
@@ -122,7 +122,7 @@
           "name": "Does it phone home?",
           "acceptedAnswer": {
             "@type": "Answer",
-            "text": "No. Localhost bind, a static bearer key, no telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either - view source; it's a static file."
+            "text": "No. Localhost bind, a static bearer key, and no product telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either - view source; it's a static file."
           }
         }
       ]
@@ -169,7 +169,7 @@
     <div>
       <p class="kicker"><span class="live-dot" aria-hidden="true"></span> local-first coordination substrate for coding agents</p>
       <h1>Your agents share a brain. <em>You can read it.</em></h1>
-      <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> - as markdown files in a folder you own, indexed by a single Go binary, curated with you in the loop.</p>
+      <p class="sub">Seamless gives the fleet of coding agents you run <strong>persistent memory</strong>, <strong>dependency-aware tasks</strong>, and <strong>shared plans</strong> - as markdown files in a folder you own, indexed by one local Go daemon, curated with you in the loop.</p>
       <div class="os-switch" role="group" aria-label="Show the install command for">
         <button type="button" data-os-pick="unix" aria-pressed="false">macOS / Linux</button>
         <button type="button" data-os-pick="windows" aria-pressed="false">Windows</button>
@@ -225,7 +225,7 @@
       <article class="pillar rv">
         <span class="prob">problem: your knowledge, their database</span>
         <h3>Files are the source of truth</h3>
-        <p>Every memory and note is a markdown file with frontmatter under <code>~/.seamless</code> - git-diffable, greppable, hand-editable. SQLite is just a rebuildable index. Delete the database and lose nothing.</p>
+        <p>Every memory and note is a markdown file with frontmatter under <code>~/.seamless</code> - git-diffable, greppable, hand-editable. SQLite indexes those files and also stores operational state such as sessions, tasks, trials, and events, so back up the whole data directory.</p>
       </article>
       <article class="pillar rv">
         <span class="prob">problem: silent auto-forgetting</span>
@@ -234,8 +234,8 @@
       </article>
       <article class="pillar rv">
         <span class="prob">problem: a runtime to babysit</span>
-        <h3>One binary. No ceremony.</h3>
-        <p>A single static Go binary with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. One command installs it, wires your agents, and leaves it running as a service. Re-run that command to upgrade.</p>
+        <h3>Small runtime. No ceremony.</h3>
+        <p>Two small static Go binaries - a daemon and a headless CLI - with pure-Go SQLite. No CGO, no Node, no separate engine, no vector database, no cloud account. One command installs them, wires your agents, and leaves the daemon running as a service. Re-run that command to upgrade.</p>
       </article>
     </div>
   </div>
@@ -375,7 +375,7 @@
           <text class="d-dim d-edge-label" x="240" y="118" text-anchor="middle" font-size="9.5">hooks + mcp tools</text>
           <rect class="d-core" x="45" y="136" width="310" height="86" rx="10" stroke-width="1.4"/>
           <text class="d-title" x="200" y="164" text-anchor="middle" font-size="13">seamlessd</text>
-          <text x="200" y="182" text-anchor="middle" font-size="9.5">one Go binary &#183; no CGO &#183; localhost</text>
+          <text x="200" y="182" text-anchor="middle" font-size="9.5">Go daemon + CLI &#183; no CGO &#183; localhost</text>
           <text class="d-dim" x="200" y="200" text-anchor="middle" font-size="9">briefing &#183; recall &#183; ready-queue &#183; gardener</text>
           <!-- you -->
           <rect class="d-box" x="372" y="136" width="98" height="86" rx="10"/>
@@ -393,7 +393,7 @@
           <text class="d-title" x="200" y="286" text-anchor="middle" font-size="12">~/.seamless/</text>
           <text x="200" y="306" text-anchor="middle" font-size="9.5">memory/*.md &#183; notes/*.md</text>
           <text class="d-dim" x="200" y="324" text-anchor="middle" font-size="9.5">markdown + frontmatter &#183; source of truth &#183; in git</text>
-          <text class="d-dim" x="200" y="342" text-anchor="middle" font-size="9.5">sqlite = rebuildable index</text>
+          <text class="d-dim" x="200" y="342" text-anchor="middle" font-size="9.5">sqlite = indexes + operational state</text>
           <text class="d-dim" x="240" y="392" text-anchor="middle" font-size="10" font-style="italic"># kill -9 the daemon; the files don't care</text>
         </svg>
       </div>
@@ -583,7 +583,7 @@
       </details>
       <details class="rv">
         <summary>&hellip;agentmemory?</summary>
-        <div class="a"><p>agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless is one Go binary; the source of truth is markdown in git; and forgetting is a proposal you approve - never a curve you're on.</p></div>
+        <div class="a"><p>agentmemory is a Node.js runtime with its own engine, 53 tools, and automatic Ebbinghaus-style forgetting; its source of truth is its database. Seamless uses a self-contained Go daemon plus CLI; durable knowledge has markdown in git as its source of truth; and forgetting is a proposal you approve - never a curve you're on.</p></div>
       </details>
       <details class="rv">
         <summary>&hellip;Supermemory?</summary>
@@ -595,7 +595,7 @@
       </details>
       <details class="rv">
         <summary>Does it phone home?</summary>
-        <div class="a"><p>No. Localhost bind, a static bearer key, no telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either - view source; it's a static file.</p></div>
+        <div class="a"><p>No. Localhost bind, a static bearer key, and no product telemetry. Embeddings use OpenAI by default but run fully offline with Ollama if you prefer. This page has no trackers either - view source; it's a static file.</p></div>
       </details>
     </div>
   </div>
@@ -607,7 +607,7 @@
     <p class="kicker">thereisnospoon.org</p>
     <h2>There is no spoon.</h2>
     <p>Every memory product asks you to trust a spoon: an embedding space you can't read, a decay curve you can't veto, a cloud you can't leave. Seamless is built on the opposite bet - <strong>the magic memory layer doesn't exist.</strong> It never did.</p>
-    <p>What exists is a folder of markdown files, in git, on your disk. And a single Go binary that indexes them, briefs your agents, queues their work, and asks your permission before it forgets anything. <strong>That's the trick: there isn't one.</strong></p>
+    <p>What exists is a folder of markdown files, in git, on your disk. A local Go daemon indexes them, briefs your agents, queues their work, and asks your permission before it forgets anything; a companion CLI lets headless agents use the same system. <strong>That's the trick: there isn't one.</strong></p>
     <p class="ls">$ ls ~/.seamless/memory/ <span class="dim">&nbsp;# go ahead. look.</span></p>
   </div>
 </section>

@@ -216,6 +216,7 @@ docs:
 # are diffed by name -- the rest of $(SITE_ROOT) is hand-written and not ours to
 # compare -- so a stale committed sitemap fails the gate like any stale page.
 docs-check:
+	@scripts/changelog.sh --check
 	@tmp=$$(mktemp -d) || exit 1; \
 	    trap 'rm -rf "$$tmp"' EXIT; \
 	    $(GO) run ./cmd/docsgen -src $(DOCS_SRC) -out "$$tmp/docs" -site "$$tmp" >/dev/null || exit 1; \
@@ -234,7 +235,7 @@ docs-serve: docs
 # (TestRenderIsDeterministic, docs-check) -- a date injected there would drift
 # the committed site on every unrelated PR. Run this after tagging a release,
 # then commit the rewritten docs-src/changelog.md with the re-rendered site;
-# between releases the page is ordinary committed source that cannot go stale.
+# between releases `docs-check` verifies the committed source against the tags.
 changelog:
 	@scripts/changelog.sh
 	@$(MAKE) docs

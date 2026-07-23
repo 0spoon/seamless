@@ -1,14 +1,15 @@
 # What is Seamless?
 
-> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one Go binary.
+> A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.
 
 Seamless is a local-first memory and coordination system for coding agents -
 a **shared, persistent brain** for Claude Code, Codex, and any other MCP client
 you run. Memory survives the end of a conversation, tasks can be handed from one
 agent to another, and plans get executed together. All of it is stored as
 markdown files in a directory you own, indexed by one SQLite database, and
-served over MCP by a single Go binary on your machine - no cloud service, no
-external vector database, no account.
+served over MCP by the local `seamlessd` daemon. The companion `seam` CLI gives
+headless agents a direct interface. There is no hosted Seamless service,
+external vector database, or account.
 
 Its clients are agents. You are the observer and editor - there is a console, but
 nothing in Seamless requires you to be in the loop for agents to use it. And it
@@ -34,8 +35,9 @@ hosted team knowledge base.
 read, `grep`, edit, and put in git. The database is a rebuildable index over
 them, plus the record for high-churn state (sessions, tasks, events).
 
-**Local-first.** One binary, one SQLite file, bound to loopback. No external
-database, no cloud dependency, no telemetry.
+**Local-first.** One daemon process, one SQLite file, bound to loopback. No
+external database, no required cloud service, and no outbound product
+telemetry.
 
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.

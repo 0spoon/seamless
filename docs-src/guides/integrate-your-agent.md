@@ -17,15 +17,17 @@ This page is that loop.
 
 ## The loop
 
-```text
-session_start   ─▶ bind the connection, get the briefing
-     │
-     ├─ recall / memory_read     ─▶ pull what the briefing summarized
-     ├─ ... do the work ...
-     ├─ memory_write / notes_create ─▶ what should outlive this run
-     │
-session_end     ─▶ persist findings for the next agent's briefing
-```
+<figure class="doc-figure" aria-labelledby="agent-loop-caption">
+  <span class="figure-kicker">The integration loop</span>
+  <div class="doc-flow cols-5">
+    <div class="flow-node"><span class="flow-step">1 · session_start</span><strong>Bind scope</strong><small>Read the project briefing.</small></div>
+    <div class="flow-node"><span class="flow-step">2 · recall</span><strong>Pull detail</strong><small>Open what the briefing summarized.</small></div>
+    <div class="flow-node emphasis"><span class="flow-step">3 · work</span><strong>Use the context</strong><small>Keep the session current while acting.</small></div>
+    <div class="flow-node"><span class="flow-step">4 · durable writes</span><strong>Save what outlives the run</strong><small><code>memory_write</code> or <code>notes_create</code></small></div>
+    <div class="flow-node success"><span class="flow-step">5 · session_end</span><strong>Hand off findings</strong><small>Feed the next agent's briefing.</small></div>
+  </div>
+  <figcaption id="agent-loop-caption">Binding, retrieval, durable writes, and a final handoff turn an MCP connection into a useful shared session.</figcaption>
+</figure>
 
 Four of those five steps are optional in the narrow sense that the tools work
 without them. They are not optional in the sense that matters: **`session_start`

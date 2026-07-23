@@ -136,7 +136,11 @@ lists is where a wrong one can be noticed and merged.
 ### Precedence, and no guessing
 
 ```text
-explicit project  →  the bound session's project  →  the sole unambiguous ambient
+Scope resolution
+1 Explicit project
+2 Bound session project
+3 Sole unambiguous ambient
+Resolution stops at the first available scope; ambiguity is an error, never a fourth fallback.
 ```
 
 Ambient sessions spanning more than one project are `errAmbiguousScope`, not a
