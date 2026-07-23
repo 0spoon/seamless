@@ -471,30 +471,41 @@ a.nav-head.current { color: var(--brand); }
   border-radius: var(--radius-md);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--ink) 6%, transparent);
 }
-/* connector: a stem that fades in toward the accent (::after) capped by a
-   round-joined chevron whose tip lands at the stem's end (::before) */
-.flow-node::after {
-  content: "";
-  position: absolute;
-  top: calc(50% - 1px);
-  left: calc(100% + 2px);
-  width: 26px;
-  height: 2px;
-  border-radius: 1px;
-  background: linear-gradient(90deg, transparent, var(--figure-accent));
-}
+/* Connectors use one round-joined arrow mask in every orientation. The small
+   accent marker makes the line feel anchored to its source rather than floating
+   between cards; the halo and tapered color carry each figure's tone. */
 .flow-node::before {
   content: "";
   position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: calc(100% + 2px);
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--figure-accent);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--figure-accent) 16%, transparent),
+    0 0 8px color-mix(in srgb, var(--figure-accent) 28%, transparent);
+  transform: translate(-50%, -50%);
+}
+.flow-node::after {
+  content: "";
+  position: absolute;
   z-index: 1;
-  top: calc(50% - 4px);
-  left: calc(100% + 20px);
-  width: 8px;
-  height: 8px;
-  border-top: 2px solid var(--figure-accent);
-  border-right: 2px solid var(--figure-accent);
-  border-radius: 0 2px 0 0;
-  transform: rotate(45deg);
+  top: calc(50% - 6px);
+  left: 100%;
+  width: 30px;
+  height: 12px;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--figure-accent) 24%, transparent),
+    color-mix(in srgb, var(--figure-accent) 72%, transparent) 42%,
+    var(--figure-accent) 78%
+  );
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 12'%3E%3Cpath d='M3 6h24m-5-5 5 5-5 5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 12'%3E%3Cpath d='M3 6h24m-5-5 5 5-5 5' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  filter: drop-shadow(0 0 3px color-mix(in srgb, var(--figure-accent) 28%, transparent));
 }
 .flow-node:last-child::before,
 .flow-node:last-child::after,
@@ -563,23 +574,17 @@ a.nav-head.current { color: var(--brand); }
 .doc-stack .flow-node + .flow-node { margin-top: 18px; }
 .doc-stack .flow-node + .flow-node::before {
   display: block;
-  /* the rotated box's point sits ~6px below its center: these offsets land it
-     at the stem's lower end, centered on the stem */
-  top: -10px;
+  top: -26px;
   left: 50%;
-  margin-left: -4px;
-  width: 8px;
-  height: 8px;
-  transform: rotate(135deg);
+  margin-left: 0;
+  transform: translate(-50%, -50%);
 }
 .doc-stack .flow-node + .flow-node::after {
   display: block;
-  top: -19px;
-  left: 50%;
-  width: 2px;
-  height: 18px;
-  margin-left: -1px;
-  background: linear-gradient(180deg, transparent, var(--figure-accent));
+  top: -21px;
+  left: calc(50% - 15px);
+  margin-left: 0;
+  transform: rotate(90deg);
 }
 .system-map {
   display: grid;
@@ -873,28 +878,23 @@ a.nav-head.current { color: var(--brand); }
   .system-map,
   .comparison-grid,
   .flow-split { grid-template-columns: minmax(0, 1fr); }
+  .doc-flow { row-gap: 10px; }
   .flow-node::before,
   .flow-node::after { display: none; }
   .doc-flow .flow-node + .flow-node { margin-top: 18px; }
   .doc-flow .flow-node + .flow-node::before {
     display: block;
-    /* same geometry as the .doc-stack connector: point at the stem's end,
-       centered on the stem */
-    top: -10px;
+    top: -26px;
     left: 50%;
-    margin-left: -4px;
-    width: 8px;
-    height: 8px;
-    transform: rotate(135deg);
+    margin-left: 0;
+    transform: translate(-50%, -50%);
   }
   .doc-flow .flow-node + .flow-node::after {
     display: block;
-    top: -19px;
-    left: 50%;
-    width: 2px;
-    height: 18px;
-    margin-left: -1px;
-    background: linear-gradient(180deg, transparent, var(--figure-accent));
+    top: -21px;
+    left: calc(50% - 15px);
+    margin-left: 0;
+    transform: rotate(90deg);
   }
   .tree-root,
   .tree-branch,
