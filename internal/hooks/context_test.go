@@ -220,7 +220,12 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	require.NotNil(t, response.HookSpecificOutput)
 	emitted := response.HookSpecificOutput.AdditionalContext
 	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
-	require.Contains(t, emitted, "CONSTRAINT: pinned-constraint-000")
+	// The constraint head is tiered (default constraint_max_full=10): the top
+	// full line and the compact "Also binding" tail -- including the oldest
+	// name it carries -- are both pinned and survive the codex cap.
+	require.Contains(t, emitted, "CONSTRAINT: pinned-constraint-024")
+	require.Contains(t, emitted, "Also binding (15):")
+	require.Contains(t, emitted, "pinned-constraint-000")
 	require.Contains(t, emitted, "PLAN: codex-context-plan-000")
 	require.Contains(t, emitted, "Seam session: cx/019f7291-")
 	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
@@ -245,6 +250,13 @@ func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T
 		insertMemory(t, db, fmt.Sprintf("01S%03d", i), "constraint",
 			fmt.Sprintf("subagent-constraint-%03d", i), strings.Repeat("bounded child detail ", 12), "demo")
 	}
+	// The tiered constraint rendering keeps even 80 constraints under the codex
+	// cap, so force the legacy all-full rendering (the owner's
+	// constraint_max_full=0 override) to overflow it and exercise the
+	// truncation + telemetry path end to end.
+	legacy := config.Defaults().Briefing
+	legacy.ConstraintMaxFull = 0
+	require.NoError(t, store.SetBriefingConfig(context.Background(), db, legacy))
 	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
 		"session_id": parentID, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent",
 	})

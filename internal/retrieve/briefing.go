@@ -1,9 +1,11 @@
 package retrieve
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -67,16 +69,21 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		}
 	}
 
+	// Constraints are ranked ahead of the tier split (ConstraintMaxFull):
+	// starred first, then the blended recency+utility order. With tiering
+	// disabled (0) the order stays untouched -- the legacy all-full rendering.
+	constraints = s.rankConstraints(ctx, project, constraints, cfg)
+
 	// Subagents get constraints only (they inherit the parent's task context).
 	if in.AgentType != "" {
-		text, ids := s.assembleSubagent(project, constraints)
+		text, ids := s.assembleSubagent(project, constraints, cfg.ConstraintMaxFull)
 		return text, ids, nil
 	}
 
 	// Utility blend runs after the partition (pinned sections are already out)
 	// and before the trims, so the MemoryMaxItems head-slice and the budget
 	// drop order both follow the blended ranking rather than raw recency.
-	index = s.utilityRankedIndex(ctx, project, index, cfg)
+	index = s.utilityRankedMemories(ctx, project, index, cfg)
 
 	// Recency/count trims run AFTER the kind partition above, so constraints and
 	// pinned stages are exempt (the never-drop invariant).
@@ -147,37 +154,38 @@ func (s *Service) effectiveBriefing(ctx context.Context) config.Briefing {
 // side) so the two terms decay on the same clock.
 const briefingRecencyHalfLifeDays = 14.0
 
-// utilityRankedIndex re-orders the briefing memory index by the blended
-// recency+utility key when utility ranking is active for the project (mode
-// "on", or "auto" with the gardener's readiness latch / owner force). Both
-// state and score reads are failure-soft: the briefing must never fail -- or
-// change composition -- because a stats read did. With weight 0 or inactive
-// state the index is returned untouched (the legacy recency order).
-func (s *Service) utilityRankedIndex(ctx context.Context, project string, index []core.Memory, cfg config.Briefing) []core.Memory {
-	if cfg.UtilityWeight <= 0 || len(index) < 2 {
-		return index
+// utilityRankedMemories re-orders a briefing memory slice (the index, and the
+// constraints ahead of their tier split) by the blended recency+utility key
+// when utility ranking is active for the project (mode "on", or "auto" with
+// the gardener's readiness latch / owner force). Both state and score reads
+// are failure-soft: the briefing must never fail -- or change composition --
+// because a stats read did. With weight 0 or inactive state the slice is
+// returned untouched (the legacy recency order).
+func (s *Service) utilityRankedMemories(ctx context.Context, project string, mems []core.Memory, cfg config.Briefing) []core.Memory {
+	if cfg.UtilityWeight <= 0 || len(mems) < 2 {
+		return mems
 	}
 	activation, err := store.GetUtilityActivation(ctx, s.db)
 	if err != nil {
 		s.logger.Warn("retrieve: utility activation unavailable, briefing keeps recency order", "error", err)
-		return index
+		return mems
 	}
 	if !activation.Active(project, cfg.UtilityMode) {
-		return index
+		return mems
 	}
 	utility, err := store.UtilityScores(ctx, s.db)
 	if err != nil {
 		s.logger.Warn("retrieve: utility scores unavailable, briefing keeps recency order", "error", err)
-		return index
+		return mems
 	}
-	return rankMemoryIndex(index, utility, cfg.UtilityWeight, time.Now())
+	return rankMemories(mems, utility, cfg.UtilityWeight, time.Now())
 }
 
-// rankMemoryIndex sorts the index by (1-w)*recency + w*utility, both in [0,1)
+// rankMemories sorts memories by (1-w)*recency + w*utility, both in [0,1)
 // (recency decays with briefingRecencyHalfLifeDays). Ties break Updated desc
 // then ID desc, replicating ActiveMemoriesForScope's SQL order so w=0 or
 // all-zero utility reproduces the legacy ordering exactly.
-func rankMemoryIndex(index []core.Memory, utility map[string]float64, weight float64, now time.Time) []core.Memory {
+func rankMemories(index []core.Memory, utility map[string]float64, weight float64, now time.Time) []core.Memory {
 	key := func(m core.Memory) float64 {
 		days := now.Sub(m.Updated).Hours() / 24
 		if days < 0 {
@@ -199,6 +207,66 @@ func rankMemoryIndex(index []core.Memory, utility map[string]float64, weight flo
 		return out[i].ID > out[j].ID
 	})
 	return out
+}
+
+// rankConstraints orders constraints for the tiered rendering: priority class
+// first (constraintPriority -- starred constraints claim full-tier slots
+// before anything else), then within a class the blended recency+utility order
+// -- the same utilityRankedMemories gate and key as the memory index,
+// degrading to pure recency (the SQL updated_at DESC order) when utility is
+// inactive or weighted 0. ConstraintMaxFull 0 disables tiering, so the input
+// order is returned untouched: the legacy all-full rendering stays exactly as
+// it was, favorites included.
+func (s *Service) rankConstraints(ctx context.Context, project string, constraints []core.Memory, cfg config.Briefing) []core.Memory {
+	if cfg.ConstraintMaxFull <= 0 || len(constraints) < 2 {
+		return constraints
+	}
+	ranked := s.utilityRankedMemories(ctx, project, constraints, cfg)
+	out := make([]core.Memory, len(ranked))
+	copy(out, ranked)
+	slices.SortStableFunc(out, func(a, b core.Memory) int {
+		return cmp.Compare(constraintPriority(a), constraintPriority(b))
+	})
+	return out
+}
+
+// constraintPriority is a constraint's class in the tiered ordering: a lower
+// class claims full-tier slots first, and the blended order (rankConstraints)
+// is preserved within a class. Step 5 of plan:briefing-salience inserts
+// mishap-promoted constraints as a class between favorites and the rest --
+// extend this function rather than re-sorting elsewhere.
+func constraintPriority(m core.Memory) int {
+	if m.Favorite {
+		return 0
+	}
+	return 1
+}
+
+// constraintTiers splits ranked constraints at the full-tier boundary: the top
+// maxFull render as full CONSTRAINT lines, the rest collapse into the compact
+// "Also binding" line. maxFull 0 disables tiering (everything renders full,
+// the legacy behavior).
+func constraintTiers(constraints []core.Memory, maxFull int) (full, compact []core.Memory) {
+	if maxFull <= 0 || len(constraints) <= maxFull {
+		return constraints, nil
+	}
+	return constraints[:maxFull], constraints[maxFull:]
+}
+
+// alsoBindingLine collapses the constraints past the full tier into one
+// compact pinned line that still names every one -- the name is what
+// memory_read takes, so the never-drop invariant holds in compact form.
+// Returns "" when the compact tier is empty.
+func alsoBindingLine(compact []core.Memory) string {
+	if len(compact) == 0 {
+		return ""
+	}
+	names := make([]string, 0, len(compact))
+	for _, c := range compact {
+		names = append(names, sanitizeField(c.Name, 80))
+	}
+	return fmt.Sprintf("Also binding (%d): %s -- memory_read a name before working near it.\n",
+		len(compact), strings.Join(names, ", "))
 }
 
 // trimMemoryIndex applies the recency filter (MemoryMaxAgeDays) and item cap
@@ -359,7 +427,7 @@ func projectLabel(project string) string {
 // briefing (subagents use assembleSubagent instead). Grouping the sections keeps
 // the assembler signature stable as new sections are added.
 type briefingSections struct {
-	constraints  []core.Memory
+	constraints  []core.Memory // ranked (rankConstraints); tier-split by ConstraintMaxFull at render
 	favorites    []core.Memory // starred non-constraint/stage memories, pinned after plans
 	index        []core.Memory
 	indexOmitted int // index lines cut by the recency/count trims, for the "+N older" trailer
@@ -372,9 +440,10 @@ type briefingSections struct {
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 }
 
-// assembleBriefing packs the sections against the token budget. Constraints,
-// stages, plan rollups, favorites, the header, and the trailer are counted
-// first and never dropped. Body sections then pack in render order --
+// assembleBriefing packs the sections against the token budget. Constraints
+// (both the full tier and the compact "Also binding" line), stages, plan
+// rollups, favorites, the header, and the trailer are counted first and never
+// dropped. Body sections then pack in render order --
 // situation before library: pending plans > recent findings > ready tasks >
 // memory index > sibling findings > sibling memories -- so budget priority and
 // render priority agree: a fat memory index can no longer evict the findings
@@ -419,8 +488,16 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	}
 
 	var head strings.Builder
-	for _, c := range constraints {
+	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
+	for _, c := range full {
 		head.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		ids = append(ids, c.ID)
+	}
+	// The compact tier is part of the same pinned head -- budget can drop
+	// neither tier -- and its ids are recorded like the full lines' so the
+	// read-after-inject funnel keeps seeing every constraint.
+	head.WriteString(alsoBindingLine(compact))
+	for _, c := range compact {
 		ids = append(ids, c.ID)
 	}
 	// Pinned stages sit right after constraints and, like them, are never dropped
@@ -598,9 +675,12 @@ func readyTasksLine(ready []core.Task, shown int) string {
 }
 
 // assembleSubagent renders a constraints-only briefing for a subagent, or "" if
-// there are no constraints in scope. The second return value is the ids of the
-// rendered constraints, for retrieval instrumentation.
-func (s *Service) assembleSubagent(project string, constraints []core.Memory) (string, []string) {
+// there are no constraints in scope. Constraints arrive already ranked
+// (rankConstraints) and get the same maxFull tier split as the full briefing --
+// a subagent drowns in an all-full wall just the same. The second return value
+// is the ids of the rendered constraints (both tiers), for retrieval
+// instrumentation.
+func (s *Service) assembleSubagent(project string, constraints []core.Memory, maxFull int) (string, []string) {
 	if len(constraints) == 0 {
 		return "", nil
 	}
@@ -609,8 +689,13 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory) (s
 	var b strings.Builder
 	b.WriteString("<seam-briefing>\n")
 	fmt.Fprintf(&b, "Seam project: %s -- %d constraints (subagent scope).\n", sanitizeField(label, 80), len(constraints))
-	for _, c := range constraints {
+	full, compact := constraintTiers(constraints, maxFull)
+	for _, c := range full {
 		b.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		ids = append(ids, c.ID)
+	}
+	b.WriteString(alsoBindingLine(compact))
+	for _, c := range compact {
 		ids = append(ids, c.ID)
 	}
 	b.WriteString("</seam-briefing>")
