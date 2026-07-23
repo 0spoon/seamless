@@ -372,22 +372,20 @@ type briefingSections struct {
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 }
 
-// assembleBriefing packs the sections against the token budget. Constraints, the
-// header, and the trailer are counted first and never dropped. Recent findings
-// reserve their budget next -- they are few (FindingsCount-capped) and say what
-// just happened here, and before the reservation a fat memory index silently
-// evicted all of them while the header still claimed they were present. The
-// memory index and sibling sections then pack against what remains, and the
-// whole is hard-capped. Render order: constraints > stages > plans > favorites
-// (all pinned) > pending plans > memory index >
-// sibling findings > sibling memories > recent findings > ready tasks. The
-// header counts the findings actually rendered, and findings cut despite the
-// reservation leave a "+N more" trailer, mirroring the memory index. The
-// second return value is the ids of the memories actually rendered
-// (constraints, pinned stages, and the index/sibling lines that survived
-// budgeting) -- for retrieval instrumentation. Findings, siblings, and ready
-// tasks are sessions/tasks, not memory_read-able memories, so they are omitted
-// from the funnel.
+// assembleBriefing packs the sections against the token budget. Constraints,
+// stages, plan rollups, favorites, the header, and the trailer are counted
+// first and never dropped. Body sections then pack in render order --
+// situation before library: pending plans > recent findings > ready tasks >
+// memory index > sibling findings > sibling memories -- so budget priority and
+// render priority agree: a fat memory index can no longer evict the findings
+// that render above it, and the sibling sections, last, are dropped first. The
+// header counts the findings actually rendered (headLine defers for that), and
+// findings cut by budget leave a "+N more" trailer, mirroring the memory
+// index. The whole is hard-capped. The second return value is the ids of the
+// memories actually rendered (constraints, pinned stages, favorites, and the
+// index/sibling lines that survived budgeting) -- for retrieval
+// instrumentation. Findings, siblings, and ready tasks are sessions/tasks, not
+// memory_read-able memories, so they are omitted from the funnel.
 func (s *Service) assembleBriefing(project, source string, sec briefingSections, cfg config.Briefing) (string, []string) {
 	constraints, index := sec.constraints, sec.index
 	findings, ready := sec.findings, sec.ready
@@ -405,9 +403,9 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	ids := make([]string, 0, len(constraints)+len(sec.stages)+len(index))
 
 	// The header line carries the count of findings that actually render, which
-	// is only known after the findings reservation below; headLine defers its
-	// composition. Estimating the budget with the pre-reservation count is fine
-	// -- the two strings differ by at most a digit.
+	// is only known after the findings section packs below; headLine defers its
+	// composition. Estimating the budget with the pre-packing count is fine --
+	// the two strings differ by at most a digit.
 	//
 	// Constraints ARE memories (kind=constraint), just pinned and rendered first,
 	// so the header reports one memory total with constraints called out as its
@@ -451,36 +449,12 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 
 	used := estTokens(headLine(len(findings))) + estTokens(head.String()) + estTokens(tail.String())
 
-	// Reserve the findings section against the budget before any other body
-	// section packs; it is rendered at its usual position further down.
-	var findingsText strings.Builder
-	findingsRendered := 0
-	if len(findings) > 0 {
-		lead := "\nRecent findings:\n"
-		if used+estTokens(lead) <= budget {
-			findingsText.WriteString(lead)
-			used += estTokens(lead)
-			for _, f := range findings {
-				line := "- " + sanitizeField(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + sanitizeField(f.Findings, 200) + "\n"
-				if used+estTokens(line) > budget {
-					break
-				}
-				findingsText.WriteString(line)
-				used += estTokens(line)
-				findingsRendered++
-			}
-			if cut := len(findings) - findingsRendered; cut > 0 {
-				extra := fmt.Sprintf("- (+%d more -- use recall)\n", cut)
-				findingsText.WriteString(extra)
-				used += estTokens(extra)
-			}
-		}
-	}
-
 	var body strings.Builder
 	// Pending (unapproved) plan lines come first in the body so they read as a
-	// continuation of the pinned PLAN rollups, but unlike those they compete for
-	// budget: a stale hint should lose to memories, not crowd them out.
+	// continuation of the pinned PLAN rollups, but unlike those they compete
+	// for budget. Packing first gives them budget priority too -- deliberate:
+	// they are few and PendingPlanMaxDays-bounded, so they cannot crowd out
+	// what follows the way a fat index could.
 	for _, n := range sec.pendingPlans {
 		line := fmt.Sprintf("PLAN (awaiting approval): %s -- %s (%s, %s)\n",
 			sanitizeField(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
@@ -491,6 +465,41 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		body.WriteString(line)
 		used += estTokens(line)
 	}
+
+	// Recent findings pack before the memory index: they are few
+	// (FindingsCount-capped) and say what just happened here, so a fat index
+	// can neither out-render nor out-budget them.
+	findingsRendered := 0
+	if len(findings) > 0 {
+		lead := "\nRecent findings:\n"
+		if used+estTokens(lead) <= budget {
+			body.WriteString(lead)
+			used += estTokens(lead)
+			for _, f := range findings {
+				line := "- " + sanitizeField(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + sanitizeField(f.Findings, 200) + "\n"
+				if used+estTokens(line) > budget {
+					break
+				}
+				body.WriteString(line)
+				used += estTokens(line)
+				findingsRendered++
+			}
+			if cut := len(findings) - findingsRendered; cut > 0 {
+				extra := fmt.Sprintf("- (+%d more -- use recall)\n", cut)
+				body.WriteString(extra)
+				used += estTokens(extra)
+			}
+		}
+	}
+
+	// The ready-tasks line follows the findings: the queue is part of the
+	// situation, not the library. Sections still pack after it, so its cost
+	// accumulates like any other line.
+	if line := readyTasksLine(ready, cfg.ReadyTasksShown); line != "" && used+estTokens(line) <= budget {
+		body.WriteString(line)
+		used += estTokens(line)
+	}
+
 	dropped := 0
 	if len(index) > 0 || sec.indexOmitted > 0 {
 		lead := "\nMemories (" + sanitizeField(label, 80) + "):\n"
@@ -548,16 +557,6 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 				ids = append(ids, m.ID)
 			}
 		}
-	}
-
-	// The findings section was reserved (and budget-accounted) up front; this is
-	// just its render position.
-	body.WriteString(findingsText.String())
-
-	// Ready tasks is the last body section, so its cost is only checked against
-	// the budget, not accumulated (nothing follows it).
-	if line := readyTasksLine(ready, cfg.ReadyTasksShown); line != "" && used+estTokens(line) <= budget {
-		body.WriteString(line)
 	}
 
 	return hardTruncate(headLine(findingsRendered)+head.String()+body.String()+tail.String(), hardCap), ids

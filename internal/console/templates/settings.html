@@ -232,8 +232,13 @@
         <div class="briefing-groups">
           <section class="brief-group memory-group">
             <header><span class="brief-group-icon">{{icon "database"}}</span><div><span>Durable context</span><h4>Memory index</h4></div></header>
-            <p>Shape the compact memory directory without touching protected constraints.</p>
-            <div class="brief-fields two">
+            <p>Choose how many constraints render in full, then shape the compact memory directory.</p>
+            <div class="brief-fields three">
+              <label class="brief-field" for="constraint-max-full">
+                <span>Full constraint lines</span>
+                <span class="brief-number"><input id="constraint-max-full" type="number" name="constraint_max_full" min="0" value="{{.Briefing.ConstraintMaxFull}}" aria-describedby="constraint-max-full-help"><i>lines</i></span>
+                <small id="constraint-max-full-help">the rest share one compact line; 0 keeps every constraint full</small>
+              </label>
               <label class="brief-field" for="memory-max-items">
                 <span>Maximum lines</span>
                 <span class="brief-number"><input id="memory-max-items" type="number" name="memory_max_items" min="0" value="{{.Briefing.MemoryMaxItems}}" aria-describedby="memory-max-items-help"><i>items</i></span>

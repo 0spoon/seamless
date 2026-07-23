@@ -95,7 +95,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `findings` | string | **yes** | Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected. |
-| `mishaps` | array | no | Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. Recorded for recurrence review, not blame -- report them even when fully recovered. |
+| `mishaps` | array | no | Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. "violated chroma-boot-race by ...") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered. |
 | `session` | string | no | Optional session name; defaults to the bound session |
 | `session_id` | string | no | Optional session ULID; takes precedence over session and the bound session |
 

@@ -365,12 +365,13 @@ func TestBriefingTunables_MemoryIndexTrims(t *testing.T) {
 	})
 }
 
-// Findings reserve their budget before the memory index packs: a fat index must
-// not evict them, the header must count what actually rendered, and render
-// order (index before findings) stays unchanged. Regression: before the
-// reservation, findings packed last, so every one of them was silently dropped
-// while the header still claimed they were present.
-func TestBriefingReservesFindingsBudget(t *testing.T) {
+// Body sections pack in render order, findings above the memory index: a fat
+// index can neither render above the findings nor eat their budget, and the
+// header counts what actually rendered. Regression: findings once packed last
+// and a fat index silently evicted every one of them while the header still
+// claimed they were present; a reserve-then-render split then kept them fed
+// but still rendered them below the index.
+func TestBriefingFindingsRenderBeforeMemoryIndex(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
 	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/w":"p"}`))
@@ -395,8 +396,51 @@ func TestBriefingReservesFindingsBudget(t *testing.T) {
 	require.Contains(t, b, "alpha finding text")
 	require.Contains(t, b, "beta finding text")
 	require.Contains(t, b, "older -- use recall", "the index, not the findings, absorbs the squeeze")
-	require.Less(t, strings.Index(b, "Memories (p):"), strings.Index(b, "Recent findings:"),
-		"reservation must not change the render order")
+	require.Less(t, strings.Index(b, "Recent findings:"), strings.Index(b, "Memories (p):"),
+		"a fat index must not push the findings below it")
+}
+
+// The ready-tasks line is no longer the final body section, so its cost must
+// accumulate into the running total: the memory index packing after it has to
+// see a smaller remaining budget and render fewer lines. Regression guard:
+// when the line rendered last its cost was only checked, never accumulated --
+// harmless then, an overshoot by the ready line's size now.
+func TestBriefingReadyTasksLineCostAccumulates(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/w":"p"}`))
+
+	pad := strings.Repeat("waffle ", 15)
+	for i := range 25 {
+		insMem(t, db, fmt.Sprintf("M%02d", i), "gotcha", fmt.Sprintf("mem-%02d", i), pad, "p")
+	}
+	// Three ready tasks with title-cap-length names, so the ready line costs
+	// enough budget to displace at least one index line.
+	longTitle := strings.Repeat("task word ", 6) // 60 chars, the render cap
+	for i := range 3 {
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: id, ProjectSlug: "p", Title: fmt.Sprintf("%d %s", i, longTitle), Status: core.TaskOpen,
+			CreatedAt: time.Now(), UpdatedAt: time.Now(),
+		}))
+	}
+
+	svc := New(db, nil, config.Budgets{MaxBriefingTokens: 200, RecallBudgetTokens: 1000}, nil)
+
+	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ReadyTasksShown = 0 }))
+	without, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
+	require.NoError(t, err)
+	require.NotContains(t, without, "Ready tasks:")
+
+	svc.SetBriefingConfig(config.Defaults().Briefing)
+	with, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, with, "Ready tasks: 3 -- ")
+	require.Less(t, strings.Index(with, "Ready tasks:"), strings.Index(with, "Memories (p):"),
+		"the ready line renders above the memory index")
+	require.Less(t, strings.Count(with, "- mem-"), strings.Count(without, "- mem-"),
+		"the ready line's cost must come out of the following sections' budget")
 }
 
 func TestBriefingTunables_FamilyCrossOver(t *testing.T) {

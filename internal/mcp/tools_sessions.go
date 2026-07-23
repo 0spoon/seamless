@@ -229,7 +229,7 @@ func sessionEndTool() mcp.Tool {
 	return mcp.NewTool("session_end",
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
-		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. Recorded for recurrence review, not blame -- report them even when fully recovered.")),
+		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. \"violated chroma-boot-race by ...\") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered.")),
 		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
 		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
 	)
@@ -270,15 +270,40 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	// Self-reported mishaps land as one durable agent.mishap event each -- the
 	// only record of an action no telemetry can observe (the agent confessing it
 	// is the signal). Recorded before session.ended so the session's timeline
-	// reads in order.
+	// reads in order. Each text is scanned once, here at ingestion, for active
+	// memories it names (mishapMemoryIDs); matches persist in the payload as
+	// item_ids, so nothing ever re-matches against a corpus that has since
+	// changed. The linkage feeds the briefing's mishap promotion
+	// (store.RecentMishapItemIDs) and deliberately NOT the utility score.
 	mishaps := argStrings(req, "mishaps")
+	corpus := s.mishapMatchCorpus(ctx, sess.ProjectSlug, len(mishaps))
 	for _, m := range mishaps {
-		s.record(ctx, core.EventAgentMishap, sess.ID, sess.ProjectSlug, "",
-			map[string]any{"description": events.Truncate(m, s.cfg.ToolEventMaxChars)})
+		payload := map[string]any{"description": events.Truncate(m, s.cfg.ToolEventMaxChars)}
+		if ids := mishapMemoryIDs(m, corpus); len(ids) > 0 {
+			payload["item_ids"] = ids
+		}
+		s.record(ctx, core.EventAgentMishap, sess.ID, sess.ProjectSlug, "", payload)
 	}
 	s.record(ctx, core.EventSessionEnded, sess.ID, sess.ProjectSlug, "",
 		map[string]any{"claims_released": released, "findings": events.Truncate(findings, s.cfg.ToolEventMaxChars)})
 	return jsonResult(map[string]any{"status": "completed", "session_id": sess.ID, "claims_released": released, "mishaps_recorded": len(mishaps)})
+}
+
+// mishapMatchCorpus loads the active memories a mishap report may name: the
+// session project's own plus global scope, the same visibility rule every other
+// read uses -- another project's memory never matches. Skipped entirely when
+// there are no mishaps. Best-effort: linkage must never fail a session_end, so
+// a load error logs and the reports come through unlinked.
+func (s *Server) mishapMatchCorpus(ctx context.Context, project string, mishapCount int) []core.Memory {
+	if mishapCount == 0 {
+		return nil
+	}
+	mems, err := store.ActiveMemories(ctx, s.cfg.DB, project)
+	if err != nil {
+		s.logger.Warn("session_end: load memories for mishap linkage", "error", err)
+		return nil
+	}
+	return mems
 }
 
 // resolveSession loads the session the request targets: an explicit session_id

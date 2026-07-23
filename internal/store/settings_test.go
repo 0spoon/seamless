@@ -40,6 +40,7 @@ func TestBriefingConfigOverride(t *testing.T) {
 	saved := base
 	saved.FindingsCount = 5
 	saved.MemoryMaxAgeDays = 30
+	saved.ConstraintMaxFull = 4
 	saved.IncludeSiblingMemories = true
 	require.NoError(t, SetBriefingConfig(ctx, db, saved))
 	got, overridden, err = BriefingConfig(ctx, db, base)
@@ -69,6 +70,39 @@ func TestBriefingConfigOverride(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, overridden)
 	require.Equal(t, base, got)
+}
+
+// TestBriefingConfigLegacyRowConstraintMaxFull proves a stored override row
+// written before the constraint_max_full knob existed stays decodable, and
+// that the absent field follows the standard layering rule: it keeps the base
+// value. With a pre-knob base that is 0 -- the legacy all-full constraint
+// rendering.
+func TestBriefingConfigLegacyRowConstraintMaxFull(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// A row saved by an older console: every field of its era, no
+	// constraintMaxFull key.
+	legacy := `{"memoryMaxAgeDays":30,"memoryMaxItems":0,"findingsCount":5,` +
+		`"findingsMaxAgeDays":0,"readyTasksShown":1,"pendingPlanMaxDays":7,` +
+		`"stageUnknownMaxAgeDays":7,"hardCapMultiplier":2,` +
+		`"includeParentMemories":true,"siblingFindingsCount":2,` +
+		`"includeSiblingMemories":false,"utilityWeight":0.4,"utilityMode":"auto"}`
+	require.NoError(t, SetSetting(ctx, db, SettingBriefingConfig, legacy))
+
+	base := config.Defaults().Briefing
+	base.ConstraintMaxFull = 0 // a base from before the knob existed
+	got, overridden, err := BriefingConfig(ctx, db, base)
+	require.NoError(t, err)
+	require.True(t, overridden)
+	require.Equal(t, 0, got.ConstraintMaxFull, "legacy row keeps the all-full rendering")
+	require.Equal(t, 5, got.FindingsCount)
+
+	// Under the shipped default base the same row inherits the default (10),
+	// like any other field absent from a stored override.
+	got, _, err = BriefingConfig(ctx, db, config.Defaults().Briefing)
+	require.NoError(t, err)
+	require.Equal(t, config.Defaults().Briefing.ConstraintMaxFull, got.ConstraintMaxFull)
 }
 
 func TestSiblingProjects(t *testing.T) {

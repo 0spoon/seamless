@@ -396,6 +396,7 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 	}
 	b.UtilityWeight = weight
 	for name, dst := range map[string]*int{
+		"constraint_max_full":        &b.ConstraintMaxFull,
 		"memory_max_age_days":        &b.MemoryMaxAgeDays,
 		"memory_max_items":           &b.MemoryMaxItems,
 		"findings_count":             &b.FindingsCount,

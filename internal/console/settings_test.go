@@ -81,6 +81,7 @@ func TestSettingsPage(t *testing.T) {
 	require.Contains(t, page, `class="brief-group family-group"`)
 	require.Contains(t, page, `class="brief-group utility-group"`)
 	require.Contains(t, page, `id="utility-mode"`)
+	require.Contains(t, page, `name="constraint_max_full"`)
 	require.Contains(t, page, `class="registry-scroll workspace-directory"`)
 	require.Contains(t, page, `class="workspace-row" data-workspace-scope="seamless"`)
 	require.Contains(t, page, `class="workspace-route" title="/Users/x/repos/seamless"`)
@@ -249,6 +250,7 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	// Save: stores the override row and redirects back with a notice.
 	// include_parent_memories is deliberately absent = unchecked = false.
 	rr := postForm(mux, "/console/settings/briefing", url.Values{
+		"constraint_max_full":        {"12"},
 		"memory_max_age_days":        {"30"},
 		"memory_max_items":           {"20"},
 		"findings_count":             {"5"},
@@ -268,6 +270,7 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	var data settingsData
 	getJSON(t, mux, "/console/settings?format=json", &data)
 	require.True(t, data.BriefingOverridden)
+	require.Equal(t, 12, data.Briefing.ConstraintMaxFull)
 	require.Equal(t, 30, data.Briefing.MemoryMaxAgeDays)
 	require.Equal(t, 20, data.Briefing.MemoryMaxItems)
 	require.Equal(t, 5, data.Briefing.FindingsCount)
@@ -292,6 +295,9 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	rr = postForm(mux, "/console/settings/briefing", "findings_count=three")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "error=")
+	rr = postForm(mux, "/console/settings/briefing", "constraint_max_full=-1")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "error=")
 	rr = postForm(mux, "/console/settings/briefing", "utility_weight=1.5")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	require.Contains(t, rr.Header().Get("Location"), "error=")
@@ -308,6 +314,7 @@ func TestSettingsBriefingSaveAndReset(t *testing.T) {
 	getJSON(t, mux, "/console/settings?format=json", &data)
 	require.False(t, data.BriefingOverridden)
 	require.Equal(t, 3, data.Briefing.FindingsCount)
+	require.Equal(t, 10, data.Briefing.ConstraintMaxFull)
 	require.True(t, data.Briefing.IncludeParentMemories)
 	require.Equal(t, 0.4, data.Briefing.UtilityWeight)
 	require.Equal(t, "auto", data.Briefing.UtilityMode)

@@ -66,11 +66,18 @@ type Budgets struct {
 // store.BriefingConfig), which layers on top of this file/env base.
 //
 // The never-drop invariant: constraints and active-plan rollups are exempt
-// from every knob here, and so is a pinned stage while its Status header marks
-// a live gate -- recency and count filters apply only to the memory index,
-// findings, and sibling sections. A stage with no live gate holds its pin only
-// through the StageUnknownMaxAgeDays grace window.
+// from every filter here, and so is a pinned stage while its Status header
+// marks a live gate -- recency and count filters apply only to the memory
+// index, findings, and sibling sections. ConstraintMaxFull shapes how
+// constraints render (full vs compact), never whether they appear. A stage
+// with no live gate holds its pin only through the StageUnknownMaxAgeDays
+// grace window.
 type Briefing struct {
+	// ConstraintMaxFull is how many top-ranked constraints render as full
+	// "CONSTRAINT: name: description" lines; the rest collapse into one compact
+	// "Also binding (N): ..." line that still names every one. 0 disables the
+	// tiering (every constraint renders full, the legacy behavior).
+	ConstraintMaxFull int `yaml:"constraint_max_full" json:"constraintMaxFull"`
 	// MemoryMaxAgeDays drops memory-index lines not updated within this many
 	// days. 0 = no recency filter. Constraints and stages are exempt.
 	MemoryMaxAgeDays int `yaml:"memory_max_age_days" json:"memoryMaxAgeDays"`
@@ -127,6 +134,7 @@ func (b Briefing) Validate() error {
 		name string
 		v    int
 	}{
+		{"constraint_max_full", b.ConstraintMaxFull},
 		{"memory_max_age_days", b.MemoryMaxAgeDays},
 		{"memory_max_items", b.MemoryMaxItems},
 		{"findings_count", b.FindingsCount},
@@ -287,6 +295,7 @@ func Defaults() Config {
 		DataDir: "~/.seamless",
 		Budgets: Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000},
 		Briefing: Briefing{
+			ConstraintMaxFull:      10,
 			FindingsCount:          3,
 			ReadyTasksShown:        3,
 			PendingPlanMaxDays:     7,
@@ -461,6 +470,7 @@ func (c *Config) applyEnv() error {
 	}
 
 	for key, dst := range map[string]*int{
+		"SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL":        &c.Briefing.ConstraintMaxFull,
 		"SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS":        &c.Briefing.MemoryMaxAgeDays,
 		"SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS":           &c.Briefing.MemoryMaxItems,
 		"SEAMLESS_BRIEFING_FINDINGS_COUNT":             &c.Briefing.FindingsCount,

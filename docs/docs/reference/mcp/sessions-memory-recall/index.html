@@ -397,7 +397,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>mishaps</code></td>
 <td>array</td>
 <td>no</td>
-<td>Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. Recorded for recurrence review, not blame -- report them even when fully recovered.</td>
+<td>Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. &quot;violated chroma-boot-race by ...&quot;) -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered.</td>
 </tr>
 <tr>
 <td><code>session</code></td>

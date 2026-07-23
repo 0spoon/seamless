@@ -55,6 +55,7 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `budgets.max_briefing_tokens` | int | `1500` |
 | `budgets.recall_budget_tokens` | int | `1000` |
 | `budgets.tool_event_max_chars` | int | - |
+| `briefing.constraint_max_full` | int | `10` |
 | `briefing.memory_max_age_days` | int | - |
 | `briefing.memory_max_items` | int | - |
 | `briefing.findings_count` | int | `3` |
@@ -152,9 +153,15 @@ budgets:
 # Defaults reproduce the built-in behavior; every knob is also editable live in
 # the console (Settings -> Briefing injection), which stores a runtime override
 # in the database that WINS over this file and env until reset. Constraints and
-# active-plan rollups are never filtered by these knobs; a pinned stage is
-# exempt too while its Status header marks a live gate.
+# active-plan rollups are never dropped by these knobs (constraint_max_full only
+# shapes how constraints render); a pinned stage is exempt too while its Status
+# header marks a live gate.
 briefing:
+  # Top-ranked constraints rendered as full "CONSTRAINT: name: description"
+  # lines; the rest collapse into one compact "Also binding (N): ..." line that
+  # still names every one. 0 = no tiering (every constraint renders full).
+  # env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL
+  constraint_max_full: 10
   # Drop memory-index lines not updated within this many days. 0 = no filter.
   # env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS
   memory_max_age_days: 0

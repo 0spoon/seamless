@@ -357,7 +357,7 @@ const (
 	EventHookPrompt       EventKind = "hook.prompt"  // a UserPromptSubmit that matched no memory (recall miss)
 	EventRecallMiss       EventKind = "recall.miss"  // a recall tool call that returned zero hits (payload: query, scope, limit, source)
 	EventHookError        EventKind = "hook.error"   // a hook-stage failure swallowed fail-open (payload: stage, error, client)
-	EventAgentMishap      EventKind = "agent.mishap" // a mishap the agent self-reported at session_end (payload: description)
+	EventAgentMishap      EventKind = "agent.mishap" // a mishap the agent self-reported at session_end (payload: description, plus item_ids of the memories the text names)
 
 	// Claude Code plan-mode capture (PostToolUse/PermissionRequest/SubagentStop hooks).
 	EventPlanCaptured     EventKind = "plan.captured"     // a plan-file iteration landed as a cc-plan note
