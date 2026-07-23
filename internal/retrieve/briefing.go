@@ -601,7 +601,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 			body.WriteString(lead)
 			used += estTokens(lead)
 			for _, f := range findings {
-				line := "- " + sanitizeField(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + sanitizeField(f.Findings, 200) + "\n"
+				line := "- " + sanitizeField(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 200) + "\n"
 				if used+estTokens(line) > budget {
 					break
 				}
@@ -655,7 +655,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 			body.WriteString(lead)
 			used += estTokens(lead)
 			for _, f := range sec.siblings {
-				line := "- " + sanitizeField(f.ProjectSlug, 60) + " (" + humanAge(f.UpdatedAt) + "): " + sanitizeField(f.Findings, 150) + "\n"
+				line := "- " + sanitizeField(f.ProjectSlug, 60) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 150) + "\n"
 				if used+estTokens(line) > budget {
 					break
 				}

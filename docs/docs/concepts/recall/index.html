@@ -239,8 +239,9 @@ below the +15% favorite boost, so an explicit star always outranks an implicit
 hot streak - and neither can resurrect something the retrievers did not return.
 The ambient <code>&lt;seam-recall&gt;</code> injection uses the same score to pick which
 qualified matches fill its three slots - after its overlap and score floors,
-never instead of them. The briefing's memory index blends it with recency once
-a project's demand history matures
+never instead of them. The briefing blends it with recency once a project's
+demand history matures - for the memory index's order, and for ranking
+constraints ahead of their full/compact tier split
 (<a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a>).
 One signal, three surfaces, all bounded.</p>
 <h2 id="the-recall-triad">The recall triad</h2>
@@ -261,7 +262,7 @@ with the agent knowing something.</p>
 <tr>
 <td><strong>The briefing</strong></td>
 <td>SessionStart hook</td>
-<td>Constraints, pinned stages, plan rollups, the memory index</td>
+<td>Tiered constraints, pinned stages, plan rollups, recent findings, the memory index</td>
 <td>No</td>
 </tr>
 <tr>

@@ -61,8 +61,10 @@ the most expensive kind of lost work - the thinking already happened. Surfacing
 it costs one briefing line and makes the decision explicit: pick it up, or
 abandon it on purpose.
 
-Unapproved captures are budget-participating, unlike the pinned lines above them:
-a stale hint should lose to your actual memories, not crowd them out.
+Unapproved captures are budget-participating, unlike the pinned lines above
+them, and they expire from the briefing on their own after
+`briefing.pending_plan_max_days`: a hint, unlike a constraint, is allowed to
+lapse rather than crowd out your actual memories.
 
 ## The escape hatches
 

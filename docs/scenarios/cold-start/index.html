@@ -193,15 +193,15 @@ CONSTRAINT: refresh-token-single-use: A refresh token is single-use: rotate it o
 <mark class="foc">PLAN: auth-refresh -- 4/6 done, 1 claimable, 0 in flight</mark>
 (claim a step with tasks_claim; attach notes/tasks to a plan with the plan:&lt;slug&gt; convention)
 
+Recent findings:
+- <mark class="foc">cc/1a2b3c4d (18h): Finished auth-refresh step 4</mark>: the auth responses now set the session and refresh cookies HttpOnly+Secure+SameSite=Lax, and the token pair no longer rides in the JSON body. Reuse-detection from step 3…
+
 Memories (myapp):
 - edge-cache-gotcha: CDN strips Vary on 304s; never cache HTML
 - deploy-runbook: Deploy myapp: build the binary, run migrations, wait for /healthz, then flip the load balancer.
 - <mark class="foc">rate-limit-not-in-memory</mark>: In-memory rate limit on the refresh endpoint resets per instance; use shared storage.
 - chroma-boot-race: Chroma isn&#39;t ready when the API boots; retry the first query with backoff instead of crashing the process.
 - postgres-timeouts: Postgres statement_timeout kills long analytics queries; run them on the read replica with a raised timeout.
-
-Recent findings:
-- <mark class="foc">cc/1a2b3c4d (18h): Finished auth-refresh step 4</mark>: the auth responses now set the session and refresh cookies HttpOnly+Secure+SameSite=Lax, and the token pair no longer rides in the JSON body. Reuse-detection from step 3…
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/52a41f8a (ambient)
 &lt;/seam-briefing&gt;</span></div>

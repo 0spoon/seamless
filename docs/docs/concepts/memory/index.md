@@ -50,7 +50,7 @@ is its entire purpose.
 
 | Kind | What it holds | Never forget |
 |---|---|---|
-| `constraint` | A rule the project cannot violate | Pinned into every briefing, never dropped for budget, never staleness-archived |
+| `constraint` | A rule the project cannot violate | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `Also binding` line |
 | `runbook` | A procedure that works | The steps, in order, that actually ran |
 | `protocol` | An agreed way of doing something | Why the agreement exists |
 | `gotcha` | A trap and how to avoid it | The symptom, so it is recognizable next time |

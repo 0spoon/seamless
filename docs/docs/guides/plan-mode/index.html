@@ -267,8 +267,10 @@ the agent that executes it can read the research that justified it.</p>
 the most expensive kind of lost work - the thinking already happened. Surfacing
 it costs one briefing line and makes the decision explicit: pick it up, or
 abandon it on purpose.</p>
-<p>Unapproved captures are budget-participating, unlike the pinned lines above them:
-a stale hint should lose to your actual memories, not crowd them out.</p>
+<p>Unapproved captures are budget-participating, unlike the pinned lines above
+them, and they expire from the briefing on their own after
+<code>briefing.pending_plan_max_days</code>: a hint, unlike a constraint, is allowed to
+lapse rather than crowd out your actual memories.</p>
 <h2 id="the-escape-hatches">The escape hatches</h2>
 <p>Sometimes Claude Code skips the approval hook, and a plan you did approve stays
 <code>presented</code>.</p>

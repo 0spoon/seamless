@@ -81,9 +81,11 @@ contains the fix*. The body never has to open.
   <figcaption id="errcheck-description-caption">Pinned briefing space should carry the rule itself, not a pointer saying that rules exist.</figcaption>
 </figure>
 
-A constraint is pinned into every briefing and never dropped for budget. That is
-expensive real estate, and "rules for errcheck" spends it to tell an agent that
-rules exist.
+A constraint is pinned into every briefing and never dropped for budget - though
+only the top `briefing.constraint_max_full` of them render this description in
+full; the rest are pinned as names on the compact `Also binding` line. That is
+expensive real estate either way, and "rules for errcheck" spends it to tell an
+agent that rules exist.
 
 The pattern in every good one: **symptom or trigger, then the mechanism, then the
 consequence or the fix.** Not the topic. The topic is what a filename is for.

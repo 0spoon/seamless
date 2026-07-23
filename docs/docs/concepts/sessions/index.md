@@ -50,30 +50,42 @@ This is a real briefing, in the order the assembler packs it:
 ```text
 Actual packing order budgeted
 <seam-briefing>
-Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
+Seam project: seamless -- 62 memories (24 constraints), 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
+... 8 more CONSTRAINT lines ...
+Also binding (14): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
 STAGE: deep-audit-f15-f18-landed -- status unknown
 PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
+Recent findings:
+- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...
+Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav
 Memories (seamless):
 - gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
 - (+34 older -- use recall)
-Recent findings:
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
-Pinned constraints and live work lead; the budgeted memory index and recent findings follow; retrieval guidance and session identity close the envelope.
+Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.
 ```
 
 Line by line:
 
 - **The header** counts what exists, so an agent knows how much it is *not* being
-  shown.
+  shown. Constraints are memories too, so they are reported as a subset of the
+  total, not a second pool.
 - **`CONSTRAINT:` lines** come first and are **never dropped for budget**. A
   constraint is a rule the project cannot violate; a briefing that omitted one to
-  fit a token budget would be worse than no briefing at all.
+  fit a token budget would be worse than no briefing at all. They are *tiered*:
+  the top `briefing.constraint_max_full` (default 10) render as full
+  `name: description` lines - starred constraints first, then constraints a
+  recent mishap referenced (last 30 days, most recent first), then the same
+  blended recency+utility order the memory index uses - and the remainder
+  collapse into the compact **`Also binding (N):`** line, which still names
+  every one so an agent can `memory_read` a name before working near it.
+  Setting the knob to 0 disables tiering and renders every constraint in full.
 - **`STAGE:` lines** are pinned right after constraints, for the same reason: a
   gated stage's status is load-bearing for the whole session. The pin belongs to
   the *gate*: a stage whose body does not open with a live
@@ -81,13 +93,22 @@ Line by line:
   for the `briefing.stage_unknown_max_age_days` grace window (default 7) after
   its last update, then leaves the briefing rather than squatting in it forever.
 - **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
-  tell the next agent what work it can pick up right now.
+  tell the next agent what work it can pick up right now. Starred memories close
+  the pinned head as `FAVORITE:` lines, exempt from every trim.
+- **`PLAN (awaiting approval)` lines** open the budgeted body: captured but
+  unapproved plans are a hint, not a commitment, so unlike the rollups above
+  them they compete for budget and expire after
+  `briefing.pending_plan_max_days`.
+- **Recent findings** - what previous sessions learned, harvested at their end -
+  render right after: they say what just happened here, so they pack (and
+  render) before the memory index rather than below it.
+- **The ready-tasks line** closes the situation half: the open queue, oldest
+  first, before the library begins.
 - **The memory index** is `name: description` only - the description is the *only*
   text an index ever shows, which is why writing a good one matters more than
   writing a good body.
 - **`(+34 older -- use recall)`** is the honest tail: the index was trimmed, and
   the briefing says so instead of pretending it is complete.
-- **Recent findings** are what previous sessions learned, harvested at their end.
 
 ## The budget, and what survives it
 
@@ -95,14 +116,17 @@ Sections are packed against `budgets.max_briefing_tokens` (default 1500), then
 the whole thing is hard-capped at `briefing.hard_cap_multiplier` times that
 (default 2x).
 
-The **never-drop invariant**: constraints, pinned stages, and active-plan rollups
-are counted first and are exempt from budget dropping. Recent findings reserve
-their (small, `findings_count`-capped) share of the budget next - they are the
-"what just happened here" section, and without the reservation a fat memory
-index would silently evict all of them while the header still claimed they were
-present. Everything else - the memory index, sibling findings, sibling memories,
-ready tasks - then packs in render order until the budget runs out; the header
-counts only the findings that actually rendered.
+The **never-drop invariant**: constraints (both the full tier and the compact
+`Also binding` line), pinned stages, active-plan rollups, and starred memories
+are counted first and are exempt from budget dropping - every constraint name
+appears in every briefing. Everything else packs in render order - pending
+plans, recent findings, ready tasks, the memory index, sibling findings,
+sibling memories - so budget priority and render priority agree: the sections
+that say what is happening now pack before the memory library, a fat index can
+no longer evict the findings that render above it, and the sibling sections
+are the first to go when the budget runs out. The header counts only the
+findings that actually rendered, and findings or index lines cut by budget
+leave an explicit `+N more/older -- use recall` trailer.
 
 The memory index's own order starts as newest-first - but each memory also
 carries a [utility score](https://thereisnospoon.org/docs/concepts/recall/#the-utility-nudge), a time-decayed
@@ -110,6 +134,9 @@ record of actual demand (reads, recall hits, prompt matches; being briefed
 counts for nothing), and once a project's demand history matures the index is
 ranked by the blend `(1-w)·recency + w·utility`, both on a 14-day half-life,
 with `briefing.utility_weight` as `w` (default 0.4, 0 restores pure recency).
+The same blended key ranks constraints ahead of their tier split, after stars
+and recent mishaps have claimed the head of the full tier; while utility is
+inactive the constraint order degrades to pure recency.
 The switch is deliberate, not silent: in `briefing.utility_mode: auto` the
 gardener latches it per project only once the project's first demand is at
 least 14 days old and it has shown 20+ demand events and 10+ memories touched

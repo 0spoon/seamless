@@ -91,7 +91,7 @@ That session's context now opens with an injected briefing:
 ```text
 Injected context SessionStart
 <seam-briefing>
-Seam project: seamless -- 4 constraints, 58 memories, 3 recent findings.
+Seam project: seamless -- 58 memories (4 constraints), 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 ...
 </seam-briefing>
