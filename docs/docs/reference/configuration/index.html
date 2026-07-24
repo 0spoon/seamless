@@ -274,7 +274,12 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <tr>
 <td><code>briefing.constraint_max_full</code></td>
 <td>int</td>
-<td><code>10</code></td>
+<td><code>4</code></td>
+</tr>
+<tr>
+<td><code>briefing.convention_max_full</code></td>
+<td>int</td>
+<td><code>4</code></td>
 </tr>
 <tr>
 <td><code>briefing.memory_max_age_days</code></td>
@@ -540,7 +545,13 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># lines; the rest collapse into one compact &#34;Also binding (N): ...&#34; line that</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># still names every one. 0 = no tiering (every constraint renders full).</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">constraint_max_full</span><span class="p">:</span><span class="w"> </span><span class="m">10</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">constraint_max_full</span><span class="p">:</span><span class="w"> </span><span class="m">4</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Top-ranked conventions rendered as full &#34;CONVENTION: name: description&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># lines in the budget-competing body; the rest stay behind the section&#39;s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># count line (&#34;recall kind=convention&#34;). 0 = no tiering, like</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># constraint_max_full.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_CONVENTION_MAX_FULL</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">convention_max_full</span><span class="p">:</span><span class="w"> </span><span class="m">4</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Drop memory-index lines not updated within this many days. 0 = no filter.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">memory_max_age_days</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">

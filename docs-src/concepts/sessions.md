@@ -51,9 +51,9 @@ This is a real briefing, in the order the assembler packs it:
 <figure class="doc-figure" aria-labelledby="annotated-briefing-caption">
   <div class="sample-panel">
     <div class="sample-panel-head"><span>Actual packing order</span><span>budgeted</span></div>
-    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints), 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 8 more CONSTRAINT lines ...</span><br>Also binding (14): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.<br>STAGE: deep-audit-f15-f18-landed -- status unknown<br>PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight<br>PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br>Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- use recall)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 62 memories (24 constraints), 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br>CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...<br><span class="sample-muted">... 2 more CONSTRAINT lines ...</span><br>Also binding (20): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.<br>STAGE: deep-audit-f15-f18-landed -- status unknown<br>PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight<br>PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)<br>CONVENTION: wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...<br><span class="sample-muted">... 3 more CONVENTION lines ...</span><br>(9 conventions, 4 shown -- recall kind=convention for the rest)<br><br><span class="sample-strong">Recent findings:</span><br>- cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...<br><br>Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav<br><br><span class="sample-strong">Memories (seamless):</span><br>- gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...<br>- shared-worktree-concurrent-agents-verify: Agents share the main worktree ...<br>- (+34 older -- use recall)<br>Recall on demand with recall; read a memory with memory_read.<br>Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)<br><span class="sample-muted">&lt;/seam-briefing&gt;</span></div>
   </div>
-  <figcaption id="annotated-briefing-caption">Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.</figcaption>
+  <figcaption id="annotated-briefing-caption">Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, conventions, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.</figcaption>
 </figure>
 
 Line by line:
@@ -64,7 +64,7 @@ Line by line:
 - **`CONSTRAINT:` lines** come first and are **never dropped for budget**. A
   constraint is a rule the project cannot violate; a briefing that omitted one to
   fit a token budget would be worse than no briefing at all. They are *tiered*:
-  the top `briefing.constraint_max_full` (default 10) render as full
+  the top `briefing.constraint_max_full` (default 4) render as full
   `name: description` lines - starred constraints first, then constraints a
   recent mishap referenced (last 30 days, most recent first), then the same
   blended recency+utility order the memory index uses - and the remainder
@@ -84,6 +84,11 @@ Line by line:
   unapproved plans are a hint, not a commitment, so unlike the rollups above
   them they compete for budget and expire after
   `briefing.pending_plan_max_days`.
+- **`CONVENTION:` lines** follow: project-local choices and layout facts
+  (`kind: convention`) - binding, but topically triggered, so unlike
+  constraints they compete for budget. The top `briefing.convention_max_full`
+  (default 4; 0 renders all) show in full and a count line always closes the
+  section, pointing at `recall kind=convention` for the rest.
 - **Recent findings** - what previous sessions learned, harvested at their end -
   render right after: they say what just happened here, so they pack (and
   render) before the memory index rather than below it.
@@ -105,8 +110,8 @@ The **never-drop invariant**: constraints (both the full tier and the compact
 `Also binding` line), pinned stages, active-plan rollups, and starred memories
 are counted first and are exempt from budget dropping - every constraint name
 appears in every briefing. Everything else packs in render order - pending
-plans, recent findings, ready tasks, the memory index, sibling findings,
-sibling memories - so budget priority and render priority agree: the sections
+plans, conventions, recent findings, ready tasks, the memory index, sibling
+findings, sibling memories - so budget priority and render priority agree: the sections
 that say what is happening now pack before the memory library, a fat index can
 no longer evict the findings that render above it, and the sibling sections
 are the first to go when the budget runs out. The header counts only the

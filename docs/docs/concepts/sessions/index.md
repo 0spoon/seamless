@@ -53,11 +53,14 @@ Actual packing order budgeted
 Seam project: seamless -- 62 memories (24 constraints), 3 recent findings.
 CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
-... 8 more CONSTRAINT lines ...
-Also binding (14): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
+... 2 more CONSTRAINT lines ...
+Also binding (20): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
 STAGE: deep-audit-f15-f18-landed -- status unknown
 PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
+CONVENTION: wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
+... 3 more CONVENTION lines ...
+(9 conventions, 4 shown -- recall kind=convention for the rest)
 Recent findings:
 - cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...
 Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav
@@ -68,7 +71,7 @@ Memories (seamless):
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
-Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.
+Situation before library: the pinned head leads (tiered constraints, stages, plan rollups), what just happened follows (pending plans, conventions, recent findings, ready tasks), the memory index packs after it, and retrieval guidance plus session identity close the envelope.
 ```
 
 Line by line:
@@ -79,7 +82,7 @@ Line by line:
 - **`CONSTRAINT:` lines** come first and are **never dropped for budget**. A
   constraint is a rule the project cannot violate; a briefing that omitted one to
   fit a token budget would be worse than no briefing at all. They are *tiered*:
-  the top `briefing.constraint_max_full` (default 10) render as full
+  the top `briefing.constraint_max_full` (default 4) render as full
   `name: description` lines - starred constraints first, then constraints a
   recent mishap referenced (last 30 days, most recent first), then the same
   blended recency+utility order the memory index uses - and the remainder
@@ -99,6 +102,11 @@ Line by line:
   unapproved plans are a hint, not a commitment, so unlike the rollups above
   them they compete for budget and expire after
   `briefing.pending_plan_max_days`.
+- **`CONVENTION:` lines** follow: project-local choices and layout facts
+  (`kind: convention`) - binding, but topically triggered, so unlike
+  constraints they compete for budget. The top `briefing.convention_max_full`
+  (default 4; 0 renders all) show in full and a count line always closes the
+  section, pointing at `recall kind=convention` for the rest.
 - **Recent findings** - what previous sessions learned, harvested at their end -
   render right after: they say what just happened here, so they pack (and
   render) before the memory index rather than below it.
@@ -120,8 +128,8 @@ The **never-drop invariant**: constraints (both the full tier and the compact
 `Also binding` line), pinned stages, active-plan rollups, and starred memories
 are counted first and are exempt from budget dropping - every constraint name
 appears in every briefing. Everything else packs in render order - pending
-plans, recent findings, ready tasks, the memory index, sibling findings,
-sibling memories - so budget priority and render priority agree: the sections
+plans, conventions, recent findings, ready tasks, the memory index, sibling
+findings, sibling memories - so budget priority and render priority agree: the sections
 that say what is happening now pack before the memory library, a fat index can
 no longer evict the findings that render above it, and the sibling sections
 are the first to go when the budget runs out. The header counts only the

@@ -78,6 +78,12 @@ type Briefing struct {
 	// "Also binding (N): ..." line that still names every one. 0 disables the
 	// tiering (every constraint renders full, the legacy behavior).
 	ConstraintMaxFull int `yaml:"constraint_max_full" json:"constraintMaxFull"`
+	// ConventionMaxFull is how many top-ranked conventions render as full
+	// "CONVENTION: name: description" lines in the budget-competing body; the
+	// rest stay behind the section's count line ("recall kind=convention").
+	// 0 disables the tiering (every convention renders full), matching
+	// ConstraintMaxFull semantics.
+	ConventionMaxFull int `yaml:"convention_max_full" json:"conventionMaxFull"`
 	// MemoryMaxAgeDays drops memory-index lines not updated within this many
 	// days. 0 = no recency filter. Constraints and stages are exempt.
 	MemoryMaxAgeDays int `yaml:"memory_max_age_days" json:"memoryMaxAgeDays"`
@@ -135,6 +141,7 @@ func (b Briefing) Validate() error {
 		v    int
 	}{
 		{"constraint_max_full", b.ConstraintMaxFull},
+		{"convention_max_full", b.ConventionMaxFull},
 		{"memory_max_age_days", b.MemoryMaxAgeDays},
 		{"memory_max_items", b.MemoryMaxItems},
 		{"findings_count", b.FindingsCount},
@@ -295,7 +302,8 @@ func Defaults() Config {
 		DataDir: "~/.seamless",
 		Budgets: Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000},
 		Briefing: Briefing{
-			ConstraintMaxFull:      10,
+			ConstraintMaxFull:      4,
+			ConventionMaxFull:      4,
 			FindingsCount:          3,
 			ReadyTasksShown:        3,
 			PendingPlanMaxDays:     7,
@@ -471,6 +479,7 @@ func (c *Config) applyEnv() error {
 
 	for key, dst := range map[string]*int{
 		"SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL":        &c.Briefing.ConstraintMaxFull,
+		"SEAMLESS_BRIEFING_CONVENTION_MAX_FULL":        &c.Briefing.ConventionMaxFull,
 		"SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS":        &c.Briefing.MemoryMaxAgeDays,
 		"SEAMLESS_BRIEFING_MEMORY_MAX_ITEMS":           &c.Briefing.MemoryMaxItems,
 		"SEAMLESS_BRIEFING_FINDINGS_COUNT":             &c.Briefing.FindingsCount,

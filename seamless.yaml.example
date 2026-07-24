@@ -57,7 +57,13 @@ briefing:
   # lines; the rest collapse into one compact "Also binding (N): ..." line that
   # still names every one. 0 = no tiering (every constraint renders full).
   # env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL
-  constraint_max_full: 10
+  constraint_max_full: 4
+  # Top-ranked conventions rendered as full "CONVENTION: name: description"
+  # lines in the budget-competing body; the rest stay behind the section's
+  # count line ("recall kind=convention"). 0 = no tiering, like
+  # constraint_max_full.
+  # env: SEAMLESS_BRIEFING_CONVENTION_MAX_FULL
+  convention_max_full: 4
   # Drop memory-index lines not updated within this many days. 0 = no filter.
   # env: SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS
   memory_max_age_days: 0

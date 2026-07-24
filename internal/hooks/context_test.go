@@ -221,11 +221,11 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	require.NotNil(t, response.HookSpecificOutput)
 	emitted := response.HookSpecificOutput.AdditionalContext
 	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
-	// The constraint head is tiered (default constraint_max_full=10): the top
+	// The constraint head is tiered (default constraint_max_full=4): the top
 	// full line and the compact "Also binding" tail -- including the oldest
 	// name it carries -- are both pinned and survive the codex cap.
 	require.Contains(t, emitted, "CONSTRAINT: pinned-constraint-024")
-	require.Contains(t, emitted, "Also binding (15):")
+	require.Contains(t, emitted, "Also binding (21):")
 	require.Contains(t, emitted, "pinned-constraint-000")
 	require.Contains(t, emitted, "PLAN: codex-context-plan-000")
 	require.Contains(t, emitted, "Seam session: cx/019f7291-")

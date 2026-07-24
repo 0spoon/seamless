@@ -38,8 +38,10 @@ func TestDefaults(t *testing.T) {
 	require.Equal(t, 14, d.Gardener.StaleStageDays)
 	require.Equal(t, 45, d.Gardener.SessionIdleMinutes)
 	// Briefing defaults reproduce the historical hardcoded auto-inject behavior;
-	// constraint_max_full is the one deliberate departure (tiering on by default).
-	require.Equal(t, 10, d.Briefing.ConstraintMaxFull)
+	// the constraint/convention tier caps are the deliberate departures
+	// (tiering on by default, constraint-split shape).
+	require.Equal(t, 4, d.Briefing.ConstraintMaxFull)
+	require.Equal(t, 4, d.Briefing.ConventionMaxFull)
 	require.Equal(t, 0, d.Briefing.MemoryMaxAgeDays)
 	require.Equal(t, 0, d.Briefing.MemoryMaxItems)
 	require.Equal(t, 3, d.Briefing.FindingsCount)
@@ -175,6 +177,7 @@ func TestLoadFrom_BriefingFileAndEnv(t *testing.T) {
 	path := writeConfig(t, `
 briefing:
   constraint_max_full: 5
+  convention_max_full: 6
   memory_max_age_days: 60
   findings_count: 5
   include_sibling_memories: true
@@ -184,6 +187,7 @@ gardener:
 	cfg, err := LoadFrom(path)
 	require.NoError(t, err)
 	require.Equal(t, 5, cfg.Briefing.ConstraintMaxFull)
+	require.Equal(t, 6, cfg.Briefing.ConventionMaxFull)
 	require.Equal(t, 60, cfg.Briefing.MemoryMaxAgeDays)
 	require.Equal(t, 5, cfg.Briefing.FindingsCount)
 	require.True(t, cfg.Briefing.IncludeSiblingMemories)
@@ -195,6 +199,7 @@ gardener:
 	require.True(t, cfg.Briefing.IncludeParentMemories)
 
 	t.Setenv("SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL", "6")
+	t.Setenv("SEAMLESS_BRIEFING_CONVENTION_MAX_FULL", "2")
 	t.Setenv("SEAMLESS_BRIEFING_MEMORY_MAX_AGE_DAYS", "90")
 	t.Setenv("SEAMLESS_BRIEFING_STAGE_UNKNOWN_MAX_AGE_DAYS", "10")
 	t.Setenv("SEAMLESS_GARDENER_STALE_STAGE_DAYS", "21")
@@ -211,6 +216,7 @@ gardener:
 	require.NoError(t, err)
 	require.Equal(t, 90, cfg.Briefing.MemoryMaxAgeDays, "env wins over file")
 	require.Equal(t, 6, cfg.Briefing.ConstraintMaxFull, "env wins over file")
+	require.Equal(t, 2, cfg.Briefing.ConventionMaxFull, "env wins over file")
 	require.Equal(t, 10, cfg.Briefing.StageUnknownMaxAgeDays)
 	require.Equal(t, 21, cfg.Gardener.StaleStageDays)
 	require.Equal(t, 25, cfg.Briefing.MemoryMaxItems)
@@ -308,6 +314,8 @@ func TestValidate(t *testing.T) {
 		{"negative-briefing-findings", func(c *Config) { c.Briefing.FindingsCount = -1 }, true},
 		{"zero-constraint-max-full-ok", func(c *Config) { c.Briefing.ConstraintMaxFull = 0 }, false},
 		{"negative-constraint-max-full", func(c *Config) { c.Briefing.ConstraintMaxFull = -1 }, true},
+		{"zero-convention-max-full-ok", func(c *Config) { c.Briefing.ConventionMaxFull = 0 }, false},
+		{"negative-convention-max-full", func(c *Config) { c.Briefing.ConventionMaxFull = -1 }, true},
 		{"negative-briefing-memory-age", func(c *Config) { c.Briefing.MemoryMaxAgeDays = -1 }, true},
 		{"negative-briefing-stage-window", func(c *Config) { c.Briefing.StageUnknownMaxAgeDays = -1 }, true},
 		{"negative-briefing-hard-cap", func(c *Config) { c.Briefing.HardCapMultiplier = -1 }, true},

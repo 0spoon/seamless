@@ -57,7 +57,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	var constraints, stageMems, favorites []core.Memory
+	var constraints, stageMems, favorites, conventions []core.Memory
 	index := make([]core.Memory, 0, len(mems))
 	for _, m := range mems {
 		switch {
@@ -69,8 +69,15 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 			// Starred memories are pinned like constraints/stages: pulled out of
 			// the index before the recency/count trims and never budget-dropped.
 			// A starred constraint or stage keeps its existing pinned section
-			// (the cases above win), so it is never rendered twice.
+			// (the cases above win), so it is never rendered twice. This case
+			// also wins over the convention one below: a starred convention is
+			// pinned, not demoted to the budget-competing CONVENTION block.
 			favorites = append(favorites, m)
+		case m.Kind == core.KindConvention:
+			// Project-local choices/facts: their own budget-competing section,
+			// out of the index and its recency/count trims (the section's own
+			// ConventionMaxFull tier + count line bound it instead).
+			conventions = append(conventions, m)
 		default:
 			index = append(index, m)
 		}
@@ -99,7 +106,10 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	// Utility blend runs after the partition (pinned sections are already out)
 	// and before the trims, so the MemoryMaxItems head-slice and the budget
 	// drop order both follow the blended ranking rather than raw recency.
+	// Conventions take the same blend ahead of their ConventionMaxFull tier
+	// split, so the full lines are the ones agents actually use.
 	index = s.utilityRankedMemories(ctx, project, index, cfg)
+	conventions = s.utilityRankedMemories(ctx, project, conventions, cfg)
 
 	// Recency/count trims run AFTER the kind partition above, so constraints and
 	// pinned stages are exempt (the never-drop invariant).
@@ -137,13 +147,15 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		return "", nil, err
 	}
 	stages := s.pinnedStages(stageMems, cfg.StageUnknownMaxAgeDays, time.Now())
-	if len(constraints) == 0 && len(favorites) == 0 && len(index) == 0 && omitted == 0 &&
+	if len(constraints) == 0 && len(favorites) == 0 && len(conventions) == 0 &&
+		len(index) == 0 && omitted == 0 &&
 		len(findings) == 0 && len(ready) == 0 && len(siblings) == 0 && len(siblingMems) == 0 &&
 		len(stages) == 0 && len(rollups) == 0 && len(pending) == 0 {
 		return "", nil, nil
 	}
 	text, ids := s.assembleBriefing(project, in.Source, briefingSections{
-		constraints: constraints, favorites: favorites, index: index, indexOmitted: omitted,
+		constraints: constraints, favorites: favorites, conventions: conventions,
+		index: index, indexOmitted: omitted,
 		findings: findings, ready: ready, siblings: siblings,
 		siblingMems: siblingMems, stages: stages, plans: rollups,
 		pendingPlans: pending,
@@ -332,6 +344,18 @@ func alsoBindingLine(compact []core.Memory) string {
 		len(compact), strings.Join(names, ", "))
 }
 
+// conventionCountLine closes the CONVENTION section with the pool size and the
+// retrieval mechanism for whatever the tier or budget left unrendered. Unlike
+// alsoBindingLine it carries no names -- a count is the demotion -- so it is
+// cheap enough to render unconditionally, keeping the section discoverable
+// even when every full line was budget-dropped.
+func conventionCountLine(total, shown int) string {
+	if shown < total {
+		return fmt.Sprintf("(%d conventions, %d shown -- recall kind=convention for the rest)\n", total, shown)
+	}
+	return fmt.Sprintf("(%d conventions -- recall kind=convention)\n", total)
+}
+
 // trimMemoryIndex applies the recency filter (MemoryMaxAgeDays) and item cap
 // (MemoryMaxItems) to the briefing's memory index, returning the kept lines and
 // how many were omitted. The omitted count folds into the assembler's
@@ -492,6 +516,7 @@ func projectLabel(project string) string {
 type briefingSections struct {
 	constraints  []core.Memory // ranked (rankConstraints); tier-split by ConstraintMaxFull at render
 	favorites    []core.Memory // starred non-constraint/stage memories, pinned after plans
+	conventions  []core.Memory // ranked; tier-split by ConventionMaxFull at render, budget-competing
 	index        []core.Memory
 	indexOmitted int // index lines cut by the recency/count trims, for the "+N older" trailer
 	findings     []core.Session
@@ -507,9 +532,10 @@ type briefingSections struct {
 // (both the full tier and the compact "Also binding" line), stages, plan
 // rollups, favorites, the header, and the trailer are counted first and never
 // dropped. Body sections then pack in render order --
-// situation before library: pending plans > recent findings > ready tasks >
-// memory index > sibling findings > sibling memories -- so budget priority and
-// render priority agree: a fat memory index can no longer evict the findings
+// situation before library: pending plans > conventions > recent findings >
+// ready tasks > memory index > sibling findings > sibling memories -- so
+// budget priority and render priority agree: a fat memory index can no longer
+// evict the findings
 // that render above it, and the sibling sections, last, are dropped first. The
 // header counts the findings actually rendered (headLine defers for that), and
 // findings cut by budget leave a "+N more" trailer, mirroring the memory
@@ -540,7 +566,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// subset. Reporting them as two disjoint pools ("6 constraints, 76 memories")
 	// contradicts the body, where 6 CONSTRAINT lines + the index + the "+N older"
 	// trailer sum to the total, not to the index count alone.
-	totalMems := len(constraints) + len(sec.favorites) + len(index)
+	totalMems := len(constraints) + len(sec.favorites) + len(sec.conventions) + len(index)
 	headLine := func(renderedFindings int) string {
 		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories (%d constraints), %d recent findings.\n",
 			sanitizeField(label, 80), totalMems, len(constraints), renderedFindings)
@@ -598,6 +624,33 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		if used+estTokens(line) > budget {
 			break
 		}
+		body.WriteString(line)
+		used += estTokens(line)
+	}
+
+	// Conventions -- project-local choices/facts, the constraint head's demoted
+	// sibling tier -- render right below the plan lines: rules-adjacent, but
+	// budget-COMPETING, unlike constraints. Up to ConventionMaxFull full lines
+	// pack against the budget (0 = all full, matching ConstraintMaxFull); the
+	// count line then always renders, exempt from the budget check, so the
+	// section is never invisible and the rest stay one kind-filtered recall
+	// away. Only the full lines' ids are recorded: the count line names
+	// nothing, so counting its hidden conventions as surfaced would poison the
+	// read-after-inject funnel with exposure that never happened.
+	if len(sec.conventions) > 0 {
+		full, _ := constraintTiers(sec.conventions, cfg.ConventionMaxFull)
+		shown := 0
+		for _, m := range full {
+			line := "CONVENTION: " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			if used+estTokens(line) > budget {
+				break
+			}
+			body.WriteString(line)
+			used += estTokens(line)
+			ids = append(ids, m.ID)
+			shown++
+		}
+		line := conventionCountLine(len(sec.conventions), shown)
 		body.WriteString(line)
 		used += estTokens(line)
 	}

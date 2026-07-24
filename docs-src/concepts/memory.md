@@ -52,7 +52,7 @@ is its entire purpose.
 | Kind | What it holds | Never forget |
 |---|---|---|
 | `constraint` | A rule any agent must follow regardless of task | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `Also binding` line |
-| `convention` | A project-local choice or layout fact - naming, branding, where things live and deploy | Binding but topically triggered; filing it as `constraint` crowds the briefing head |
+| `convention` | A project-local choice or layout fact - naming, branding, where things live and deploy | Binding but topically triggered: its own budget-competing CONVENTION block (the top `briefing.convention_max_full` in full, the rest behind an always-rendered count line pointing at `recall kind=convention`); filing it as `constraint` crowds the briefing head |
 | `runbook` | A procedure that works | The steps, in order, that actually ran |
 | `protocol` | An agreed way of doing something | Why the agreement exists |
 | `gotcha` | A trap and how to avoid it | The symptom, so it is recognizable next time |
