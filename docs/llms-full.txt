@@ -1638,7 +1638,7 @@ it.
 
 A stage's pin is conditional on it actually gating something. `Status: done`
 unpins it immediately; a missing or unparseable header renders as
-`status unknown` for a grace window
+`status unknown (no Status: header)` for a grace window
 (`briefing.stage_unknown_max_age_days`, default 7 days since last update) and
 then leaves the briefing, and the gardener proposes archiving gateless stages
 after `gardener.stale_stage_days` (14). A milestone breadcrumb ("X landed") is
@@ -1787,7 +1787,7 @@ CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-bla
 CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
 ... 2 more CONSTRAINT lines ...
 Also binding (20): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-STAGE: deep-audit-f15-f18-landed -- status unknown
+STAGE: deep-audit-f15-f18-landed -- status unknown (no Status: header)
 PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
 PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
 CONVENTION: wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
@@ -1824,9 +1824,10 @@ Line by line:
 - **`STAGE:` lines** are pinned right after constraints, for the same reason: a
   gated stage's status is load-bearing for the whole session. The pin belongs to
   the *gate*: a stage whose body does not open with a live
-  `Status: open|in_progress|blocked` header only renders (as `status unknown`)
-  for the `briefing.stage_unknown_max_age_days` grace window (default 7) after
-  its last update, then leaves the briefing rather than squatting in it forever.
+  `Status: open|in_progress|blocked` header only renders (as
+  `status unknown (no Status: header)` - the nudge names the fix) for the
+  `briefing.stage_unknown_max_age_days` grace window (default 7) after its last
+  update, then leaves the briefing rather than squatting in it forever.
 - **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
   tell the next agent what work it can pick up right now. Starred memories close
   the pinned head as `FAVORITE:` lines, exempt from every trim.

@@ -111,6 +111,9 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	if similar != nil {
 		resp["similar"] = *similar
 	}
+	if hint := stageHeaderHint(kind, body); hint != "" {
+		resp["stage_hint"] = hint
+	}
 	// Canonicalized like every other name, so `supersedes: "My Old Note"`
 	// resolves to the same memory `memory_write name: "my-old-note"` created.
 	supersedes, serr := memoryName(argString(req, "supersedes"))
@@ -227,7 +230,34 @@ func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.record(ctx, core.EventMemoryWritten, s.boundSession(ctx), mem.Project, mem.ID,
 		map[string]any{"name": name, "appended": true})
-	return jsonResult(map[string]any{"id": mem.ID, "name": name, "status": "appended"})
+	resp := map[string]any{"id": mem.ID, "name": name, "status": "appended"}
+	// Parsed AFTER the append: if the added lines landed a valid header inside
+	// the parse window the stage is fixed and no hint fires; if the stage is
+	// still headerless, appending was the wrong tool for a status change.
+	if hint := stageHeaderHint(mem.Kind, mem.Body); hint != "" {
+		resp["stage_hint"] = hint
+	}
+	return jsonResult(resp)
+}
+
+// stageHeaderHint returns the non-blocking advisory for a stage body whose
+// Status header is missing or unrecognized. The write always proceeds -- the
+// stage just renders as status unknown and ages out of the briefing instead of
+// pinning -- and the hint teaches the header contract while the writing agent
+// still has the context to fix the body in-session.
+func stageHeaderHint(kind core.MemoryKind, body string) string {
+	if kind != core.KindStage {
+		return ""
+	}
+	status, _ := core.ParseStageHeader(body)
+	if core.StageStatusLive(status) || status == core.StageStatusDone {
+		return ""
+	}
+	problem := "stage body has no parseable Status header, so the briefing shows it as status unknown and ages it out"
+	if status != "" {
+		problem = fmt.Sprintf("stage body has unrecognized Status value %q, so the briefing shows it as status unknown and ages it out", status)
+	}
+	return problem + "; " + agentguide.StageContract
 }
 
 func memoryReadTool() mcp.Tool {

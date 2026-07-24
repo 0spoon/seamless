@@ -76,7 +76,10 @@ func stageHead(stages []stageLine) string {
 		if st.status != "" {
 			b.WriteString(sanitizeField(st.status, 40))
 		} else {
-			b.WriteString("status unknown")
+			// A compact nudge, not just a shrug: name the missing header so the
+			// reading agent knows what a fix looks like (open the body with
+			// Status: open|in_progress|blocked|done).
+			b.WriteString("status unknown (no Status: header)")
 		}
 		if st.gate != "" {
 			b.WriteString(", gate " + sanitizeField(st.gate, 40))

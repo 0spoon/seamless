@@ -298,7 +298,7 @@ constraints; filing a real constraint as a <code>reference</code> means agents w
 it.</p>
 <p>A stage's pin is conditional on it actually gating something. <code>Status: done</code>
 unpins it immediately; a missing or unparseable header renders as
-<code>status unknown</code> for a grace window
+<code>status unknown (no Status: header)</code> for a grace window
 (<code>briefing.stage_unknown_max_age_days</code>, default 7 days since last update) and
 then leaves the briefing, and the gardener proposes archiving gateless stages
 after <code>gardener.stale_stage_days</code> (14). A milestone breadcrumb (&quot;X landed&quot;) is

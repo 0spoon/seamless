@@ -69,7 +69,7 @@ it.
 
 A stage's pin is conditional on it actually gating something. `Status: done`
 unpins it immediately; a missing or unparseable header renders as
-`status unknown` for a grace window
+`status unknown (no Status: header)` for a grace window
 (`briefing.stage_unknown_max_age_days`, default 7 days since last update) and
 then leaves the briefing, and the gardener proposes archiving gateless stages
 after `gardener.stale_stage_days` (14). A milestone breadcrumb ("X landed") is

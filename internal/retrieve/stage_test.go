@@ -82,7 +82,7 @@ func TestBriefingAgesOutGatelessStages(t *testing.T) {
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
 	require.NotContains(t, b, "old-no-header", "gateless stage past the window is not pinned")
-	require.Contains(t, b, "STAGE: fresh-no-header -- status unknown", "grace window keeps a fresh gateless stage visible")
+	require.Contains(t, b, "STAGE: fresh-no-header -- status unknown (no Status: header)", "grace window keeps a fresh gateless stage visible, with the missing header named")
 	require.Contains(t, b, "STAGE: old-live-gate -- blocked, gate human", "a live gate pins at any age")
 	require.NotContains(t, b, "old-odd-status", "an unrecognized status token is not a live gate")
 	require.NotContains(t, ids, "01S1")
@@ -92,6 +92,6 @@ func TestBriefingAgesOutGatelessStages(t *testing.T) {
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.StageUnknownMaxAgeDays = 0 }))
 	b0, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b0, "STAGE: old-no-header -- status unknown")
+	require.Contains(t, b0, "STAGE: old-no-header -- status unknown (no Status: header)")
 	require.Contains(t, b0, "STAGE: old-odd-status -- p6")
 }
