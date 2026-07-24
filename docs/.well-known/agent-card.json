@@ -8,7 +8,7 @@
     "organization": "0spoon",
     "url": "https://thereisnospoon.org"
   },
-  "version": "0.4.3",
+  "version": "0.4.4",
   "documentationUrl": "https://thereisnospoon.org/docs/",
   "capabilities": {
     "streaming": false,
