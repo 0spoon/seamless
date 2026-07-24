@@ -73,9 +73,9 @@ gardener](/concepts/gardener/).
 **Global** - the Seamless scope with no project, visible to every agent in
 every repo; reached only by passing `project: global` deliberately.
 
-**Kind** - a Seamless memory's type: `constraint`, `runbook`, `protocol`,
-`gotcha`, `decision`, `refuted`, `reference`, or `stage`. See [Memory &
-notes](/concepts/memory/).
+**Kind** - a Seamless memory's type: `constraint`, `convention`, `runbook`,
+`protocol`, `gotcha`, `decision`, `refuted`, `reference`, or `stage`. See
+[Memory & notes](/concepts/memory/).
 
 **Lab** - a shared Seamless workspace for a systematic investigation, holding
 trials; opened with `lab_open`.

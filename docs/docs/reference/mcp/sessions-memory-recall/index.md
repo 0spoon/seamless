@@ -106,7 +106,7 @@ Create or update a durable memory. Writing an existing name updates it in place 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | **yes** | kebab-case identifier, unique within the project |
-| `kind` | string | **yes** | memory kind. One of: `constraint`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | **yes** | memory kind. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |

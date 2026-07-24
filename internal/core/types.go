@@ -40,7 +40,8 @@ func (p Project) Retired() bool { return p.RetiredAt != nil }
 type MemoryKind string
 
 const (
-	KindConstraint MemoryKind = "constraint" // hard rule that must hold
+	KindConstraint MemoryKind = "constraint" // hard rule that must hold on any task
+	KindConvention MemoryKind = "convention" // project-local choice or layout fact
 	KindRunbook    MemoryKind = "runbook"    // procedure to follow
 	KindProtocol   MemoryKind = "protocol"   // interaction/coordination contract
 	KindGotcha     MemoryKind = "gotcha"     // surprising pitfall
@@ -52,7 +53,7 @@ const (
 
 // MemoryKinds lists every valid kind, in briefing-priority-ish order.
 var MemoryKinds = []MemoryKind{
-	KindConstraint, KindRunbook, KindProtocol, KindGotcha,
+	KindConstraint, KindConvention, KindRunbook, KindProtocol, KindGotcha,
 	KindDecision, KindRefuted, KindReference, KindStage,
 }
 

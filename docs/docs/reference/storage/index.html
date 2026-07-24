@@ -258,7 +258,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <tr>
 <td><code>kind</code></td>
 <td>author</td>
-<td>One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly.</td>
+<td>One of the nine kinds below. Kinds are pinned and filtered differently during briefing assembly.</td>
 </tr>
 <tr>
 <td><code>name</code></td>
@@ -326,7 +326,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <p>Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
 verbatim through a parse/render round-trip (Obsidian plugin fields and the like
 survive), but is not mirrored to the index.</p>
-<h3 id="the-eight-kinds">The eight kinds</h3>
+<h3 id="the-nine-kinds">The nine kinds</h3>
 <div class="table-wrap">
 <table>
 <thead>
@@ -338,7 +338,11 @@ survive), but is not mirrored to the index.</p>
 <tbody>
 <tr>
 <td><code>constraint</code></td>
-<td>A hard rule that must hold.</td>
+<td>A hard rule that must hold on any task.</td>
+</tr>
+<tr>
+<td><code>convention</code></td>
+<td>A project-local choice or layout fact.</td>
 </tr>
 <tr>
 <td><code>runbook</code></td>
@@ -504,7 +508,7 @@ including <code>memory_write</code>'s <code>supersedes</code>.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-eight-kinds">The eight kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-tree">The tree</a></li><li class="lvl-2"><a href="#memory-frontmatter">Memory frontmatter</a></li><li class="lvl-3"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-3"><a href="#validity">Validity</a></li><li class="lvl-2"><a href="#note-frontmatter">Note frontmatter</a></li><li class="lvl-2"><a href="#what-lives-only-in-sqlite">What lives only in SQLite</a></li><li class="lvl-3"><a href="#reconciliation">Reconciliation</a></li><li class="lvl-2"><a href="#hand-editing-rules">Hand-editing rules</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   

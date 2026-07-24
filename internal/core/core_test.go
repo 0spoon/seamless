@@ -29,10 +29,11 @@ func TestNewID_ValidAndUnique(t *testing.T) {
 
 func TestMemoryKind_Valid(t *testing.T) {
 	require.True(t, KindConstraint.Valid())
+	require.True(t, KindConvention.Valid())
 	require.True(t, KindStage.Valid())
 	require.False(t, MemoryKind("bogus").Valid())
 	require.False(t, MemoryKind("").Valid())
-	require.Len(t, MemoryKinds, 8)
+	require.Len(t, MemoryKinds, 9)
 }
 
 func TestMemory_Active(t *testing.T) {

@@ -243,7 +243,17 @@ func (s *Service) requestCandidates(ctx context.Context, scope RequestScope) ([]
 	return mems, nil
 }
 
-const requestSystemPrompt = `You convert a single natural-language request to REORGANIZE an AI agent's memory store into a set of PROPOSED, reviewable operations. You never modify anything yourself; a human reviews and applies each operation. Reference memories only by their candidate number.
+// requestKindList renders core.MemoryKinds for the interpreter prompt, so the
+// prompt's kind vocabulary follows the enum instead of a hand-written copy.
+func requestKindList() string {
+	parts := make([]string, len(core.MemoryKinds))
+	for i, k := range core.MemoryKinds {
+		parts[i] = string(k)
+	}
+	return strings.Join(parts, ", ")
+}
+
+var requestSystemPrompt = `You convert a single natural-language request to REORGANIZE an AI agent's memory store into a set of PROPOSED, reviewable operations. You never modify anything yourself; a human reviews and applies each operation. Reference memories only by their candidate number.
 
 Operations (return these in "ops"):
 - merge: fold one memory into another EXISTING memory. {"op":"merge","keep":<n>,"drop":<m>}. keep is retained as-is; drop is superseded by keep (still readable, pointing at keep). Use this when one existing memory should simply absorb another.
@@ -257,7 +267,7 @@ Splitting a project (special -- NOT an op):
 Rules:
 - Reference memories ONLY by their [N] candidate number. Never invent numbers.
 - For a merge, keep and drop must be different memories.
-- For consolidate, kind is one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage. name is a short kebab-case identifier. Write a genuine unified body from the sources; do not invent facts beyond them.
+- For consolidate, kind is one of: ` + requestKindList() + `. name is a short kebab-case identifier. Write a genuine unified body from the sources; do not invent facts beyond them.
 - For reproject, "to" must be one of the existing project slugs. Creating a new project is a split, not a reproject.
 - Propose only what the request asks for. If nothing applies, return {"ops":[]}.
 - Output ONLY a JSON object -- either {"split":{...}} OR {"ops":[...]} -- with no prose and no markdown code fences.`

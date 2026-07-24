@@ -93,7 +93,7 @@ func icon(name string) template.HTML {
 // the legend/chart dots use). Unknown kinds fall back to the muted tone.
 func kindColorVar(kind string) string {
 	switch kind {
-	case "gotcha", "constraint", "reference", "decision", "runbook", "protocol", "stage", "refuted":
+	case "gotcha", "constraint", "convention", "reference", "decision", "runbook", "protocol", "stage", "refuted":
 		return "var(--k-" + kind + ")"
 	default:
 		return "var(--muted)"

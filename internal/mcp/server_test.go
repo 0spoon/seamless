@@ -200,6 +200,32 @@ func TestMCPLoopWithBinding(t *testing.T) {
 	require.Equal(t, "completed", end["status"])
 }
 
+// TestConventionKindRoundTrips pins the convention kind end-to-end: written via
+// memory_write, read back with the kind intact, and reachable through recall's
+// index without special-casing.
+func TestConventionKindRoundTrips(t *testing.T) {
+	ctx := context.Background()
+	url, _ := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+
+	w := callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "wordmark-markup", "kind": "convention",
+		"description": "the wordmark markup must stay in sync across the three files",
+		"body":        "index.html, docsgen layout, og-source.\n",
+	})
+	require.NotEmpty(t, w["id"])
+
+	r := callJSON(t, ctx, cli, "memory_read", map[string]any{"name": "wordmark-markup"})
+	require.Equal(t, "convention", r["kind"])
+
+	rec := callJSON(t, ctx, cli, "recall", map[string]any{"query": "wordmark markup sync"})
+	hits := rec["hits"].([]any)
+	require.NotEmpty(t, hits)
+	require.Equal(t, "wordmark-markup", hits[0].(map[string]any)["name"])
+}
+
 func TestMemorySupersession(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)

@@ -131,7 +131,7 @@ index for the files.
 ```yaml
 ---
 id: 01K...                 # ULID
-kind: gotcha               # constraint|runbook|protocol|gotcha|decision|refuted|reference|stage
+kind: gotcha               # constraint|convention|runbook|protocol|gotcha|decision|refuted|reference|stage
 name: chroma-boot-race
 description: one line, <=150 chars -- the ONLY text shown in indexes
 project: seam              # empty = global

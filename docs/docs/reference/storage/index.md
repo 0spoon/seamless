@@ -58,7 +58,7 @@ Field by field:
 | Field | Set by | Meaning |
 |---|---|---|
 | `id` | system | ULID. Never a UUID. The identity every other reference points at. |
-| `kind` | author | One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly. |
+| `kind` | author | One of the nine kinds below. Kinds are pinned and filtered differently during briefing assembly. |
 | `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories - a superseded memory coexists with a replacement that reuses its name. |
 | `description` | author | One line, ≤150 chars. **The only text shown in indexes** - write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
 | `project` | author | Project slug. Empty means global, and the file lives under `memory/_global/`. Omitted from the frontmatter when empty. |
@@ -76,11 +76,12 @@ Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
 verbatim through a parse/render round-trip (Obsidian plugin fields and the like
 survive), but is not mirrored to the index.
 
-### The eight kinds
+### The nine kinds
 
 | Kind | Meaning |
 |---|---|
-| `constraint` | A hard rule that must hold. |
+| `constraint` | A hard rule that must hold on any task. |
+| `convention` | A project-local choice or layout fact. |
 | `runbook` | A procedure to follow. |
 | `protocol` | An interaction or coordination contract. |
 | `gotcha` | A surprising pitfall. |

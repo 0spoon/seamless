@@ -1616,11 +1616,12 @@ does the whole job without the body being opened at all.
 Write the description for a future agent deciding whether to read further. That
 is its entire purpose.
 
-## The eight kinds
+## The nine kinds
 
 | Kind | What it holds | Never forget |
 |---|---|---|
-| `constraint` | A rule the project cannot violate | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `Also binding` line |
+| `constraint` | A rule any agent must follow regardless of task | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `Also binding` line |
+| `convention` | A project-local choice or layout fact - naming, branding, where things live and deploy | Binding but topically triggered; filing it as `constraint` crowds the briefing head |
 | `runbook` | A procedure that works | The steps, in order, that actually ran |
 | `protocol` | An agreed way of doing something | Why the agreement exists |
 | `gotcha` | A trap and how to avoid it | The symptom, so it is recognizable next time |
@@ -4422,7 +4423,7 @@ Create or update a durable memory. Writing an existing name updates it in place 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | **yes** | kebab-case identifier, unique within the project |
-| `kind` | string | **yes** | memory kind. One of: `constraint`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | **yes** | memory kind. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
@@ -7063,7 +7064,7 @@ Field by field:
 | Field | Set by | Meaning |
 |---|---|---|
 | `id` | system | ULID. Never a UUID. The identity every other reference points at. |
-| `kind` | author | One of the eight kinds below. Kinds are pinned and filtered differently during briefing assembly. |
+| `kind` | author | One of the nine kinds below. Kinds are pinned and filtered differently during briefing assembly. |
 | `name` | author | The filename stem, and how agents address the memory. Unique per project only among active memories - a superseded memory coexists with a replacement that reuses its name. |
 | `description` | author | One line, ≤150 chars. **The only text shown in indexes** - write it for an agent deciding whether to read the body. Longer text is **silently truncated** by `memory_write`, not rejected, so write to the limit deliberately. |
 | `project` | author | Project slug. Empty means global, and the file lives under `memory/_global/`. Omitted from the frontmatter when empty. |
@@ -7081,11 +7082,12 @@ Timestamps are RFC3339 strings on disk. Any key not in that set is preserved
 verbatim through a parse/render round-trip (Obsidian plugin fields and the like
 survive), but is not mirrored to the index.
 
-### The eight kinds
+### The nine kinds
 
 | Kind | Meaning |
 |---|---|
-| `constraint` | A hard rule that must hold. |
+| `constraint` | A hard rule that must hold on any task. |
+| `convention` | A project-local choice or layout fact. |
 | `runbook` | A procedure to follow. |
 | `protocol` | An interaction or coordination contract. |
 | `gotcha` | A surprising pitfall. |
@@ -7309,9 +7311,9 @@ gardener](/concepts/gardener/).
 **Global** - the Seamless scope with no project, visible to every agent in
 every repo; reached only by passing `project: global` deliberately.
 
-**Kind** - a Seamless memory's type: `constraint`, `runbook`, `protocol`,
-`gotcha`, `decision`, `refuted`, `reference`, or `stage`. See [Memory &
-notes](/concepts/memory/).
+**Kind** - a Seamless memory's type: `constraint`, `convention`, `runbook`,
+`protocol`, `gotcha`, `decision`, `refuted`, `reference`, or `stage`. See
+[Memory & notes](/concepts/memory/).
 
 **Lab** - a shared Seamless workspace for a systematic investigation, holding
 trials; opened with `lab_open`.

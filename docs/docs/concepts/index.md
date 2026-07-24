@@ -34,7 +34,7 @@ finds duplicates, staleness, and drift - and only ever proposes, because
 nothing in Seamless rewrites your knowledge behind your back.
 
 - [How Seamless works](https://thereisnospoon.org/docs/concepts/how-it-works/): One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.
-- [Memory & notes](https://thereisnospoon.org/docs/concepts/memory/): What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.
+- [Memory & notes](https://thereisnospoon.org/docs/concepts/memory/): What a memory is, the nine kinds, how supersession keeps the store honest, and when to write a note instead.
 - [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/): How an agent gets your knowledge injected before it does anything - ambient sessions, the briefing's packing order, and what never gets dropped.
 - [Recall](https://thereisnospoon.org/docs/concepts/recall/): One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.
 - [Tasks & plans](https://thereisnospoon.org/docs/concepts/tasks-and-plans/): The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.

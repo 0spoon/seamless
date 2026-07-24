@@ -182,7 +182,7 @@ func TestNormalizeArgs_RequiredRunsAfterTheEmptyStringRule(t *testing.T) {
 	schema := schemaOf(mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds)))
 
 	_, err := normalizeArgs(schema, map[string]any{"kind": ""})
-	require.EqualError(t, err, `missing required parameter "kind" (one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
+	require.EqualError(t, err, `missing required parameter "kind" (one of: constraint, convention, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
 }
 
 // TestNormalizeArgs_RequiredBatchesAndEnriches pins the two upgrades to the
@@ -199,7 +199,7 @@ func TestNormalizeArgs_RequiredBatchesAndEnriches(t *testing.T) {
 
 	_, err := normalizeArgs(schema, map[string]any{"body": "b"})
 	require.EqualError(t, err,
-		`missing required parameters: "name", "kind" (one of: constraint, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
+		`missing required parameters: "name", "kind" (one of: constraint, convention, runbook, protocol, gotcha, decision, refuted, reference, stage)`)
 }
 
 // TestArgsCoerceLegacyForms is the plan's headline pin: the array and CSV forms
@@ -562,7 +562,7 @@ func TestEnumOf_DerivesFromCanonicalSets(t *testing.T) {
 		want []string
 	}{
 		{"memory kinds", enumOf(core.MemoryKinds), []string{
-			"constraint", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage",
+			"constraint", "convention", "runbook", "protocol", "gotcha", "decision", "refuted", "reference", "stage",
 		}},
 		{"task statuses", enumOf(core.TaskStatuses), []string{"open", "in_progress", "done", "dropped"}},
 		{"proposal kinds", enumOf(store.ProposalKinds), store.ProposalKinds},

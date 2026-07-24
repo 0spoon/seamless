@@ -60,6 +60,7 @@
   /* per-kind hues -- drive the memories-by-kind legend + chart dots */
   --k-gotcha:     var(--pop);
   --k-constraint: var(--brand);
+  --k-convention: #d6409f;
   --k-reference:  #0e9384;
   --k-decision:   #8b5cf6;
   --k-runbook:    var(--warn);
@@ -343,6 +344,7 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 /* Per-kind colors, applied to legend dots and bar fills via data-kind. */
 [data-kind="gotcha"]     { background: var(--k-gotcha); }
 [data-kind="constraint"] { background: var(--k-constraint); }
+[data-kind="convention"] { background: var(--k-convention); }
 [data-kind="reference"]  { background: var(--k-reference); }
 [data-kind="decision"]   { background: var(--k-decision); }
 [data-kind="runbook"]    { background: var(--k-runbook); }
@@ -2244,6 +2246,7 @@ kbd {
 
 [data-memory-kind="gotcha"]     { --lib-item-accent: var(--k-gotcha); }
 [data-memory-kind="constraint"] { --lib-item-accent: var(--k-constraint); }
+[data-memory-kind="convention"] { --lib-item-accent: var(--k-convention); }
 [data-memory-kind="reference"]  { --lib-item-accent: var(--k-reference); }
 [data-memory-kind="decision"]   { --lib-item-accent: var(--k-decision); }
 [data-memory-kind="runbook"]    { --lib-item-accent: var(--k-runbook); }

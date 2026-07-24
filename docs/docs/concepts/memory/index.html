@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Memory &amp; notes - Seamless docs</title>
-<meta name="description" content="What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.">
+<meta name="description" content="What a memory is, the nine kinds, how supersession keeps the store honest, and when to write a note instead.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/concepts/memory/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/concepts/memory/">
 <meta property="og:title" content="Memory &amp; notes - Seamless docs">
-<meta property="og:description" content="What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.">
+<meta property="og:description" content="What a memory is, the nine kinds, how supersession keeps the store honest, and when to write a note instead.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"},{"@type":"ListItem","position":3,"name":"Memory \u0026 notes","item":"https://thereisnospoon.org/docs/concepts/memory/"}]},{"@type":"TechArticle","headline":"Memory \u0026 notes - Seamless docs","description":"What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.","url":"https://thereisnospoon.org/docs/concepts/memory/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Concepts","item":"https://thereisnospoon.org/docs/concepts/"},{"@type":"ListItem","position":3,"name":"Memory \u0026 notes","item":"https://thereisnospoon.org/docs/concepts/memory/"}]},{"@type":"TechArticle","headline":"Memory \u0026 notes - Seamless docs","description":"What a memory is, the nine kinds, how supersession keeps the store honest, and when to write a note instead.","url":"https://thereisnospoon.org/docs/concepts/memory/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -196,7 +196,7 @@
 </nav>
 
   <h1>Memory &amp; notes</h1>
-  <p class="lede">What a memory is, the eight kinds, how supersession keeps the store honest, and when to write a note instead.</p>
+  <p class="lede">What a memory is, the nine kinds, how supersession keeps the store honest, and when to write a note instead.</p>
   <p>In Seamless, a memory is one markdown file with YAML frontmatter holding one
 durable piece of knowledge an agent should not have to rediscover. The files
 are the source of truth - the SQLite database is a rebuildable index over them -
@@ -232,7 +232,7 @@ can tell whether it matters. One that says &quot;Console: a trailing note inside
 does the whole job without the body being opened at all.</p>
 <p>Write the description for a future agent deciding whether to read further. That
 is its entire purpose.</p>
-<h2 id="the-eight-kinds">The eight kinds</h2>
+<h2 id="the-nine-kinds">The nine kinds</h2>
 <div class="table-wrap">
 <table>
 <thead>
@@ -245,8 +245,13 @@ is its entire purpose.</p>
 <tbody>
 <tr>
 <td><code>constraint</code></td>
-<td>A rule the project cannot violate</td>
+<td>A rule any agent must follow regardless of task</td>
 <td>Pinned into every briefing, never dropped for budget, never staleness-archived; the top <code>briefing.constraint_max_full</code> render in full, the rest as names on the compact <code>Also binding</code> line</td>
+</tr>
+<tr>
+<td><code>convention</code></td>
+<td>A project-local choice or layout fact - naming, branding, where things live and deploy</td>
+<td>Binding but topically triggered; filing it as <code>constraint</code> crowds the briefing head</td>
 </tr>
 <tr>
 <td><code>runbook</code></td>
@@ -423,7 +428,7 @@ the global scope. Pass <code>project: global</code> to mean it on purpose. See
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-description-is-the-product">The description is the product</a></li><li class="lvl-2"><a href="#the-eight-kinds">The eight kinds</a></li><li class="lvl-2"><a href="#supersession-how-the-store-stays-honest">Supersession: how the store stays honest</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete</a></li><li class="lvl-2"><a href="#memory-or-note">Memory or note?</a></li><li class="lvl-2"><a href="#global-vs-project">Global vs. project</a></li>
+      <li class="lvl-2"><a href="#the-description-is-the-product">The description is the product</a></li><li class="lvl-2"><a href="#the-nine-kinds">The nine kinds</a></li><li class="lvl-2"><a href="#supersession-how-the-store-stays-honest">Supersession: how the store stays honest</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete</a></li><li class="lvl-2"><a href="#memory-or-note">Memory or note?</a></li><li class="lvl-2"><a href="#global-vs-project">Global vs. project</a></li>
     </ul>
   </aside>
   

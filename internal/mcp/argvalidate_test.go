@@ -245,7 +245,7 @@ func TestArgsEnforceEnums(t *testing.T) {
 			"memory_write", map[string]any{
 				"name": "k", "kind": "gotchya", "description": "d", "body": "b", "project": "global",
 			},
-			"valid values are constraint, runbook, protocol, gotcha, decision, refuted, reference, stage",
+			"valid values are constraint, convention, runbook, protocol, gotcha, decision, refuted, reference, stage",
 		},
 		{
 			// Used to become SQL `AND kind = 'merged'` -> {"proposals":[],"count":0}
