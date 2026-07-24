@@ -98,6 +98,17 @@ func TestAgentGuidanceNamesRealTools(t *testing.T) {
 	}
 }
 
+// The constraint-vs-convention call is made at write time, so the kind
+// parameter must carry the shared discriminator string -- not a paraphrase that
+// can drift from the guidance agentguide serves elsewhere.
+func TestMemoryWriteKindTeachesTheDiscriminator(t *testing.T) {
+	prop, err := propSchema(memoryWriteTool().InputSchema, "kind")
+	require.NoError(t, err)
+
+	desc, _ := prop["description"].(string)
+	require.Contains(t, desc, agentguide.KindDiscriminator)
+}
+
 // asStrings widens a canonical set declared over a named string type, so the
 // expectation below is the set itself rather than a second transcription of it.
 func asStrings[T ~string](values []T) []string {

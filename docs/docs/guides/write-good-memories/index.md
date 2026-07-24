@@ -96,14 +96,24 @@ The kind is not filing paperwork - it changes what happens to the memory:
 
 | Kind | Use it for | Consequence |
 |---|---|---|
-| `constraint` | A rule the project cannot violate | **Pinned.** Never dropped for budget, never staleness-archived |
+| `constraint` | A rule any agent must follow regardless of task | **Pinned.** Never dropped for budget, never staleness-archived |
 | `stage` | Where multi-session work stands | **Pinned**, same as a constraint |
+| `convention` | A project-local choice or layout fact | Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at `recall kind=convention` |
 | `gotcha` | A trap, led by its symptom | Ordinary budget and staleness rules |
 | `decision` | A choice plus the alternatives it rejected | Ordinary |
 | `refuted` | A belief that turned out false | Ordinary |
 | `runbook` / `protocol` / `reference` | A procedure, an agreement, a pointer | Ordinary |
 
-Two calls people get wrong.
+Three calls people get wrong.
+
+**`constraint` vs `convention`.** Ask whether the rule binds regardless of task.
+"No CGO" binds every agent on every task - `constraint`. "The wordmark markup
+must stay in sync across three files" binds only the agent touching the wordmark
+- `convention`. Both are rules; the difference is delivery. A constraint is
+pinned into the head of every briefing; a convention renders lower, competes for
+budget, and rides prompt-matched recall when its topic comes up. Filing a
+convention as a constraint costs only head space - but the head is exactly the
+space that keeps real constraints visible.
 
 **`decision` vs `constraint`.** "We chose SQLite over ChromaDB, because a second
 service buys ANN we do not need" is a `decision` - it carries reasoning and a

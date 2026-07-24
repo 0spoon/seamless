@@ -308,13 +308,18 @@ actually contain.</p>
 <tbody>
 <tr>
 <td><code>constraint</code></td>
-<td>A rule the project cannot violate</td>
+<td>A rule any agent must follow regardless of task</td>
 <td><strong>Pinned.</strong> Never dropped for budget, never staleness-archived</td>
 </tr>
 <tr>
 <td><code>stage</code></td>
 <td>Where multi-session work stands</td>
 <td><strong>Pinned</strong>, same as a constraint</td>
+</tr>
+<tr>
+<td><code>convention</code></td>
+<td>A project-local choice or layout fact</td>
+<td>Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at <code>recall kind=convention</code></td>
 </tr>
 <tr>
 <td><code>gotcha</code></td>
@@ -339,7 +344,17 @@ actually contain.</p>
 </tbody>
 </table>
 </div>
-<p>Two calls people get wrong.</p>
+<p>Three calls people get wrong.</p>
+<p><strong><code>constraint</code> vs <code>convention</code>.</strong> Ask whether the rule binds regardless of task.
+&quot;No CGO&quot; binds every agent on every task - <code>constraint</code>. &quot;The wordmark markup
+must stay in sync across three files&quot; binds only the agent touching the wordmark</p>
+<ul>
+<li><code>convention</code>. Both are rules; the difference is delivery. A constraint is
+pinned into the head of every briefing; a convention renders lower, competes for
+budget, and rides prompt-matched recall when its topic comes up. Filing a
+convention as a constraint costs only head space - but the head is exactly the
+space that keeps real constraints visible.</li>
+</ul>
 <p><strong><code>decision</code> vs <code>constraint</code>.</strong> &quot;We chose SQLite over ChromaDB, because a second
 service buys ANN we do not need&quot; is a <code>decision</code> - it carries reasoning and a
 rejected alternative, and it exists so the argument does not happen again. &quot;No
