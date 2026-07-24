@@ -38,6 +38,17 @@ type reprojectView struct {
 	Rationale string `json:"rationale,omitempty"`
 }
 
+// rekindView is the rekind-specific projection of a proposal card: a memory
+// reclassified from one kind to another, in place.
+type rekindView struct {
+	ID        string `json:"id"`
+	Name      string `json:"name"`
+	Project   string `json:"project,omitempty"`
+	From      string `json:"from"`
+	To        string `json:"to"`
+	Rationale string `json:"rationale,omitempty"`
+}
+
 // splitView is the split-setup projection: the source project and the child /
 // shared projects it will be split into.
 type splitView struct {
@@ -90,6 +101,9 @@ type proposalCard struct {
 	// Reproject (move a memory across projects) and Split (set up a project split).
 	Reproject *reprojectView `json:"reproject,omitempty"`
 	Split     *splitView     `json:"split,omitempty"`
+
+	// Rekind (reclassify a memory's kind in place).
+	Rekind *rekindView `json:"rekind,omitempty"`
 
 	// AbandonPlan (retag a never-approved captured plan).
 	AbandonPlan *abandonPlanView `json:"abandonPlan,omitempty"`
@@ -340,6 +354,13 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			From: payloadStr(p.Payload, "from"), To: payloadStr(p.Payload, "to"),
 			Rationale: payloadStr(p.Payload, "rationale"),
 		}
+	case store.ProposalRekind:
+		c.Rekind = &rekindView{
+			ID: payloadStr(p.Payload, "id"), Name: payloadStr(p.Payload, "name"),
+			Project: payloadStr(p.Payload, "project"),
+			From:    payloadStr(p.Payload, "from"), To: payloadStr(p.Payload, "to"),
+			Rationale: payloadStr(p.Payload, "rationale"),
+		}
 	case store.ProposalAbandonPlan:
 		c.AbandonPlan = &abandonPlanView{
 			NoteID: payloadStr(p.Payload, "id"), Slug: payloadStr(p.Payload, "slug"),
@@ -404,6 +425,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Consolidate into one memory", "Synthesis", "database", "brand"
 	case store.ProposalReproject:
 		return "Move a memory", "Scope correction", "folder-tree", "pop"
+	case store.ProposalRekind:
+		return "Reclassify a memory", "Kind correction", "sort", "pop"
 	case store.ProposalSplit:
 		return "Restructure a project", "Project topology", "split", "pop"
 	case store.ProposalAbandonPlan:

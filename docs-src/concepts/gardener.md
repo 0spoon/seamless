@@ -55,10 +55,14 @@ reach an agent - recurrence here is the one place they surface. Applying its
 proposal opens a repair task rather than pretending the gardener can fix code
 or configuration itself.
 
-Two more proposal types come from requests rather than the timer:
+Three more proposal types come from requests rather than the timer:
 
 - **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
+- **rekind** - a memory filed under the wrong kind, reclassified in place (same
+  identity, project, and body). The most common correction is constraint vs
+  convention: a systemic rule any agent must follow stays a constraint, while a
+  project-local choice or layout fact belongs under convention.
 - **split** - one project divided into new child projects. This creates projects
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a

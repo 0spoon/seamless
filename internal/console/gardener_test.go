@@ -47,7 +47,7 @@ func (c *seqChat) Complete(context.Context, string, string) (string, error) {
 
 // newConsoleWithGardener wires a real gardener (no embedder/chat) so apply/dismiss
 // round-trip through the proposal store and files.
-func newConsoleWithGardener(t *testing.T) (context.Context, *sql.DB, *http.ServeMux) {
+func newConsoleWithGardener(t *testing.T) (context.Context, *sql.DB, *files.Manager, *http.ServeMux) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -64,7 +64,7 @@ func newConsoleWithGardener(t *testing.T) (context.Context, *sql.DB, *http.Serve
 	require.NoError(t, err)
 	mux := http.NewServeMux()
 	svc.Register(mux)
-	return context.Background(), db, mux
+	return context.Background(), db, mgr, mux
 }
 
 func post(mux *http.ServeMux, path string) *httptest.ResponseRecorder {
@@ -86,7 +86,7 @@ func TestProposalPresentation_CoversCanonicalKinds(t *testing.T) {
 }
 
 func TestGardenerPage_CardsDismissApply(t *testing.T) {
-	ctx, db, mux := newConsoleWithGardener(t)
+	ctx, db, _, mux := newConsoleWithGardener(t)
 
 	archiveP, err := store.CreateProposal(ctx, db, store.ProposalArchive, map[string]any{
 		"key": "archive:MISSING", "id": "MISSINGMEM", "name": "old-note",
@@ -216,6 +216,55 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	require.Equal(t, store.ProposalPending, p.Status)
 }
 
+// TestGardenerPage_RekindCardAndApply round-trips a rekind proposal: the card
+// projects the from/to kinds, and applying it reclassifies the memory in place.
+func TestGardenerPage_RekindCardAndApply(t *testing.T) {
+	ctx, db, mgr, mux := newConsoleWithGardener(t)
+
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	_, err = mgr.WriteMemory(ctx, core.Memory{
+		ID: id, Kind: core.KindConstraint, Name: "wordmark-rule", Description: "branding fact",
+		Project: "seamless", Body: "body", Created: now, Updated: now, ValidFrom: now,
+	})
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, db, store.ProposalRekind, map[string]any{
+		"key": "rekind:" + id + ":convention", "id": id, "name": "wordmark-rule",
+		"project": "seamless", "from": "constraint", "to": "convention",
+		"rationale": "project-local branding, not a systemic rule",
+	})
+	require.NoError(t, err)
+
+	var data gardenerData
+	getJSON(t, mux, "/console/gardener?format=json", &data)
+	require.Len(t, data.Cards, 1)
+	card := data.Cards[0]
+	require.Equal(t, "Reclassify a memory", card.Label)
+	require.Equal(t, "sort", card.Icon)
+	require.NotNil(t, card.Rekind)
+	require.Equal(t, "wordmark-rule", card.Rekind.Name)
+	require.Equal(t, "constraint", card.Rekind.From)
+	require.Equal(t, "convention", card.Rekind.To)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/gardener", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	body := do(mux, req).Body.String()
+	require.Contains(t, body, "From kind")
+	require.Contains(t, body, "To kind")
+	require.Contains(t, body, "only its kind classification changes")
+
+	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+p.ID+"/apply").Code)
+	got, _, err := store.ProposalByID(ctx, db, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalApplied, got.Status)
+	mem, found, err := store.MemoryByName(ctx, db, "seamless", "wordmark-rule")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, core.KindConvention, mem.Kind, "apply reclassified the memory in place")
+}
+
 // newConsoleWithChat wires a chat-backed gardener and seeds two active global
 // memories in a known newest-first order ([1] keep-me, [2] drop-me), so the
 // natural-language request path has candidates to reference.
@@ -277,7 +326,7 @@ func TestGardenerRequest_CreatesProposals(t *testing.T) {
 }
 
 func TestGardenerRequest_UnavailableWithoutChat(t *testing.T) {
-	_, _, mux := newConsoleWithGardener(t) // gardener without a chat client
+	_, _, _, mux := newConsoleWithGardener(t) // gardener without a chat client
 	var data gardenerData
 	getJSON(t, mux, "/console/gardener?format=json", &data)
 	require.False(t, data.CanRequest, "the request box is gated off when no chat client is configured")

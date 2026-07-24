@@ -160,8 +160,8 @@ so losing `seam.db` loses them:
   utility score with its per-signal demand breakdown, rebuilt from events.
 - `projects` - slugs, parent topology, retirement.
 - `gardener_proposals` - pending proposals, one row per kind-and-key
-  (merge, consolidate, archive, digest, reproject, split, abandon-plan,
-  memory-wanted).
+  (merge, consolidate, archive, digest, reproject, rekind, split, abandon-plan,
+  memory-wanted, tool-error).
 - `settings` - `repo_project_map`, project families, the runtime briefing
   overrides the console writes, the per-scope utility-activation latch, and the
   embedder on/off switch.

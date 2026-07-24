@@ -398,7 +398,8 @@ The review queue. Each pending proposal renders as a card showing exactly what i
 would do - the memory to archive and why (whether staleness, a dead stage, or
 dead weight flagged it), the pair to merge with their similarity score, the
 digest or consolidated memory with its body rendered, the reproject's source and
-destination, the split's children and shared parent, and the **knowledge gap**
+destination, the rekind's from and to kinds, the split's children and shared
+parent, and the **knowledge gap**
 card with the queries agents kept searching for in vain - applying that one
 opens a task; nothing is written until someone writes the memory.
 

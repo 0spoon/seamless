@@ -237,6 +237,90 @@ func TestApplyReproject_NameClashInTargetErrors(t *testing.T) {
 	require.Equal(t, store.ProposalPending, got.Status, "the proposal stays pending for the owner to resolve")
 }
 
+func TestApplyRekind_ChangesKindInPlace(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "wordmark-rule", "seamless", "1", core.KindConstraint, now.Add(-time.Hour), "branding fact")
+	mem, _, err := store.MemoryByName(ctx, g.db, "seamless", "wordmark-rule")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalRekind, map[string]any{
+		"key": "rekind:" + mem.ID + ":convention", "id": mem.ID, "name": "wordmark-rule",
+		"project": "seamless", "from": "constraint", "to": "convention", "rationale": "project-local branding",
+	})
+	require.NoError(t, err)
+
+	res, err := g.Apply(ctx, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, "applied", res["status"])
+	require.Equal(t, "constraint", res["from"])
+	require.Equal(t, "convention", res["to"])
+
+	// Same identity and project, new kind, bumped updated stamp.
+	got, found, err := store.MemoryByName(ctx, g.db, "seamless", "wordmark-rule")
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, mem.ID, got.ID, "rekind keeps the ULID")
+	require.Equal(t, core.KindConvention, got.Kind)
+	require.True(t, got.Active(), "a rekind is a reclassification, not an invalidation")
+	require.True(t, got.Updated.After(mem.Updated), "the rewrite bumps updated")
+
+	// The file on disk carries the new kind too (files are the source of truth).
+	idx, _, err := store.MemoryByID(ctx, g.db, mem.ID)
+	require.NoError(t, err)
+	onDisk, err := mgr.Store().ReadMemory(idx.FilePath)
+	require.NoError(t, err)
+	require.Equal(t, core.KindConvention, onDisk.Kind)
+}
+
+// TestApplyRekind_RetryIsIdempotent drives applyRekind twice: a memory already
+// at the target kind is a no-op success, so a retry after a partial apply
+// converges rather than erroring.
+func TestApplyRekind_RetryIsIdempotent(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "thing", "seamless", "1", core.KindConstraint, now, "x")
+	mem, _, err := store.MemoryByName(ctx, g.db, "seamless", "thing")
+	require.NoError(t, err)
+	p := store.Proposal{Payload: map[string]any{"id": mem.ID, "name": "thing", "from": "constraint", "to": "convention"}}
+
+	_, err = g.applyRekind(ctx, p, now)
+	require.NoError(t, err)
+	res, err := g.applyRekind(ctx, p, now.Add(time.Minute))
+	require.NoError(t, err, "a second apply converges rather than erroring")
+	require.Equal(t, true, res["noop"], "the retry is a no-op")
+}
+
+func TestApplyRekind_UnknownKindStaysPending(t *testing.T) {
+	g, mgr, cx := newApplyFixture(t)
+	ctx := cx()
+	now := time.Now().UTC()
+
+	writeMem(t, mgr, "thing", "seamless", "1", core.KindConstraint, now, "x")
+	mem, _, err := store.MemoryByName(ctx, g.db, "seamless", "thing")
+	require.NoError(t, err)
+
+	p, err := store.CreateProposal(ctx, g.db, store.ProposalRekind, map[string]any{
+		"key": "rekind:" + mem.ID + ":no-such-kind", "id": mem.ID, "name": "thing",
+		"from": "constraint", "to": "no-such-kind",
+	})
+	require.NoError(t, err)
+
+	_, err = g.Apply(ctx, p.ID)
+	require.Error(t, err, "an unknown target kind blocks the apply")
+	got, _, err := store.ProposalByID(ctx, g.db, p.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalPending, got.Status, "the proposal stays pending for the owner to resolve")
+
+	unchanged, _, err := store.MemoryByName(ctx, g.db, "seamless", "thing")
+	require.NoError(t, err)
+	require.Equal(t, core.KindConstraint, unchanged.Kind, "the memory is untouched")
+}
+
 func TestApplySplit_CreatesProjectsFamilyAndParents(t *testing.T) {
 	g, _, cx := newApplyFixture(t)
 	ctx := cx()

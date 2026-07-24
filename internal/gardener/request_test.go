@@ -157,6 +157,47 @@ func TestRequest_ReprojectToUnknownProjectIsSkipped(t *testing.T) {
 	require.Empty(t, all)
 }
 
+func TestRequest_RekindReclassifiesKind(t *testing.T) {
+	ctx, db, mgr, g := newReorgGardener(t,
+		`{"ops":[{"op":"rekind","target":1,"kind":"convention","reason":"project-local branding fact"}]}`)
+	writeMem(t, mgr, "wordmark-rule", "seamless", "1", core.KindConstraint, time.Now().UTC(), "branding")
+
+	res, err := g.Request(ctx, "the wordmark memory is a convention, not a constraint", RequestScope{AllProjects: true})
+	require.NoError(t, err)
+	require.Equal(t, 1, res.Total)
+	require.Equal(t, 1, res.ByKind[store.ProposalRekind])
+	require.Empty(t, res.Skipped)
+	require.Contains(t, res.Summary, "1 rekind")
+
+	rks, err := store.PendingProposals(ctx, db, store.ProposalRekind)
+	require.NoError(t, err)
+	require.Len(t, rks, 1)
+	require.Equal(t, "wordmark-rule", rks[0].Payload["name"])
+	require.Equal(t, "seamless", rks[0].Payload["project"])
+	require.Equal(t, "constraint", rks[0].Payload["from"])
+	require.Equal(t, "convention", rks[0].Payload["to"])
+	require.Equal(t, "request", rks[0].Payload["source"], "request-originated rekinds are tagged")
+}
+
+func TestRequest_RekindInvalidOrSameKindIsSkipped(t *testing.T) {
+	ctx, db, mgr, g := newReorgGardener(t,
+		`{"ops":[{"op":"rekind","target":1,"kind":"banana","reason":"x"},{"op":"rekind","target":2,"kind":"constraint","reason":"x"}]}`)
+	now := time.Now().UTC()
+	writeMem(t, mgr, "newer-thing", "seamless", "1", core.KindConstraint, now, "a")
+	writeMem(t, mgr, "older-thing", "seamless", "2", core.KindConstraint, now.Add(-time.Hour), "b")
+
+	res, err := g.Request(ctx, "reclassify these", RequestScope{AllProjects: true})
+	require.NoError(t, err)
+	require.Equal(t, 0, res.Total)
+	require.Len(t, res.Skipped, 2)
+	require.Contains(t, res.Skipped[0], "unknown kind")
+	require.Contains(t, res.Skipped[1], "already a constraint")
+
+	all, err := store.PendingProposals(ctx, db, "")
+	require.NoError(t, err)
+	require.Empty(t, all)
+}
+
 func TestRequest_RecognizesSplitAndRoutes(t *testing.T) {
 	ctx, db, mgr, g := newReorgGardener(t,
 		`{"split":{"source":"arctop-app","instruction":"ios and android"}}`)

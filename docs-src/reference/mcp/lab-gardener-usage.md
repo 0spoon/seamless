@@ -54,7 +54,9 @@ constraint does not become less true by sitting still.
 `gardener_request` takes a request in natural language ("fold the two console
 theme memories together") and turns it into the same reviewable proposals. It can
 also **reproject** a memory filed under the wrong project - moving it to a
-different project that already exists.
+different project that already exists - and **rekind** a memory filed under the
+wrong kind, reclassifying it in place (most often demoting a project-local
+constraint to a convention, or the reverse).
 
 Its `project` argument scopes the memories it may reference: a project slug (that
 project plus globals), `global` for globals only, or `all` for every project on

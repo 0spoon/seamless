@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -14,10 +15,11 @@ import (
 // Apply carries out a pending proposal and marks it applied. The effect depends
 // on the kind: an archive retires the memory (invalid, but still readable), a
 // merge supersedes the "drop" memory by the "keep" memory, a digest writes the
-// summary as a note, and a memory_wanted opens a task to write the missing
-// knowledge. If the effect cannot be carried out (e.g. a referenced memory has
-// since been deleted), the proposal is left pending and an error is returned,
-// so the owner can retry or dismiss.
+// summary as a note, a memory_wanted opens a task to write the missing
+// knowledge, and a rekind reclassifies the memory's kind in place. If the
+// effect cannot be carried out (e.g. a referenced memory has since been
+// deleted), the proposal is left pending and an error is returned, so the
+// owner can retry or dismiss.
 func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) {
 	p, ok, err := store.ProposalByID(ctx, s.db, id)
 	if err != nil {
@@ -51,6 +53,8 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyMemoryWanted(ctx, p, now)
 	case store.ProposalToolError:
 		result, err = s.applyToolError(ctx, p, now)
+	case store.ProposalRekind:
+		result, err = s.applyRekind(ctx, p, now)
 	default:
 		return nil, fmt.Errorf("unknown proposal kind %q", p.Kind)
 	}
@@ -254,6 +258,38 @@ func (s *Service) applyReproject(ctx context.Context, p store.Proposal, now time
 		"name": moved.Name, "from": from, "to": to, "by": "gardener",
 	})
 	return map[string]any{"moved": lifecycle.MemoryRef(to, moved.Name), "from": from, "to": to}, nil
+}
+
+// applyRekind reclassifies a memory in place: same ULID, same project, same
+// body -- only the kind (and the updated stamp) change, so briefings and recall
+// start tiering it under its corrected kind. It is idempotent: a memory already
+// at the target kind is a no-op success, so a retry after a partial apply
+// converges. An unknown target kind is a hard error (the proposal stays pending)
+// rather than a silent default -- the owner approved a specific classification.
+func (s *Service) applyRekind(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
+	to := core.MemoryKind(payloadString(p.Payload, "to"))
+	if !slices.Contains(core.MemoryKinds, to) {
+		return nil, fmt.Errorf("rekind proposal has unknown target kind %q", to)
+	}
+	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
+	if err != nil {
+		return nil, err
+	}
+	from := mem.Kind
+	ref := lifecycle.MemoryRef(mem.Project, mem.Name)
+	if from == to {
+		return map[string]any{"rekinded": ref, "from": string(from), "to": string(to), "noop": true}, nil
+	}
+	mem.Kind = to
+	mem.Updated = now
+	written, err := s.files.WriteMemory(ctx, mem)
+	if err != nil {
+		return nil, err
+	}
+	s.recordMemory(ctx, core.EventMemoryWritten, written, map[string]any{
+		"name": written.Name, "kind_from": string(from), "kind_to": string(to), "by": "gardener",
+	})
+	return map[string]any{"rekinded": ref, "from": string(from), "to": string(to)}, nil
 }
 
 // applySplit sets up the topology for a project split: it creates the child and

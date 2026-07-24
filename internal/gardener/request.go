@@ -174,7 +174,7 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 		"action": "request", "text": truncateRunes(text, 200),
 		"created": res.Total, "merges": res.ByKind[store.ProposalMerge],
 		"archives": res.ByKind[store.ProposalArchive], "consolidations": res.ByKind[store.ProposalConsolidate],
-		"reprojects": res.ByKind[store.ProposalReproject],
+		"reprojects": res.ByKind[store.ProposalReproject], "rekinds": res.ByKind[store.ProposalRekind],
 	})
 	return res, nil
 }
@@ -260,6 +260,7 @@ Operations (return these in "ops"):
 - archive: retire a memory that is no longer relevant. {"op":"archive","target":<n>,"reason":"<short why>"}. The memory is marked invalid but stays readable.
 - consolidate: replace several redundant memories with ONE new unified memory that you write. {"op":"consolidate","name":"<short-kebab-name>","kind":"<kind>","description":"<one line, <=150 chars>","body":"<full markdown body>","sources":[<n>,<m>,...]}. Every named source is superseded by the new memory. Use this (not merge) when the truth is spread across several memories and a fresh combined write is clearer than keeping any single one.
 - reproject: move a memory to a DIFFERENT, ALREADY-EXISTING project. {"op":"reproject","target":<n>,"to":"<existing-project-slug>","reason":"<short why>"}. "to" MUST be one of the existing project slugs listed below. Use this when a memory is filed under the wrong project. Do NOT use reproject to move a memory into a project that does not exist yet -- that is a split.
+- rekind: change a memory's KIND classification in place. {"op":"rekind","target":<n>,"kind":"<kind>","reason":"<short why>"}. The memory keeps its identity, project, and body; only its kind changes. The most common correction: constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, file sync sets).
 
 Splitting a project (special -- NOT an op):
 - If the request is to SPLIT one project into NEW child projects (e.g. "split arctop-app into arctop-ios and arctop-android"), do NOT emit ops. Instead return {"split":{"source":"<project-slug-to-split>","instruction":"<the request text>"}}. Splitting creates new projects and a shared parent and is planned by a separate pass; here you only identify the single project being split.
@@ -267,7 +268,7 @@ Splitting a project (special -- NOT an op):
 Rules:
 - Reference memories ONLY by their [N] candidate number. Never invent numbers.
 - For a merge, keep and drop must be different memories.
-- For consolidate, kind is one of: ` + requestKindList() + `. name is a short kebab-case identifier. Write a genuine unified body from the sources; do not invent facts beyond them.
+- For consolidate and rekind, kind is one of: ` + requestKindList() + `. For a consolidate, name is a short kebab-case identifier; write a genuine unified body from the sources and do not invent facts beyond them.
 - For reproject, "to" must be one of the existing project slugs. Creating a new project is a split, not a reproject.
 - Propose only what the request asks for. If nothing applies, return {"ops":[]}.
 - Output ONLY a JSON object -- either {"split":{...}} OR {"ops":[...]} -- with no prose and no markdown code fences.`
@@ -302,14 +303,15 @@ func projectLabel(project string) string {
 // reqOp is one operation the interpreter emits. Candidate references are 1-based
 // indices into the candidate list, so 0 is a clean "absent" sentinel.
 type reqOp struct {
-	Op     string `json:"op"`     // "merge" | "archive" | "consolidate" | "reproject"
+	Op     string `json:"op"`     // "merge" | "archive" | "consolidate" | "reproject" | "rekind"
 	Keep   int    `json:"keep"`   // merge: candidate to retain
 	Drop   int    `json:"drop"`   // merge: candidate to fold into keep
-	Target int    `json:"target"` // archive/reproject: candidate to retire/move
+	Target int    `json:"target"` // archive/reproject/rekind: candidate to retire/move/reclassify
 	To     string `json:"to"`     // reproject: destination project slug
-	Reason string `json:"reason"` // archive/reproject rationale
+	Reason string `json:"reason"` // archive/reproject/rekind rationale
 
 	// consolidate: a new unified memory written from several sources.
+	// Kind doubles as a rekind's target kind.
 	Name        string `json:"name"`
 	Kind        string `json:"kind"`
 	Description string `json:"description"`
@@ -384,6 +386,25 @@ func mapRequestOp(op reqOp, candidates []core.Memory, text string, known map[str
 		}
 		return store.ProposalReproject, "reproject:" + m.ID, map[string]any{
 			"id": m.ID, "name": m.Name, "from": m.Project, "to": to,
+			"rationale": strings.TrimSpace(op.Reason), "source": "request", "request_text": text,
+		}, ""
+	case store.ProposalRekind:
+		m, ok := candidateAt(candidates, op.Target)
+		if !ok {
+			return "", "", nil, fmt.Sprintf("rekind references memory #%d, which is not in the candidate list", op.Target)
+		}
+		to := core.MemoryKind(strings.TrimSpace(op.Kind))
+		if !slices.Contains(core.MemoryKinds, to) {
+			// Unlike a consolidate there is no safe default: the whole point of a
+			// rekind is the specific classification, so an unknown kind drops the op.
+			return "", "", nil, fmt.Sprintf("rekind of %s names unknown kind %q", m.Name, op.Kind)
+		}
+		if m.Kind == to {
+			return "", "", nil, fmt.Sprintf("%s is already a %s", m.Name, to)
+		}
+		return store.ProposalRekind, "rekind:" + m.ID + ":" + string(to), map[string]any{
+			"id": m.ID, "name": m.Name, "project": m.Project,
+			"from": string(m.Kind), "to": string(to),
 			"rationale": strings.TrimSpace(op.Reason), "source": "request", "request_text": text,
 		}, ""
 	case store.ProposalMerge:
@@ -498,6 +519,9 @@ func requestSummary(res RequestResult) string {
 	}
 	if n := res.ByKind[store.ProposalReproject]; n > 0 {
 		parts = append(parts, fmt.Sprintf("%d move", n))
+	}
+	if n := res.ByKind[store.ProposalRekind]; n > 0 {
+		parts = append(parts, fmt.Sprintf("%d rekind", n))
 	}
 	return "created " + strings.Join(parts, ", ") + " proposal(s)"
 }

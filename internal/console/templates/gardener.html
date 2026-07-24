@@ -269,6 +269,17 @@
   {{if .Rationale}}<div class="proposal-reason"><span>Why this scope fits</span><p>{{.Rationale}}</p></div>{{end}}
   <div class="proposal-assurance">{{icon "folder-tree"}} The memory keeps its identity and history; only its project scope changes.</div>
   {{end}}
+{{else if eq .Kind "rekind"}}
+  {{with .Rekind}}
+  <div class="proposal-moving-memory">{{icon "brain"}} <a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{if .Project}} <small><a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a></small>{{end}}</div>
+  <div class="proposal-move-map">
+    <div><span>From kind</span><strong>{{.From}}</strong></div>
+    <span class="proposal-path">{{icon "arrow-right"}}</span>
+    <div class="destination"><span>To kind</span><strong>{{.To}}</strong></div>
+  </div>
+  {{if .Rationale}}<div class="proposal-reason"><span>Why this kind fits</span><p>{{.Rationale}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "sort"}} The memory keeps its identity, project, and body; only its kind classification changes.</div>
+  {{end}}
 {{else if eq .Kind "abandon_plan"}}
   {{with .AbandonPlan}}
   <div class="proposal-object">

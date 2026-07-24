@@ -42,7 +42,9 @@ constraint does not become less true by sitting still.
 `gardener_request` takes a request in natural language ("fold the two console
 theme memories together") and turns it into the same reviewable proposals. It can
 also **reproject** a memory filed under the wrong project - moving it to a
-different project that already exists.
+different project that already exists - and **rekind** a memory filed under the
+wrong kind, reclassifying it in place (most often demoting a project-local
+constraint to a convention, or the reverse).
 
 Its `project` argument scopes the memories it may reference: a project slug (that
 project plus globals), `global` for globals only, or `all` for every project on
@@ -122,15 +124,15 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 
 ## gardener_proposals {#gardener_proposals}
 
-List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only.
+List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`. |
 
 ## gardener_request {#gardener_request}
 
-The natural-language entry point for REORGANIZING memory. Describe the change in plain language and it returns reviewable pending proposals -- fold duplicates together ("these two memories are duplicates -- keep the newer"), retire stale memories ("archive anything about the old port 8080"), synthesize several into one ("combine the three auth-flow notes"), or move a mis-filed memory to another EXISTING project ("the iOS DFU memory belongs in arctop-ios"). Use this whenever the user describes how they want their knowledge organized; if the intended change is ambiguous, ask them a clarifying question first. It NEVER mutates memories: it only creates pending proposals -- review with gardener_proposals, resolve with gardener_apply. If the request is to split one project into NEW child projects, it recognizes that and returns guidance (splitSource) pointing you at gardener_split instead. Needs an LLM chat client.
+The natural-language entry point for REORGANIZING memory. Describe the change in plain language and it returns reviewable pending proposals -- fold duplicates together ("these two memories are duplicates -- keep the newer"), retire stale memories ("archive anything about the old port 8080"), synthesize several into one ("combine the three auth-flow notes"), move a mis-filed memory to another EXISTING project ("the iOS DFU memory belongs in arctop-ios"), or reclassify a memory's kind ("the wordmark memory is a convention, not a constraint"). Use this whenever the user describes how they want their knowledge organized; if the intended change is ambiguous, ask them a clarifying question first. It NEVER mutates memories: it only creates pending proposals -- review with gardener_proposals, resolve with gardener_apply. If the request is to split one project into NEW child projects, it recognizes that and returns guidance (splitSource) pointing you at gardener_split instead. Needs an LLM chat client.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -148,7 +150,7 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 
 ## gardener_apply {#gardener_apply}
 
-Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised.
+Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
