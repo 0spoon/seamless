@@ -54,6 +54,12 @@ current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's [memory-wanted proposals](https://thereisnospoon.org/docs/concepts/gardener/#what-it-looks-for).
 
+The optional `kind` filter restricts hits to memories of one frontmatter kind -
+the mechanism behind briefing hints like `recall kind=convention`. It implies
+memories-only: combining it with `scope=notes` is rejected as contradictory
+rather than returning a misleading empty result, and a kind-filtered miss still
+counts as memory-wanted demand.
+
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.
@@ -147,6 +153,7 @@ Search memories and notes by meaning and keyword (fused), scoped to the current 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `query` | string | **yes** | what you are looking for |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | number | no | maximum results (default 10) |
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |

@@ -55,7 +55,7 @@ type SnippetHit struct {
 // with no index row (notes, or an orphan) has nothing to invalidate it and is
 // kept.
 func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SearchHit, error) {
-	hits, err := ftsSearch(ctx, db, query, kinds, projects, time.Time{}, limit, false)
+	hits, err := ftsSearch(ctx, db, query, kinds, projects, "", time.Time{}, limit, false)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +74,7 @@ func FTSSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []
 // LIMIT so old, highly-ranked rows cannot crowd in-window matches out of the
 // candidate set.
 func FTSSearchSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int) ([]SearchHit, error) {
-	hits, err := ftsSearch(ctx, db, query, kinds, projects, since, limit, false)
+	hits, err := ftsSearch(ctx, db, query, kinds, projects, "", since, limit, false)
 	if err != nil {
 		return nil, err
 	}
@@ -94,13 +94,16 @@ func FTSSearchSince(ctx context.Context, db *sql.DB, query string, kinds, projec
 // ordering cannot drift between the snippet and no-snippet paths -- callers rely
 // on both returning identical hits for identical inputs.
 func FTSSearchSnippets(ctx context.Context, db *sql.DB, query string, kinds, projects []string, limit int) ([]SnippetHit, error) {
-	return ftsSearch(ctx, db, query, kinds, projects, time.Time{}, limit, true)
+	return ftsSearch(ctx, db, query, kinds, projects, "", time.Time{}, limit, true)
 }
 
 // FTSSearchSnippetsSince is the windowed form of FTSSearchSnippets. See
 // FTSSearchSince for why the time predicate is part of the candidate query.
-func FTSSearchSnippetsSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int) ([]SnippetHit, error) {
-	return ftsSearch(ctx, db, query, kinds, projects, since, limit, true)
+// memKind, when non-empty, restricts hits to memories of that frontmatter kind
+// (memories_index.kind); notes have no memories_index row, so a memKind filter
+// excludes them regardless of the kinds (item-type) filter.
+func FTSSearchSnippetsSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, memKind string, since time.Time, limit int) ([]SnippetHit, error) {
+	return ftsSearch(ctx, db, query, kinds, projects, memKind, since, limit, true)
 }
 
 // FTSSearchAllTerms is FTSSearch with AND semantics: a hit must contain every
@@ -127,7 +130,7 @@ func FTSSearchAllTerms(ctx context.Context, db *sql.DB, terms []string, kinds, p
 		return nil, nil
 	}
 	// Adjacent quoted terms are an implicit AND in FTS5.
-	hits, err := ftsSearchMatch(ctx, db, strings.Join(quoted, " "), kinds, projects, time.Time{}, limit, false)
+	hits, err := ftsSearchMatch(ctx, db, strings.Join(quoted, " "), kinds, projects, "", time.Time{}, limit, false)
 	if err != nil {
 		return nil, err
 	}
@@ -140,13 +143,13 @@ func FTSSearchAllTerms(ctx context.Context, db *sql.DB, terms []string, kinds, p
 
 // ftsSearch is the shared body of the free-text FTS entry points. withSnippet
 // adds the snippet() projection; everything else about the query is identical.
-func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
-	return ftsSearchMatch(ctx, db, ftsQuery(query), kinds, projects, since, limit, withSnippet)
+func ftsSearch(ctx context.Context, db *sql.DB, query string, kinds, projects []string, memKind string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
+	return ftsSearchMatch(ctx, db, ftsQuery(query), kinds, projects, memKind, since, limit, withSnippet)
 }
 
 // ftsSearchMatch runs a pre-built FTS5 MATCH expression. match must already be
 // sanitized (quoted terms only); an empty match yields no hits.
-func ftsSearchMatch(ctx context.Context, db *sql.DB, match string, kinds, projects []string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
+func ftsSearchMatch(ctx context.Context, db *sql.DB, match string, kinds, projects []string, memKind string, since time.Time, limit int, withSnippet bool) ([]SnippetHit, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -178,6 +181,13 @@ func ftsSearchMatch(ctx context.Context, db *sql.DB, match string, kinds, projec
 		for _, p := range projects {
 			args = append(args, p)
 		}
+	}
+	// A NULL mi.kind (a note, or an orphan) fails the predicate, so a memKind
+	// filter is memories-only by construction -- applied inside the candidate
+	// query, like scope, so the whole depth stays in-kind.
+	if memKind != "" {
+		sqlStr += ` AND mi.kind = ?`
+		args = append(args, memKind)
 	}
 	if !since.IsZero() {
 		sqlStr += ` AND COALESCE(mi.updated_at, ni.updated_at) >= ?`

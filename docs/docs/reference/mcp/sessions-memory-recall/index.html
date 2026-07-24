@@ -263,6 +263,11 @@ similarity with reciprocal rank fusion, nudges the fused order by favorite and
 current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's <a href="../../../concepts/gardener/#what-it-looks-for">memory-wanted proposals</a>.</p>
+<p>The optional <code>kind</code> filter restricts hits to memories of one frontmatter kind -
+the mechanism behind briefing hints like <code>recall kind=convention</code>. It implies
+memories-only: combining it with <code>scope=notes</code> is rejected as contradictory
+rather than returning a misleading empty result, and a kind-filtered miss still
+counts as memory-wanted demand.</p>
 <p>It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.</p>
@@ -574,6 +579,12 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td>string</td>
 <td><strong>yes</strong></td>
 <td>what you are looking for</td>
+</tr>
+<tr>
+<td><code>kind</code></td>
+<td>string</td>
+<td>no</td>
+<td>only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected. One of: <code>constraint</code>, <code>convention</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, <code>stage</code>.</td>
 </tr>
 <tr>
 <td><code>limit</code></td>

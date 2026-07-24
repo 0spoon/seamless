@@ -61,7 +61,7 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		limit = 20
 	}
 
-	acc, err := s.candidates(ctx, in.Query, kinds, in.Projects, in.Since, searchSourceDepth, in.Semantic, "retrieve.Search")
+	acc, err := s.candidates(ctx, in.Query, kinds, in.Projects, "", in.Since, searchSourceDepth, in.Semantic, "retrieve.Search")
 	if err != nil {
 		return nil, err
 	}

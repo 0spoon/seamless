@@ -65,6 +65,12 @@ current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's [memory-wanted proposals](/concepts/gardener/#what-it-looks-for).
 
+The optional `kind` filter restricts hits to memories of one frontmatter kind -
+the mechanism behind briefing hints like `recall kind=convention`. It implies
+memories-only: combining it with `scope=notes` is rejected as contradictory
+rather than returning a misleading empty result, and a kind-filtered miss still
+counts as memory-wanted demand.
+
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.

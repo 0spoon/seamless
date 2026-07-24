@@ -20,6 +20,7 @@ func recallTool() mcp.Tool {
 		mcp.WithDescription("Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point."),
 		mcp.WithString("query", mcp.Required(), mcp.Description("what you are looking for")),
 		mcp.WithString("scope", enumOf(retrieve.RecallScopes), mcp.Description("what to search (default all)")),
+		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("maximum results (default 10)")),
 	)
@@ -35,7 +36,8 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 		return errResult("recall", err)
 	}
 	hits, err := s.cfg.Retrieve.Recall(ctx, retrieve.RecallInput{
-		Query: query, Project: project, Scope: argString(req, "scope"), Limit: argInt(req, "limit", 10),
+		Query: query, Project: project, Scope: argString(req, "scope"),
+		Kind: argString(req, "kind"), Limit: argInt(req, "limit", 10),
 	})
 	if err != nil {
 		return errResult("recall", err)
@@ -55,10 +57,15 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 			map[string]any{"query": query, "item_ids": ids, "item_scores": scores, "source": "recall"})
 	} else {
 		// A zero-hit recall is demand for knowledge that does not exist -- the
-		// signal the gardener's memory-wanted pass clusters into proposals.
-		s.record(ctx, core.EventRecallMiss, s.boundSession(ctx), project, "",
-			map[string]any{"query": events.Truncate(query, recallMissQueryMax), "scope": argString(req, "scope"),
-				"limit": argInt(req, "limit", 10), "source": "recall"})
+		// signal the gardener's memory-wanted pass clusters into proposals. A
+		// kind-filtered miss is still demand (the pass reads only query); kind
+		// rides along only when set, so the unfiltered payload shape is stable.
+		payload := map[string]any{"query": events.Truncate(query, recallMissQueryMax), "scope": argString(req, "scope"),
+			"limit": argInt(req, "limit", 10), "source": "recall"}
+		if kind := argString(req, "kind"); kind != "" {
+			payload["kind"] = kind
+		}
+		s.record(ctx, core.EventRecallMiss, s.boundSession(ctx), project, "", payload)
 	}
 	return jsonResult(map[string]any{"hits": hits})
 }

@@ -104,17 +104,20 @@ func UpsertEmbedding(ctx context.Context, db *sql.DB, itemID, kind, model string
 // row (a note, or an orphan) has nothing to invalidate it and survives this
 // predicate -- the scope filter is what drops orphans.
 func CosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, limit int) ([]SearchHit, error) {
-	return cosineSearch(ctx, db, query, model, kinds, projects, time.Time{}, limit)
+	return cosineSearch(ctx, db, query, model, kinds, projects, "", time.Time{}, limit)
 }
 
 // CosineSearchSince is CosineSearch restricted to knowledge updated at or
 // after since. A zero since is unbounded. Filtering before the top-K scan keeps
 // old neighbors from occupying the entire candidate window of a recent search.
-func CosineSearchSince(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, since time.Time, limit int) ([]SearchHit, error) {
-	return cosineSearch(ctx, db, query, model, kinds, projects, since, limit)
+// memKind, when non-empty, restricts hits to memories of that frontmatter kind
+// (memories_index.kind); notes have no memories_index row, so a memKind filter
+// excludes them regardless of the kinds (item-type) filter.
+func CosineSearchSince(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, memKind string, since time.Time, limit int) ([]SearchHit, error) {
+	return cosineSearch(ctx, db, query, model, kinds, projects, memKind, since, limit)
 }
 
-func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, since time.Time, limit int) ([]SearchHit, error) {
+func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string, kinds, projects []string, memKind string, since time.Time, limit int) ([]SearchHit, error) {
 	if len(query) == 0 {
 		return nil, fmt.Errorf("store.CosineSearch: empty query vector")
 	}
@@ -142,6 +145,13 @@ func cosineSearch(ctx context.Context, db *sql.DB, query []float32, model string
 		for _, p := range projects {
 			args = append(args, p)
 		}
+	}
+	// A NULL mi.kind (a note, or an orphan) fails the predicate, so a memKind
+	// filter is memories-only by construction, applied before the top-K scan
+	// like every other scope predicate.
+	if memKind != "" {
+		sqlStr += ` AND mi.kind = ?`
+		args = append(args, memKind)
 	}
 	if !since.IsZero() {
 		sqlStr += ` AND COALESCE(mi.updated_at, ni.updated_at) >= ?`

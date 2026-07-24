@@ -87,7 +87,14 @@ type RecallInput struct {
 	Query   string
 	Project string
 	Scope   string // all | memories | notes (default all)
-	Limit   int
+	// Kind, when non-empty, restricts hits to memories of that frontmatter
+	// kind (core.MemoryKinds) -- the mechanism behind briefing hints like
+	// "recall kind=convention". It implies memories-only, so Scope "notes" is
+	// rejected as contradictory, and link expansion is skipped: a kind filter
+	// is a targeted enumeration, and a [[link]] neighbor of another kind would
+	// violate it.
+	Kind  string
+	Limit int
 }
 
 type fusedItem struct {
@@ -108,14 +115,14 @@ type fusedItem struct {
 // drift on the behavior that matters most when the provider misbehaves.
 //
 // semantic requests the cosine leg; it is skipped when no embedder is
-// configured. projects/kinds are applied inside the candidate queries (never
-// after fusion) so the whole depth stays in scope.
+// configured. projects/kinds/memKind are applied inside the candidate queries
+// (never after fusion) so the whole depth stays in scope.
 //
 // The FTS leg always asks for snippets: the snippet projection cannot perturb
 // which rows return or in what order (pinned by
 // store.TestFTSSearch_SnippetVariantMatchesPlainOrdering), so Recall paying for
 // a snippet it discards is cheaper than two divergent query paths.
-func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, since time.Time, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
+func (s *Service) candidates(ctx context.Context, query string, kinds, projects []string, memKind string, since time.Time, depth int, semantic bool, who string) (map[string]*fusedItem, error) {
 	acc := make(map[string]*fusedItem)
 	add := func(itemID, kind string, rank int, isSemantic bool, snippet string, cosine float64) {
 		f := acc[itemID]
@@ -154,7 +161,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 			// embedderCheck is where the owner sees this standing condition.
 			s.logger.Warn(who+": embed failed, FTS only", "error", err)
 		default:
-			hits, err := store.CosineSearchSince(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, since, depth)
+			hits, err := store.CosineSearchSince(ctx, s.db, qvec, s.embedder.Model(), kinds, projects, memKind, since, depth)
 			if err != nil {
 				return nil, err
 			}
@@ -163,7 +170,7 @@ func (s *Service) candidates(ctx context.Context, query string, kinds, projects 
 			}
 		}
 	}
-	ftsHits, err := store.FTSSearchSnippetsSince(ctx, s.db, query, kinds, projects, since, depth)
+	ftsHits, err := store.FTSSearchSnippetsSince(ctx, s.db, query, kinds, projects, memKind, since, depth)
 	if err != nil {
 		return nil, err
 	}
@@ -201,6 +208,22 @@ func (s *Service) hydrate(ctx context.Context, ordered []string, acc map[string]
 // to FTS only.
 func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	kinds := scopeKinds(in.Scope)
+	if in.Kind != "" {
+		// An unknown kind would silently match nothing, indistinguishable from
+		// "no such knowledge" -- the MCP boundary enforces the enum, this guards
+		// the Go API.
+		if !core.MemoryKind(in.Kind).Valid() {
+			return nil, fmt.Errorf("retrieve.Recall: unknown kind %q", in.Kind)
+		}
+		// A kind filter names a memory frontmatter kind, so it is memories-only
+		// by definition; combined with the notes scope nothing could ever match,
+		// and a silent empty result would read as "no such knowledge". Reject
+		// the contradiction instead. Any other scope narrows to memories.
+		if in.Scope == "notes" {
+			return nil, fmt.Errorf("retrieve.Recall: kind %q filters memories; scope=notes excludes them -- drop kind or widen scope", in.Kind)
+		}
+		kinds = []string{"memory"}
+	}
 	limit := in.Limit
 	if limit <= 0 {
 		limit = 10
@@ -215,7 +238,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		projects = append(projects, in.Project)
 	}
 
-	acc, err := s.candidates(ctx, in.Query, kinds, projects, time.Time{}, recallSourceDepth, true, "retrieve.Recall")
+	acc, err := s.candidates(ctx, in.Query, kinds, projects, in.Kind, time.Time{}, recallSourceDepth, true, "retrieve.Recall")
 	if err != nil {
 		return nil, err
 	}
@@ -229,9 +252,13 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	// Link expansion: pull in memories referenced by [[name]] links in the top
 	// hits, as a third retrieval signal alongside semantic and FTS. Requires the
 	// body reader (index rows carry no body); degrades away when it is unset.
-	// expandLinks adds neighbors to both acc and mems.
-	if _, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
-		return nil, err
+	// expandLinks adds neighbors to both acc and mems. Skipped under a kind
+	// filter: a [[link]] neighbor of another kind would violate it (see
+	// RecallInput.Kind).
+	if in.Kind == "" {
+		if _, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
+			return nil, err
+		}
 	}
 
 	// Favorite and utility boosts, then one re-rank covering both and any link
@@ -280,6 +307,11 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 			// ones; this is the residual guard for a memory superseded between
 			// the candidate query and this hydration.
 			if !m.Active() {
+				continue
+			}
+			// Residual kind guard, same spirit as scopeVisible below: the
+			// candidate queries already filter, this catches index drift.
+			if in.Kind != "" && string(m.Kind) != in.Kind {
 				continue
 			}
 			h = memoryHit(m)

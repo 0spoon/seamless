@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -62,5 +63,40 @@ func TestRecall_ZeroHitRecordsMiss(t *testing.T) {
 	// A hit records only retrieval.injected -- no second miss row appears.
 	rec = callJSON(t, ctx, cli, "recall", map[string]any{"query": "chroma readiness boot race"})
 	require.NotEmpty(t, rec["hits"])
+	require.Len(t, missEvents(t, db), 1)
+}
+
+// A kind-filtered recall keeps both filter contracts: a zero-hit call is still
+// demand (the miss records, kind riding along), and the notes scope is a
+// contradiction reported as an error, not an empty result.
+func TestRecall_KindFilterMissAndScopeContradiction(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "boot-order", "kind": "gotcha",
+		"description": "boot order matters",
+		"body":        "b\n",
+	})
+
+	// The gotcha matches the query, but the convention filter excludes it: a
+	// kind-filtered zero-hit is still a recorded miss (memory-wanted demand).
+	rec := callJSON(t, ctx, cli, "recall", map[string]any{"query": "boot order", "kind": "convention"})
+	require.Empty(t, rec["hits"])
+	misses := missEvents(t, db)
+	require.Len(t, misses, 1)
+	require.Equal(t, "boot order", misses[0]["query"])
+	require.Equal(t, "convention", misses[0]["kind"])
+
+	// kind implies memories-only; combined with scope=notes it errors loudly.
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name:      "recall",
+		Arguments: map[string]any{"query": "boot order", "scope": "notes", "kind": "convention"},
+	}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+	// The contradiction is not a miss: no second miss row appears.
 	require.Len(t, missEvents(t, db), 1)
 }

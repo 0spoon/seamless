@@ -91,7 +91,7 @@ func TestCosineSearchSince_FiltersBeforeTopK(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "old", all[0].ItemID)
 
-	hits, err := CosineSearchSince(ctx, db, []float32{1, 0}, "m1", nil, nil, now.Add(-24*time.Hour), 1)
+	hits, err := CosineSearchSince(ctx, db, []float32{1, 0}, "m1", nil, nil, "", now.Add(-24*time.Hour), 1)
 	require.NoError(t, err)
 	require.Len(t, hits, 1)
 	require.Equal(t, "new", hits[0].ItemID)
