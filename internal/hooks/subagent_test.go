@@ -13,6 +13,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -295,8 +296,8 @@ func TestSubagentSpawnPrompt_ClaudeCode(t *testing.T) {
 
 // The subagent path populates BriefingInput.Prompt for both clients; a missing
 // transcript leaves it empty without disturbing the rest of the input. The
-// field itself stays unread by the briefing until the RELEVANT step lands
-// (TestSubagentBriefing_PromptFieldUnread in internal/retrieve pins that).
+// briefing matches the field against project memories to render its RELEVANT
+// section (the briefing_prompt tests in internal/retrieve cover that half).
 func TestSubagentBriefingInput_PopulatesPrompt(t *testing.T) {
 	// Claude Code: the child transcript exists when the hook fires.
 	in := subagentBriefingInput(ClientClaudeCode, subagentPayload{
@@ -325,6 +326,63 @@ func TestSubagentBriefingInput_PopulatesPrompt(t *testing.T) {
 	})
 	require.Equal(t, "/work/demo", in.CWD)
 	require.Empty(t, in.Prompt)
+}
+
+// The RELEVANT section end to end (Claude Code): the child transcript supplies
+// the spawn prompt, the matched memory renders between the constraint tiers
+// and the footer, its id joins the injected-ids telemetry, and that telemetry
+// stays weight 0 for utility -- a briefing inject is exposure, never
+// prompt-class demand, even though the prompt matcher produced it (the
+// closed-loop-utility-signal-contract boundary).
+func TestSubagentStart_RelevantInjectsAreWeightZero(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+	const parent = "cc-parent-relevant-0001"
+
+	_, _ = post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"session_id": parent, "cwd": "/work/demo", "source": "startup",
+	})
+
+	transcript := placeSubagentTranscriptContent(t, "rel1", []byte(
+		`{"type":"user","message":{"role":"user","content":"why does the chroma container health check race at startup"}}`+"\n"))
+	resp, out := post(t, ts.URL+"/api/hooks/subagent-start", testKey, map[string]any{
+		"session_id": parent, "agent_id": "rel1", "agent_type": "Explore",
+		"cwd": "/work/demo", "transcript_path": transcript,
+		"permission_mode": "default", "hook_event_name": "SubagentStart",
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.Contains(t, ac, "RELEVANT: chroma-boot-race: chroma container health check startup race")
+	require.Greater(t, strings.Index(ac, "RELEVANT: "), strings.Index(ac, "CONSTRAINT: "),
+		"RELEVANT renders after the constraint tiers")
+	require.Contains(t, ac, "Recall on demand with recall; read a memory with memory_read.")
+	require.True(t, strings.HasSuffix(ac, "</seam-briefing>"))
+
+	// The RELEVANT id joins the injected-ids instrumentation on the
+	// subagent-start surface, alongside the constraints'.
+	var injection core.Event
+	for _, event := range eventsOfKind(t, events.NewRecorder(db), core.EventInjected) {
+		if event.Payload["hook"] == "subagent-start" {
+			injection = event
+			break
+		}
+	}
+	require.NotEmpty(t, injection.ID, "the subagent-start injection must be recorded")
+	require.Contains(t, injection.Payload["item_ids"], "01A")
+	require.Contains(t, injection.Payload["item_ids"], "01B")
+
+	// Weight 0: rebuilding retrieval stats from the event log credits the
+	// RELEVANT memory with exposure only. No prompt-class (or any other)
+	// demand component may appear -- demand stays the child's own subsequent
+	// memory_read/recall calls.
+	require.NoError(t, store.RebuildRetrievalStats(ctx, db))
+	stat, ok, err := store.GetRetrievalStat(ctx, db, "01B")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, 2, stat.InjectCount, "session-start index line + subagent-start RELEVANT line")
+	require.Zero(t, stat.Utility, "a RELEVANT inject must not accrue utility")
+	require.True(t, stat.Components.IsZero(), "no demand in any class, prompt included")
 }
 
 func TestParseSubagentTranscript(t *testing.T) {

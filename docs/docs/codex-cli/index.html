@@ -274,7 +274,8 @@ refreshed on upgrades.</p>
 Claude-style plan-file/<code>ExitPlanMode</code> surface to capture from Codex, and Codex
 0.144.6 emits <strong>no SessionEnd</strong>, so the parent lifecycle closes differently (see
 <a href="#no-sessionend-the-reaper-closes-sessions">below</a>). Subagent hooks provide
-constraints and lifecycle safety without creating Codex plan notes.</p>
+constraints, spawn-prompt-matched memories, and lifecycle safety without
+creating Codex plan notes.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -302,8 +303,8 @@ constraints and lifecycle safety without creating Codex plan notes.</p>
 </tr>
 <tr>
 <td><code>SubagentStart</code></td>
-<td>constraints-only <code>&lt;seam-briefing&gt;</code></td>
-<td>Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one.</td>
+<td>child <code>&lt;seam-briefing&gt;</code></td>
+<td>Gives the child the project's active constraints, up to three <code>RELEVANT:</code> memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one.</td>
 </tr>
 <tr>
 <td><code>SubagentStop</code></td>
@@ -327,9 +328,9 @@ tokens to a temporary file and gives the model a head-and-tail preview. That
 would make Seamless's injection telemetry describe more text than the model saw.
 Seamless therefore caps every Codex <code>additionalContext</code> response at <strong>2,400
 estimated tokens</strong> before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart constraints;
-generated closing tags and the ambient-session line are preserved. Claude Code
-output is not given this Codex-specific cap.</p>
+SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
+briefings; generated closing tags and the ambient-session line are preserved.
+Claude Code output is not given this Codex-specific cap.</p>
 <h3 id="trust-the-hooks-once">Trust the hooks once</h3>
 <p>Codex will not run a non-managed command hook until its <strong>current definition</strong> is
 trusted. New or changed definitions are skipped until reviewed, so a reinstall

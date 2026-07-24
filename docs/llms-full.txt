@@ -583,7 +583,8 @@ invocation to run yourself.
 
 The hooks are what make sessions **ambient** - an agent gets a briefing at
 startup, its prompts get matched against your memories, its Task subagents get
-the project's constraints at spawn, its findings get harvested at the end, and
+the project's constraints plus spawn-prompt-matched memories at spawn, its
+findings get harvested at the end, and
 its plan-mode activity gets captured, all without the agent choosing to call
 anything. See [Sessions & briefings](/concepts/sessions/)
 for what that delivers and [the hooks reference](/reference/hooks/) for the
@@ -978,14 +979,15 @@ Codex installs five hooks against seven for Claude Code. Seamless has no verifie
 Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
 0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
 [below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide
-constraints and lifecycle safety without creating Codex plan notes.
+constraints, spawn-prompt-matched memories, and lifecycle safety without
+creating Codex plan notes.
 
 | Event | Injects | Effect |
 |---|---|---|
 | `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes an opaque `cx/...` ambient session keyed by the full external ID. |
 | `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
 | `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
-| `SubagentStart` | constraints-only `<seam-briefing>` | Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
+| `SubagentStart` | child `<seam-briefing>` | Gives the child the project's active constraints, up to three `RELEVANT:` memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
 | `SubagentStop` | nothing | Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes. |
 
 Codex delivers a hook's `additionalContext` to the model on both SessionStart and
@@ -1006,9 +1008,9 @@ tokens to a temporary file and gives the model a head-and-tail preview. That
 would make Seamless's injection telemetry describe more text than the model saw.
 Seamless therefore caps every Codex `additionalContext` response at **2,400
 estimated tokens** before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart constraints;
-generated closing tags and the ambient-session line are preserved. Claude Code
-output is not given this Codex-specific cap.
+SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
+briefings; generated closing tags and the ambient-session line are preserved.
+Claude Code output is not given this Codex-specific cap.
 
 ### Trust the hooks once
 
@@ -6029,7 +6031,7 @@ install order:
 | `UserPromptSubmit` | none | http | 5s | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. A miss is logged as a `hook.prompt` event. |
 | `SessionEnd` | none | command (`seam hook session-end`) | 10s | `/api/hooks/session-end` | Harvests findings and completes the agent's sessions. Bare ack - Claude Code's schema has no `hookSpecificOutput` for `SessionEnd`. |
 | `PostToolUse` | `Write\|Edit\|MultiEdit\|ExitPlanMode` | command (`seam hook post-tool-use`) | 10s | `/api/hooks/post-tool-use` | Heartbeats the ambient session. Captures plan-file iterations (`Write`/`Edit`/`MultiEdit` under the plans dir) and plan approvals (`ExitPlanMode`). |
-| `SubagentStart` | none | command (`seam hook subagent-start`) | 10s | `/api/hooks/subagent-start` | Injects a constraints-only briefing into every Task subagent and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
+| `SubagentStart` | none | command (`seam hook subagent-start`) | 10s | `/api/hooks/subagent-start` | Injects the child briefing - pinned constraints, up to three `RELEVANT:` memories matched from the child's spawn prompt, and a recall/memory_read footer - into every Task subagent and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
 | `SubagentStop` | none | command (`seam hook subagent-stop`) | 10s | `/api/hooks/subagent-stop` | Caches a planning subagent's prompt and final report as a `cc-agent-<agent_id>` note in the plan composition. |
 | `PermissionRequest` | `ExitPlanMode` | command (`seam hook permission-request`) | 10s | `/api/hooks/permission-request` | Marks the session's draft plan as presented when the user is prompted to review an `ExitPlanMode` call. |
 
@@ -6040,9 +6042,36 @@ cannot spend the whole hook budget.
 `SessionStart` is the only hook with a matcher on session sources, and Claude
 Code never fires it for Task subagents - its sources are the main-session ones
 (`startup`/`resume`/`clear`/`compact`). A child is briefed by `SubagentStart`
-instead: the same constraints-only briefing the Codex profile injects, keyed off
+instead: the same child briefing the Codex profile injects, keyed off
 the parent's `session_id`. Subagents share the parent's session and get no
 ambient session of their own.
+
+What a child receives is deliberately narrower than the main briefing - the
+parent's prompt carries the task context, so there are no findings, tasks, or
+plan sections. It has three parts:
+
+- **Constraints**, pinned and tiered exactly like the main briefing (the top
+  `constraint_max_full` in full, the rest named on the compact `Also binding`
+  line).
+- **`RELEVANT:` lines** - up to three memories of any kind matched against the
+  child's spawn prompt (read best-effort from the child transcript or Codex
+  rollout; a prompt that has not been flushed yet just means no section). A
+  constraint already visible in either tier is never repeated here, and the
+  dedupe never costs the section a genuinely-new match. These are passive
+  injects: they carry zero utility weight, unlike a `<seam-recall>` match on
+  the agent's own prompt.
+- **A closing footer** naming `recall` and `memory_read`, so even a child in a
+  project with two constraints knows how to pull more.
+
+```text
+<seam-briefing>
+Seam project: seamless -- 24 constraints (subagent scope).
+CONSTRAINT: fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
+Also binding (14): console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
+RELEVANT: chroma-boot-race: chroma container health check startup race
+Recall on demand with recall; read a memory with memory_read.
+</seam-briefing>
+```
 
 ## Codex local host: five hooks
 
@@ -6059,7 +6088,7 @@ lifecycle.
 | `SessionStart` | command (`seam hook session-start --client codex`) | `/api/hooks/session-start` | Registers the cwd's project, assembles the `<seam-briefing>`, and creates or resumes an opaque `cx/<prefix>-<digest>` ambient handle keyed by the full external ID. |
 | `UserPromptSubmit` | command (`seam hook user-prompt-submit --client codex`) | `/api/hooks/user-prompt-submit` | Heartbeats the ambient session, matches the prompt against stored memories, and injects a recall block. |
 | `Stop` | command (`seam hook stop --client codex`) | `/api/hooks/stop` | Heartbeats and harvests findings from the turn's final assistant message. No injection - Codex's `Stop` has no `hookSpecificOutput`. Fires at every turn end. |
-| `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects a constraints-only briefing under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
+| `SubagentStart` | command (`seam hook subagent-start --client codex`) | `/api/hooks/subagent-start` | Injects the child briefing (constraints, spawn-prompt-matched `RELEVANT:` memories, recall footer) under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session. |
 | `SubagentStop` | command (`seam hook subagent-stop --client codex`) | `/api/hooks/subagent-stop` | Heartbeats the parent only. It does not apply the child's model/final message to parent state or create Claude-style plan notes. |
 
 All five are `command` hooks. Codex's current hook schema executes command
@@ -7509,7 +7538,7 @@ as success to an agent, which would then leave two contradictory memories live.
 ```text
 SessionStart trace
 Claude → hook · 1–3 Authenticate, bound, map seam hook session-start forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.
-Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents stop at constraints.
+Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.
 Pack · 9–11 Trim only eligible context Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.
 Hook response · 12–15 Bind, inject, record Create or resume the ambient session, append its line, record the exact text sent, and return additionalContext .
 The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.

@@ -29,7 +29,8 @@ invocation to run yourself.
 
 The hooks are what make sessions **ambient** - an agent gets a briefing at
 startup, its prompts get matched against your memories, its Task subagents get
-the project's constraints at spawn, its findings get harvested at the end, and
+the project's constraints plus spawn-prompt-matched memories at spawn, its
+findings get harvested at the end, and
 its plan-mode activity gets captured, all without the agent choosing to call
 anything. See [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/)
 for what that delivers and [the hooks reference](https://thereisnospoon.org/docs/reference/hooks/) for the

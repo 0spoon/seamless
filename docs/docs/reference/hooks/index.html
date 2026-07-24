@@ -266,7 +266,7 @@ install order:</p>
 <td>command (<code>seam hook subagent-start</code>)</td>
 <td>10s</td>
 <td><code>/api/hooks/subagent-start</code></td>
-<td>Injects a constraints-only briefing into every Task subagent and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
+<td>Injects the child briefing - pinned constraints, up to three <code>RELEVANT:</code> memories matched from the child's spawn prompt, and a recall/memory_read footer - into every Task subagent and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
 </tr>
 <tr>
 <td><code>SubagentStop</code></td>
@@ -293,10 +293,34 @@ cannot spend the whole hook budget.</p>
 <p><code>SessionStart</code> is the only hook with a matcher on session sources, and Claude
 Code never fires it for Task subagents - its sources are the main-session ones
 (<code>startup</code>/<code>resume</code>/<code>clear</code>/<code>compact</code>). A child is briefed by <code>SubagentStart</code>
-instead: the same constraints-only briefing the Codex profile injects, keyed off
+instead: the same child briefing the Codex profile injects, keyed off
 the parent's <code>session_id</code>. Subagents share the parent's session and get no
 ambient session of their own.</p>
-<h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>
+<p>What a child receives is deliberately narrower than the main briefing - the
+parent's prompt carries the task context, so there are no findings, tasks, or
+plan sections. It has three parts:</p>
+<ul>
+<li><strong>Constraints</strong>, pinned and tiered exactly like the main briefing (the top
+<code>constraint_max_full</code> in full, the rest named on the compact <code>Also binding</code>
+line).</li>
+<li><strong><code>RELEVANT:</code> lines</strong> - up to three memories of any kind matched against the
+child's spawn prompt (read best-effort from the child transcript or Codex
+rollout; a prompt that has not been flushed yet just means no section). A
+constraint already visible in either tier is never repeated here, and the
+dedupe never costs the section a genuinely-new match. These are passive
+injects: they carry zero utility weight, unlike a <code>&lt;seam-recall&gt;</code> match on
+the agent's own prompt.</li>
+<li><strong>A closing footer</strong> naming <code>recall</code> and <code>memory_read</code>, so even a child in a
+project with two constraints knows how to pull more.</li>
+</ul>
+<pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
+</span></span><span class="line"><span class="cl">Seam project: seamless -- 24 constraints (subagent scope).
+</span></span><span class="line"><span class="cl">CONSTRAINT: fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
+</span></span><span class="line"><span class="cl">Also binding (14): console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
+</span></span><span class="line"><span class="cl">RELEVANT: chroma-boot-race: chroma container health check startup race
+</span></span><span class="line"><span class="cl">Recall on demand with recall; read a memory with memory_read.
+</span></span><span class="line"><span class="cl">&lt;/seam-briefing&gt;
+</span></span></code></pre><h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>
 <p><code>seamlessd install-hooks --client codex</code> installs five hooks into
 <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>) instead of the seven above.
 The desktop app, CLI, and IDE extension share this profile for the same Codex
@@ -337,7 +361,7 @@ lifecycle.</p>
 <td><code>SubagentStart</code></td>
 <td>command (<code>seam hook subagent-start --client codex</code>)</td>
 <td><code>/api/hooks/subagent-start</code></td>
-<td>Injects a constraints-only briefing under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
+<td>Injects the child briefing (constraints, spawn-prompt-matched <code>RELEVANT:</code> memories, recall footer) under the Codex output cap and heartbeats the parent. It never creates, reactivates, or re-scopes an ambient session.</td>
 </tr>
 <tr>
 <td><code>SubagentStop</code></td>

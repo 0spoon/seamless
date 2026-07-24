@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -261,10 +262,18 @@ func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T
 		"session_id": parentID, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent",
 	})
 
+	// A child rollout whose spawn prompt matches the seeded gotcha, so every
+	// section -- constraint wall, RELEVANT, footer -- participates in the
+	// capped assembly.
+	rollout := filepath.Join(t.TempDir(), "rollout-child-1.jsonl")
+	require.NoError(t, os.WriteFile(rollout, []byte(
+		`{"type":"event_msg","payload":{"type":"user_message","message":"why does the chroma container health check race at startup"}}`+"\n"), 0o644))
+
 	resp, out := post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
 		"session_id": parentID, "turn_id": "turn-1", "agent_id": "child-1",
 		"agent_type": "default", "cwd": "/work/demo", "model": "gpt-child",
 		"permission_mode": "default", "hook_event_name": "SubagentStart",
+		"transcript_path": rollout,
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	hso := out["hookSpecificOutput"].(map[string]any)
@@ -288,10 +297,58 @@ func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T
 	require.Equal(t, string(ClientCodex), injection.Payload["external_client"])
 	require.Equal(t, true, injection.Payload["truncated"])
 	require.Equal(t, false, injection.Payload["item_ids_exact"])
+	// Truncation cut the RELEVANT line, but its id stays in the superset list
+	// (the assembleBriefing posture): item_ids is the only source of
+	// last_injected_at, so dropping it would make the memory read as
+	// stale-and-archivable.
+	require.Contains(t, injection.Payload["item_ids"], "01B")
 	require.Greater(t, injection.Payload["original_estimated_tokens"].(float64),
 		float64(codexContextMaxTokens))
 	require.LessOrEqual(t, injection.Payload["emitted_estimated_tokens"].(float64),
 		float64(codexContextMaxTokens))
+}
+
+// A child briefing that fits under the Codex cap flows through whole: the
+// constraint core, the prompt-matched RELEVANT section read from the child
+// rollout's first user event, and the closing footer, with exact telemetry.
+func TestSubagentStart_CodexRelevantSectionUnderCap(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	const parentID = "019f8000-0000-7000-8000-000000000002"
+
+	_, _ = post(t, ts.URL+"/api/hooks/session-start?client=codex", testKey, map[string]any{
+		"session_id": parentID, "cwd": "/work/demo", "source": "startup", "model": "gpt-parent",
+	})
+	rollout := filepath.Join(t.TempDir(), "rollout-child-rel.jsonl")
+	require.NoError(t, os.WriteFile(rollout, []byte(
+		`{"type":"event_msg","payload":{"type":"user_message","message":"why does the chroma container health check race at startup"}}`+"\n"), 0o644))
+
+	resp, out := post(t, ts.URL+"/api/hooks/subagent-start?client=codex", testKey, map[string]any{
+		"session_id": parentID, "turn_id": "turn-1", "agent_id": "child-rel",
+		"agent_type": "default", "cwd": "/work/demo", "model": "gpt-child",
+		"permission_mode": "default", "hook_event_name": "SubagentStart",
+		"transcript_path": rollout,
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	emitted := additionalContext(t, out)
+	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
+	require.Contains(t, emitted, "CONSTRAINT: no-force-push")
+	require.Contains(t, emitted, "RELEVANT: chroma-boot-race: chroma container health check startup race")
+	require.Contains(t, emitted, "Recall on demand with recall; read a memory with memory_read.")
+	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
+	require.NotContains(t, emitted, contextTruncationMarker)
+
+	var injection core.Event
+	for _, event := range eventsOfKind(t, events.NewRecorder(db), core.EventInjected) {
+		if event.Payload["hook"] == "subagent-start" {
+			injection = event
+			break
+		}
+	}
+	require.NotEmpty(t, injection.ID)
+	require.Equal(t, emitted, injection.Payload["content"])
+	require.Equal(t, false, injection.Payload["truncated"])
+	require.Contains(t, injection.Payload["item_ids"], "01A")
+	require.Contains(t, injection.Payload["item_ids"], "01B")
 }
 
 // The cap is Codex-only: the same oversized briefing on a Claude Code

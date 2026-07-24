@@ -110,7 +110,7 @@ as success to an agent, which would then leave two contradictory memories live.
   <span class="figure-kicker">SessionStart trace</span>
   <div class="doc-flow cols-4">
     <div class="flow-node"><span class="flow-step">Claude → hook · 1–3</span><strong>Authenticate, bound, map</strong><small><code>seam hook session-start</code> forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.</small></div>
-    <div class="flow-node"><span class="flow-step">Retrieve · 4–8</span><strong>Resolve effective scope</strong><small>Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents stop at constraints.</small></div>
+    <div class="flow-node"><span class="flow-step">Retrieve · 4–8</span><strong>Resolve effective scope</strong><small>Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.</small></div>
     <div class="flow-node emphasis"><span class="flow-step">Pack · 9–11</span><strong>Trim only eligible context</strong><small>Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.</small></div>
     <div class="flow-node success"><span class="flow-step">Hook response · 12–15</span><strong>Bind, inject, record</strong><small>Create or resume the ambient session, append its line, record the exact text sent, and return <code>additionalContext</code>.</small></div>
   </div>

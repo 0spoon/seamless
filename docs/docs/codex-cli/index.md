@@ -98,14 +98,15 @@ Codex installs five hooks against seven for Claude Code. Seamless has no verifie
 Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
 0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
 [below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide
-constraints and lifecycle safety without creating Codex plan notes.
+constraints, spawn-prompt-matched memories, and lifecycle safety without
+creating Codex plan notes.
 
 | Event | Injects | Effect |
 |---|---|---|
 | `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes an opaque `cx/...` ambient session keyed by the full external ID. |
 | `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
 | `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
-| `SubagentStart` | constraints-only `<seam-briefing>` | Gives the child the project's active constraints, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
+| `SubagentStart` | child `<seam-briefing>` | Gives the child the project's active constraints, up to three `RELEVANT:` memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
 | `SubagentStop` | nothing | Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes. |
 
 Codex delivers a hook's `additionalContext` to the model on both SessionStart and
@@ -126,9 +127,9 @@ tokens to a temporary file and gives the model a head-and-tail preview. That
 would make Seamless's injection telemetry describe more text than the model saw.
 Seamless therefore caps every Codex `additionalContext` response at **2,400
 estimated tokens** before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart constraints;
-generated closing tags and the ambient-session line are preserved. Claude Code
-output is not given this Codex-specific cap.
+SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
+briefings; generated closing tags and the ambient-session line are preserved.
+Claude Code output is not given this Codex-specific cap.
 
 ### Trust the hooks once
 

@@ -1,9 +1,11 @@
 package hooks
 
 // Subagent lifecycle handling. SubagentStart fires for both clients and
-// injects the same constraints-only briefing into the child while sharing its
-// parent's ambient session -- Claude Code emits no SessionStart for Task
-// subagents, so this is a CC child's only injection point.
+// injects the same child briefing -- pinned constraints, up to three RELEVANT
+// memories matched from the child's spawn prompt, and the recall/memory_read
+// footer -- while sharing its parent's ambient session. Claude Code emits no
+// SessionStart for Task subagents, so this is a CC child's only injection
+// point.
 // Codex SubagentStop is deliberately limited to a
 // parent heartbeat: it never harvests child output into the parent's findings or
 // creates durable notes. Claude Code's established planning-subagent capture is
@@ -33,11 +35,12 @@ import (
 // maxAgentTitleRunes caps the prompt-derived part of an agent-cache note title.
 const maxAgentTitleRunes = 120
 
-// subagentStart injects project constraints into a child without running any
-// ambient-session ensure/reactivation path. Both contracts (the captured Codex
-// fixtures and Claude Code's documented SubagentStart payload) name session_id
-// as the parent id, so a heartbeat is safe; model attribution is intentionally
-// not updated because a child may run a different model.
+// subagentStart injects the child briefing (project constraints plus
+// spawn-prompt-matched RELEVANT memories) without running any ambient-session
+// ensure/reactivation path. Both contracts (the captured Codex fixtures and
+// Claude Code's documented SubagentStart payload) name session_id as the
+// parent id, so a heartbeat is safe; model attribution is intentionally not
+// updated because a child may run a different model.
 func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
 	if !verifyBearer(r, h.apiKey) {
 		http.Error(w, "unauthorized", http.StatusUnauthorized)
@@ -202,9 +205,9 @@ func agentStamp(sessionName, agentID, head string, now time.Time) string {
 }
 
 // subagentBriefingInput builds the child-briefing input from a SubagentStart
-// payload, carrying the spawn prompt when it can be resolved. The prompt field
-// is staged for the RELEVANT-section step of plan:subagent-briefing and is
-// intentionally unread by the briefing until that step lands.
+// payload, carrying the spawn prompt when it can be resolved. The briefing
+// matches the prompt against the project's memories and renders the hits as
+// its RELEVANT section; an unresolved (empty) prompt just means no section.
 func subagentBriefingInput(client Client, p subagentPayload) retrieve.BriefingInput {
 	return retrieve.BriefingInput{
 		CWD:       p.CWD,

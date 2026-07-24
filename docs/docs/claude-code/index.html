@@ -215,7 +215,8 @@ registration fails, the hooks still land and the command prints the exact
 invocation to run yourself.</p>
 <p>The hooks are what make sessions <strong>ambient</strong> - an agent gets a briefing at
 startup, its prompts get matched against your memories, its Task subagents get
-the project's constraints at spawn, its findings get harvested at the end, and
+the project's constraints plus spawn-prompt-matched memories at spawn, its
+findings get harvested at the end, and
 its plan-mode activity gets captured, all without the agent choosing to call
 anything. See <a href="../concepts/sessions/">Sessions &amp; briefings</a>
 for what that delivers and <a href="../reference/hooks/">the hooks reference</a> for the

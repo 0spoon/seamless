@@ -288,8 +288,21 @@ func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promp
 
 // scorePrompt scores each candidate by the length-normalized IDF sum of its
 // overlap with the prompt tokens, keeping only those over both floors, best
-// first (ties broken newest).
+// first (ties broken newest), capped at promptMaxHits.
 func scorePrompt(promptTokens []string, c *promptCorpus) []promptHit {
+	hits := scorePromptAll(promptTokens, c)
+	if len(hits) > promptMaxHits {
+		hits = hits[:promptMaxHits]
+	}
+	return hits
+}
+
+// scorePromptAll is scorePrompt without the promptMaxHits cap: every candidate
+// over both floors, in the same order. The subagent RELEVANT section consumes
+// the uncapped ranking because it drops hits already pinned as constraints
+// AFTER scoring -- with a pre-capped list, a constraint occupying a top slot
+// would starve the section of a genuinely-new memory ranked just below it.
+func scorePromptAll(promptTokens []string, c *promptCorpus) []promptHit {
 	promptSet := make(map[string]struct{}, len(promptTokens))
 	for _, t := range promptTokens {
 		promptSet[t] = struct{}{}
@@ -325,9 +338,6 @@ func scorePrompt(promptTokens []string, c *promptCorpus) []promptHit {
 		}
 		return hits[i].updatedAt.After(hits[j].updatedAt)
 	})
-	if len(hits) > promptMaxHits {
-		hits = hits[:promptMaxHits]
-	}
 	return hits
 }
 

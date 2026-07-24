@@ -24,12 +24,11 @@ type BriefingInput struct {
 	Source    string // startup|resume|clear|compact
 	AgentType string // non-empty => subagent => constraints-only briefing
 	// Prompt is the child's spawn prompt, resolved best-effort at SubagentStart
-	// (empty on the main-session path and whenever resolution fails).
-	// Intentionally UNREAD for now: it is staged for the RELEVANT-section step
-	// of plan:subagent-briefing, which will match it against project memories.
-	// Until that step consumes it, briefing output must be byte-identical
-	// whether this field is set or empty (pinned by
-	// TestSubagentBriefing_PromptFieldUnread).
+	// (empty on the main-session path and whenever resolution fails). The
+	// subagent path matches it against the project's memories and renders the
+	// hits as the briefing's RELEVANT section (subagentRelevant); the
+	// main-session path never reads it, so main briefings stay byte-identical
+	// whether it is set or empty.
 	Prompt string
 }
 
@@ -83,9 +82,17 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	// disabled (0) the order stays untouched -- the legacy all-full rendering.
 	constraints = s.rankConstraints(ctx, project, constraints, cfg)
 
-	// Subagents get constraints only (they inherit the parent's task context).
+	// Subagents get constraints plus, when a spawn prompt resolved, a
+	// prompt-matched RELEVANT section (they inherit the parent's task context,
+	// so no index/findings/tasks sections). The matcher is skipped entirely
+	// when no constraints are in scope: the child briefing renders only with
+	// constraints >= 1, so there would be nothing to attach the section to.
 	if in.AgentType != "" {
-		text, ids := s.assembleSubagent(project, constraints, cfg.ConstraintMaxFull)
+		var relevant []promptHit
+		if len(constraints) > 0 {
+			relevant = s.subagentRelevant(ctx, project, in.Prompt, constraints)
+		}
+		text, ids := s.assembleSubagent(project, constraints, relevant, cfg)
 		return text, ids, nil
 	}
 
@@ -519,11 +526,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	if budget <= 0 {
 		budget = 1500
 	}
-	mult := cfg.HardCapMultiplier
-	if mult <= 0 {
-		mult = 2
-	}
-	hardCap := budget * mult
+	hardCap := s.briefingHardCap(cfg)
 
 	ids := make([]string, 0, len(constraints)+len(sec.stages)+len(index))
 
@@ -738,23 +741,88 @@ func readyTasksLine(ready []core.Task, shown int) string {
 // redundancy between the two lines when both render is accepted by design.
 const subagentFooter = "Recall on demand with recall; read a memory with memory_read.\n"
 
-// assembleSubagent renders a constraints-only briefing for a subagent, or "" if
-// there are no constraints in scope. Constraints arrive already ranked
-// (rankConstraints) and get the same maxFull tier split as the full briefing --
-// a subagent drowns in an all-full wall just the same. Whenever the briefing
-// renders it closes with subagentFooter, independent of the tier split. The
-// second return value is the ids of the rendered constraints (both tiers), for
-// retrieval instrumentation.
-func (s *Service) assembleSubagent(project string, constraints []core.Memory, maxFull int) (string, []string) {
+// subagentRelevantMax caps the briefing's RELEVANT section. Prompt-matched
+// memories are a pointer, not a second memory index -- the child pulls more
+// with recall (the footer says how).
+const subagentRelevantMax = 3
+
+// subagentRelevant matches a child's spawn prompt against the project scope's
+// memories -- all kinds, via the same corpus the <seam-recall> engine uses --
+// and returns up to subagentRelevantMax hits not already rendered as
+// constraints. The dedupe runs over the UNCAPPED ranking (scorePromptAll), so
+// a constraint the child already sees never costs the section a genuinely-new
+// memory ranked below it. Failure-soft throughout: an empty prompt, an
+// unavailable corpus, or no qualifying hits yield nil, never a failed
+// briefing.
+//
+// Utility boundary (the closed-loop-utility-signal-contract memory): these are
+// briefing injects, weight 0. The hook records them under the subagent-start
+// surface -- never as prompt-class demand, even though the prompt matcher
+// produced them: spawn-prompt matching is automated supply, not the child
+// choosing to ask. Demand stays the child's own memory_read/recall calls.
+func (s *Service) subagentRelevant(ctx context.Context, project, prompt string, constraints []core.Memory) []promptHit {
+	tokens := promptTokenize(prompt)
+	if len(tokens) == 0 {
+		return nil
+	}
+	corpus, err := s.promptCorpusFor(ctx, project)
+	if err != nil {
+		s.logger.Warn("retrieve: subagent prompt corpus unavailable, briefing omits the RELEVANT section", "error", err)
+		return nil
+	}
+	pinned := make(map[string]struct{}, len(constraints))
+	for _, c := range constraints {
+		pinned[c.ID] = struct{}{}
+	}
+	var out []promptHit
+	for _, h := range scorePromptAll(tokens, corpus) {
+		if _, ok := pinned[h.id]; ok {
+			continue
+		}
+		out = append(out, h)
+		if len(out) == subagentRelevantMax {
+			break
+		}
+	}
+	return out
+}
+
+// briefingHardCap is the absolute ceiling hardTruncate enforces on an
+// assembled briefing: the token budget times cfg.HardCapMultiplier, with the
+// same fallbacks assembleBriefing applies to its packing budget.
+func (s *Service) briefingHardCap(cfg config.Briefing) int {
+	budget := s.budgets.MaxBriefingTokens
+	if budget <= 0 {
+		budget = 1500
+	}
+	mult := cfg.HardCapMultiplier
+	if mult <= 0 {
+		mult = 2
+	}
+	return budget * mult
+}
+
+// assembleSubagent renders the briefing for a subagent, or "" if there are no
+// constraints in scope (RELEVANT hits alone never render -- the child briefing
+// exists only where constraints do). Constraints arrive already ranked
+// (rankConstraints) and get the same ConstraintMaxFull tier split as the full
+// briefing -- a subagent drowns in an all-full wall just the same. The
+// prompt-matched RELEVANT lines sit between the constraint tiers and the
+// footer; whenever the briefing renders it closes with subagentFooter,
+// independent of the tier split, and the whole is hard-capped like the main
+// briefing. The second return value is the ids of the rendered memories (both
+// constraint tiers plus the RELEVANT hits) for retrieval instrumentation; like
+// assembleBriefing's, it is a superset when the hard cap truncates lines.
+func (s *Service) assembleSubagent(project string, constraints []core.Memory, relevant []promptHit, cfg config.Briefing) (string, []string) {
 	if len(constraints) == 0 {
 		return "", nil
 	}
 	label := projectLabel(project)
-	ids := make([]string, 0, len(constraints))
+	ids := make([]string, 0, len(constraints)+len(relevant))
 	var b strings.Builder
 	b.WriteString("<seam-briefing>\n")
 	fmt.Fprintf(&b, "Seam project: %s -- %d constraints (subagent scope).\n", sanitizeField(label, 80), len(constraints))
-	full, compact := constraintTiers(constraints, maxFull)
+	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
 	for _, c := range full {
 		b.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
 		ids = append(ids, c.ID)
@@ -763,9 +831,13 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, ma
 	for _, c := range compact {
 		ids = append(ids, c.ID)
 	}
+	for _, h := range relevant {
+		b.WriteString("RELEVANT: " + sanitizeField(h.name, 80) + ": " + sanitizeField(h.description, 160) + "\n")
+		ids = append(ids, h.id)
+	}
 	b.WriteString(subagentFooter)
 	b.WriteString("</seam-briefing>")
-	return b.String(), ids
+	return hardTruncate(b.String(), s.briefingHardCap(cfg)), ids
 }
 
 // hardTruncate caps s at hardCapTokens estimated tokens while preserving the

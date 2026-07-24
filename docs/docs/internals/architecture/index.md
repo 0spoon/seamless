@@ -104,7 +104,7 @@ as success to an agent, which would then leave two contradictory memories live.
 ```text
 SessionStart trace
 Claude → hook · 1–3 Authenticate, bound, map seam hook session-start forwards stdin; only auth and request shape can return non-2xx; work is capped at two seconds; cwd grows the project map.
-Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents stop at constraints.
+Retrieve · 4–8 Resolve effective scope Merge runtime settings, resolve cwd and family scope, load active memories, partition pinned kinds; subagents take constraints plus spawn-prompt-matched RELEVANT lines.
 Pack · 9–11 Trim only eligible context Apply recency after partitioning, add findings/tasks/family/plan signals, then pack to budget and hard cap.
 Hook response · 12–15 Bind, inject, record Create or resume the ambient session, append its line, record the exact text sent, and return additionalContext .
 The hook fails open after authentication: a retrieval problem may remove context, but it cannot stop the agent's turn.
