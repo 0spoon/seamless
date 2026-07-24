@@ -301,9 +301,9 @@ parent's prompt carries the task context, so there are no findings, tasks, or
 plan sections. It has three parts:</p>
 <ul>
 <li><strong>Constraints</strong>, pinned and tiered exactly like the main briefing (the top
-<code>constraint_max_full</code> in full, the rest named on the compact <code>Also binding</code>
-line).</li>
-<li><strong><code>RELEVANT:</code> lines</strong> - up to three memories of any kind matched against the
+<code>constraint_max_full</code> in full, the rest named on the compact
+<code>+N more, equally binding</code> line).</li>
+<li><strong>A &quot;Relevant to this task&quot; section</strong> - up to three memories of any kind matched against the
 child's spawn prompt (read best-effort from the child transcript or Codex
 rollout; a prompt that has not been flushed yet just means no section). A
 constraint already visible in either tier is never repeated here, and the
@@ -315,9 +315,13 @@ project with two constraints knows how to pull more.</li>
 </ul>
 <pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
 </span></span><span class="line"><span class="cl">Seam project: seamless -- 24 constraints (subagent scope).
-</span></span><span class="line"><span class="cl">CONSTRAINT: fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
-</span></span><span class="line"><span class="cl">Also binding (14): console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-</span></span><span class="line"><span class="cl">RELEVANT: chroma-boot-race: chroma container health check startup race
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Constraints (binding for every session):
+</span></span><span class="line"><span class="cl">- fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
+</span></span><span class="line"><span class="cl">- +14 more, equally binding -- memory_read name=&lt;name&gt; before working near one: console-csrf-origin-check-contract, ...
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">Relevant to this task:
+</span></span><span class="line"><span class="cl">- chroma-boot-race: chroma container health check startup race
 </span></span><span class="line"><span class="cl">Recall on demand with recall; read a memory with memory_read.
 </span></span><span class="line"><span class="cl">&lt;/seam-briefing&gt;
 </span></span></code></pre><h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>

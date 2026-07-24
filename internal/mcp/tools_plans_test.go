@@ -46,7 +46,7 @@ func TestPlanComposition(t *testing.T) {
 	// the claim holder) is untouched.
 	briefCli := dialClient(t, ctx, url, testKey)
 	brief := callJSON(t, ctx, briefCli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
-	require.Contains(t, brief["briefing"], "PLAN: demo-plan -- 0/1 done, 0 claimable, 1 in flight")
+	require.Contains(t, brief["briefing"], "- demo-plan -- 0/1 done, 0 claimable, 1 in flight")
 
 	// Release reopens the step so it is claimable again.
 	released := callJSON(t, ctx, cli, "tasks_release", map[string]any{"id": stepID})

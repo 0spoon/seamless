@@ -159,7 +159,8 @@ That session's context now opens with an injected briefing:
 Injected context SessionStart
 <seam-briefing>
 Seam project: seamless -- 58 memories (4 constraints), 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
+Constraints (binding for every session):
+- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 ...
 </seam-briefing>
 Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.
@@ -1620,8 +1621,8 @@ is its entire purpose.
 
 | Kind | What it holds | Never forget |
 |---|---|---|
-| `constraint` | A rule any agent must follow regardless of task | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `Also binding` line |
-| `convention` | A project-local choice or layout fact - naming, branding, where things live and deploy | Binding but topically triggered: its own budget-competing CONVENTION block (the top `briefing.convention_max_full` in full, the rest behind an always-rendered count line pointing at `recall kind=convention`); filing it as `constraint` crowds the briefing head |
+| `constraint` | A rule any agent must follow regardless of task | Pinned into every briefing, never dropped for budget, never staleness-archived; the top `briefing.constraint_max_full` render in full, the rest as names on the compact `+N more, equally binding` line |
+| `convention` | A project-local choice or layout fact - naming, branding, where things live and deploy | Binding but topically triggered: its own budget-competing Conventions section (the top `briefing.convention_max_full` in full, the rest behind an always-rendered count line pointing at `recall kind=convention`); filing it as `constraint` crowds the briefing head |
 | `runbook` | A procedure that works | The steps, in order, that actually ran |
 | `protocol` | An agreed way of doing something | Why the agreement exists |
 | `gotcha` | A trap and how to avoid it | The symptom, so it is recognizable next time |
@@ -1782,24 +1783,33 @@ This is a real briefing, in the order the assembler packs it:
 ```text
 Actual packing order budgeted
 <seam-briefing>
-Seam project: seamless -- 62 memories (24 constraints), 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
-CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
-... 2 more CONSTRAINT lines ...
-Also binding (20): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-STAGE: deep-audit-f15-f18-landed -- status unknown (no Status: header)
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
-PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-CONVENTION: wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
-... 3 more CONVENTION lines ...
-(9 conventions, 4 shown -- recall kind=convention for the rest)
+Seam project: seamless -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.
+Constraints (binding for every session):
+- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
+- llm-degradation-remote-vs-local: llm errors split remote ...
+... 2 more bullets ...
+- +20 more, equally binding -- memory_read name=<name> before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...
+Stages (world-state gates):
+- deep-audit-f15-f18-landed -- status unknown (no Status: header)
+(details: memory_read name=<stage>)
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
+Conventions (project-local choices):
+- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
+... 3 more bullets ...
+(9 total, 4 shown -- recall kind=convention for the rest)
 Recent findings:
 - cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...
-Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav
+Ready tasks (2):
+- Fix tool.call misattribution
+- Polish the docs nav
+(full queue with ids: tasks_ready; claim: tasks_claim id=<id>)
 Memories (seamless):
 - gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
-- (+34 older -- use recall)
+- (+34 older -- recall query=<topic>, optionally kind=<kind>)
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
@@ -1809,47 +1819,53 @@ Situation before library: the pinned head leads (tiered constraints, stages, pla
 Line by line:
 
 - **The header** counts what exists, so an agent knows how much it is *not* being
-  shown. Constraints are memories too, so they are reported as a subset of the
-  total, not a second pool.
-- **`CONSTRAINT:` lines** come first and are **never dropped for budget**. A
+  shown. Constraints, conventions, and pinned stages are memories too, so they
+  are reported as subsets of the total, not second pools.
+- **The Constraints section** comes first and is **never dropped for budget**. A
   constraint is a rule the project cannot violate; a briefing that omitted one to
-  fit a token budget would be worse than no briefing at all. They are *tiered*:
+  fit a token budget would be worse than no briefing at all. It is *tiered*:
   the top `briefing.constraint_max_full` (default 4) render as full
-  `name: description` lines - starred constraints first, then constraints a
+  `- name: description` bullets - starred constraints first, then constraints a
   recent mishap referenced (last 30 days, most recent first), then the same
   blended recency+utility order the memory index uses - and the remainder
-  collapse into the compact **`Also binding (N):`** line, which still names
-  every one so an agent can `memory_read` a name before working near it.
-  Setting the knob to 0 disables tiering and renders every constraint in full.
-- **`STAGE:` lines** are pinned right after constraints, for the same reason: a
-  gated stage's status is load-bearing for the whole session. The pin belongs to
-  the *gate*: a stage whose body does not open with a live
+  collapse into the compact **`+N more, equally binding`** line, which still
+  names every one so an agent can `memory_read name=<name>` before working near
+  it. Setting the knob to 0 disables tiering and renders every constraint full.
+- **The Stages section** is pinned right after constraints, for the same reason:
+  a gated stage's status is load-bearing for the whole session. The pin belongs
+  to the *gate*: a stage whose body does not open with a live
   `Status: open|in_progress|blocked` header only renders (as
   `status unknown (no Status: header)` - the nudge names the fix) for the
   `briefing.stage_unknown_max_age_days` grace window (default 7) after its last
   update, then leaves the briefing rather than squatting in it forever.
-- **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
-  tell the next agent what work it can pick up right now. Starred memories close
-  the pinned head as `FAVORITE:` lines, exempt from every trim.
-- **`PLAN (awaiting approval)` lines** open the budgeted body: captured but
-  unapproved plans are a hint, not a commitment, so unlike the rollups above
-  them they compete for budget and expire after
+- **The Plans section** follows. The pinned rollup rows (`2/3 done,
+  1 claimable`) tell the next agent what work it can pick up right now, and the
+  closing hint names the premade filters: `tasks_ready plan=<slug>` for a
+  plan's steps, `tasks_claim` to take one.
+- **`awaiting approval` rows** sit in the same section but open the budgeted
+  body: captured but unapproved plans are a hint, not a commitment, so unlike
+  the rollups they compete for budget and expire after
   `briefing.pending_plan_max_days`.
-- **`CONVENTION:` lines** follow: project-local choices and layout facts
+- **The Conventions section** follows: project-local choices and layout facts
   (`kind: convention`) - binding, but topically triggered, so unlike
   constraints they compete for budget. The top `briefing.convention_max_full`
   (default 4; 0 renders all) show in full and a count line always closes the
-  section, pointing at `recall kind=convention` for the rest.
+  section, pointing at `recall kind=convention` - a real command: `recall`
+  with a kind and no query lists that kind newest-first. A starred convention
+  heads the section and renders regardless of the tier cap or the budget.
 - **Recent findings** - what previous sessions learned, harvested at their end -
   render right after: they say what just happened here, so they pack (and
   render) before the memory index rather than below it.
-- **The ready-tasks line** closes the situation half: the open queue, oldest
-  first, before the library begins.
-- **The memory index** is `name: description` only - the description is the *only*
-  text an index ever shows, which is why writing a good one matters more than
-  writing a good body.
-- **`(+34 older -- use recall)`** is the honest tail: the index was trimmed, and
-  the briefing says so instead of pretending it is complete.
+- **The Ready tasks section** closes the situation half: the open queue, oldest
+  first, before the library begins, with the full-queue and claim commands as
+  its trailer.
+- **The Memories index** is `- name: description` bullets only - the description
+  is the *only* text an index ever shows, which is why writing a good one
+  matters more than writing a good body. Starred memories head the list,
+  exempt from every trim and from the budget.
+- **`(+34 older -- recall query=<topic>, optionally kind=<kind>)`** is the
+  honest tail: the index was trimmed, and the briefing says so instead of
+  pretending it is complete.
 
 ## The budget, and what survives it
 
@@ -1858,16 +1874,18 @@ the whole thing is hard-capped at `briefing.hard_cap_multiplier` times that
 (default 2x).
 
 The **never-drop invariant**: constraints (both the full tier and the compact
-`Also binding` line), pinned stages, active-plan rollups, and starred memories
-are counted first and are exempt from budget dropping - every constraint name
-appears in every briefing. Everything else packs in render order - pending
+`+N more, equally binding` line), pinned stages, and active-plan rollups are
+counted first and are exempt from budget dropping - every constraint name
+appears in every briefing. Starred memories keep the same exemption inside
+their sections: a starred convention or index memory renders no matter how
+starved the budget. Everything else packs in render order - pending
 plans, conventions, recent findings, ready tasks, the memory index, sibling
 findings, sibling memories - so budget priority and render priority agree: the sections
 that say what is happening now pack before the memory library, a fat index can
 no longer evict the findings that render above it, and the sibling sections
 are the first to go when the budget runs out. The header counts only the
 findings that actually rendered, and findings or index lines cut by budget
-leave an explicit `+N more/older -- use recall` trailer.
+leave an explicit `+N more/older` trailer.
 
 The memory index's own order starts as newest-first - but each memory also
 carries a [utility score](/concepts/recall/#the-utility-nudge), a time-decayed
@@ -2151,10 +2169,13 @@ the thing that usually evaporates between sessions.
 that are genuinely loose work. Pass `plan=<slug>` to either tool to see that
 plan's steps instead.
 
-The briefing surfaces each active plan as one rolled-up line:
+The briefing surfaces each active plan as one rolled-up row of its Plans
+section:
 
 ```text
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
 ```
 
 That is enough for an agent to decide whether to pick something up, without
@@ -2169,8 +2190,9 @@ captured:
   (`plan-status:draft|presented|approved|abandoned`).
 - Planning subagents are cached as `cc-agent-<id>` notes in the same composition.
 - Approving the plan creates the tracking task.
-- Unapproved captures appear in the briefing as `PLAN (awaiting approval)` lines,
-  so a plan that was designed and then forgotten is visible rather than lost.
+- Unapproved captures appear in the briefing's Plans section as
+  `awaiting approval` rows, so a plan that was designed and then forgotten is
+  visible rather than lost.
 
 See the [tasks reference](/reference/mcp/tasks/) for the tool surface.
 
@@ -3274,7 +3296,8 @@ Pinned briefing space should carry the rule itself, not a pointer saying that ru
 
 A constraint is pinned into every briefing and never dropped for budget - though
 only the top `briefing.constraint_max_full` of them render this description in
-full; the rest are pinned as names on the compact `Also binding` line. That is
+full; the rest are pinned as names on the compact `+N more, equally binding`
+line. That is
 expensive real estate either way, and "rules for errcheck" spends it to tell an
 agent that rules exist.
 
@@ -3296,7 +3319,7 @@ The kind is not filing paperwork - it changes what happens to the memory:
 |---|---|---|
 | `constraint` | A rule any agent must follow regardless of task | **Pinned.** Never dropped for budget, never staleness-archived |
 | `stage` | Where multi-session work stands | **Pinned while its `Status:` header marks a live gate** - `done` unpins immediately; a missing header ages out after `briefing.stage_unknown_max_age_days` |
-| `convention` | A project-local choice or layout fact | Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at `recall kind=convention` |
+| `convention` | A project-local choice or layout fact | Its own budget-competing Conventions section; the overflow sits behind a count line pointing at `recall kind=convention`, which lists the kind newest-first when called without a query |
 | `gotcha` | A trap, led by its symptom | Ordinary budget and staleness rules |
 | `decision` | A choice plus the alternatives it rejected | Ordinary |
 | `refuted` | A belief that turned out false | Ordinary |
@@ -3498,11 +3521,13 @@ skip them unless you pass `plan=`, so a twelve-step plan does not bury the handf
 of tasks that are genuinely loose work. This is why a planner can decompose
 aggressively without drowning every other agent on the machine.
 
-The briefing surfaces each active plan as one rolled-up line rather than a step
+The briefing surfaces each active plan as one rolled-up row rather than a step
 list:
 
 ```text
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
 ```
 
 That is enough for an arriving agent to decide whether to pick something up,
@@ -4419,11 +4444,18 @@ current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's [memory-wanted proposals](/concepts/gardener/#what-it-looks-for).
 
-The optional `kind` filter restricts hits to memories of one frontmatter kind -
-the mechanism behind briefing hints like `recall kind=convention`. It implies
-memories-only: combining it with `scope=notes` is rejected as contradictory
-rather than returning a misleading empty result, and a kind-filtered miss still
-counts as memory-wanted demand.
+The optional `kind` filter restricts hits to memories of one frontmatter kind.
+It implies memories-only: combining it with `scope=notes` is rejected as
+contradictory rather than returning a misleading empty result, and a
+kind-filtered miss still counts as memory-wanted demand.
+
+With `kind` set, `query` becomes optional: a kind alone is the **browse mode**
+behind briefing hints like `recall kind=convention` - the scope's active
+memories of that kind, listed newest-first under the same limit and token
+budget. A browse is a listing, not a search: no fusion, no favorite or utility
+boost, its hits record as passive exposure (never query-gated demand), and an
+empty browse records no miss - "this project has no conventions yet" is not a
+missing memory.
 
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
@@ -4513,14 +4545,14 @@ Delete a memory by name (removes the file and its index).
 
 ## recall {#recall}
 
-Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point.
+Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `query` | string | **yes** | what you are looking for |
-| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | number | no | maximum results (default 10) |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |
 
 ---
@@ -5894,15 +5926,15 @@ budgets:
 # shapes how constraints render); a pinned stage is exempt too while its Status
 # header marks a live gate.
 briefing:
-  # Top-ranked constraints rendered as full "CONSTRAINT: name: description"
-  # lines; the rest collapse into one compact "Also binding (N): ..." line that
-  # still names every one. 0 = no tiering (every constraint renders full).
+  # Top-ranked constraints rendered as full bullets in the briefing's
+  # Constraints section; the rest collapse into one compact "+N more, equally
+  # binding" line that still names every one. 0 = no tiering (all full).
   # env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL
   constraint_max_full: 4
-  # Top-ranked conventions rendered as full "CONVENTION: name: description"
-  # lines in the budget-competing body; the rest stay behind the section's
-  # count line ("recall kind=convention"). 0 = no tiering, like
-  # constraint_max_full.
+  # Top-ranked conventions rendered as full bullets in the budget-competing
+  # Conventions section; the rest stay behind the section's count line
+  # ("recall kind=convention"). Starred conventions always render full.
+  # 0 = no tiering, like constraint_max_full.
   # env: SEAMLESS_BRIEFING_CONVENTION_MAX_FULL
   convention_max_full: 4
   # Drop memory-index lines not updated within this many days. 0 = no filter.
@@ -5917,7 +5949,7 @@ briefing:
   # Drop findings older than this many days. 0 = no filter.
   # env: SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS
   findings_max_age_days: 0
-  # Ready-task titles named on the "Ready tasks" line. 0 hides the line.
+  # Ready-task titles listed in the "Ready tasks" section. 0 hides the section.
   # env: SEAMLESS_BRIEFING_READY_TASKS_SHOWN
   ready_tasks_shown: 3
   # Days a captured, unapproved Claude Code plan earns an "awaiting approval"
@@ -6116,9 +6148,9 @@ parent's prompt carries the task context, so there are no findings, tasks, or
 plan sections. It has three parts:
 
 - **Constraints**, pinned and tiered exactly like the main briefing (the top
-  `constraint_max_full` in full, the rest named on the compact `Also binding`
-  line).
-- **`RELEVANT:` lines** - up to three memories of any kind matched against the
+  `constraint_max_full` in full, the rest named on the compact
+  `+N more, equally binding` line).
+- **A "Relevant to this task" section** - up to three memories of any kind matched against the
   child's spawn prompt (read best-effort from the child transcript or Codex
   rollout; a prompt that has not been flushed yet just means no section). A
   constraint already visible in either tier is never repeated here, and the
@@ -6131,9 +6163,13 @@ plan sections. It has three parts:
 ```text
 <seam-briefing>
 Seam project: seamless -- 24 constraints (subagent scope).
-CONSTRAINT: fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
-Also binding (14): console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-RELEVANT: chroma-boot-race: chroma container health check startup race
+
+Constraints (binding for every session):
+- fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
+- +14 more, equally binding -- memory_read name=<name> before working near one: console-csrf-origin-check-contract, ...
+
+Relevant to this task:
+- chroma-boot-race: chroma container health check startup race
 Recall on demand with recall; read a memory with memory_read.
 </seam-briefing>
 ```

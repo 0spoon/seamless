@@ -124,8 +124,8 @@ func TestBriefingUtilityNeverTouchesPinned(t *testing.T) {
 
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "CONSTRAINT: hard-rule")
-	require.Contains(t, b, "FAVORITE: starred-pick")
+	require.Contains(t, b, "- hard-rule")
+	require.Contains(t, b, "- starred-pick")
 	require.Contains(t, b, "plain-hot", "the hot memory holds the sole index slot")
 }
 

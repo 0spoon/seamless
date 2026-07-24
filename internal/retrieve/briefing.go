@@ -65,19 +65,21 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 			constraints = append(constraints, m)
 		case m.Kind == core.KindStage:
 			stageMems = append(stageMems, m)
-		case m.Favorite:
-			// Starred memories are pinned like constraints/stages: pulled out of
-			// the index before the recency/count trims and never budget-dropped.
-			// A starred constraint or stage keeps its existing pinned section
-			// (the cases above win), so it is never rendered twice. This case
-			// also wins over the convention one below: a starred convention is
-			// pinned, not demoted to the budget-competing CONVENTION block.
-			favorites = append(favorites, m)
 		case m.Kind == core.KindConvention:
 			// Project-local choices/facts: their own budget-competing section,
 			// out of the index and its recency/count trims (the section's own
-			// ConventionMaxFull tier + count line bound it instead).
+			// ConventionMaxFull tier + count line bound it instead). A starred
+			// convention stays here -- there is no separate starred section --
+			// but keeps the pin: it sorts to the section head and is exempt
+			// from the tier split and the budget check (see the assembler).
 			conventions = append(conventions, m)
+		case m.Favorite:
+			// Starred index-kind memories keep the favorite pin without a
+			// section of their own: they render as the head of the Memories
+			// list, pulled out of the index before the recency/count trims and
+			// never budget-dropped. A starred constraint or stage keeps its own
+			// pinned section (the cases above win), so nothing renders twice.
+			favorites = append(favorites, m)
 		default:
 			index = append(index, m)
 		}
@@ -110,6 +112,19 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	// split, so the full lines are the ones agents actually use.
 	index = s.utilityRankedMemories(ctx, project, index, cfg)
 	conventions = s.utilityRankedMemories(ctx, project, conventions, cfg)
+	// Starred conventions sort to the section head ahead of the tier split:
+	// the favorite pin relocated into the section. The assembler renders them
+	// full-tier and budget-exempt, so a star still guarantees rendering.
+	slices.SortStableFunc(conventions, func(a, b core.Memory) int {
+		switch {
+		case a.Favorite == b.Favorite:
+			return 0
+		case a.Favorite:
+			return -1
+		default:
+			return 1
+		}
+	})
 
 	// Recency/count trims run AFTER the kind partition above, so constraints and
 	// pinned stages are exempt (the never-drop invariant).
@@ -340,20 +355,64 @@ func alsoBindingLine(compact []core.Memory) string {
 	for _, c := range compact {
 		names = append(names, sanitizeField(c.Name, 80))
 	}
-	return fmt.Sprintf("Also binding (%d): %s -- memory_read a name before working near it.\n",
+	return fmt.Sprintf("- +%d more, equally binding -- memory_read name=<name> before working near one: %s\n",
 		len(compact), strings.Join(names, ", "))
 }
 
-// conventionCountLine closes the CONVENTION section with the pool size and the
-// retrieval mechanism for whatever the tier or budget left unrendered. Unlike
+// conventionCountLine closes the Conventions section with the pool size and the
+// premade filter for whatever the tier or budget left unrendered. Unlike
 // alsoBindingLine it carries no names -- a count is the demotion -- so it is
 // cheap enough to render unconditionally, keeping the section discoverable
-// even when every full line was budget-dropped.
+// even when every full line was budget-dropped. The kind=convention hint is a
+// real command: recall with kind and no query lists the kind newest-first.
 func conventionCountLine(total, shown int) string {
 	if shown < total {
-		return fmt.Sprintf("(%d conventions, %d shown -- recall kind=convention for the rest)\n", total, shown)
+		return fmt.Sprintf("(%d total, %d shown -- recall kind=convention for the rest)\n", total, shown)
 	}
-	return fmt.Sprintf("(%d conventions -- recall kind=convention)\n", total)
+	return fmt.Sprintf("(%d total -- recall kind=convention lists them)\n", total)
+}
+
+// conventionTiers splits ranked conventions at the full-tier boundary like
+// constraintTiers, except starred conventions -- sorted to the head by the
+// caller -- always make the full tier even past maxFull: the star's render
+// guarantee survives the section fold. maxFull 0 disables tiering.
+func conventionTiers(conventions []core.Memory, maxFull int) (full, compact []core.Memory) {
+	if maxFull <= 0 || len(conventions) <= maxFull {
+		return conventions, nil
+	}
+	starred := 0
+	for starred < len(conventions) && conventions[starred].Favorite {
+		starred++
+	}
+	return conventions[:max(maxFull, starred)], conventions[max(maxFull, starred):]
+}
+
+// countNoun renders "1 constraint" / "3 constraints" for the header breakdown.
+func countNoun(n int, singular, plural string) string {
+	if n == 1 {
+		return "1 " + singular
+	}
+	return fmt.Sprintf("%d %s", n, plural)
+}
+
+// kindBreakdown renders the header's parenthesized kind counts, naming only
+// the nonzero pinned/sectioned kinds ("" when all are zero) -- the shape of
+// the store at a glance without a row of noisy zeros.
+func kindBreakdown(constraints, conventions, stages int) string {
+	var parts []string
+	if constraints > 0 {
+		parts = append(parts, countNoun(constraints, "constraint", "constraints"))
+	}
+	if conventions > 0 {
+		parts = append(parts, countNoun(conventions, "convention", "conventions"))
+	}
+	if stages > 0 {
+		parts = append(parts, countNoun(stages, "stage", "stages"))
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // trimMemoryIndex applies the recency filter (MemoryMaxAgeDays) and item cap
@@ -528,20 +587,22 @@ type briefingSections struct {
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 }
 
-// assembleBriefing packs the sections against the token budget. Constraints
-// (both the full tier and the compact "Also binding" line), stages, plan
-// rollups, favorites, the header, and the trailer are counted first and never
-// dropped. Body sections then pack in render order --
-// situation before library: pending plans > conventions > recent findings >
-// ready tasks > memory index > sibling findings > sibling memories -- so
-// budget priority and render priority agree: a fat memory index can no longer
-// evict the findings
-// that render above it, and the sibling sections, last, are dropped first. The
-// header counts the findings actually rendered (headLine defers for that), and
-// findings cut by budget leave a "+N more" trailer, mirroring the memory
-// index. The whole is hard-capped. The second return value is the ids of the
-// memories actually rendered (constraints, pinned stages, favorites, and the
-// index/sibling lines that survived budgeting) -- for retrieval
+// assembleBriefing packs the grouped sections against the token budget. The
+// pinned content -- the header line, the Constraints section (both tiers), the
+// Stages section, the active-plan rollups with their trailer, and the footer
+// -- is counted first and never dropped. Budget-competing rows then pack in
+// render order -- situation before library: pending plan lines > conventions >
+// recent findings > ready tasks > memory index > sibling findings > sibling
+// memories -- so budget priority and render priority agree: a fat memory index
+// can no longer evict the findings that render above it, and the sibling
+// sections, last, are dropped first. Starred rows carry the favorite pin into
+// their sections: starred conventions and the starred head of the Memories
+// list render exempt from the budget check. The header counts the findings
+// actually rendered (headLine defers for that), and findings cut by budget
+// leave a "+N more" trailer, mirroring the memory index. The whole is
+// hard-capped. The second return value is the ids of the memories actually
+// rendered (constraints, pinned stages, starred rows, and the
+// convention/index/sibling lines that survived budgeting) -- for retrieval
 // instrumentation. Findings, siblings, and ready tasks are sessions/tasks, not
 // memory_read-able memories, so they are omitted from the funnel.
 func (s *Service) assembleBriefing(project, source string, sec briefingSections, cfg config.Briefing) (string, []string) {
@@ -561,45 +622,58 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	// composition. Estimating the budget with the pre-packing count is fine --
 	// the two strings differ by at most a digit.
 	//
-	// Constraints ARE memories (kind=constraint), just pinned and rendered first,
-	// so the header reports one memory total with constraints called out as its
-	// subset. Reporting them as two disjoint pools ("6 constraints, 76 memories")
-	// contradicts the body, where 6 CONSTRAINT lines + the index + the "+N older"
-	// trailer sum to the total, not to the index count alone.
-	totalMems := len(constraints) + len(sec.favorites) + len(sec.conventions) + len(index)
+	// Constraints, conventions, and pinned stages ARE memories, just sectioned,
+	// so the header reports one memory total with the kind counts called out as
+	// its subsets. Reporting them as disjoint pools ("6 constraints, 76
+	// memories") would contradict the body, where the sections, the index, and
+	// the "+N older" trailer sum to the total.
+	totalMems := len(constraints) + len(sec.favorites) + len(sec.conventions) + len(index) + len(sec.stages)
+	breakdown := kindBreakdown(len(constraints), len(sec.conventions), len(sec.stages))
 	headLine := func(renderedFindings int) string {
-		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories (%d constraints), %d recent findings.\n",
-			sanitizeField(label, 80), totalMems, len(constraints), renderedFindings)
+		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories%s, %d recent findings.\n",
+			sanitizeField(label, 80), totalMems, breakdown, renderedFindings)
 	}
 
-	var head strings.Builder
-	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
-	for _, c := range full {
-		head.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
-		ids = append(ids, c.ID)
+	// Pinned sections are composed up front so their cost is reserved before
+	// any budget-competing row packs: a droppable line can never squeeze out
+	// pinned content that renders after it.
+	var constraintsSec strings.Builder
+	if len(constraints) > 0 {
+		constraintsSec.WriteString("\nConstraints (binding for every session):\n")
+		full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
+		for _, c := range full {
+			constraintsSec.WriteString("- " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+			ids = append(ids, c.ID)
+		}
+		// The compact tier is part of the same pinned section -- budget can drop
+		// neither tier -- and its ids are recorded like the full lines' so the
+		// read-after-inject funnel keeps seeing every constraint.
+		constraintsSec.WriteString(alsoBindingLine(compact))
+		for _, c := range compact {
+			ids = append(ids, c.ID)
+		}
 	}
-	// The compact tier is part of the same pinned head -- budget can drop
-	// neither tier -- and its ids are recorded like the full lines' so the
-	// read-after-inject funnel keeps seeing every constraint.
-	head.WriteString(alsoBindingLine(compact))
-	for _, c := range compact {
-		ids = append(ids, c.ID)
-	}
-	// Pinned stages sit right after constraints and, like them, are never dropped
-	// for budget -- a gated stage's status is load-bearing for the whole session.
-	head.WriteString(stageHead(sec.stages))
+	// The pinned Stages section sits right after constraints and, like them, is
+	// never dropped for budget -- a gated stage's status is load-bearing for
+	// the whole session.
+	stagesSec := stagesSection(sec.stages)
 	for _, st := range sec.stages {
 		ids = append(ids, st.id)
 	}
-	// Active-plan rollups follow stages, also pinned: a plan's claimable/in-flight
-	// counts tell the next agent what work is available to pick up right now.
-	head.WriteString(planHead(sec.plans))
-	// Starred memories close the pinned head: the owner (or an agent) marked
-	// them important enough that every session should see them, so like
-	// constraints they are exempt from the trims and the budget loop.
-	for _, m := range sec.favorites {
-		head.WriteString("FAVORITE: " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n")
-		ids = append(ids, m.ID)
+	// Active-plan rollups follow stages, also pinned: a plan's
+	// claimable/in-flight counts tell the next agent what work is available to
+	// pick up right now. The section header and trailer are pinned with them;
+	// the pending (awaiting approval) lines interleave between rollups and
+	// trailer below but budget-compete.
+	const plansHeader = "\nPlans:\n"
+	var rollups strings.Builder
+	plansTrailer := ""
+	if len(sec.plans) > 0 {
+		for _, p := range sec.plans {
+			fmt.Fprintf(&rollups, "- %s -- %d/%d done, %d claimable, %d in flight\n",
+				sanitizeField(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
+		}
+		plansTrailer = "(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)\n"
 	}
 
 	var tail strings.Builder
@@ -609,40 +683,75 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	}
 	tail.WriteString("</seam-briefing>")
 
-	used := estTokens(headLine(len(findings))) + estTokens(head.String()) + estTokens(tail.String())
+	pinnedPlans := ""
+	if len(sec.plans) > 0 {
+		pinnedPlans = plansHeader + rollups.String() + plansTrailer
+	}
+	used := estTokens(headLine(len(findings))) + estTokens(constraintsSec.String()) +
+		estTokens(stagesSec) + estTokens(pinnedPlans) + estTokens(tail.String())
 
 	var body strings.Builder
-	// Pending (unapproved) plan lines come first in the body so they read as a
-	// continuation of the pinned PLAN rollups, but unlike those they compete
-	// for budget. Packing first gives them budget priority too -- deliberate:
-	// they are few and PendingPlanMaxDays-bounded, so they cannot crowd out
-	// what follows the way a fat index could.
-	for _, n := range sec.pendingPlans {
-		line := fmt.Sprintf("PLAN (awaiting approval): %s -- %s (%s, %s)\n",
-			sanitizeField(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
-			plans.StatusFromTags(n.Tags), humanAge(n.Updated))
-		if used+estTokens(line) > budget {
-			break
+	body.WriteString(constraintsSec.String())
+	body.WriteString(stagesSec)
+
+	// Pending (unapproved) plan lines pack first among the budget-competing
+	// rows -- deliberate: they are few and PendingPlanMaxDays-bounded, so they
+	// cannot crowd out what follows the way a fat index could. With no active
+	// rollups the section header is not pinned; it packs with the first
+	// pending line instead, so a pending-only section still budget-competes as
+	// a whole.
+	if len(sec.plans) > 0 {
+		body.WriteString(plansHeader)
+		body.WriteString(rollups.String())
+		for _, n := range sec.pendingPlans {
+			line := pendingPlanLine(n)
+			if used+estTokens(line) > budget {
+				break
+			}
+			body.WriteString(line)
+			used += estTokens(line)
 		}
-		body.WriteString(line)
-		used += estTokens(line)
+		body.WriteString(plansTrailer)
+	} else if len(sec.pendingPlans) > 0 {
+		wroteHeader := false
+		for _, n := range sec.pendingPlans {
+			line := pendingPlanLine(n)
+			cost := estTokens(line)
+			if !wroteHeader {
+				cost += estTokens(plansHeader)
+			}
+			if used+cost > budget {
+				break
+			}
+			if !wroteHeader {
+				body.WriteString(plansHeader)
+				wroteHeader = true
+			}
+			body.WriteString(line)
+			used += cost
+		}
 	}
 
 	// Conventions -- project-local choices/facts, the constraint head's demoted
-	// sibling tier -- render right below the plan lines: rules-adjacent, but
-	// budget-COMPETING, unlike constraints. Up to ConventionMaxFull full lines
-	// pack against the budget (0 = all full, matching ConstraintMaxFull); the
-	// count line then always renders, exempt from the budget check, so the
-	// section is never invisible and the rest stay one kind-filtered recall
-	// away. Only the full lines' ids are recorded: the count line names
-	// nothing, so counting its hidden conventions as surfaced would poison the
-	// read-after-inject funnel with exposure that never happened.
+	// sibling tier -- render right below the plans: rules-adjacent, but
+	// budget-COMPETING, unlike constraints. Starred conventions (sorted to the
+	// section head) render exempt from the budget check -- the favorite pin
+	// folded into the section -- then up to ConventionMaxFull full lines pack
+	// against the budget (0 = all full, matching ConstraintMaxFull); the count
+	// line then always renders, exempt too, so the section is never invisible
+	// and the rest stay one kind-filtered recall away. Only rendered lines'
+	// ids are recorded: the count line names nothing, so counting its hidden
+	// conventions as surfaced would poison the read-after-inject funnel with
+	// exposure that never happened.
 	if len(sec.conventions) > 0 {
-		full, _ := constraintTiers(sec.conventions, cfg.ConventionMaxFull)
+		lead := "\nConventions (project-local choices):\n"
+		body.WriteString(lead)
+		used += estTokens(lead)
+		full, _ := conventionTiers(sec.conventions, cfg.ConventionMaxFull)
 		shown := 0
 		for _, m := range full {
-			line := "CONVENTION: " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
-			if used+estTokens(line) > budget {
+			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			if !m.Favorite && used+estTokens(line) > budget {
 				break
 			}
 			body.WriteString(line)
@@ -674,29 +783,42 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 				findingsRendered++
 			}
 			if cut := len(findings) - findingsRendered; cut > 0 {
-				extra := fmt.Sprintf("- (+%d more -- use recall)\n", cut)
+				// No retrieval hint: session findings are not recallable, so
+				// naming a mechanism here would point at a command that cannot
+				// reach them.
+				extra := fmt.Sprintf("- (+%d more)\n", cut)
 				body.WriteString(extra)
 				used += estTokens(extra)
 			}
 		}
 	}
 
-	// The ready-tasks line follows the findings: the queue is part of the
-	// situation, not the library. Sections still pack after it, so its cost
-	// accumulates like any other line.
-	if line := readyTasksLine(ready, cfg.ReadyTasksShown); line != "" && used+estTokens(line) <= budget {
-		body.WriteString(line)
-		used += estTokens(line)
+	// The ready-tasks section follows the findings: the queue is part of the
+	// situation, not the library. It packs all-or-nothing, like the single
+	// line it replaces -- a header with no rows underneath would read as an
+	// empty queue.
+	if section := readyTasksSection(ready, cfg.ReadyTasksShown); section != "" && used+estTokens(section) <= budget {
+		body.WriteString(section)
+		used += estTokens(section)
 	}
 
 	dropped := 0
-	if len(index) > 0 || sec.indexOmitted > 0 {
+	if len(sec.favorites) > 0 || len(index) > 0 || sec.indexOmitted > 0 {
 		lead := "\nMemories (" + sanitizeField(label, 80) + "):\n"
 		body.WriteString(lead)
 		used += estTokens(lead)
+		// Starred memories head the list, exempt from the budget check: the
+		// favorite pin folded into the section (partitioned out before the
+		// recency/count trims, so those never saw them either).
+		for _, m := range sec.favorites {
+			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			body.WriteString(line)
+			used += estTokens(line)
+			ids = append(ids, m.ID)
+		}
 		for i, m := range index {
 			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
-			if used+estTokens(line) > budget && i > 0 {
+			if used+estTokens(line) > budget && (i > 0 || len(sec.favorites) > 0) {
 				dropped = len(index) - i
 				break
 			}
@@ -707,14 +829,14 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		// The trailer counts both budget-dropped lines and the recency/count trims,
 		// so filtered-out knowledge stays discoverable via recall.
 		if dropped+sec.indexOmitted > 0 {
-			extra := fmt.Sprintf("- (+%d older -- use recall)\n", dropped+sec.indexOmitted)
+			extra := fmt.Sprintf("- (+%d older -- recall query=<topic>, optionally kind=<kind>)\n", dropped+sec.indexOmitted)
 			body.WriteString(extra)
 			used += estTokens(extra)
 		}
 	}
 
 	if len(sec.siblings) > 0 {
-		lead := "\n## Sibling projects\n"
+		lead := "\nSibling projects:\n"
 		if used+estTokens(lead) <= budget {
 			body.WriteString(lead)
 			used += estTokens(lead)
@@ -748,42 +870,36 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		}
 	}
 
-	return hardTruncate(headLine(findingsRendered)+head.String()+body.String()+tail.String(), hardCap), ids
+	return hardTruncate(headLine(findingsRendered)+body.String()+tail.String(), hardCap), ids
 }
 
-// planHead renders one pinned line per active plan
-// ("PLAN: <slug> -- X/Y done, Z claimable, W in flight"), or "" when there are
-// none. A trailing reminder of the plan:<slug> convention is appended once so
-// agents discover how to attach step tasks and supporting notes to a plan.
-func planHead(plans []store.PlanRollup) string {
-	if len(plans) == 0 {
-		return ""
-	}
-	var b strings.Builder
-	for _, p := range plans {
-		fmt.Fprintf(&b, "PLAN: %s -- %d/%d done, %d claimable, %d in flight\n",
-			sanitizeField(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
-	}
-	b.WriteString("(claim a step with tasks_claim; attach notes/tasks to a plan with the plan:<slug> convention)\n")
-	return b.String()
+// pendingPlanLine renders one captured, not-yet-approved CC plan as a row of
+// the Plans section -- a hint, not a commitment, so unlike the rollup rows it
+// budget-competes (see assembleBriefing).
+func pendingPlanLine(n core.Note) string {
+	return fmt.Sprintf("- %s -- awaiting approval: %s (%s, %s)\n",
+		sanitizeField(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
+		plans.StatusFromTags(n.Tags), humanAge(n.Updated))
 }
 
-// readyTasksLine renders the briefing's ready-queue line ("Ready tasks: N -- t1;
-// t2; t3"), naming up to shown oldest ready tasks, or "" when none are ready or
-// the line is disabled (shown 0). The ordering matches store.ReadyTasks (oldest
-// first), which the CLI shares.
-func readyTasksLine(ready []core.Task, shown int) string {
+// readyTasksSection renders the briefing's ready-queue section ("Ready tasks
+// (N):" with up to shown oldest-first title bullets and the premade-filter
+// trailer), or "" when none are ready or the section is disabled (shown 0).
+// The ordering matches store.ReadyTasks (oldest first), which the CLI shares.
+func readyTasksSection(ready []core.Task, shown int) string {
 	if len(ready) == 0 || shown <= 0 {
 		return ""
 	}
-	titles := make([]string, 0, min(shown, len(ready)))
-	for _, t := range ready {
-		if len(titles) == shown {
+	var b strings.Builder
+	fmt.Fprintf(&b, "\nReady tasks (%d):\n", len(ready))
+	for i, t := range ready {
+		if i == shown {
 			break
 		}
-		titles = append(titles, sanitizeField(t.Title, 60))
+		b.WriteString("- " + sanitizeField(t.Title, 60) + "\n")
 	}
-	return fmt.Sprintf("\nReady tasks: %d -- %s\n", len(ready), strings.Join(titles, "; "))
+	b.WriteString("(full queue with ids: tasks_ready; claim: tasks_claim id=<id>)\n")
+	return b.String()
 }
 
 // subagentFooter is the always-on tool-guidance line closing every non-empty
@@ -856,16 +972,17 @@ func (s *Service) briefingHardCap(cfg config.Briefing) int {
 }
 
 // assembleSubagent renders the briefing for a subagent, or "" if there are no
-// constraints in scope (RELEVANT hits alone never render -- the child briefing
+// constraints in scope (relevant hits alone never render -- the child briefing
 // exists only where constraints do). Constraints arrive already ranked
-// (rankConstraints) and get the same ConstraintMaxFull tier split as the full
-// briefing -- a subagent drowns in an all-full wall just the same. The
-// prompt-matched RELEVANT lines sit between the constraint tiers and the
-// footer; whenever the briefing renders it closes with subagentFooter,
-// independent of the tier split, and the whole is hard-capped like the main
-// briefing. The second return value is the ids of the rendered memories (both
-// constraint tiers plus the RELEVANT hits) for retrieval instrumentation; like
-// assembleBriefing's, it is a superset when the hard cap truncates lines.
+// (rankConstraints) and get the same grouped Constraints section and
+// ConstraintMaxFull tier split as the full briefing -- a subagent drowns in an
+// all-full wall just the same. The prompt-matched "Relevant to this task"
+// section sits between the Constraints section and the footer; whenever the
+// briefing renders it closes with subagentFooter, independent of the tier
+// split, and the whole is hard-capped like the main briefing. The second
+// return value is the ids of the rendered memories (both constraint tiers plus
+// the relevant hits) for retrieval instrumentation; like assembleBriefing's,
+// it is a superset when the hard cap truncates lines.
 func (s *Service) assembleSubagent(project string, constraints []core.Memory, relevant []promptHit, cfg config.Briefing) (string, []string) {
 	if len(constraints) == 0 {
 		return "", nil
@@ -874,19 +991,24 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, re
 	ids := make([]string, 0, len(constraints)+len(relevant))
 	var b strings.Builder
 	b.WriteString("<seam-briefing>\n")
-	fmt.Fprintf(&b, "Seam project: %s -- %d constraints (subagent scope).\n", sanitizeField(label, 80), len(constraints))
+	fmt.Fprintf(&b, "Seam project: %s -- %s (subagent scope).\n", sanitizeField(label, 80),
+		countNoun(len(constraints), "constraint", "constraints"))
+	b.WriteString("\nConstraints (binding for every session):\n")
 	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
 	for _, c := range full {
-		b.WriteString("CONSTRAINT: " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		b.WriteString("- " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
 		ids = append(ids, c.ID)
 	}
 	b.WriteString(alsoBindingLine(compact))
 	for _, c := range compact {
 		ids = append(ids, c.ID)
 	}
-	for _, h := range relevant {
-		b.WriteString("RELEVANT: " + sanitizeField(h.name, 80) + ": " + sanitizeField(h.description, 160) + "\n")
-		ids = append(ids, h.id)
+	if len(relevant) > 0 {
+		b.WriteString("\nRelevant to this task:\n")
+		for _, h := range relevant {
+			b.WriteString("- " + sanitizeField(h.name, 80) + ": " + sanitizeField(h.description, 160) + "\n")
+			ids = append(ids, h.id)
+		}
 	}
 	b.WriteString(subagentFooter)
 	b.WriteString("</seam-briefing>")

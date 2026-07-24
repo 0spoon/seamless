@@ -42,7 +42,7 @@ func TestBriefingPinsStages(t *testing.T) {
 
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "STAGE: f5-ssh-signing -- in_progress, gate human")
+	require.Contains(t, b, "- f5-ssh-signing -- in_progress, gate human")
 	require.NotContains(t, b, "f6-old", "done stages are not pinned")
 	// The pinned stage's id is injected; the done (unpinned) stage's id is not.
 	require.Subset(t, ids, []string{"01A", "01S1"})
@@ -52,7 +52,7 @@ func TestBriefingPinsStages(t *testing.T) {
 	plain := New(db, nil, budgets(), nil)
 	b2, ids2, err := plain.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.NotContains(t, b2, "STAGE:")
+	require.NotContains(t, b2, "Stages (world-state gates):")
 	require.Contains(t, ids2, "01A")     // constraint still injected
 	require.NotContains(t, ids2, "01S1") // no stage section => no stage ids
 }
@@ -82,8 +82,8 @@ func TestBriefingAgesOutGatelessStages(t *testing.T) {
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
 	require.NotContains(t, b, "old-no-header", "gateless stage past the window is not pinned")
-	require.Contains(t, b, "STAGE: fresh-no-header -- status unknown (no Status: header)", "grace window keeps a fresh gateless stage visible, with the missing header named")
-	require.Contains(t, b, "STAGE: old-live-gate -- blocked, gate human", "a live gate pins at any age")
+	require.Contains(t, b, "- fresh-no-header -- status unknown (no Status: header)", "grace window keeps a fresh gateless stage visible, with the missing header named")
+	require.Contains(t, b, "- old-live-gate -- blocked, gate human", "a live gate pins at any age")
 	require.NotContains(t, b, "old-odd-status", "an unrecognized status token is not a live gate")
 	require.NotContains(t, ids, "01S1")
 	require.Subset(t, ids, []string{"01S2", "01S3"})
@@ -92,6 +92,6 @@ func TestBriefingAgesOutGatelessStages(t *testing.T) {
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.StageUnknownMaxAgeDays = 0 }))
 	b0, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b0, "STAGE: old-no-header -- status unknown (no Status: header)")
-	require.Contains(t, b0, "STAGE: old-odd-status -- p6")
+	require.Contains(t, b0, "- old-no-header -- status unknown (no Status: header)")
+	require.Contains(t, b0, "- old-odd-status -- p6")
 }

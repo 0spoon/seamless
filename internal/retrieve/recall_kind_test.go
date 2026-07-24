@@ -56,3 +56,65 @@ func TestRecallKindScopeAndValidity(t *testing.T) {
 	require.Len(t, hits, 1)
 	require.Equal(t, "layout-fact", hits[0].Name)
 }
+
+// A kind with no query is the browse mode: the scope's active memories of that
+// kind list newest-first (project plus global, invalidated ones excluded),
+// with no fusion source or score attached -- and no query with no kind is an
+// error, since there is nothing to search or list.
+func TestRecallKindBrowseListsNewestFirst(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	insMemAt(t, db, "01OLD", "convention", "old-fact", "the older layout fact", "seam", now.Add(-3*time.Hour))
+	insMemAt(t, db, "01NEW", "convention", "new-fact", "the newer layout fact", "seam", now.Add(-1*time.Hour))
+	insMemAt(t, db, "01GLO", "convention", "global-fact", "a global layout fact", "", now.Add(-2*time.Hour))
+	insMemAt(t, db, "01OTH", "convention", "other-scope", "another project's fact", "elsewhere", now)
+	insMemAt(t, db, "01GOT", "gotcha", "some-gotcha", "a different kind entirely", "seam", now)
+
+	svc := New(db, nil, budgets(), nil)
+
+	hits, err := svc.Recall(ctx, RecallInput{Kind: "convention", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+	names := make([]string, len(hits))
+	for i, h := range hits {
+		names[i] = h.Name
+		require.Equal(t, "browse", h.Source)
+		require.Zero(t, h.Score, "a listing has no fused score")
+	}
+	require.Equal(t, []string{"new-fact", "global-fact", "old-fact"}, names,
+		"newest-first across the project and global scopes, other kinds and projects excluded")
+
+	// The limit caps the listing like a searching recall.
+	hits, err = svc.Recall(ctx, RecallInput{Kind: "convention", Project: "seam", Limit: 2})
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+
+	// Neither query nor kind: nothing to search, nothing to list.
+	_, err = svc.Recall(ctx, RecallInput{Project: "seam"})
+	require.ErrorContains(t, err, "query is required unless kind is set")
+
+	// The scope/validity guards run before the browse branch, so a browse with
+	// scope=notes or an unknown kind fails the same way a search does.
+	_, err = svc.Recall(ctx, RecallInput{Kind: "convention", Scope: "notes"})
+	require.ErrorContains(t, err, "scope=notes")
+	_, err = svc.Recall(ctx, RecallInput{Kind: "conventionz"})
+	require.ErrorContains(t, err, "unknown kind")
+}
+
+// Browse excludes superseded/archived memories: the candidate listing is the
+// active scope, exactly what the briefing index draws from.
+func TestRecallKindBrowseSkipsInvalidated(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	now := time.Now()
+	insMemAt(t, db, "01LIV", "convention", "live-fact", "still standing", "seam", now)
+	insMemAt(t, db, "01DEA", "convention", "dead-fact", "superseded long ago", "seam", now)
+	_, err := db.ExecContext(ctx, `UPDATE memories_index SET invalid_at = ? WHERE id = '01DEA'`, now.UTC().Format(time.RFC3339))
+	require.NoError(t, err)
+
+	svc := New(db, nil, budgets(), nil)
+	hits, err := svc.Recall(ctx, RecallInput{Kind: "convention", Project: "seam", Limit: 10})
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "live-fact", hits[0].Name)
+}

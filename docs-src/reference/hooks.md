@@ -51,9 +51,9 @@ parent's prompt carries the task context, so there are no findings, tasks, or
 plan sections. It has three parts:
 
 - **Constraints**, pinned and tiered exactly like the main briefing (the top
-  `constraint_max_full` in full, the rest named on the compact `Also binding`
-  line).
-- **`RELEVANT:` lines** - up to three memories of any kind matched against the
+  `constraint_max_full` in full, the rest named on the compact
+  `+N more, equally binding` line).
+- **A "Relevant to this task" section** - up to three memories of any kind matched against the
   child's spawn prompt (read best-effort from the child transcript or Codex
   rollout; a prompt that has not been flushed yet just means no section). A
   constraint already visible in either tier is never repeated here, and the
@@ -66,9 +66,13 @@ plan sections. It has three parts:
 ```text
 <seam-briefing>
 Seam project: seamless -- 24 constraints (subagent scope).
-CONSTRAINT: fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
-Also binding (14): console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-RELEVANT: chroma-boot-race: chroma container health check startup race
+
+Constraints (binding for every session):
+- fts-or-vs-allterms-presence-probe: ftsQuery ORs terms ...
+- +14 more, equally binding -- memory_read name=<name> before working near one: console-csrf-origin-check-contract, ...
+
+Relevant to this task:
+- chroma-boot-race: chroma container health check startup race
 Recall on demand with recall; read a memory with memory_read.
 </seam-briefing>
 ```

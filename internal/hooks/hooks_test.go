@@ -119,13 +119,13 @@ func TestSessionStartHook(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	ac := additionalContext(t, out)
 	require.Contains(t, ac, "<seam-briefing>")
-	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.Contains(t, ac, "- no-force-push")
 	require.Contains(t, ac, "chroma-boot-race")
 
 	// Subagent -> constraints only.
 	_, out = post(t, url, testKey, map[string]any{"cwd": "/work/demo", "agent_type": "Explore"})
 	ac = additionalContext(t, out)
-	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.Contains(t, ac, "- no-force-push")
 	require.NotContains(t, ac, "chroma-boot-race")
 
 	// End to end: the auto-briefing recorded item_ids, so rebuilding the funnel
@@ -177,7 +177,7 @@ func TestCodexSubagentStart_ConstraintsOnlyAndParentIdentityIsReadOnly(t *testin
 	require.True(t, ok)
 	require.Equal(t, "SubagentStart", hso["hookEventName"])
 	ac := additionalContext(t, out)
-	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.Contains(t, ac, "- no-force-push")
 	require.NotContains(t, ac, "chroma-boot-race", "children receive constraints, not the full memory index")
 	require.NotContains(t, ac, "Seam session:", "a child gets no independent ambient identity")
 
@@ -257,7 +257,7 @@ func TestClaudeSubagentStart_ConstraintsOnly(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, "SubagentStart", hso["hookEventName"])
 	ac := additionalContext(t, out)
-	require.Contains(t, ac, "CONSTRAINT: no-force-push")
+	require.Contains(t, ac, "- no-force-push")
 	require.NotContains(t, ac, "chroma-boot-race", "children receive constraints, not the full memory index")
 	require.NotContains(t, ac, "Seam session:", "a child gets no independent ambient identity")
 

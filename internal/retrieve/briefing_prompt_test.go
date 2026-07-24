@@ -11,10 +11,37 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// These tests cover the subagent briefing's RELEVANT section
+// relevantSectionOf extracts the subagent briefing's "Relevant to this task"
+// bullets: the section runs from its header to the first non-bullet line (the
+// footer), so assertions can distinguish a memory rendered as relevant from
+// the same name rendered as a constraint bullet.
+func relevantSectionOf(sb string) string {
+	_, after, ok := strings.Cut(sb, "\nRelevant to this task:\n")
+	if !ok {
+		return ""
+	}
+	var lines []string
+	for line := range strings.SplitSeq(after, "\n") {
+		if !strings.HasPrefix(line, "- ") {
+			break
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// relevantLines counts the bullets in the "Relevant to this task" section.
+func relevantLines(sb string) int {
+	if relevantSectionOf(sb) == "" {
+		return 0
+	}
+	return len(strings.Split(relevantSectionOf(sb), "\n"))
+}
+
+// These tests cover the subagent briefing's "Relevant to this task" section
 // (plan:subagent-briefing, D3): BriefingInput.Prompt is matched against the
 // project's memories (all kinds) and rendered as up to subagentRelevantMax
-// lines between the constraint tiers and the footer. They replace the retired
+// bullets between the constraint tiers and the footer. They replace the retired
 // TestSubagentBriefing_PromptFieldUnread, which pinned the field unread until
 // this step landed.
 
@@ -40,15 +67,15 @@ func TestSubagentBriefing_RelevantSectionRenders(t *testing.T) {
 		Prompt: "fix the chroma container health check race at compose startup",
 	})
 	require.NoError(t, err)
-	require.Contains(t, sb, "RELEVANT: chroma-boot-race: chroma container health check startup race")
-	require.Contains(t, sb, "RELEVANT: compose-restart-order:")
+	require.Contains(t, relevantSectionOf(sb), "- chroma-boot-race: chroma container health check startup race")
+	require.Contains(t, relevantSectionOf(sb), "- compose-restart-order:")
 	require.NotContains(t, sb, "unrelated-fact", "non-matching memories stay out")
 
 	// The section sits between the constraint tiers and the footer, which
 	// stays the last line before the closing tag.
-	constraintAt := strings.Index(sb, "CONSTRAINT: no-force-push")
-	relevantAt := strings.Index(sb, "RELEVANT: ")
-	require.Greater(t, relevantAt, constraintAt, "RELEVANT renders after the constraint tiers")
+	constraintAt := strings.Index(sb, "- no-force-push")
+	relevantAt := strings.Index(sb, "Relevant to this task:")
+	require.Greater(t, relevantAt, constraintAt, "the relevant section renders after the constraint tiers")
 	require.True(t, strings.HasSuffix(sb, subagentFooter+"</seam-briefing>"),
 		"the footer stays the last line before the closing tag: %s", sb)
 
@@ -68,7 +95,7 @@ func TestSubagentBriefing_EmptyPromptNoSection(t *testing.T) {
 		sb, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", AgentType: "Explore", Prompt: prompt})
 		require.NoError(t, err)
 		require.NotEmpty(t, sb)
-		require.NotContains(t, sb, "RELEVANT:")
+		require.NotContains(t, sb, "Relevant to this task:")
 		require.Equal(t, []string{"01CON"}, ids, "only the constraint is injected without a prompt")
 	}
 }
@@ -83,7 +110,7 @@ func TestSubagentBriefing_NoMatchesNoSection(t *testing.T) {
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, sb)
-	require.NotContains(t, sb, "RELEVANT:")
+	require.NotContains(t, sb, "Relevant to this task:")
 	require.Equal(t, []string{"01CON"}, ids)
 }
 
@@ -119,15 +146,15 @@ func TestSubagentBriefing_RelevantDedupesBothConstraintTiers(t *testing.T) {
 			svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ConstraintMaxFull = tt.maxFull }))
 			sb, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", AgentType: "Explore", Prompt: prompt})
 			require.NoError(t, err)
-			require.NotContains(t, sb, "RELEVANT: chroma-health-gate",
-				"a constraint visible in either tier is never repeated as RELEVANT")
-			require.NotContains(t, sb, "RELEVANT: chroma-startup-order",
-				"a constraint visible in either tier is never repeated as RELEVANT")
+			require.NotContains(t, relevantSectionOf(sb), "chroma-health-gate",
+				"a constraint visible in either tier is never repeated as relevant")
+			require.NotContains(t, relevantSectionOf(sb), "chroma-startup-order",
+				"a constraint visible in either tier is never repeated as relevant")
 			// The dedupe must not shrink the section below the genuinely-new
 			// hits: both gotchas rank behind the two matching constraints, and
 			// both still render.
-			require.Contains(t, sb, "RELEVANT: chroma-race-gotcha")
-			require.Contains(t, sb, "RELEVANT: container-check-gotcha")
+			require.Contains(t, relevantSectionOf(sb), "- chroma-race-gotcha")
+			require.Contains(t, relevantSectionOf(sb), "- container-check-gotcha")
 			require.ElementsMatch(t, []string{"01CA", "01CB", "01GA", "01GB"}, ids,
 				"every rendered memory joins the instrumentation exactly once")
 		})
@@ -153,7 +180,7 @@ func TestSubagentBriefing_RelevantCapsAtMax(t *testing.T) {
 		Prompt: "chroma container health check race at startup",
 	})
 	require.NoError(t, err)
-	require.Equal(t, subagentRelevantMax, strings.Count(sb, "RELEVANT: "))
+	require.Equal(t, subagentRelevantMax, relevantLines(sb))
 	require.Len(t, ids, 1+subagentRelevantMax, "constraint plus the capped RELEVANT hits")
 }
 
@@ -211,7 +238,7 @@ func TestSubagentBriefing_HardCapWithAllSections(t *testing.T) {
 	hardCap := svc.briefingHardCap(svc.briefing)
 	require.LessOrEqual(t, estTokens(sb), hardCap+1, "the assembled briefing respects the hard cap")
 	require.True(t, strings.HasSuffix(sb, "</seam-briefing>"), "truncation keeps the briefing well-formed")
-	require.Contains(t, sb, "CONSTRAINT: bulk-rule-", "the pinned head survives the cap")
+	require.Contains(t, sb, "- bulk-rule-", "the pinned section survives the cap")
 	// The ids stay the full superset (the assembleBriefing posture): the
 	// RELEVANT hit is credited even when its line fell to the cap.
 	require.Contains(t, ids, "01GOT")
@@ -233,5 +260,5 @@ func TestMainBriefing_PromptFieldIgnored(t *testing.T) {
 	with, _, err := svc.Briefing(ctx, prompted)
 	require.NoError(t, err)
 	require.Equal(t, without, with, "a main-session briefing must ignore Prompt")
-	require.NotContains(t, without, "RELEVANT:")
+	require.NotContains(t, without, "Relevant to this task:")
 }

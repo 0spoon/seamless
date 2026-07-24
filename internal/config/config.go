@@ -74,15 +74,16 @@ type Budgets struct {
 // grace window.
 type Briefing struct {
 	// ConstraintMaxFull is how many top-ranked constraints render as full
-	// "CONSTRAINT: name: description" lines; the rest collapse into one compact
-	// "Also binding (N): ..." line that still names every one. 0 disables the
-	// tiering (every constraint renders full, the legacy behavior).
+	// "- name: description" bullets in the Constraints section; the rest
+	// collapse into one compact "+N more, equally binding" line that still
+	// names every one. 0 disables the tiering (every constraint renders full,
+	// the legacy behavior).
 	ConstraintMaxFull int `yaml:"constraint_max_full" json:"constraintMaxFull"`
 	// ConventionMaxFull is how many top-ranked conventions render as full
-	// "CONVENTION: name: description" lines in the budget-competing body; the
-	// rest stay behind the section's count line ("recall kind=convention").
-	// 0 disables the tiering (every convention renders full), matching
-	// ConstraintMaxFull semantics.
+	// bullets in the budget-competing Conventions section; the rest stay
+	// behind the section's count line ("recall kind=convention"). Starred
+	// conventions always render full past the cap. 0 disables the tiering
+	// (every convention renders full), matching ConstraintMaxFull semantics.
 	ConventionMaxFull int `yaml:"convention_max_full" json:"conventionMaxFull"`
 	// MemoryMaxAgeDays drops memory-index lines not updated within this many
 	// days. 0 = no recency filter. Constraints and stages are exempt.

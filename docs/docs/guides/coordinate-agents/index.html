@@ -286,9 +286,11 @@ plan's queue:</p>
 skip them unless you pass <code>plan=</code>, so a twelve-step plan does not bury the handful
 of tasks that are genuinely loose work. This is why a planner can decompose
 aggressively without drowning every other agent on the machine.</p>
-<p>The briefing surfaces each active plan as one rolled-up line rather than a step
+<p>The briefing surfaces each active plan as one rolled-up row rather than a step
 list:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+<pre class="chroma"><code><span class="line"><span class="cl">Plans:
+</span></span><span class="line"><span class="cl">- marketing -- 2/3 done, 1 claimable, 0 in flight
+</span></span><span class="line"><span class="cl">(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)
 </span></span></code></pre><p>That is enough for an arriving agent to decide whether to pick something up,
 without spending briefing budget on steps it will not touch.</p>
 <p>Claude Code's plan mode builds this composition automatically - plan-file saves

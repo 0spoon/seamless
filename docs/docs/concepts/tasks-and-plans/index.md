@@ -116,10 +116,13 @@ the thing that usually evaporates between sessions.
 that are genuinely loose work. Pass `plan=<slug>` to either tool to see that
 plan's steps instead.
 
-The briefing surfaces each active plan as one rolled-up line:
+The briefing surfaces each active plan as one rolled-up row of its Plans
+section:
 
 ```text
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
 ```
 
 That is enough for an agent to decide whether to pick something up, without
@@ -134,7 +137,8 @@ captured:
   (`plan-status:draft|presented|approved|abandoned`).
 - Planning subagents are cached as `cc-agent-<id>` notes in the same composition.
 - Approving the plan creates the tracking task.
-- Unapproved captures appear in the briefing as `PLAN (awaiting approval)` lines,
-  so a plan that was designed and then forgotten is visible rather than lost.
+- Unapproved captures appear in the briefing's Plans section as
+  `awaiting approval` rows, so a plan that was designed and then forgotten is
+  visible rather than lost.
 
 See the [tasks reference](https://thereisnospoon.org/docs/reference/mcp/tasks/) for the tool surface.

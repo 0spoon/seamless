@@ -92,7 +92,7 @@ That session's context now opens with an injected briefing:
 <figure class="doc-figure" data-tone="ok" aria-labelledby="quickstart-briefing-caption">
   <div class="sample-panel">
     <div class="sample-panel-head"><span>Injected context</span><span>SessionStart</span></div>
-    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 58 memories (4 constraints), 3 recent findings.<br>CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br><span class="sample-muted">...<br>&lt;/seam-briefing&gt;</span></div>
+    <div class="sample-panel-body"><span class="sample-muted">&lt;seam-briefing&gt;</span><br><span class="sample-strong">Seam project: seamless</span> -- 58 memories (4 constraints), 3 recent findings.<br><br><span class="sample-strong">Constraints (binding for every session):</span><br>- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...<br><span class="sample-muted">...<br>&lt;/seam-briefing&gt;</span></div>
   </div>
   <figcaption id="quickstart-briefing-caption">Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.</figcaption>
 </figure>

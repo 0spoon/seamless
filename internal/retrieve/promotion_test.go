@@ -49,16 +49,16 @@ func TestConstraintMishapPromotionBeatsBlendedRank(t *testing.T) {
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
-	require.Contains(t, b, "CONSTRAINT: violated-rule: hit last hour")
-	require.Contains(t, b, "Also binding (1): fresh-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- violated-rule: hit last hour")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: fresh-rule")
 	require.Subset(t, ids, []string{"01MIS", "01FRE"})
 
 	// Subagent parity: rankConstraints runs before the subagent branch, so the
 	// promoted constraint holds the full tier there too.
 	sb, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", AgentType: "Explore"})
 	require.NoError(t, err)
-	require.Contains(t, sb, "CONSTRAINT: violated-rule: hit last hour")
-	require.Contains(t, sb, "Also binding (1): fresh-rule -- memory_read a name before working near it.")
+	require.Contains(t, sb, "- violated-rule: hit last hour")
+	require.Contains(t, sb, "- +1 more, equally binding -- memory_read name=<name> before working near one: fresh-rule")
 }
 
 // Among promoted constraints the most recently violated ranks first, even when
@@ -87,9 +87,9 @@ func TestConstraintMishapPromotionMostRecentFirst(t *testing.T) {
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 3, fullConstraintLines(b))
-	iNew := strings.Index(b, "CONSTRAINT: new-hit")
-	iMid := strings.Index(b, "CONSTRAINT: mid-hit")
-	iOld := strings.Index(b, "CONSTRAINT: old-hit")
+	iNew := strings.Index(b, "- new-hit")
+	iMid := strings.Index(b, "- mid-hit")
+	iOld := strings.Index(b, "- old-hit")
 	require.True(t, iNew >= 0 && iMid >= 0 && iOld >= 0)
 	require.True(t, iNew < iMid && iMid < iOld, "most recent mishap first: %s", b)
 
@@ -97,9 +97,9 @@ func TestConstraintMishapPromotionMostRecentFirst(t *testing.T) {
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ConstraintMaxFull = 2 }))
 	b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "CONSTRAINT: new-hit")
-	require.Contains(t, b, "CONSTRAINT: mid-hit")
-	require.Contains(t, b, "Also binding (1): old-hit -- memory_read a name before working near it.")
+	require.Contains(t, b, "- new-hit")
+	require.Contains(t, b, "- mid-hit")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: old-hit")
 }
 
 // The promotion window is mishapPinWindowDays: a 31-day-old mishap no longer
@@ -122,10 +122,10 @@ func TestConstraintMishapPromotionWindowExpiry(t *testing.T) {
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
-	require.Contains(t, b, "CONSTRAINT: recent-hit")
+	require.Contains(t, b, "- recent-hit")
 	// The expired mishap earns no promotion: the compact tier keeps the
 	// blended (recency) order, fresh-rule ahead of expired-hit.
-	require.Contains(t, b, "Also binding (2): fresh-rule, expired-hit -- memory_read a name before working near it.")
+	require.Contains(t, b, "- +2 more, equally binding -- memory_read name=<name> before working near one: fresh-rule, expired-hit")
 }
 
 // A star is an explicit owner signal and outranks the implicit mishap signal:
@@ -149,9 +149,9 @@ func TestConstraintMishapPromotionStarOutranks(t *testing.T) {
 
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	iSta := strings.Index(b, "CONSTRAINT: starred-rule")
-	iMis := strings.Index(b, "CONSTRAINT: violated-rule")
-	iFre := strings.Index(b, "CONSTRAINT: fresh-rule")
+	iSta := strings.Index(b, "- starred-rule")
+	iMis := strings.Index(b, "- violated-rule")
+	iFre := strings.Index(b, "- fresh-rule")
 	require.True(t, iSta >= 0 && iMis >= 0 && iFre >= 0)
 	require.True(t, iSta < iMis && iMis < iFre, "starred, then mishap-promoted, then blended: %s", b)
 
@@ -161,8 +161,8 @@ func TestConstraintMishapPromotionStarOutranks(t *testing.T) {
 	b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
-	require.Contains(t, b, "CONSTRAINT: starred-rule")
-	require.Contains(t, b, "Also binding (2): violated-rule, fresh-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- starred-rule")
+	require.Contains(t, b, "- +2 more, equally binding -- memory_read name=<name> before working near one: violated-rule, fresh-rule")
 
 	// A mishap against the starred constraint leaves it in the favorites
 	// class -- the explicit signal already outranks the implicit one.
@@ -170,8 +170,8 @@ func TestConstraintMishapPromotionStarOutranks(t *testing.T) {
 	b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
-	require.Contains(t, b, "CONSTRAINT: starred-rule")
-	require.Contains(t, b, "Also binding (2): violated-rule, fresh-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- starred-rule")
+	require.Contains(t, b, "- +2 more, equally binding -- memory_read name=<name> before working near one: violated-rule, fresh-rule")
 }
 
 // An unreadable mishap query costs the promotion, never the briefing (the
@@ -199,8 +199,8 @@ func TestConstraintMishapPromotionFailureSoft(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
 	// No promotion: the blended (recency) order decides the tier boundary.
-	require.Contains(t, b, "CONSTRAINT: fresh-rule")
-	require.Contains(t, b, "Also binding (1): violated-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- fresh-rule")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: violated-rule")
 	require.Subset(t, ids, []string{"01MIS", "01FRE"})
 }
 
@@ -224,10 +224,10 @@ func TestConstraintMishapPromotionTieringDisabled(t *testing.T) {
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 3, fullConstraintLines(b))
-	require.NotContains(t, b, "Also binding")
-	iA := strings.Index(b, "CONSTRAINT: fresh-a")
-	iB := strings.Index(b, "CONSTRAINT: fresh-b")
-	iM := strings.Index(b, "CONSTRAINT: violated-rule")
+	require.NotContains(t, b, "equally binding")
+	iA := strings.Index(b, "- fresh-a")
+	iB := strings.Index(b, "- fresh-b")
+	iM := strings.Index(b, "- violated-rule")
 	require.True(t, iA >= 0 && iB >= 0 && iM >= 0)
 	require.True(t, iA < iB && iB < iM, "legacy order is updated_at DESC, mishap not promoted: %s", b)
 }

@@ -158,15 +158,15 @@ budgets:
 # shapes how constraints render); a pinned stage is exempt too while its Status
 # header marks a live gate.
 briefing:
-  # Top-ranked constraints rendered as full "CONSTRAINT: name: description"
-  # lines; the rest collapse into one compact "Also binding (N): ..." line that
-  # still names every one. 0 = no tiering (every constraint renders full).
+  # Top-ranked constraints rendered as full bullets in the briefing's
+  # Constraints section; the rest collapse into one compact "+N more, equally
+  # binding" line that still names every one. 0 = no tiering (all full).
   # env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL
   constraint_max_full: 4
-  # Top-ranked conventions rendered as full "CONVENTION: name: description"
-  # lines in the budget-competing body; the rest stay behind the section's
-  # count line ("recall kind=convention"). 0 = no tiering, like
-  # constraint_max_full.
+  # Top-ranked conventions rendered as full bullets in the budget-competing
+  # Conventions section; the rest stay behind the section's count line
+  # ("recall kind=convention"). Starred conventions always render full.
+  # 0 = no tiering, like constraint_max_full.
   # env: SEAMLESS_BRIEFING_CONVENTION_MAX_FULL
   convention_max_full: 4
   # Drop memory-index lines not updated within this many days. 0 = no filter.
@@ -181,7 +181,7 @@ briefing:
   # Drop findings older than this many days. 0 = no filter.
   # env: SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS
   findings_max_age_days: 0
-  # Ready-task titles named on the "Ready tasks" line. 0 hides the line.
+  # Ready-task titles listed in the "Ready tasks" section. 0 hides the section.
   # env: SEAMLESS_BRIEFING_READY_TASKS_SHOWN
   ready_tasks_shown: 3
   # Days a captured, unapproved Claude Code plan earns an "awaiting approval"

@@ -352,10 +352,10 @@ func TestSubagentStart_RelevantInjectsAreWeightZero(t *testing.T) {
 	})
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	ac := additionalContext(t, out)
-	require.Contains(t, ac, "CONSTRAINT: no-force-push")
-	require.Contains(t, ac, "RELEVANT: chroma-boot-race: chroma container health check startup race")
-	require.Greater(t, strings.Index(ac, "RELEVANT: "), strings.Index(ac, "CONSTRAINT: "),
-		"RELEVANT renders after the constraint tiers")
+	require.Contains(t, ac, "- no-force-push")
+	require.Contains(t, ac, "Relevant to this task:\n- chroma-boot-race: chroma container health check startup race")
+	require.Greater(t, strings.Index(ac, "Relevant to this task:"), strings.Index(ac, "Constraints (binding for every session):"),
+		"the relevant section renders after the constraint tiers")
 	require.Contains(t, ac, "Recall on demand with recall; read a memory with memory_read.")
 	require.True(t, strings.HasSuffix(ac, "</seam-briefing>"))
 

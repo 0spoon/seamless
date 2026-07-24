@@ -452,8 +452,8 @@ var recallQueries = []string{
 // briefingPreviews give retrieval.injected SessionStart events a plausible
 // content preview (what the console shows when a row expands).
 var briefingPreviews = []string{
-	"<seam-briefing>\nSeam project: orbital -- 8 constraints, 53 memories, 3 recent findings.\nCONSTRAINT: payments-idempotent-by-event-id: Every payment mutation must be idempotent on provider event id...\nPLAN: billing-webhooks-v2 -- 3/5 done, 1 claimable, 1 in flight\n...",
-	"<seam-briefing>\nSeam project: orbital-web -- 6 constraints, 30 memories, 3 recent findings.\nCONSTRAINT: bundle-budget-180kb: First-load JS budget 180KB gz per route...\nPLAN: design-tokens-refresh -- 2/3 done, 0 claimable, 1 in flight\n...",
-	"<seam-briefing>\nSeam project: homelab -- 2 constraints, 23 memories, 2 recent findings.\nCONSTRAINT: vault-vm-never-snapshots-live: The vault VM is never live-snapshotted...\n...",
-	"<seam-briefing>\nSeam project: dotfiles -- 1 constraint, 7 memories, 1 recent finding.\n...",
+	"<seam-briefing>\nSeam project: orbital -- 53 memories (8 constraints), 3 recent findings.\n\nConstraints (binding for every session):\n- payments-idempotent-by-event-id: Every payment mutation must be idempotent on provider event id...\n\nPlans:\n- billing-webhooks-v2 -- 3/5 done, 1 claimable, 1 in flight\n...",
+	"<seam-briefing>\nSeam project: orbital-web -- 30 memories (6 constraints), 3 recent findings.\n\nConstraints (binding for every session):\n- bundle-budget-180kb: First-load JS budget 180KB gz per route...\n\nPlans:\n- design-tokens-refresh -- 2/3 done, 0 claimable, 1 in flight\n...",
+	"<seam-briefing>\nSeam project: homelab -- 23 memories (2 constraints), 2 recent findings.\n\nConstraints (binding for every session):\n- vault-vm-never-snapshots-live: The vault VM is never live-snapshotted...\n...",
+	"<seam-briefing>\nSeam project: dotfiles -- 7 memories (1 constraint), 1 recent finding.\n...",
 }

@@ -100,3 +100,74 @@ func TestRecall_KindFilterMissAndScopeContradiction(t *testing.T) {
 	// The contradiction is not a miss: no second miss row appears.
 	require.Len(t, missEvents(t, db), 1)
 }
+
+// injectedEvents reads the retrieval.injected rows straight off the event log.
+func injectedEvents(t *testing.T, db *sql.DB) []map[string]any {
+	t.Helper()
+	rows, err := db.Query(`SELECT payload FROM events WHERE kind = ?`,
+		string(core.EventInjected))
+	require.NoError(t, err)
+	defer func() { _ = rows.Close() }()
+	var out []map[string]any
+	for rows.Next() {
+		var payload string
+		require.NoError(t, rows.Scan(&payload))
+		var p map[string]any
+		require.NoError(t, json.Unmarshal([]byte(payload), &p))
+		out = append(out, p)
+	}
+	require.NoError(t, rows.Err())
+	return out
+}
+
+// A kind browse (no query) is a listing, not demand: its hits record as
+// retrieval.injected under source "recall-browse" -- which the utility scorer
+// classifies as passive exposure, weight 0 (closed-loop contract) -- and an
+// empty browse records nothing at all: no miss row, since there is no query
+// text for the memory-wanted pass to cluster and an empty kind is not a
+// missing memory.
+func TestRecall_BrowseRecordsExposureNotDemand(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	callJSON(t, ctx, cli, "memory_write", map[string]any{
+		"name": "layout-fact", "kind": "convention",
+		"description": "where things deploy",
+		"body":        "b\n",
+	})
+
+	// An empty browse: no hits, no miss event, no injected event.
+	rec := callJSON(t, ctx, cli, "recall", map[string]any{"kind": "stage"})
+	require.Empty(t, rec["hits"])
+	require.Empty(t, missEvents(t, db))
+
+	// A browse with hits records injected under the browse source, never the
+	// query-gated "recall" source.
+	rec = callJSON(t, ctx, cli, "recall", map[string]any{"kind": "convention"})
+	require.Len(t, rec["hits"], 1)
+	var browse []map[string]any
+	for _, e := range injectedEvents(t, db) {
+		if e["source"] == "recall-browse" {
+			browse = append(browse, e)
+		}
+	}
+	require.Len(t, browse, 1)
+	require.Equal(t, "", browse[0]["query"])
+	require.Equal(t, []any{"layout-fact"}, func() []any {
+		mems := callJSON(t, ctx, cli, "recall", map[string]any{"kind": "convention"})
+		names := make([]any, 0)
+		for _, h := range mems["hits"].([]any) {
+			names = append(names, h.(map[string]any)["name"])
+		}
+		return names
+	}())
+
+	// Neither query nor kind is a loud error, not an empty result.
+	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{
+		Name: "recall", Arguments: map[string]any{},
+	}})
+	require.NoError(t, err)
+	require.True(t, res.IsError)
+}

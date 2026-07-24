@@ -92,7 +92,8 @@ That session's context now opens with an injected briefing:
 Injected context SessionStart
 <seam-briefing>
 Seam project: seamless -- 58 memories (4 constraints), 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
+Constraints (binding for every session):
+- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
 ...
 </seam-briefing>
 Seeing this envelope proves the hook resolved the repository and delivered a budgeted briefing.

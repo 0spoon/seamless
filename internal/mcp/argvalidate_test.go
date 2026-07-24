@@ -346,9 +346,11 @@ func TestArgsMissingRequired(t *testing.T) {
 	cli := dialClient(t, ctx, url, testKey)
 	callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
 
+	// recall's query stopped being schema-required when the kind-browse mode
+	// landed; the handler still rejects a call with neither query nor kind.
 	isErr, txt := callErr(t, ctx, cli, "recall", map[string]any{})
 	require.True(t, isErr)
-	require.Contains(t, txt, `missing required parameter "query"`)
+	require.Contains(t, txt, "query is required unless kind is set")
 
 	// A required parameter with aliases names all of them, so a caller that sent
 	// none of the accepted names learns every one it could have used.

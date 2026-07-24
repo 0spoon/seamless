@@ -54,11 +54,18 @@ current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's [memory-wanted proposals](https://thereisnospoon.org/docs/concepts/gardener/#what-it-looks-for).
 
-The optional `kind` filter restricts hits to memories of one frontmatter kind -
-the mechanism behind briefing hints like `recall kind=convention`. It implies
-memories-only: combining it with `scope=notes` is rejected as contradictory
-rather than returning a misleading empty result, and a kind-filtered miss still
-counts as memory-wanted demand.
+The optional `kind` filter restricts hits to memories of one frontmatter kind.
+It implies memories-only: combining it with `scope=notes` is rejected as
+contradictory rather than returning a misleading empty result, and a
+kind-filtered miss still counts as memory-wanted demand.
+
+With `kind` set, `query` becomes optional: a kind alone is the **browse mode**
+behind briefing hints like `recall kind=convention` - the scope's active
+memories of that kind, listed newest-first under the same limit and token
+budget. A browse is a listing, not a search: no fusion, no favorite or utility
+boost, its hits record as passive exposure (never query-gated demand), and an
+empty browse records no miss - "this project has no conventions yet" is not a
+missing memory.
 
 It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
@@ -148,12 +155,12 @@ Delete a memory by name (removes the file and its index).
 
 ## recall {#recall}
 
-Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point.
+Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `query` | string | **yes** | what you are looking for |
-| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | number | no | maximum results (default 10) |
 | `project` | string | no | project slug; defaults to the bound session's project |
+| `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |

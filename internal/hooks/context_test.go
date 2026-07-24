@@ -182,7 +182,7 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 			fmt.Sprintf("pinned-constraint-%03d", i), strings.Repeat("bounded pinned detail ", 12), "demo")
 	}
 	now := time.Now().UTC()
-	for i := range 80 {
+	for i := range 95 {
 		require.NoError(t, store.CreateTask(ctx, db, core.Task{
 			ID:          fmt.Sprintf("01T%03d", i),
 			ProjectSlug: "demo",
@@ -224,10 +224,10 @@ func TestSessionStart_CodexCapsPinnedContextAfterAmbientLine(t *testing.T) {
 	// The constraint head is tiered (default constraint_max_full=4): the top
 	// full line and the compact "Also binding" tail -- including the oldest
 	// name it carries -- are both pinned and survive the codex cap.
-	require.Contains(t, emitted, "CONSTRAINT: pinned-constraint-024")
-	require.Contains(t, emitted, "Also binding (21):")
+	require.Contains(t, emitted, "- pinned-constraint-024")
+	require.Contains(t, emitted, "- +21 more, equally binding")
 	require.Contains(t, emitted, "pinned-constraint-000")
-	require.Contains(t, emitted, "PLAN: codex-context-plan-000")
+	require.Contains(t, emitted, "- codex-context-plan-000")
 	require.Contains(t, emitted, "Seam session: cx/019f7291-")
 	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
 
@@ -247,7 +247,7 @@ func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T
 	ts, db := newHandlerServer(t)
 	const parentID = "019f8000-0000-7000-8000-000000000001"
 
-	for i := range 80 {
+	for i := range 95 {
 		insertMemory(t, db, fmt.Sprintf("01S%03d", i), "constraint",
 			fmt.Sprintf("subagent-constraint-%03d", i), strings.Repeat("bounded child detail ", 12), "demo")
 	}
@@ -280,7 +280,7 @@ func TestSubagentStart_CodexCapsConstraintsAndRecordsExactTelemetry(t *testing.T
 	require.Equal(t, "SubagentStart", hso["hookEventName"])
 	emitted := additionalContext(t, out)
 	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
-	require.Contains(t, emitted, "CONSTRAINT: subagent-constraint-")
+	require.Contains(t, emitted, "- subagent-constraint-")
 	require.Contains(t, emitted, contextTruncationMarker)
 	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
 	require.NotContains(t, emitted, "Seam session:")
@@ -331,8 +331,8 @@ func TestSubagentStart_CodexRelevantSectionUnderCap(t *testing.T) {
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	emitted := additionalContext(t, out)
 	require.LessOrEqual(t, retrieve.EstimateTokens(emitted), codexContextMaxTokens)
-	require.Contains(t, emitted, "CONSTRAINT: no-force-push")
-	require.Contains(t, emitted, "RELEVANT: chroma-boot-race: chroma container health check startup race")
+	require.Contains(t, emitted, "- no-force-push")
+	require.Contains(t, emitted, "Relevant to this task:\n- chroma-boot-race: chroma container health check startup race")
 	require.Contains(t, emitted, "Recall on demand with recall; read a memory with memory_read.")
 	require.True(t, strings.HasSuffix(emitted, "</seam-briefing>"))
 	require.NotContains(t, emitted, contextTruncationMarker)
@@ -367,7 +367,7 @@ func TestSessionStart_ClaudeEmitsOversizedBriefingUncapped(t *testing.T) {
 			fmt.Sprintf("pinned-constraint-%03d", i), strings.Repeat("bounded pinned detail ", 12), "demo")
 	}
 	now := time.Now().UTC()
-	for i := range 80 {
+	for i := range 95 {
 		require.NoError(t, store.CreateTask(ctx, db, core.Task{
 			ID:          fmt.Sprintf("01T%03d", i),
 			ProjectSlug: "demo",

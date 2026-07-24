@@ -327,7 +327,7 @@ func TestTasksReadyQueue(t *testing.T) {
 
 	// The next session's briefing surfaces the ready-tasks line.
 	brief := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "resume"})
-	require.Contains(t, brief["briefing"], "Ready tasks: 1 -- wire briefing line")
+	require.Contains(t, brief["briefing"], "Ready tasks (1):\n- wire briefing line")
 }
 
 func TestResearchTrials(t *testing.T) {

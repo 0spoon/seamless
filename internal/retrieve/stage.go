@@ -64,15 +64,18 @@ func (s *Service) pinnedStages(stages []core.Memory, maxUnknownAgeDays int, now 
 	return out
 }
 
-// stageHead renders the pinned-stage lines for the briefing header (right after
-// constraints), or "" when there are none.
-func stageHead(stages []stageLine) string {
+// stagesSection renders the pinned Stages section for the briefing (right
+// after constraints), or "" when there are none. The trailer names the depth
+// command: a stage's gate details live in its body, which only memory_read
+// reaches.
+func stagesSection(stages []stageLine) string {
 	if len(stages) == 0 {
 		return ""
 	}
 	var b strings.Builder
+	b.WriteString("\nStages (world-state gates):\n")
 	for _, st := range stages {
-		b.WriteString("STAGE: " + sanitizeField(st.name, 80) + " -- ")
+		b.WriteString("- " + sanitizeField(st.name, 80) + " -- ")
 		if st.status != "" {
 			b.WriteString(sanitizeField(st.status, 40))
 		} else {
@@ -86,5 +89,6 @@ func stageHead(stages []stageLine) string {
 		}
 		b.WriteString("\n")
 	}
+	b.WriteString("(details: memory_read name=<stage>)\n")
 	return b.String()
 }

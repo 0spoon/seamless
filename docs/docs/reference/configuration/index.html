@@ -541,15 +541,15 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="c"># shapes how constraints render); a pinned stage is exempt too while its Status</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># header marks a live gate.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">briefing</span><span class="p">:</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Top-ranked constraints rendered as full &#34;CONSTRAINT: name: description&#34;</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># lines; the rest collapse into one compact &#34;Also binding (N): ...&#34; line that</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># still names every one. 0 = no tiering (every constraint renders full).</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Top-ranked constraints rendered as full bullets in the briefing&#39;s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Constraints section; the rest collapse into one compact &#34;+N more, equally</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># binding&#34; line that still names every one. 0 = no tiering (all full).</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_CONSTRAINT_MAX_FULL</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">constraint_max_full</span><span class="p">:</span><span class="w"> </span><span class="m">4</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Top-ranked conventions rendered as full &#34;CONVENTION: name: description&#34;</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># lines in the budget-competing body; the rest stay behind the section&#39;s</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># count line (&#34;recall kind=convention&#34;). 0 = no tiering, like</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># constraint_max_full.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Top-ranked conventions rendered as full bullets in the budget-competing</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Conventions section; the rest stay behind the section&#39;s count line</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (&#34;recall kind=convention&#34;). Starred conventions always render full.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># 0 = no tiering, like constraint_max_full.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_CONVENTION_MAX_FULL</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">convention_max_full</span><span class="p">:</span><span class="w"> </span><span class="m">4</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Drop memory-index lines not updated within this many days. 0 = no filter.</span><span class="w">
@@ -564,7 +564,7 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Drop findings older than this many days. 0 = no filter.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_FINDINGS_MAX_AGE_DAYS</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">findings_max_age_days</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Ready-task titles named on the &#34;Ready tasks&#34; line. 0 hides the line.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Ready-task titles listed in the &#34;Ready tasks&#34; section. 0 hides the section.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_READY_TASKS_SHOWN</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">ready_tasks_shown</span><span class="p">:</span><span class="w"> </span><span class="m">3</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Days a captured, unapproved Claude Code plan earns an &#34;awaiting approval&#34;</span><span class="w">

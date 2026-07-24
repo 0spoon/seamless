@@ -76,7 +76,8 @@ Pinned briefing space should carry the rule itself, not a pointer saying that ru
 
 A constraint is pinned into every briefing and never dropped for budget - though
 only the top `briefing.constraint_max_full` of them render this description in
-full; the rest are pinned as names on the compact `Also binding` line. That is
+full; the rest are pinned as names on the compact `+N more, equally binding`
+line. That is
 expensive real estate either way, and "rules for errcheck" spends it to tell an
 agent that rules exist.
 
@@ -98,7 +99,7 @@ The kind is not filing paperwork - it changes what happens to the memory:
 |---|---|---|
 | `constraint` | A rule any agent must follow regardless of task | **Pinned.** Never dropped for budget, never staleness-archived |
 | `stage` | Where multi-session work stands | **Pinned while its `Status:` header marks a live gate** - `done` unpins immediately; a missing header ages out after `briefing.stage_unknown_max_age_days` |
-| `convention` | A project-local choice or layout fact | Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at `recall kind=convention` |
+| `convention` | A project-local choice or layout fact | Its own budget-competing Conventions section; the overflow sits behind a count line pointing at `recall kind=convention`, which lists the kind newest-first when called without a query |
 | `gotcha` | A trap, led by its symptom | Ordinary budget and staleness rules |
 | `decision` | A choice plus the alternatives it rejected | Ordinary |
 | `refuted` | A belief that turned out false | Ordinary |

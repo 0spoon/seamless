@@ -12,12 +12,33 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// fullConstraintLines counts the full-tier "CONSTRAINT:" lines in a briefing.
-func fullConstraintLines(b string) int { return strings.Count(b, "CONSTRAINT: ") }
+// constraintsSectionOf extracts the briefing's Constraints section body: the
+// lines between its header and the blank line before the next section (or the
+// rest of the briefing when it is the last section).
+func constraintsSectionOf(b string) string {
+	_, after, ok := strings.Cut(b, "Constraints (binding for every session):\n")
+	if !ok {
+		return ""
+	}
+	sec, _, _ := strings.Cut(after, "\n\n")
+	return sec
+}
+
+// fullConstraintLines counts the full-tier bullets in a briefing's Constraints
+// section (the "- +N more" compact line is not a full line).
+func fullConstraintLines(b string) int {
+	n := 0
+	for line := range strings.SplitSeq(constraintsSectionOf(b), "\n") {
+		if strings.HasPrefix(line, "- ") && !strings.HasPrefix(line, "- +") {
+			n++
+		}
+	}
+	return n
+}
 
 // The tier boundary sits exactly at constraint_max_full: the top K constraints
 // (recency order with the utility gate closed) render as full lines, the rest
-// collapse into one "Also binding" line -- and every name plus every id stays
+// collapse into one "equally binding" line -- and every name plus every id stays
 // visible regardless of K.
 func TestConstraintTierBoundaryAtK(t *testing.T) {
 	db := setupDB(t)
@@ -36,9 +57,9 @@ func TestConstraintTierBoundaryAtK(t *testing.T) {
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 2, fullConstraintLines(b), "exactly K full lines")
-	require.Contains(t, b, "CONSTRAINT: c-one: rule one")
-	require.Contains(t, b, "CONSTRAINT: c-two: rule two")
-	require.Contains(t, b, "Also binding (2): c-three, c-four -- memory_read a name before working near it.")
+	require.Contains(t, b, "- c-one: rule one")
+	require.Contains(t, b, "- c-two: rule two")
+	require.Contains(t, b, "- +2 more, equally binding -- memory_read name=<name> before working near one: c-three, c-four")
 	// The compact tier's ids are recorded alongside the full tier's, so the
 	// read-after-inject funnel keeps seeing every constraint.
 	require.Subset(t, ids, []string{"01ONE", "01TWO", "01THR", "01FOU"})
@@ -49,7 +70,7 @@ func TestConstraintTierBoundaryAtK(t *testing.T) {
 		b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 		require.NoError(t, err)
 		require.Equal(t, 4, fullConstraintLines(b))
-		require.NotContains(t, b, "Also binding")
+		require.NotContains(t, b, "equally binding")
 	}
 
 	// K just below len collapses exactly the one overflow constraint.
@@ -57,7 +78,7 @@ func TestConstraintTierBoundaryAtK(t *testing.T) {
 	b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 3, fullConstraintLines(b))
-	require.Contains(t, b, "Also binding (1): c-four -- memory_read a name before working near it.")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: c-four")
 
 	// Every constraint name is present in every briefing regardless of K.
 	for _, k := range []int{0, 1, 2, 3, 4, 50} {
@@ -92,8 +113,8 @@ func TestConstraintTierFavoritePromoted(t *testing.T) {
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 1, fullConstraintLines(b))
-	require.Contains(t, b, "CONSTRAINT: starred-rule: old but starred")
-	require.Contains(t, b, "Also binding (2): fresh-a, fresh-b -- memory_read a name before working near it.")
+	require.Contains(t, b, "- starred-rule: old but starred")
+	require.Contains(t, b, "- +2 more, equally binding -- memory_read name=<name> before working near one: fresh-a, fresh-b")
 	require.Subset(t, ids, []string{"01STA", "01FRA", "01FRB"})
 }
 
@@ -118,8 +139,8 @@ func TestConstraintTierZeroDisables(t *testing.T) {
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
 	require.Equal(t, 3, fullConstraintLines(b))
-	require.NotContains(t, b, "Also binding")
-	a, bb, c := strings.Index(b, "CONSTRAINT: fresh-a"), strings.Index(b, "CONSTRAINT: fresh-b"), strings.Index(b, "CONSTRAINT: starred-rule")
+	require.NotContains(t, b, "equally binding")
+	a, bb, c := strings.Index(b, "- fresh-a"), strings.Index(b, "- fresh-b"), strings.Index(b, "- starred-rule")
 	require.True(t, a >= 0 && bb >= 0 && c >= 0)
 	require.True(t, a < bb && bb < c, "legacy order is updated_at DESC, star not promoted: %s", b)
 }
@@ -143,9 +164,9 @@ func TestConstraintTierSubagentParity(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, sb, "(subagent scope)")
 	require.Equal(t, 2, fullConstraintLines(sb))
-	require.Contains(t, sb, "CONSTRAINT: c-one: rule one")
-	require.Contains(t, sb, "CONSTRAINT: c-two: rule two")
-	require.Contains(t, sb, "Also binding (1): c-three -- memory_read a name before working near it.")
+	require.Contains(t, sb, "- c-one: rule one")
+	require.Contains(t, sb, "- c-two: rule two")
+	require.Contains(t, sb, "- +1 more, equally binding -- memory_read name=<name> before working near one: c-three")
 	require.ElementsMatch(t, []string{"01ONE", "01TWO", "01THR"}, ids)
 
 	// The 0-disables path holds for subagents too.
@@ -153,7 +174,7 @@ func TestConstraintTierSubagentParity(t *testing.T) {
 	sb, ids, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", AgentType: "Explore"})
 	require.NoError(t, err)
 	require.Equal(t, 3, fullConstraintLines(sb))
-	require.NotContains(t, sb, "Also binding")
+	require.NotContains(t, sb, "equally binding")
 	require.ElementsMatch(t, []string{"01ONE", "01TWO", "01THR"}, ids)
 }
 
@@ -180,16 +201,16 @@ func TestConstraintTierUtilityGateFallsBackToRecency(t *testing.T) {
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ConstraintMaxFull = 2 }))
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "CONSTRAINT: fresh-rule")
-	require.Contains(t, b, "CONSTRAINT: mid-rule")
-	require.Contains(t, b, "Also binding (1): hot-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- fresh-rule")
+	require.Contains(t, b, "- mid-rule")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: hot-rule")
 
 	// Gate open (mode on): the blended key lifts the proven constraint into the
 	// full tier; the two-day-old unproven one takes the compact line instead.
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ConstraintMaxFull = 2; b.UtilityMode = "on" }))
 	b, _, err = svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "CONSTRAINT: hot-rule")
-	require.Contains(t, b, "CONSTRAINT: fresh-rule")
-	require.Contains(t, b, "Also binding (1): mid-rule -- memory_read a name before working near it.")
+	require.Contains(t, b, "- hot-rule")
+	require.Contains(t, b, "- fresh-rule")
+	require.Contains(t, b, "- +1 more, equally binding -- memory_read name=<name> before working near one: mid-rule")
 }

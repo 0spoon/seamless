@@ -52,7 +52,7 @@ type Hit struct {
 	Description string  `json:"description"`
 	Project     string  `json:"project,omitempty"`
 	Age         string  `json:"age"`
-	Source      string  `json:"source"` // semantic | fts | fused
+	Source      string  `json:"source"` // semantic | fts | fused | link | browse
 	Score       float64 `json:"score"`
 	// Snippet is the matched text in context, with the matched terms wrapped in
 	// store.SnippetStartMark/SnippetEndMark. Only Search sets it, and only for
@@ -84,12 +84,14 @@ var RecallScopes = []string{"all", "memories", "notes"}
 // RecallInput parameterizes a recall. Project is the session's bound scope;
 // results are limited to that project plus global items.
 type RecallInput struct {
+	// Query is the search text. It may be empty only when Kind is set: a kind
+	// with no query is the browse mode (list that kind newest-first), the
+	// mechanism behind briefing hints like "recall kind=convention".
 	Query   string
 	Project string
 	Scope   string // all | memories | notes (default all)
 	// Kind, when non-empty, restricts hits to memories of that frontmatter
-	// kind (core.MemoryKinds) -- the mechanism behind briefing hints like
-	// "recall kind=convention". It implies memories-only, so Scope "notes" is
+	// kind (core.MemoryKinds). It implies memories-only, so Scope "notes" is
 	// rejected as contradictory, and link expansion is skipped: a kind filter
 	// is a targeted enumeration, and a [[link]] neighbor of another kind would
 	// violate it.
@@ -229,6 +231,15 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		limit = 10
 	}
 
+	// A kind with no query is the browse mode: a premade filter ("list the
+	// conventions"), not a search, so it skips the retrieval legs entirely.
+	if in.Query == "" {
+		if in.Kind == "" {
+			return nil, errors.New("retrieve.Recall: query is required unless kind is set")
+		}
+		return s.browseKind(ctx, in.Kind, in.Project, limit)
+	}
+
 	// The recall scope is the bound project plus global (project ""). Filtering
 	// happens in the candidate queries themselves: filtering only after fusion
 	// over a fixed depth would let a query dominated by out-of-scope hits starve
@@ -324,6 +335,45 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		h.Source = fusedSource(f)
 		h.Score = f.score
 
+		cost := estTokens(h.Title + h.Description)
+		if len(out) > 0 && (len(out) >= limit || used+cost > budget) {
+			break
+		}
+		out = append(out, h)
+		used += cost
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out, nil
+}
+
+// browseKind is Recall's no-query mode: enumerate the scope's active memories
+// of one kind, newest-first, under the same limit and token budget as a
+// searching recall. Deliberately list-shaped, not rank-shaped: no fusion, no
+// link expansion, and no favorite or utility boost -- library rails default to
+// recency, and there is no fused score to boost. The MCP layer records a
+// browse's hits as passive-class exposure (source "recall-browse"), never as
+// query-gated demand: a listing is the briefing's kin, and crediting it would
+// let browsing reinforce the ranking it reads
+// (closed-loop-utility-signal-contract).
+func (s *Service) browseKind(ctx context.Context, kind, project string, limit int) ([]Hit, error) {
+	mems, err := store.ActiveMemoriesForScope(ctx, s.db, project, nil)
+	if err != nil {
+		return nil, err
+	}
+	budget := s.budgets.RecallBudgetTokens
+	if budget <= 0 {
+		budget = 1000
+	}
+	out := make([]Hit, 0, limit)
+	used := 0
+	for _, m := range mems {
+		if string(m.Kind) != kind {
+			continue
+		}
+		h := memoryHit(m)
+		h.Source = "browse"
 		cost := estTokens(h.Title + h.Description)
 		if len(out) > 0 && (len(out) >= limit || used+cost > budget) {
 			break

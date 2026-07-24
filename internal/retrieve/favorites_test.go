@@ -3,6 +3,7 @@ package retrieve
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,10 +20,11 @@ func starMemory(t *testing.T, db *sql.DB, id string) {
 	require.NoError(t, err)
 }
 
-// A starred non-constraint memory is pinned as a FAVORITE head line: it leaves
-// the trimmable index (surviving MemoryMaxItems=1), renders once, and reports
-// its id for the retrieval funnel. A starred constraint keeps its CONSTRAINT
-// section and is never rendered twice.
+// A starred non-constraint memory keeps the favorite pin without a section of
+// its own: it heads the Memories list, leaves the trimmable index (surviving
+// MemoryMaxItems=1), renders once, and reports its id for the retrieval
+// funnel. A starred constraint keeps its Constraints section and is never
+// rendered twice.
 func TestBriefingPinsFavorites(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
@@ -41,10 +43,15 @@ func TestBriefingPinsFavorites(t *testing.T) {
 
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "FAVORITE: starred-gotcha: the starred pitfall")
-	require.Contains(t, b, "CONSTRAINT: starred-constraint")
-	require.NotContains(t, b, "FAVORITE: starred-constraint", "a starred constraint stays in its own pinned section")
+	require.NotContains(t, b, "FAVORITE:", "no separate starred section")
+	require.Contains(t, b, "- starred-gotcha: the starred pitfall")
+	require.Contains(t, b, "- starred-constraint")
+	require.Equal(t, 1, strings.Count(b, "starred-constraint"), "a starred constraint renders once, in its section")
 	require.Contains(t, b, "plain-gotcha")
+	// The starred gotcha heads the Memories list, ahead of the fresher plain
+	// one that recency alone would rank first.
+	require.Less(t, strings.Index(b, "- starred-gotcha"), strings.Index(b, "- plain-gotcha"),
+		"the star heads the Memories list")
 	require.Subset(t, ids, []string{"01A", "01B", "01C"})
 }
 

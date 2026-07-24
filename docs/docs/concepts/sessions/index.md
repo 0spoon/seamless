@@ -50,24 +50,33 @@ This is a real briefing, in the order the assembler packs it:
 ```text
 Actual packing order budgeted
 <seam-briefing>
-Seam project: seamless -- 62 memories (24 constraints), 3 recent findings.
-CONSTRAINT: errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
-CONSTRAINT: llm-degradation-remote-vs-local: llm errors split remote ...
-... 2 more CONSTRAINT lines ...
-Also binding (20): fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ... -- memory_read a name before working near it.
-STAGE: deep-audit-f15-f18-landed -- status unknown (no Status: header)
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
-PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-CONVENTION: wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
-... 3 more CONVENTION lines ...
-(9 conventions, 4 shown -- recall kind=convention for the rest)
+Seam project: seamless -- 62 memories (24 constraints, 9 conventions, 1 stage), 3 recent findings.
+Constraints (binding for every session):
+- errcheck-check-blank-two-category-rule: errcheck runs with check-blank ...
+- llm-degradation-remote-vs-local: llm errors split remote ...
+... 2 more bullets ...
+- +20 more, equally binding -- memory_read name=<name> before working near one: fts-or-vs-allterms-presence-probe, console-csrf-origin-check-contract, ...
+Stages (world-state gates):
+- deep-audit-f15-f18-landed -- status unknown (no Status: header)
+(details: memory_read name=<stage>)
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+- seamless-documentation-site -- awaiting approval: Seamless documentation site (presented, 2m)
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
+Conventions (project-local choices):
+- wordmark-caret-l-spans-three-files: The wordmark markup must stay in sync ...
+... 3 more bullets ...
+(9 total, 4 shown -- recall kind=convention for the rest)
 Recent findings:
 - cc/1fa4b02d (1h): Landed the installer check; the release gate now fails on ...
-Ready tasks: 2 -- Fix tool.call misattribution; Polish the docs nav
+Ready tasks (2):
+- Fix tool.call misattribution
+- Polish the docs nav
+(full queue with ids: tasks_ready; claim: tasks_claim id=<id>)
 Memories (seamless):
 - gofmt-must-scope-to-tracked-files: gofmt walks the filesystem ...
 - shared-worktree-concurrent-agents-verify: Agents share the main worktree ...
-- (+34 older -- use recall)
+- (+34 older -- recall query=<topic>, optionally kind=<kind>)
 Recall on demand with recall; read a memory with memory_read.
 Seam session: cc/8dd2fd5b-55d96b8d15ff0104 (ambient)
 </seam-briefing>
@@ -77,47 +86,53 @@ Situation before library: the pinned head leads (tiered constraints, stages, pla
 Line by line:
 
 - **The header** counts what exists, so an agent knows how much it is *not* being
-  shown. Constraints are memories too, so they are reported as a subset of the
-  total, not a second pool.
-- **`CONSTRAINT:` lines** come first and are **never dropped for budget**. A
+  shown. Constraints, conventions, and pinned stages are memories too, so they
+  are reported as subsets of the total, not second pools.
+- **The Constraints section** comes first and is **never dropped for budget**. A
   constraint is a rule the project cannot violate; a briefing that omitted one to
-  fit a token budget would be worse than no briefing at all. They are *tiered*:
+  fit a token budget would be worse than no briefing at all. It is *tiered*:
   the top `briefing.constraint_max_full` (default 4) render as full
-  `name: description` lines - starred constraints first, then constraints a
+  `- name: description` bullets - starred constraints first, then constraints a
   recent mishap referenced (last 30 days, most recent first), then the same
   blended recency+utility order the memory index uses - and the remainder
-  collapse into the compact **`Also binding (N):`** line, which still names
-  every one so an agent can `memory_read` a name before working near it.
-  Setting the knob to 0 disables tiering and renders every constraint in full.
-- **`STAGE:` lines** are pinned right after constraints, for the same reason: a
-  gated stage's status is load-bearing for the whole session. The pin belongs to
-  the *gate*: a stage whose body does not open with a live
+  collapse into the compact **`+N more, equally binding`** line, which still
+  names every one so an agent can `memory_read name=<name>` before working near
+  it. Setting the knob to 0 disables tiering and renders every constraint full.
+- **The Stages section** is pinned right after constraints, for the same reason:
+  a gated stage's status is load-bearing for the whole session. The pin belongs
+  to the *gate*: a stage whose body does not open with a live
   `Status: open|in_progress|blocked` header only renders (as
   `status unknown (no Status: header)` - the nudge names the fix) for the
   `briefing.stage_unknown_max_age_days` grace window (default 7) after its last
   update, then leaves the briefing rather than squatting in it forever.
-- **`PLAN:` rollups** follow, also pinned. The counts (`2/3 done, 1 claimable`)
-  tell the next agent what work it can pick up right now. Starred memories close
-  the pinned head as `FAVORITE:` lines, exempt from every trim.
-- **`PLAN (awaiting approval)` lines** open the budgeted body: captured but
-  unapproved plans are a hint, not a commitment, so unlike the rollups above
-  them they compete for budget and expire after
+- **The Plans section** follows. The pinned rollup rows (`2/3 done,
+  1 claimable`) tell the next agent what work it can pick up right now, and the
+  closing hint names the premade filters: `tasks_ready plan=<slug>` for a
+  plan's steps, `tasks_claim` to take one.
+- **`awaiting approval` rows** sit in the same section but open the budgeted
+  body: captured but unapproved plans are a hint, not a commitment, so unlike
+  the rollups they compete for budget and expire after
   `briefing.pending_plan_max_days`.
-- **`CONVENTION:` lines** follow: project-local choices and layout facts
+- **The Conventions section** follows: project-local choices and layout facts
   (`kind: convention`) - binding, but topically triggered, so unlike
   constraints they compete for budget. The top `briefing.convention_max_full`
   (default 4; 0 renders all) show in full and a count line always closes the
-  section, pointing at `recall kind=convention` for the rest.
+  section, pointing at `recall kind=convention` - a real command: `recall`
+  with a kind and no query lists that kind newest-first. A starred convention
+  heads the section and renders regardless of the tier cap or the budget.
 - **Recent findings** - what previous sessions learned, harvested at their end -
   render right after: they say what just happened here, so they pack (and
   render) before the memory index rather than below it.
-- **The ready-tasks line** closes the situation half: the open queue, oldest
-  first, before the library begins.
-- **The memory index** is `name: description` only - the description is the *only*
-  text an index ever shows, which is why writing a good one matters more than
-  writing a good body.
-- **`(+34 older -- use recall)`** is the honest tail: the index was trimmed, and
-  the briefing says so instead of pretending it is complete.
+- **The Ready tasks section** closes the situation half: the open queue, oldest
+  first, before the library begins, with the full-queue and claim commands as
+  its trailer.
+- **The Memories index** is `- name: description` bullets only - the description
+  is the *only* text an index ever shows, which is why writing a good one
+  matters more than writing a good body. Starred memories head the list,
+  exempt from every trim and from the budget.
+- **`(+34 older -- recall query=<topic>, optionally kind=<kind>)`** is the
+  honest tail: the index was trimmed, and the briefing says so instead of
+  pretending it is complete.
 
 ## The budget, and what survives it
 
@@ -126,16 +141,18 @@ the whole thing is hard-capped at `briefing.hard_cap_multiplier` times that
 (default 2x).
 
 The **never-drop invariant**: constraints (both the full tier and the compact
-`Also binding` line), pinned stages, active-plan rollups, and starred memories
-are counted first and are exempt from budget dropping - every constraint name
-appears in every briefing. Everything else packs in render order - pending
+`+N more, equally binding` line), pinned stages, and active-plan rollups are
+counted first and are exempt from budget dropping - every constraint name
+appears in every briefing. Starred memories keep the same exemption inside
+their sections: a starred convention or index memory renders no matter how
+starved the budget. Everything else packs in render order - pending
 plans, conventions, recent findings, ready tasks, the memory index, sibling
 findings, sibling memories - so budget priority and render priority agree: the sections
 that say what is happening now pack before the memory library, a fat index can
 no longer evict the findings that render above it, and the sibling sections
 are the first to go when the budget runs out. The header counts only the
 findings that actually rendered, and findings or index lines cut by budget
-leave an explicit `+N more/older -- use recall` trailer.
+leave an explicit `+N more/older` trailer.
 
 The memory index's own order starts as newest-first - but each memory also
 carries a [utility score](https://thereisnospoon.org/docs/concepts/recall/#the-utility-nudge), a time-decayed

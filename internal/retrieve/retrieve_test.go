@@ -81,10 +81,11 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	require.Contains(t, b, "</seam-briefing>")
 	// Header reports one memory total with constraints as its named subset (1
 	// constraint + 3 index memories incl. the visible global = 4), not two
-	// disjoint pools -- so the count reconciles with the rendered CONSTRAINT and
-	// memory lines.
-	require.Contains(t, b, "Seam project: seam -- 4 memories (1 constraints), 1 recent findings.")
-	require.Contains(t, b, "CONSTRAINT: no-force-push: never force push to main")
+	// disjoint pools -- so the count reconciles with the rendered constraint and
+	// memory lines. Singular kinds render singular ("1 constraint").
+	require.Contains(t, b, "Seam project: seam -- 4 memories (1 constraint), 1 recent findings.")
+	require.Contains(t, b, "Constraints (binding for every session):")
+	require.Contains(t, b, "- no-force-push: never force push to main")
 	require.Contains(t, b, "chroma-boot-race")
 	require.Contains(t, b, "global-fact") // global memory visible in project scope
 	require.Contains(t, b, "Recent findings:")
@@ -99,7 +100,7 @@ func TestBriefingSectionsAndSanitization(t *testing.T) {
 	// Subagent briefing is constraints-only.
 	sb, sbIDs, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", AgentType: "Explore"})
 	require.NoError(t, err)
-	require.Contains(t, sb, "CONSTRAINT: no-force-push")
+	require.Contains(t, sb, "- no-force-push")
 	require.NotContains(t, sb, "chroma-boot-race")
 	require.NotContains(t, sb, "Recent findings")
 	require.Equal(t, []string{"01A"}, sbIDs) // only the constraint is injected
@@ -151,7 +152,8 @@ func TestBriefingPendingPlanLines(t *testing.T) {
 	svc := New(db, nil, budgets(), nil)
 	b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "PLAN (awaiting approval): fresh-plan -- Fresh Plan (presented,")
+	require.Contains(t, b, "Plans:")
+	require.Contains(t, b, "- fresh-plan -- awaiting approval: Fresh Plan (presented,")
 	require.NotContains(t, b, "done-plan")
 	require.NotContains(t, b, "old-plan")
 	require.NotContains(t, b, "other-plan")
@@ -186,7 +188,7 @@ func TestBriefingSiblingProjects(t *testing.T) {
 	svc := New(db, nil, budgets(), nil)
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/app", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "## Sibling projects")
+	require.Contains(t, b, "Sibling projects:")
 	require.Contains(t, b, "backend migration shipped", "sibling family finding surfaces")
 	require.NotContains(t, b, "web redesign landed", "non-family project finding excluded")
 	require.Contains(t, ids, "01A") // the constraint memory, not the sibling findings
@@ -231,8 +233,8 @@ func TestBriefingBudgetDropsTail(t *testing.T) {
 	svc := New(db, nil, config.Budgets{MaxBriefingTokens: 200, RecallBudgetTokens: 1000}, nil)
 	b, ids, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, b, "CONSTRAINT: keep-me") // constraints never dropped
-	require.Contains(t, b, "older -- use recall") // tail was truncated
+	require.Contains(t, b, "- keep-me")                     // constraints never dropped
+	require.Contains(t, b, "older -- recall query=<topic>") // tail was truncated
 	require.True(t, strings.HasSuffix(b, "</seam-briefing>"))
 	// The dropped tail is not counted as injected: reported ids match exactly the
 	// constraint plus the index lines that survived budgeting.
@@ -281,7 +283,8 @@ func TestBriefingTunables_CountsAndAges(t *testing.T) {
 		require.Contains(t, b, "newest finding text")
 		require.Contains(t, b, "second finding text")
 		require.Contains(t, b, "ancient finding text")
-		require.Contains(t, b, "Ready tasks: 1 -- an open ready task")
+		require.Contains(t, b, "Ready tasks (1):")
+		require.Contains(t, b, "- an open ready task")
 	})
 
 	t.Run("findings count 1 keeps only the newest", func(t *testing.T) {
@@ -311,7 +314,7 @@ func TestBriefingTunables_CountsAndAges(t *testing.T) {
 		svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ReadyTasksShown = 0 }))
 		b, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 		require.NoError(t, err)
-		require.NotContains(t, b, "Ready tasks:")
+		require.NotContains(t, b, "Ready tasks (")
 	})
 }
 
@@ -335,7 +338,7 @@ func TestBriefingTunables_MemoryIndexTrims(t *testing.T) {
 		require.Contains(t, b, "newest-mem")
 		require.NotContains(t, b, "recent-mem")
 		require.NotContains(t, b, "stale-mem")
-		require.Contains(t, b, "(+2 older -- use recall)")
+		require.Contains(t, b, "(+2 older -- recall query=<topic>, optionally kind=<kind>)")
 		require.Contains(t, b, "old-constraint", "constraints are exempt from the cap")
 		require.ElementsMatch(t, []string{"C1", "M1"}, ids)
 	})
@@ -347,8 +350,8 @@ func TestBriefingTunables_MemoryIndexTrims(t *testing.T) {
 		require.Contains(t, b, "newest-mem")
 		require.Contains(t, b, "recent-mem")
 		require.NotContains(t, b, "stale-mem")
-		require.Contains(t, b, "(+1 older -- use recall)")
-		require.Contains(t, b, "CONSTRAINT: old-constraint", "recency filter must not drop a constraint")
+		require.Contains(t, b, "(+1 older -- recall query=<topic>, optionally kind=<kind>)")
+		require.Contains(t, b, "- old-constraint", "recency filter must not drop a constraint")
 		require.NotContains(t, ids, "M3")
 	})
 
@@ -395,7 +398,7 @@ func TestBriefingFindingsRenderBeforeMemoryIndex(t *testing.T) {
 	require.Contains(t, b, "2 recent findings.", "header counts the findings that rendered")
 	require.Contains(t, b, "alpha finding text")
 	require.Contains(t, b, "beta finding text")
-	require.Contains(t, b, "older -- use recall", "the index, not the findings, absorbs the squeeze")
+	require.Contains(t, b, "older -- recall query=<topic>", "the index, not the findings, absorbs the squeeze")
 	require.Less(t, strings.Index(b, "Recent findings:"), strings.Index(b, "Memories (p):"),
 		"a fat index must not push the findings below it")
 }
@@ -431,13 +434,13 @@ func TestBriefingReadyTasksLineCostAccumulates(t *testing.T) {
 	svc.SetBriefingConfig(briefingWith(func(b *config.Briefing) { b.ReadyTasksShown = 0 }))
 	without, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.NotContains(t, without, "Ready tasks:")
+	require.NotContains(t, without, "Ready tasks (")
 
 	svc.SetBriefingConfig(config.Defaults().Briefing)
 	with, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/w", Source: "startup"})
 	require.NoError(t, err)
-	require.Contains(t, with, "Ready tasks: 3 -- ")
-	require.Less(t, strings.Index(with, "Ready tasks:"), strings.Index(with, "Memories (p):"),
+	require.Contains(t, with, "Ready tasks (3):")
+	require.Less(t, strings.Index(with, "Ready tasks ("), strings.Index(with, "Memories (p):"),
 		"the ready line renders above the memory index")
 	require.Less(t, strings.Count(with, "- mem-"), strings.Count(without, "- mem-"),
 		"the ready line's cost must come out of the following sections' budget")

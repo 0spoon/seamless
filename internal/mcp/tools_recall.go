@@ -17,27 +17,30 @@ const recallMissQueryMax = 500
 
 func recallTool() mcp.Tool {
 	return mcp.NewTool("recall",
-		mcp.WithDescription("Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point."),
-		mcp.WithString("query", mcp.Required(), mcp.Description("what you are looking for")),
+		mcp.WithDescription("Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse)."),
+		mcp.WithString("query", mcp.Description("what you are looking for; required unless kind is set (kind alone lists that kind newest-first)")),
 		mcp.WithString("scope", enumOf(retrieve.RecallScopes), mcp.Description("what to search (default all)")),
-		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected")),
+		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("maximum results (default 10)")),
 	)
 }
 
 func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	query := argString(req, "query")
-	if query == "" {
-		return errResult("recall", errors.New("query is required"))
+	query, kind := argString(req, "query"), argString(req, "kind")
+	// No query + kind is the browse mode (retrieve.Recall lists the kind
+	// newest-first); no query and no kind has nothing to search or list.
+	if query == "" && kind == "" {
+		return errResult("recall", errors.New("query is required unless kind is set"))
 	}
+	browse := query == ""
 	project, err := s.resolveReadScope(ctx, argString(req, "project"))
 	if err != nil {
 		return errResult("recall", err)
 	}
 	hits, err := s.cfg.Retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: query, Project: project, Scope: argString(req, "scope"),
-		Kind: argString(req, "kind"), Limit: argInt(req, "limit", 10),
+		Kind: kind, Limit: argInt(req, "limit", 10),
 	})
 	if err != nil {
 		return errResult("recall", err)
@@ -46,23 +49,35 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 	// item_scores rides along (parallel to item_ids, which is already in rank
 	// order) so future scoring can weigh how confidently each hit ranked --
 	// dropping the score here would lose it forever, the log being append-only.
-	if len(hits) > 0 {
+	// A browse's hits record under their own source: injectedUtilityWeight
+	// counts only source "recall" as query-gated demand, so a kind listing
+	// stays passive-class exposure like the briefing it resembles
+	// (closed-loop-utility-signal-contract).
+	switch {
+	case len(hits) > 0:
 		ids := make([]string, len(hits))
 		scores := make([]float64, len(hits))
 		for i, h := range hits {
 			ids[i] = h.ID
 			scores[i] = h.Score
 		}
+		source := "recall"
+		if browse {
+			source = "recall-browse"
+		}
 		s.record(ctx, core.EventInjected, s.boundSession(ctx), project, "",
-			map[string]any{"query": query, "item_ids": ids, "item_scores": scores, "source": "recall"})
-	} else {
+			map[string]any{"query": query, "item_ids": ids, "item_scores": scores, "source": source})
+	case !browse:
 		// A zero-hit recall is demand for knowledge that does not exist -- the
 		// signal the gardener's memory-wanted pass clusters into proposals. A
 		// kind-filtered miss is still demand (the pass reads only query); kind
 		// rides along only when set, so the unfiltered payload shape is stable.
+		// An empty browse records nothing: with no query text there is no
+		// demand for the pass to cluster, and "this project has no conventions
+		// yet" is not a missing memory.
 		payload := map[string]any{"query": events.Truncate(query, recallMissQueryMax), "scope": argString(req, "scope"),
 			"limit": argInt(req, "limit", 10), "source": "recall"}
-		if kind := argString(req, "kind"); kind != "" {
+		if kind != "" {
 			payload["kind"] = kind
 		}
 		s.record(ctx, core.EventRecallMiss, s.boundSession(ctx), project, "", payload)

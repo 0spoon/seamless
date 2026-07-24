@@ -102,11 +102,13 @@ skip them unless you pass `plan=`, so a twelve-step plan does not bury the handf
 of tasks that are genuinely loose work. This is why a planner can decompose
 aggressively without drowning every other agent on the machine.
 
-The briefing surfaces each active plan as one rolled-up line rather than a step
+The briefing surfaces each active plan as one rolled-up row rather than a step
 list:
 
 ```text
-PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+Plans:
+- marketing -- 2/3 done, 1 claimable, 0 in flight
+(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)
 ```
 
 That is enough for an arriving agent to decide whether to pick something up,

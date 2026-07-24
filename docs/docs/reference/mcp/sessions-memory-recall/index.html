@@ -263,11 +263,17 @@ similarity with reciprocal rank fusion, nudges the fused order by favorite and
 current project plus global items, and packs results into a token budget. A call
 that finds nothing is recorded as a miss - recurring misses become the
 gardener's <a href="../../../concepts/gardener/#what-it-looks-for">memory-wanted proposals</a>.</p>
-<p>The optional <code>kind</code> filter restricts hits to memories of one frontmatter kind -
-the mechanism behind briefing hints like <code>recall kind=convention</code>. It implies
-memories-only: combining it with <code>scope=notes</code> is rejected as contradictory
-rather than returning a misleading empty result, and a kind-filtered miss still
-counts as memory-wanted demand.</p>
+<p>The optional <code>kind</code> filter restricts hits to memories of one frontmatter kind.
+It implies memories-only: combining it with <code>scope=notes</code> is rejected as
+contradictory rather than returning a misleading empty result, and a
+kind-filtered miss still counts as memory-wanted demand.</p>
+<p>With <code>kind</code> set, <code>query</code> becomes optional: a kind alone is the <strong>browse mode</strong>
+behind briefing hints like <code>recall kind=convention</code> - the scope's active
+memories of that kind, listed newest-first under the same limit and token
+budget. A browse is a listing, not a search: no fusion, no favorite or utility
+boost, its hits record as passive exposure (never query-gated demand), and an
+empty browse records no miss - &quot;this project has no conventions yet&quot; is not a
+missing memory.</p>
 <p>It degrades rather than fails: if the embedding provider is unreachable, recall
 falls back to keyword-only results instead of erroring. A local misconfiguration
 is surfaced instead of hidden - the two cases are deliberately not treated alike.</p>
@@ -562,7 +568,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 </table>
 </div>
 <h2 id="recall">recall</h2>
-<p>Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point.</p>
+<p>Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -575,16 +581,10 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 </thead>
 <tbody>
 <tr>
-<td><code>query</code></td>
-<td>string</td>
-<td><strong>yes</strong></td>
-<td>what you are looking for</td>
-</tr>
-<tr>
 <td><code>kind</code></td>
 <td>string</td>
 <td>no</td>
-<td>only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected. One of: <code>constraint</code>, <code>convention</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, <code>stage</code>.</td>
+<td>only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: <code>constraint</code>, <code>convention</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, <code>stage</code>.</td>
 </tr>
 <tr>
 <td><code>limit</code></td>
@@ -597,6 +597,12 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td>string</td>
 <td>no</td>
 <td>project slug; defaults to the bound session's project</td>
+</tr>
+<tr>
+<td><code>query</code></td>
+<td>string</td>
+<td>no</td>
+<td>what you are looking for; required unless kind is set (kind alone lists that kind newest-first)</td>
 </tr>
 <tr>
 <td><code>scope</code></td>

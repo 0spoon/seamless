@@ -112,9 +112,9 @@ if [[ "$verify" == "1" ]]; then
     -d "{\"session_id\":\"setup-verify\",\"cwd\":\"$myapp\",\"source\":\"startup\"}" \
     | python3 -c 'import sys,json; print(json.load(sys.stdin).get("hookSpecificOutput",{}).get("additionalContext",""))' 2>/dev/null || true)
   kill "$vpid" 2>/dev/null || true; wait "$vpid" 2>/dev/null || true; vpid=""
-  if grep -q "PLAN: auth-refresh" <<<"$briefing" && grep -q "edge-cache-gotcha" <<<"$briefing" && grep -q "(18h)" <<<"$briefing"; then
+  if grep -q -- "- auth-refresh -- " <<<"$briefing" && grep -q "edge-cache-gotcha" <<<"$briefing" && grep -q "(18h)" <<<"$briefing"; then
     verify_ok="yes"
-    echo "    OK: briefing has the PLAN line, edge-cache-gotcha, and the 18h finding"
+    echo "    OK: briefing has the auth-refresh plan line, edge-cache-gotcha, and the 18h finding"
   else
     echo "    WARNING: briefing did not contain all expected markers; see $base/serve-verify.log" >&2
     printf '%s\n' "$briefing" | sed 's/^/    | /'

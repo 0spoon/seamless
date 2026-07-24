@@ -50,9 +50,9 @@ func TestSubagentFooter_AlwaysOnAcrossTierSplits(t *testing.T) {
 			if tt.wantCompact {
 				// The compact line's wording stays byte-identical alongside the
 				// footer; their mild redundancy is accepted by design.
-				require.Contains(t, sb, "Also binding (1): c-three -- memory_read a name before working near it.")
+				require.Contains(t, sb, "- +1 more, equally binding -- memory_read name=<name> before working near one: c-three")
 			} else {
-				require.NotContains(t, sb, "Also binding")
+				require.NotContains(t, sb, "equally binding")
 			}
 			require.ElementsMatch(t, []string{"01ONE", "01TWO", "01THR"}, ids)
 		})

@@ -349,8 +349,11 @@ the thing that usually evaporates between sessions.</p>
 <code>tasks_list</code> skip them, so a twelve-step plan does not bury the handful of tasks
 that are genuinely loose work. Pass <code>plan=&lt;slug&gt;</code> to either tool to see that
 plan's steps instead.</p>
-<p>The briefing surfaces each active plan as one rolled-up line:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">PLAN: marketing -- 2/3 done, 1 claimable, 0 in flight
+<p>The briefing surfaces each active plan as one rolled-up row of its Plans
+section:</p>
+<pre class="chroma"><code><span class="line"><span class="cl">Plans:
+</span></span><span class="line"><span class="cl">- marketing -- 2/3 done, 1 claimable, 0 in flight
+</span></span><span class="line"><span class="cl">(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)
 </span></span></code></pre><p>That is enough for an agent to decide whether to pick something up, without
 spending briefing budget listing every step.</p>
 <h2 id="claude-code-plan-mode-feeds-this-automatically">Claude Code plan mode feeds this automatically</h2>
@@ -361,8 +364,9 @@ captured:</p>
 (<code>plan-status:draft|presented|approved|abandoned</code>).</li>
 <li>Planning subagents are cached as <code>cc-agent-&lt;id&gt;</code> notes in the same composition.</li>
 <li>Approving the plan creates the tracking task.</li>
-<li>Unapproved captures appear in the briefing as <code>PLAN (awaiting approval)</code> lines,
-so a plan that was designed and then forgotten is visible rather than lost.</li>
+<li>Unapproved captures appear in the briefing's Plans section as
+<code>awaiting approval</code> rows, so a plan that was designed and then forgotten is
+visible rather than lost.</li>
 </ul>
 <p>See the <a href="../../reference/mcp/tasks/">tasks reference</a> for the tool surface.</p>
 
