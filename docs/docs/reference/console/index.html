@@ -601,7 +601,11 @@ the <strong>recall-miss rate</strong> is ambient - prompts that matched no memor
 <a href="../../concepts/recall/#the-recall-triad"><code>&lt;seam-recall&gt;</code> path</a> - while <strong>agent
 search misses</strong> are deliberate <code>recall</code> calls that found nothing; recurring
 ones feed the gardener's
-<a href="../../concepts/gardener/#what-it-looks-for">memory-wanted pass</a>. The zone closes
+<a href="../../concepts/gardener/#what-it-looks-for">memory-wanted pass</a>. <strong>Funnel by
+surface</strong> splits the read-after-inject funnel by injection surface -
+session-start briefings versus subagent-start child injections - each with
+its injections, distinct memories, and the share pulled by a query-gated
+read within the following 24 hours. The zone closes
 with the <strong>dead weight</strong> panel: memories briefings kept injecting without a
 single recall hit, prompt match, or read in 30 days (constraints and stages
 exempt as pinned-by-design) - the evidence behind the gardener's dead-weight

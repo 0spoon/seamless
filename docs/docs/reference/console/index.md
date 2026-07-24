@@ -377,7 +377,11 @@ Five zones below it:
    [`<seam-recall>` path](https://thereisnospoon.org/docs/concepts/recall/#the-recall-triad) - while **agent
    search misses** are deliberate `recall` calls that found nothing; recurring
    ones feed the gardener's
-   [memory-wanted pass](https://thereisnospoon.org/docs/concepts/gardener/#what-it-looks-for). The zone closes
+   [memory-wanted pass](https://thereisnospoon.org/docs/concepts/gardener/#what-it-looks-for). **Funnel by
+   surface** splits the read-after-inject funnel by injection surface -
+   session-start briefings versus subagent-start child injections - each with
+   its injections, distinct memories, and the share pulled by a query-gated
+   read within the following 24 hours. The zone closes
    with the **dead weight** panel: memories briefings kept injecting without a
    single recall hit, prompt match, or read in 30 days (constraints and stages
    exempt as pinned-by-design) - the evidence behind the gardener's dead-weight

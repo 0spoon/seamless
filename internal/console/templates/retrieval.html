@@ -251,6 +251,23 @@
       </article>
     </div>
 
+    <article class="retrieval-panel retrieval-funnel-panel">
+      <header class="retrieval-panel-head">
+        <span class="retrieval-panel-icon brand">{{icon "arrow-down-to-line"}}</span>
+        <div><span>Read-after-inject</span><h3>Funnel by surface</h3></div>
+        <small>{{.WindowLabel}} injects &middot; pulled within {{.FunnelFollowHours}}h</small>
+      </header>
+      <div class="retrieval-funnel-list">
+        {{range .FunnelBySurface}}
+        <div class="retrieval-funnel-row">
+          <div class="retrieval-funnel-copy"><strong>{{.Surface}}</strong><span>{{.Injections}} injection{{if ne .Injections 1}}s{{end}} &middot; {{.Items}} distinct memor{{if eq .Items 1}}y{{else}}ies{{end}}</span></div>
+          <div class="retrieval-scope-meter" role="img" aria-label="{{.ReadRate}} percent of memories injected via {{.Surface}} were pulled back"><span style="width:{{.ReadRate}}%"></span></div>
+          <div class="retrieval-funnel-metrics"><strong>{{if .Items}}{{.ReadRate}}%{{else}}&mdash;{{end}}</strong><span>{{.ItemsRead}} of {{.Items}} pulled</span></div>
+        </div>
+        {{end}}
+      </div>
+    </article>
+
     <article class="retrieval-panel retrieval-deadweight-panel{{if not .DeadWeight}} healthy{{end}}">
       <header class="retrieval-panel-head">
         <span class="retrieval-panel-icon {{if .DeadWeight}}warn{{else}}ok{{end}}">{{if .DeadWeight}}{{icon "triangle-alert"}}{{else}}{{icon "check"}}{{end}}</span>

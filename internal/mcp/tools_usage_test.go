@@ -24,10 +24,22 @@ func TestUsageSummaryTool(t *testing.T) {
 	mems, ok := out["memories"].(map[string]any)
 	require.True(t, ok, "summary has a memories section")
 	require.Equal(t, float64(1), mems["active"])
-	_, ok = out["retrieval"].(map[string]any)
+	ret, ok := out["retrieval"].(map[string]any)
 	require.True(t, ok)
 	_, ok = out["eventsByKind"].(map[string]any)
 	require.True(t, ok)
+
+	// The read-after-inject funnel split rides on the retrieval section: one
+	// entry per injection surface, in a stable order.
+	funnel, ok := ret["funnelBySurface"].([]any)
+	require.True(t, ok, "retrieval carries funnelBySurface")
+	require.Len(t, funnel, 2)
+	first, ok := funnel[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "session-start", first["surface"])
+	second, ok := funnel[1].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "subagent-start", second["surface"])
 }
 
 // TestToolCountMatchesRegistered mirrors the doctor assertion: the server must

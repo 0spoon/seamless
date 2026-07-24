@@ -24,10 +24,17 @@ func placeSubagentTranscript(t *testing.T, agentID string) string {
 	t.Helper()
 	fixture, err := os.ReadFile(filepath.Join("testdata", "agent-transcript.jsonl"))
 	require.NoError(t, err)
+	return placeSubagentTranscriptContent(t, agentID, fixture)
+}
+
+// placeSubagentTranscriptContent writes content as the subagent transcript in
+// the verified layout and returns the main transcript path.
+func placeSubagentTranscriptContent(t *testing.T, agentID string, content []byte) string {
+	t.Helper()
 	main := filepath.Join(t.TempDir(), "session.jsonl")
 	sub := filepath.Join(strings.TrimSuffix(main, ".jsonl"), "subagents", "agent-"+agentID+".jsonl")
 	require.NoError(t, os.MkdirAll(filepath.Dir(sub), 0o755))
-	require.NoError(t, os.WriteFile(sub, fixture, 0o644))
+	require.NoError(t, os.WriteFile(sub, content, 0o644))
 	return main
 }
 
@@ -233,6 +240,91 @@ func TestSubagentTranscriptPathRejectsTraversalAgentID(t *testing.T) {
 	ok.AgentID = "agent01"
 	require.Equal(t, filepath.Join("/tmp/sess", "subagents", "agent-agent01.jsonl"),
 		subagentTranscriptPath(ok))
+}
+
+// subagentSpawnPrompt (Claude Code): the child transcript's first user message
+// is the spawn prompt; every failure mode -- absent, empty, malformed,
+// oversized -- yields "" silently.
+func TestSubagentSpawnPrompt_ClaudeCode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		main func(t *testing.T) string
+		want string
+	}{
+		{
+			"prompt present",
+			func(t *testing.T) string { return placeSubagentTranscript(t, "sp1") },
+			"Explore the gardener package and report its structure",
+		},
+		{
+			"transcript not yet written (file absent)",
+			func(t *testing.T) string { return filepath.Join(t.TempDir(), "session.jsonl") },
+			"",
+		},
+		{
+			"file empty",
+			func(t *testing.T) string { return placeSubagentTranscriptContent(t, "sp1", nil) },
+			"",
+		},
+		{
+			"malformed lines only",
+			func(t *testing.T) string {
+				return placeSubagentTranscriptContent(t, "sp1", []byte("{not json\n\nplain text\n"))
+			},
+			"",
+		},
+		{
+			"prompt line exceeding the scanner bound",
+			func(t *testing.T) string {
+				oversized := `{"type":"user","message":{"role":"user","content":"` +
+					strings.Repeat("x", 17*1024*1024) + `"}}` + "\n"
+				return placeSubagentTranscriptContent(t, "sp1", []byte(oversized))
+			},
+			"",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := subagentPayload{
+				ParentSessionID: "parent", AgentID: "sp1", AgentType: "Explore",
+				CWD: "/work/demo", TranscriptPath: tc.main(t),
+			}
+			require.Equal(t, tc.want, subagentSpawnPrompt(ClientClaudeCode, p))
+		})
+	}
+}
+
+// The subagent path populates BriefingInput.Prompt for both clients; a missing
+// transcript leaves it empty without disturbing the rest of the input. The
+// field itself stays unread by the briefing until the RELEVANT step lands
+// (TestSubagentBriefing_PromptFieldUnread in internal/retrieve pins that).
+func TestSubagentBriefingInput_PopulatesPrompt(t *testing.T) {
+	// Claude Code: the child transcript exists when the hook fires.
+	in := subagentBriefingInput(ClientClaudeCode, subagentPayload{
+		ParentSessionID: "parent", AgentID: "sp42", AgentType: "Explore",
+		CWD: "/work/demo", TranscriptPath: placeSubagentTranscript(t, "sp42"),
+	})
+	require.Equal(t, "/work/demo", in.CWD)
+	require.Equal(t, "Explore", in.AgentType)
+	require.Equal(t, "Explore the gardener package and report its structure", in.Prompt)
+
+	// Codex: the Start fixture's transcript_path names the CHILD rollout (its
+	// basename carries the agent_id), unlike Stop where it names the parent.
+	p := decodeSubagentStart(ClientCodex, codexFixture(t, "tui", "subagent-start.input.json"))
+	require.Contains(t, filepath.Base(p.TranscriptPath), p.AgentID,
+		"SubagentStart transcript_path must name the child rollout")
+	p.TranscriptPath = rolloutPath() // stand the committed rollout fixture in as the child rollout
+	in = subagentBriefingInput(ClientCodex, p)
+	require.Equal(t, p.CWD, in.CWD)
+	require.Equal(t, p.AgentType, in.AgentType)
+	require.Equal(t, rolloutUserPrompt, in.Prompt)
+
+	// Not-yet-flushed transcript: the prompt is empty, the input intact.
+	in = subagentBriefingInput(ClientClaudeCode, subagentPayload{
+		ParentSessionID: "parent", AgentID: "sp43", AgentType: "Explore",
+		CWD: "/work/demo", TranscriptPath: filepath.Join(t.TempDir(), "missing.jsonl"),
+	})
+	require.Equal(t, "/work/demo", in.CWD)
+	require.Empty(t, in.Prompt)
 }
 
 func TestParseSubagentTranscript(t *testing.T) {

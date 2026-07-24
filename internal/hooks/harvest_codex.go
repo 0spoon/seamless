@@ -80,6 +80,85 @@ func tailCodexRollout(path string) string {
 	return last
 }
 
+// maxRolloutHeadBytes bounds how much of a Codex rollout file the SubagentStart
+// prompt read scans. A child rollout opens with session_meta, environment
+// context, and the spawn prompt within its first lines, so a head read finds
+// the prompt without parsing a file that may grow to many MB.
+const maxRolloutHeadBytes = 256 * 1024
+
+// headCodexRollout returns the first user message from a Codex rollout JSONL
+// file, reading only its first maxRolloutHeadBytes. At SubagentStart the
+// payload's transcript_path names the CHILD rollout (fixture
+// testdata/codex/v0.144.6/tui/subagent-start.input.json: the rollout id equals
+// agent_id; Stop differs -- there transcript_path is the parent), so the first
+// user message is the spawn prompt. Any problem -- blank path, unreadable or
+// not-yet-created file, no user message within the head -- yields "" (the
+// caller injects without a prompt). It never errors: the Start hook must
+// always complete.
+func headCodexRollout(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return ""
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return ""
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return ""
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxRolloutHeadBytes))
+	if err != nil {
+		return ""
+	}
+	lines := bytes.Split(data, []byte("\n"))
+	// A bounded read almost always ends inside a line; drop that trailing
+	// partial so we never parse half a JSON object.
+	if info.Size() > maxRolloutHeadBytes && len(lines) > 0 {
+		lines = lines[:len(lines)-1]
+	}
+	for _, line := range lines {
+		if msg := codexRolloutLineUserMessage(line); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
+// codexRolloutLineUserMessage returns the user-submitted message a single
+// rollout line carries, or "" if it carries none. Only the event_msg /
+// user_message shape (payload.message) identifies the submitted prompt: the
+// response_item message shape also stamps injected environment instructions
+// with role "user" (v0.144.5 rollout fixture, lines 3-4 vs 8-9), so a
+// user-role response_item cannot distinguish the spawn prompt from ambient
+// context and is deliberately not read. Tolerant: a malformed or unrelated
+// line is "".
+func codexRolloutLineUserMessage(line []byte) string {
+	if len(bytes.TrimSpace(line)) == 0 {
+		return ""
+	}
+	var ev codexRolloutEvent
+	if err := json.Unmarshal(line, &ev); err != nil {
+		return ""
+	}
+	if ev.Type != "event_msg" {
+		return ""
+	}
+	var p struct {
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	if err := json.Unmarshal(ev.Payload, &p); err != nil {
+		return ""
+	}
+	if p.Type != "user_message" {
+		return ""
+	}
+	return strings.TrimSpace(p.Message)
+}
+
 // codexRolloutEvent is the tolerant shape of one rollout JSONL line: a typed
 // wrapper around a payload whose shape depends on the type.
 type codexRolloutEvent struct {

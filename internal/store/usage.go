@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 )
 
 // NamedCount pairs an item's name with a count, for "top N" lists.
@@ -36,6 +37,9 @@ type UsageSummary struct {
 		Reads       int          `json:"reads"`
 		TopInjected []NamedCount `json:"topInjected"`
 		TopUtility  []NamedScore `json:"topUtility"` // highest decayed-demand scores
+		// FunnelBySurface is the all-time read-after-inject funnel segmented by
+		// injection surface (conversions within DefaultFunnelFollow).
+		FunnelBySurface []SurfaceFunnel `json:"funnelBySurface"`
 	} `json:"retrieval"`
 	GardenerPending map[string]int `json:"gardenerPending"` // kind -> count
 	EventsByKind    map[string]int `json:"eventsByKind"`
@@ -80,6 +84,9 @@ func GetUsageSummary(ctx context.Context, db *sql.DB) (UsageSummary, error) {
 		return u, err
 	}
 	if u.Retrieval.TopUtility, err = topUtility(ctx, db, 5); err != nil {
+		return u, err
+	}
+	if u.Retrieval.FunnelBySurface, err = ReadAfterInjectFunnel(ctx, db, time.Time{}, 0); err != nil {
 		return u, err
 	}
 	return u, nil

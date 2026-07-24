@@ -42,3 +42,31 @@ func TestGetUsageSummary(t *testing.T) {
 	require.Equal(t, 2, u.Retrieval.TopInjected[0].Count)
 	require.Equal(t, 2, u.EventsByKind["retrieval.injected"])
 }
+
+func TestGetUsageSummary_FunnelBySurface(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	base := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+
+	insertEvent(t, db, core.EventInjected, "", `{"hook":"session-start","item_ids":["m1","m2"]}`, base)
+	insertEvent(t, db, core.EventInjected, "", `{"hook":"subagent-start","item_ids":["m2"]}`, base)
+	insertEvent(t, db, core.EventMemoryRead, "m2", "{}", base.Add(time.Hour))
+
+	u, err := GetUsageSummary(ctx, db)
+	require.NoError(t, err)
+	require.Len(t, u.Retrieval.FunnelBySurface, 2)
+
+	ss := u.Retrieval.FunnelBySurface[0]
+	require.Equal(t, "session-start", ss.Surface)
+	require.Equal(t, 2, ss.Injections)
+	require.Equal(t, 2, ss.Items)
+	require.Equal(t, 1, ss.ItemsRead)
+	require.Equal(t, 50, ss.ReadRate)
+
+	sub := u.Retrieval.FunnelBySurface[1]
+	require.Equal(t, "subagent-start", sub.Surface)
+	require.Equal(t, 1, sub.Injections)
+	require.Equal(t, 1, sub.Items)
+	require.Equal(t, 1, sub.ItemsRead)
+	require.Equal(t, 100, sub.ReadRate)
+}

@@ -60,9 +60,7 @@ func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
 			p.ParentSessionID, "", "", false, nil)
 		return
 	}
-	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
-		CWD: p.CWD, AgentType: p.AgentType,
-	})
+	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, subagentBriefingInput(client, p))
 	if err != nil {
 		h.logger.Warn("hooks: subagent-start briefing failed", "error", err)
 		briefing, injectedIDs = "", nil
@@ -201,6 +199,38 @@ func agentNoteTitle(agentType, prompt string) string {
 func agentStamp(sessionName, agentID, head string, now time.Time) string {
 	return fmt.Sprintf("> captured from %s | agent %s | git %s | %s",
 		stampSession(sessionName), agentID, shortHead(head), now.UTC().Format(time.RFC3339))
+}
+
+// subagentBriefingInput builds the child-briefing input from a SubagentStart
+// payload, carrying the spawn prompt when it can be resolved. The prompt field
+// is staged for the RELEVANT-section step of plan:subagent-briefing and is
+// intentionally unread by the briefing until that step lands.
+func subagentBriefingInput(client Client, p subagentPayload) retrieve.BriefingInput {
+	return retrieve.BriefingInput{
+		CWD:       p.CWD,
+		AgentType: p.AgentType,
+		Prompt:    subagentSpawnPrompt(client, p),
+	}
+}
+
+// subagentSpawnPrompt best-effort resolves the child's spawn prompt at
+// SubagentStart, per client: Claude Code = the first user message of the child
+// transcript (which may not exist yet when the hook fires); Codex = the first
+// user event of the child rollout that the Start payload's transcript_path
+// names (Stop differs: there transcript_path is the parent rollout and
+// agent_transcript_path the child). Every failure mode -- absent, empty, or
+// unparseable file, prompt not yet flushed, oversized line -- yields ""
+// silently; reads are size-bounded and never turn the hook response into an
+// error.
+func subagentSpawnPrompt(client Client, p subagentPayload) string {
+	switch client {
+	case ClientClaudeCode:
+		prompt, _ := parseSubagentTranscript(subagentTranscriptPath(p))
+		return prompt
+	case ClientCodex:
+		return headCodexRollout(p.TranscriptPath)
+	}
+	return ""
 }
 
 // subagentTranscriptPath resolves the subagent's JSONL transcript: the payload

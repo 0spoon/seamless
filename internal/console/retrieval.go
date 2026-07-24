@@ -46,6 +46,11 @@ type retrievalData struct {
 	MissRate           int                `json:"missRate"`
 	ToolMisses         int                `json:"toolMisses"`
 	DeadWeight         []store.MemoryStat `json:"deadWeight"`
+
+	// Read-after-inject funnel segmented by injection surface: window-scoped
+	// injections, conversions within FunnelFollowHours of each injection.
+	FunnelBySurface   []store.SurfaceFunnel `json:"funnelBySurface"`
+	FunnelFollowHours int                   `json:"funnelFollowHours"`
 }
 
 func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +66,11 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stale, err := store.StaleMemories(ctx, s.cfg.DB, time.Now().UTC().AddDate(0, 0, -staleWindowDays))
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	funnel, err := store.ReadAfterInjectFunnel(ctx, s.cfg.DB, win.Since, 0)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -88,8 +98,10 @@ func (s *Service) retrieval(w http.ResponseWriter, r *http.Request) {
 			BriefingSurfaced: report.BriefingSurfaced, DemandedOfSurfaced: report.DemandedOfSurfaced,
 			DemandRate: report.DemandRate, WasteShare: report.WasteShare,
 			PromptMatches: report.PromptMatches, RecallMisses: report.RecallMisses, MissRate: report.MissRate,
-			ToolMisses: report.ToolMisses,
-			DeadWeight: report.DeadWeight,
+			ToolMisses:        report.ToolMisses,
+			DeadWeight:        report.DeadWeight,
+			FunnelBySurface:   funnel,
+			FunnelFollowHours: int(store.DefaultFunnelFollow.Hours()),
 		},
 	})
 }

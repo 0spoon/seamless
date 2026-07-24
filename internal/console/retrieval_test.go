@@ -111,6 +111,55 @@ func TestRetrievalPage_LoopHealth(t *testing.T) {
 	require.Greater(t, detail.UtilityParts.Recall, 0.0)
 }
 
+// Read-after-inject funnel: each injection surface reports what it pushed and
+// the share agents pulled back, and the split renders inside the loop-health
+// zone -- server-rendered, so window changes morph it in place like the rest of
+// the page (no document reload).
+func TestRetrievalPage_FunnelBySurface(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	briefed := writeMemory(t, mgr, core.KindGotcha, "seamless", "briefed-only", "never pulled")
+	pulled := writeMemory(t, mgr, core.KindGotcha, "seamless", "pulled-back", "read after inject")
+
+	_, err := rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessA",
+		Payload: map[string]any{"item_ids": []any{briefed.ID, pulled.ID}, "hook": "session-start"}})
+	require.NoError(t, err)
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessB",
+		Payload: map[string]any{"item_ids": []any{pulled.ID}, "hook": "subagent-start"}})
+	require.NoError(t, err)
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventMemoryRead, SessionID: "sessB", ItemID: pulled.ID})
+	require.NoError(t, err)
+
+	var data retrievalData
+	getJSON(t, mux, "/console/retrieval?format=json", &data)
+	require.Len(t, data.FunnelBySurface, 2)
+
+	ss := data.FunnelBySurface[0]
+	require.Equal(t, "session-start", ss.Surface)
+	require.Equal(t, 2, ss.Injections)
+	require.Equal(t, 2, ss.Items)
+	require.Equal(t, 1, ss.ItemsRead)
+	require.Equal(t, 50, ss.ReadRate)
+
+	sub := data.FunnelBySurface[1]
+	require.Equal(t, "subagent-start", sub.Surface)
+	require.Equal(t, 1, sub.Injections)
+	require.Equal(t, 1, sub.Items)
+	require.Equal(t, 1, sub.ItemsRead)
+	require.Equal(t, 100, sub.ReadRate)
+	require.Positive(t, data.FunnelFollowHours)
+
+	body := getHTMLBody(t, mux, "/console/retrieval")
+	require.Contains(t, body, "Funnel by surface")
+	require.Contains(t, body, `class="retrieval-panel retrieval-funnel-panel"`)
+	require.Contains(t, body, "session-start")
+	require.Contains(t, body, "subagent-start")
+	require.Contains(t, body, "1 of 2 pulled")
+	require.Contains(t, body, "1 of 1 pulled")
+}
+
 func TestRetrievalPage_EmptyRenders(t *testing.T) {
 	_, _, mux := newConsoleWithFiles(t)
 	var data retrievalData
@@ -118,5 +167,9 @@ func TestRetrievalPage_EmptyRenders(t *testing.T) {
 	require.Zero(t, data.Injections)
 	// StaleMemories over an empty store is empty; ensure no error path.
 	require.Empty(t, data.Stale)
+	// The funnel keeps its stable two-surface shape even with no events.
+	require.Len(t, data.FunnelBySurface, 2)
+	require.Equal(t, "session-start", data.FunnelBySurface[0].Surface)
+	require.Equal(t, "subagent-start", data.FunnelBySurface[1].Surface)
 	_ = store.MemoryStat{}
 }

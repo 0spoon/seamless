@@ -144,3 +144,107 @@ func TestCodexStopFindings_CapsLongMessage(t *testing.T) {
 	got := codexStopFindings(long, "")
 	require.Equal(t, "(auto-harvested) "+strings.Repeat("z", maxHarvestRunes), got)
 }
+
+// The sentinel user prompt the fixture turn submitted, present only in the
+// event_msg/user_message line (the user-role response_items before it carry
+// injected environment instructions, which must NOT be mistaken for it).
+const rolloutUserPrompt = "Search your entire current context for tokens matching SEAMLESS_SENTINEL_. " +
+	"Print each token=value verbatim, one per line. If none, print exactly NONE."
+
+// The whole head-parse acceptance: the real rollout fixture yields the first
+// user-submitted message, skipping the earlier user-role environment lines.
+func TestHeadCodexRollout_Fixture(t *testing.T) {
+	require.Equal(t, rolloutUserPrompt, headCodexRollout(rolloutPath()))
+}
+
+// Only the event_msg/user_message shape identifies the submitted prompt;
+// everything else -- including user-role response_items, which also carry
+// injected environment instructions -- decodes to "".
+func TestCodexRolloutLineUserMessage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		line string
+		want string
+	}{
+		{
+			"user_message carries message",
+			`{"type":"event_msg","payload":{"type":"user_message","message":"do the thing","images":[]}}`,
+			"do the thing",
+		},
+		{
+			"user response_item is ambiguous (environment instructions share role user) and is not read",
+			`{"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"env instructions"}]}}`,
+			"",
+		},
+		{
+			"agent_message is not a user message",
+			`{"type":"event_msg","payload":{"type":"agent_message","message":"answer"}}`,
+			"",
+		},
+		{
+			"task_complete is not a user message",
+			`{"type":"event_msg","payload":{"type":"task_complete","last_agent_message":"done"}}`,
+			"",
+		},
+		{"unrelated event_msg is empty", `{"type":"event_msg","payload":{"type":"token_count"}}`, ""},
+		{"malformed line is empty", `{not json`, ""},
+		{"blank line is empty", ``, ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Equal(t, tc.want, codexRolloutLineUserMessage([]byte(tc.line)))
+		})
+	}
+}
+
+// Absent, blank, empty, and malformed-only rollouts all degrade to "" -- the
+// Start hook then injects without a prompt, never errors.
+func TestHeadCodexRollout_AbsentEmptyMalformed(t *testing.T) {
+	empty := filepath.Join(t.TempDir(), "empty.jsonl")
+	require.NoError(t, os.WriteFile(empty, nil, 0o600))
+	malformed := filepath.Join(t.TempDir(), "malformed.jsonl")
+	require.NoError(t, os.WriteFile(malformed, []byte("{not json\n\nplain text\n"), 0o600))
+
+	for _, tc := range []struct{ name, path string }{
+		{"blank path", ""},
+		{"whitespace path", "   "},
+		{"absent file", filepath.Join(t.TempDir(), "does-not-exist.jsonl")},
+		{"empty file", empty},
+		{"malformed lines only", malformed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.Empty(t, headCodexRollout(tc.path))
+		})
+	}
+}
+
+// The FIRST user message wins: a child rollout's spawn prompt precedes any
+// later user turns.
+func TestHeadCodexRollout_FirstMatchWins(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "rollout.jsonl")
+	body := strings.Join([]string{
+		`{"type":"event_msg","payload":{"type":"user_message","message":"spawn prompt"}}`,
+		`{"type":"event_msg","payload":{"type":"user_message","message":"later turn"}}`,
+	}, "\n") + "\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	require.Equal(t, "spawn prompt", headCodexRollout(path))
+}
+
+// A prompt beyond the head window is not found: the read is bounded, the
+// trailing partial line is dropped rather than misparsed, and the result is "".
+func TestHeadCodexRollout_HeadWindowBoundsRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "big.jsonl")
+	// A first line larger than the whole head window pushes the user_message
+	// past the bound; the truncated remainder must not be parsed.
+	pad := strings.Repeat("x", maxRolloutHeadBytes+50_000)
+	body := `{"type":"session_meta","payload":{"note":"` + pad + `"}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"user_message","message":"beyond the window"}}` + "\n"
+	require.NoError(t, os.WriteFile(path, []byte(body), 0o600))
+	require.Empty(t, headCodexRollout(path))
+
+	// A modest lead-in keeps the prompt inside the window and it is found.
+	small := filepath.Join(t.TempDir(), "small.jsonl")
+	body = `{"type":"session_meta","payload":{"note":"meta"}}` + "\n" +
+		`{"type":"event_msg","payload":{"type":"user_message","message":"inside the window"}}` + "\n"
+	require.NoError(t, os.WriteFile(small, []byte(body), 0o600))
+	require.Equal(t, "inside the window", headCodexRollout(small))
+}

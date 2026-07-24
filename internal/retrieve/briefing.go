@@ -23,6 +23,14 @@ type BriefingInput struct {
 	CWD       string // agent working directory; resolved to a project slug
 	Source    string // startup|resume|clear|compact
 	AgentType string // non-empty => subagent => constraints-only briefing
+	// Prompt is the child's spawn prompt, resolved best-effort at SubagentStart
+	// (empty on the main-session path and whenever resolution fails).
+	// Intentionally UNREAD for now: it is staged for the RELEVANT-section step
+	// of plan:subagent-briefing, which will match it against project memories.
+	// Until that step consumes it, briefing output must be byte-identical
+	// whether this field is set or empty (pinned by
+	// TestSubagentBriefing_PromptFieldUnread).
+	Prompt string
 }
 
 // Briefing assembles the SessionStart briefing for an agent: constraints (always
@@ -722,12 +730,21 @@ func readyTasksLine(ready []core.Task, shown int) string {
 	return fmt.Sprintf("\nReady tasks: %d -- %s\n", len(ready), strings.Join(titles, "; "))
 }
 
+// subagentFooter is the always-on tool-guidance line closing every non-empty
+// subagent briefing: the first sentence of agentguide.BriefingFooter (a test
+// pins the prefix relation so the vocabulary cannot drift). Without it a child
+// in a project with few constraints would get no hint that recall/memory_read
+// exist -- alsoBindingLine names memory_read only past the tier cap. The mild
+// redundancy between the two lines when both render is accepted by design.
+const subagentFooter = "Recall on demand with recall; read a memory with memory_read.\n"
+
 // assembleSubagent renders a constraints-only briefing for a subagent, or "" if
 // there are no constraints in scope. Constraints arrive already ranked
 // (rankConstraints) and get the same maxFull tier split as the full briefing --
-// a subagent drowns in an all-full wall just the same. The second return value
-// is the ids of the rendered constraints (both tiers), for retrieval
-// instrumentation.
+// a subagent drowns in an all-full wall just the same. Whenever the briefing
+// renders it closes with subagentFooter, independent of the tier split. The
+// second return value is the ids of the rendered constraints (both tiers), for
+// retrieval instrumentation.
 func (s *Service) assembleSubagent(project string, constraints []core.Memory, maxFull int) (string, []string) {
 	if len(constraints) == 0 {
 		return "", nil
@@ -746,6 +763,7 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, ma
 	for _, c := range compact {
 		ids = append(ids, c.ID)
 	}
+	b.WriteString(subagentFooter)
 	b.WriteString("</seam-briefing>")
 	return b.String(), ids
 }
