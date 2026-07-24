@@ -13,6 +13,12 @@ note and step tasks keyed by `plan:<slug>`.
 Tasks are how agents hand work to each other. Plans are how a design survives the
 agent that wrote it.
 
+Not everything that blocks work belongs in the queue. A task is work someone
+here can claim and finish; a state of the world you wait on - a PR awaiting
+maintainer review, hardware in the mail - is a [`stage` memory](/concepts/memory/)
+instead, which pins into the briefing while it gates rather than sitting in the
+ready queue as forever-claimable work.
+
 ## The ready queue
 
 A task is **ready** when it has no unfinished blocker. `tasks_ready` returns

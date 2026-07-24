@@ -98,15 +98,17 @@ func TestAgentGuidanceNamesRealTools(t *testing.T) {
 	}
 }
 
-// The constraint-vs-convention call is made at write time, so the kind
-// parameter must carry the shared discriminator string -- not a paraphrase that
-// can drift from the guidance agentguide serves elsewhere.
+// The constraint-vs-convention call and the stage-header contract are both
+// applied at write time, so the kind parameter must carry the shared strings
+// -- not a paraphrase that can drift from the guidance agentguide serves
+// elsewhere.
 func TestMemoryWriteKindTeachesTheDiscriminator(t *testing.T) {
 	prop, err := propSchema(memoryWriteTool().InputSchema, "kind")
 	require.NoError(t, err)
 
 	desc, _ := prop["description"].(string)
 	require.Contains(t, desc, agentguide.KindDiscriminator)
+	require.Contains(t, desc, agentguide.StageContract)
 }
 
 // asStrings widens a canonical set declared over a named string type, so the

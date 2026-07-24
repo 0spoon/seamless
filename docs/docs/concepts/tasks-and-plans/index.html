@@ -205,6 +205,11 @@ A plan is deliberately not a primitive - it is a composition of a narrative
 note and step tasks keyed by <code>plan:&lt;slug&gt;</code>.</p>
 <p>Tasks are how agents hand work to each other. Plans are how a design survives the
 agent that wrote it.</p>
+<p>Not everything that blocks work belongs in the queue. A task is work someone
+here can claim and finish; a state of the world you wait on - a PR awaiting
+maintainer review, hardware in the mail - is a <a href="../../concepts/memory/"><code>stage</code> memory</a>
+instead, which pins into the briefing while it gates rather than sitting in the
+ready queue as forever-claimable work.</p>
 <h2 id="the-ready-queue">The ready queue</h2>
 <p>A task is <strong>ready</strong> when it has no unfinished blocker. <code>tasks_ready</code> returns
 exactly those, so an agent asking &quot;what can I do now?&quot; never reasons about the

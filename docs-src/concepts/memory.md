@@ -76,6 +76,13 @@ after `gardener.stale_stage_days` (14). A milestone breadcrumb ("X landed") is
 a note or a finding, not a stage - written as a stage without a live gate, it
 now expires instead of pinning forever.
 
+Update a stage's status by re-writing it with `memory_write` (same name, in
+place) - `memory_append` adds below the existing body and cannot change the
+header, which is parsed from the top of the body. And the rule of thumb that
+keeps stages out of the task queue: a task is work someone here can claim and
+finish; a stage is a state of the world you wait on that every session must
+know while it holds.
+
 `refuted` deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,
 finds it dead, and moves on - every time. Recording the refutation makes that

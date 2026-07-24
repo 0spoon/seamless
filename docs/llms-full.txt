@@ -1645,6 +1645,13 @@ after `gardener.stale_stage_days` (14). A milestone breadcrumb ("X landed") is
 a note or a finding, not a stage - written as a stage without a live gate, it
 now expires instead of pinning forever.
 
+Update a stage's status by re-writing it with `memory_write` (same name, in
+place) - `memory_append` adds below the existing body and cannot change the
+header, which is parsed from the top of the body. And the rule of thumb that
+keeps stages out of the task queue: a task is work someone here can claim and
+finish; a stage is a state of the world you wait on that every session must
+know while it holds.
+
 `refuted` deserves special mention. A store that only records what is true keeps
 paying for the same wrong turn: the fleet re-derives the dead end, tries it,
 finds it dead, and moves on - every time. Recording the refutation makes that
@@ -2038,6 +2045,12 @@ note and step tasks keyed by `plan:<slug>`.
 
 Tasks are how agents hand work to each other. Plans are how a design survives the
 agent that wrote it.
+
+Not everything that blocks work belongs in the queue. A task is work someone
+here can claim and finish; a state of the world you wait on - a PR awaiting
+maintainer review, hardware in the mail - is a [`stage` memory](/concepts/memory/)
+instead, which pins into the briefing while it gates rather than sitting in the
+ready queue as forever-claimable work.
 
 ## The ready queue
 
@@ -3281,14 +3294,14 @@ The kind is not filing paperwork - it changes what happens to the memory:
 | Kind | Use it for | Consequence |
 |---|---|---|
 | `constraint` | A rule any agent must follow regardless of task | **Pinned.** Never dropped for budget, never staleness-archived |
-| `stage` | Where multi-session work stands | **Pinned**, same as a constraint |
+| `stage` | Where multi-session work stands | **Pinned while its `Status:` header marks a live gate** - `done` unpins immediately; a missing header ages out after `briefing.stage_unknown_max_age_days` |
 | `convention` | A project-local choice or layout fact | Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at `recall kind=convention` |
 | `gotcha` | A trap, led by its symptom | Ordinary budget and staleness rules |
 | `decision` | A choice plus the alternatives it rejected | Ordinary |
 | `refuted` | A belief that turned out false | Ordinary |
 | `runbook` / `protocol` / `reference` | A procedure, an agreement, a pointer | Ordinary |
 
-Three calls people get wrong.
+Four calls people get wrong.
 
 **`constraint` vs `convention`.** Ask whether the rule binds regardless of task.
 "No CGO" binds every agent on every task - `constraint`. "The wordmark markup
@@ -3305,6 +3318,18 @@ rejected alternative, and it exists so the argument does not happen again. "No
 CGO" is a `constraint` - there is no reasoning to weigh at call time, only a rule
 to not violate. Filing a preference as a constraint crowds out real constraints;
 filing a real constraint as a `reference` means agents violate it.
+
+**`stage` vs the task queue.** A task is work someone here can claim and
+finish; a stage is a state of the world you wait on that every session must
+know while it holds. "PR 10593 awaits maintainer re-review" gates work but is
+not claimable by anyone here - filed as a task it pollutes the ready queue as
+forever-claimable work; filed as a stage it pins into every briefing until the
+gate releases. A stage's body opens with
+`Status: open|in_progress|blocked|done` and optionally `Gate: human|ai`, and
+the pin belongs to that header: `done` unpins it immediately, a missing header
+ages out. Update the status by re-writing the memory with `memory_write` -
+`memory_append` cannot change the header, which is parsed from the top of the
+body.
 
 **`refuted` is the one that gets skipped.** Nobody wants to write down what they
 were wrong about. But a store that only records what is true keeps paying for the
@@ -4451,7 +4476,7 @@ Create or update a durable memory. Writing an existing name updates it in place 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | **yes** | kebab-case identifier, unique within the project |
-| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together). One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |

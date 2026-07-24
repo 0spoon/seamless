@@ -97,14 +97,14 @@ The kind is not filing paperwork - it changes what happens to the memory:
 | Kind | Use it for | Consequence |
 |---|---|---|
 | `constraint` | A rule any agent must follow regardless of task | **Pinned.** Never dropped for budget, never staleness-archived |
-| `stage` | Where multi-session work stands | **Pinned**, same as a constraint |
+| `stage` | Where multi-session work stands | **Pinned while its `Status:` header marks a live gate** - `done` unpins immediately; a missing header ages out after `briefing.stage_unknown_max_age_days` |
 | `convention` | A project-local choice or layout fact | Its own budget-competing CONVENTION section; the overflow sits behind a count line pointing at `recall kind=convention` |
 | `gotcha` | A trap, led by its symptom | Ordinary budget and staleness rules |
 | `decision` | A choice plus the alternatives it rejected | Ordinary |
 | `refuted` | A belief that turned out false | Ordinary |
 | `runbook` / `protocol` / `reference` | A procedure, an agreement, a pointer | Ordinary |
 
-Three calls people get wrong.
+Four calls people get wrong.
 
 **`constraint` vs `convention`.** Ask whether the rule binds regardless of task.
 "No CGO" binds every agent on every task - `constraint`. "The wordmark markup
@@ -121,6 +121,18 @@ rejected alternative, and it exists so the argument does not happen again. "No
 CGO" is a `constraint` - there is no reasoning to weigh at call time, only a rule
 to not violate. Filing a preference as a constraint crowds out real constraints;
 filing a real constraint as a `reference` means agents violate it.
+
+**`stage` vs the task queue.** A task is work someone here can claim and
+finish; a stage is a state of the world you wait on that every session must
+know while it holds. "PR 10593 awaits maintainer re-review" gates work but is
+not claimable by anyone here - filed as a task it pollutes the ready queue as
+forever-claimable work; filed as a stage it pins into every briefing until the
+gate releases. A stage's body opens with
+`Status: open|in_progress|blocked|done` and optionally `Gate: human|ai`, and
+the pin belongs to that header: `done` unpins it immediately, a missing header
+ages out. Update the status by re-writing the memory with `memory_write` -
+`memory_append` cannot change the header, which is parsed from the top of the
+body.
 
 **`refuted` is the one that gets skipped.** Nobody wants to write down what they
 were wrong about. But a store that only records what is true keeps paying for the
