@@ -14,6 +14,47 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.4 {#v0-4-4}
+
+Released 2026-07-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.4)
+
+### Features
+
+- feat(briefing): grouped-section layout + recall kind-browse mode
+- feat(memory): runtime self-teaching for the stage header contract
+- feat(guidance): teach the stage header contract at write time
+- feat(gardener): rekind proposal type -- propose-only kind reclassification
+- feat(guidance): teach the constraint-vs-convention discriminator at write time
+- feat(recall): optional kind filter applied inside the candidate queries
+- feat(briefing): CONVENTION section + convention_max_full; constraint_max_full default 4
+- feat(memory): add convention kind end-to-end (enum, console, gardener prompt, docs)
+- feat(briefing): prompt-matched RELEVANT section in subagent briefings
+- feat(briefing): subagent footer, spawn-prompt capture, funnel-by-surface split
+- feat(hooks): brief Claude Code Task subagents via SubagentStart
+- feat(briefing): clip findings at word boundaries and refresh docs
+- feat(briefing): promote mishap-referenced constraints in the full tier
+- feat(briefing): tier constraints into top-K full lines plus compact tail
+- feat(briefing): reorder body, add constraint_max_full, link mishaps
+- feat(docs): redesign figure connectors
+- feat(console): tighten Interactions controls and event inspector
+- feat(console): redesign event review workspace
+- feat(console): make Interactions a clean live feed
+- feat(console): add an agent-reported mishaps rail to the Overview
+- feat(site): expose WebMCP tools to browser agents
+- feat(docsgen): publish the Agent Skills discovery index
+- feat(a2a): serve a real A2A surface and publish its agent card
+- feat(docsgen): emit /auth.md documenting the local-first auth model
+- feat(docsgen): emit the MCP Server Card at /.well-known/mcp/server-card.json
+- feat(docsgen): emit a site-root index.md twin; drop the Content-Type edge rule
+- feat(docsgen): emit a markdown twin per page for text/markdown negotiation
+- feat(docsgen): emit /.well-known/api-catalog at the site root
+
+### Fixes
+
+- fix(docs): preserve flow label casing
+- fix(installer): report only actual changes
+- fix(console): stabilize interaction model attribution
+
 ## v0.4.3 {#v0-4-3}
 
 Released 2026-07-22 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.3)
