@@ -454,14 +454,21 @@ a.nav-head.current { color: var(--brand); }
   color: var(--figure-accent);
 }
 .doc-flow {
+  --flow-gap: 30px;
   display: grid;
   grid-template-columns: repeat(var(--flow-cols, 3), minmax(0, 1fr));
-  gap: 30px;
+  gap: var(--flow-gap);
   align-items: stretch;
 }
 .doc-flow.cols-2 { --flow-cols: 2; }
 .doc-flow.cols-4 { --flow-cols: 4; }
-.doc-flow.cols-5 { --flow-cols: 5; }
+/* The docs shell leaves the article about 770px wide on desktop. Five cards
+   need a denser gap and inset so tool names still fit as whole identifiers. */
+.doc-flow.cols-5 {
+  --flow-cols: 5;
+  --flow-gap: 16px;
+}
+.doc-flow.cols-5 .flow-node { padding-inline: 12px; }
 .flow-node {
   position: relative;
   min-width: 0;
@@ -495,7 +502,7 @@ a.nav-head.current { color: var(--brand); }
   z-index: 1;
   top: calc(50% - 6px);
   left: 100%;
-  width: 30px;
+  width: var(--flow-gap, 30px);
   height: 12px;
   background: linear-gradient(
     90deg,
@@ -519,7 +526,11 @@ a.nav-head.current { color: var(--brand); }
   font-weight: 600;
   line-height: 1.3;
   letter-spacing: .02em;
-  overflow-wrap: anywhere;
+  /* Tool names are single atoms. Wrap the label at its spaces, never inside
+     session_start or another identifier. */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
   color: var(--figure-accent);
 }
 .flow-node strong {
@@ -536,7 +547,11 @@ a.nav-head.current { color: var(--brand); }
   line-height: 1.45;
   color: var(--muted);
 }
-.flow-node code { font-size: 11px; }
+.flow-node code {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
 .flow-node.success { border-color: color-mix(in srgb, var(--ok) 55%, var(--border)); }
 .flow-node.error { border-color: color-mix(in srgb, var(--pop) 55%, var(--border)); }
 .flow-node.warn { border-color: color-mix(in srgb, var(--pop-strong) 55%, var(--border)); }
@@ -879,7 +894,10 @@ a.nav-head.current { color: var(--brand); }
   .system-map,
   .comparison-grid,
   .flow-split { grid-template-columns: minmax(0, 1fr); }
-  .doc-flow { row-gap: 10px; }
+  .doc-flow {
+    --flow-gap: 30px;
+    row-gap: 10px;
+  }
   .flow-node::before,
   .flow-node::after { display: none; }
   .doc-flow .flow-node + .flow-node { margin-top: 18px; }
