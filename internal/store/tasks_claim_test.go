@@ -608,3 +608,39 @@ func TestActivePlansRollup(t *testing.T) {
 	require.Equal(t, 1, p.InFlight)
 	require.Equal(t, 1, p.Claimable, "a blocked open step is not claimable")
 }
+
+func TestActivePlansOrderByLastActivity(t *testing.T) {
+	db := newTaskDB(t)
+	ctx := context.Background()
+	slugs := func(plans []PlanRollup) []string {
+		out := make([]string, len(plans))
+		for i, p := range plans {
+			out[i] = p.Slug
+		}
+		return out
+	}
+
+	// Newest step activity inverts the slug order; alpha gets a second step so
+	// closing one later keeps the plan active.
+	a1 := addPlanTask(t, db, "demo", "alpha", "a1", 1)
+	addPlanTask(t, db, "demo", "alpha", "a2", 2)
+	addPlanTask(t, db, "demo", "mid", "m1", 5)
+	addPlanTask(t, db, "demo", "zeta", "z1", 10)
+
+	plans, err := ActivePlans(ctx, db, "demo")
+	require.NoError(t, err)
+	require.Equal(t, []string{"zeta", "mid", "alpha"}, slugs(plans),
+		"most recently active first, not alphabetical")
+	require.Equal(t, time.Date(2026, 7, 10, 12, 10, 0, 0, time.UTC), plans[0].LastActivity,
+		"LastActivity is the newest step updated_at")
+
+	// Touching an alpha step bumps the whole plan to the top.
+	done := core.TaskDone
+	_, err = UpdateTask(ctx, db, a1, TaskPatch{Status: &done}, "",
+		time.Date(2026, 7, 10, 14, 0, 0, 0, time.UTC))
+	require.NoError(t, err)
+	plans, err = ActivePlans(ctx, db, "demo")
+	require.NoError(t, err)
+	require.Equal(t, []string{"alpha", "zeta", "mid"}, slugs(plans))
+	require.Equal(t, time.Date(2026, 7, 10, 14, 0, 0, 0, time.UTC), plans[0].LastActivity)
+}

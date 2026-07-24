@@ -284,9 +284,9 @@ to the <em>gate</em>: a stage whose body does not open with a live
 <code>status unknown (no Status: header)</code> - the nudge names the fix) for the
 <code>briefing.stage_unknown_max_age_days</code> grace window (default 7) after its last
 update, then leaves the briefing rather than squatting in it forever.</li>
-<li><strong>The Plans section</strong> follows. The pinned rollup rows (<code>2/3 done, 1 claimable</code>) tell the next agent what work it can pick up right now, and the
-closing hint names the premade filters: <code>tasks_ready plan=&lt;slug&gt;</code> for a
-plan's steps, <code>tasks_claim</code> to take one.</li>
+<li><strong>The Plans section</strong> follows. The pinned rollup rows (<code>2/3 done, 1 claimable</code>), most recently active plan first, tell the next agent what work
+it can pick up right now, and the closing hint names the premade filters:
+<code>tasks_ready plan=&lt;slug&gt;</code> for a plan's steps, <code>tasks_claim</code> to take one.</li>
 <li><strong><code>awaiting approval</code> rows</strong> sit in the same section but open the budgeted
 body: captured but unapproved plans are a hint, not a commitment, so unlike
 the rollups they compete for budget and expire after
@@ -301,9 +301,10 @@ heads the section and renders regardless of the tier cap or the budget.</li>
 <li><strong>Recent findings</strong> - what previous sessions learned, harvested at their end -
 render right after: they say what just happened here, so they pack (and
 render) before the memory index rather than below it.</li>
-<li><strong>The Ready tasks section</strong> closes the situation half: the open queue, oldest
+<li><strong>The Ready tasks section</strong> closes the situation half: the open queue, newest
 first, before the library begins, with the full-queue and claim commands as
-its trailer.</li>
+its trailer. The display order is the only thing that changes at the top:
+<code>tasks_ready</code> itself still lists oldest-first, so claiming stays FIFO.</li>
 <li><strong>The Memories index</strong> is <code>- name: description</code> bullets only - the description
 is the <em>only</em> text an index ever shows, which is why writing a good one
 matters more than writing a good body. Starred memories head the list,

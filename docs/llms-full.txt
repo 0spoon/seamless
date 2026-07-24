@@ -1880,9 +1880,9 @@ Line by line:
   `briefing.stage_unknown_max_age_days` grace window (default 7) after its last
   update, then leaves the briefing rather than squatting in it forever.
 - **The Plans section** follows. The pinned rollup rows (`2/3 done,
-  1 claimable`) tell the next agent what work it can pick up right now, and the
-  closing hint names the premade filters: `tasks_ready plan=<slug>` for a
-  plan's steps, `tasks_claim` to take one.
+  1 claimable`), most recently active plan first, tell the next agent what work
+  it can pick up right now, and the closing hint names the premade filters:
+  `tasks_ready plan=<slug>` for a plan's steps, `tasks_claim` to take one.
 - **`awaiting approval` rows** sit in the same section but open the budgeted
   body: captured but unapproved plans are a hint, not a commitment, so unlike
   the rollups they compete for budget and expire after
@@ -1897,9 +1897,10 @@ Line by line:
 - **Recent findings** - what previous sessions learned, harvested at their end -
   render right after: they say what just happened here, so they pack (and
   render) before the memory index rather than below it.
-- **The Ready tasks section** closes the situation half: the open queue, oldest
+- **The Ready tasks section** closes the situation half: the open queue, newest
   first, before the library begins, with the full-queue and claim commands as
-  its trailer.
+  its trailer. The display order is the only thing that changes at the top:
+  `tasks_ready` itself still lists oldest-first, so claiming stays FIFO.
 - **The Memories index** is `- name: description` bullets only - the description
   is the *only* text an index ever shows, which is why writing a good one
   matters more than writing a good body. Starred memories head the list,

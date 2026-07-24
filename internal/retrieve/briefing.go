@@ -883,16 +883,24 @@ func pendingPlanLine(n core.Note) string {
 }
 
 // readyTasksSection renders the briefing's ready-queue section ("Ready tasks
-// (N):" with up to shown oldest-first title bullets and the premade-filter
+// (N):" with up to shown newest-first title bullets and the premade-filter
 // trailer), or "" when none are ready or the section is disabled (shown 0).
-// The ordering matches store.ReadyTasks (oldest first), which the CLI shares.
+// Display-only recency sort: store.ReadyTasks (and the tasks_ready tool the
+// trailer points at) stays oldest-first because claiming is intentionally FIFO.
 func readyTasksSection(ready []core.Task, shown int) string {
 	if len(ready) == 0 || shown <= 0 {
 		return ""
 	}
+	newestFirst := slices.Clone(ready)
+	slices.SortStableFunc(newestFirst, func(a, b core.Task) int {
+		if c := b.CreatedAt.Compare(a.CreatedAt); c != 0 {
+			return c
+		}
+		return cmp.Compare(b.ID, a.ID)
+	})
 	var b strings.Builder
-	fmt.Fprintf(&b, "\nReady tasks (%d):\n", len(ready))
-	for i, t := range ready {
+	fmt.Fprintf(&b, "\nReady tasks (%d):\n", len(newestFirst))
+	for i, t := range newestFirst {
 		if i == shown {
 			break
 		}

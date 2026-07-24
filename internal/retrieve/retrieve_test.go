@@ -446,6 +446,24 @@ func TestBriefingReadyTasksLineCostAccumulates(t *testing.T) {
 		"the ready line's cost must come out of the following sections' budget")
 }
 
+// The briefing's ready-tasks section is a display surface, so it leads with the
+// newest work. The claim order is untouched: store.ReadyTasks (and tasks_ready)
+// stays oldest-first, which the store tests assert.
+func TestReadyTasksSectionNewestFirst(t *testing.T) {
+	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+	mk := func(title string, min int) core.Task {
+		return core.Task{ID: fmt.Sprintf("%02d", min), Title: title,
+			CreatedAt: base.Add(time.Duration(min) * time.Minute)}
+	}
+	ready := []core.Task{mk("oldest", 1), mk("middle", 2), mk("newest", 3)} // store order
+
+	s := readyTasksSection(ready, 2)
+	require.Contains(t, s, "Ready tasks (3):")
+	require.Contains(t, s, "- newest\n- middle\n", "newest first")
+	require.NotContains(t, s, "- oldest", "shown cap trims the oldest, not the newest")
+	require.Equal(t, "oldest", ready[0].Title, "input slice order untouched")
+}
+
 func TestBriefingTunables_FamilyCrossOver(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()
