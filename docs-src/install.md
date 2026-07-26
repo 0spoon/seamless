@@ -237,6 +237,9 @@ the shape Seamless is built for.
 
 ## Upgrading
 
+Seamless is early in its development cycle: releases with improvements and bug
+fixes land often, so update at least weekly to stay on the latest version.
+
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
 latest release by re-running the canonical installer for you - so there is a
 single upgrade path to trust, not a second copy of the download-and-swap logic

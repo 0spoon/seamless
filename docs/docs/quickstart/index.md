@@ -30,6 +30,11 @@ macOS, systemd `--user` on Linux, an at-logon Scheduled Task on Windows. Re-run
 it to upgrade. [Install & deploy](https://thereisnospoon.org/docs/install/) has the overrides, service details,
 and removal procedure.
 
+Seamless is early in its development cycle, and releases with improvements and
+bug fixes land often. Make updating a habit - at least weekly - so you are
+always on the latest version: `seamlessd update` is the one command, on every
+OS. See [Upgrading](https://thereisnospoon.org/docs/install/#upgrading).
+
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install), and every other route to the
 same place is on that page: `brew install 0spoon/tap/seamless`, prebuilt

@@ -14,6 +14,20 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.5 {#v0-4-5}
+
+Released 2026-07-26 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.5)
+
+### Features
+
+- feat(install): order install targets Claude-first
+- feat(briefing): order plans and ready tasks by recency
+
+### Fixes
+
+- fix(mcp): preserve memory frontmatter on update, add memory_write tags
+- fix(docs): keep tool names whole in the five-card flow figure
+
 ## v0.4.4 {#v0-4-4}
 
 Released 2026-07-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.4)

@@ -97,6 +97,11 @@ macOS, systemd `--user` on Linux, an at-logon Scheduled Task on Windows. Re-run
 it to upgrade. [Install & deploy](/install/) has the overrides, service details,
 and removal procedure.
 
+Seamless is early in its development cycle, and releases with improvements and
+bug fixes land often. Make updating a habit - at least weekly - so you are
+always on the latest version: `seamlessd update` is the one command, on every
+OS. See [Upgrading](/install/#upgrading).
+
 Piping a stranger's script into a shell deserves a read first - it is
 [one file](https://thereisnospoon.org/install), and every other route to the
 same place is on that page: `brew install 0spoon/tap/seamless`, prebuilt
@@ -427,6 +432,9 @@ you are signed in and stops when you sign out - a single-user desktop, which is
 the shape Seamless is built for.
 
 ## Upgrading
+
+Seamless is early in its development cycle: releases with improvements and bug
+fixes land often, so update at least weekly to stay on the latest version.
 
 `seamlessd update` is the one command, on every OS. It upgrades in place to the
 latest release by re-running the canonical installer for you - so there is a
@@ -1188,6 +1196,20 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
+
+## v0.4.5 {#v0-4-5}
+
+Released 2026-07-26 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.5)
+
+### Features
+
+- feat(install): order install targets Claude-first
+- feat(briefing): order plans and ready tasks by recency
+
+### Fixes
+
+- fix(mcp): preserve memory frontmatter on update, add memory_write tags
+- fix(docs): keep tool names whole in the five-card flow figure
 
 ## v0.4.4 {#v0-4-4}
 

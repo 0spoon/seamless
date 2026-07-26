@@ -107,6 +107,11 @@ at-logon Scheduled Task on Windows. Upgrade any time with `seamlessd update`
 (re-runs the installer for you; `--check` reports installed vs latest): your
 config and `~/.seamless` are never touched.
 
+> **Early days, frequent releases.** Seamless is early in its development
+> cycle, and releases with improvements and bug fixes land often. Update at
+> least weekly to run the latest version -- `seamlessd update` is the one
+> command. See [Upgrading](https://thereisnospoon.org/docs/install/#upgrading).
+
 (Why `seam`? The CLI keeps the short name of Seam v1, the decommissioned
 private predecessor Seamless was rebuilt from the ground up to replace.)
 
