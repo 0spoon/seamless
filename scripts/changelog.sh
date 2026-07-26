@@ -13,6 +13,10 @@
 # The output depends only on the tags and the commit history, so re-running at
 # the same commit is byte-identical -- idempotent by construction, like docsgen.
 #
+# --check is the `make docs-check` gate, with one exemption for the release
+# commit itself (see below): it cannot contain the entry for the tag that names
+# it, because the tag does not exist until after the commit does.
+#
 # The entries mirror the GitHub release notes goreleaser builds (see the
 # `changelog:` block in .goreleaser.yaml): commit subjects since the previous
 # tag, grouped Features (^feat) / Fixes (^fix) / Other, with ^docs, ^chore,
@@ -57,10 +61,11 @@ group() {
 	printf '\n'
 }
 
-tmp=$(mktemp)
-trap 'rm -f "$tmp"' EXIT
-
-{
+# render <tags>: emit the whole page for one newest-first tag list. The list is
+# an argument rather than a read of $tags so --check can render a second time
+# without the newest tag, for the release-commit exemption below.
+render() {
+	render_tags=$1
 	cat <<'EOF'
 ---
 title: Changelog
@@ -81,7 +86,7 @@ install in place with `seamlessd update`.
 
 EOF
 
-	for tag in $tags; do
+	for tag in $render_tags; do
 		date=$(git for-each-ref "refs/tags/$tag" --format='%(creatordate:format-local:%Y-%m-%d)')
 		anchor=$(printf '%s' "$tag" | tr '.' '-')
 		prev=$(printf '%s\n' "$tags" | awk -v t="$tag" 'f { print; exit } $0 == t { f = 1 }')
@@ -114,18 +119,41 @@ EOF
 		group "Fixes" "$fixes"
 		group "Other" "$other"
 	done
-} >"$tmp"
+}
+
+tmp=$(mktemp)
+trap 'rm -f "$tmp"' EXIT
+render "$tags" >"$tmp"
 
 count=$(printf '%s\n' "$tags" | wc -l | tr -d ' ')
 newest=$(printf '%s\n' "$tags" | head -1)
 if [ "$MODE" = "check" ]; then
-	if ! cmp -s "$tmp" "$OUT"; then
-		echo "changelog drift: $OUT does not include the current tag history (run 'make changelog')" >&2
-		diff -u "$OUT" "$tmp" | sed -n '1,80p' >&2 || true
-		exit 1
+	if cmp -s "$tmp" "$OUT"; then
+		echo "changelog-check: $OUT covers $count releases through $newest"
+		exit 0
 	fi
-	echo "changelog-check: $OUT covers $count releases through $newest"
-else
-	mv "$tmp" "$OUT"
-	echo "changelog: wrote $OUT ($count releases, newest $newest)"
+
+	# Release-commit exemption. A tagged commit cannot contain its own entry:
+	# the release flow commits the version bump, tags that commit, and only
+	# then runs `make changelog` -- so from the tag until that follow-up commit
+	# the page legitimately stops one release short. Tolerate exactly that, and
+	# only while HEAD is the commit the newest tag names (CI checking out the
+	# release commit, or the tag ref itself). Re-rendering without the newest
+	# tag and demanding a byte-identical match keeps this narrow: the entry for
+	# $newest may be missing, nothing else may differ. Every later commit is
+	# strict again, including the follow-up that adds the entry.
+	if [ "$(git rev-parse -q --verify "$newest^{commit}" || true)" = "$(git rev-parse HEAD)" ]; then
+		rest=$(printf '%s\n' "$tags" | tail -n +2)
+		if [ -n "$rest" ] && render "$rest" | cmp -s - "$OUT"; then
+			echo "changelog-check: $OUT covers $((count - 1)) releases through $(printf '%s\n' "$rest" | head -1); $newest is the release commit at HEAD, its entry lands in the follow-up 'make changelog' commit"
+			exit 0
+		fi
+	fi
+
+	echo "changelog drift: $OUT does not include the current tag history (run 'make changelog')" >&2
+	diff -u "$OUT" "$tmp" | sed -n '1,80p' >&2 || true
+	exit 1
 fi
+
+mv "$tmp" "$OUT"
+echo "changelog: wrote $OUT ($count releases, newest $newest)"
