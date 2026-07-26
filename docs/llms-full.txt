@@ -4556,6 +4556,7 @@ Create or update a durable memory. Writing an existing name updates it in place 
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
 | `supersedes` | string | no | name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here |
+| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear |
 
 ## memory_append {#memory_append}
 

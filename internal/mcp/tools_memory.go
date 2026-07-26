@@ -27,6 +27,7 @@ func memoryWriteTool() mcp.Tool {
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),
+		mcp.WithArray("tags", mcp.WithStringItems(), mcp.Description("tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear")),
 		mcp.WithString("supersedes", mcp.Description("name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here")),
 	)
 }
@@ -84,6 +85,29 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 		if mem.Model == "" {
 			mem.Model = existing.Model
 		}
+		// Curation the caller did not necessarily send. files.WriteMemory renders
+		// the struct as-is and never merges with the file on disk, so every field
+		// not carried forward here is erased from the frontmatter: a correction to
+		// the body would silently untag a memory, unstar it out of its briefing
+		// pin, and drop the unknown keys Extra exists to round-trip. Favorite and
+		// Extra have no argument at all; tags carried forward here are what an
+		// explicit tags argument overrides further down.
+		mem.Tags = existing.Tags
+		mem.Favorite = existing.Favorite
+		// The index row carries tags and favorite but NOT Extra (core.Memory.Extra
+		// is deliberately unmirrored), and frontmatter is the authority for stars
+		// anyway, so the file is the real source for all three. Degrade to the
+		// index values if it cannot be read -- losing unknown keys is bad, losing
+		// the write is worse.
+		if existing.FilePath != "" {
+			onDisk, rerr := s.cfg.Files.Store().ReadMemory(existing.FilePath)
+			if rerr != nil {
+				s.logger.Warn("mcp: memory_write frontmatter preservation",
+					"name", name, "project", project, "error", rerr)
+			} else {
+				mem.Tags, mem.Favorite, mem.Extra = onDisk.Tags, onDisk.Favorite, onDisk.Extra
+			}
+		}
 	} else {
 		id, err := core.NewID()
 		if err != nil {
@@ -94,6 +118,15 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 		if hint, herr := s.cfg.Retrieve.DedupHint(ctx, project, name, desc); herr == nil && hint != nil {
 			similar = &map[string]any{"name": hint.Name, "description": hint.Description, "score": hint.Score}
 		}
+	}
+	// Deliberate re-tagging, replacing the whole set. The argPresent guard is the
+	// entire contract: a bare `mem.Tags = argStrings(...)` would clear the tags of
+	// every caller that omits the argument, which is precisely the silent erasure
+	// the preservation above exists to prevent. validateMiddleware drops an empty
+	// array as "absent", so clearing tags is deliberately not expressible here --
+	// same as notes_update, and the parameter description says so.
+	if argPresent(req, "tags") {
+		mem.Tags = argStrings(req, "tags")
 	}
 
 	written, err := s.cfg.Files.WriteMemory(ctx, mem)

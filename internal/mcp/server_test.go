@@ -37,6 +37,15 @@ func newServer(t *testing.T) (string, *sql.DB) {
 // newServerCfg is newServer with a hook to tune the Config before construction
 // (e.g. ToolEventMaxChars), so tests can exercise non-default wiring.
 func newServerCfg(t *testing.T, tune func(*mcpserver.Config)) (string, *sql.DB) {
+	url, db, _, _ := newServerFiles(t, tune)
+	return url, db
+}
+
+// newServerFiles is newServerCfg plus the files layer behind the server: the
+// data dir and its Manager. Tests that must assert against the markdown file
+// (the source of truth for durable knowledge) rather than the index row, or that
+// need to seed frontmatter the tool surface cannot express, use this.
+func newServerFiles(t *testing.T, tune func(*mcpserver.Config)) (string, *sql.DB, *files.Manager, string) {
 	t.Helper()
 	dir := t.TempDir()
 	db, err := store.Open(filepath.Join(dir, "seam.db"))
@@ -62,7 +71,7 @@ func newServerCfg(t *testing.T, tune func(*mcpserver.Config)) (string, *sql.DB) 
 	srv := mcpserver.New(cfg)
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
-	return ts.URL, db
+	return ts.URL, db, mgr, dir
 }
 
 // dialClient starts and initializes an MCP client against url with the given key.
