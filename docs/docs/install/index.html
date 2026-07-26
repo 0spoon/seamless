@@ -228,16 +228,16 @@ against the release's <code>checksums.txt</code> before unpacking anything; when
 against this repository's release workflow identity;</li>
 <li>installs <code>seamlessd</code> and <code>seam</code> into <code>~/.local/bin</code>;</li>
 <li>runs <code>seamlessd install-hooks</code>, which generates the bearer key into
-<code>~/.config/seamless/seamless.yaml</code> on first run, detects Claude Code,
-Codex, and the Claude app chat surface, and installs that set's hooks, MCP
+<code>~/.config/seamless/seamless.yaml</code> on first run, detects Claude Code, the
+Claude app chat surface, and Codex, and installs that set's hooks, MCP
 registrations, and skills;</li>
 <li>installs and starts the per-user service - launchd on macOS, systemd
 <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
 <code>/healthz</code> until the daemon actually answers.</li>
 </ol>
-<p>Step 3 detects three install targets - <strong>Claude Code</strong>, <strong>Codex</strong>, and the
-<strong>Claude app chat surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge;
-it has no hooks or skills) - and wires the detected set. That one selection
+<p>Step 3 detects three install targets - <strong>Claude Code</strong>, the <strong>Claude app chat
+surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge; it has no hooks or
+skills), and <strong>Codex</strong> - and wires the detected set. That one selection
 drives hooks, MCP registrations, and the maintained <code>seam-onboard</code> /
 <code>seam-research</code> skills together. On a terminal the run confirms the selection
 with a multi-select menu - answers are numbers or names, comma-separated
@@ -286,7 +286,7 @@ script</a> with no dependencies to audit.</p>
 <td>put the binaries somewhere else</td>
 </tr>
 <tr>
-<td><code>SEAMLESS_CLIENT=claude|codex|claude-desktop|all</code></td>
+<td><code>SEAMLESS_CLIENT=claude|claude-desktop|codex|all</code></td>
 <td>choose which target(s) to wire instead of auto-detection; comma lists work (<code>claude,claude-desktop</code>)</td>
 </tr>
 <tr>

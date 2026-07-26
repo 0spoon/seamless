@@ -37,7 +37,7 @@ seamlessd install-hooks --client claude-desktop
 ```
 
 This is the same registration the interactive installer offers as menu entry
-`[3] Claude app (chat)` - answers are comma lists, so `1,3` wires Claude Code
+`[2] Claude app (chat)` - answers are comma lists, so `1,2` wires Claude Code
 and the chat surface together, and `all` includes the chat surface on the
 platforms that can host it (the Claude app ships for macOS and Windows; on
 Linux `all` deliberately excludes it).

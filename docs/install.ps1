@@ -25,7 +25,7 @@
 # Overrides (set as environment variables before running):
 #   $env:SEAMLESS_VERSION             version to install (default: latest release)
 #   $env:SEAMLESS_INSTALL_DIR         where the binaries go (default: ~\.local\bin)
-#   $env:SEAMLESS_CLIENT              claude|codex|claude-desktop|all, or a comma
+#   $env:SEAMLESS_CLIENT              claude|claude-desktop|codex|all, or a comma
 #                                     list of targets (default: the detected
 #                                     clients; prompts when several or none are
 #                                     found, and aborts when none is found and
@@ -83,7 +83,7 @@ function Test-Interactive {
 }
 
 # ConvertTo-ClientList: map an answer -- numbers or target words, singly or
-# comma-separated -- to the canonical comma list (claude, codex, claude-desktop
+# comma-separated -- to the canonical comma list (claude, claude-desktop, codex
 # in stable order). $null for any unrecognized token, so callers can re-prompt
 # or die instead of guessing.
 function ConvertTo-ClientList {
@@ -94,8 +94,8 @@ function ConvertTo-ClientList {
         if ($t -eq '') { continue }
         switch ($t) {
             { $_ -in '1', 'claude', 'claude-code', 'cc' } { $claude = $true; break }
-            { $_ -in '2', 'codex', 'cx' } { $codex = $true; break }
-            { $_ -in '3', 'claude-desktop', 'desktop' } { $desktop = $true; break }
+            { $_ -in '2', 'claude-desktop', 'desktop' } { $desktop = $true; break }
+            { $_ -in '3', 'codex', 'cx' } { $codex = $true; break }
             { $_ -in '4', 'all' } { $claude = $true; $codex = $true; $desktop = $true; break }
             'both' { $claude = $true; $codex = $true; break }
             default { return $null }
@@ -105,8 +105,8 @@ function ConvertTo-ClientList {
     if (-not $any) { return $null }
     $targets = @()
     if ($claude) { $targets += 'claude' }
-    if ($codex) { $targets += 'codex' }
     if ($desktop) { $targets += 'claude-desktop' }
+    if ($codex) { $targets += 'codex' }
     return ($targets -join ',')
 }
 
@@ -121,8 +121,8 @@ function Read-ClientChoice {
     # Go test pins them).
     Write-Host 'Wire Seamless to which agent client?'
     Write-Host ('  [1] Claude Code {0}' -f $(if ($script:ClaudeDetected) { '(detected)' } else { '(not detected)' }))
-    Write-Host ('  [2] Codex (app/CLI/IDE) {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
-    Write-Host ('  [3] Claude app (chat) {0}' -f $(if ($script:DesktopDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host ('  [2] Claude app (chat) {0}' -f $(if ($script:DesktopDetected) { '(detected)' } else { '(not detected)' }))
+    Write-Host ('  [3] Codex (app/CLI/IDE) {0}' -f $(if ($script:CodexDetected) { '(detected)' } else { '(not detected)' }))
     Write-Host '  [4] All'
     while ($true) {
         $prompt = if ($DefaultChoice) { "Enter choices like 1 or 1,3 [$DefaultChoice]" } else { 'Enter choices like 1 or 1,3' }
@@ -137,7 +137,7 @@ function Read-ClientChoice {
 function Resolve-AgentClient {
     if ($env:SEAMLESS_CLIENT) {
         $list = ConvertTo-ClientList $env:SEAMLESS_CLIENT
-        if (-not $list) { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, codex, claude-desktop, all, or a comma list)" }
+        if (-not $list) { Die "invalid SEAMLESS_CLIENT=$env:SEAMLESS_CLIENT (valid values: claude, claude-desktop, codex, all, or a comma list)" }
         return $list
     }
     $claude = (((Get-Command claude -ErrorAction SilentlyContinue) -ne $null) -or (Test-Path (Join-Path $HOME '.claude')))
@@ -152,8 +152,8 @@ function Resolve-AgentClient {
     $script:DesktopDetected = $desktop
     $targets = @()
     if ($claude) { $targets += 'claude' }
-    if ($codex) { $targets += 'codex' }
     if ($desktop) { $targets += 'claude-desktop' }
+    if ($codex) { $targets += 'codex' }
     if ($targets.Count -eq 1) { return $targets[0] }
     if ($targets.Count -gt 1) {
         $detected = $targets -join ','
@@ -161,17 +161,17 @@ function Resolve-AgentClient {
         # The menu default is the detected set as numbers, collapsed to 4 (All)
         # when every target was detected.
         $default = if ($targets.Count -eq 3) { '4' } else {
-            (($targets | ForEach-Object { @{ 'claude' = '1'; 'codex' = '2'; 'claude-desktop' = '3' }[$_] }) -join ',')
+            (($targets | ForEach-Object { @{ 'claude' = '1'; 'claude-desktop' = '2'; 'codex' = '3' }[$_] }) -join ',')
         }
         return Read-ClientChoice $default
     }
     if (-not (Test-Interactive)) {
-        Die 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app); set $env:SEAMLESS_CLIENT=claude|codex|claude-desktop|all to install anyway'
+        Die 'no agent client was detected on this machine (Claude Code, the Claude app, or Codex); set $env:SEAMLESS_CLIENT=claude|claude-desktop|codex|all to install anyway'
     }
-    Warn 'no agent client was detected on this machine (Claude Code, Codex, or the Claude app)'
+    Warn 'no agent client was detected on this machine (Claude Code, the Claude app, or Codex)'
     $answer = Read-Host 'Install anyway? [y/N]'
     if ($answer -notmatch '^(y|yes)$') {
-        Die 'aborted: no agent client detected (set $env:SEAMLESS_CLIENT=claude|codex|claude-desktop|all to force)'
+        Die 'aborted: no agent client detected (set $env:SEAMLESS_CLIENT=claude|claude-desktop|codex|all to force)'
     }
     return Read-ClientChoice ''
 }

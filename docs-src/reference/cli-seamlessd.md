@@ -116,7 +116,7 @@ usable embedder, it warns and imports without vectors rather than failing.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--client claude|codex|claude-desktop|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
+seamlessd install-hooks [--client claude|claude-desktop|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
 Wires the selected install target(s) to Seamless: merges the hook entries into
@@ -187,7 +187,7 @@ for subagents; the [hooks reference](/reference/hooks/) has both tables.
 ## seamlessd uninstall {#seamlessd_uninstall}
 
 ```bash
-seamlessd uninstall [--client claude|codex|claude-desktop|all|detect] [--dry-run] [--yes] [--purge]
+seamlessd uninstall [--client claude|claude-desktop|codex|all|detect] [--dry-run] [--yes] [--purge]
 ```
 
 Reverses a full install on any supported OS: stops and removes the per-user

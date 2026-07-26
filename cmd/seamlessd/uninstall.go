@@ -38,7 +38,7 @@ const (
 // failure, so uninstall is idempotent and safe to re-run.
 func runUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
-	clientFlag := fs.String("client", "all", "which agent client(s) to remove hooks/MCP for: claude|codex|claude-desktop, a comma list of those, or all|detect")
+	clientFlag := fs.String("client", "all", "which agent client(s) to remove hooks/MCP for: claude|claude-desktop|codex, a comma list of those, or all|detect")
 	purge := fs.Bool("purge", false, "also delete the config dir (~/.config/seamless) and data dir (~/.seamless)")
 	dryRun := fs.Bool("dry-run", false, "print what would be removed and exit without changing anything")
 	yes := fs.Bool("yes", false, "skip the confirmation prompt")

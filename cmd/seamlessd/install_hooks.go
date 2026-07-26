@@ -26,9 +26,9 @@ import (
 // runInstallHooks wires an agent client to Seamless in one command: it installs
 // the hooks into that client's config file and, unless --mcp=false, registers
 // the MCP server through its management surface. --client selects which: claude
-// (~/.claude/settings.json + `claude mcp add`), codex ($CODEX_HOME/hooks.json +
-// `codex mcp add ... seam mcp-proxy`), claude-desktop (the Claude app chat
-// surface -- desktop-config MCP bridge only, no hooks or skills), a comma list
+// (~/.claude/settings.json + `claude mcp add`), claude-desktop (the Claude app
+// chat surface -- desktop-config MCP bridge only, no hooks or skills), codex
+// ($CODEX_HOME/hooks.json + `codex mcp add ... seam mcp-proxy`), a comma list
 // of those, all (every target this platform can host), or detect (the default:
 // the targets present on this machine, the same selection the curl installer
 // makes; an error when none are, so nothing is wired without an explicit
@@ -36,7 +36,7 @@ import (
 // .claude/settings.json so v2 hooks fire only here.
 func runInstallHooks(args []string) error {
 	fs := flag.NewFlagSet("install-hooks", flag.ContinueOnError)
-	clientFlag := fs.String("client", "detect", "which agent client(s) to install for: claude|codex|claude-desktop, a comma list of those, or all|detect (claude-desktop wires only the Claude app chat surface's MCP bridge)")
+	clientFlag := fs.String("client", "detect", "which agent client(s) to install for: claude|claude-desktop|codex, a comma list of those, or all|detect (claude-desktop wires only the Claude app chat surface's MCP bridge)")
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	desktopConfigFlag := fs.String("desktop-config", "", "Claude desktop app claude_desktop_config.json to register the MCP bridge in (default: the app's per-OS location)")
@@ -254,8 +254,8 @@ type installTarget string
 
 const (
 	targetClaudeCode    installTarget = "claude"
-	targetCodex         installTarget = "codex"
 	targetClaudeDesktop installTarget = "claude-desktop"
+	targetCodex         installTarget = "codex"
 )
 
 // detectedTargets is one machine probe handed to the selection functions, so
@@ -288,18 +288,20 @@ func (d detectedTargets) allTargets() []installTarget {
 	return orderedTargets(true, true, d.desktopSupported)
 }
 
-// orderedTargets composes a selection in the stable install order: Claude Code,
-// Codex, Claude app chat surface.
+// orderedTargets composes a selection in the stable install order: the Claude
+// surfaces first (Claude Code, then the Claude app chat surface), then Codex.
+// The parameters keep their detection order (claude, codex, desktop); only the
+// emitted order is the install order, which the menu numbering follows.
 func orderedTargets(claude, codex, desktop bool) []installTarget {
 	var out []installTarget
 	if claude {
 		out = append(out, targetClaudeCode)
 	}
-	if codex {
-		out = append(out, targetCodex)
-	}
 	if desktop {
 		out = append(out, targetClaudeDesktop)
+	}
+	if codex {
+		out = append(out, targetCodex)
 	}
 	return out
 }
@@ -324,10 +326,10 @@ func targetNames(targets []installTarget) []string {
 	out := make([]string, len(targets))
 	for i, t := range targets {
 		switch t {
-		case targetCodex:
-			out[i] = "Codex"
 		case targetClaudeDesktop:
 			out[i] = "Claude app (chat)"
+		case targetCodex:
+			out[i] = "Codex"
 		default:
 			out[i] = "Claude Code"
 		}
@@ -336,9 +338,9 @@ func targetNames(targets []installTarget) []string {
 }
 
 // parseInstallTargets maps the --client flag to install targets in a stable
-// order. The value is one target or a comma list of targets -- claude, codex,
+// order. The value is one target or a comma list of targets -- claude,
 // claude-desktop (the Claude app chat surface: MCP bridge only, no hooks or
-// skills) -- or a selector: "all" is every target this platform can host
+// skills), codex -- or a selector: "all" is every target this platform can host
 // (naming claude-desktop explicitly still works anywhere, for --desktop-config
 // overrides), "both" remains the two hook clients, and "detect" (also the
 // meaning of an empty value) resolves to the detected set -- the same
@@ -350,7 +352,7 @@ func parseInstallTargets(raw string, det detectedTargets) ([]installTarget, erro
 	if trimmed := strings.ToLower(strings.TrimSpace(raw)); trimmed == "" || trimmed == "detect" || trimmed == "auto" {
 		targets := det.detected()
 		if len(targets) == 0 {
-			return nil, errors.New("no agent client was detected on this machine (Claude Code, Codex, or the Claude app); pass --client claude|codex|claude-desktop|all to select one anyway")
+			return nil, errors.New("no agent client was detected on this machine (Claude Code, the Claude app, or Codex); pass --client claude|claude-desktop|codex|all to select one anyway")
 		}
 		return targets, nil
 	}
@@ -361,10 +363,10 @@ func parseInstallTargets(raw string, det detectedTargets) ([]installTarget, erro
 			// a stray comma selects nothing
 		case "claude", "claude-code", "cc":
 			claude = true
-		case "codex", "cx":
-			codex = true
 		case "claude-desktop", "desktop":
 			desktop = true
+		case "codex", "cx":
+			codex = true
 		case "all":
 			claude, codex = true, true
 			desktop = desktop || det.desktopSupported
@@ -373,12 +375,12 @@ func parseInstallTargets(raw string, det detectedTargets) ([]installTarget, erro
 		case "detect", "auto":
 			return nil, fmt.Errorf("--client %q: detect cannot be combined with named targets", raw)
 		default:
-			return nil, fmt.Errorf("unknown --client %q: valid values are claude, codex, claude-desktop, all, detect, or a comma list of targets", raw)
+			return nil, fmt.Errorf("unknown --client %q: valid values are claude, claude-desktop, codex, all, detect, or a comma list of targets", raw)
 		}
 	}
 	targets := orderedTargets(claude, codex, desktop)
 	if len(targets) == 0 {
-		return nil, fmt.Errorf("--client %q selects no target: valid values are claude, codex, claude-desktop, all, detect, or a comma list of targets", raw)
+		return nil, fmt.Errorf("--client %q selects no target: valid values are claude, claude-desktop, codex, all, detect, or a comma list of targets", raw)
 	}
 	return targets, nil
 }
@@ -418,8 +420,8 @@ func promptInstallTargets(in io.Reader, out io.Writer, det detectedTargets) ([]i
 	def := defaultTargetChoice(det)
 	fmt.Fprintln(out, bold("Install Seamless for which agent client?"))
 	fmt.Fprintf(out, "  %s Claude Code %s\n", dim("[1]"), detectedColor(det.claude))
-	fmt.Fprintf(out, "  %s Codex (app/CLI/IDE) %s\n", dim("[2]"), detectedColor(det.codex))
-	fmt.Fprintf(out, "  %s Claude app (chat) %s\n", dim("[3]"), desktopMenuTag(det))
+	fmt.Fprintf(out, "  %s Claude app (chat) %s\n", dim("[2]"), desktopMenuTag(det))
+	fmt.Fprintf(out, "  %s Codex (app/CLI/IDE) %s\n", dim("[3]"), detectedColor(det.codex))
 	fmt.Fprintf(out, "  %s All\n", dim("[4]"))
 	for {
 		if def == "" {
@@ -465,7 +467,7 @@ func desktopMenuTag(det detectedTargets) string {
 // on an empty answer or EOF, so pressing Enter (or a closed stdin) aborts
 // rather than wiring a client that is not there.
 func confirmInstallWithoutClients(reader *bufio.Reader, out io.Writer) error {
-	fmt.Fprintf(out, "%s no agent client was detected on this machine (Claude Code, Codex, or the Claude app)\n", yellow("warning:"))
+	fmt.Fprintf(out, "%s no agent client was detected on this machine (Claude Code, the Claude app, or Codex)\n", yellow("warning:"))
 	for {
 		fmt.Fprint(out, "Install anyway? [y/N]: ")
 		line, err := reader.ReadString('\n')
@@ -473,10 +475,10 @@ func confirmInstallWithoutClients(reader *bufio.Reader, out io.Writer) error {
 		case "y", "yes":
 			return nil
 		case "", "n", "no":
-			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|claude-desktop|all)")
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|claude-desktop|codex|all)")
 		}
 		if err != nil {
-			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|codex|claude-desktop|all)")
+			return errors.New("aborted: no agent client detected (answer y, or rerun with --client claude|claude-desktop|codex|all)")
 		}
 		fmt.Fprintln(out, "  please answer y or n")
 	}
@@ -493,10 +495,10 @@ func targetsForChoice(s string, det detectedTargets) ([]installTarget, bool) {
 			continue
 		case "1", "claude", "claude-code", "cc":
 			claude = true
-		case "2", "codex", "cx":
-			codex = true
-		case "3", "claude-desktop", "desktop":
+		case "2", "claude-desktop", "desktop":
 			desktop = true
+		case "3", "codex", "cx":
+			codex = true
 		case "4", "all":
 			claude, codex = true, true
 			desktop = desktop || det.desktopSupported
@@ -529,9 +531,9 @@ func defaultTargetChoice(det detectedTargets) string {
 	nums := make([]string, 0, len(detected))
 	for _, t := range detected {
 		switch t {
-		case targetCodex:
-			nums = append(nums, "2")
 		case targetClaudeDesktop:
+			nums = append(nums, "2")
+		case targetCodex:
 			nums = append(nums, "3")
 		default:
 			nums = append(nums, "1")

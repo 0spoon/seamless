@@ -47,16 +47,16 @@ itself. No Go toolchain is involved. In order, it:
    against this repository's release workflow identity;
 2. installs `seamlessd` and `seam` into `~/.local/bin`;
 3. runs `seamlessd install-hooks`, which generates the bearer key into
-   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code,
-   Codex, and the Claude app chat surface, and installs that set's hooks, MCP
+   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code, the
+   Claude app chat surface, and Codex, and installs that set's hooks, MCP
    registrations, and skills;
 4. installs and starts the per-user service - launchd on macOS, systemd
    `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
    `/healthz` until the daemon actually answers.
 
-Step 3 detects three install targets - **Claude Code**, **Codex**, and the
-**Claude app chat surface** (`claude-desktop`, the app's `mcpServers` bridge;
-it has no hooks or skills) - and wires the detected set. That one selection
+Step 3 detects three install targets - **Claude Code**, the **Claude app chat
+surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
+skills), and **Codex** - and wires the detected set. That one selection
 drives hooks, MCP registrations, and the maintained `seam-onboard` /
 `seam-research` skills together. On a terminal the run confirms the selection
 with a multi-select menu - answers are numbers or names, comma-separated
@@ -95,7 +95,7 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 |---|---|
 | `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
 | `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
-| `SEAMLESS_CLIENT=claude\|codex\|claude-desktop\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
+| `SEAMLESS_CLIENT=claude\|claude-desktop\|codex\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
 | `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
 | `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
 | `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |

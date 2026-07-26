@@ -209,7 +209,7 @@ func TestParseInstallTargets(t *testing.T) {
 	cx := []installTarget{targetCodex}
 	dt := []installTarget{targetClaudeDesktop}
 	hookPair := []installTarget{targetClaudeCode, targetCodex}
-	everything := []installTarget{targetClaudeCode, targetCodex, targetClaudeDesktop}
+	everything := []installTarget{targetClaudeCode, targetClaudeDesktop, targetCodex}
 
 	for _, tt := range []struct {
 		raw  string
@@ -224,7 +224,7 @@ func TestParseInstallTargets(t *testing.T) {
 		{"desktop", detTargets(false, false, false), dt},
 		// Comma lists compose targets; order and duplicates do not matter.
 		{"claude,claude-desktop", detTargets(false, false, false), []installTarget{targetClaudeCode, targetClaudeDesktop}},
-		{"desktop, codex", detTargets(false, false, false), []installTarget{targetCodex, targetClaudeDesktop}},
+		{"desktop, codex", detTargets(false, false, false), []installTarget{targetClaudeDesktop, targetCodex}},
 		{"codex,claude,codex,", detTargets(false, false, false), hookPair},
 		// all is every target the platform can host; both stays the hook pair.
 		{"all", detTargets(false, false, false), everything},
@@ -268,19 +268,19 @@ func TestParseInstallTargets(t *testing.T) {
 }
 
 func TestHookClientsForAndTargetNames(t *testing.T) {
-	everything := []installTarget{targetClaudeCode, targetCodex, targetClaudeDesktop}
+	everything := []installTarget{targetClaudeCode, targetClaudeDesktop, targetCodex}
 	require.Equal(t, []hooks.Client{hooks.ClientClaudeCode, hooks.ClientCodex}, hookClientsFor(everything))
 	require.Empty(t, hookClientsFor([]installTarget{targetClaudeDesktop}))
-	require.Equal(t, []string{"Claude Code", "Codex", "Claude app (chat)"}, targetNames(everything))
+	require.Equal(t, []string{"Claude Code", "Claude app (chat)", "Codex"}, targetNames(everything))
 }
 
 func TestDefaultTargetChoice(t *testing.T) {
 	require.Equal(t, "", defaultTargetChoice(detTargets(false, false, false))) // nothing detected -> no default
 	require.Equal(t, "1", defaultTargetChoice(detTargets(true, false, false)))
-	require.Equal(t, "2", defaultTargetChoice(detTargets(false, true, false))) // codex-only machine defaults to codex
-	require.Equal(t, "3", defaultTargetChoice(detTargets(false, false, true))) // chat-only machine defaults to the app
-	require.Equal(t, "1,2", defaultTargetChoice(detTargets(true, true, false)))
-	require.Equal(t, "1,3", defaultTargetChoice(detTargets(true, false, true)))
+	require.Equal(t, "3", defaultTargetChoice(detTargets(false, true, false))) // codex-only machine defaults to codex
+	require.Equal(t, "2", defaultTargetChoice(detTargets(false, false, true))) // chat-only machine defaults to the app
+	require.Equal(t, "1,3", defaultTargetChoice(detTargets(true, true, false)))
+	require.Equal(t, "1,2", defaultTargetChoice(detTargets(true, false, true)))
 	require.Equal(t, "4", defaultTargetChoice(detTargets(true, true, true))) // everything detected -> All
 	// On a platform without the chat surface, both hook clients ARE everything.
 	require.Equal(t, "4", defaultTargetChoice(detTargetsNoDesktop(true, true)))
@@ -294,11 +294,11 @@ func TestTargetsForChoice(t *testing.T) {
 		want []installTarget
 	}{
 		{"1", []installTarget{targetClaudeCode}},
-		{"3", []installTarget{targetClaudeDesktop}},
-		{"1,3", []installTarget{targetClaudeCode, targetClaudeDesktop}},
-		{"3, 2", []installTarget{targetCodex, targetClaudeDesktop}},
-		{"4", []installTarget{targetClaudeCode, targetCodex, targetClaudeDesktop}},
-		{"all", []installTarget{targetClaudeCode, targetCodex, targetClaudeDesktop}},
+		{"2", []installTarget{targetClaudeDesktop}},
+		{"1,2", []installTarget{targetClaudeCode, targetClaudeDesktop}},
+		{"3, 2", []installTarget{targetClaudeDesktop, targetCodex}},
+		{"4", []installTarget{targetClaudeCode, targetClaudeDesktop, targetCodex}},
+		{"all", []installTarget{targetClaudeCode, targetClaudeDesktop, targetCodex}},
 		{"both", []installTarget{targetClaudeCode, targetCodex}},
 		{"desktop", []installTarget{targetClaudeDesktop}},
 		{"claude,codex", []installTarget{targetClaudeCode, targetCodex}},
@@ -323,7 +323,7 @@ func TestPromptInstallTargets(t *testing.T) {
 	cc := []installTarget{targetClaudeCode}
 	cx := []installTarget{targetCodex}
 	hookPair := []installTarget{targetClaudeCode, targetCodex}
-	everything := []installTarget{targetClaudeCode, targetCodex, targetClaudeDesktop}
+	everything := []installTarget{targetClaudeCode, targetClaudeDesktop, targetCodex}
 
 	for _, tt := range []struct {
 		name  string
@@ -332,9 +332,9 @@ func TestPromptInstallTargets(t *testing.T) {
 		want  []installTarget
 	}{
 		{"pick claude", "1\n", detTargets(true, false, false), cc},
-		{"pick codex", "2\n", detTargets(true, true, false), cx},
+		{"pick codex", "3\n", detTargets(true, true, false), cx},
 		{"pick all", "4\n", detTargets(true, true, true), everything},
-		{"pick a pair", "1,3\n", detTargets(true, true, true), []installTarget{targetClaudeCode, targetClaudeDesktop}},
+		{"pick a pair", "1,2\n", detTargets(true, true, true), []installTarget{targetClaudeCode, targetClaudeDesktop}},
 		{"word alias", "codex\n", detTargets(false, true, false), cx},
 		{"both keeps the hook pair", "both\n", detTargets(true, true, true), hookPair},
 		{"empty takes default codex", "\n", detTargets(false, true, false), cx},
@@ -348,10 +348,11 @@ func TestPromptInstallTargets(t *testing.T) {
 			got, err := promptInstallTargets(strings.NewReader(tt.input), &out, tt.det)
 			require.NoError(t, err)
 			require.Equal(t, tt.want, got)
-			// The menu always renders every target with a detection tag.
+			// The menu always renders every target with a detection tag, Claude
+			// surfaces first.
 			require.Contains(t, out.String(), "[1] Claude Code")
-			require.Contains(t, out.String(), "[2] Codex (app/CLI/IDE)")
-			require.Contains(t, out.String(), "[3] Claude app (chat)")
+			require.Contains(t, out.String(), "[2] Claude app (chat)")
+			require.Contains(t, out.String(), "[3] Codex (app/CLI/IDE)")
 			require.Contains(t, out.String(), "[4] All")
 		})
 	}
@@ -361,7 +362,7 @@ func TestPromptInstallTargets(t *testing.T) {
 	var out strings.Builder
 	_, err := promptInstallTargets(strings.NewReader("1\n"), &out, detTargetsNoDesktop(true, true))
 	require.NoError(t, err)
-	require.Contains(t, out.String(), "[3] Claude app (chat) (not supported on this OS)")
+	require.Contains(t, out.String(), "[2] Claude app (chat) (not supported on this OS)")
 }
 
 func TestInstallerMenuLabelsStayInSync(t *testing.T) {
@@ -371,8 +372,8 @@ func TestInstallerMenuLabelsStayInSync(t *testing.T) {
 	} {
 		raw, err := os.ReadFile(path)
 		require.NoError(t, err)
-		require.Contains(t, string(raw), "[2] Codex (app/CLI/IDE)", path)
-		require.Contains(t, string(raw), "[3] Claude app (chat)", path)
+		require.Contains(t, string(raw), "[2] Claude app (chat)", path)
+		require.Contains(t, string(raw), "[3] Codex (app/CLI/IDE)", path)
 		require.Contains(t, string(raw), "[4] All", path)
 	}
 }
@@ -388,8 +389,8 @@ func TestPromptInstallTargets_NothingDetected(t *testing.T) {
 		input string
 		want  []installTarget
 	}{
-		{"yes then codex", "y\n2\n", cx},
-		{"yes then desktop", "yes\n3\n", []installTarget{targetClaudeDesktop}},
+		{"yes then codex", "y\n3\n", cx},
+		{"yes then desktop", "yes\n2\n", []installTarget{targetClaudeDesktop}},
 		{"yes reprompt then valid", "y\n\nboth\n", hookPair},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
