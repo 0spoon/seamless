@@ -32,6 +32,65 @@ var brTagRE = regexp.MustCompile(`<br\s*/?>`)
 
 var anyTagRE = regexp.MustCompile(`<[^>]+>`)
 
+// cardGridRE matches one authored router card grid (the docs home's "which
+// agent do you run?" cards). Authored grids contain only anchor cards -- no
+// nested divs -- so the non-greedy span ends at the grid's own closer.
+var cardGridRE = regexp.MustCompile(`(?s)<div class="card-grid">.*?</div>`)
+
+// docCardRE matches one card inside a grid: href, title, optional description.
+var docCardRE = regexp.MustCompile(`(?s)<a class="doc-card" href="([^"]+)">\s*<h2>(.*?)</h2>\s*(?:<p>(.*?)</p>\s*)?</a>`)
+
+// htmlCommentRE matches an authoring note; text consumers never need those.
+var htmlCommentRE = regexp.MustCompile(`(?s)<!--.*?-->\n?`)
+
+// cfgRE matches the setup configurator widget. Its content is composed by JS
+// from the picker state, so there is no reader text worth mirroring; the
+// static labeled install blocks around it carry the commands.
+var cfgRE = regexp.MustCompile(`(?s)<div class="cfg".*?</div>\n?`)
+
+// detailsTagRE / summaryRE flatten native disclosures: the summary becomes a
+// bold lead line and the content stays inline -- a text consumer must never
+// receive less than the page shows expanded.
+var (
+	detailsTagRE = regexp.MustCompile(`</?details[^>]*>\n?`)
+	summaryRE    = regexp.MustCompile(`(?s)<summary>(.*?)</summary>`)
+)
+
+// textifyEmbeddedHTML flattens every authored affordance for the markdown
+// representations (the per-page twins and llms-full.txt): figures become
+// fenced text, card grids become link lists, variant containers become bold
+// label lines over their still-present content, disclosures open into bold
+// lead lines, the configurator widget and HTML comments drop.
+func textifyEmbeddedHTML(md string) string {
+	out := textifyCards(textifyFigures(textifyVariants(md)))
+	out = cfgRE.ReplaceAllString(out, "")
+	out = detailsTagRE.ReplaceAllString(out, "")
+	out = summaryRE.ReplaceAllString(out, "**$1**")
+	return htmlCommentRE.ReplaceAllString(out, "")
+}
+
+// textifyCards rewrites an authored card grid as the markdown link list its
+// HTML shows. Card hrefs are authored docs-root-relative because raw HTML is
+// invisible to rewriteDocLinks; they re-root here as root-absolute markdown
+// links so absolutizeRootLinks treats them like every authored link.
+func textifyCards(md string) string {
+	return cardGridRE.ReplaceAllStringFunc(md, func(block string) string {
+		var lines []string
+		for _, m := range docCardRE.FindAllStringSubmatch(block, -1) {
+			href, title, desc := m[1], strings.TrimSpace(m[2]), strings.TrimSpace(m[3])
+			if !strings.HasPrefix(href, "/") && !strings.Contains(href, "://") {
+				href = "/" + href
+			}
+			line := "- [" + title + "](" + href + ")"
+			if desc != "" {
+				line += ": " + desc
+			}
+			lines = append(lines, line)
+		}
+		return strings.Join(lines, "\n")
+	})
+}
+
 // textifyFigures rewrites each explanatory figure as a fenced text block for
 // the markdown representations (the per-page twins and llms-full.txt): <br>
 // becomes a line break, every other tag a space, entities unescape, and blank
@@ -63,7 +122,7 @@ func markdownTwin(p *Page) []byte {
 	if p.Description != "" {
 		b.WriteString("\n> " + p.Description + "\n")
 	}
-	if body := strings.TrimSpace(textifyFigures(p.FullMarkdown)); body != "" {
+	if body := strings.TrimSpace(textifyEmbeddedHTML(p.FullMarkdown)); body != "" {
 		b.WriteString("\n" + absolutizeRootLinks(body) + "\n")
 	}
 	if p.IsSectionIndex() {

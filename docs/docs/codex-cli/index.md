@@ -70,6 +70,32 @@ all` to install both in one pass, or `--client detect` (the default) to let the
 machine decide. `make install` uses the same default, so a Codex-only machine
 gets the Codex profile without naming it.
 
+## Trust the hooks once
+
+Hooks installed, one gate remains before anything fires - and it is the
+Codex-specific version of "silence is the failure mode". Codex will not run a
+non-managed command hook until its **current definition** is trusted. New or
+changed definitions are skipped until reviewed, so a fresh install - or a
+reinstall that repairs a path or command - can show no briefing until you
+approve. Two supported paths:
+
+- **CLI** (the currently verified path): start `codex`, open `/hooks`, inspect the
+  current Seamless commands, and approve them. Codex also warns at startup when
+  configured hooks need review.
+- **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
+  name says, it is for automation that already vets its hook sources.
+
+The public hook documentation names `/hooks` in the CLI, and Codex.app
+26.715.52143 confirmed the boundary: `/hooks` is not intercepted in a desktop
+chat and directs the user back to the CLI. A real repo-local app chat did receive
+`<seam-briefing>`, prompt recall, and Stop harvest, so Local app hook execution is
+live-verified for that build. Trust state is still not inspectable in the app,
+and the presence of `hooks.json` alone remains insufficient evidence.
+
+If a Codex session opens with no briefing, an untrusted hook is the first thing
+to check. Seamless does not read or write Codex's private trust hashes, and
+`doctor` never claims trust is healthy from a recent observation alone.
+
 ## Teach Codex when to use Seamless
 
 Every MCP initialize response carries concise server instructions. The first
@@ -94,20 +120,18 @@ refreshed on upgrades.
 
 ## The five hooks, and what they inject
 
-Codex installs five hooks against seven for Claude Code. Seamless has no verified
-Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
-0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
-[below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide
-constraints, spawn-prompt-matched memories, and lifecycle safety without
-creating Codex plan notes.
-
-| Event | Injects | Effect |
-|---|---|---|
-| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes an opaque `cx/...` ambient session keyed by the full external ID. |
-| `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
-| `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
-| `SubagentStart` | child `<seam-briefing>` | Gives the child the project's active constraints, up to three `RELEVANT:` memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
-| `SubagentStop` | nothing | Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes. |
+Codex installs five hooks against seven for Claude Code: `SessionStart`
+injects the `<seam-briefing>` and creates or resumes the opaque `cx/...`
+ambient session, `UserPromptSubmit` injects `<seam-recall>` on a match,
+`Stop` heartbeats and harvests findings at every turn end, and
+`SubagentStart`/`SubagentStop` brief Task children with constraints and
+spawn-prompt-matched memories while only ever heartbeating the parent session.
+Seamless has no verified Claude-style plan-file/`ExitPlanMode` surface to
+capture from Codex, and Codex 0.144.6 emits **no SessionEnd**, so the parent
+lifecycle closes differently (see
+[below](#no-sessionend-the-reaper-closes-sessions)). The exact per-event
+table - transports, endpoints, effects, and the 2,400-token output cap - is in
+[the hooks reference](https://thereisnospoon.org/docs/reference/hooks/#codex-local-host-five-hooks).
 
 Codex delivers a hook's `additionalContext` to the model on both SessionStart and
 UserPromptSubmit, and on SubagentStart, in **both** the interactive TUI and
@@ -115,45 +139,18 @@ headless `codex exec` - there is no headless recall-injection gap of the kind
 `claude -p` has. The briefing and recall blocks reach the model either way.
 
 All five are **command** hooks - `seam hook <event> --config <yaml> --client
-codex`. Codex's hook schema currently executes command handlers; this is
-independent of MCP transport, where both stdio and Streamable HTTP are supported.
-Every command hook is subject to Codex's trust gate, covered next. See [the hooks
-reference](https://thereisnospoon.org/docs/reference/hooks/) for the full per-client table and transports.
+codex` - and every one passes through [the trust gate above](#trust-the-hooks-once).
+Codex's hook schema currently executes command handlers; this is independent of
+MCP transport, where both stdio and Streamable HTTP are supported.
 
 ### The model-visible output ceiling
 
 Codex spills a model-visible hook-output entry above roughly 2,500 estimated
-tokens to a temporary file and gives the model a head-and-tail preview. That
-would make Seamless's injection telemetry describe more text than the model saw.
-Seamless therefore caps every Codex `additionalContext` response at **2,400
-estimated tokens** before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
-briefings; generated closing tags and the ambient-session line are preserved.
-Claude Code output is not given this Codex-specific cap.
-
-### Trust the hooks once
-
-Codex will not run a non-managed command hook until its **current definition** is
-trusted. New or changed definitions are skipped until reviewed, so a reinstall
-that repairs a path or command can require approval again. Two supported paths:
-
-- **CLI** (the currently verified path): start `codex`, open `/hooks`, inspect the
-  current Seamless commands, and approve them. Codex also warns at startup when
-  configured hooks need review.
-- **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
-  name says, it is for automation that already vets its hook sources.
-
-The public hook documentation names `/hooks` in the CLI, and Codex.app
-26.715.52143 confirmed the boundary: `/hooks` is not intercepted in a desktop
-chat and directs the user back to the CLI. A real repo-local app chat did receive
-`<seam-briefing>`, prompt recall, and Stop harvest, so Local app hook execution is
-live-verified for that build. Trust state is still not inspectable in the app,
-and the presence of `hooks.json` alone remains insufficient evidence.
-
-If a Codex session opens with no briefing, an untrusted hook is the first thing
-to check - it is the Codex-specific version of "silence is the failure mode".
-Seamless does not read or write Codex's private trust hashes, and `doctor` never
-claims trust is healthy from a recent observation alone.
+tokens to a temporary file, so Seamless caps every Codex `additionalContext`
+response at **2,400 estimated tokens** - briefings, recall, and child
+briefings alike - keeping the injected bytes equal to what the model actually
+saw. The mechanics live in
+[the hooks reference](https://thereisnospoon.org/docs/reference/hooks/#codex-local-host-five-hooks).
 
 ## Why MCP goes through a bridge
 
@@ -180,6 +177,8 @@ safe path. Fully headless automation of the Seamless loop needs **both**
 
 ### Registering MCP by hand
 
+**Direct Streamable HTTP instead of the bridge**
+
 If you prefer direct Streamable HTTP over the stdio bridge, add it to
 `~/.codex/config.toml` yourself:
 
@@ -197,6 +196,7 @@ bridge exists to avoid. `codex mcp add seamless --url http://127.0.0.1:8081/api/
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
 the default.
+
 
 The name `seamless` is the installer's desired-state boundary. If you keep a
 manual direct-HTTP entry under that name, run `seamlessd install-hooks --client

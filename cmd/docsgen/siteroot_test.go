@@ -161,14 +161,16 @@ func TestLlmsFullTxtIsUntruncated(t *testing.T) {
 		if p.Src != "" {
 			require.NotEmpty(t, p.FullMarkdown, "%s carries its composed markdown", p.URL)
 		}
-		require.Contains(t, full, strings.TrimRight(textifyFigures(p.FullMarkdown), "\n"),
+		require.Contains(t, full, strings.TrimRight(textifyEmbeddedHTML(p.FullMarkdown), "\n"),
 			"%s content is present whole", p.URL)
 	}
 
-	// This file exists for text consumers: authored figures must arrive as
-	// their flattened text form, never as markup.
+	// This file exists for text consumers: authored figures and card grids
+	// must arrive as their flattened text form, never as markup.
 	require.NotContains(t, full, `<figure class="doc-figure"`)
 	require.NotContains(t, full, `class="flow-node"`)
+	require.NotContains(t, full, `class="card-grid"`)
+	require.NotContains(t, full, `class="doc-card"`)
 
 	// The generated references are the longest pages; if the untruncated
 	// composed markdown ever regresses to the 2000-rune plainText, this fails.

@@ -5,26 +5,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Install &amp; deploy - Seamless docs</title>
-<meta name="description" content="The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.">
+<meta name="description" content="The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/install/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/install/">
 <meta property="og:title" content="Install &amp; deploy - Seamless docs">
-<meta property="og:description" content="The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.">
+<meta property="og:description" content="The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Install \u0026 deploy","item":"https://thereisnospoon.org/docs/install/"}]},{"@type":"TechArticle","headline":"Install \u0026 deploy - Seamless docs","description":"The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.","url":"https://thereisnospoon.org/docs/install/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Install \u0026 deploy","item":"https://thereisnospoon.org/docs/install/"}]},{"@type":"TechArticle","headline":"Install \u0026 deploy - Seamless docs","description":"The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.","url":"https://thereisnospoon.org/docs/install/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../quickstart/">Quickstart</a></li>
         
-        <li><a href="../install/" class="current" aria-current="page">Install &amp; deploy</a></li>
-        
         <li><a href="../claude-code/">Claude Code setup</a></li>
         
         <li><a href="../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../install/" class="current" aria-current="page">Install &amp; deploy</a></li>
+        
+        <li><a href="../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,24 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
+    <div class="ctx-bar">
+      <span class="ctx-bar-label">Steps for</span>
+      <div class="ctx-seg" role="group" aria-label="Operating system">
+        <button type="button" data-ctx-os-pick="macos" aria-pressed="false">macOS</button>
+        <button type="button" data-ctx-os-pick="linux" aria-pressed="false">Linux</button>
+        <button type="button" data-ctx-os-pick="windows" aria-pressed="false">Windows</button>
+        <button type="button" data-ctx-os-pick="all" aria-pressed="false">All</button>
+      </div>
+      <div class="ctx-seg" role="group" aria-label="Client">
+        <button type="button" data-ctx-client-pick="claude" aria-pressed="false">Claude Code</button>
+        <button type="button" data-ctx-client-pick="claude-desktop" aria-pressed="false">Claude app chat</button>
+        <button type="button" data-ctx-client-pick="codex" aria-pressed="false">Codex</button>
+        <button type="button" data-ctx-client-pick="all" aria-pressed="false">All</button>
+      </div>
+      <p class="ctx-status" aria-live="polite"></p>
+    </div>
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -195,29 +219,27 @@
 </nav>
 
   <h1>Install &amp; deploy</h1>
-  <p class="lede">The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.</p>
+  <p class="lede">The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.</p>
   <p>Installing Seamless is one command: a script downloads a release archive
 containing the <code>seamlessd</code> daemon and <code>seam</code> CLI for macOS, Linux, or Windows,
 verifies its SHA-256, and registers the daemon as a per-user service - launchd,
 systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
 or Go toolchain. The <a href="../quickstart/">Quickstart</a> runs that command and moves on;
-this page is what it did, and what to do when you want to steer it yourself.</p>
-<h2 id="one-instance-per-machine">One instance per machine</h2>
-<p>There is <strong>one instance</strong>: port <code>8081</code>, data dir <code>~/.seamless</code>. One daemon, one
-database, one set of files.</p>
-<p>Both are config keys, not fixed facts - set <code>addr:</code> and <code>data_dir:</code> in
-<code>~/.config/seamless/seamless.yaml</code> (or the <code>SEAMLESS_ADDR</code> / <code>SEAMLESS_DATA_DIR</code>
-env overrides) and restart the service. The config is the single source of truth
-for the bind address: the installer and the Makefile both read the port back out
-of it, so the health check follows your change rather than assuming <code>8081</code>.
-Nothing bakes the address into the service - which is why editing <code>addr:</code> works
-instead of being silently overridden.</p>
+this page is what it did, and what to do when you want to steer it yourself.
+Where everything lands - the service, logs, ports, and every path - is on
+<a href="../reference/service/">The service &amp; where things live</a>.</p>
 <h2 id="install-in-one-command">Install in one command</h2>
+<div class="ctx-variant" data-ctx-os="macos linux">
+<p class="ctx-label"><span class="ctx-chip">macOS</span><span class="ctx-chip">Linux</span></p>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>On Windows, run the <a href="https://thereisnospoon.org/install.ps1">PowerShell installer</a>
-instead - it does the same steps with a Scheduled Task in place of launchd/systemd:</p>
+</span></span></code></pre></div>
+<div class="ctx-variant" data-ctx-os="windows">
+<p class="ctx-label"><span class="ctx-chip">Windows</span></p>
+<p>The <a href="https://thereisnospoon.org/install.ps1">PowerShell installer</a> does the
+same steps with a Scheduled Task in place of launchd/systemd:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
-</span></span></span></code></pre><p>This is the path for using Seamless (as opposed to working on it). The POSIX
+</span></span></span></code></pre></div>
+<p>This is the path for using Seamless (as opposed to working on it). The POSIX
 script needs <code>curl</code> and <code>tar</code>; the PowerShell one needs nothing beyond Windows
 itself. No Go toolchain is involved. In order, it:</p>
 <ol>
@@ -231,9 +253,9 @@ against this repository's release workflow identity;</li>
 <code>~/.config/seamless/seamless.yaml</code> on first run, detects Claude Code, the
 Claude app chat surface, and Codex, and installs that set's hooks, MCP
 registrations, and skills;</li>
-<li>installs and starts the per-user service - launchd on macOS, systemd
-<code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and polls
-<code>/healthz</code> until the daemon actually answers.</li>
+<li>installs and starts the <a href="../reference/service/">per-user service</a> - launchd
+on macOS, systemd <code>--user</code> on Linux, an at-logon Scheduled Task on
+Windows - and polls <code>/healthz</code> until the daemon actually answers.</li>
 </ol>
 <p>Step 3 detects three install targets - <strong>Claude Code</strong>, the <strong>Claude app chat
 surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge; it has no hooks or
@@ -256,11 +278,14 @@ under <code>$CODEX_HOME/skills</code> when set, otherwise <code>$HOME/.codex/ski
 paths are <code>%USERPROFILE%</code>-relative on Windows). Invoke <code>/seam-onboard</code> in Claude
 Code or <code>$seam-onboard</code> in Codex. The skill asks before adding its marked block
 to global/project <code>CLAUDE.md</code> or <code>AGENTS.md</code>; it never silently edits either.</p>
+<div class="ctx-variant" data-ctx-os="windows">
+<p class="ctx-label"><span class="ctx-chip">Windows</span></p>
 <p>The Windows installer is per-user by the same principle as the others: it runs
 as <strong>you</strong>, never elevates, and registers the Scheduled Task under your own
 account (<code>LogonType Interactive</code>), so a single signed-in user is all it needs and
 no administrator prompt ever appears. <code>~/.config/seamless</code> and <code>~/.seamless</code>
 resolve under <code>%USERPROFILE%</code>, exactly the paths the daemon already searches.</p>
+</div>
 <p>Re-running it upgrades in place: binaries are swapped by rename (safe while the
 daemon holds them open), the service restarts on the new build, and your config
 and <code>~/.seamless</code> are preserved. The selected clients are reconciled to those
@@ -312,19 +337,27 @@ script</a> with no dependencies to audit.</p>
 </tbody>
 </table>
 </div>
+<div class="ctx-variant" data-ctx-os="macos linux">
+<p class="ctx-label"><span class="ctx-chip">macOS</span><span class="ctx-chip">Linux</span></p>
 <p>Set them ahead of the shell, not the curl:
-<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh</code>. On
-Windows the same knobs are environment variables you set before the pipe -
+<code>curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh</code>.</p>
+</div>
+<div class="ctx-variant" data-ctx-os="windows">
+<p class="ctx-label"><span class="ctx-chip">Windows</span></p>
+<p>The same knobs are environment variables you set before the pipe -
 <code>$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex</code></p>
 <ul>
 <li>with the one exception of <code>SEAMLESS_ALLOW_ROOT</code>, which is POSIX-only (the
 Windows task is per-user by construction, so there is no root case to allow).</li>
 </ul>
+</div>
 <p>Everything here is per-user by construction - <code>~/.local/bin</code>, <code>~/.config</code>,
 <code>~/.seamless</code>, a user service - so run it as yourself. Under <code>curl | sudo sh</code> it
 would all land in root's home where your agents will never look, which is why
 the script refuses root unless you insist.</p>
-<h2 id="homebrew">Homebrew</h2>
+<h2 id="installing-without-the-one-liner">Installing without the one-liner</h2>
+<p>The other routes end up in the same place with more of the steps left to you.</p>
+<h3 id="homebrew">Homebrew</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">brew install 0spoon/tap/seamless
 </span></span></code></pre><p>Every release publishes a cask to the <code>0spoon/homebrew-tap</code> tap, on macOS and
 Linux alike. It delivers the <strong>binaries only</strong> - <code>seamlessd</code> and <code>seam</code> on your
@@ -336,7 +369,7 @@ finish with the two commands the cask's caveats print:</p>
 </span></span></code></pre><p><code>brew upgrade</code> moves you to the latest release. The hooks keep working - they
 resolve <code>seam</code> through brew's stable bin path - but restart the daemon
 yourself so it runs the new build.</p>
-<h2 id="install-from-a-clone">Install from a clone</h2>
+<h3 id="from-a-clone">From a clone</h3>
 <pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
 </span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
 </span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service, hooks, MCP, skills + binaries (data kept)</span>
@@ -345,11 +378,13 @@ yourself so it runs the new build.</p>
 and config to stable locations, then points launchd <strong>and</strong> the selected clients'
 hooks/MCP definitions at the copies. Nothing live resolves through your working
 tree, so <code>make build</code>, a branch switch, and a moved or cleaned repo cannot change
-what the running daemon and every agent's hooks execute. Swapping them is <code>make install</code>, deliberately.</p>
+what the running daemon and every agent's hooks execute. Swapping them is <code>make install</code>, deliberately - <a href="../internals/contributing/">Contributing</a> covers using
+it as the edit-test loop.</p>
 <p>The config lands in <code>~/.config/seamless/</code>, one of the paths Seamless already
 searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
 It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.</p>
+<h3 id="go-install-and-release-archives">Go install and release archives</h3>
 <p>The remaining routes end up in the same place with less done for you:
 <code>go install github.com/0spoon/seamless/cmd/...@latest</code> needs Go 1.25+, and the
 <a href="https://github.com/0spoon/seamless/releases">GitHub releases</a> carry the same
@@ -357,113 +392,19 @@ prebuilt archives the installer fetches. From a bare binary, <code>seamlessd ser
 covers the essentials - first run seeds the config - and <code>seamlessd install-hooks</code>
 wires the detected Claude Code/Codex clients; what you take on yourself is the
 service.</p>
-<h2 id="iterating-on-seamless-itself">Iterating on Seamless itself</h2>
-<p><code>make install</code> is also the edit-test loop. When the rendered plist is unchanged -
-the common case - it skips the launchd bootout/bootstrap and kickstarts the
-service in place, so its marginal cost over <code>make build</code> is two file copies.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
-</span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
-</span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>
-</span></span></code></pre><p>That split is the point. <code>make build</code> on a half-finished edit is free, because
-the daemon and hooks keep running the last thing you installed. Rebuilding is not
-deploying.</p>
 <h2 id="the-service">The service</h2>
-<p>It runs as <strong>your</strong> user, not root: it reads your config, writes your files, and
-should die with your login session, not the machine.</p>
-<p>Whatever the platform, one set of verbs controls it - they resolve your OS's
-service manager for you:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd start       <span class="c1"># start | stop | restart | status</span>
-</span></span><span class="line"><span class="cl">make start            <span class="c1"># the same, from a clone (start | stop | restart | status)</span>
-</span></span></code></pre><p>These act on the already-installed service and print a hint if it was never
-installed. The platform-native commands below are what they wrap.</p>
-<p>On <strong>macOS</strong> it is a user LaunchAgent labelled <code>org.thereisnospoon.seamless</code> in
-<code>~/Library/LaunchAgents/</code>, logging to <code>~/.seamless/seamlessd.log</code>; <code>make logs</code>
-follows that log. Underneath, the verbs above wrap
-<code>launchctl print gui/$(id -u)/org.thereisnospoon.seamless</code>,
-<code>launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless</code>, and
-<code>launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless</code>.</p>
-<p>On <strong>Linux</strong> the installer writes a systemd user unit to
-<code>~/.config/systemd/user/seamless.service</code> and enables lingering, so the daemon
-starts at boot rather than at your next login:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">systemctl --user status seamless      <span class="c1"># state, pid, last exit</span>
-</span></span><span class="line"><span class="cl">journalctl --user -u seamless -f      <span class="c1"># follow the log</span>
-</span></span><span class="line"><span class="cl">systemctl --user restart seamless
-</span></span><span class="line"><span class="cl">systemctl --user stop seamless
-</span></span></code></pre><p>No systemd user session (some containers, WSL1)? The installer says so and skips
-the step; run <code>seamlessd serve</code> under whatever supervises processes there.</p>
-<p>On <strong>Windows</strong> it is an at-logon Scheduled Task named <code>Seamless</code>, running as you
-(<code>LogonType Interactive</code>, no admin), logging to <code>~/.seamless/seamlessd.log</code>. The
-task action is a bare exec - <code>seamlessd.exe serve --config &lt;path&gt; --log-file &lt;path&gt;</code> - because a task cannot carry the <code>SEAMLESS_CONFIG</code> env prefix a plist or
-systemd unit does; the two flags pass exactly what that prefix would have:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Get-ScheduledTask</span> <span class="n">Seamless</span> <span class="p">|</span> <span class="nb">Get-ScheduledTaskInfo</span>   <span class="c"># state, last run, last result</span>
-</span></span><span class="line"><span class="cl"><span class="nb">Get-Content</span> <span class="p">~/.</span><span class="n">seamless</span><span class="p">/</span><span class="n">seamlessd</span><span class="p">.</span><span class="py">log</span> <span class="n">-Wait</span>          <span class="c"># follow the log</span>
-</span></span><span class="line"><span class="cl"><span class="nb">Restart-ScheduledTask</span> <span class="n">Seamless</span>                        <span class="c"># stop + start</span>
-</span></span><span class="line"><span class="cl"><span class="nb">Stop-ScheduledTask</span> <span class="n">Seamless</span>                           <span class="c"># stop (it restarts at next logon)</span>
-</span></span></code></pre><p>It restarts on failure and never hits the default execution time limit, so it
-behaves like launchd's <code>KeepAlive</code>. Because it triggers at logon, it runs while
-you are signed in and stops when you sign out - a single-user desktop, which is
-the shape Seamless is built for.</p>
+<p>The installer registered <code>seamlessd</code> as a per-user service - launchd on macOS,
+systemd <code>--user</code> on Linux, an at-logon Scheduled Task on Windows - and
+<code>seamlessd start|stop|restart|status</code> controls it the same way everywhere. The
+native commands, log locations, and every path Seamless touches are on
+<a href="../reference/service/">The service &amp; where things live</a>.</p>
 <h2 id="upgrading">Upgrading</h2>
-<p>Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.</p>
-<p><code>seamlessd update</code> is the one command, on every OS. It upgrades in place to the
-latest release by re-running the canonical installer for you - so there is a
-single upgrade path to trust, not a second copy of the download-and-swap logic
-that could drift from the installer:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs latest, change nothing</span>
-</span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
-</span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
-</span></span></code></pre><p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
-Under the hood it fetches the installer script (the PowerShell one on Windows)
-from the latest release's assets together with the Sigstore bundle the release
-workflow signed it with, verifies the signature in-process - the script must
-have been produced by this repository's release workflow on a version tag, or
-update refuses to run it - and then runs it. That is the same script as doing
-it by hand, minus the signature check:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>From a clone, <code>make update</code> builds first and then runs that same command against
-your installed copy (<code>make update CHECK=1</code> only reports). Note that both
-<code>seamlessd update</code> and <code>make update</code> install the latest <em>release</em>, which may be
-older than your clone's HEAD - to deploy the build from your working tree instead:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">git pull
-</span></span><span class="line"><span class="cl">make check             <span class="c1"># everything green before you swap the running daemon</span>
-</span></span><span class="line"><span class="cl">make install           <span class="c1"># swap it</span>
-</span></span><span class="line"><span class="cl">make doctor            <span class="c1"># confirm config + DB after the swap</span>
-</span></span></code></pre><p>Migrations apply automatically at startup - there is no separate migrate step.
-Run <code>make doctor</code> afterwards anyway: it is the cheapest way to learn that the new
-build disagrees with your config before an agent does.</p>
-<p><code>/healthz</code> reports the running build. If a change seems not to have taken effect,
-check it before you debug anything else - a stale daemon still serving the old
-binary looks exactly like a bug in the new one.</p>
+<p><code>seamlessd update</code> upgrades in place to the latest release, on every OS.
+<a href="../updating/">Update &amp; uninstall</a> has the full procedure, the pinning knobs,
+and how the fetched installer is signature-verified before it runs.</p>
 <h2 id="uninstalling">Uninstalling</h2>
-<p><code>seamlessd uninstall</code> is the one command, on every OS. It reverses the whole
-install - stops and removes the per-user service, strips the Claude Code and
-Codex hooks, deregisters the MCP server from both client CLIs and from the
-Claude app's <code>claude_desktop_config.json</code>, removes both hook clients' installed
-<code>seam-onboard</code> and <code>seam-research</code> packages/one-shot markers, and deletes the
-binaries - and it is idempotent, so a second run is a clean no-op. Preview it
-first with <code>--dry-run</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall --dry-run   <span class="c1"># print exactly what would be removed</span>
-</span></span><span class="line"><span class="cl">seamlessd uninstall             <span class="c1"># do it (asks to confirm on a terminal)</span>
-</span></span></code></pre><p>From a clone it is <code>make uninstall</code>, which builds first and then runs that same
-command against your installed copy.</p>
-<p><strong>Your knowledge is kept by default.</strong> <code>~/.config/seamless</code> (your bearer key) and
-<code>~/.seamless</code> (the database, and your memories and notes as markdown) are left in
-place - the uninstall of a program should not delete your knowledge. Add
-<code>--purge</code> (or <code>make uninstall PURGE=1</code>) only when you actually mean to delete
-them; a guard refuses to purge a path that resolves to your home directory or the
-filesystem root. See <a href="../reference/storage/">Storage</a> for what is in there.</p>
-<p>The hooks come out of <code>~/.claude/settings.json</code> and Codex's <code>hooks.json</code> through
-the same exact classifier the installer and doctor use. Current, marked-stale,
-and unmistakable legacy Seamless entries are removed; foreign entries survive,
-even when their arguments happen to contain <code>hook &lt;event&gt;</code>. The install's
-original backup sits next to each file. If you would rather do it by hand - a
-bare binary you never installed a service for, say - the service teardown is
-<code>launchctl bootout</code> / <code>systemctl --user disable --now</code> /
-<code>Unregister-ScheduledTask -TaskName Seamless</code>, and <code>claude mcp remove seamless</code>
-or <code>codex mcp remove seamless</code> drops that client's MCP registration. The chat
-surface has no CLI: delete the <code>seamless</code> entry under <code>mcpServers</code> in the
-Claude app (Settings &gt; Developer &gt; Edit Config) and restart it.</p>
+<p><code>seamlessd uninstall</code> reverses the whole install and keeps your knowledge by
+default. See <a href="../updating/#uninstall">Update &amp; uninstall</a>.</p>
 <h2 id="security-posture">Security posture</h2>
 <p>What you are accepting when you run this:</p>
 <ul>
@@ -509,8 +450,8 @@ on loopback.</p>
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../quickstart/"><span class="dir">Previous</span><span class="t">Quickstart</span></a>
-      <a class="next" href="../claude-code/"><span class="dir">Next</span><span class="t">Claude Code setup</span></a>
+      <a class="prev" href="../codex-cli/"><span class="dir">Previous</span><span class="t">Codex local setup (app, CLI, and IDE)</span></a>
+      <a class="next" href="../updating/"><span class="dir">Next</span><span class="t">Update &amp; uninstall</span></a>
     </nav>
     
   </main>
@@ -519,7 +460,7 @@ on loopback.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#one-instance-per-machine">One instance per machine</a></li><li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#homebrew">Homebrew</a></li><li class="lvl-2"><a href="#install-from-a-clone">Install from a clone</a></li><li class="lvl-2"><a href="#iterating-on-seamless-itself">Iterating on Seamless itself</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#installing-without-the-one-liner">Installing without the one-liner</a></li><li class="lvl-3"><a href="#homebrew">Homebrew</a></li><li class="lvl-3"><a href="#from-a-clone">From a clone</a></li><li class="lvl-3"><a href="#go-install-and-release-archives">Go install and release archives</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
     </ul>
   </aside>
   
@@ -530,7 +471,7 @@ on loopback.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=e5dfd08c"></script>
+<script src="../static/docs.js?v=46efc7ae"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

@@ -38,19 +38,11 @@ exact table.
 
 ### Why some hooks are commands and others are http
 
-This looks inconsistent and is not:
-
-- **SessionStart** must be a command hook. Claude Code only runs `command` and
-  `mcp_tool` hooks for SessionStart - an `http` one is *silently skipped*, and
-  the briefing and ambient session simply never fire.
-- **SessionEnd** does support http, but at process exit a fire-and-forget request
-  races the teardown, so the harvest often never lands and sessions pile up as
-  active. As a command hook, Claude Code waits for it.
-- **UserPromptSubmit** fires mid-turn where http is reliable, so it stays http
-  (and carries the bearer key in `settings.json`).
-- **The plan-capture hooks** are commands because `seam` pre-filters locally: the
-  machine-wide `Write`/`Edit` hot path should never touch the network for files
-  that have nothing to do with plans.
+This looks inconsistent and is not: SessionStart only fires as a command hook,
+SessionEnd as http races Claude Code's teardown, and the plan-capture hooks
+pre-filter locally so the machine-wide `Write`/`Edit` hot path never touches
+the network. The full rationale, hook by hook, is in
+[the hooks reference](https://thereisnospoon.org/docs/reference/hooks/#why-claude-code-uses-two-transports).
 
 ## Registering the MCP endpoint by hand
 

@@ -22,9 +22,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../quickstart/">Quickstart</a></li>
         
-        <li><a href="../install/">Install &amp; deploy</a></li>
-        
         <li><a href="../claude-code/">Claude Code setup</a></li>
         
         <li><a href="../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../codex-cli/" class="current" aria-current="page">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,7 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -254,6 +261,29 @@ hardening step.</p>
 nothing about your Claude Code setup changes when you add Codex. Use <code>--client all</code> to install both in one pass, or <code>--client detect</code> (the default) to let the
 machine decide. <code>make install</code> uses the same default, so a Codex-only machine
 gets the Codex profile without naming it.</p>
+<h2 id="trust-the-hooks-once">Trust the hooks once</h2>
+<p>Hooks installed, one gate remains before anything fires - and it is the
+Codex-specific version of &quot;silence is the failure mode&quot;. Codex will not run a
+non-managed command hook until its <strong>current definition</strong> is trusted. New or
+changed definitions are skipped until reviewed, so a fresh install - or a
+reinstall that repairs a path or command - can show no briefing until you
+approve. Two supported paths:</p>
+<ul>
+<li><strong>CLI</strong> (the currently verified path): start <code>codex</code>, open <code>/hooks</code>, inspect the
+current Seamless commands, and approve them. Codex also warns at startup when
+configured hooks need review.</li>
+<li><strong>Headless automation</strong>: pass <code>--dangerously-bypass-hook-trust</code>. As the flag
+name says, it is for automation that already vets its hook sources.</li>
+</ul>
+<p>The public hook documentation names <code>/hooks</code> in the CLI, and Codex.app
+26.715.52143 confirmed the boundary: <code>/hooks</code> is not intercepted in a desktop
+chat and directs the user back to the CLI. A real repo-local app chat did receive
+<code>&lt;seam-briefing&gt;</code>, prompt recall, and Stop harvest, so Local app hook execution is
+live-verified for that build. Trust state is still not inspectable in the app,
+and the presence of <code>hooks.json</code> alone remains insufficient evidence.</p>
+<p>If a Codex session opens with no briefing, an untrusted hook is the first thing
+to check. Seamless does not read or write Codex's private trust hashes, and
+<code>doctor</code> never claims trust is healthy from a recent observation alone.</p>
 <h2 id="teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</h2>
 <p>Every MCP initialize response carries concise server instructions. The first
 512 characters cover the baseline even before onboarding: recall before
@@ -270,88 +300,32 @@ only its own skill directory after success. Reinstall it from a clone with:</p>
 multi-agent research-lab workflow as Claude Code. It remains installed and is
 refreshed on upgrades.</p>
 <h2 id="the-five-hooks-and-what-they-inject">The five hooks, and what they inject</h2>
-<p>Codex installs five hooks against seven for Claude Code. Seamless has no verified
-Claude-style plan-file/<code>ExitPlanMode</code> surface to capture from Codex, and Codex
-0.144.6 emits <strong>no SessionEnd</strong>, so the parent lifecycle closes differently (see
-<a href="#no-sessionend-the-reaper-closes-sessions">below</a>). Subagent hooks provide
-constraints, spawn-prompt-matched memories, and lifecycle safety without
-creating Codex plan notes.</p>
-<div class="table-wrap">
-<table>
-<thead>
-<tr>
-<th>Event</th>
-<th>Injects</th>
-<th>Effect</th>
-</tr>
-</thead>
-<tbody>
-<tr>
-<td><code>SessionStart</code></td>
-<td><code>&lt;seam-briefing&gt;</code></td>
-<td>Resolves the agent's cwd to its project and creates or resumes an opaque <code>cx/...</code> ambient session keyed by the full external ID.</td>
-</tr>
-<tr>
-<td><code>UserPromptSubmit</code></td>
-<td><code>&lt;seam-recall&gt;</code> on a match</td>
-<td>Heartbeats the session and matches the prompt against your memories.</td>
-</tr>
-<tr>
-<td><code>Stop</code></td>
-<td>nothing</td>
-<td>Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end.</td>
-</tr>
-<tr>
-<td><code>SubagentStart</code></td>
-<td>child <code>&lt;seam-briefing&gt;</code></td>
-<td>Gives the child the project's active constraints, up to three <code>RELEVANT:</code> memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one.</td>
-</tr>
-<tr>
-<td><code>SubagentStop</code></td>
-<td>nothing</td>
-<td>Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes.</td>
-</tr>
-</tbody>
-</table>
-</div>
+<p>Codex installs five hooks against seven for Claude Code: <code>SessionStart</code>
+injects the <code>&lt;seam-briefing&gt;</code> and creates or resumes the opaque <code>cx/...</code>
+ambient session, <code>UserPromptSubmit</code> injects <code>&lt;seam-recall&gt;</code> on a match,
+<code>Stop</code> heartbeats and harvests findings at every turn end, and
+<code>SubagentStart</code>/<code>SubagentStop</code> brief Task children with constraints and
+spawn-prompt-matched memories while only ever heartbeating the parent session.
+Seamless has no verified Claude-style plan-file/<code>ExitPlanMode</code> surface to
+capture from Codex, and Codex 0.144.6 emits <strong>no SessionEnd</strong>, so the parent
+lifecycle closes differently (see
+<a href="#no-sessionend-the-reaper-closes-sessions">below</a>). The exact per-event
+table - transports, endpoints, effects, and the 2,400-token output cap - is in
+<a href="../reference/hooks/#codex-local-host-five-hooks">the hooks reference</a>.</p>
 <p>Codex delivers a hook's <code>additionalContext</code> to the model on both SessionStart and
 UserPromptSubmit, and on SubagentStart, in <strong>both</strong> the interactive TUI and
 headless <code>codex exec</code> - there is no headless recall-injection gap of the kind
 <code>claude -p</code> has. The briefing and recall blocks reach the model either way.</p>
-<p>All five are <strong>command</strong> hooks - <code>seam hook &lt;event&gt; --config &lt;yaml&gt; --client codex</code>. Codex's hook schema currently executes command handlers; this is
-independent of MCP transport, where both stdio and Streamable HTTP are supported.
-Every command hook is subject to Codex's trust gate, covered next. See <a href="../reference/hooks/">the hooks
-reference</a> for the full per-client table and transports.</p>
+<p>All five are <strong>command</strong> hooks - <code>seam hook &lt;event&gt; --config &lt;yaml&gt; --client codex</code> - and every one passes through <a href="#trust-the-hooks-once">the trust gate above</a>.
+Codex's hook schema currently executes command handlers; this is independent of
+MCP transport, where both stdio and Streamable HTTP are supported.</p>
 <h3 id="the-model-visible-output-ceiling">The model-visible output ceiling</h3>
 <p>Codex spills a model-visible hook-output entry above roughly 2,500 estimated
-tokens to a temporary file and gives the model a head-and-tail preview. That
-would make Seamless's injection telemetry describe more text than the model saw.
-Seamless therefore caps every Codex <code>additionalContext</code> response at <strong>2,400
-estimated tokens</strong> before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
-briefings; generated closing tags and the ambient-session line are preserved.
-Claude Code output is not given this Codex-specific cap.</p>
-<h3 id="trust-the-hooks-once">Trust the hooks once</h3>
-<p>Codex will not run a non-managed command hook until its <strong>current definition</strong> is
-trusted. New or changed definitions are skipped until reviewed, so a reinstall
-that repairs a path or command can require approval again. Two supported paths:</p>
-<ul>
-<li><strong>CLI</strong> (the currently verified path): start <code>codex</code>, open <code>/hooks</code>, inspect the
-current Seamless commands, and approve them. Codex also warns at startup when
-configured hooks need review.</li>
-<li><strong>Headless automation</strong>: pass <code>--dangerously-bypass-hook-trust</code>. As the flag
-name says, it is for automation that already vets its hook sources.</li>
-</ul>
-<p>The public hook documentation names <code>/hooks</code> in the CLI, and Codex.app
-26.715.52143 confirmed the boundary: <code>/hooks</code> is not intercepted in a desktop
-chat and directs the user back to the CLI. A real repo-local app chat did receive
-<code>&lt;seam-briefing&gt;</code>, prompt recall, and Stop harvest, so Local app hook execution is
-live-verified for that build. Trust state is still not inspectable in the app,
-and the presence of <code>hooks.json</code> alone remains insufficient evidence.</p>
-<p>If a Codex session opens with no briefing, an untrusted hook is the first thing
-to check - it is the Codex-specific version of &quot;silence is the failure mode&quot;.
-Seamless does not read or write Codex's private trust hashes, and <code>doctor</code> never
-claims trust is healthy from a recent observation alone.</p>
+tokens to a temporary file, so Seamless caps every Codex <code>additionalContext</code>
+response at <strong>2,400 estimated tokens</strong> - briefings, recall, and child
+briefings alike - keeping the injected bytes equal to what the model actually
+saw. The mechanics live in
+<a href="../reference/hooks/#codex-local-host-five-hooks">the hooks reference</a>.</p>
 <h2 id="why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</h2>
 <p>Seamless serves MCP over Streamable HTTP, and current Codex can connect to that
 URL directly <strong>or</strong> launch a local MCP server over stdio. Seamless chooses the
@@ -372,6 +346,8 @@ safe path. Fully headless automation of the Seamless loop needs <strong>both</st
 <code>--dangerously-bypass-hook-trust</code> (for the hooks) and
 <code>--dangerously-bypass-approvals-and-sandbox</code> (for the tool calls).</p>
 <h3 id="registering-mcp-by-hand">Registering MCP by hand</h3>
+<details>
+<summary>Direct Streamable HTTP instead of the bridge</summary>
 <p>If you prefer direct Streamable HTTP over the stdio bridge, add it to
 <code>~/.codex/config.toml</code> yourself:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="p">[</span><span class="nx">mcp_servers</span><span class="p">.</span><span class="nx">seamless</span><span class="p">]</span>
@@ -383,6 +359,7 @@ bridge exists to avoid. <code>codex mcp add seamless --url http://127.0.0.1:8081
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
 the default.</p>
+</details>
 <p>The name <code>seamless</code> is the installer's desired-state boundary. If you keep a
 manual direct-HTTP entry under that name, run <code>seamlessd install-hooks --client codex --mcp=false</code> for hook and skill updates. With MCP reconciliation enabled,
 the installer reports the foreign transport and asks you to remove it explicitly
@@ -466,7 +443,7 @@ operator's <code>CODEX_HOME</code>.</p>
     
     <nav class="page-nav" aria-label="Pagination">
       <a class="prev" href="../claude-app/"><span class="dir">Previous</span><span class="t">Claude app chat setup</span></a>
-      <a class="next" href="../changelog/"><span class="dir">Next</span><span class="t">Changelog</span></a>
+      <a class="next" href="../install/"><span class="dir">Next</span><span class="t">Install &amp; deploy</span></a>
     </nav>
     
   </main>
@@ -475,7 +452,7 @@ operator's <code>CODEX_HOME</code>.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</a></li><li class="lvl-2"><a href="#the-five-hooks-and-what-they-inject">The five hooks, and what they inject</a></li><li class="lvl-3"><a href="#the-model-visible-output-ceiling">The model-visible output ceiling</a></li><li class="lvl-3"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#session-identity-and-provenance">Session identity and provenance</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li><li class="lvl-2"><a href="#compatibility-evidence">Compatibility evidence</a></li>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-2"><a href="#trust-the-hooks-once">Trust the hooks once</a></li><li class="lvl-2"><a href="#teach-codex-when-to-use-seamless">Teach Codex when to use Seamless</a></li><li class="lvl-2"><a href="#the-five-hooks-and-what-they-inject">The five hooks, and what they inject</a></li><li class="lvl-3"><a href="#the-model-visible-output-ceiling">The model-visible output ceiling</a></li><li class="lvl-2"><a href="#why-mcp-goes-through-a-bridge">Why MCP goes through a bridge</a></li><li class="lvl-3"><a href="#registering-mcp-by-hand">Registering MCP by hand</a></li><li class="lvl-2"><a href="#session-identity-and-provenance">Session identity and provenance</a></li><li class="lvl-2"><a href="#no-sessionend-the-reaper-closes-sessions">No SessionEnd: the reaper closes sessions</a></li><li class="lvl-2"><a href="#verify">Verify</a></li><li class="lvl-2"><a href="#compatibility-evidence">Compatibility evidence</a></li>
     </ul>
   </aside>
   
@@ -486,7 +463,7 @@ operator's <code>CODEX_HOME</code>.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=e5dfd08c"></script>
+<script src="../static/docs.js?v=46efc7ae"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

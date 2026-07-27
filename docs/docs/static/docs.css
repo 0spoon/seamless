@@ -761,6 +761,143 @@ a.nav-head.current { color: var(--brand); }
 .doc-card p { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 0; }
 
 /* ==========================================================================
+   CONTEXT PICKER -- the OS/client bar and the `::: when` variant blocks.
+   The head script sets data-os / data-clients on <html> before first paint;
+   picking a button rewrites them everywhere on the page. Without JS neither
+   attribute is set, so every variant shows (labeled by its chips) and the
+   bar hides -- the same no-JS strategy as the landing page's OS switch.
+   ========================================================================== */
+:root:not([data-os]) .ctx-bar { display: none; }
+
+:root[data-os="macos"] .ctx-variant[data-ctx-os]:not([data-ctx-os~="macos"]),
+:root[data-os="linux"] .ctx-variant[data-ctx-os]:not([data-ctx-os~="linux"]),
+:root[data-os="windows"] .ctx-variant[data-ctx-os]:not([data-ctx-os~="windows"]) { display: none; }
+
+/* Clients are a set on both sides: with a selection present, hide every
+   client-gated block, then re-show the ones naming a selected client. The
+   show rules sit after the hide rule at equal specificity, so they win. */
+:root[data-clients] .ctx-variant[data-ctx-client] { display: none; }
+:root[data-clients~="claude"] .ctx-variant[data-ctx-client~="claude"],
+:root[data-clients~="claude-desktop"] .ctx-variant[data-ctx-client~="claude-desktop"],
+:root[data-clients~="codex"] .ctx-variant[data-ctx-client~="codex"] { display: block; }
+
+.ctx-bar {
+  position: sticky;
+  top: var(--head-h);
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 46rem;
+  margin: 0 0 22px;
+  padding: 9px 12px;
+  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  backdrop-filter: saturate(140%) blur(8px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+.ctx-bar-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.ctx-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+.ctx-seg button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-mono); font-size: 11.5px; letter-spacing: var(--tracking-wide);
+  color: var(--muted);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
+}
+.ctx-seg button:hover { color: var(--ink); }
+.ctx-seg button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+/* Visually hidden, still announced: the aria-live confirmation of a pick. */
+.ctx-status {
+  position: absolute;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  clip-path: inset(50%);
+  overflow: hidden; white-space: nowrap;
+}
+
+.prose .ctx-variant {
+  margin: 18px 0;
+  padding: 2px 0 2px 16px;
+  border-left: 3px solid color-mix(in srgb, var(--brand) 35%, transparent);
+}
+.prose .ctx-label {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.ctx-chip {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+}
+
+/* The setup configurator: composes the canonical install command from the
+   picker state. JS-revealed; a page without JS never shows it. */
+.prose .cfg {
+  margin: 18px 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.prose .cfg-head {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.prose .cfg-opt {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 14.5px;
+  margin: 0 0 6px;
+  cursor: pointer;
+}
+.prose .cfg-out { margin: 12px 0 0; }
+
+/* Native disclosure for alternative routes -- never put headings inside. */
+.prose details {
+  margin: 16px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.prose summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 14.5px;
+  color: var(--muted);
+}
+.prose summary:hover { color: var(--ink); }
+.prose details[open] summary { margin-bottom: 8px; color: var(--ink); }
+
+/* ==========================================================================
    PREV / NEXT
    ========================================================================== */
 .page-nav {

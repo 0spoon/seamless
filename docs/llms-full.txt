@@ -49,15 +49,26 @@ telemetry.
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
 
-## Where to go next
+## Which agent do you run?
+
+Setup is client-shaped: pick yours and that page walks install, wiring, and
+verification end to end. The [Quickstart](/quickstart/) is the same path for
+everyone - one install command, then your client.
+
+- [Claude Code](/claude-code/): The terminal CLI and the Claude app's code sessions - one setup covers both.
+- [Claude app chat](/claude-app/): Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.
+- [Codex](/codex-cli/): CLI, desktop app, and IDE extension - one shared local profile named codex.
+- [Any other MCP client](/guides/mcp-clients/): Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.
+
+## Or start from the task
 
 | If you want to | Read |
 |---|---|
-| Get it running in ten minutes | [Quickstart](/quickstart/) |
-| Wire it into Claude Code | [Claude Code setup](/claude-code/) |
-| Wire it into Codex | [Codex local setup (app, CLI, and IDE)](/codex-cli/) |
+| Install from zero in ten minutes | [Quickstart](/quickstart/) |
+| Update, uninstall, or add a client later | [Update & uninstall](/updating/) |
+| Control the service, find logs and paths | [The service & where things live](/reference/service/) |
 | Understand the model before trusting it | [How Seamless works](/concepts/how-it-works/) |
-| Point another MCP agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
+| Point a hand-rolled agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
 | Make a fleet divide work without colliding | [Coordinate multiple agents](/guides/coordinate-agents/) |
 | Look up a tool, key, or command | [Reference](/reference/) |
 | Fix something that is silently not working | [Troubleshooting](/guides/troubleshooting/) |
@@ -73,88 +84,101 @@ This is the one happy path: install, start a session, and watch it open with a
 briefing. It is one command and a check - everything between them is automatic.
 Every fork in the road is a link, not a branch in these steps.
 
-No CGO toolchain, no external database, no Node. The installer needs `curl` and
-`tar`; building from source needs **Go 1.25+**.
-
 ## Install
+
+**macOS · Linux:**
 
 ```bash
 curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
-On Windows, run the same install in PowerShell:
+
+**Windows:**
+
+The same install, in PowerShell:
 
 ```powershell
 irm https://thereisnospoon.org/install.ps1 | iex
 ```
 
+
+
 One command does the lot: it fetches the checksum-verified release archive for
 your platform (macOS, Linux, and Windows; amd64 and arm64), installs `seamlessd`
-and `seam` into `~/.local/bin`, generates the bearer key, wires the detected
-Claude Code/Codex clients (hooks, MCP, and skills), and starts the daemon as a
-per-user service on `127.0.0.1:8081` with data in `~/.seamless` - launchd on
-macOS, systemd `--user` on Linux, an at-logon Scheduled Task on Windows. Re-run
-it to upgrade. [Install & deploy](/install/) has the overrides, service details,
-and removal procedure.
+and `seam`, generates the bearer key, wires the detected clients - Claude Code,
+the Claude app chat surface, Codex - with hooks, MCP, and skills, and starts
+the daemon as a per-user service on `127.0.0.1:8081` with data in `~/.seamless`.
+No Go, no CGO toolchain, no database server, no Node; the installer needs
+`curl` and `tar`. [Install & deploy](/install/) has the override knobs and the
+other routes (Homebrew, a clone, `go install`, prebuilt archives);
+[The service & where things live](/reference/service/) has the service
+controls, logs, and every path.
 
 Seamless is early in its development cycle, and releases with improvements and
 bug fixes land often. Make updating a habit - at least weekly - so you are
 always on the latest version: `seamlessd update` is the one command, on every
-OS. See [Upgrading](/install/#upgrading).
+OS. See [Update & uninstall](/updating/).
 
 Piping a stranger's script into a shell deserves a read first - it is
-[one file](https://thereisnospoon.org/install), and every other route to the
-same place is on that page: `brew install 0spoon/tap/seamless`, prebuilt
-archives from [GitHub releases](https://github.com/0spoon/seamless/releases),
-`go install github.com/0spoon/seamless/cmd/...@latest`, or `make install` from
-a clone.
+[one file](https://thereisnospoon.org/install).
 
 On a true first run - no config file anywhere - the bearer key is generated and
 written to `~/.config/seamless/seamless.yaml`. Nothing to copy, nothing to
-paste.
-
-No LLM key is required either: without one, recall degrades to plain full-text
-search. Add OpenAI or Ollama in the [configuration](/reference/configuration/)
-when you want semantic recall.
+paste. No LLM key is required either: without one, recall degrades to plain
+full-text search. Add OpenAI or Ollama in the
+[configuration](/reference/configuration/) when you want semantic recall.
 
 `seamlessd doctor` is the checkpoint: it validates the config, opens the
 database, applies migrations, and asserts the tool count. If it is green, the
 daemon will start.
 
-## Wire your agents
+## Now open your client
 
-The installer already ran `install-hooks` for you, so there is no second setup
-step. Start either detected client in any git repo:
+The installer already wired the clients it found, so there is no second setup
+step.
+
+**Claude Code:**
+
+Start Claude Code in any git repo - restart it first if it was already
+running, so it reloads hooks, MCP, and skills:
 
 ```bash
-cd ~/code/myrepo && claude    # Claude Code
-cd ~/code/myrepo && codex     # Codex
+cd ~/code/myrepo && claude
 ```
 
-`install-hooks` selects the installed clients by default. For Claude Code it
-installs seven hooks and registers Streamable HTTP through `claude mcp add-json
---scope user`. For Codex it installs five hooks and registers the maintained
-`seam mcp-proxy` stdio policy; Codex itself also supports direct Streamable HTTP.
-Both profiles receive `seam-onboard` and `seam-research`. Installed by hand? Run
-`seamlessd install-hooks` yourself first, or select explicitly with `--client
-claude|codex|all`.
+The same setup covers code sessions inside the Claude desktop app - they
+share `~/.claude`. See [Claude Code setup](/claude-code/).
 
-The hooks are what make sessions *ambient*: an agent gets a briefing without
-calling a tool. They also register the repo. On the first session inside a git
-repo, the SessionStart hook resolves your cwd to its git root, derives a project
-slug from that directory's name, and records the mapping - so agents inherit
-project scope without passing `project` on every call, and without you creating
-a project first. `seamlessd map-repo --path ~/code/myrepo --project myrepo` is
-the override when you want a slug that is not the directory name; see
-[Projects & scope](/concepts/projects/) for the full precedence chain.
 
-Restart the selected client once after installing so it reloads hooks, MCP, and
-skills. In Codex CLI, open `/hooks`, review the exact Seamless commands, and
-approve them; `seamlessd doctor` deliberately reports that trust as unverified.
-The desktop app does not expose `/hooks`, so confirm that a real repo chat
-receives `<seam-briefing>` before relying on it. See [Claude Code
-setup](/claude-code/) or [Codex local setup](/codex-cli/) for the client-specific
-behavior.
+**Codex:**
+
+Start Codex in any git repo - restart it first if it was already running, so
+it reloads hooks, MCP, and skills:
+
+```bash
+cd ~/code/myrepo && codex
+```
+
+Codex asks you to approve the hooks once: open `/hooks`, review the exact
+Seamless commands, and accept them - until then, no briefing appears
+([why](/codex-cli/#trust-the-hooks-once)). See
+[Codex local setup](/codex-cli/).
+
+
+**Claude app chat:**
+
+Restart the Claude app once - it reads its config only at startup. A chat has
+no hooks and no working directory, so tell it the repo's absolute path and
+have it run `session_start` with that as `cwd`. See
+[Claude app chat setup](/claude-app/).
+
+
+The first session inside a git repo also registers it: the SessionStart hook
+resolves your cwd to its git root, derives a project slug from that
+directory's name, and records the mapping - so agents inherit project scope
+without passing `project` on every call, and without you creating a project
+first. See [Projects & scope](/concepts/projects/) for the precedence chain
+and the `seamlessd map-repo` override.
 
 ## Confirm it works
 
@@ -183,380 +207,12 @@ seamlessd console-open                               # opens pre-authenticated
 
 ## Next steps
 
-- [Install & deploy](/install/) makes the daemon a service that survives
-  reboots instead of a foreground process.
-- The installer already delivered `seam-onboard` for the selected client. Run
-  `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once to write a
-  Seamless-awareness block into global or project instructions (`CLAUDE.md` or
-  `AGENTS.md`). From a clone, `make install-onboard-skill CLIENT=codex`
-  installs the Codex copy; the default is `CLIENT=detect`.
+- Run `/seam-onboard` in Claude Code or `$seam-onboard` in Codex once - it
+  shows the Seamless-awareness block it can add to global or project
+  instructions (`CLAUDE.md` or `AGENTS.md`) and edits only with your approval.
+- Wire a client the installer did not find:
+  [Add or remove one client](/updating/#add-or-remove-one-client).
 - Look up any tool, key, or command in the [Reference](/reference/).
-
----
-
-# Install & deploy
-
-URL: https://thereisnospoon.org/docs/install/
-
-
-Installing Seamless is one command: a script downloads a release archive
-containing the `seamlessd` daemon and `seam` CLI for macOS, Linux, or Windows,
-verifies its SHA-256, and registers the daemon as a per-user service - launchd,
-systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
-or Go toolchain. The [Quickstart](/quickstart/) runs that command and moves on;
-this page is what it did, and what to do when you want to steer it yourself.
-
-## One instance per machine
-
-There is **one instance**: port `8081`, data dir `~/.seamless`. One daemon, one
-database, one set of files.
-
-Both are config keys, not fixed facts - set `addr:` and `data_dir:` in
-`~/.config/seamless/seamless.yaml` (or the `SEAMLESS_ADDR` / `SEAMLESS_DATA_DIR`
-env overrides) and restart the service. The config is the single source of truth
-for the bind address: the installer and the Makefile both read the port back out
-of it, so the health check follows your change rather than assuming `8081`.
-Nothing bakes the address into the service - which is why editing `addr:` works
-instead of being silently overridden.
-
-## Install in one command
-
-```bash
-curl -fsSL https://thereisnospoon.org/install | sh
-```
-
-On Windows, run the [PowerShell installer](https://thereisnospoon.org/install.ps1)
-instead - it does the same steps with a Scheduled Task in place of launchd/systemd:
-
-```powershell
-irm https://thereisnospoon.org/install.ps1 | iex
-```
-
-This is the path for using Seamless (as opposed to working on it). The POSIX
-script needs `curl` and `tar`; the PowerShell one needs nothing beyond Windows
-itself. No Go toolchain is involved. In order, it:
-
-1. resolves the latest release and downloads the archive for your platform
-   (macOS, Linux, and Windows; amd64 and arm64), **verifying its SHA-256**
-   against the release's `checksums.txt` before unpacking anything; when
-   `cosign` is available it also verifies that manifest's keyless signature
-   against this repository's release workflow identity;
-2. installs `seamlessd` and `seam` into `~/.local/bin`;
-3. runs `seamlessd install-hooks`, which generates the bearer key into
-   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code, the
-   Claude app chat surface, and Codex, and installs that set's hooks, MCP
-   registrations, and skills;
-4. installs and starts the per-user service - launchd on macOS, systemd
-   `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
-   `/healthz` until the daemon actually answers.
-
-Step 3 detects three install targets - **Claude Code**, the **Claude app chat
-surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
-skills), and **Codex** - and wires the detected set. That one selection
-drives hooks, MCP registrations, and the maintained `seam-onboard` /
-`seam-research` skills together. On a terminal the run confirms the selection
-with a multi-select menu - answers are numbers or names, comma-separated
-(`1,3`), defaulting to the detected set; headless, the detected set is wired
-as-is. With nothing detected, a run on a terminal warns and asks whether to
-install at all (defaulting to no), and a headless run aborts - the installer
-never silently wires a client that is not there. Set `SEAMLESS_CLIENT` to make
-the choice explicit: one target, a comma list, or `all` (every target the
-platform can host - the chat surface exists only where the Claude app runs, so
-`all` never fails on Linux over it). See [Codex local setup](/codex-cli/) for
-the shared app/CLI/IDE profile and Codex's trust gate, and
-[Claude app chat setup](/claude-app/) for what the chat surface does and does
-not get.
-
-On every OS, Claude's copies live under `$HOME/.claude/skills`; Codex's live
-under `$CODEX_HOME/skills` when set, otherwise `$HOME/.codex/skills` (the same
-paths are `%USERPROFILE%`-relative on Windows). Invoke `/seam-onboard` in Claude
-Code or `$seam-onboard` in Codex. The skill asks before adding its marked block
-to global/project `CLAUDE.md` or `AGENTS.md`; it never silently edits either.
-
-The Windows installer is per-user by the same principle as the others: it runs
-as **you**, never elevates, and registers the Scheduled Task under your own
-account (`LogonType Interactive`), so a single signed-in user is all it needs and
-no administrator prompt ever appears. `~/.config/seamless` and `~/.seamless`
-resolve under `%USERPROFILE%`, exactly the paths the daemon already searches.
-
-Re-running it upgrades in place: binaries are swapped by rename (safe while the
-daemon holds them open), the service restarts on the new build, and your config
-and `~/.seamless` are preserved. The selected clients are reconciled to those
-new stable paths: owned stale hooks and the Codex stdio registration are
-repaired, current definitions are untouched, foreign hooks are preserved, and
-the recurring skill is refreshed. It is [one shell
-script](https://thereisnospoon.org/install) with no dependencies to audit.
-
-| Override | Effect |
-|---|---|
-| `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
-| `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
-| `SEAMLESS_CLIENT=claude\|claude-desktop\|codex\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
-| `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
-| `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
-| `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |
-| `SEAMLESS_NO_SERVICE=1` | install the binaries only; run `seamlessd serve` yourself |
-| `SEAMLESS_ALLOW_ROOT=1` | permit running as root (single-user containers) |
-
-Set them ahead of the shell, not the curl:
-`curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh`. On
-Windows the same knobs are environment variables you set before the pipe -
-`$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex`
-- with the one exception of `SEAMLESS_ALLOW_ROOT`, which is POSIX-only (the
-Windows task is per-user by construction, so there is no root case to allow).
-
-Everything here is per-user by construction - `~/.local/bin`, `~/.config`,
-`~/.seamless`, a user service - so run it as yourself. Under `curl | sudo sh` it
-would all land in root's home where your agents will never look, which is why
-the script refuses root unless you insist.
-
-## Homebrew
-
-```bash
-brew install 0spoon/tap/seamless
-```
-
-Every release publishes a cask to the `0spoon/homebrew-tap` tap, on macOS and
-Linux alike. It delivers the **binaries only** - `seamlessd` and `seam` on your
-PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
-binaries are unsigned). It does not wire clients or register a service, so
-finish with the two commands the cask's caveats print:
-
-```bash
-seamlessd install-hooks   # bearer key on first run, hooks, MCP, skills
-seamlessd serve           # or set up the service yourself
-```
-
-`brew upgrade` moves you to the latest release. The hooks keep working - they
-resolve `seam` through brew's stable bin path - but restart the daemon
-yourself so it runs the new build.
-
-## Install from a clone
-
-```bash
-make install                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
-make install PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
-make uninstall                  # remove service, hooks, MCP, skills + binaries (data kept)
-```
-
-`make install` is the same destination from your own build, and it is macOS-only
-(it renders the launchd plist from `deploy/launchd/`). It snapshots the binaries
-and config to stable locations, then points launchd **and** the selected clients'
-hooks/MCP definitions at the copies. Nothing live resolves through your working
-tree, so `make build`, a branch switch, and a moved or cleaned repo cannot change
-what the running daemon and every agent's hooks execute. Swapping them is `make
-install`, deliberately.
-
-The config lands in `~/.config/seamless/`, one of the paths Seamless already
-searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
-It is seeded **only when absent** - an install never clobbers a config holding
-your bearer key. Delete it to re-seed.
-
-The remaining routes end up in the same place with less done for you:
-`go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.25+, and the
-[GitHub releases](https://github.com/0spoon/seamless/releases) carry the same
-prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
-covers the essentials - first run seeds the config - and `seamlessd install-hooks`
-wires the detected Claude Code/Codex clients; what you take on yourself is the
-service.
-
-## Iterating on Seamless itself
-
-`make install` is also the edit-test loop. When the rendered plist is unchanged -
-the common case - it skips the launchd bootout/bootstrap and kickstarts the
-service in place, so its marginal cost over `make build` is two file copies.
-
-```bash
-make build      # compile only; nothing live changes
-make install    # ...and now it does
-make logs       # follow ~/.seamless/seamlessd.log
-```
-
-That split is the point. `make build` on a half-finished edit is free, because
-the daemon and hooks keep running the last thing you installed. Rebuilding is not
-deploying.
-
-## The service
-
-It runs as **your** user, not root: it reads your config, writes your files, and
-should die with your login session, not the machine.
-
-Whatever the platform, one set of verbs controls it - they resolve your OS's
-service manager for you:
-
-```bash
-seamlessd start       # start | stop | restart | status
-make start            # the same, from a clone (start | stop | restart | status)
-```
-
-These act on the already-installed service and print a hint if it was never
-installed. The platform-native commands below are what they wrap.
-
-On **macOS** it is a user LaunchAgent labelled `org.thereisnospoon.seamless` in
-`~/Library/LaunchAgents/`, logging to `~/.seamless/seamlessd.log`; `make logs`
-follows that log. Underneath, the verbs above wrap
-`launchctl print gui/$(id -u)/org.thereisnospoon.seamless`,
-`launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless`, and
-`launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless`.
-
-On **Linux** the installer writes a systemd user unit to
-`~/.config/systemd/user/seamless.service` and enables lingering, so the daemon
-starts at boot rather than at your next login:
-
-```bash
-systemctl --user status seamless      # state, pid, last exit
-journalctl --user -u seamless -f      # follow the log
-systemctl --user restart seamless
-systemctl --user stop seamless
-```
-
-No systemd user session (some containers, WSL1)? The installer says so and skips
-the step; run `seamlessd serve` under whatever supervises processes there.
-
-On **Windows** it is an at-logon Scheduled Task named `Seamless`, running as you
-(`LogonType Interactive`, no admin), logging to `~/.seamless/seamlessd.log`. The
-task action is a bare exec - `seamlessd.exe serve --config <path> --log-file
-<path>` - because a task cannot carry the `SEAMLESS_CONFIG` env prefix a plist or
-systemd unit does; the two flags pass exactly what that prefix would have:
-
-```powershell
-Get-ScheduledTask Seamless | Get-ScheduledTaskInfo   # state, last run, last result
-Get-Content ~/.seamless/seamlessd.log -Wait          # follow the log
-Restart-ScheduledTask Seamless                        # stop + start
-Stop-ScheduledTask Seamless                           # stop (it restarts at next logon)
-```
-
-It restarts on failure and never hits the default execution time limit, so it
-behaves like launchd's `KeepAlive`. Because it triggers at logon, it runs while
-you are signed in and stops when you sign out - a single-user desktop, which is
-the shape Seamless is built for.
-
-## Upgrading
-
-Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.
-
-`seamlessd update` is the one command, on every OS. It upgrades in place to the
-latest release by re-running the canonical installer for you - so there is a
-single upgrade path to trust, not a second copy of the download-and-swap logic
-that could drift from the installer:
-
-```bash
-seamlessd update --check   # report installed vs latest, change nothing
-seamlessd update --dry-run # print exactly what it would fetch and run
-seamlessd update           # fetch the latest release and swap it in
-```
-
-It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
-update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
-Under the hood it fetches the installer script (the PowerShell one on Windows)
-from the latest release's assets together with the Sigstore bundle the release
-workflow signed it with, verifies the signature in-process - the script must
-have been produced by this repository's release workflow on a version tag, or
-update refuses to run it - and then runs it. That is the same script as doing
-it by hand, minus the signature check:
-
-```bash
-curl -fsSL https://thereisnospoon.org/install | sh
-```
-
-From a clone, `make update` builds first and then runs that same command against
-your installed copy (`make update CHECK=1` only reports). Note that both
-`seamlessd update` and `make update` install the latest *release*, which may be
-older than your clone's HEAD - to deploy the build from your working tree instead:
-
-```bash
-git pull
-make check             # everything green before you swap the running daemon
-make install           # swap it
-make doctor            # confirm config + DB after the swap
-```
-
-Migrations apply automatically at startup - there is no separate migrate step.
-Run `make doctor` afterwards anyway: it is the cheapest way to learn that the new
-build disagrees with your config before an agent does.
-
-`/healthz` reports the running build. If a change seems not to have taken effect,
-check it before you debug anything else - a stale daemon still serving the old
-binary looks exactly like a bug in the new one.
-
-## Uninstalling
-
-`seamlessd uninstall` is the one command, on every OS. It reverses the whole
-install - stops and removes the per-user service, strips the Claude Code and
-Codex hooks, deregisters the MCP server from both client CLIs and from the
-Claude app's `claude_desktop_config.json`, removes both hook clients' installed
-`seam-onboard` and `seam-research` packages/one-shot markers, and deletes the
-binaries - and it is idempotent, so a second run is a clean no-op. Preview it
-first with `--dry-run`:
-
-```bash
-seamlessd uninstall --dry-run   # print exactly what would be removed
-seamlessd uninstall             # do it (asks to confirm on a terminal)
-```
-
-From a clone it is `make uninstall`, which builds first and then runs that same
-command against your installed copy.
-
-**Your knowledge is kept by default.** `~/.config/seamless` (your bearer key) and
-`~/.seamless` (the database, and your memories and notes as markdown) are left in
-place - the uninstall of a program should not delete your knowledge. Add
-`--purge` (or `make uninstall PURGE=1`) only when you actually mean to delete
-them; a guard refuses to purge a path that resolves to your home directory or the
-filesystem root. See [Storage](/reference/storage/) for what is in there.
-
-The hooks come out of `~/.claude/settings.json` and Codex's `hooks.json` through
-the same exact classifier the installer and doctor use. Current, marked-stale,
-and unmistakable legacy Seamless entries are removed; foreign entries survive,
-even when their arguments happen to contain `hook <event>`. The install's
-original backup sits next to each file. If you would rather do it by hand - a
-bare binary you never installed a service for, say - the service teardown is
-`launchctl bootout` / `systemctl --user disable --now` /
-`Unregister-ScheduledTask -TaskName Seamless`, and `claude mcp remove seamless`
-or `codex mcp remove seamless` drops that client's MCP registration. The chat
-surface has no CLI: delete the `seamless` entry under `mcpServers` in the
-Claude app (Settings > Developer > Edit Config) and restart it.
-
-## Security posture
-
-What you are accepting when you run this:
-
-- **One static bearer key** guards `/api/mcp` and the console. Not JWT, not
-  OAuth, no user accounts. It is a single-user local tool and the key is in your
-  config file with `0600` permissions.
-- **Default agent registrations do not copy that key.** Claude Code calls
-  `seam mcp-headers` through `headersHelper`; Codex launches `seam mcp-proxy`.
-  Both read the 0600 Seamless config at connection time, and neither puts the
-  bearer value in client config or subprocess argv. A manual Codex direct-HTTP
-  registration with `http_headers` does copy it into `config.toml`; use that
-  tradeoff deliberately.
-- **Loopback bind** by default (`127.0.0.1:8081`). Nothing off your machine can
-  reach it.
-- **SSRF guards on capture.** `capture_url` is the one tool that makes an
-  outbound request on an agent's behalf, and its destination ports are restricted
-  to `capture.allowed_ports` (80 and 443 by default) - never "any port".
-- **No product telemetry.** Seamless sends no usage or analytics data. The
-  outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
-  Ollama to keep model calls local), URLs an agent explicitly asks
-  `capture_url` to fetch, and the GitHub release check and download that an
-  explicit `seamlessd update` performs.
-- **Release authenticity has two layers.** Every installer verifies the
-  archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
-  verifies the manifest's keyless signature against this repository's release
-  workflow identity; without cosign it warns clearly and continues with checksum
-  integrity only. `seamlessd update` separately verifies the fetched installer
-  script's Sigstore bundle in-process before executing it. `curl | sh` still
-  means trusting the bytes served by the site, so read the script first if that
-  boundary is not acceptable; `go install` lands in the same place.
-
-The key and loopback are a matched pair. A static bearer key is adequate
-*because* the listener is on loopback; it would not be adequate on a public
-interface. If you widen `addr` to a routable address, the key becomes the only
-thing between the internet and your entire knowledge store - so don't. Put it
-behind a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) and leave the bind
-on loopback.
-
-See [Configuration](/reference/configuration/) for every key.
 
 ---
 
@@ -601,19 +257,11 @@ exact table.
 
 ### Why some hooks are commands and others are http
 
-This looks inconsistent and is not:
-
-- **SessionStart** must be a command hook. Claude Code only runs `command` and
-  `mcp_tool` hooks for SessionStart - an `http` one is *silently skipped*, and
-  the briefing and ambient session simply never fire.
-- **SessionEnd** does support http, but at process exit a fire-and-forget request
-  races the teardown, so the harvest often never lands and sessions pile up as
-  active. As a command hook, Claude Code waits for it.
-- **UserPromptSubmit** fires mid-turn where http is reliable, so it stays http
-  (and carries the bearer key in `settings.json`).
-- **The plan-capture hooks** are commands because `seam` pre-filters locally: the
-  machine-wide `Write`/`Edit` hot path should never touch the network for files
-  that have nothing to do with plans.
+This looks inconsistent and is not: SessionStart only fires as a command hook,
+SessionEnd as http races Claude Code's teardown, and the plan-capture hooks
+pre-filter locally so the machine-wide `Write`/`Edit` hot path never touches
+the network. The full rationale, hook by hook, is in
+[the hooks reference](/reference/hooks/#why-claude-code-uses-two-transports).
 
 ## Registering the MCP endpoint by hand
 
@@ -794,9 +442,24 @@ Linux `all` deliberately excludes it).
 There is no management CLI for the app, so registration is a direct,
 merge-preserving edit of the app's config file:
 
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- `--desktop-config PATH` overrides the location.
+**macOS:**
+
+The file is `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+
+**Windows:**
+
+The file is `%APPDATA%\Claude\claude_desktop_config.json`.
+
+
+**Linux:**
+
+The Claude app does not ship for Linux, so there is no chat surface to
+register on this machine - the code-session and CLI setup on
+[Claude Code setup](/claude-code/) is the whole story there.
+
+
+`--desktop-config PATH` overrides the location.
 
 The edit adds one stdio entry under `mcpServers` - the reserved name
 `seamless`, launching `seam mcp-proxy --config <absolute seamless.yaml>` - and
@@ -863,10 +526,14 @@ in [Projects & scope](/concepts/projects/).
 ## Uninstall
 
 `seamlessd uninstall` (default `--client all`) removes the chat-surface entry
-along with everything else; `--client claude-desktop` scopes the run to just
-it. Removal deletes only the reserved `seamless` entry - every other key,
-including a now-empty `mcpServers`, stays exactly as found - and prints the
-same restart notice, since the app also unloads config at startup only.
+along with everything else; `--client claude-desktop` limits the client step
+to this entry alone, though uninstall always removes the service and binaries
+too - it un-installs the program, not one client. Removal deletes only the
+reserved `seamless` entry - every other key, including a now-empty
+`mcpServers`, stays exactly as found - and prints the same restart notice,
+since the app also loads config at startup only. To drop just this entry and
+keep Seamless, edit the config by hand:
+[Add or remove one client](/updating/#add-or-remove-one-client).
 
 ## Verify
 
@@ -960,6 +627,32 @@ all` to install both in one pass, or `--client detect` (the default) to let the
 machine decide. `make install` uses the same default, so a Codex-only machine
 gets the Codex profile without naming it.
 
+## Trust the hooks once
+
+Hooks installed, one gate remains before anything fires - and it is the
+Codex-specific version of "silence is the failure mode". Codex will not run a
+non-managed command hook until its **current definition** is trusted. New or
+changed definitions are skipped until reviewed, so a fresh install - or a
+reinstall that repairs a path or command - can show no briefing until you
+approve. Two supported paths:
+
+- **CLI** (the currently verified path): start `codex`, open `/hooks`, inspect the
+  current Seamless commands, and approve them. Codex also warns at startup when
+  configured hooks need review.
+- **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
+  name says, it is for automation that already vets its hook sources.
+
+The public hook documentation names `/hooks` in the CLI, and Codex.app
+26.715.52143 confirmed the boundary: `/hooks` is not intercepted in a desktop
+chat and directs the user back to the CLI. A real repo-local app chat did receive
+`<seam-briefing>`, prompt recall, and Stop harvest, so Local app hook execution is
+live-verified for that build. Trust state is still not inspectable in the app,
+and the presence of `hooks.json` alone remains insufficient evidence.
+
+If a Codex session opens with no briefing, an untrusted hook is the first thing
+to check. Seamless does not read or write Codex's private trust hashes, and
+`doctor` never claims trust is healthy from a recent observation alone.
+
 ## Teach Codex when to use Seamless
 
 Every MCP initialize response carries concise server instructions. The first
@@ -984,20 +677,18 @@ refreshed on upgrades.
 
 ## The five hooks, and what they inject
 
-Codex installs five hooks against seven for Claude Code. Seamless has no verified
-Claude-style plan-file/`ExitPlanMode` surface to capture from Codex, and Codex
-0.144.6 emits **no SessionEnd**, so the parent lifecycle closes differently (see
-[below](#no-sessionend-the-reaper-closes-sessions)). Subagent hooks provide
-constraints, spawn-prompt-matched memories, and lifecycle safety without
-creating Codex plan notes.
-
-| Event | Injects | Effect |
-|---|---|---|
-| `SessionStart` | `<seam-briefing>` | Resolves the agent's cwd to its project and creates or resumes an opaque `cx/...` ambient session keyed by the full external ID. |
-| `UserPromptSubmit` | `<seam-recall>` on a match | Heartbeats the session and matches the prompt against your memories. |
-| `Stop` | nothing | Heartbeats the session and harvests findings from the turn's final message. Fires at every turn end. |
-| `SubagentStart` | child `<seam-briefing>` | Gives the child the project's active constraints, up to three `RELEVANT:` memories matched from its spawn prompt (read from the head of the child rollout), and a recall/memory_read footer, capped below Codex's hook-output spill threshold. It shares and only heartbeats the parent ambient session; it never creates or re-scopes one. |
-| `SubagentStop` | nothing | Heartbeats the parent only. The child model/final message cannot overwrite parent attribution or findings, and generic workers do not create durable notes. |
+Codex installs five hooks against seven for Claude Code: `SessionStart`
+injects the `<seam-briefing>` and creates or resumes the opaque `cx/...`
+ambient session, `UserPromptSubmit` injects `<seam-recall>` on a match,
+`Stop` heartbeats and harvests findings at every turn end, and
+`SubagentStart`/`SubagentStop` brief Task children with constraints and
+spawn-prompt-matched memories while only ever heartbeating the parent session.
+Seamless has no verified Claude-style plan-file/`ExitPlanMode` surface to
+capture from Codex, and Codex 0.144.6 emits **no SessionEnd**, so the parent
+lifecycle closes differently (see
+[below](#no-sessionend-the-reaper-closes-sessions)). The exact per-event
+table - transports, endpoints, effects, and the 2,400-token output cap - is in
+[the hooks reference](/reference/hooks/#codex-local-host-five-hooks).
 
 Codex delivers a hook's `additionalContext` to the model on both SessionStart and
 UserPromptSubmit, and on SubagentStart, in **both** the interactive TUI and
@@ -1005,45 +696,18 @@ headless `codex exec` - there is no headless recall-injection gap of the kind
 `claude -p` has. The briefing and recall blocks reach the model either way.
 
 All five are **command** hooks - `seam hook <event> --config <yaml> --client
-codex`. Codex's hook schema currently executes command handlers; this is
-independent of MCP transport, where both stdio and Streamable HTTP are supported.
-Every command hook is subject to Codex's trust gate, covered next. See [the hooks
-reference](/reference/hooks/) for the full per-client table and transports.
+codex` - and every one passes through [the trust gate above](#trust-the-hooks-once).
+Codex's hook schema currently executes command handlers; this is independent of
+MCP transport, where both stdio and Streamable HTTP are supported.
 
 ### The model-visible output ceiling
 
 Codex spills a model-visible hook-output entry above roughly 2,500 estimated
-tokens to a temporary file and gives the model a head-and-tail preview. That
-would make Seamless's injection telemetry describe more text than the model saw.
-Seamless therefore caps every Codex `additionalContext` response at **2,400
-estimated tokens** before both serialization and telemetry. This applies to
-SessionStart briefings, UserPromptSubmit recall, and SubagentStart child
-briefings; generated closing tags and the ambient-session line are preserved.
-Claude Code output is not given this Codex-specific cap.
-
-### Trust the hooks once
-
-Codex will not run a non-managed command hook until its **current definition** is
-trusted. New or changed definitions are skipped until reviewed, so a reinstall
-that repairs a path or command can require approval again. Two supported paths:
-
-- **CLI** (the currently verified path): start `codex`, open `/hooks`, inspect the
-  current Seamless commands, and approve them. Codex also warns at startup when
-  configured hooks need review.
-- **Headless automation**: pass `--dangerously-bypass-hook-trust`. As the flag
-  name says, it is for automation that already vets its hook sources.
-
-The public hook documentation names `/hooks` in the CLI, and Codex.app
-26.715.52143 confirmed the boundary: `/hooks` is not intercepted in a desktop
-chat and directs the user back to the CLI. A real repo-local app chat did receive
-`<seam-briefing>`, prompt recall, and Stop harvest, so Local app hook execution is
-live-verified for that build. Trust state is still not inspectable in the app,
-and the presence of `hooks.json` alone remains insufficient evidence.
-
-If a Codex session opens with no briefing, an untrusted hook is the first thing
-to check - it is the Codex-specific version of "silence is the failure mode".
-Seamless does not read or write Codex's private trust hashes, and `doctor` never
-claims trust is healthy from a recent observation alone.
+tokens to a temporary file, so Seamless caps every Codex `additionalContext`
+response at **2,400 estimated tokens** - briefings, recall, and child
+briefings alike - keeping the injected bytes equal to what the model actually
+saw. The mechanics live in
+[the hooks reference](/reference/hooks/#codex-local-host-five-hooks).
 
 ## Why MCP goes through a bridge
 
@@ -1070,6 +734,8 @@ safe path. Fully headless automation of the Seamless loop needs **both**
 
 ### Registering MCP by hand
 
+**Direct Streamable HTTP instead of the bridge**
+
 If you prefer direct Streamable HTTP over the stdio bridge, add it to
 `~/.codex/config.toml` yourself:
 
@@ -1087,6 +753,7 @@ bridge exists to avoid. `codex mcp add seamless --url http://127.0.0.1:8081/api/
 key from an environment variable that Codex's own process must have set when it
 launches - fragile to arrange reliably, which is the other reason the bridge is
 the default.
+
 
 The name `seamless` is the installer's desired-state boundary. If you keep a
 manual direct-HTTP entry under that name, run `seamlessd install-hooks --client
@@ -1180,14 +847,389 @@ Primary upstream contracts: [Codex hooks](https://learn.chatgpt.com/docs/hooks),
 
 ---
 
+# Install & deploy
+
+URL: https://thereisnospoon.org/docs/install/
+
+
+Installing Seamless is one command: a script downloads a release archive
+containing the `seamlessd` daemon and `seam` CLI for macOS, Linux, or Windows,
+verifies its SHA-256, and registers the daemon as a per-user service - launchd,
+systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
+or Go toolchain. The [Quickstart](/quickstart/) runs that command and moves on;
+this page is what it did, and what to do when you want to steer it yourself.
+Where everything lands - the service, logs, ports, and every path - is on
+[The service & where things live](/reference/service/).
+
+## Install in one command
+
+**macOS · Linux:**
+
+```bash
+curl -fsSL https://thereisnospoon.org/install | sh
+```
+
+
+**Windows:**
+
+The [PowerShell installer](https://thereisnospoon.org/install.ps1) does the
+same steps with a Scheduled Task in place of launchd/systemd:
+
+```powershell
+irm https://thereisnospoon.org/install.ps1 | iex
+```
+
+
+This is the path for using Seamless (as opposed to working on it). The POSIX
+script needs `curl` and `tar`; the PowerShell one needs nothing beyond Windows
+itself. No Go toolchain is involved. In order, it:
+
+1. resolves the latest release and downloads the archive for your platform
+   (macOS, Linux, and Windows; amd64 and arm64), **verifying its SHA-256**
+   against the release's `checksums.txt` before unpacking anything; when
+   `cosign` is available it also verifies that manifest's keyless signature
+   against this repository's release workflow identity;
+2. installs `seamlessd` and `seam` into `~/.local/bin`;
+3. runs `seamlessd install-hooks`, which generates the bearer key into
+   `~/.config/seamless/seamless.yaml` on first run, detects Claude Code, the
+   Claude app chat surface, and Codex, and installs that set's hooks, MCP
+   registrations, and skills;
+4. installs and starts the [per-user service](/reference/service/) - launchd
+   on macOS, systemd `--user` on Linux, an at-logon Scheduled Task on
+   Windows - and polls `/healthz` until the daemon actually answers.
+
+Step 3 detects three install targets - **Claude Code**, the **Claude app chat
+surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
+skills), and **Codex** - and wires the detected set. That one selection
+drives hooks, MCP registrations, and the maintained `seam-onboard` /
+`seam-research` skills together. On a terminal the run confirms the selection
+with a multi-select menu - answers are numbers or names, comma-separated
+(`1,3`), defaulting to the detected set; headless, the detected set is wired
+as-is. With nothing detected, a run on a terminal warns and asks whether to
+install at all (defaulting to no), and a headless run aborts - the installer
+never silently wires a client that is not there. Set `SEAMLESS_CLIENT` to make
+the choice explicit: one target, a comma list, or `all` (every target the
+platform can host - the chat surface exists only where the Claude app runs, so
+`all` never fails on Linux over it). See [Codex local setup](/codex-cli/) for
+the shared app/CLI/IDE profile and Codex's trust gate, and
+[Claude app chat setup](/claude-app/) for what the chat surface does and does
+not get.
+
+On every OS, Claude's copies live under `$HOME/.claude/skills`; Codex's live
+under `$CODEX_HOME/skills` when set, otherwise `$HOME/.codex/skills` (the same
+paths are `%USERPROFILE%`-relative on Windows). Invoke `/seam-onboard` in Claude
+Code or `$seam-onboard` in Codex. The skill asks before adding its marked block
+to global/project `CLAUDE.md` or `AGENTS.md`; it never silently edits either.
+
+**Windows:**
+
+The Windows installer is per-user by the same principle as the others: it runs
+as **you**, never elevates, and registers the Scheduled Task under your own
+account (`LogonType Interactive`), so a single signed-in user is all it needs and
+no administrator prompt ever appears. `~/.config/seamless` and `~/.seamless`
+resolve under `%USERPROFILE%`, exactly the paths the daemon already searches.
+
+
+Re-running it upgrades in place: binaries are swapped by rename (safe while the
+daemon holds them open), the service restarts on the new build, and your config
+and `~/.seamless` are preserved. The selected clients are reconciled to those
+new stable paths: owned stale hooks and the Codex stdio registration are
+repaired, current definitions are untouched, foreign hooks are preserved, and
+the recurring skill is refreshed. It is [one shell
+script](https://thereisnospoon.org/install) with no dependencies to audit.
+
+| Override | Effect |
+|---|---|
+| `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
+| `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
+| `SEAMLESS_CLIENT=claude\|claude-desktop\|codex\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
+| `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
+| `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
+| `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |
+| `SEAMLESS_NO_SERVICE=1` | install the binaries only; run `seamlessd serve` yourself |
+| `SEAMLESS_ALLOW_ROOT=1` | permit running as root (single-user containers) |
+
+**macOS · Linux:**
+
+Set them ahead of the shell, not the curl:
+`curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh`.
+
+
+**Windows:**
+
+The same knobs are environment variables you set before the pipe -
+`$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex`
+- with the one exception of `SEAMLESS_ALLOW_ROOT`, which is POSIX-only (the
+Windows task is per-user by construction, so there is no root case to allow).
+
+
+Everything here is per-user by construction - `~/.local/bin`, `~/.config`,
+`~/.seamless`, a user service - so run it as yourself. Under `curl | sudo sh` it
+would all land in root's home where your agents will never look, which is why
+the script refuses root unless you insist.
+
+## Installing without the one-liner
+
+The other routes end up in the same place with more of the steps left to you.
+
+### Homebrew
+
+```bash
+brew install 0spoon/tap/seamless
+```
+
+Every release publishes a cask to the `0spoon/homebrew-tap` tap, on macOS and
+Linux alike. It delivers the **binaries only** - `seamlessd` and `seam` on your
+PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
+binaries are unsigned). It does not wire clients or register a service, so
+finish with the two commands the cask's caveats print:
+
+```bash
+seamlessd install-hooks   # bearer key on first run, hooks, MCP, skills
+seamlessd serve           # or set up the service yourself
+```
+
+`brew upgrade` moves you to the latest release. The hooks keep working - they
+resolve `seam` through brew's stable bin path - but restart the daemon
+yourself so it runs the new build.
+
+### From a clone
+
+```bash
+make install                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
+make install PREFIX=/opt/seam   # custom prefix (binaries land in $PREFIX/bin)
+make uninstall                  # remove service, hooks, MCP, skills + binaries (data kept)
+```
+
+`make install` is the same destination from your own build, and it is macOS-only
+(it renders the launchd plist from `deploy/launchd/`). It snapshots the binaries
+and config to stable locations, then points launchd **and** the selected clients'
+hooks/MCP definitions at the copies. Nothing live resolves through your working
+tree, so `make build`, a branch switch, and a moved or cleaned repo cannot change
+what the running daemon and every agent's hooks execute. Swapping them is `make
+install`, deliberately - [Contributing](/internals/contributing/) covers using
+it as the edit-test loop.
+
+The config lands in `~/.config/seamless/`, one of the paths Seamless already
+searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
+It is seeded **only when absent** - an install never clobbers a config holding
+your bearer key. Delete it to re-seed.
+
+### Go install and release archives
+
+The remaining routes end up in the same place with less done for you:
+`go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.25+, and the
+[GitHub releases](https://github.com/0spoon/seamless/releases) carry the same
+prebuilt archives the installer fetches. From a bare binary, `seamlessd serve`
+covers the essentials - first run seeds the config - and `seamlessd install-hooks`
+wires the detected Claude Code/Codex clients; what you take on yourself is the
+service.
+
+## The service {#the-service}
+
+The installer registered `seamlessd` as a per-user service - launchd on macOS,
+systemd `--user` on Linux, an at-logon Scheduled Task on Windows - and
+`seamlessd start|stop|restart|status` controls it the same way everywhere. The
+native commands, log locations, and every path Seamless touches are on
+[The service & where things live](/reference/service/).
+
+## Upgrading {#upgrading}
+
+`seamlessd update` upgrades in place to the latest release, on every OS.
+[Update & uninstall](/updating/) has the full procedure, the pinning knobs,
+and how the fetched installer is signature-verified before it runs.
+
+## Uninstalling {#uninstalling}
+
+`seamlessd uninstall` reverses the whole install and keeps your knowledge by
+default. See [Update & uninstall](/updating/#uninstall).
+
+## Security posture
+
+What you are accepting when you run this:
+
+- **One static bearer key** guards `/api/mcp` and the console. Not JWT, not
+  OAuth, no user accounts. It is a single-user local tool and the key is in your
+  config file with `0600` permissions.
+- **Default agent registrations do not copy that key.** Claude Code calls
+  `seam mcp-headers` through `headersHelper`; Codex launches `seam mcp-proxy`.
+  Both read the 0600 Seamless config at connection time, and neither puts the
+  bearer value in client config or subprocess argv. A manual Codex direct-HTTP
+  registration with `http_headers` does copy it into `config.toml`; use that
+  tradeoff deliberately.
+- **Loopback bind** by default (`127.0.0.1:8081`). Nothing off your machine can
+  reach it.
+- **SSRF guards on capture.** `capture_url` is the one tool that makes an
+  outbound request on an agent's behalf, and its destination ports are restricted
+  to `capture.allowed_ports` (80 and 443 by default) - never "any port".
+- **No product telemetry.** Seamless sends no usage or analytics data. The
+  outbound traffic is: calls to a configured OpenAI or Anthropic provider (use
+  Ollama to keep model calls local), URLs an agent explicitly asks
+  `capture_url` to fetch, and the GitHub release check and download that an
+  explicit `seamlessd update` performs.
+- **Release authenticity has two layers.** Every installer verifies the
+  archive's SHA-256 against `checksums.txt`. When `cosign` is installed it also
+  verifies the manifest's keyless signature against this repository's release
+  workflow identity; without cosign it warns clearly and continues with checksum
+  integrity only. `seamlessd update` separately verifies the fetched installer
+  script's Sigstore bundle in-process before executing it. `curl | sh` still
+  means trusting the bytes served by the site, so read the script first if that
+  boundary is not acceptable; `go install` lands in the same place.
+
+The key and loopback are a matched pair. A static bearer key is adequate
+*because* the listener is on loopback; it would not be adequate on a public
+interface. If you widen `addr` to a routable address, the key becomes the only
+thing between the internet and your entire knowledge store - so don't. Put it
+behind a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) and leave the bind
+on loopback.
+
+See [Configuration](/reference/configuration/) for every key.
+
+---
+
+# Update & uninstall
+
+URL: https://thereisnospoon.org/docs/updating/
+
+
+The install is one command, and so is everything after it. `seamlessd`
+carries its own lifecycle: update, uninstall, and client wiring are the same
+commands on macOS, Linux, and Windows, resolving your platform's service
+manager and paths for you. The OS-specific detail all lives on
+[The service & where things live](/reference/service/).
+
+## Update
+
+Seamless is early in its development cycle: releases with improvements and bug
+fixes land often, so update at least weekly to stay on the latest version.
+
+`seamlessd update` is the one command, on every OS. It upgrades in place to the
+latest release by re-running the canonical installer for you - so there is a
+single upgrade path to trust, not a second copy of the download-and-swap logic
+that could drift from the installer:
+
+```bash
+seamlessd update --check   # report installed vs latest, change nothing
+seamlessd update --dry-run # print exactly what it would fetch and run
+seamlessd update           # fetch the latest release and swap it in
+```
+
+It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
+update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
+Under the hood it fetches the installer script (the PowerShell one on Windows)
+from the latest release's assets together with the Sigstore bundle the release
+workflow signed it with, verifies the signature in-process - the script must
+have been produced by this repository's release workflow on a version tag, or
+update refuses to run it - and then runs it. That is the same script as doing
+it by hand, minus the signature check:
+
+```bash
+curl -fsSL https://thereisnospoon.org/install | sh
+```
+
+Your config and `~/.seamless` are preserved, binaries are swapped by rename
+(safe while the daemon holds them open), and the service restarts on the new
+build. The selected clients are reconciled to the new stable paths: owned
+stale hooks and the Codex stdio registration are repaired, current definitions
+are untouched, foreign hooks are preserved, and the recurring skill is
+refreshed.
+
+From a clone, `make update` builds first and then runs that same command against
+your installed copy (`make update CHECK=1` only reports).
+
+**Deploying your working tree instead of a release**
+
+Both `seamlessd update` and `make update` install the latest *release*, which
+may be older than your clone's HEAD. To deploy the build from your working
+tree instead:
+
+```bash
+git pull
+make check             # everything green before you swap the running daemon
+make install           # swap it
+make doctor            # confirm config + DB after the swap
+```
+
+
+Migrations apply automatically at startup - there is no separate migrate step.
+Run `make doctor` afterwards anyway: it is the cheapest way to learn that the new
+build disagrees with your config before an agent does.
+
+`/healthz` reports the running build. If a change seems not to have taken effect,
+check it before you debug anything else - a stale daemon still serving the old
+binary looks exactly like a bug in the new one.
+
+## Uninstall {#uninstall}
+
+`seamlessd uninstall` is the one command, on every OS. It reverses the whole
+install - stops and removes the per-user service, strips the Claude Code and
+Codex hooks, deregisters the MCP server from both client CLIs and from the
+Claude app's `claude_desktop_config.json`, removes both hook clients' installed
+`seam-onboard` and `seam-research` packages/one-shot markers, and deletes the
+binaries - and it is idempotent, so a second run is a clean no-op. Preview it
+first with `--dry-run`:
+
+```bash
+seamlessd uninstall --dry-run   # print exactly what would be removed
+seamlessd uninstall             # do it (asks to confirm on a terminal)
+```
+
+From a clone it is `make uninstall`, which builds first and then runs that same
+command against your installed copy.
+
+**Your knowledge is kept by default.** `~/.config/seamless` (your bearer key) and
+`~/.seamless` (the database, and your memories and notes as markdown) are left in
+place - the uninstall of a program should not delete your knowledge. Add
+`--purge` (or `make uninstall PURGE=1`) only when you actually mean to delete
+them; a guard refuses to purge a path that resolves to your home directory or the
+filesystem root. See [Storage](/reference/storage/) for what is in there.
+
+The hooks come out of `~/.claude/settings.json` and Codex's `hooks.json` through
+the same exact classifier the installer and doctor use. Current, marked-stale,
+and unmistakable legacy Seamless entries are removed; foreign entries survive,
+even when their arguments happen to contain `hook <event>`. The install's
+original backup sits next to each file.
+
+If you would rather do it by hand - a bare binary you never installed a
+service for, say - `claude mcp remove seamless` or `codex mcp remove seamless`
+drops that client's MCP registration; the chat surface has no CLI, so delete
+the `seamless` entry under `mcpServers` in the Claude app (Settings >
+Developer > Edit Config) and restart it. The native service teardown commands
+live with the rest of the OS-specific detail:
+[Removing the service by hand](/reference/service/#removing-the-service-by-hand).
+
+## Add or remove one client
+
+Client wiring is independent per target, and adding one never disturbs
+another - Claude's and Codex's skills live in separate homes with independent
+delivery markers, and `install-hooks` touches only the target you name:
+
+```bash
+seamlessd install-hooks --client codex            # add Codex to an existing install
+seamlessd install-hooks --client claude-desktop   # add the Claude app chat surface
+seamlessd install-hooks                           # or re-run the interactive multi-select
+```
+
+Restart the client you added so it loads hooks, MCP, and skills; Codex
+additionally gates new hook definitions behind
+[/hooks approval](/codex-cli/#trust-the-hooks-once), and the Claude app reads
+its config only at startup.
+
+Removing one client's wiring while keeping Seamless installed is the manual
+path: `claude mcp remove seamless` or `codex mcp remove seamless` deregisters
+MCP, the managed hook entries (tagged `seamless_managed`) come out of
+`~/.claude/settings.json` or `${CODEX_HOME:-~/.codex}/hooks.json`, and the
+skills are directories you can delete. `seamlessd uninstall --client <name>`
+also exists, but it scopes only which clients are un-wired during a **full**
+uninstall - the service and binaries come out regardless.
+
+---
+
 # Changelog
 
 URL: https://thereisnospoon.org/docs/changelog/
 
 
-<!-- GENERATED by scripts/changelog.sh (make changelog) from the git tags.
-     Do not edit by hand: edit the script, or for release notes themselves,
-     write better commit subjects. -->
 
 Every release, newest first. The entries mirror the notes on
 [GitHub Releases](https://github.com/0spoon/seamless/releases) - the same
@@ -4353,10 +4395,13 @@ CLIs: [seam](/reference/cli-seam/), the short handle an agent or owner types,
 and [seamlessd](/reference/cli-seamlessd/), the daemon and operator commands.
 
 Deployment behavior lives in [Configuration](/reference/configuration/) (every
-key, type, and default, plus the four layers that resolve them) and
+key, type, and default, plus the four layers that resolve them),
 [Hooks](/reference/hooks/) (what `install-hooks` writes per client, the
-transports and timeouts, and the fail-open contract). The two compatibility
-matrices - [Claude app](/reference/claude-app-compatibility/) and
+transports and timeouts, and the fail-open contract), and
+[The service & where things live](/reference/service/) - the one page with the
+OS-specific service commands, log locations, and every path Seamless touches.
+The two compatibility matrices -
+[Claude app](/reference/claude-app-compatibility/) and
 [Codex](/reference/codex-compatibility/) - hold versioned, platform-specific
 evidence rather than assumptions, and record how to re-verify each claim.
 
@@ -6182,6 +6227,21 @@ interactive run warns and asks whether to install at all (defaulting to no), and
 a non-interactive run errors - nothing is wired without an explicit choice. The
 curl installer and `make install` make the same choice.
 
+## The profiles at a glance
+
+The [Claude app chat surface](/claude-app/) is in the table because people ask
+where its hooks are: it has none - it is an MCP-only install target, not a
+hook client.
+
+| | Claude Code | Codex (app, CLI, IDE) | Claude app chat |
+|---|---|---|---|
+| Hooks installed | seven | five | none - MCP only |
+| Command form | exec form (`command` + `args`), identical on every OS | shell string, plus a `command_windows` variant | - |
+| Session close | `SessionEnd` harvests and completes | no `SessionEnd` - [the idle reaper expires it](/codex-cli/#no-sessionend-the-reaper-closes-sessions) | explicit `session_end`, or it never closes |
+| Trust gate | none | [/hooks approval](/codex-cli/#trust-the-hooks-once) before any hook runs | - |
+| Injection cap | none | 2,400 estimated tokens per response | - |
+| Plan capture | `PostToolUse` + `PermissionRequest` | none | - |
+
 ## Claude Code: seven hooks
 
 Taken from the `seamlessHooks` definition in `internal/hooks/install.go`, in
@@ -6498,6 +6558,131 @@ looks vaguely Seamless-shaped.
 - [Codex compatibility matrix](/reference/codex-compatibility/) - versioned
   live/schema evidence and the recapture procedure.
 - [Quickstart](/quickstart/) - install order for a working setup.
+
+---
+
+# The service & where things live
+
+URL: https://thereisnospoon.org/docs/reference/service/
+
+
+The installer registers `seamlessd` as a per-user service, so the daemon
+survives reboots without you supervising it. It runs as **your** user, not
+root: it reads your config, writes your files, and should die with your login
+session, not the machine.
+
+There is **one instance per machine**: port `8081`, data dir `~/.seamless` -
+one daemon, one database, one set of files. Both are config keys, not fixed
+facts: set `addr:` and `data_dir:` in `~/.config/seamless/seamless.yaml` (or
+the `SEAMLESS_ADDR` / `SEAMLESS_DATA_DIR` env overrides) and restart the
+service. The config is the single source of truth for the bind address - the
+installer and the Makefile both read the port back out of it, so their health
+checks follow your change rather than assuming `8081`, and nothing bakes the
+address into the service itself.
+
+## Control it from anywhere
+
+Whatever the platform, one set of verbs controls the service - they resolve
+your OS's service manager for you:
+
+```bash
+seamlessd start       # start | stop | restart | status
+make start            # the same, from a clone (start | stop | restart | status)
+```
+
+These act on the already-installed service and print a hint if it was never
+installed. The platform-native commands below are what they wrap - you need
+them only when you want to talk to the service manager directly.
+
+## The service on your OS
+
+**macOS:**
+
+A user LaunchAgent labelled `org.thereisnospoon.seamless` in
+`~/Library/LaunchAgents/`, logging to `~/.seamless/seamlessd.log` (`make logs`
+follows it from a clone). The universal verbs wrap:
+
+```bash
+launchctl print gui/$(id -u)/org.thereisnospoon.seamless        # state
+launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless # restart
+launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless      # stop
+```
+
+
+**Linux:**
+
+The installer writes a systemd user unit to
+`~/.config/systemd/user/seamless.service` and enables lingering, so the daemon
+starts at boot rather than at your next login:
+
+```bash
+systemctl --user status seamless      # state, pid, last exit
+journalctl --user -u seamless -f      # follow the log
+systemctl --user restart seamless
+systemctl --user stop seamless
+```
+
+No systemd user session (some containers, WSL1)? The installer says so and
+skips the step; run `seamlessd serve` under whatever supervises processes
+there.
+
+
+**Windows:**
+
+An at-logon Scheduled Task named `Seamless`, running as you (`LogonType
+Interactive`, no admin), logging to `~/.seamless/seamlessd.log`. The task
+action is a bare exec - `seamlessd.exe serve --config <path> --log-file
+<path>` - because a task cannot carry the `SEAMLESS_CONFIG` env prefix a plist
+or systemd unit does; the two flags pass exactly what that prefix would have:
+
+```powershell
+Get-ScheduledTask Seamless | Get-ScheduledTaskInfo   # state, last run, last result
+Get-Content ~/.seamless/seamlessd.log -Wait          # follow the log
+Restart-ScheduledTask Seamless                        # stop + start
+Stop-ScheduledTask Seamless                           # stop (it restarts at next logon)
+```
+
+It restarts on failure and never hits the default execution time limit, so it
+behaves like launchd's `KeepAlive`. Because it triggers at logon, it runs while
+you are signed in and stops when you sign out - a single-user desktop, which is
+the shape Seamless is built for.
+
+Windows wiring ships in every release and its hook command forms are
+unit-tested, but it has fewer live-verified runs than macOS and Linux; the
+[Codex compatibility matrix](/reference/codex-compatibility/) records exactly
+which combinations have been observed working.
+
+
+## Where things live {#where-things-live}
+
+Every `~` path resolves under `%USERPROFILE%` on Windows - the daemon searches
+the same relative locations on every OS.
+
+| What | Where | Notes |
+|---|---|---|
+| Binaries | `~/.local/bin/seamlessd`, `~/.local/bin/seam` | `SEAMLESS_INSTALL_DIR` retargets them - see [Install & deploy](/install/) |
+| Config + bearer key | `~/.config/seamless/seamless.yaml` | mode `0600`; every key in [Configuration](/reference/configuration/) |
+| Knowledge + database | `~/.seamless/` | markdown memories and notes, plus `seam.db` - see [Storage](/reference/storage/) |
+| Daemon log | `~/.seamless/seamlessd.log` (macOS, Windows); journald (Linux) | `make logs` from a clone, `journalctl --user -u seamless -f` on Linux |
+| Claude Code hooks | `~/.claude/settings.json` | exactly what is written: [Hooks](/reference/hooks/) |
+| Codex hooks | `${CODEX_HOME:-~/.codex}/hooks.json` | same reference, [shell-string forms](/reference/hooks/#the-codex-profile-is-shell-strings) |
+| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` + `seam-research`, delivered per client |
+| Claude app chat MCP | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS); `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | the chat surface's only artifact - [Claude app chat setup](/claude-app/) |
+
+## Removing the service by hand {#removing-the-service-by-hand}
+
+[Update & uninstall](/updating/) covers `seamlessd uninstall`, which removes
+the service along with everything else. For a bare binary you never registered
+a service for - or a machine you are cleaning by hand - the native teardown is:
+
+```bash
+launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless   # macOS
+systemctl --user disable --now seamless                      # Linux
+```
+
+```powershell
+Unregister-ScheduledTask -TaskName Seamless                  # Windows
+```
 
 ---
 
@@ -7803,6 +7988,23 @@ make check      # the gate - everything above, in order
 
 `make help` prints the full list, including the launchd dev-loop and prod-install
 targets.
+
+## The edit-test loop: make install
+
+`make install` (macOS-only; it renders the launchd plist from `deploy/launchd/`)
+is also the dev loop. When the rendered plist is unchanged - the common case -
+it skips the launchd bootout/bootstrap and kickstarts the service in place, so
+its marginal cost over `make build` is two file copies.
+
+```bash
+make build      # compile only; nothing live changes
+make install    # ...and now it does
+make logs       # follow ~/.seamless/seamlessd.log
+```
+
+That split is the point. `make build` on a half-finished edit is free, because
+the daemon and hooks keep running the last thing you installed. Rebuilding is not
+deploying.
 
 Note that `make build` is not the same as `go build`: it stamps the commit and
 build date into the binary via `-ldflags`, and those show up in `/healthz`, the

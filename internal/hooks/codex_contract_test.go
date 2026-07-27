@@ -268,23 +268,22 @@ func TestCodexDocumentation_HookTablesMatchCanonicalProfile(t *testing.T) {
 	want, err := InstalledEvents(ClientCodex)
 	require.NoError(t, err)
 
-	for _, doc := range []struct {
-		path  string
-		start string
-		end   string
-	}{
-		{
-			path:  filepath.Join("..", "..", "docs-src", "codex-cli.md"),
-			start: "## The five hooks, and what they inject",
-			end:   "### The model-visible output ceiling",
-		},
-		{
-			path:  filepath.Join("..", "..", "docs-src", "reference", "hooks.md"),
-			start: "## Codex local host: five hooks",
-			end:   "## The fail-open contract",
-		},
-	} {
-		require.Equal(t, want, documentedHookEvents(t, doc.path, doc.start, doc.end), doc.path)
+	// reference/hooks.md is the client-axis single source: the one per-event
+	// table, pinned row-for-row against the canonical profile.
+	hooksRef := filepath.Join("..", "..", "docs-src", "reference", "hooks.md")
+	require.Equal(t, want,
+		documentedHookEvents(t, hooksRef, "## Codex local host: five hooks", "## The fail-open contract"),
+		hooksRef)
+
+	// codex-cli.md deliberately links to that table instead of duplicating it,
+	// but its overview must still name every canonical event, in profile order.
+	cliPath := filepath.Join("..", "..", "docs-src", "codex-cli.md")
+	overview := docSection(t, cliPath, "## The five hooks, and what they inject", "### The model-visible output ceiling")
+	last := -1
+	for _, event := range want {
+		idx := strings.Index(overview, "`"+event+"`")
+		require.Greater(t, idx, last, "%s: overview must name `%s` after the events before it", cliPath, event)
+		last = idx
 	}
 
 	compatibility, err := os.ReadFile(filepath.Join("..", "..", "docs-src", "reference", "codex-compatibility.md"))
@@ -293,17 +292,23 @@ func TestCodexDocumentation_HookTablesMatchCanonicalProfile(t *testing.T) {
 		"the current compatibility row must name the canonical Codex profile in order")
 }
 
-func documentedHookEvents(t *testing.T, path, startHeading, endHeading string) []string {
+// docSection slices one heading-delimited span out of a docs page, failing
+// loudly when either marker is gone so a heading rename cannot silently turn
+// the assertion into a no-op.
+func docSection(t *testing.T, path, startHeading, endHeading string) string {
 	t.Helper()
 	raw, err := os.ReadFile(path)
 	require.NoError(t, err)
-	text := string(raw)
-	start := strings.Index(text, startHeading)
-	require.NotEqual(t, -1, start, path)
-	text = text[start+len(startHeading):]
-	end := strings.Index(text, endHeading)
-	require.NotEqual(t, -1, end, path)
-	text = text[:end]
+	_, after, found := strings.Cut(string(raw), startHeading)
+	require.True(t, found, path)
+	section, _, found := strings.Cut(after, endHeading)
+	require.True(t, found, path)
+	return section
+}
+
+func documentedHookEvents(t *testing.T, path, startHeading, endHeading string) []string {
+	t.Helper()
+	text := docSection(t, path, startHeading, endHeading)
 
 	var events []string
 	for line := range strings.SplitSeq(text, "\n") {

@@ -19,6 +19,21 @@ interactive run warns and asks whether to install at all (defaulting to no), and
 a non-interactive run errors - nothing is wired without an explicit choice. The
 curl installer and `make install` make the same choice.
 
+## The profiles at a glance
+
+The [Claude app chat surface](https://thereisnospoon.org/docs/claude-app/) is in the table because people ask
+where its hooks are: it has none - it is an MCP-only install target, not a
+hook client.
+
+| | Claude Code | Codex (app, CLI, IDE) | Claude app chat |
+|---|---|---|---|
+| Hooks installed | seven | five | none - MCP only |
+| Command form | exec form (`command` + `args`), identical on every OS | shell string, plus a `command_windows` variant | - |
+| Session close | `SessionEnd` harvests and completes | no `SessionEnd` - [the idle reaper expires it](https://thereisnospoon.org/docs/codex-cli/#no-sessionend-the-reaper-closes-sessions) | explicit `session_end`, or it never closes |
+| Trust gate | none | [/hooks approval](https://thereisnospoon.org/docs/codex-cli/#trust-the-hooks-once) before any hook runs | - |
+| Injection cap | none | 2,400 estimated tokens per response | - |
+| Plan capture | `PostToolUse` + `PermissionRequest` | none | - |
+
 ## Claude Code: seven hooks
 
 Taken from the `seamlessHooks` definition in `internal/hooks/install.go`, in

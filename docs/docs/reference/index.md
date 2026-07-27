@@ -16,10 +16,13 @@ CLIs: [seam](https://thereisnospoon.org/docs/reference/cli-seam/), the short han
 and [seamlessd](https://thereisnospoon.org/docs/reference/cli-seamlessd/), the daemon and operator commands.
 
 Deployment behavior lives in [Configuration](https://thereisnospoon.org/docs/reference/configuration/) (every
-key, type, and default, plus the four layers that resolve them) and
+key, type, and default, plus the four layers that resolve them),
 [Hooks](https://thereisnospoon.org/docs/reference/hooks/) (what `install-hooks` writes per client, the
-transports and timeouts, and the fail-open contract). The two compatibility
-matrices - [Claude app](https://thereisnospoon.org/docs/reference/claude-app-compatibility/) and
+transports and timeouts, and the fail-open contract), and
+[The service & where things live](https://thereisnospoon.org/docs/reference/service/) - the one page with the
+OS-specific service commands, log locations, and every path Seamless touches.
+The two compatibility matrices -
+[Claude app](https://thereisnospoon.org/docs/reference/claude-app-compatibility/) and
 [Codex](https://thereisnospoon.org/docs/reference/codex-compatibility/) - hold versioned, platform-specific
 evidence rather than assumptions, and record how to re-verify each claim.
 
@@ -40,6 +43,7 @@ memory versus note versus finding, and archive versus supersede versus delete.
 - [seamlessd CLI](https://thereisnospoon.org/docs/reference/cli-seamlessd/): The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
 - [Configuration](https://thereisnospoon.org/docs/reference/configuration/): Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.
 - [Hooks](https://thereisnospoon.org/docs/reference/hooks/): The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
+- [The service & where things live](https://thereisnospoon.org/docs/reference/service/): Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.
 - [Claude app compatibility matrix](https://thereisnospoon.org/docs/reference/claude-app-compatibility/): Versioned evidence for the Claude app's two surfaces - embedded code sessions (hooks, MCP, runtime skew) and the chat surface's stdio MCP bridge.
 - [Codex compatibility matrix](https://thereisnospoon.org/docs/reference/codex-compatibility/): Versioned, platform-specific evidence for the Codex hooks, MCP transports, trust gate, output limit, and the contract-recapture procedure.
 - [Console](https://thereisnospoon.org/docs/reference/console/): The read-mostly observability UI at /console - the complete list of what it can change, how sign-in works, and what each page shows.

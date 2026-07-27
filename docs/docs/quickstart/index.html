@@ -22,9 +22,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../quickstart/" class="current" aria-current="page">Quickstart</a></li>
         
-        <li><a href="../install/">Install &amp; deploy</a></li>
-        
         <li><a href="../claude-code/">Claude Code setup</a></li>
         
         <li><a href="../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,24 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
+    <div class="ctx-bar">
+      <span class="ctx-bar-label">Steps for</span>
+      <div class="ctx-seg" role="group" aria-label="Operating system">
+        <button type="button" data-ctx-os-pick="macos" aria-pressed="false">macOS</button>
+        <button type="button" data-ctx-os-pick="linux" aria-pressed="false">Linux</button>
+        <button type="button" data-ctx-os-pick="windows" aria-pressed="false">Windows</button>
+        <button type="button" data-ctx-os-pick="all" aria-pressed="false">All</button>
+      </div>
+      <div class="ctx-seg" role="group" aria-label="Client">
+        <button type="button" data-ctx-client-pick="claude" aria-pressed="false">Claude Code</button>
+        <button type="button" data-ctx-client-pick="claude-desktop" aria-pressed="false">Claude app chat</button>
+        <button type="button" data-ctx-client-pick="codex" aria-pressed="false">Codex</button>
+        <button type="button" data-ctx-client-pick="all" aria-pressed="false">All</button>
+      </div>
+      <p class="ctx-status" aria-live="polite"></p>
+    </div>
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -199,64 +223,84 @@
   <p>This is the one happy path: install, start a session, and watch it open with a
 briefing. It is one command and a check - everything between them is automatic.
 Every fork in the road is a link, not a branch in these steps.</p>
-<p>No CGO toolchain, no external database, no Node. The installer needs <code>curl</code> and
-<code>tar</code>; building from source needs <strong>Go 1.25+</strong>.</p>
 <h2 id="install">Install</h2>
+<div class="ctx-variant" data-ctx-os="macos linux">
+<p class="ctx-label"><span class="ctx-chip">macOS</span><span class="ctx-chip">Linux</span></p>
 <pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>On Windows, run the same install in PowerShell:</p>
+</span></span></code></pre></div>
+<div class="ctx-variant" data-ctx-os="windows">
+<p class="ctx-label"><span class="ctx-chip">Windows</span></p>
+<p>The same install, in PowerShell:</p>
 <pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
-</span></span></span></code></pre><p>One command does the lot: it fetches the checksum-verified release archive for
+</span></span></span></code></pre></div>
+<!-- The setup configurator: JS-only sugar that composes the canonical
+     one-liner with documented env knobs from the picker state above. It
+     ships hidden; without JS the labeled blocks above teach the install.
+     site-check pins data-cmd-unix/-win to the canonical commands. -->
+<div class="cfg" hidden data-cmd-unix="curl -fsSL https://thereisnospoon.org/install | sh" data-cmd-win="irm https://thereisnospoon.org/install.ps1 | iex">
+  <p class="cfg-head">Tailor it (optional)</p>
+  <label class="cfg-opt"><input type="checkbox" data-cfg="clients"> Wire only the clients picked above (<code>SEAMLESS_CLIENT</code>)</label>
+  <label class="cfg-opt"><input type="checkbox" data-cfg="noservice"> Binaries only, no service (<code>SEAMLESS_NO_SERVICE=1</code>)</label>
+  <pre class="cfg-out"><code data-cfg-out></code></pre>
+</div>
+<p>One command does the lot: it fetches the checksum-verified release archive for
 your platform (macOS, Linux, and Windows; amd64 and arm64), installs <code>seamlessd</code>
-and <code>seam</code> into <code>~/.local/bin</code>, generates the bearer key, wires the detected
-Claude Code/Codex clients (hooks, MCP, and skills), and starts the daemon as a
-per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code> - launchd on
-macOS, systemd <code>--user</code> on Linux, an at-logon Scheduled Task on Windows. Re-run
-it to upgrade. <a href="../install/">Install &amp; deploy</a> has the overrides, service details,
-and removal procedure.</p>
+and <code>seam</code>, generates the bearer key, wires the detected clients - Claude Code,
+the Claude app chat surface, Codex - with hooks, MCP, and skills, and starts
+the daemon as a per-user service on <code>127.0.0.1:8081</code> with data in <code>~/.seamless</code>.
+No Go, no CGO toolchain, no database server, no Node; the installer needs
+<code>curl</code> and <code>tar</code>. <a href="../install/">Install &amp; deploy</a> has the override knobs and the
+other routes (Homebrew, a clone, <code>go install</code>, prebuilt archives);
+<a href="../reference/service/">The service &amp; where things live</a> has the service
+controls, logs, and every path.</p>
 <p>Seamless is early in its development cycle, and releases with improvements and
 bug fixes land often. Make updating a habit - at least weekly - so you are
 always on the latest version: <code>seamlessd update</code> is the one command, on every
-OS. See <a href="../install/#upgrading">Upgrading</a>.</p>
+OS. See <a href="../updating/">Update &amp; uninstall</a>.</p>
 <p>Piping a stranger's script into a shell deserves a read first - it is
-<a href="https://thereisnospoon.org/install">one file</a>, and every other route to the
-same place is on that page: <code>brew install 0spoon/tap/seamless</code>, prebuilt
-archives from <a href="https://github.com/0spoon/seamless/releases">GitHub releases</a>,
-<code>go install github.com/0spoon/seamless/cmd/...@latest</code>, or <code>make install</code> from
-a clone.</p>
+<a href="https://thereisnospoon.org/install">one file</a>.</p>
 <p>On a true first run - no config file anywhere - the bearer key is generated and
 written to <code>~/.config/seamless/seamless.yaml</code>. Nothing to copy, nothing to
-paste.</p>
-<p>No LLM key is required either: without one, recall degrades to plain full-text
-search. Add OpenAI or Ollama in the <a href="../reference/configuration/">configuration</a>
-when you want semantic recall.</p>
+paste. No LLM key is required either: without one, recall degrades to plain
+full-text search. Add OpenAI or Ollama in the
+<a href="../reference/configuration/">configuration</a> when you want semantic recall.</p>
 <p><code>seamlessd doctor</code> is the checkpoint: it validates the config, opens the
 database, applies migrations, and asserts the tool count. If it is green, the
 daemon will start.</p>
-<h2 id="wire-your-agents">Wire your agents</h2>
-<p>The installer already ran <code>install-hooks</code> for you, so there is no second setup
-step. Start either detected client in any git repo:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude    <span class="c1"># Claude Code</span>
-</span></span><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex     <span class="c1"># Codex</span>
-</span></span></code></pre><p><code>install-hooks</code> selects the installed clients by default. For Claude Code it
-installs seven hooks and registers Streamable HTTP through <code>claude mcp add-json --scope user</code>. For Codex it installs five hooks and registers the maintained
-<code>seam mcp-proxy</code> stdio policy; Codex itself also supports direct Streamable HTTP.
-Both profiles receive <code>seam-onboard</code> and <code>seam-research</code>. Installed by hand? Run
-<code>seamlessd install-hooks</code> yourself first, or select explicitly with <code>--client claude|codex|all</code>.</p>
-<p>The hooks are what make sessions <em>ambient</em>: an agent gets a briefing without
-calling a tool. They also register the repo. On the first session inside a git
-repo, the SessionStart hook resolves your cwd to its git root, derives a project
-slug from that directory's name, and records the mapping - so agents inherit
-project scope without passing <code>project</code> on every call, and without you creating
-a project first. <code>seamlessd map-repo --path ~/code/myrepo --project myrepo</code> is
-the override when you want a slug that is not the directory name; see
-<a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain.</p>
-<p>Restart the selected client once after installing so it reloads hooks, MCP, and
-skills. In Codex CLI, open <code>/hooks</code>, review the exact Seamless commands, and
-approve them; <code>seamlessd doctor</code> deliberately reports that trust as unverified.
-The desktop app does not expose <code>/hooks</code>, so confirm that a real repo chat
-receives <code>&lt;seam-briefing&gt;</code> before relying on it. See <a href="../claude-code/">Claude Code
-setup</a> or <a href="../codex-cli/">Codex local setup</a> for the client-specific
-behavior.</p>
+<h2 id="now-open-your-client">Now open your client</h2>
+<p>The installer already wired the clients it found, so there is no second setup
+step.</p>
+<div class="ctx-variant" data-ctx-client="claude">
+<p class="ctx-label"><span class="ctx-chip">Claude Code</span></p>
+<p>Start Claude Code in any git repo - restart it first if it was already
+running, so it reloads hooks, MCP, and skills:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude
+</span></span></code></pre><p>The same setup covers code sessions inside the Claude desktop app - they
+share <code>~/.claude</code>. See <a href="../claude-code/">Claude Code setup</a>.</p>
+</div>
+<div class="ctx-variant" data-ctx-client="codex">
+<p class="ctx-label"><span class="ctx-chip">Codex</span></p>
+<p>Start Codex in any git repo - restart it first if it was already running, so
+it reloads hooks, MCP, and skills:</p>
+<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex
+</span></span></code></pre><p>Codex asks you to approve the hooks once: open <code>/hooks</code>, review the exact
+Seamless commands, and accept them - until then, no briefing appears
+(<a href="../codex-cli/#trust-the-hooks-once">why</a>). See
+<a href="../codex-cli/">Codex local setup</a>.</p>
+</div>
+<div class="ctx-variant" data-ctx-client="claude-desktop">
+<p class="ctx-label"><span class="ctx-chip">Claude app chat</span></p>
+<p>Restart the Claude app once - it reads its config only at startup. A chat has
+no hooks and no working directory, so tell it the repo's absolute path and
+have it run <code>session_start</code> with that as <code>cwd</code>. See
+<a href="../claude-app/">Claude app chat setup</a>.</p>
+</div>
+<p>The first session inside a git repo also registers it: the SessionStart hook
+resolves your cwd to its git root, derives a project slug from that
+directory's name, and records the mapping - so agents inherit project scope
+without passing <code>project</code> on every call, and without you creating a project
+first. See <a href="../concepts/projects/">Projects &amp; scope</a> for the precedence chain
+and the <code>seamlessd map-repo</code> override.</p>
 <h2 id="confirm-it-works">Confirm it works</h2>
 <p>That session's context now opens with an injected briefing:</p>
 <figure class="doc-figure" data-tone="ok" aria-labelledby="quickstart-briefing-caption">
@@ -273,13 +317,11 @@ started with your knowledge already in context.</p>
 <pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open                               <span class="c1"># opens pre-authenticated</span>
 </span></span></code></pre><h2 id="next-steps">Next steps</h2>
 <ul>
-<li><a href="../install/">Install &amp; deploy</a> makes the daemon a service that survives
-reboots instead of a foreground process.</li>
-<li>The installer already delivered <code>seam-onboard</code> for the selected client. Run
-<code>/seam-onboard</code> in Claude Code or <code>$seam-onboard</code> in Codex once to write a
-Seamless-awareness block into global or project instructions (<code>CLAUDE.md</code> or
-<code>AGENTS.md</code>). From a clone, <code>make install-onboard-skill CLIENT=codex</code>
-installs the Codex copy; the default is <code>CLIENT=detect</code>.</li>
+<li>Run <code>/seam-onboard</code> in Claude Code or <code>$seam-onboard</code> in Codex once - it
+shows the Seamless-awareness block it can add to global or project
+instructions (<code>CLAUDE.md</code> or <code>AGENTS.md</code>) and edits only with your approval.</li>
+<li>Wire a client the installer did not find:
+<a href="../updating/#add-or-remove-one-client">Add or remove one client</a>.</li>
 <li>Look up any tool, key, or command in the <a href="../reference/">Reference</a>.</li>
 </ul>
 
@@ -290,7 +332,7 @@ installs the Codex copy; the default is <code>CLIENT=detect</code>.</li>
     
     <nav class="page-nav" aria-label="Pagination">
       <a class="prev" href="../"><span class="dir">Previous</span><span class="t">What is Seamless?</span></a>
-      <a class="next" href="../install/"><span class="dir">Next</span><span class="t">Install &amp; deploy</span></a>
+      <a class="next" href="../claude-code/"><span class="dir">Next</span><span class="t">Claude Code setup</span></a>
     </nav>
     
   </main>
@@ -299,7 +341,7 @@ installs the Codex copy; the default is <code>CLIENT=detect</code>.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install">Install</a></li><li class="lvl-2"><a href="#wire-your-agents">Wire your agents</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
+      <li class="lvl-2"><a href="#install">Install</a></li><li class="lvl-2"><a href="#now-open-your-client">Now open your client</a></li><li class="lvl-2"><a href="#confirm-it-works">Confirm it works</a></li><li class="lvl-2"><a href="#next-steps">Next steps</a></li>
     </ul>
   </aside>
   
@@ -310,7 +352,7 @@ installs the Codex copy; the default is <code>CLIENT=detect</code>.</li>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=e5dfd08c"></script>
+<script src="../static/docs.js?v=46efc7ae"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

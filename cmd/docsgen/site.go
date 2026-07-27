@@ -97,8 +97,12 @@ type Page struct {
 	// needs it because Text is capped by plainText, and a silently truncated
 	// page there would be worse than none.
 	FullMarkdown string
-	Body         template.HTML
-	Headings     []Heading
+	// HasVariants reports whether the body carries `::: when` context
+	// containers; it gates the OS/client picker bar into the layout, so pages
+	// with nothing to filter stay chrome-free.
+	HasVariants bool
+	Body        template.HTML
+	Headings    []Heading
 	// Links are the same-site paths this page's body references; checkLinks
 	// resolves them.
 	Links []string

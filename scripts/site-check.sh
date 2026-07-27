@@ -10,7 +10,7 @@
 # run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
-# Nine assertions, each one a thing a machine can actually verify:
+# Twelve assertions, each one a thing a machine can actually verify:
 #
 #   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
 #   2. every surface that teaches installing teaches the SAME two commands
@@ -22,6 +22,10 @@
 #   7. exactly one JSON-LD block, braces balanced, with the required types
 #   8. the JSON-LD FAQPage mirrors the visible #faq section
 #   9. every scene outcome in scenes.js appears verbatim in the SSR fallbacks
+#  10. native service commands live only on their two reference homes
+#  11. the setup configurator composes from the two canonical commands
+#  12. the landing bootstrap folds the docs' localStorage("os") values back
+#      to its coarse unix|windows pair
 #
 # Deliberately not a prose linter: claims like "one binary, no ceremony" are the
 # author's problem. Commands are checkable, so these are checked.
@@ -239,6 +243,35 @@ $outcomes
 EOF
 	fi
 fi
+
+# 10. OS-specific service commands have exactly one explanatory home
+#     (reference/service.md), plus the CLI reference that documents what the
+#     seamlessd verbs wrap. Phrase-level mentions ("launchd, systemd, or a
+#     Scheduled Task") are fine anywhere; a third page carrying the actual
+#     commands is a half-updated copy waiting to happen.
+strays=$(grep -rlE 'launchctl |systemctl --user|ScheduledTask' docs-src |
+	grep -v 'docs-src/reference/service\.md' |
+	grep -v 'docs-src/reference/cli-seamlessd\.md' || true)
+[ -z "$strays" ] || err "OS service commands leaked outside their reference homes: $strays"
+
+# 11. The setup configurator on the setup page composes its output from the
+#     two canonical commands carried in data attributes. Pin those attributes
+#     to canon, or the widget teaches a drifted command with every knob.
+CFGPAGE=docs-src/quickstart.md
+if grep -q 'class="cfg"' "$CFGPAGE"; then
+	grep -qF "data-cmd-unix=\"$INSTALL_CMD\"" "$CFGPAGE" ||
+		err "$CFGPAGE configurator data-cmd-unix is not the canonical [$INSTALL_CMD]"
+	grep -qF "data-cmd-win=\"$WIN_INSTALL_CMD\"" "$CFGPAGE" ||
+		err "$CFGPAGE configurator data-cmd-win is not the canonical [$WIN_INSTALL_CMD]"
+else
+	err "$CFGPAGE carries no setup configurator (class=\"cfg\" markup missing)"
+fi
+
+# 12. The docs picker widens localStorage("os") to macos/linux/windows/all;
+#     the landing bootstrap must keep folding those back to its coarse unix
+#     value, or a pick made in the docs silently resets on the landing page.
+grep -qF 'if(o==="macos"||o==="linux")o="unix";' "$PAGE" ||
+	err "$PAGE bootstrap lost the macos/linux -> unix localStorage(\"os\") mapping"
 
 [ "$fail" -eq 0 ] || exit 1
 echo "site-check: $PAGE agrees with the installer, the CLI, and its own structured data"

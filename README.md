@@ -110,7 +110,7 @@ config and `~/.seamless` are never touched.
 > **Early days, frequent releases.** Seamless is early in its development
 > cycle, and releases with improvements and bug fixes land often. Update at
 > least weekly to run the latest version -- `seamlessd update` is the one
-> command. See [Upgrading](https://thereisnospoon.org/docs/install/#upgrading).
+> command. See [Update & uninstall](https://thereisnospoon.org/docs/updating/).
 
 (Why `seam`? The CLI keeps the short name of Seam v1, the decommissioned
 private predecessor Seamless was rebuilt from the ground up to replace.)
@@ -123,33 +123,15 @@ Reach for `seamlessd map-repo --path ~/code/myrepo --project myrepo` only to
 override the derived slug.
 
 It is [one shell script](docs/install) and piping a stranger's script into a
-shell deserves a read first. Prefer a toolchain, or want the pieces one at a
-time?
-
-```bash
-go install github.com/0spoon/seamless/cmd/...@latest   # Go 1.25+; seamlessd + seam
-seamlessd serve                   # 127.0.0.1:8081; first run generates the API key
-seamlessd install-hooks           # selected client's hooks, MCP, and skills
-```
-
-`install-hooks` detects Claude Code, Codex, or both. Claude Code gets a
-user-scoped Streamable HTTP registration; the shared Codex app/CLI/IDE host gets
-five hooks and the `seam mcp-proxy` stdio bridge. Current Codex supports direct
-Streamable HTTP too - the proxy is Seamless's default so the bearer key stays in
-the 0600 Seamless config, not a transport limitation. Other MCP clients register
-`http://127.0.0.1:8081/api/mcp` with `Authorization: Bearer <mcp.api_key>`. From
-a clone, `make build && make run` is the same daemon out of `./bin/`, and `make
-install` sets it up as a service.
-
-The installer delivers portable `seam-onboard` and `seam-research` skills for
-the selected client: `~/.claude/skills/` for Claude Code and
-`${CODEX_HOME:-$HOME/.codex}/skills/` for Codex. Run `/seam-onboard` in Claude Code
-or `$seam-onboard` in Codex once to add a Seamless-awareness block to global or
-project instructions (`CLAUDE.md` or `AGENTS.md`). From a clone, use
-`make install-onboard-skill CLIENT=claude|codex|all|detect` (default: detect).
+shell deserves a read first. Prefer the pieces one at a time - Homebrew,
+`go install`, prebuilt archives - or want the override knobs? Every route is
+on [Install & deploy](https://thereisnospoon.org/docs/install/), and the
+[Quickstart](https://thereisnospoon.org/docs/quickstart/) tailors each step to
+your OS and client.
 
 Then: [Quickstart](https://thereisnospoon.org/docs/quickstart/) ·
 [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) ·
+[Claude app chat setup](https://thereisnospoon.org/docs/claude-app/) ·
 [Codex local setup](https://thereisnospoon.org/docs/codex-cli/) ·
 [Install & deploy](https://thereisnospoon.org/docs/install/)
 

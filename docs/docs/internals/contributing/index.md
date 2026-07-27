@@ -24,6 +24,23 @@ make check      # the gate - everything above, in order
 `make help` prints the full list, including the launchd dev-loop and prod-install
 targets.
 
+## The edit-test loop: make install
+
+`make install` (macOS-only; it renders the launchd plist from `deploy/launchd/`)
+is also the dev loop. When the rendered plist is unchanged - the common case -
+it skips the launchd bootout/bootstrap and kickstarts the service in place, so
+its marginal cost over `make build` is two file copies.
+
+```bash
+make build      # compile only; nothing live changes
+make install    # ...and now it does
+make logs       # follow ~/.seamless/seamlessd.log
+```
+
+That split is the point. `make build` on a half-finished edit is free, because
+the daemon and hooks keep running the last thing you installed. Rebuilding is not
+deploying.
+
 Note that `make build` is not the same as `go build`: it stamps the commit and
 build date into the binary via `-ldflags`, and those show up in `/healthz`, the
 MCP handshake, and the startup log. A plain `go build` leaves them `unknown`,

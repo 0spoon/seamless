@@ -11,14 +11,15 @@
 sections:
   - title: Getting started
     slug: ""
-    description: Install Seamless, wire it to Claude Code or Codex, and watch the first briefing land.
+    description: Install with one command, connect Claude Code, the Claude app, or Codex, and watch the first briefing land.
     pages:
       - index.md
       - quickstart.md
-      - install.md
       - claude-code.md
       - claude-app.md
       - codex-cli.md
+      - install.md
+      - updating.md
       - changelog.md
 
   - title: Concepts
@@ -54,7 +55,7 @@ sections:
 
   - title: Reference
     slug: reference
-    description: The complete surface - MCP tools, CLIs, configuration keys, hooks, and file formats.
+    description: The complete surface - MCP tools, CLIs, configuration keys, hooks, the service, and file formats.
     pages:
       - index.md
       - mcp/index.md
@@ -66,6 +67,7 @@ sections:
       - cli-seamlessd.md
       - configuration.md
       - hooks.md
+      - service.md
       - claude-app-compatibility.md
       - codex-compatibility.md
       - console.md

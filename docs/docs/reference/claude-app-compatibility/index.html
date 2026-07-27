@@ -22,9 +22,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../../quickstart/">Quickstart</a></li>
         
-        <li><a href="../../install/">Install &amp; deploy</a></li>
-        
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
         <li><a href="../../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../../reference/claude-app-compatibility/" class="current" aria-current="page">Claude app compatibility matrix</a></li>
         
         <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,7 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -306,7 +313,7 @@ while you do this.</p>
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../../reference/hooks/"><span class="dir">Previous</span><span class="t">Hooks</span></a>
+      <a class="prev" href="../../reference/service/"><span class="dir">Previous</span><span class="t">The service &amp; where things live</span></a>
       <a class="next" href="../../reference/codex-compatibility/"><span class="dir">Next</span><span class="t">Codex compatibility matrix</span></a>
     </nav>
     
@@ -327,7 +334,7 @@ while you do this.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=e5dfd08c"></script>
+<script src="../../static/docs.js?v=46efc7ae"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

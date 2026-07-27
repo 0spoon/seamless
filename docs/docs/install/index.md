@@ -1,6 +1,6 @@
 # Install & deploy
 
-> The install layout, the per-user service (launchd, systemd, or a Scheduled Task), upgrading, uninstalling, and the security posture you are accepting.
+> The one-command install and every other route to the same place - Homebrew, a clone, go install - plus the override knobs and the security posture you are accepting.
 
 Installing Seamless is one command: a script downloads a release archive
 containing the `seamlessd` daemon and `seam` CLI for macOS, Linux, or Windows,
@@ -8,32 +8,27 @@ verifies its SHA-256, and registers the daemon as a per-user service - launchd,
 systemd, or a Scheduled Task - bound to loopback. No Docker, database server,
 or Go toolchain. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) runs that command and moves on;
 this page is what it did, and what to do when you want to steer it yourself.
-
-## One instance per machine
-
-There is **one instance**: port `8081`, data dir `~/.seamless`. One daemon, one
-database, one set of files.
-
-Both are config keys, not fixed facts - set `addr:` and `data_dir:` in
-`~/.config/seamless/seamless.yaml` (or the `SEAMLESS_ADDR` / `SEAMLESS_DATA_DIR`
-env overrides) and restart the service. The config is the single source of truth
-for the bind address: the installer and the Makefile both read the port back out
-of it, so the health check follows your change rather than assuming `8081`.
-Nothing bakes the address into the service - which is why editing `addr:` works
-instead of being silently overridden.
+Where everything lands - the service, logs, ports, and every path - is on
+[The service & where things live](https://thereisnospoon.org/docs/reference/service/).
 
 ## Install in one command
+
+**macOS · Linux:**
 
 ```bash
 curl -fsSL https://thereisnospoon.org/install | sh
 ```
 
-On Windows, run the [PowerShell installer](https://thereisnospoon.org/install.ps1)
-instead - it does the same steps with a Scheduled Task in place of launchd/systemd:
+
+**Windows:**
+
+The [PowerShell installer](https://thereisnospoon.org/install.ps1) does the
+same steps with a Scheduled Task in place of launchd/systemd:
 
 ```powershell
 irm https://thereisnospoon.org/install.ps1 | iex
 ```
+
 
 This is the path for using Seamless (as opposed to working on it). The POSIX
 script needs `curl` and `tar`; the PowerShell one needs nothing beyond Windows
@@ -49,9 +44,9 @@ itself. No Go toolchain is involved. In order, it:
    `~/.config/seamless/seamless.yaml` on first run, detects Claude Code, the
    Claude app chat surface, and Codex, and installs that set's hooks, MCP
    registrations, and skills;
-4. installs and starts the per-user service - launchd on macOS, systemd
-   `--user` on Linux, an at-logon Scheduled Task on Windows - and polls
-   `/healthz` until the daemon actually answers.
+4. installs and starts the [per-user service](https://thereisnospoon.org/docs/reference/service/) - launchd
+   on macOS, systemd `--user` on Linux, an at-logon Scheduled Task on
+   Windows - and polls `/healthz` until the daemon actually answers.
 
 Step 3 detects three install targets - **Claude Code**, the **Claude app chat
 surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
@@ -76,11 +71,14 @@ paths are `%USERPROFILE%`-relative on Windows). Invoke `/seam-onboard` in Claude
 Code or `$seam-onboard` in Codex. The skill asks before adding its marked block
 to global/project `CLAUDE.md` or `AGENTS.md`; it never silently edits either.
 
+**Windows:**
+
 The Windows installer is per-user by the same principle as the others: it runs
 as **you**, never elevates, and registers the Scheduled Task under your own
 account (`LogonType Interactive`), so a single signed-in user is all it needs and
 no administrator prompt ever appears. `~/.config/seamless` and `~/.seamless`
 resolve under `%USERPROFILE%`, exactly the paths the daemon already searches.
+
 
 Re-running it upgrades in place: binaries are swapped by rename (safe while the
 daemon holds them open), the service restarts on the new build, and your config
@@ -101,19 +99,30 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 | `SEAMLESS_NO_SERVICE=1` | install the binaries only; run `seamlessd serve` yourself |
 | `SEAMLESS_ALLOW_ROOT=1` | permit running as root (single-user containers) |
 
+**macOS · Linux:**
+
 Set them ahead of the shell, not the curl:
-`curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh`. On
-Windows the same knobs are environment variables you set before the pipe -
+`curl -fsSL https://thereisnospoon.org/install | SEAMLESS_VERSION=0.3.0 sh`.
+
+
+**Windows:**
+
+The same knobs are environment variables you set before the pipe -
 `$env:SEAMLESS_VERSION='0.3.0'; irm https://thereisnospoon.org/install.ps1 | iex`
 - with the one exception of `SEAMLESS_ALLOW_ROOT`, which is POSIX-only (the
 Windows task is per-user by construction, so there is no root case to allow).
+
 
 Everything here is per-user by construction - `~/.local/bin`, `~/.config`,
 `~/.seamless`, a user service - so run it as yourself. Under `curl | sudo sh` it
 would all land in root's home where your agents will never look, which is why
 the script refuses root unless you insist.
 
-## Homebrew
+## Installing without the one-liner
+
+The other routes end up in the same place with more of the steps left to you.
+
+### Homebrew
 
 ```bash
 brew install 0spoon/tap/seamless
@@ -134,7 +143,7 @@ seamlessd serve           # or set up the service yourself
 resolve `seam` through brew's stable bin path - but restart the daemon
 yourself so it runs the new build.
 
-## Install from a clone
+### From a clone
 
 ```bash
 make install                    # -> ~/.local/bin + ~/.config/seamless/seamless.yaml
@@ -148,12 +157,15 @@ and config to stable locations, then points launchd **and** the selected clients
 hooks/MCP definitions at the copies. Nothing live resolves through your working
 tree, so `make build`, a branch switch, and a moved or cleaned repo cannot change
 what the running daemon and every agent's hooks execute. Swapping them is `make
-install`, deliberately.
+install`, deliberately - [Contributing](https://thereisnospoon.org/docs/internals/contributing/) covers using
+it as the edit-test loop.
 
 The config lands in `~/.config/seamless/`, one of the paths Seamless already
 searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
 It is seeded **only when absent** - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.
+
+### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:
 `go install github.com/0spoon/seamless/cmd/...@latest` needs Go 1.25+, and the
@@ -163,162 +175,24 @@ covers the essentials - first run seeds the config - and `seamlessd install-hook
 wires the detected Claude Code/Codex clients; what you take on yourself is the
 service.
 
-## Iterating on Seamless itself
+## The service {#the-service}
 
-`make install` is also the edit-test loop. When the rendered plist is unchanged -
-the common case - it skips the launchd bootout/bootstrap and kickstarts the
-service in place, so its marginal cost over `make build` is two file copies.
+The installer registered `seamlessd` as a per-user service - launchd on macOS,
+systemd `--user` on Linux, an at-logon Scheduled Task on Windows - and
+`seamlessd start|stop|restart|status` controls it the same way everywhere. The
+native commands, log locations, and every path Seamless touches are on
+[The service & where things live](https://thereisnospoon.org/docs/reference/service/).
 
-```bash
-make build      # compile only; nothing live changes
-make install    # ...and now it does
-make logs       # follow ~/.seamless/seamlessd.log
-```
+## Upgrading {#upgrading}
 
-That split is the point. `make build` on a half-finished edit is free, because
-the daemon and hooks keep running the last thing you installed. Rebuilding is not
-deploying.
+`seamlessd update` upgrades in place to the latest release, on every OS.
+[Update & uninstall](https://thereisnospoon.org/docs/updating/) has the full procedure, the pinning knobs,
+and how the fetched installer is signature-verified before it runs.
 
-## The service
+## Uninstalling {#uninstalling}
 
-It runs as **your** user, not root: it reads your config, writes your files, and
-should die with your login session, not the machine.
-
-Whatever the platform, one set of verbs controls it - they resolve your OS's
-service manager for you:
-
-```bash
-seamlessd start       # start | stop | restart | status
-make start            # the same, from a clone (start | stop | restart | status)
-```
-
-These act on the already-installed service and print a hint if it was never
-installed. The platform-native commands below are what they wrap.
-
-On **macOS** it is a user LaunchAgent labelled `org.thereisnospoon.seamless` in
-`~/Library/LaunchAgents/`, logging to `~/.seamless/seamlessd.log`; `make logs`
-follows that log. Underneath, the verbs above wrap
-`launchctl print gui/$(id -u)/org.thereisnospoon.seamless`,
-`launchctl kickstart -k gui/$(id -u)/org.thereisnospoon.seamless`, and
-`launchctl bootout gui/$(id -u)/org.thereisnospoon.seamless`.
-
-On **Linux** the installer writes a systemd user unit to
-`~/.config/systemd/user/seamless.service` and enables lingering, so the daemon
-starts at boot rather than at your next login:
-
-```bash
-systemctl --user status seamless      # state, pid, last exit
-journalctl --user -u seamless -f      # follow the log
-systemctl --user restart seamless
-systemctl --user stop seamless
-```
-
-No systemd user session (some containers, WSL1)? The installer says so and skips
-the step; run `seamlessd serve` under whatever supervises processes there.
-
-On **Windows** it is an at-logon Scheduled Task named `Seamless`, running as you
-(`LogonType Interactive`, no admin), logging to `~/.seamless/seamlessd.log`. The
-task action is a bare exec - `seamlessd.exe serve --config <path> --log-file
-<path>` - because a task cannot carry the `SEAMLESS_CONFIG` env prefix a plist or
-systemd unit does; the two flags pass exactly what that prefix would have:
-
-```powershell
-Get-ScheduledTask Seamless | Get-ScheduledTaskInfo   # state, last run, last result
-Get-Content ~/.seamless/seamlessd.log -Wait          # follow the log
-Restart-ScheduledTask Seamless                        # stop + start
-Stop-ScheduledTask Seamless                           # stop (it restarts at next logon)
-```
-
-It restarts on failure and never hits the default execution time limit, so it
-behaves like launchd's `KeepAlive`. Because it triggers at logon, it runs while
-you are signed in and stops when you sign out - a single-user desktop, which is
-the shape Seamless is built for.
-
-## Upgrading
-
-Seamless is early in its development cycle: releases with improvements and bug
-fixes land often, so update at least weekly to stay on the latest version.
-
-`seamlessd update` is the one command, on every OS. It upgrades in place to the
-latest release by re-running the canonical installer for you - so there is a
-single upgrade path to trust, not a second copy of the download-and-swap logic
-that could drift from the installer:
-
-```bash
-seamlessd update --check   # report installed vs latest, change nothing
-seamlessd update --dry-run # print exactly what it would fetch and run
-seamlessd update           # fetch the latest release and swap it in
-```
-
-It honors the same knobs as the installer, so `SEAMLESS_VERSION=0.3.0 seamlessd
-update` pins a version and `SEAMLESS_INSTALL_DIR=... seamlessd update` retargets.
-Under the hood it fetches the installer script (the PowerShell one on Windows)
-from the latest release's assets together with the Sigstore bundle the release
-workflow signed it with, verifies the signature in-process - the script must
-have been produced by this repository's release workflow on a version tag, or
-update refuses to run it - and then runs it. That is the same script as doing
-it by hand, minus the signature check:
-
-```bash
-curl -fsSL https://thereisnospoon.org/install | sh
-```
-
-From a clone, `make update` builds first and then runs that same command against
-your installed copy (`make update CHECK=1` only reports). Note that both
-`seamlessd update` and `make update` install the latest *release*, which may be
-older than your clone's HEAD - to deploy the build from your working tree instead:
-
-```bash
-git pull
-make check             # everything green before you swap the running daemon
-make install           # swap it
-make doctor            # confirm config + DB after the swap
-```
-
-Migrations apply automatically at startup - there is no separate migrate step.
-Run `make doctor` afterwards anyway: it is the cheapest way to learn that the new
-build disagrees with your config before an agent does.
-
-`/healthz` reports the running build. If a change seems not to have taken effect,
-check it before you debug anything else - a stale daemon still serving the old
-binary looks exactly like a bug in the new one.
-
-## Uninstalling
-
-`seamlessd uninstall` is the one command, on every OS. It reverses the whole
-install - stops and removes the per-user service, strips the Claude Code and
-Codex hooks, deregisters the MCP server from both client CLIs and from the
-Claude app's `claude_desktop_config.json`, removes both hook clients' installed
-`seam-onboard` and `seam-research` packages/one-shot markers, and deletes the
-binaries - and it is idempotent, so a second run is a clean no-op. Preview it
-first with `--dry-run`:
-
-```bash
-seamlessd uninstall --dry-run   # print exactly what would be removed
-seamlessd uninstall             # do it (asks to confirm on a terminal)
-```
-
-From a clone it is `make uninstall`, which builds first and then runs that same
-command against your installed copy.
-
-**Your knowledge is kept by default.** `~/.config/seamless` (your bearer key) and
-`~/.seamless` (the database, and your memories and notes as markdown) are left in
-place - the uninstall of a program should not delete your knowledge. Add
-`--purge` (or `make uninstall PURGE=1`) only when you actually mean to delete
-them; a guard refuses to purge a path that resolves to your home directory or the
-filesystem root. See [Storage](https://thereisnospoon.org/docs/reference/storage/) for what is in there.
-
-The hooks come out of `~/.claude/settings.json` and Codex's `hooks.json` through
-the same exact classifier the installer and doctor use. Current, marked-stale,
-and unmistakable legacy Seamless entries are removed; foreign entries survive,
-even when their arguments happen to contain `hook <event>`. The install's
-original backup sits next to each file. If you would rather do it by hand - a
-bare binary you never installed a service for, say - the service teardown is
-`launchctl bootout` / `systemctl --user disable --now` /
-`Unregister-ScheduledTask -TaskName Seamless`, and `claude mcp remove seamless`
-or `codex mcp remove seamless` drops that client's MCP registration. The chat
-surface has no CLI: delete the `seamless` entry under `mcpServers` in the
-Claude app (Settings > Developer > Edit Config) and restart it.
+`seamlessd uninstall` reverses the whole install and keeps your knowledge by
+default. See [Update & uninstall](https://thereisnospoon.org/docs/updating/#uninstall).
 
 ## Security posture
 

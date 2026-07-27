@@ -46,9 +46,27 @@ Linux `all` deliberately excludes it).
 There is no management CLI for the app, so registration is a direct,
 merge-preserving edit of the app's config file:
 
-- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
-- `--desktop-config PATH` overrides the location.
+::: when os=macos
+
+The file is `~/Library/Application Support/Claude/claude_desktop_config.json`.
+
+:::
+
+::: when os=windows
+
+The file is `%APPDATA%\Claude\claude_desktop_config.json`.
+
+:::
+
+::: when os=linux
+
+The Claude app does not ship for Linux, so there is no chat surface to
+register on this machine - the code-session and CLI setup on
+[Claude Code setup](/claude-code/) is the whole story there.
+
+:::
+
+`--desktop-config PATH` overrides the location.
 
 The edit adds one stdio entry under `mcpServers` - the reserved name
 `seamless`, launching `seam mcp-proxy --config <absolute seamless.yaml>` - and
@@ -115,10 +133,14 @@ in [Projects & scope](/concepts/projects/).
 ## Uninstall
 
 `seamlessd uninstall` (default `--client all`) removes the chat-surface entry
-along with everything else; `--client claude-desktop` scopes the run to just
-it. Removal deletes only the reserved `seamless` entry - every other key,
-including a now-empty `mcpServers`, stays exactly as found - and prints the
-same restart notice, since the app also unloads config at startup only.
+along with everything else; `--client claude-desktop` limits the client step
+to this entry alone, though uninstall always removes the service and binaries
+too - it un-installs the program, not one client. Removal deletes only the
+reserved `seamless` entry - every other key, including a now-empty
+`mcpServers`, stays exactly as found - and prints the same restart notice,
+since the app also loads config at startup only. To drop just this entry and
+keep Seamless, edit the config by hand:
+[Add or remove one client](/updating/#add-or-remove-one-client).
 
 ## Verify
 

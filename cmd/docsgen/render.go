@@ -55,12 +55,20 @@ func renderPages(site *Site) error {
 			}
 			md = strings.TrimRight(md, "\n") + "\n\n" + extra
 		}
-		out, err := renderMarkdown(md, p.DocsRoot, p.Root)
+		expanded, hasVariants, err := expandVariants(md)
 		if err != nil {
 			return fmt.Errorf("%s: %w", p.Src, err)
 		}
+		out, err := renderMarkdown(expanded, p.DocsRoot, p.Root)
+		if err != nil {
+			return fmt.Errorf("%s: %w", p.Src, err)
+		}
+		// FullMarkdown keeps the authored `::: when` source; the markdown
+		// representations run textifyVariants over it so text consumers get
+		// labeled variants, never the marker syntax or hidden content.
 		p.FullMarkdown = md
-		p.Body, p.Headings, p.Links, p.Text = out.HTML, out.Headings, out.Links, plainText(md)
+		p.HasVariants = hasVariants
+		p.Body, p.Headings, p.Links, p.Text = out.HTML, out.Headings, out.Links, plainText(textifyVariants(md))
 	}
 	return checkLinks(site)
 }

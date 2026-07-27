@@ -21,9 +21,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="static/docs.css?v=426739fc">
+<link rel="stylesheet" href="static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="">
 
@@ -65,13 +67,15 @@
         
         <li><a href="quickstart/">Quickstart</a></li>
         
-        <li><a href="install/">Install &amp; deploy</a></li>
-        
         <li><a href="claude-code/">Claude Code setup</a></li>
         
         <li><a href="claude-app/">Claude app chat setup</a></li>
         
         <li><a href="codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="install/">Install &amp; deploy</a></li>
+        
+        <li><a href="updating/">Update &amp; uninstall</a></li>
         
         <li><a href="changelog/">Changelog</a></li>
         
@@ -155,6 +159,8 @@
         
         <li><a href="reference/hooks/">Hooks</a></li>
         
+        <li><a href="reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -185,6 +191,7 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
     <article class="prose home-intro">
   <h1>What is Seamless?</h1>
   <p class="lede">A local-first memory and coordination substrate for the fleet of coding agents you run - markdown files you own, indexed by one local daemon.</p>
@@ -222,7 +229,31 @@ external database, no required cloud service, and no outbound product
 telemetry.</p>
 <p><strong>Propose, don't act.</strong> The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.</p>
-<h2 id="where-to-go-next">Where to go next</h2>
+<h2 id="which-agent-do-you-run">Which agent do you run?</h2>
+<p>Setup is client-shaped: pick yours and that page walks install, wiring, and
+verification end to end. The <a href="quickstart/">Quickstart</a> is the same path for
+everyone - one install command, then your client.</p>
+<!-- Raw HTML, so hrefs are relative to the docs home (rewriteDocLinks only
+     rewrites markdown links). This page renders at /docs/, one level deep. -->
+<div class="card-grid">
+  <a class="doc-card" href="claude-code/">
+    <h2>Claude Code</h2>
+    <p>The terminal CLI and the Claude app's code sessions - one setup covers both.</p>
+  </a>
+  <a class="doc-card" href="claude-app/">
+    <h2>Claude app chat</h2>
+    <p>Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.</p>
+  </a>
+  <a class="doc-card" href="codex-cli/">
+    <h2>Codex</h2>
+    <p>CLI, desktop app, and IDE extension - one shared local profile named codex.</p>
+  </a>
+  <a class="doc-card" href="guides/mcp-clients/">
+    <h2>Any other MCP client</h2>
+    <p>Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.</p>
+  </a>
+</div>
+<h2 id="or-start-from-the-task">Or start from the task</h2>
 <div class="table-wrap">
 <table>
 <thead>
@@ -233,23 +264,23 @@ proposes. Nothing rewrites your knowledge behind your back.</p>
 </thead>
 <tbody>
 <tr>
-<td>Get it running in ten minutes</td>
+<td>Install from zero in ten minutes</td>
 <td><a href="quickstart/">Quickstart</a></td>
 </tr>
 <tr>
-<td>Wire it into Claude Code</td>
-<td><a href="claude-code/">Claude Code setup</a></td>
+<td>Update, uninstall, or add a client later</td>
+<td><a href="updating/">Update &amp; uninstall</a></td>
 </tr>
 <tr>
-<td>Wire it into Codex</td>
-<td><a href="codex-cli/">Codex local setup (app, CLI, and IDE)</a></td>
+<td>Control the service, find logs and paths</td>
+<td><a href="reference/service/">The service &amp; where things live</a></td>
 </tr>
 <tr>
 <td>Understand the model before trusting it</td>
 <td><a href="concepts/how-it-works/">How Seamless works</a></td>
 </tr>
 <tr>
-<td>Point another MCP agent at it</td>
+<td>Point a hand-rolled agent at it</td>
 <td><a href="guides/integrate-your-agent/">Integrate your agent</a></td>
 </tr>
 <tr>
@@ -286,7 +317,7 @@ proposes. Nothing rewrites your knowledge behind your back.</p>
   
   <a class="doc-card" href="reference/">
     <h2>Reference</h2>
-    <p>The complete surface - MCP tools, CLIs, configuration keys, hooks, and file formats.</p>
+    <p>The complete surface - MCP tools, CLIs, configuration keys, hooks, the service, and file formats.</p>
   </a>
   
   <a class="doc-card" href="internals/">
@@ -309,7 +340,7 @@ proposes. Nothing rewrites your knowledge behind your back.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-it-gives-a-fleet">What it gives a fleet</a></li><li class="lvl-2"><a href="#design-principles">Design principles</a></li><li class="lvl-2"><a href="#where-to-go-next">Where to go next</a></li>
+      <li class="lvl-2"><a href="#what-it-gives-a-fleet">What it gives a fleet</a></li><li class="lvl-2"><a href="#design-principles">Design principles</a></li><li class="lvl-2"><a href="#which-agent-do-you-run">Which agent do you run?</a></li><li class="lvl-2"><a href="#or-start-from-the-task">Or start from the task</a></li>
     </ul>
   </aside>
   
@@ -320,7 +351,7 @@ proposes. Nothing rewrites your knowledge behind your back.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="static/docs.js?v=e5dfd08c"></script>
+<script src="static/docs.js?v=46efc7ae"></script>
 <script src="../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

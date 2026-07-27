@@ -132,9 +132,9 @@ func llmsTxt(site *Site) []byte {
 
 // llmsFullTxt renders /llms-full.txt: every page's full source markdown in nav
 // order, each under its title with its canonical URL, so an LLM that fetches
-// one file gets the whole site untruncated. Figures flatten to fenced text
-// (textifyFigures) -- this file exists for text consumers, who should never
-// see the figures' HTML markup.
+// one file gets the whole site untruncated. Authored raw HTML flattens
+// (textifyEmbeddedHTML: figures to fenced text, card grids to link lists) --
+// this file exists for text consumers, who should never see the markup.
 func llmsFullTxt(site *Site) []byte {
 	var b strings.Builder
 	b.WriteString("# " + siteName + "\n\n")
@@ -143,7 +143,7 @@ func llmsFullTxt(site *Site) []byte {
 		b.WriteString("\n---\n\n")
 		b.WriteString("# " + p.Title + "\n\n")
 		b.WriteString("URL: " + p.Canonical() + "\n\n")
-		b.WriteString(strings.TrimRight(textifyFigures(p.FullMarkdown), "\n") + "\n")
+		b.WriteString(strings.TrimRight(textifyEmbeddedHTML(p.FullMarkdown), "\n") + "\n")
 	}
 	return []byte(b.String())
 }

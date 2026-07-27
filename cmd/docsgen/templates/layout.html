@@ -23,7 +23,9 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="{{.Root}}static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="{{.Root}}static/site.css{{.Assets.SiteCSS}}">
 <link rel="stylesheet" href="{{.DocsRoot}}static/docs.css{{.Assets.DocsCSS}}">
 </head>
@@ -73,6 +75,24 @@
   </nav>
 
   <main class="docs-main" id="content">
+    {{if .HasVariants}}
+    <div class="ctx-bar">
+      <span class="ctx-bar-label">Steps for</span>
+      <div class="ctx-seg" role="group" aria-label="Operating system">
+        <button type="button" data-ctx-os-pick="macos" aria-pressed="false">macOS</button>
+        <button type="button" data-ctx-os-pick="linux" aria-pressed="false">Linux</button>
+        <button type="button" data-ctx-os-pick="windows" aria-pressed="false">Windows</button>
+        <button type="button" data-ctx-os-pick="all" aria-pressed="false">All</button>
+      </div>
+      <div class="ctx-seg" role="group" aria-label="Client">
+        <button type="button" data-ctx-client-pick="claude" aria-pressed="false">Claude Code</button>
+        <button type="button" data-ctx-client-pick="claude-desktop" aria-pressed="false">Claude app chat</button>
+        <button type="button" data-ctx-client-pick="codex" aria-pressed="false">Codex</button>
+        <button type="button" data-ctx-client-pick="all" aria-pressed="false">All</button>
+      </div>
+      <p class="ctx-status" aria-live="polite"></p>
+    </div>
+    {{end}}
     {{template "content" .}}
 
     {{if or .Prev .Next}}

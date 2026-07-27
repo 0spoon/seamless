@@ -42,15 +42,26 @@ telemetry.
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
 
-## Where to go next
+## Which agent do you run?
+
+Setup is client-shaped: pick yours and that page walks install, wiring, and
+verification end to end. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) is the same path for
+everyone - one install command, then your client.
+
+- [Claude Code](https://thereisnospoon.org/docs/claude-code/): The terminal CLI and the Claude app's code sessions - one setup covers both.
+- [Claude app chat](https://thereisnospoon.org/docs/claude-app/): Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.
+- [Codex](https://thereisnospoon.org/docs/codex-cli/): CLI, desktop app, and IDE extension - one shared local profile named codex.
+- [Any other MCP client](https://thereisnospoon.org/docs/guides/mcp-clients/): Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.
+
+## Or start from the task
 
 | If you want to | Read |
 |---|---|
-| Get it running in ten minutes | [Quickstart](https://thereisnospoon.org/docs/quickstart/) |
-| Wire it into Claude Code | [Claude Code setup](https://thereisnospoon.org/docs/claude-code/) |
-| Wire it into Codex | [Codex local setup (app, CLI, and IDE)](https://thereisnospoon.org/docs/codex-cli/) |
+| Install from zero in ten minutes | [Quickstart](https://thereisnospoon.org/docs/quickstart/) |
+| Update, uninstall, or add a client later | [Update & uninstall](https://thereisnospoon.org/docs/updating/) |
+| Control the service, find logs and paths | [The service & where things live](https://thereisnospoon.org/docs/reference/service/) |
 | Understand the model before trusting it | [How Seamless works](https://thereisnospoon.org/docs/concepts/how-it-works/) |
-| Point another MCP agent at it | [Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/) |
+| Point a hand-rolled agent at it | [Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/) |
 | Make a fleet divide work without colliding | [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/) |
 | Look up a tool, key, or command | [Reference](https://thereisnospoon.org/docs/reference/) |
 | Fix something that is silently not working | [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/) |

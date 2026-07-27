@@ -117,6 +117,116 @@
     });
   }
 
+  /* ------------------------------------------------------- context picker */
+  /* The head script seeded data-os / data-clients on <html> pre-paint (UA
+     detect, localStorage, or ?os=&client= query params). The bar's buttons
+     rewrite that state for the whole page and persist it; block visibility
+     is pure CSS off the two attributes. */
+  var ctxBar = document.querySelector(".ctx-bar");
+  if (ctxBar) {
+    var OS_LABELS = { macos: "macOS", linux: "Linux", windows: "Windows" };
+    var CLIENT_ORDER = ["claude", "claude-desktop", "codex"];
+    var CLIENT_LABELS = { claude: "Claude Code", "claude-desktop": "Claude app chat", codex: "Codex" };
+    var ctxStatus = ctxBar.querySelector(".ctx-status");
+
+    var selectedClients = function () {
+      return (root.dataset.clients || "").split(" ").filter(Boolean);
+    };
+    var syncCtx = function () {
+      var os = root.dataset.os || "all";
+      ctxBar.querySelectorAll("[data-ctx-os-pick]").forEach(function (btn) {
+        btn.setAttribute("aria-pressed", btn.dataset.ctxOsPick === os ? "true" : "false");
+      });
+      var picked = selectedClients();
+      ctxBar.querySelectorAll("[data-ctx-client-pick]").forEach(function (btn) {
+        var v = btn.dataset.ctxClientPick;
+        var on = v === "all" ? picked.length === 0 : picked.indexOf(v) >= 0;
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+      if (ctxStatus) {
+        ctxStatus.textContent = "Showing steps for " + (OS_LABELS[os] || "every OS") + ", " +
+          (picked.length ? picked.map(function (v) { return CLIENT_LABELS[v]; }).join(" + ") : "every client") + ".";
+      }
+    };
+    ctxBar.addEventListener("click", function (ev) {
+      var osBtn = ev.target.closest("[data-ctx-os-pick]");
+      var clientBtn = ev.target.closest("[data-ctx-client-pick]");
+      if (osBtn) {
+        root.dataset.os = osBtn.dataset.ctxOsPick;
+        try { localStorage.setItem("os", root.dataset.os); } catch (e) { /* private mode */ }
+      } else if (clientBtn) {
+        var v = clientBtn.dataset.ctxClientPick;
+        var picked = v === "all" ? [] : selectedClients();
+        if (v !== "all") {
+          var at = picked.indexOf(v);
+          if (at >= 0) picked.splice(at, 1); else picked.push(v);
+          /* Selecting all three is "All": drop the filter entirely. */
+          if (picked.length === CLIENT_ORDER.length) picked = [];
+          picked.sort(function (a, b) { return CLIENT_ORDER.indexOf(a) - CLIENT_ORDER.indexOf(b); });
+        }
+        if (picked.length) root.dataset.clients = picked.join(" ");
+        else delete root.dataset.clients;
+        try {
+          if (picked.length) localStorage.setItem("clients", picked.join(","));
+          else localStorage.removeItem("clients");
+        } catch (e) { /* private mode */ }
+      } else {
+        return;
+      }
+      syncCtx();
+    });
+
+    /* A deep link or search landing can target an element inside a block the
+       current filter hides; showing everything beats a scroll to nowhere. */
+    var revealHashTarget = function () {
+      var id = location.hash.slice(1);
+      var el = id && document.getElementById(id);
+      if (!el || !el.closest(".ctx-variant") || el.offsetParent !== null) return;
+      root.dataset.os = "all";
+      delete root.dataset.clients;
+      syncCtx();
+      el.scrollIntoView();
+    };
+    syncCtx();
+    revealHashTarget();
+    window.addEventListener("hashchange", revealHashTarget);
+  }
+
+  /* ------------------------------------------------------------ configurator */
+  /* The setup page's optional command composer. It reads the SAME state the
+     context picker writes (data-os / data-clients on <html>), composes the
+     canonical one-liner carried in its data attributes with the documented
+     env knobs, and never invents a command shape of its own. Hidden without
+     JS: the static labeled blocks teach the install on their own. */
+  var cfg = document.querySelector(".cfg");
+  if (cfg) {
+    var cfgOut = cfg.querySelector("[data-cfg-out]");
+    var updateCfg = function () {
+      var picked = (root.dataset.clients || "").split(" ").filter(Boolean);
+      var wantClients = cfg.querySelector('[data-cfg="clients"]').checked && picked.length > 0;
+      var noService = cfg.querySelector('[data-cfg="noservice"]').checked;
+      var cmd;
+      if (root.dataset.os === "windows") {
+        var ps = [];
+        if (wantClients) ps.push("$env:SEAMLESS_CLIENT='" + picked.join(",") + "'");
+        if (noService) ps.push("$env:SEAMLESS_NO_SERVICE='1'");
+        cmd = (ps.length ? ps.join("; ") + "; " : "") + cfg.dataset.cmdWin;
+      } else {
+        var env = [];
+        if (wantClients) env.push("SEAMLESS_CLIENT=" + picked.join(","));
+        if (noService) env.push("SEAMLESS_NO_SERVICE=1");
+        cmd = cfg.dataset.cmdUnix;
+        /* Env goes ahead of the shell, not the curl -- the documented form. */
+        if (env.length) cmd = cmd.replace("| sh", "| " + env.join(" ") + " sh");
+      }
+      cfgOut.textContent = cmd;
+    };
+    cfg.hidden = false;
+    cfg.addEventListener("change", updateCfg);
+    new MutationObserver(updateCfg).observe(root, { attributes: true, attributeFilter: ["data-os", "data-clients"] });
+    updateCfg();
+  }
+
   /* --------------------------------------------------------------- search */
   var input = document.getElementById("search-input");
   var results = document.getElementById("search-results");

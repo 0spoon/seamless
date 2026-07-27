@@ -43,15 +43,42 @@ telemetry.
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
 
-## Where to go next
+## Which agent do you run?
+
+Setup is client-shaped: pick yours and that page walks install, wiring, and
+verification end to end. The [Quickstart](/quickstart/) is the same path for
+everyone - one install command, then your client.
+
+<!-- Raw HTML, so hrefs are relative to the docs home (rewriteDocLinks only
+     rewrites markdown links). This page renders at /docs/, one level deep. -->
+<div class="card-grid">
+  <a class="doc-card" href="claude-code/">
+    <h2>Claude Code</h2>
+    <p>The terminal CLI and the Claude app's code sessions - one setup covers both.</p>
+  </a>
+  <a class="doc-card" href="claude-app/">
+    <h2>Claude app chat</h2>
+    <p>Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.</p>
+  </a>
+  <a class="doc-card" href="codex-cli/">
+    <h2>Codex</h2>
+    <p>CLI, desktop app, and IDE extension - one shared local profile named codex.</p>
+  </a>
+  <a class="doc-card" href="guides/mcp-clients/">
+    <h2>Any other MCP client</h2>
+    <p>Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.</p>
+  </a>
+</div>
+
+## Or start from the task
 
 | If you want to | Read |
 |---|---|
-| Get it running in ten minutes | [Quickstart](/quickstart/) |
-| Wire it into Claude Code | [Claude Code setup](/claude-code/) |
-| Wire it into Codex | [Codex local setup (app, CLI, and IDE)](/codex-cli/) |
+| Install from zero in ten minutes | [Quickstart](/quickstart/) |
+| Update, uninstall, or add a client later | [Update & uninstall](/updating/) |
+| Control the service, find logs and paths | [The service & where things live](/reference/service/) |
 | Understand the model before trusting it | [How Seamless works](/concepts/how-it-works/) |
-| Point another MCP agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
+| Point a hand-rolled agent at it | [Integrate your agent](/guides/integrate-your-agent/) |
 | Make a fleet divide work without colliding | [Coordinate multiple agents](/guides/coordinate-agents/) |
 | Look up a tool, key, or command | [Reference](/reference/) |
 | Fix something that is silently not working | [Troubleshooting](/guides/troubleshooting/) |

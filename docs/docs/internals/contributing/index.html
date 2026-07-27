@@ -22,9 +22,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../../quickstart/">Quickstart</a></li>
         
-        <li><a href="../../install/">Install &amp; deploy</a></li>
-        
         <li><a href="../../claude-code/">Claude Code setup</a></li>
         
         <li><a href="../../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,7 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -213,6 +220,17 @@ handful of rules that are worth knowing before you write a line.</p>
 </span></span><span class="line"><span class="cl">make check      <span class="c1"># the gate - everything above, in order</span>
 </span></span></code></pre><p><code>make help</code> prints the full list, including the launchd dev-loop and prod-install
 targets.</p>
+<h2 id="the-edit-test-loop-make-install">The edit-test loop: make install</h2>
+<p><code>make install</code> (macOS-only; it renders the launchd plist from <code>deploy/launchd/</code>)
+is also the dev loop. When the rendered plist is unchanged - the common case -
+it skips the launchd bootout/bootstrap and kickstarts the service in place, so
+its marginal cost over <code>make build</code> is two file copies.</p>
+<pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
+</span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
+</span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>
+</span></span></code></pre><p>That split is the point. <code>make build</code> on a half-finished edit is free, because
+the daemon and hooks keep running the last thing you installed. Rebuilding is not
+deploying.</p>
 <p>Note that <code>make build</code> is not the same as <code>go build</code>: it stamps the commit and
 build date into the binary via <code>-ldflags</code>, and those show up in <code>/healthz</code>, the
 MCP handshake, and the startup log. A plain <code>go build</code> leaves them <code>unknown</code>,
@@ -516,7 +534,7 @@ error.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
+      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
     </ul>
   </aside>
   
@@ -527,7 +545,7 @@ error.</li>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=e5dfd08c"></script>
+<script src="../../static/docs.js?v=46efc7ae"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

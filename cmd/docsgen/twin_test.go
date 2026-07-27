@@ -102,6 +102,48 @@ func TestTextifyFigures(t *testing.T) {
 	require.Equal(t, plain, textifyFigures(plain))
 }
 
+// TestTextifyCards: the markdown representations flatten an authored card
+// grid to the link list its HTML shows, re-rooting the docs-root-relative
+// hrefs raw HTML has to use (rewriteDocLinks never sees raw HTML) so
+// absolutizeRootLinks can canonicalize them, and authoring comments drop.
+func TestTextifyCards(t *testing.T) {
+	md := "intro\n\n" +
+		"<!-- authoring note -->\n" +
+		"<div class=\"card-grid\">\n" +
+		"  <a class=\"doc-card\" href=\"claude-code/\">\n" +
+		"    <h2>Claude Code</h2>\n" +
+		"    <p>The CLI and the app's code sessions.</p>\n" +
+		"  </a>\n" +
+		"  <a class=\"doc-card\" href=\"guides/mcp-clients/\">\n" +
+		"    <h2>Any other MCP client</h2>\n" +
+		"  </a>\n" +
+		"</div>\n\nafter\n"
+
+	got := textifyEmbeddedHTML(md)
+	require.NotContains(t, got, "card-grid")
+	require.NotContains(t, got, "<!--")
+	require.Contains(t, got, "- [Claude Code](/claude-code/): The CLI and the app's code sessions.\n")
+	require.Contains(t, got, "- [Any other MCP client](/guides/mcp-clients/)\n\nafter\n")
+
+	abs := absolutizeRootLinks(got)
+	require.Contains(t, abs, "- [Claude Code]("+siteBaseURL+"/docs/claude-code/)")
+
+	plain := "no cards here, just `code`\n"
+	require.Equal(t, plain, textifyEmbeddedHTML(plain))
+
+	// Disclosures open into a bold lead line; the configurator widget drops
+	// entirely (its content is JS-composed, nothing to mirror).
+	extras := "<div class=\"cfg\" hidden data-cmd-unix=\"curl | sh\">\n" +
+		"  <p class=\"cfg-head\">Tailor it</p>\n" +
+		"</div>\n\n" +
+		"<details>\n<summary>Another route</summary>\n\nhidden body\n\n</details>\n"
+	flat := textifyEmbeddedHTML(extras)
+	require.NotContains(t, flat, "cfg")
+	require.NotContains(t, flat, "<details>")
+	require.Contains(t, flat, "**Another route**")
+	require.Contains(t, flat, "hidden body")
+}
+
 // TestAbsolutizeRootLinks covers the destination families rewriteDocLinks
 // distinguishes: docs-root paths, site-root scenario paths, fragments,
 // scheme-relative and already-relative destinations.

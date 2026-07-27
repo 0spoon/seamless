@@ -17,10 +17,13 @@ CLIs: [seam](/reference/cli-seam/), the short handle an agent or owner types,
 and [seamlessd](/reference/cli-seamlessd/), the daemon and operator commands.
 
 Deployment behavior lives in [Configuration](/reference/configuration/) (every
-key, type, and default, plus the four layers that resolve them) and
+key, type, and default, plus the four layers that resolve them),
 [Hooks](/reference/hooks/) (what `install-hooks` writes per client, the
-transports and timeouts, and the fail-open contract). The two compatibility
-matrices - [Claude app](/reference/claude-app-compatibility/) and
+transports and timeouts, and the fail-open contract), and
+[The service & where things live](/reference/service/) - the one page with the
+OS-specific service commands, log locations, and every path Seamless touches.
+The two compatibility matrices -
+[Claude app](/reference/claude-app-compatibility/) and
 [Codex](/reference/codex-compatibility/) - hold versioned, platform-specific
 evidence rather than assumptions, and record how to re-verify each claim.
 

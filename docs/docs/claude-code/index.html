@@ -22,9 +22,11 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../static/favicon.svg">
-<script>(function(){var t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
+<script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
+var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
+var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="../static/docs.css?v=426739fc">
+<link rel="stylesheet" href="../static/docs.css?v=e0b48ac5">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -66,13 +68,15 @@
         
         <li><a href="../quickstart/">Quickstart</a></li>
         
-        <li><a href="../install/">Install &amp; deploy</a></li>
-        
         <li><a href="../claude-code/" class="current" aria-current="page">Claude Code setup</a></li>
         
         <li><a href="../claude-app/">Claude app chat setup</a></li>
         
         <li><a href="../codex-cli/">Codex local setup (app, CLI, and IDE)</a></li>
+        
+        <li><a href="../install/">Install &amp; deploy</a></li>
+        
+        <li><a href="../updating/">Update &amp; uninstall</a></li>
         
         <li><a href="../changelog/">Changelog</a></li>
         
@@ -156,6 +160,8 @@
         
         <li><a href="../reference/hooks/">Hooks</a></li>
         
+        <li><a href="../reference/service/">The service &amp; where things live</a></li>
+        
         <li><a href="../reference/claude-app-compatibility/">Claude app compatibility matrix</a></li>
         
         <li><a href="../reference/codex-compatibility/">Codex compatibility matrix</a></li>
@@ -186,6 +192,7 @@
   </nav>
 
   <main class="docs-main" id="content">
+    
     <article class="prose">
   <nav class="breadcrumb" aria-label="Breadcrumb">
   <ol>
@@ -222,20 +229,11 @@ anything. See <a href="../concepts/sessions/">Sessions &amp; briefings</a>
 for what that delivers and <a href="../reference/hooks/">the hooks reference</a> for the
 exact table.</p>
 <h3 id="why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</h3>
-<p>This looks inconsistent and is not:</p>
-<ul>
-<li><strong>SessionStart</strong> must be a command hook. Claude Code only runs <code>command</code> and
-<code>mcp_tool</code> hooks for SessionStart - an <code>http</code> one is <em>silently skipped</em>, and
-the briefing and ambient session simply never fire.</li>
-<li><strong>SessionEnd</strong> does support http, but at process exit a fire-and-forget request
-races the teardown, so the harvest often never lands and sessions pile up as
-active. As a command hook, Claude Code waits for it.</li>
-<li><strong>UserPromptSubmit</strong> fires mid-turn where http is reliable, so it stays http
-(and carries the bearer key in <code>settings.json</code>).</li>
-<li><strong>The plan-capture hooks</strong> are commands because <code>seam</code> pre-filters locally: the
-machine-wide <code>Write</code>/<code>Edit</code> hot path should never touch the network for files
-that have nothing to do with plans.</li>
-</ul>
+<p>This looks inconsistent and is not: SessionStart only fires as a command hook,
+SessionEnd as http races Claude Code's teardown, and the plan-capture hooks
+pre-filter locally so the machine-wide <code>Write</code>/<code>Edit</code> hot path never touches
+the network. The full rationale, hook by hook, is in
+<a href="../reference/hooks/#why-claude-code-uses-two-transports">the hooks reference</a>.</p>
 <h2 id="registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</h2>
 <p>For a different MCP client, or when <code>install-hooks</code> could not find the
 <code>claude</code> CLI:</p>
@@ -337,7 +335,7 @@ organized by symptom.</p>
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../install/"><span class="dir">Previous</span><span class="t">Install &amp; deploy</span></a>
+      <a class="prev" href="../quickstart/"><span class="dir">Previous</span><span class="t">Quickstart</span></a>
       <a class="next" href="../claude-app/"><span class="dir">Next</span><span class="t">Claude app chat setup</span></a>
     </nav>
     
@@ -358,7 +356,7 @@ organized by symptom.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=e5dfd08c"></script>
+<script src="../static/docs.js?v=46efc7ae"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

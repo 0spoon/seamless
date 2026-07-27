@@ -114,6 +114,49 @@ and a docsgen test pins it to exactly the set the generator emits -- so adding
 or removing a page keeps them current automatically, and a release's
 `server.json` bump makes the committed cards stale until `make docs` is rerun.
 
+## The context picker and variant containers
+
+The docs carry an OS/client reading context: a `Steps for` bar (rendered only
+on pages that vary) filters authored variant blocks page-wide. Authors gate a
+span of markdown with a fence-style container:
+
+```text
+::: when os=windows client=codex
+...markdown (no `##`/`###` headings -- build error; the chips are the label)...
+:::
+```
+
+`cmd/docsgen/variants.go` expands that at build time into a labeled
+`.ctx-variant` div; visibility is pure CSS off `data-os` / `data-clients` on
+`<html>`, set pre-paint by the layout's head script (UA detect, then
+`localStorage`, then `?os=` / `?client=` query params, which win -- use them
+for deep links, e.g. `/docs/quickstart/?os=windows&client=codex`). Unknown
+values, nesting, an unclosed container, or a heading inside one fail
+`make docs`. Value sets live in `variantDimensions`; extending them means
+extending the CSS visibility rules in `assets/docs.css` and the bar in
+`templates/layout.html` too.
+
+Degradation is part of the contract: without JS no attribute is set, so every
+variant shows (labeled by its chips) and the bar hides; the markdown twins,
+`llms-full.txt`, and the search index run `textifyVariants`, so text
+consumers get every variant under a bold label and never the `:::` syntax.
+
+The `localStorage("os")` key is shared with the landing page's coarser
+unix/windows switch: the docs write `macos|linux|windows|all`, the landing
+bootstrap folds `macos|linux` back to `unix` (site-check assertion 12), and
+the docs bootstrap UA-refines a stored `unix`. Change either side only in
+lockstep. The setup page's configurator widget (`class="cfg"`) composes the
+canonical install command from this same picker state; its `data-cmd-*`
+attributes are pinned to the canonical commands by site-check assertion 11.
+
+Single-home rule for instructions: a command sequence has one home page; a
+fact may be *named* anywhere but is *explained* once (the OS service
+commands live on `reference/service.md` -- site-check assertion 10; the
+per-event hook tables live on `reference/hooks.md` -- pinned by
+`internal/hooks/codex_contract_test.go`). The two canonical install one-liners
+are the deliberate exception: every teaching surface carries them verbatim,
+and site-check assertion 2 owns that.
+
 ## Markdown for agents (content negotiation)
 
 Every docs page is emitted twice: `index.html` and a markdown twin at
