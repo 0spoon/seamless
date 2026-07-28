@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -451,15 +452,43 @@ func ResolveProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, 
 // AddRepoMapping records repoPath -> slug in the repo_project_map and persists
 // it, so the mapping survives restarts and is shared by every agent. It is a
 // no-op when that exact entry already exists, so callers may invoke it on every
-// resolve without churning the setting. The read-decode-write runs inside one
-// transaction: the pool is capped at a single connection (see Open), so the
-// whole mutation is serialized against concurrent mutators and two agents
-// registering different repos at once can no longer clobber each other's entry.
+// resolve without churning the setting.
 func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) error {
 	repoPath = filepath.Clean(repoPath)
+	return mutateRepoMap(ctx, db, "store.AddRepoMapping", func(m map[string]string) bool {
+		if m[repoPath] == slug {
+			return false
+		}
+		m[repoPath] = slug
+		return true
+	})
+}
+
+// adoptRepoMapping re-points a project slug at a moved repo: one transaction
+// removes the dead entries that owned slug and records newPath in their place,
+// so a concurrent registrar can never observe the slug half-moved.
+func adoptRepoMapping(ctx context.Context, db *sql.DB, slug, newPath string, deadPaths []string) error {
+	newPath = filepath.Clean(newPath)
+	return mutateRepoMap(ctx, db, "store.adoptRepoMapping", func(m map[string]string) bool {
+		for _, p := range deadPaths {
+			delete(m, p)
+		}
+		m[newPath] = slug
+		return true
+	})
+}
+
+// mutateRepoMap applies mutate to the decoded repo_project_map and writes the
+// result back. The read-decode-write runs inside one transaction: the pool is
+// capped at a single connection (see Open), so the whole mutation is serialized
+// against concurrent mutators and two agents registering different repos at
+// once cannot clobber each other's entry. mutate returning false signals a
+// no-op, which skips the write (rollback of the read-only transaction is
+// harmless).
+func mutateRepoMap(ctx context.Context, db *sql.DB, op string, mutate func(map[string]string) bool) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("store.AddRepoMapping: begin: %w", err)
+		return fmt.Errorf("%s: begin: %w", op, err)
 	}
 	defer func() { _ = tx.Rollback() }() // no-op after Commit
 
@@ -471,30 +500,40 @@ func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) erro
 	case errors.Is(err, sql.ErrNoRows):
 		// Unset: start from an empty map.
 	case err != nil:
-		return fmt.Errorf("store.AddRepoMapping: %w", err)
+		return fmt.Errorf("%s: %w", op, err)
 	case strings.TrimSpace(raw) != "":
 		if err := json.Unmarshal([]byte(raw), &m); err != nil {
-			return fmt.Errorf("store.AddRepoMapping: decode: %w", err)
+			return fmt.Errorf("%s: decode: %w", op, err)
 		}
 	}
-	if m[repoPath] == slug {
-		return nil // rollback of the read-only transaction is harmless
+	if !mutate(m) {
+		return nil
 	}
-	m[repoPath] = slug
 	b, err := json.Marshal(m)
 	if err != nil {
-		return fmt.Errorf("store.AddRepoMapping: %w", err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO settings (key, value) VALUES (?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
 		SettingRepoProjectMap, string(b)); err != nil {
-		return fmt.Errorf("store.AddRepoMapping: %w", err)
+		return fmt.Errorf("%s: %w", op, err)
 	}
 	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("store.AddRepoMapping: commit: %w", err)
+		return fmt.Errorf("%s: commit: %w", op, err)
 	}
 	return nil
+}
+
+// RepoMapAdoption reports that RegisterProjectForCWD re-pointed an existing
+// project at a repo's new location instead of minting a fresh -N slug: every
+// map entry owning the derived slug named a path that no longer exists on
+// disk, so the repo was moved, not duplicated. The remap already happened;
+// callers only surface it (an event, a console notice).
+type RepoMapAdoption struct {
+	Slug     string   // the adopted project slug
+	NewPath  string   // the repo root that now owns the slug
+	OldPaths []string // the dead map entries that owned it, now removed
 }
 
 // RegisterProjectForCWD resolves cwd to a project slug like ResolveProjectForCWD,
@@ -505,25 +544,31 @@ func AddRepoMapping(ctx context.Context, db *sql.DB, repoPath, slug string) erro
 // no recompile, no manual map-repo. For an already-mapped cwd it still backfills
 // the registry row, so project_list stays complete. A blank cwd, or a cwd outside
 // any git repo, resolves to the global scope ("") and registers nothing.
-func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, error) {
+//
+// A moved repo heals itself here: when the derived slug is owned only by map
+// entries whose paths no longer exist, the repo was moved, and the existing
+// project is adopted (the dead entries are replaced by the new root) instead of
+// minting a -N slug that would silently split the project's history. The
+// non-nil *RepoMapAdoption reports that remap; it is nil on every other path.
+func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string, *RepoMapAdoption, error) {
 	if strings.TrimSpace(cwd) == "" {
-		return "", nil
+		return "", nil, nil
 	}
 	m, err := RepoProjectMap(ctx, db)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if slug := matchProjectPath(cwd, m); slug != "" {
 		// Already mapped: backfill the registry row (idempotent) and return.
 		if _, err := EnsureProject(ctx, db, slug, slug); err != nil {
-			return "", err
+			return "", nil, err
 		}
-		return slug, nil
+		return slug, nil, nil
 	}
 
 	root := gitRepoRoot(cwd)
 	if root == "" {
-		return "", nil // not inside a git repo: stay global, register nothing
+		return "", nil, nil // not inside a git repo: stay global, register nothing
 	}
 	// A linked worktree (git worktree add, the Claude/Codex apps' managed
 	// worktrees) is a checkout of the main repository, not a repository of its
@@ -537,30 +582,45 @@ func RegisterProjectForCWD(ctx context.Context, db *sql.DB, cwd string) (string,
 			// worktree also gets its own map entry so read paths (briefing,
 			// prompt recall) resolve it without re-deriving git identity.
 			if _, err := EnsureProject(ctx, db, slug, slug); err != nil {
-				return "", err
+				return "", nil, err
 			}
 			if !pathHasPrefix(root, main) {
 				if err := AddRepoMapping(ctx, db, root, slug); err != nil {
-					return "", err
+					return "", nil, err
 				}
 			}
-			return slug, nil
+			return slug, nil, nil
 		}
 	}
 	name := filepath.Base(main)
-	slug := uniqueProjectSlug(core.Slugify(name), main, m)
+	base := core.Slugify(name)
+	if dead := deadOwnerPaths(base, main, m); len(dead) > 0 {
+		if _, err := EnsureProject(ctx, db, base, name); err != nil {
+			return "", nil, err
+		}
+		if err := adoptRepoMapping(ctx, db, base, main, dead); err != nil {
+			return "", nil, err
+		}
+		if main != root && !pathHasPrefix(root, main) {
+			if err := AddRepoMapping(ctx, db, root, base); err != nil {
+				return "", nil, err
+			}
+		}
+		return base, &RepoMapAdoption{Slug: base, NewPath: main, OldPaths: dead}, nil
+	}
+	slug := uniqueProjectSlug(base, main, m)
 	if _, err := EnsureProject(ctx, db, slug, name); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if err := AddRepoMapping(ctx, db, main, slug); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	if main != root && !pathHasPrefix(root, main) {
 		if err := AddRepoMapping(ctx, db, root, slug); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
-	return slug, nil
+	return slug, nil, nil
 }
 
 // gitRepoRoot returns the nearest ancestor of dir (inclusive) containing a .git
@@ -632,11 +692,36 @@ func gitMainWorktreeRoot(root string) string {
 	return filepath.Dir(commonDir)
 }
 
+// deadOwnerPaths returns the map entries owning slug when every one of them
+// names a path that no longer exists on disk -- the moved-repo signal. It
+// returns nil when nothing owns the slug (no collision at all) or when any
+// owning path is still present or merely unknowable (a genuine same-name
+// collision, or a stat failure that is not a clean not-exist): only provably
+// dead owners justify adopting their project. Sorted, so the surfaced
+// event/notice is deterministic.
+func deadOwnerPaths(slug, root string, m map[string]string) []string {
+	root = filepath.Clean(root)
+	var dead []string
+	for path, s := range m {
+		if s != slug || filepath.Clean(path) == root {
+			continue
+		}
+		if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		dead = append(dead, path)
+	}
+	slices.Sort(dead)
+	return dead
+}
+
 // uniqueProjectSlug returns base unless another repo path already owns it in m,
 // in which case it appends -2, -3, ... until free. The guard keeps a newly seen
 // repo whose directory name collides with an existing project (e.g. two distinct
 // "backend" repos) from silently inheriting that project's memories; the owner
-// can still merge them later with map-repo.
+// can still merge them later with map-repo. A collision where every owning path
+// is dead never reaches here -- RegisterProjectForCWD adopts the project instead
+// (see deadOwnerPaths).
 func uniqueProjectSlug(base, root string, m map[string]string) string {
 	root = filepath.Clean(root)
 	takenByOther := func(slug string) bool {

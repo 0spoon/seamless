@@ -144,6 +144,34 @@ func TestSessionStartHook(t *testing.T) {
 	require.Equal(t, 1, gotchaStat.InjectCount)
 }
 
+// A SessionStart from a moved repo's new location adopts the existing project
+// and records the remap as a repo.moved event -- the console's notice that the
+// map healed itself instead of minting a duplicate -N project.
+func TestSessionStartHook_MovedRepoAdoptsAndRecordsEvent(t *testing.T) {
+	ts, db := newHandlerServer(t)
+	ctx := context.Background()
+
+	// The fixture maps /work/demo -> demo, and /work/demo does not exist on
+	// disk; a real repo named demo elsewhere is therefore a move, not a
+	// same-name collision.
+	newRoot := filepath.Join(t.TempDir(), "demo")
+	require.NoError(t, os.MkdirAll(filepath.Join(newRoot, ".git"), 0o755))
+
+	resp, _ := post(t, ts.URL+"/api/hooks/session-start", testKey, map[string]any{
+		"cwd": newRoot, "source": "startup"})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+
+	m, err := store.RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{newRoot: "demo"}, m)
+
+	var payload string
+	require.NoError(t, db.QueryRowContext(ctx,
+		`SELECT payload FROM events WHERE kind = 'repo.moved'`).Scan(&payload))
+	require.Contains(t, payload, newRoot)
+	require.Contains(t, payload, "/work/demo")
+}
+
 // Codex has a distinct SubagentStart event. It reuses the constraints-only
 // briefing path but the event's session_id is the parent identity, so it must
 // never run SessionStart's create/reactivate/re-scope behavior.

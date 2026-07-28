@@ -34,10 +34,17 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		source = "explicit"
 	}
 	// Resolve the cwd to a project, registering a new repo->project mapping and
-	// projects-table row when the agent works in a not-yet-mapped git repo.
-	project, err := store.RegisterProjectForCWD(ctx, s.cfg.DB, cwd)
+	// projects-table row when the agent works in a not-yet-mapped git repo. A
+	// moved repo adopts its existing project here; surface that remap as an
+	// event so the console shows the map healed itself.
+	project, moved, err := store.RegisterProjectForCWD(ctx, s.cfg.DB, cwd)
 	if err != nil {
 		return errResult("session_start", err)
+	}
+	if moved != nil {
+		s.record(ctx, core.EventRepoMoved, "", project, "", map[string]any{
+			"slug": moved.Slug, "new_path": moved.NewPath, "old_paths": moved.OldPaths,
+		})
 	}
 
 	// Resume a named session if it already exists.

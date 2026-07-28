@@ -6,9 +6,11 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -100,6 +102,7 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
+	checks = append(checks, repoMapCheck(db))
 	checks = append(checks, mcpToolsCheck())
 	checks = append(checks, claudeRuntimeChecks()...)
 	checks = append(checks, hooksCheck(cfg))
@@ -108,6 +111,38 @@ func doctor(args []string) error {
 	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
+}
+
+// repoMapCheck reports dangling repo_project_map entries -- mapped paths that no
+// longer exist on disk. A repo moved without a rename heals itself at its next
+// session start (RegisterProjectForCWD adopts the project once every owner of
+// the derived slug is dead), but a repo moved AND renamed derives a different
+// slug and cannot be recognized; the printed map-repo override is the fix for
+// that case. Dangling entries are otherwise harmless, so this warns rather than
+// fails.
+func repoMapCheck(db *sql.DB) check {
+	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
+	defer cancel()
+	m, err := store.RepoProjectMap(ctx, db)
+	if err != nil {
+		return check{statusWarn, "repo map", "cannot read repo_project_map: " + err.Error()}
+	}
+	if len(m) == 0 {
+		return check{statusOK, "repo map", "no repos mapped yet (a repo maps itself on its first session)"}
+	}
+	var missing []string
+	for path, slug := range m {
+		if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
+			missing = append(missing, fmt.Sprintf("%s -> %s", path, slug))
+		}
+	}
+	if len(missing) == 0 {
+		return check{statusOK, "repo map", fmt.Sprintf("%d mapped paths, all present on disk", len(m))}
+	}
+	slices.Sort(missing)
+	return check{statusWarn, "repo map", fmt.Sprintf(
+		"%d of %d mapped paths missing on disk: %s -- a moved repo adopts its project at its next session start; a renamed one needs `seamlessd map-repo --path <new-root> --project <slug>`",
+		len(missing), len(m), strings.Join(missing, "; "))}
 }
 
 // hooksCheck reports whether the Claude Code Seamless hooks are installed. It

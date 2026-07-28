@@ -226,8 +226,10 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// preferable to failing session start, so it is logged rather than hidden --
 	// the explicit session_start tool resolves the same cwd and does surface the
 	// error, and that is the path where a wrong binding actually sticks.
-	if _, err := store.RegisterProjectForCWD(ctx, h.db, p.CWD); err != nil {
+	if _, moved, err := store.RegisterProjectForCWD(ctx, h.db, p.CWD); err != nil {
 		h.recordHookError(ctx, "register-project", client, err, "cwd", p.CWD)
+	} else if moved != nil {
+		h.recordRepoMoved(ctx, client, moved)
 	}
 
 	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
@@ -751,6 +753,27 @@ func (h *Handler) ambientDisplayName(ctx context.Context, client Client, externa
 // text. Emission never affects fail-open: with no recorder, or a recorder
 // failure, the log line is all that happens. client may be zero (an internal
 // caller with no request client in scope); the payload then omits it.
+// recordRepoMoved surfaces the automatic remap RegisterProjectForCWD performs
+// when a moved repo's new location adopts its existing project: an INFO log for
+// the daemon and a repo.moved event for the console's activity feed, so the
+// owner can see the map healed itself rather than minting a duplicate project.
+func (h *Handler) recordRepoMoved(ctx context.Context, client Client, moved *store.RepoMapAdoption) {
+	h.logger.Info("hooks: repo moved, adopted existing project",
+		"project", moved.Slug, "new_path", moved.NewPath, "old_paths", moved.OldPaths)
+	if h.events == nil {
+		return
+	}
+	if _, err := h.events.Record(ctx, core.Event{
+		Kind:        core.EventRepoMoved,
+		ProjectSlug: moved.Slug,
+		Payload: map[string]any{
+			"slug": moved.Slug, "new_path": moved.NewPath, "old_paths": moved.OldPaths,
+		},
+	}); err != nil {
+		h.recordHookError(ctx, "record-repo-moved", client, err)
+	}
+}
+
 func (h *Handler) recordHookError(ctx context.Context, stage string, client Client, err error, attrs ...any) {
 	h.logger.Warn("hooks: "+stage, append(attrs, "error", err)...)
 	if h.events == nil {

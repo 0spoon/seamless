@@ -348,6 +348,7 @@ const (
 	EventMemorySuperseded EventKind = "memory.superseded"
 	EventMemoryArchived   EventKind = "memory.archived"
 	EventMemoryMoved      EventKind = "memory.moved"     // relocated to another project (reproject/split)
+	EventRepoMoved        EventKind = "repo.moved"       // a moved repo's new path adopted its existing project (payload: slug, new_path, old_paths)
 	EventFavoriteChanged  EventKind = "favorite.changed" // an item was starred/unstarred (payload: kind, id, name, favorite, by)
 	EventNoteWritten      EventKind = "note.written"
 	EventTrialRecorded    EventKind = "trial.recorded"

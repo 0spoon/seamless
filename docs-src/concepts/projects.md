@@ -80,8 +80,19 @@ enclosing git repository, derives a slug from the repo root's directory name,
 registers the project, and records `repoRoot -> slug`. No recompile, no setup
 step. A cwd outside any git repo registers nothing and stays global.
 
+The map also heals itself when a repo moves. A session starting from the new
+location derives the same slug, and when every mapped path that owns that slug
+no longer exists on disk, Seamless treats it as the same repo at a new path:
+the existing project is adopted, the dead entries are replaced by the new root,
+and a `repo.moved` event records the remap in the console feed. Two *live*
+repos sharing a directory name still get distinct projects (`backend`,
+`backend-2`) so unrelated repos never inherit each other's memories. The one
+case the healing cannot recognize is a repo that was moved *and renamed* - it
+derives a different slug - and that is what the override below is for.
+`seamlessd doctor` lists mapped paths that no longer exist.
+
 Map by hand only to override the derived slug - an `ios` directory that should be
-the `arctop-ios` project:
+the `arctop-ios` project, or a renamed repo that should keep its old project:
 
 ```bash
 seamlessd map-repo --path ~/code/ios --project arctop-ios

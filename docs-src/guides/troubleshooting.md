@@ -110,6 +110,13 @@ working directory via the repo map. Three outcomes:
 - **A project named after your directory** - an unmapped *git* repo
   auto-registers a project named after the repository root. It is real, it is
   just new and therefore empty.
+- **A `<slug>-2` project after moving a repo on disk** - the repo's old path
+  still owned the slug, so registration minted a fresh project and the
+  briefing lost the original's memories. Current daemons adopt the existing
+  project automatically when the old path is gone (a `repo.moved` event lands
+  in the console feed); if a split already happened, point the path back with
+  `seamlessd map-repo --path <new-root> --project <slug>`. `seamlessd doctor`
+  lists mapped paths that no longer exist on disk.
 - **No project at all** - the cwd is not inside a git repo, so nothing resolved
   and the session is global.
 

@@ -46,7 +46,7 @@ func TestRegisterProjectForCWD(t *testing.T) {
 	sub := filepath.Join(root, "internal", "mcp")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 
-	slug, err := RegisterProjectForCWD(ctx, db, sub)
+	slug, _, err := RegisterProjectForCWD(ctx, db, sub)
 	require.NoError(t, err)
 	require.Equal(t, "my-cool-repo", slug)
 
@@ -61,20 +61,20 @@ func TestRegisterProjectForCWD(t *testing.T) {
 	require.Equal(t, "my-cool-repo", got)
 
 	// Re-registering the same repo is idempotent: no new project, same slug.
-	slug2, err := RegisterProjectForCWD(ctx, db, root)
+	slug2, _, err := RegisterProjectForCWD(ctx, db, root)
 	require.NoError(t, err)
 	require.Equal(t, "my-cool-repo", slug2)
 	require.Equal(t, []string{"my-cool-repo"}, ListProjectsSlugs(t, db))
 
 	// A cwd outside any git repo stays global and registers nothing.
 	nonGit := t.TempDir()
-	slug3, err := RegisterProjectForCWD(ctx, db, nonGit)
+	slug3, _, err := RegisterProjectForCWD(ctx, db, nonGit)
 	require.NoError(t, err)
 	require.Empty(t, slug3)
 	require.Equal(t, []string{"my-cool-repo"}, ListProjectsSlugs(t, db))
 
 	// A blank cwd is global.
-	slug4, err := RegisterProjectForCWD(ctx, db, "")
+	slug4, _, err := RegisterProjectForCWD(ctx, db, "")
 	require.NoError(t, err)
 	require.Empty(t, slug4)
 }
@@ -90,13 +90,13 @@ func TestRegisterProjectForCWDFailureIsNotGlobal(t *testing.T) {
 	nonGit := t.TempDir()
 
 	// Legitimately unmapped: empty slug, no error.
-	slug, err := RegisterProjectForCWD(ctx, db, nonGit)
+	slug, _, err := RegisterProjectForCWD(ctx, db, nonGit)
 	require.NoError(t, err)
 	require.Empty(t, slug)
 
 	// Same empty slug, but now carrying an error the caller must not discard.
 	require.NoError(t, db.Close())
-	slug, err = RegisterProjectForCWD(ctx, db, nonGit)
+	slug, _, err = RegisterProjectForCWD(ctx, db, nonGit)
 	require.Error(t, err, "a store failure must not be reported as an unmapped cwd")
 	require.Empty(t, slug)
 }
@@ -115,13 +115,14 @@ func TestRegisterProjectForCWDSlugCollision(t *testing.T) {
 	a := mkRepo("backend")
 	b := mkRepo("backend")
 
-	slugA, err := RegisterProjectForCWD(ctx, db, a)
+	slugA, _, err := RegisterProjectForCWD(ctx, db, a)
 	require.NoError(t, err)
 	require.Equal(t, "backend", slugA)
 
-	slugB, err := RegisterProjectForCWD(ctx, db, b)
+	slugB, moved, err := RegisterProjectForCWD(ctx, db, b)
 	require.NoError(t, err)
 	require.Equal(t, "backend-2", slugB)
+	require.Nil(t, moved, "a live same-name repo is a collision, not a move")
 
 	// Both resolve to their own project.
 	got, err := ResolveProjectForCWD(ctx, db, a)
@@ -130,6 +131,69 @@ func TestRegisterProjectForCWDSlugCollision(t *testing.T) {
 	got, err = ResolveProjectForCWD(ctx, db, b)
 	require.NoError(t, err)
 	require.Equal(t, "backend-2", got)
+}
+
+func TestRegisterProjectForCWDMovedRepoAdoptsProject(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// A repo whose mapped path no longer exists on disk was moved, not
+	// duplicated: registration from the new location must adopt the existing
+	// project instead of minting backend-2 and silently splitting its history.
+	old := filepath.Join(t.TempDir(), "backend") // mapped but never created
+	require.NoError(t, AddRepoMapping(ctx, db, old, "backend"))
+	_, err := EnsureProject(ctx, db, "backend", "backend")
+	require.NoError(t, err)
+
+	newRoot := filepath.Join(t.TempDir(), "backend")
+	require.NoError(t, os.MkdirAll(filepath.Join(newRoot, ".git"), 0o755))
+
+	slug, moved, err := RegisterProjectForCWD(ctx, db, filepath.Join(newRoot, "internal"))
+	require.NoError(t, err)
+	require.Equal(t, "backend", slug)
+	require.NotNil(t, moved, "a dead owner path must be reported as an adoption")
+	require.Equal(t, "backend", moved.Slug)
+	require.Equal(t, newRoot, moved.NewPath)
+	require.Equal(t, []string{old}, moved.OldPaths)
+
+	// The dead entry is gone, the new root owns the slug, and no -2 project
+	// appeared.
+	m, err := RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{newRoot: "backend"}, m)
+	require.Equal(t, []string{"backend"}, ListProjectsSlugs(t, db))
+
+	// The next session start resolves through the map: no repeat adoption.
+	slug, moved, err = RegisterProjectForCWD(ctx, db, newRoot)
+	require.NoError(t, err)
+	require.Equal(t, "backend", slug)
+	require.Nil(t, moved)
+}
+
+func TestRegisterProjectForCWDMixedOwnersStillMint(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	// One dead and one live owner of the slug: the live repo may be the real
+	// "backend", so this is not provably a move -- keep the collision mint.
+	dead := filepath.Join(t.TempDir(), "backend") // mapped but never created
+	live := filepath.Join(t.TempDir(), "backend")
+	require.NoError(t, os.MkdirAll(filepath.Join(live, ".git"), 0o755))
+	require.NoError(t, AddRepoMapping(ctx, db, dead, "backend"))
+	require.NoError(t, AddRepoMapping(ctx, db, live, "backend"))
+
+	newRoot := filepath.Join(t.TempDir(), "backend")
+	require.NoError(t, os.MkdirAll(filepath.Join(newRoot, ".git"), 0o755))
+
+	slug, moved, err := RegisterProjectForCWD(ctx, db, newRoot)
+	require.NoError(t, err)
+	require.Equal(t, "backend-2", slug)
+	require.Nil(t, moved)
+
+	// The existing entries, dead one included, are untouched.
+	m, err := RepoProjectMap(ctx, db)
+	require.NoError(t, err)
+	require.Equal(t, map[string]string{dead: "backend", live: "backend", newRoot: "backend-2"}, m)
 }
 
 // mkLinkedWorktree wires wtRoot up as a linked worktree of mainRoot using the
@@ -163,7 +227,7 @@ func TestRegisterProjectForCWDManagedWorktreeFirstContact(t *testing.T) {
 	wt := filepath.Join(main, ".claude", "worktrees", "youthful-shamir")
 	mkLinkedWorktree(t, main, wt, "youthful-shamir", true)
 
-	slug, err := RegisterProjectForCWD(ctx, db, filepath.Join(wt, "internal"))
+	slug, _, err := RegisterProjectForCWD(ctx, db, filepath.Join(wt, "internal"))
 	require.NoError(t, err)
 	require.Equal(t, "backend", slug)
 	require.Equal(t, []string{"backend"}, ListProjectsSlugs(t, db))
@@ -192,7 +256,7 @@ func TestRegisterProjectForCWDOutOfTreeWorktree(t *testing.T) {
 	// Main checkout already mapped: the worktree adopts its project and gets its
 	// own map entry so read paths resolve it too.
 	require.NoError(t, AddRepoMapping(ctx, db, main, "backend"))
-	slug, err := RegisterProjectForCWD(ctx, db, wt)
+	slug, _, err := RegisterProjectForCWD(ctx, db, wt)
 	require.NoError(t, err)
 	require.Equal(t, "backend", slug)
 
@@ -203,7 +267,7 @@ func TestRegisterProjectForCWDOutOfTreeWorktree(t *testing.T) {
 	// A second out-of-tree worktree with nothing mapped at all: registration
 	// derives the project from the main checkout and maps both roots.
 	db2 := openTestDB(t)
-	slug, err = RegisterProjectForCWD(ctx, db2, wt)
+	slug, _, err = RegisterProjectForCWD(ctx, db2, wt)
 	require.NoError(t, err)
 	require.Equal(t, "backend", slug)
 	m, err := RepoProjectMap(ctx, db2)
@@ -225,7 +289,7 @@ func TestRegisterProjectForCWDSubmoduleStaysItsOwnProject(t *testing.T) {
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(sub, ".git"), []byte("gitdir: "+modAdmin+"\n"), 0o644))
 
-	slug, err := RegisterProjectForCWD(ctx, db, sub)
+	slug, _, err := RegisterProjectForCWD(ctx, db, sub)
 	require.NoError(t, err)
 	require.Equal(t, "lib", slug)
 }
