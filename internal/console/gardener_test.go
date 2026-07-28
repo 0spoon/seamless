@@ -159,18 +159,19 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	require.Equal(t, "tasks_add: unknown parameter <v>", byKind["tool_error"].ToolError.SuggestedTitle)
 
 	// The HTML is a two-stage trust surface: the propose-only contract is
-	// explicit before the request composer, and decisions expose their effects
+	// explicit above the composer, and the selected proposal exposes its effects
 	// before the Apply gate.
 	req := httptest.NewRequest(http.MethodGet, "/console/gardener", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	body := do(mux, req).Body.String()
 	require.Contains(t, body, "Propose-only by design.")
-	require.Contains(t, body, `aria-label="How Gardener changes knowledge"`)
 	require.Contains(t, body, `id="gardener-ask-title"`)
 	require.Contains(t, body, `id="gardener-review-title"`)
 	require.Contains(t, body, "Found by a background Gardener pass")
 	require.Contains(t, body, "Dismiss suggestion")
 	require.Contains(t, body, "Apply change")
+	require.Contains(t, body, `data-base="/console/gardener"`, "the queue uses the shared library reader")
+	require.Contains(t, body, `id="ri-`+archiveP.ID+`"`, "every pending proposal has a rail row")
 
 	// Dismiss the merge -> gone from pending.
 	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+mergeP.ID+"/dismiss").Code)
@@ -207,10 +208,12 @@ func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	titles := []string{tasks[0].Title, tasks[1].Title}
 	require.Contains(t, titles, "Fix recurring error: tasks_add: unknown parameter <v>")
 
-	// Apply the archive whose memory is missing -> flash error, proposal stays pending.
+	// Apply the archive whose memory is missing -> flash error, proposal stays
+	// pending and stays selected (the owner still has to deal with it).
 	rr := post(mux, "/console/gardener/"+archiveP.ID+"/apply")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
-	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/gardener?error="))
+	require.True(t, strings.HasPrefix(rr.Header().Get("Location"), "/console/gardener/"+archiveP.ID+"?error="),
+		"a failed apply keeps the proposal selected, got %q", rr.Header().Get("Location"))
 	p, _, err = store.ProposalByID(ctx, db, archiveP.ID)
 	require.NoError(t, err)
 	require.Equal(t, store.ProposalPending, p.Status)
@@ -242,7 +245,7 @@ func TestGardenerPage_RekindCardAndApply(t *testing.T) {
 	require.Len(t, data.Cards, 1)
 	card := data.Cards[0]
 	require.Equal(t, "Reclassify a memory", card.Label)
-	require.Equal(t, "sort", card.Icon)
+	require.Equal(t, "arrow-up-down", card.Icon)
 	require.NotNil(t, card.Rekind)
 	require.Equal(t, "wordmark-rule", card.Rekind.Name)
 	require.Equal(t, "constraint", card.Rekind.From)
@@ -407,10 +410,15 @@ func TestGardenerSplit_CreatesPlanGroup(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/console/gardener", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	body := do(mux, req).Body.String()
-	require.Contains(t, body, "Project restructuring plan")
+	require.Contains(t, body, "Split plan:")
 	require.Contains(t, body, "Setup is applied first")
 	require.Contains(t, body, "Apply whole plan")
-	require.Contains(t, body, `class="gardener-retarget"`)
+
+	// The retarget correction rides with the reproject in the reader, so open
+	// one rather than expecting it on the setup card the queue selects first.
+	rep := httptest.NewRequest(http.MethodGet, "/console/gardener/"+reps[0].ID, nil)
+	rep.Header.Set("Authorization", "Bearer "+testKey)
+	require.Contains(t, do(mux, rep).Body.String(), `class="gardener-retarget"`)
 }
 
 // A request recognized as a split of a known project chains straight into split

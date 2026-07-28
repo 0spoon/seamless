@@ -1,54 +1,32 @@
 {{define "content"}}
 {{with .Data}}
-<div class="gardener-page">
-  <header class="gardener-hero">
-    <div class="gardener-hero-copy">
-      <div class="gardener-eyebrow">{{icon "sprout"}} Knowledge stewardship</div>
-      <h1>Gardener</h1>
-      <div class="sub">Keep shared knowledge coherent without giving up control of what changes.</div>
-      <div class="gardener-contract">
-        <span class="gardener-contract-icon">{{icon "lock"}}</span>
-        <div><strong>Propose-only by design.</strong><span>The gardener can prepare a change, but only you can let it alter the knowledge your agents receive.</span></div>
+{{$sel := .Selected}}
+{{$qs := .QS}}
+<div class="lib-page gardener-page" data-library="gardener">
+  <header class="lib-hero">
+    <div class="lib-hero-copy">
+      <div class="lib-eyebrow">{{icon "sprout"}} Knowledge stewardship</div>
+      <h1 id="gardener-review-title">Gardener</h1>
+      <div class="sub">
+        <span class="gardener-contract-badge">{{icon "lock"}} Propose-only by design.</span>
+        The gardener can prepare a change, but only you can let it alter the knowledge your agents receive.
       </div>
     </div>
-
-    <aside class="gardener-queue" aria-label="Gardener review queue">
-      <div class="gardener-queue-score">
-        <span>Awaiting your decision</span>
-        <strong>{{.PendingCount}}</strong>
-        <small>proposal{{if ne .PendingCount 1}}s{{end}} in the review gate</small>
-      </div>
-      <div class="gardener-queue-breakdown">
-        <div><strong>{{len .Groups}}</strong><span>change batch{{if ne (len .Groups) 1}}es{{end}}</span></div>
-        <div><strong>{{.RequestedCount}}</strong><span>asked by you</span></div>
-        <div><strong>{{.BackgroundCount}}</strong><span>found in review</span></div>
-      </div>
-      <ol class="gardener-contract-flow" aria-label="How Gardener changes knowledge">
-        <li><span>1</span><div><strong>Inspect</strong><small>find drift</small></div></li>
-        <li><span>2</span><div><strong>Propose</strong><small>show impact</small></div></li>
-        <li><span>3</span><div><strong>You decide</strong><small>apply or dismiss</small></div></li>
-      </ol>
-    </aside>
+    <div class="lib-total" aria-label="{{.PendingCount}} proposals awaiting your decision">
+      <strong>{{.PendingCount}}</strong><span>pending</span>
+      <small>{{.RequestedCount}} asked by you &middot; {{.BackgroundCount}} background</small>
+    </div>
   </header>
 
-  <section class="gardener-zone" aria-labelledby="gardener-ask-title">
-    <header class="gardener-zone-head">
-      <span class="gardener-zone-index">01</span>
-      <div>
-        <div class="gardener-zone-kicker">Aim the maintenance pass</div>
-        <h2 id="gardener-ask-title">Ask for a cleanup</h2>
-        <p>Describe the outcome in plain language. The response lands in the review queue, never directly in your knowledge.</p>
-      </div>
-      <span class="gardener-access">{{icon "lock"}} Proposal only</span>
-    </header>
-
+  <section class="gardener-composer" aria-labelledby="gardener-ask-title">
+    <h2 class="gardener-composer-title" id="gardener-ask-title">Ask for a cleanup</h2>
     {{if .CanRequest}}
     <form class="gardener-request-card" method="post" action="/console/gardener/request" id="req-form">
       <label class="gardener-request-label" for="req-text">
         <span>What should be tidied?</span>
-        <small>Name the memories, topic, or project when you know it. You can also ask for a project split here.</small>
+        <small>Plain language. Name the memories, topic, or project when you know it &mdash; or ask for a project split.</small>
       </label>
-      <textarea class="field gardener-request-input" name="request" id="req-text" rows="4"
+      <textarea class="field gardener-request-input" name="request" id="req-text" rows="3"
         placeholder="For example: the two auth-flow memories overlap — keep the newer one and archive anything that still refers to port 8080">{{.SplitReq}}</textarea>
 
       <div class="gardener-examples" aria-label="Request examples">
@@ -99,130 +77,203 @@
     {{end}}
   </section>
 
-  <section class="gardener-zone gardener-review-zone" id="review-queue" aria-labelledby="gardener-review-title">
-    <header class="gardener-zone-head">
-      <span class="gardener-zone-index">02</span>
-      <div>
-        <div class="gardener-zone-kicker">Human review gate</div>
-        <h2 id="gardener-review-title">Decide what changes</h2>
-        <p>Read the evidence and resulting state together. Apply approves the change; dismiss closes the suggestion without touching knowledge.</p>
+  {{if or .TotalPending .Recent}}
+  {{if .TotalPending}}
+  <section class="lib-controlbar" aria-label="Proposal filters">
+    <div class="lib-control">
+      <span class="lib-control-label">Type</span>
+      <div class="seg" data-seam-query>
+        <a class="{{if eq .TypeFilter "all"}}on{{end}}" href="/console/gardener?src={{.SrcFilter}}">All</a>
+        <a class="{{if eq .TypeFilter "split"}}on{{end}}" href="/console/gardener?group=split&amp;src={{.SrcFilter}}">Split plans</a>
+        <a class="{{if eq .TypeFilter "errors"}}on{{end}}" href="/console/gardener?group=errors&amp;src={{.SrcFilter}}">Errors &amp; gaps</a>
+        <a class="{{if eq .TypeFilter "cleanup"}}on{{end}}" href="/console/gardener?group=cleanup&amp;src={{.SrcFilter}}">Memory cleanup</a>
+        <a class="{{if eq .TypeFilter "plans"}}on{{end}}" href="/console/gardener?group=plans&amp;src={{.SrcFilter}}">Plan settlements</a>
+        <a class="{{if eq .TypeFilter "digests"}}on{{end}}" href="/console/gardener?group=digests&amp;src={{.SrcFilter}}">Digests</a>
       </div>
-      <span class="gardener-review-count"><strong>{{.PendingCount}}</strong> pending</span>
-    </header>
-
-    {{if or .Groups .Cards}}
-    <div class="gardener-review-rule">{{icon "lock"}} <span>Every item below is inert until you cross its Apply gate. Linked memories and projects open in the detail reader.</span></div>
-
-    {{/* Plan groups: a split setup plus its per-memory moves, reviewed as one change set. */}}
-    {{range .Groups}}
-    <section class="gardener-batch" aria-labelledby="batch-{{.Slug}}">
-      <header class="gardener-batch-head">
-        <span class="gardener-batch-icon">{{icon "split"}}</span>
-        <div class="gardener-batch-copy">
-          <div class="gardener-batch-kicker">Project restructuring plan</div>
-          <h3 id="batch-{{.Slug}}">{{.Slug}}</h3>
-          {{if .Request}}<p>&ldquo;{{.Request}}&rdquo;</p>{{else}}<p>A coordinated setup and move sequence, reviewed as one change set.</p>{{end}}
-        </div>
-        <div class="gardener-batch-facts">
-          <span><strong>{{len .Cards}}</strong> steps</span>
-          <span><strong>{{.MoveCount}}</strong> memor{{if eq .MoveCount 1}}y{{else}}ies{{end}} moving</span>
-          <span><strong>{{len .Targets}}</strong> destinations</span>
-        </div>
-        {{if $.Data.CanAct}}
-        <form method="post" action="/console/gardener/plan/{{.Slug}}/apply"
-          onsubmit="return confirm('Apply every proposal in this plan? Projects are created first, then memories are moved.');">
-          <button class="btn primary" type="submit">{{icon "check"}} Apply whole plan</button>
-        </form>
-        {{end}}
-      </header>
-      <div class="gardener-batch-order">{{icon "list-checks"}} Setup is applied first, then each memory move. You can retarget or approve steps individually.</div>
-
-      {{$targets := .Targets}}
-      <ol class="gardener-batch-steps">
-        {{range .Cards}}
-        <li>
-          <article class="gardener-proposal tone-{{.Tone}}">
-            <header class="gardener-proposal-head">
-              <span class="gardener-proposal-icon">{{icon .Icon}}</span>
-              <div class="gardener-proposal-title"><span>{{.Eyebrow}}</span><h4>{{.Label}}</h4></div>
-              <div class="gardener-proposal-meta"><span class="kind">{{.Kind}}</span><time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time></div>
-            </header>
-            <div class="gardener-proposal-body">{{template "cardKindBody" .}}</div>
-
-            {{if and (eq .Kind "reproject") $.Data.CanAct $targets}}
-            {{$to := .Reproject.To}}
-            <form class="gardener-retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
-              <label for="retarget-{{.ID}}">Correction</label>
-              <span>Move this memory to</span>
-              <select id="retarget-{{.ID}}" name="to">
-                {{range $targets}}<option value="{{.Slug}}"{{if eq .Slug $to}} selected{{end}}>{{.Label}}</option>{{end}}
-              </select>
-              <button class="btn small" type="submit">Retarget</button>
-            </form>
-            {{end}}
-
-            {{if $.Data.CanAct}}
-            <footer class="gardener-proposal-actions">
-              <span>Apply only this step</span>
-              <div class="btn-row">
-                <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal? It will be closed without changing knowledge.');">
-                  <button class="btn small" type="submit">Dismiss</button>
-                </form>
-                <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
-                  <button class="btn small primary" type="submit">{{icon "check"}} Apply step</button>
-                </form>
-              </div>
-            </footer>
-            {{end}}
-          </article>
-        </li>
-        {{end}}
-      </ol>
-    </section>
-    {{end}}
-
-    {{if .Cards}}
-    <div class="gardener-loose-head">
-      <div><span>Individual decisions</span><h3>Proposal queue</h3></div>
-      <p>{{len .Cards}} standalone change{{if ne (len .Cards) 1}}s{{end}}, newest first</p>
     </div>
-    <div class="gardener-proposal-stack">
-      {{range .Cards}}
-      <article class="gardener-proposal tone-{{.Tone}}">
-        <header class="gardener-proposal-head">
-          <span class="gardener-proposal-icon">{{icon .Icon}}</span>
-          <div class="gardener-proposal-title"><span>{{.Eyebrow}}</span><h3>{{.Label}}</h3></div>
-          <div class="gardener-proposal-meta"><span class="kind">{{.Kind}}</span><time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time></div>
-        </header>
-        {{if .RequestText}}<blockquote class="gardener-request-origin"><span>Asked by you</span><p>&ldquo;{{.RequestText}}&rdquo;</p></blockquote>{{else}}<div class="gardener-scan-origin">{{icon "sprout"}} Found by a background Gardener pass</div>{{end}}
-        <div class="gardener-proposal-body">{{template "cardKindBody" .}}</div>
-        {{if $.Data.CanAct}}
-        <footer class="gardener-proposal-actions">
-          <span>Knowledge changes only if applied</span>
-          <div class="btn-row">
-            <form method="post" action="/console/gardener/{{.ID}}/dismiss" onsubmit="return confirm('Dismiss this {{.Kind}} proposal? It will be closed without changing knowledge.');">
-              <button class="btn" type="submit">Dismiss suggestion</button>
+    <div class="lib-control">
+      <span class="lib-control-label">Source</span>
+      <div class="seg" data-seam-query>
+        <a class="{{if eq .SrcFilter "all"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}">All</a>
+        <a class="{{if eq .SrcFilter "you"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=you">Asked by you</a>
+        <a class="{{if eq .SrcFilter "auto"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=auto">Background</a>
+      </div>
+    </div>
+    <div class="lib-control-note"><strong>Review gate</strong><span>Read the evidence, then apply or dismiss</span></div>
+  </section>
+  {{end}}
+
+  <div class="lib-layout"{{if and $sel .SelectedAuto}} data-auto-url="/console/gardener/{{$sel.ID}}{{$qs}}"{{end}}>
+    <nav class="lib-rail" aria-label="Proposals">
+      <div class="rail-overview"><span>Review queue</span><span>{{.PendingCount}} pending</span></div>
+      <div class="rail-scroll">
+        <div class="rail-groups">
+
+        {{/* Split plans lead: a setup card plus its per-memory moves, reviewed as one change set. */}}
+        {{range .Groups}}
+        <section class="rail-group gardener-plan-group" id="rg-plan-{{.Slug}}">
+          <header class="rail-group-hd"><span class="hd-label">{{icon "split"}}Split plan: {{.Slug}}</span> <span class="n">{{len .Cards}}</span></header>
+          {{if .Request}}<blockquote class="gardener-group-quote">&ldquo;{{.Request}}&rdquo;</blockquote>{{end}}
+          <div class="gardener-group-note">{{icon "list-checks"}} Setup is applied first, then each memory move.</div>
+          {{if $.Data.CanAct}}
+          <div class="gardener-group-actions">
+            <form method="post" action="/console/gardener/plan/{{.Slug}}/apply"
+              onsubmit="return confirm('Apply every proposal in this plan? Projects are created first, then memories are moved. Setting up a split cannot be undone from the console.');">
+              <button class="btn small primary" type="submit">{{icon "check"}} Apply whole plan</button>
             </form>
-            <form method="post" action="/console/gardener/{{.ID}}/apply" onsubmit="return confirm('Apply this {{.Kind}} proposal?');">
-              <button class="btn primary" type="submit">{{icon "check"}} Apply change</button>
+            <form class="gardener-dismiss-all" method="post" action="/console/gardener/group/dismiss"
+              onsubmit="return confirm('Dismiss all {{len .Cards}} proposal{{if ne (len .Cards) 1}}s{{end}} in this plan? They can be restored from Recently decided.');">
+              <input type="hidden" name="plan" value="{{.Slug}}">
+              <button class="btn small" type="submit">Dismiss all {{len .Cards}}</button>
             </form>
           </div>
-        </footer>
+          {{end}}
+          <div class="rail-items">
+            {{range .Cards}}{{template "gardener-row" .}}{{end}}
+          </div>
+        </section>
         {{end}}
-      </article>
+
+        {{range .Sections}}
+        <section class="rail-group" id="rg-{{.Key}}">
+          <header class="rail-group-hd"><span class="hd-label">{{icon .Icon}}{{.Label}}</span> <span class="n">{{len .Rows}}</span></header>
+          {{if $.Data.CanAct}}
+          <form class="gardener-dismiss-all" method="post" action="/console/gardener/group/dismiss"
+            onsubmit="return confirm('Dismiss all {{len .Rows}} proposal{{if ne (len .Rows) 1}}s{{end}} in {{.Label}}? They can be restored from Recently decided.');">
+            <input type="hidden" name="group" value="{{.Key}}">
+            <button class="btn small" type="submit">Dismiss all {{len .Rows}}</button>
+          </form>
+          {{end}}
+          <div class="rail-items">
+            {{range .Rows}}{{template "gardener-row" .}}{{end}}
+          </div>
+        </section>
+        {{end}}
+
+        {{if not (or .Groups .Sections)}}
+          {{if .TotalPending}}
+          <div class="rail-none">No proposal matches this filter. <a href="/console/gardener">Clear filters</a></div>
+          {{else}}
+          <div class="rail-none">The garden is tidy. Nothing is waiting on you.</div>
+          {{end}}
+        {{end}}
+
+        {{if .Recent}}
+        <details class="rail-group rail-collapse gardener-recent" id="rg-recent">
+          <summary class="rail-group-hd"><span class="hd-label">{{icon "undo-2"}}Recently decided</span> <span class="n">{{len .Recent}}</span></summary>
+          <div class="gardener-recent-rows">
+            {{range .Recent}}
+            <div class="gardener-recent-row tone-{{.Tone}}">
+              <span class="grr-icon">{{icon .Icon}}</span>
+              <span class="grr-copy">
+                <span class="grr-title">{{.RowTitle}}</span>
+                <span class="grr-meta">{{.Status}} &middot; <time title="{{ts .ResolvedAt}}">{{ago .ResolvedAt}}</time></span>
+              </span>
+              {{if and $.Data.CanAct .CanUndo}}
+              <form method="post" action="/console/gardener/{{.ID}}/undo">
+                <button class="btn small" type="submit" title="Return this proposal to the queue">{{icon "undo-2"}} Undo</button>
+              </form>
+              {{else}}
+              <span class="grr-final" title="Applying this created projects or folded memories together, so it cannot be reversed from here">final</span>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+        </details>
+        {{end}}
+
+        </div><!-- .rail-groups -->
+      </div><!-- .rail-scroll -->
+    </nav>
+    <section class="lib-reader" id="lib-reader" data-base="/console/gardener" aria-live="polite" aria-label="Proposal">
+      {{if $sel}}{{template "gardener-reader" $sel}}{{else}}
+      <div class="reader-empty dotgrid"><span class="empty-ico">{{icon "sprout"}}</span><div>{{if .TotalPending}}Select a proposal to review it here.{{else}}The garden is tidy. No proposed change is waiting on you.{{end}}</div></div>
       {{end}}
-    </div>
-    {{end}}
-    {{else}}
-    <div class="gardener-tidy">
-      <span class="gardener-tidy-illustration"><i></i>{{icon "sprout"}}</span>
-      <div><span>Review queue clear</span><h3>The garden is tidy.</h3><p>No proposed change is waiting on you. Background passes will bring drift here, or you can aim the gardener with a request above.</p></div>
-      <a class="btn small" href="#gardener-ask-title">Ask for a cleanup {{icon "arrow-right"}}</a>
-    </div>
-    {{end}}
-  </section>
-</div><!-- .gardener-page -->
+    </section>
+  </div>
+  {{else}}
+  <div class="empty dotgrid">
+    <span class="empty-ico">{{icon "sprout"}}</span>
+    <div>The garden is tidy. No proposed change is waiting on you &mdash; background passes bring drift here, or you can aim the gardener with a request above.</div>
+  </div>
+  {{end}}
+</div><!-- .lib-page -->
 {{end}}
+{{end}}
+
+{{/* gardener-row is one line of the review rail: a real link, so library.js
+     upgrades it to an in-place reader swap and j/k step through the queue. */}}
+{{define "gardener-row"}}
+<a class="rail-item gardener-row tone-{{.Tone}}{{if .Selected}} selected{{end}}" id="ri-{{.ID}}"
+   href="{{.Href}}" data-title="{{.RowTitle}}" data-context="{{.GroupLabel}}"
+   {{if .Selected}}aria-current="page"{{end}}>
+  <span class="gr-icon">{{icon .Icon}}</span>
+  <span class="gr-copy">
+    <span class="gr-title">{{.RowTitle}}</span>
+    {{if .RowDetail}}<span class="gr-detail">{{.RowDetail}}</span>{{end}}
+  </span>
+  <span class="gr-meta">
+    <span class="gardener-src-chip{{if eq .Source "request"}} you{{end}}">{{if eq .Source "request"}}you{{else}}auto{{end}}</span>
+    <time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time>
+  </span>
+</a>
+{{end}}
+
+{{/* gardener-reader is the review gate for one proposal: provenance, the
+     concrete before/after evidence, then the Apply/Dismiss decision. It also
+     renders standalone as the ?reader=1 fragment, so everything it needs is on
+     the card itself. */}}
+{{define "gardener-reader"}}
+<article class="reader-sheet gardener-sheet tone-{{.Tone}}">
+  <header class="reader-head">
+    <div class="reader-eyebrow">
+      <span class="kind">{{.Kind}}</span>
+      <span class="badge">{{.Eyebrow}}</span>
+      <span class="gardener-contract-badge small">{{icon "lock"}} Proposal only</span>
+    </div>
+    <h2 class="reader-title"><span class="gardener-sheet-icon">{{icon .Icon}}</span>{{.Label}}</h2>
+    {{if .RequestText}}
+    <blockquote class="gardener-request-origin"><span>Asked by you</span><p>&ldquo;{{.RequestText}}&rdquo;</p></blockquote>
+    {{else}}
+    <div class="gardener-scan-origin">{{icon "sprout"}} Found by a background Gardener pass</div>
+    {{end}}
+    <div class="reader-facts">
+      <span class="fact" title="{{ts .CreatedAt}}">proposed {{ago .CreatedAt}}</span>
+      {{if .GroupLabel}}<span class="fact">{{.GroupLabel}}</span>{{end}}
+    </div>
+  </header>
+
+  <div class="gardener-evidence">{{template "cardKindBody" .}}</div>
+
+  {{if and (eq .Kind "reproject") .CanAct .Targets}}
+  {{$to := .Reproject.To}}
+  <form class="gardener-retarget" method="post" action="/console/gardener/{{.ID}}/retarget">
+    <label for="retarget-{{.ID}}">Correction</label>
+    <span>Move this memory to</span>
+    <select id="retarget-{{.ID}}" name="to">
+      {{range .Targets}}<option value="{{.Slug}}"{{if eq .Slug $to}} selected{{end}}>{{.Label}}</option>{{end}}
+    </select>
+    <button class="btn small" type="submit">Retarget</button>
+  </form>
+  {{end}}
+
+  {{if .CanAct}}
+  <footer class="gardener-reader-actions">
+    <span>{{icon "lock"}} Knowledge changes only if applied{{if .CanUndoApply}} &mdash; and undoable from Recently decided{{end}}</span>
+    <div class="btn-row">
+      <form method="post" action="/console/gardener/{{.ID}}/dismiss">
+        <input type="hidden" name="next" value="{{.NextID}}">
+        <button class="btn" type="submit">Dismiss suggestion</button>
+      </form>
+      <form method="post" action="/console/gardener/{{.ID}}/apply"
+        {{if not .CanUndoApply}}onsubmit="return confirm('Apply this {{.Kind}} proposal? This cannot be undone from the console.');"{{end}}>
+        <input type="hidden" name="next" value="{{.NextID}}">
+        <button class="btn primary" type="submit">{{icon "check"}} Apply change</button>
+      </form>
+    </div>
+  </footer>
+  {{end}}
+</article>
 {{end}}
 
 {{/* cardKindBody renders the concrete before/after state for one proposal. */}}
@@ -278,7 +329,7 @@
     <div class="destination"><span>To kind</span><strong>{{.To}}</strong></div>
   </div>
   {{if .Rationale}}<div class="proposal-reason"><span>Why this kind fits</span><p>{{.Rationale}}</p></div>{{end}}
-  <div class="proposal-assurance">{{icon "sort"}} The memory keeps its identity, project, and body; only its kind classification changes.</div>
+  <div class="proposal-assurance">{{icon "arrow-up-down"}} The memory keeps its identity, project, and body; only its kind classification changes.</div>
   {{end}}
 {{else if eq .Kind "abandon_plan"}}
   {{with .AbandonPlan}}

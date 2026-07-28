@@ -351,7 +351,13 @@ proposals as the timed passes. It is a way to <em>aim</em> the gardener, not a w
 bypass the review step - what comes back is still a proposal.</p>
 <h2 id="where-you-review">Where you review</h2>
 <ul>
-<li><strong>The console</strong> - <code>/console/gardener</code> lists proposals with what each would do.</li>
+<li><strong>The console</strong> - <code>/console/gardener</code> is an inbox: one line per proposal in
+the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+group can be dismissed at once, and anything you decide lands in <strong>Recently
+decided</strong>, where Undo puts it back in the queue and reverses what applying it
+did. Applying a consolidation or a project split is the exception - both
+create things that immediately accrue content, so they ask for a confirm
+instead and cannot be undone from the console.</li>
 <li><strong><code>gardener_proposals</code></strong> - the same, for an agent.</li>
 </ul>
 <p>The gardener runs every <code>gardener.interval_minutes</code> (60) when

@@ -100,7 +100,13 @@ bypass the review step - what comes back is still a proposal.
 
 ## Where you review
 
-- **The console** - `/console/gardener` lists proposals with what each would do.
+- **The console** - `/console/gardener` is an inbox: one line per proposal in
+  the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+  group can be dismissed at once, and anything you decide lands in **Recently
+  decided**, where Undo puts it back in the queue and reverses what applying it
+  did. Applying a consolidation or a project split is the exception - both
+  create things that immediately accrue content, so they ask for a confirm
+  instead and cannot be undone from the console.
 - **`gardener_proposals`** - the same, for an agent.
 
 The gardener runs every `gardener.interval_minutes` (60) when

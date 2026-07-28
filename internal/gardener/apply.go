@@ -67,6 +67,13 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 	if err := store.ResolveProposal(ctx, s.db, id, store.ProposalApplied, now); err != nil {
 		return nil, err
 	}
+	// Persist what the apply produced so Undo can find the artifact again (the
+	// note it wrote, the task it opened, the project it moved a memory out of).
+	// Best-effort: the change already landed, so a failure here costs the undo
+	// affordance, not the apply.
+	if err := store.RecordProposalResult(ctx, s.db, id, result); err != nil {
+		s.logger.Warn("gardener: record apply result", "id", id, "error", err)
+	}
 	s.record(ctx, id, map[string]any{"action": "apply", "kind": p.Kind})
 	result["status"] = "applied"
 	result["kind"] = p.Kind

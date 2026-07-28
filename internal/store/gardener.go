@@ -43,7 +43,10 @@ var ProposalKinds = []string{
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the
 // kind-specific detail; every payload includes a stable "key" string the
-// gardener uses to avoid re-proposing the same thing on a later pass.
+// gardener uses to avoid re-proposing the same thing on a later pass. Result is
+// what applying it produced (the note it wrote, the task it opened, the memory
+// it moved) -- nil until applied, and the handle undo uses to find the artifact
+// again.
 type Proposal struct {
 	ID         string         `json:"id"`
 	Kind       string         `json:"kind"`
@@ -51,7 +54,12 @@ type Proposal struct {
 	Status     string         `json:"status"`
 	CreatedAt  time.Time      `json:"createdAt"`
 	ResolvedAt *time.Time     `json:"resolvedAt,omitempty"`
+	Result     map[string]any `json:"result,omitempty"`
 }
+
+// proposalCols is the column list every proposal query selects, in the order
+// scanProposals reads them.
+const proposalCols = `id, kind, payload, status, created_at, resolved_at, result`
 
 // CreateProposal inserts a pending gardener proposal and returns it. The caller
 // supplies the kind and payload; the id and created_at are stamped here.
@@ -78,7 +86,7 @@ func CreateProposal(ctx context.Context, db *sql.DB, kind string, payload map[st
 // PendingProposals returns pending proposals, newest first. kind filters by
 // proposal kind when non-empty.
 func PendingProposals(ctx context.Context, db *sql.DB, kind string) ([]Proposal, error) {
-	q := `SELECT id, kind, payload, status, created_at, resolved_at
+	q := `SELECT ` + proposalCols + `
 		FROM gardener_proposals WHERE status = ?`
 	args := []any{ProposalPending}
 	if kind != "" {
@@ -96,7 +104,7 @@ func PendingProposals(ctx context.Context, db *sql.DB, kind string) ([]Proposal,
 
 // ProposalByID returns one proposal. found is false when absent.
 func ProposalByID(ctx context.Context, db *sql.DB, id string) (Proposal, bool, error) {
-	rows, err := db.QueryContext(ctx, `SELECT id, kind, payload, status, created_at, resolved_at
+	rows, err := db.QueryContext(ctx, `SELECT `+proposalCols+`
 		FROM gardener_proposals WHERE id = ? LIMIT 1`, id)
 	if err != nil {
 		return Proposal{}, false, fmt.Errorf("store.ProposalByID: %w", err)
@@ -159,6 +167,66 @@ func UpdateProposalPayload(ctx context.Context, db *sql.DB, id string, payload m
 	return nil
 }
 
+// RecordProposalResult stores what applying a proposal produced. It is called
+// after ResolveProposal, so it deliberately does not filter on status -- the
+// proposal is already applied by then. A missing row is not an error: the
+// result is a convenience for undo, never a correctness requirement of apply.
+func RecordProposalResult(ctx context.Context, db *sql.DB, id string, result map[string]any) error {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return fmt.Errorf("store.RecordProposalResult: marshal: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		UPDATE gardener_proposals SET result = ? WHERE id = ?`, string(raw), id); err != nil {
+		return fmt.Errorf("store.RecordProposalResult: %w", err)
+	}
+	return nil
+}
+
+// ReopenProposal returns a resolved proposal to the pending queue, clearing the
+// resolution stamp and the apply result. It is the store half of undo: the
+// caller has already inverted the effect (or is undoing a dismissal, which had
+// none). It errors if the proposal is missing or still pending, so a double
+// undo cannot resurrect an already-restored proposal.
+//
+// The payload key is deliberately left in place: AllProposalKeys reads every
+// status, so dedup behaves the same whether the proposal is pending, resolved,
+// or reopened.
+func ReopenProposal(ctx context.Context, db *sql.DB, id string) error {
+	res, err := db.ExecContext(ctx, `
+		UPDATE gardener_proposals SET status = ?, resolved_at = NULL, result = NULL
+		WHERE id = ? AND status IN (?, ?)`,
+		ProposalPending, id, ProposalApplied, ProposalDismissed)
+	if err != nil {
+		return fmt.Errorf("store.ReopenProposal: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.ReopenProposal: rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store.ReopenProposal: no resolved proposal with id %q", id)
+	}
+	return nil
+}
+
+// RecentResolvedProposals returns the most recently applied or dismissed
+// proposals, newest resolution first, capped at limit. It backs the console's
+// "Recently decided" section, where each row offers an undo.
+func RecentResolvedProposals(ctx context.Context, db *sql.DB, limit int) ([]Proposal, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	rows, err := db.QueryContext(ctx, `SELECT `+proposalCols+`
+		FROM gardener_proposals WHERE status <> ?
+		ORDER BY resolved_at DESC, id DESC LIMIT ?`, ProposalPending, limit)
+	if err != nil {
+		return nil, fmt.Errorf("store.RecentResolvedProposals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanProposals(rows)
+}
+
 // AllProposalKeys returns the set of payload "key" values across proposals of
 // EVERY status. The gardener consults it before proposing, so a suggestion the
 // owner already applied or dismissed is never raised again.
@@ -191,15 +259,22 @@ func scanProposals(rows *sql.Rows) ([]Proposal, error) {
 	var out []Proposal
 	for rows.Next() {
 		var (
-			p            Proposal
-			raw, created string
-			resolved     sql.NullString
+			p             Proposal
+			raw, created  string
+			resolved, res sql.NullString
 		)
-		if err := rows.Scan(&p.ID, &p.Kind, &raw, &p.Status, &created, &resolved); err != nil {
+		if err := rows.Scan(&p.ID, &p.Kind, &raw, &p.Status, &created, &resolved, &res); err != nil {
 			return nil, fmt.Errorf("store: scan proposal: %w", err)
 		}
 		if err := json.Unmarshal([]byte(raw), &p.Payload); err != nil {
 			return nil, fmt.Errorf("store: proposal payload: %w", err)
+		}
+		// A result written by an older binary (or hand-edited) must not make the
+		// whole proposal unreadable: undo simply finds no handle and refuses.
+		if res.Valid && res.String != "" {
+			if err := json.Unmarshal([]byte(res.String), &p.Result); err != nil {
+				p.Result = nil
+			}
 		}
 		var err error
 		if p.CreatedAt, err = core.ParseTime(created); err != nil {

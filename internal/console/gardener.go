@@ -7,6 +7,7 @@ import (
 	"html/template"
 	"net/http"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -116,6 +117,84 @@ type proposalCard struct {
 
 	// ToolError (open a task to fix an error agents keep hitting).
 	ToolError *toolErrorView `json:"toolError,omitempty"`
+
+	// Inbox projections. These drive the rail row and the reader's action
+	// footer only; every one is json:"-" because ?format=json is the seam CLI's
+	// contract and its shape (groups/cards/counts) must not move.
+	//
+	// RowTitle/RowDetail are the one-line summary: the outcome, then the
+	// concrete objects it touches. GroupKey/GroupLabel place the row in the
+	// taxonomy. Targets are the retarget options for an in-plan reproject.
+	// NextID is the row the queue advances to after this one is decided, so an
+	// apply/dismiss lands on the next proposal instead of a blank pane.
+	RowTitle   string       `json:"-"`
+	RowDetail  string       `json:"-"`
+	GroupKey   string       `json:"-"`
+	GroupLabel string       `json:"-"`
+	Targets    []projectOpt `json:"-"`
+	NextID     string       `json:"-"`
+	// Href is the row's canonical URL with the active filter suffix, and
+	// Selected marks the row the reader is showing. Both are resolved here
+	// rather than in the template so the rail row renders from the card alone.
+	Href     string `json:"-"`
+	Selected bool   `json:"-"`
+	// CanUndoApply drives both the reader's assurance copy and whether Apply
+	// asks for a confirm: an undoable change needs no interstitial, an
+	// irreversible one does. CanAct mirrors gardenerData's, because the reader
+	// also renders standalone as a ?reader=1 fragment with no page around it.
+	CanUndoApply bool `json:"-"`
+	CanAct       bool `json:"-"`
+}
+
+// queueSection is one taxonomy group in the review rail: the pending proposals
+// that call for the same kind of decision, newest first.
+type queueSection struct {
+	Key   string         `json:"-"`
+	Label string         `json:"-"`
+	Icon  string         `json:"-"`
+	Rows  []proposalCard `json:"-"`
+}
+
+// queueTaxonomy is the single source for how the review queue is grouped: the
+// section order, its label, its icon, and which proposal kinds land in it.
+// Adding a proposal kind without listing it here is caught by a test rather
+// than silently dropping its rows out of the rail.
+var queueTaxonomy = []queueSection{
+	{Key: "errors", Label: "Errors & gaps", Icon: "triangle-alert"},
+	{Key: "cleanup", Label: "Memory cleanup", Icon: "brain"},
+	{Key: "plans", Label: "Plan settlements", Icon: "map"},
+	{Key: "digests", Label: "Digests", Icon: "file-text"},
+}
+
+// sectionOfKind maps a proposal kind to its taxonomy section key.
+var sectionOfKind = map[string]string{
+	store.ProposalToolError:    "errors",
+	store.ProposalMemoryWanted: "errors",
+	store.ProposalMerge:        "cleanup",
+	store.ProposalConsolidate:  "cleanup",
+	store.ProposalArchive:      "cleanup",
+	store.ProposalRekind:       "cleanup",
+	store.ProposalReproject:    "cleanup",
+	store.ProposalAbandonPlan:  "plans",
+	store.ProposalShipPlan:     "plans",
+	store.ProposalDigest:       "digests",
+}
+
+// planSectionKey is the ?group= value selecting the split-plan batches, which
+// are their own ordered groups rather than a taxonomy section.
+const planSectionKey = "split"
+
+// recentRow is one entry in the rail's "Recently decided" section: a resolved
+// proposal reduced to what an undo decision needs.
+type recentRow struct {
+	ID         string
+	Kind       string
+	Icon       string
+	Tone       string
+	RowTitle   string
+	Status     string // applied | dismissed
+	ResolvedAt *time.Time
+	CanUndo    bool
 }
 
 // memoryWantedView is the memory_wanted projection: the recurring zero-hit
@@ -199,45 +278,368 @@ type gardenerData struct {
 	SplitReq        string         `json:"splitReq,omitempty"` // split request awaiting a source project (renders the picker follow-up)
 	Notice          string         `json:"notice,omitempty"`   // positive flash
 	Error           string         `json:"error,omitempty"`    // failure flash
+
+	// Inbox state for the HTML rail + reader. All json:"-": the CLI reads
+	// Groups/Cards/counts and that shape is fixed.
+	Sections []queueSection `json:"-"`
+	Recent   []recentRow    `json:"-"`
+	// Selected is the proposal open in the reader: the requested one on a
+	// /console/gardener/{id} page, or the first row of the queue on the list URL
+	// (SelectedAuto, which the client pins into the URL).
+	Selected     *proposalCard `json:"-"`
+	SelectedAuto bool          `json:"-"`
+	// QS is the ?group=&src= suffix rail links carry so the active filter
+	// survives a selection change ("" when both are at their defaults).
+	QS         string `json:"-"`
+	TypeFilter string `json:"-"` // "all" | planSectionKey | a queueTaxonomy key
+	SrcFilter  string `json:"-"` // "all" | "you" | "auto"
+	// TotalPending is the size of the whole queue, unfiltered -- what separates
+	// "nothing matches this filter" from "the garden is tidy".
+	TotalPending int `json:"-"`
 }
 
-func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
+// gardenerPageData assembles the review queue for the given request: every
+// pending proposal projected into a card, filtered by ?group=/?src=, then split
+// into plan batches and taxonomy sections in rail order. ok=false means the
+// 400/500 response was already written.
+//
+// It also returns the unfiltered card set, so a deep link to a proposal the
+// active filter hides can still resolve it (a shared URL must open its
+// proposal, filter or no filter).
+func (s *Service) gardenerPageData(w http.ResponseWriter, r *http.Request) (data gardenerData, all []proposalCard, ok bool) {
 	ctx := r.Context()
+	typeFilter, srcFilter, ok := s.parseGardenerFilters(w, r)
+	if !ok {
+		return gardenerData{}, nil, false
+	}
 	proposals, err := store.PendingProposals(ctx, s.cfg.DB, "")
 	if err != nil {
 		s.serverError(w, r, err)
-		return
+		return gardenerData{}, nil, false
 	}
-	cards := make([]proposalCard, 0, len(proposals))
+	all = make([]proposalCard, 0, len(proposals))
 	for _, p := range proposals {
-		cards = append(cards, s.toProposalCard(ctx, p))
+		all = append(all, s.toProposalCard(ctx, p))
 	}
-	groups, ungrouped := groupByPlan(cards)
+
+	visible := filterCards(all, typeFilter, srcFilter)
+	groups, sections := buildQueue(visible, gardenerQS(typeFilter, srcFilter))
 	requested := 0
-	for _, c := range cards {
+	for _, c := range visible {
 		if c.Source == "request" {
 			requested++
 		}
 	}
-	s.render(w, r, "gardener", pageData{
-		Title:  "Gardener",
-		Active: "gardener",
-		Data: gardenerData{
-			Groups:          groups,
-			Cards:           ungrouped,
-			PendingCount:    len(cards),
-			RequestedCount:  requested,
-			BackgroundCount: len(cards) - requested,
-			CanAct:          s.cfg.Gardener != nil,
-			CanRequest:      s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
-			Projects:        s.projectOptions(ctx),
-			Scope:           r.URL.Query().Get("project"),
-			SplitReq:        r.URL.Query().Get("split"),
-			Notice:          r.URL.Query().Get("notice"),
-			Error:           r.URL.Query().Get("error"),
-		},
-	})
+	return gardenerData{
+		Groups:          groups,
+		Cards:           ungroupedRows(sections),
+		Sections:        sections,
+		Recent:          s.recentDecisions(ctx),
+		PendingCount:    len(visible),
+		RequestedCount:  requested,
+		BackgroundCount: len(visible) - requested,
+		TotalPending:    len(all),
+		CanAct:          s.cfg.Gardener != nil,
+		CanRequest:      s.cfg.Gardener != nil && s.cfg.Gardener.CanRequest(),
+		Projects:        s.projectOptions(ctx),
+		Scope:           r.URL.Query().Get("project"),
+		SplitReq:        r.URL.Query().Get("split"),
+		Notice:          r.URL.Query().Get("notice"),
+		Error:           r.URL.Query().Get("error"),
+		QS:              gardenerQS(typeFilter, srcFilter),
+		TypeFilter:      typeFilter,
+		SrcFilter:       srcFilter,
+	}, all, true
 }
+
+func (s *Service) gardenerPage(w http.ResponseWriter, r *http.Request) {
+	data, _, ok := s.gardenerPageData(w, r)
+	if !ok {
+		return
+	}
+	// The HTML inbox opens the top of the queue, like every library screen; the
+	// client pins the resulting id into the URL so Back works through triage.
+	if !wantsJSON(r) {
+		if first := firstRow(data); first != nil {
+			first.Selected = true
+			data.Selected = first
+			data.SelectedAuto = true
+		}
+	}
+	s.render(w, r, "gardener", pageData{Title: "Gardener", Active: "gardener", Data: data})
+}
+
+// gardenerDetail serves one proposal: JSON for the CLI, the reader fragment for
+// an in-place swap (?reader=1), or the full queue page with that proposal
+// selected. A missing or already-resolved id bounces back to the queue with an
+// error flash rather than 404ing -- the usual way to reach one is a stale link
+// from a decision another tab already made.
+func (s *Service) gardenerDetail(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	id := r.PathValue("id")
+	p, found, err := store.ProposalByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if !found || p.Status != store.ProposalPending {
+		gardenerRedirect(w, r, "", "error", "That proposal was already resolved.")
+		return
+	}
+	data, all, ok := s.gardenerPageData(w, r)
+	if !ok {
+		return
+	}
+	card := findCard(data.Groups, data.Sections, id)
+	if card == nil {
+		// Hidden by the active filter: rebuild the rail unfiltered so the row
+		// still carries its plan context, just without a next-in-queue.
+		g, sec := buildQueue(all, data.QS)
+		card = findCard(g, sec, id)
+		if card == nil { // belt and braces; the proposal is pending, so it is in there
+			c := s.toProposalCard(ctx, p)
+			card = &c
+		}
+		card.NextID = ""
+	}
+	card.Selected = true
+	if wantsJSON(r) {
+		writeJSON(w, http.StatusOK, card)
+		return
+	}
+	if r.URL.Query().Get("reader") == "1" {
+		s.renderReader(w, r, "gardener", "gardener-reader", card)
+		return
+	}
+	data.Selected = card
+	s.render(w, r, "gardener", pageData{Title: "Proposal " + card.Label, Active: "gardener", Data: data})
+}
+
+// parseGardenerFilters validates ?group= and ?src=, defaulting both to "all".
+// An unknown value is a 400 naming the valid ones rather than a silent default,
+// so an agent driving the console by URL sees the fix. ok=false means the
+// response was already written.
+func (s *Service) parseGardenerFilters(w http.ResponseWriter, r *http.Request) (typeFilter, srcFilter string, ok bool) {
+	q := r.URL.Query()
+	typeFilter = q.Get("group")
+	if typeFilter == "" {
+		typeFilter = "all"
+	}
+	if !slices.Contains(groupFilterKeys(), typeFilter) {
+		s.badRequest(w, r, fmt.Sprintf("invalid group %q: valid values are %s",
+			typeFilter, strings.Join(groupFilterKeys(), ", ")))
+		return "", "", false
+	}
+	srcFilter = q.Get("src")
+	if srcFilter == "" {
+		srcFilter = "all"
+	}
+	if !slices.Contains(srcFilterKeys, srcFilter) {
+		s.badRequest(w, r, fmt.Sprintf("invalid src %q: valid values are %s",
+			srcFilter, strings.Join(srcFilterKeys, ", ")))
+		return "", "", false
+	}
+	return typeFilter, srcFilter, true
+}
+
+// srcFilterKeys are the accepted ?src values: everything, the proposals the
+// owner asked for, or the ones a background pass found.
+var srcFilterKeys = []string{"all", "you", "auto"}
+
+// groupFilterKeys are the accepted ?group values: everything, the split-plan
+// batches, or one taxonomy section.
+func groupFilterKeys() []string {
+	out := make([]string, 0, len(queueTaxonomy)+2)
+	out = append(out, "all", planSectionKey)
+	for _, sec := range queueTaxonomy {
+		out = append(out, sec.Key)
+	}
+	return out
+}
+
+// gardenerQS renders the ?group=&src= suffix rail links carry ("" at defaults),
+// so changing the selection keeps the active filter.
+func gardenerQS(typeFilter, srcFilter string) string {
+	v := url.Values{}
+	if typeFilter != "all" {
+		v.Set("group", typeFilter)
+	}
+	if srcFilter != "all" {
+		v.Set("src", srcFilter)
+	}
+	if len(v) == 0 {
+		return ""
+	}
+	return "?" + v.Encode()
+}
+
+// filterCards narrows the queue to the selected type and source. A plan card is
+// kept only by "all" or the split filter; every other card by its taxonomy
+// section.
+func filterCards(cards []proposalCard, typeFilter, srcFilter string) []proposalCard {
+	out := make([]proposalCard, 0, len(cards))
+	for _, c := range cards {
+		switch srcFilter {
+		case "you":
+			if c.Source != "request" {
+				continue
+			}
+		case "auto":
+			if c.Source == "request" {
+				continue
+			}
+		}
+		switch typeFilter {
+		case "all":
+		case planSectionKey:
+			if c.Plan == "" {
+				continue
+			}
+		default:
+			if c.Plan != "" || sectionOfKind[c.Kind] != typeFilter {
+				continue
+			}
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
+// buildQueue turns projected cards into the rail: plan batches first (a split
+// setup plus its moves, reviewed together), then the taxonomy sections. Rows
+// stay in store order (newest first) within each group, and every row learns
+// its own link plus which row the queue advances to when it is decided.
+func buildQueue(cards []proposalCard, qs string) ([]planGroup, []queueSection) {
+	groups, ungrouped := groupByPlan(cards)
+	sections := sectionize(ungrouped)
+	for _, c := range railOrder(groups, sections) {
+		c.Href = "/console/gardener/" + c.ID + qs
+	}
+	assignNextIDs(groups, sections)
+	return groups, sections
+}
+
+// railOrder returns pointers to every row in display order: plan batches lead,
+// then the taxonomy sections. The pointers are into the groups/sections
+// themselves, so writing through them updates what the rail renders.
+func railOrder(groups []planGroup, sections []queueSection) []*proposalCard {
+	var order []*proposalCard
+	for gi := range groups {
+		for ci := range groups[gi].Cards {
+			order = append(order, &groups[gi].Cards[ci])
+		}
+	}
+	for si := range sections {
+		for ri := range sections[si].Rows {
+			order = append(order, &sections[si].Rows[ri])
+		}
+	}
+	return order
+}
+
+// sectionize files the non-plan cards into the taxonomy sections, dropping
+// empty ones. A kind absent from sectionOfKind would vanish here, which is
+// exactly what TestQueueTaxonomy_CoversEveryKind exists to prevent.
+func sectionize(cards []proposalCard) []queueSection {
+	byKey := map[string][]proposalCard{}
+	for _, c := range cards {
+		key := sectionOfKind[c.Kind]
+		if key == "" {
+			continue
+		}
+		byKey[key] = append(byKey[key], c)
+	}
+	out := make([]queueSection, 0, len(queueTaxonomy))
+	for _, sec := range queueTaxonomy {
+		rows := byKey[sec.Key]
+		if len(rows) == 0 {
+			continue
+		}
+		for i := range rows {
+			rows[i].GroupKey, rows[i].GroupLabel = sec.Key, sec.Label
+		}
+		sec.Rows = rows
+		out = append(out, sec)
+	}
+	return out
+}
+
+// assignNextIDs walks the rail in display order and points each row at the one
+// after it. Apply and Dismiss post that id back, so a decision advances the
+// reader to the next proposal instead of leaving it blank. The last row's
+// NextID stays empty, which sends the owner to the bare list (auto-selecting
+// whatever is left).
+func assignNextIDs(groups []planGroup, sections []queueSection) {
+	order := railOrder(groups, sections)
+	for i, c := range order {
+		if i+1 < len(order) {
+			c.NextID = order[i+1].ID
+		}
+	}
+}
+
+// ungroupedRows flattens the sections back into the flat Cards list the
+// ?format=json CLI contract exposes, in rail order.
+func ungroupedRows(sections []queueSection) []proposalCard {
+	var out []proposalCard
+	for _, sec := range sections {
+		out = append(out, sec.Rows...)
+	}
+	return out
+}
+
+// firstRow is the reader's default selection on the list URL: the first row of
+// the rail (plan batches lead, then the taxonomy sections).
+func firstRow(data gardenerData) *proposalCard {
+	return findCard(data.Groups, data.Sections, "")
+}
+
+// findCard returns the rail row with this id, or -- for an empty id -- the
+// first row. nil means the rail has no such row.
+func findCard(groups []planGroup, sections []queueSection, id string) *proposalCard {
+	for gi := range groups {
+		for ci := range groups[gi].Cards {
+			if c := &groups[gi].Cards[ci]; id == "" || c.ID == id {
+				return c
+			}
+		}
+	}
+	for si := range sections {
+		for ri := range sections[si].Rows {
+			if c := &sections[si].Rows[ri]; id == "" || c.ID == id {
+				return c
+			}
+		}
+	}
+	return nil
+}
+
+// recentDecisions projects the last handful of resolved proposals into the
+// rail's undo affordance. Best-effort: a query error costs the section, not the
+// page.
+func (s *Service) recentDecisions(ctx context.Context) []recentRow {
+	ps, err := store.RecentResolvedProposals(ctx, s.cfg.DB, recentDecisionLimit)
+	if err != nil {
+		s.logger.Warn("console: recent gardener decisions", "error", err)
+		return nil
+	}
+	out := make([]recentRow, 0, len(ps))
+	for _, p := range ps {
+		_, _, iconName, tone := proposalPresentation(p.Kind)
+		title, _ := rowSummary(p.Kind, s.toProposalCard(ctx, p))
+		out = append(out, recentRow{
+			ID: p.ID, Kind: p.Kind, Icon: iconName, Tone: tone, RowTitle: title,
+			Status: p.Status, ResolvedAt: p.ResolvedAt,
+			CanUndo: p.Status == store.ProposalDismissed || gardener.CanUndoApply(p.Kind),
+		})
+	}
+	return out
+}
+
+// recentDecisionLimit caps the "Recently decided" section. Undo is a
+// second-thought affordance, not a history browser: the events feed keeps the
+// full record.
+const recentDecisionLimit = 10
 
 // groupByPlan partitions cards into plan groups (those carrying a plan slug) and
 // the ungrouped remainder. Within a group the split setup card sorts first, then
@@ -271,8 +673,87 @@ func groupByPlan(cards []proposalCard) (groups []planGroup, ungrouped []proposal
 				groups[i].MoveCount++
 			}
 		}
+		// Each card carries its batch's retarget options, so the reader can
+		// offer the correction without the group around it.
+		for j := range groups[i].Cards {
+			groups[i].Cards[j].Targets = groups[i].Targets
+			groups[i].Cards[j].GroupKey = planSectionKey
+			groups[i].Cards[j].GroupLabel = "Split plan: " + groups[i].Slug
+		}
 	}
 	return groups, ungrouped
+}
+
+// rowSummary is the one-line inbox projection of a proposal: the outcome, then
+// the concrete objects it touches. It is what the rail row shows and what the
+// "Recently decided" section reads back, so a decision is recognizable from a
+// single line without opening the reader.
+func rowSummary(kind string, c proposalCard) (title, detail string) {
+	switch kind {
+	case store.ProposalMerge:
+		if c.Keep != nil && c.Drop != nil {
+			return "Merge duplicates", "keep " + c.Keep.Name + " · retire " + c.Drop.Name
+		}
+		return "Merge duplicates", ""
+	case store.ProposalArchive:
+		if c.Archive != nil {
+			return "Archive memory", c.Archive.Name + " · " + projectLabel(c.Archive.Project)
+		}
+		return "Archive memory", ""
+	case store.ProposalDigest:
+		return "Publish digest", c.Title
+	case store.ProposalConsolidate:
+		return fmt.Sprintf("Consolidate %d memories", len(c.Sources)), "→ " + c.NewName
+	case store.ProposalReproject:
+		if c.Reproject != nil {
+			return "Move memory", fmt.Sprintf("%s: %s → %s",
+				c.Reproject.Name, projectLabel(c.Reproject.From), projectLabel(c.Reproject.To))
+		}
+		return "Move memory", ""
+	case store.ProposalRekind:
+		if c.Rekind != nil {
+			return "Reclassify memory", fmt.Sprintf("%s: %s → %s", c.Rekind.Name, c.Rekind.From, c.Rekind.To)
+		}
+		return "Reclassify memory", ""
+	case store.ProposalSplit:
+		if c.Split != nil {
+			return "Set up project split", fmt.Sprintf("%s → %d children", c.Split.Source, len(c.Split.Children))
+		}
+		return "Set up project split", ""
+	case store.ProposalAbandonPlan:
+		if c.AbandonPlan != nil {
+			return "Retire stale plan", c.AbandonPlan.Title
+		}
+		return "Retire stale plan", ""
+	case store.ProposalShipPlan:
+		if c.ShipPlan != nil {
+			return "Mark plan shipped", c.ShipPlan.Title + " · " +
+				plural(c.ShipPlan.MatchedCount, "matching commit", "matching commits")
+		}
+		return "Mark plan shipped", ""
+	case store.ProposalMemoryWanted:
+		if c.MemoryWanted != nil {
+			return "Write missing memory", c.MemoryWanted.SuggestedTitle + " · " +
+				plural(c.MemoryWanted.MissCount, "miss", "misses")
+		}
+		return "Write missing memory", ""
+	case store.ProposalToolError:
+		if c.ToolError != nil {
+			return "Fix recurring error", fmt.Sprintf("%s · %d×", c.ToolError.Key, c.ToolError.ErrorCount)
+		}
+		return "Fix recurring error", ""
+	default:
+		return c.Label, ""
+	}
+}
+
+// projectLabel renders a project slug for a one-line summary, naming the global
+// scope rather than leaving a gap where a project would be.
+func projectLabel(slug string) string {
+	if slug == "" {
+		return "global"
+	}
+	return slug
 }
 
 // sortGroupCards stable-orders a group's cards: the split setup first, then the
@@ -436,6 +917,9 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 		}
 		c.Split = sv
 	}
+	c.RowTitle, c.RowDetail = rowSummary(p.Kind, c)
+	c.CanUndoApply = gardener.CanUndoApply(p.Kind)
+	c.CanAct = s.cfg.Gardener != nil
 	return c
 }
 
@@ -455,7 +939,7 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 	case store.ProposalReproject:
 		return "Move a memory", "Scope correction", "folder-tree", "pop"
 	case store.ProposalRekind:
-		return "Reclassify a memory", "Kind correction", "sort", "pop"
+		return "Reclassify a memory", "Kind correction", "arrow-up-down", "pop"
 	case store.ProposalSplit:
 		return "Restructure a project", "Project topology", "split", "pop"
 	case store.ProposalAbandonPlan:
@@ -513,20 +997,23 @@ func briefFrom(m map[string]any) *memBrief {
 	}
 }
 
-// gardenerApply carries out a proposal and redirects back, surfacing an error via
-// a flash query param when the effect could not be applied.
+// gardenerApply carries out a proposal and redirects to the next one in the
+// queue, surfacing an error via a flash query param when the effect could not
+// be applied. A failure keeps the decided proposal selected, since it is still
+// pending and the owner has to deal with it.
 func (s *Service) gardenerApply(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Gardener == nil {
 		s.serverError(w, r, errNoGardener)
 		return
 	}
 	id := r.PathValue("id")
+	next := s.nextSelection(r)
 	if _, err := s.cfg.Gardener.Apply(r.Context(), id); err != nil {
 		s.logger.Warn("console: gardener apply", "id", id, "error", err)
-		redirectFlash(w, r, err.Error())
+		gardenerRedirect(w, r, id, "error", err.Error())
 		return
 	}
-	redirectNotice(w, r, "Applied the proposal.")
+	gardenerRedirect(w, r, next, "notice", "Applied the proposal.")
 }
 
 func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
@@ -535,12 +1022,130 @@ func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.PathValue("id")
+	next := s.nextSelection(r)
 	if err := s.cfg.Gardener.Dismiss(r.Context(), id); err != nil {
 		s.logger.Warn("console: gardener dismiss", "id", id, "error", err)
-		redirectFlash(w, r, err.Error())
+		gardenerRedirect(w, r, id, "error", err.Error())
 		return
 	}
-	redirectNotice(w, r, "Dismissed the proposal.")
+	gardenerRedirect(w, r, next, "notice", "Dismissed the proposal. Undo it from Recently decided.")
+}
+
+// gardenerUndo returns a resolved proposal to the queue, inverting whatever its
+// apply did. On success the proposal is pending again, so the redirect selects
+// it -- the owner lands on exactly what they took back.
+func (s *Service) gardenerUndo(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	id := r.PathValue("id")
+	if err := s.cfg.Gardener.Undo(r.Context(), id); err != nil {
+		s.logger.Warn("console: gardener undo", "id", id, "error", err)
+		gardenerRedirect(w, r, "", "error", err.Error())
+		return
+	}
+	gardenerRedirect(w, r, id, "notice", "Restored the proposal to the queue.")
+}
+
+// gardenerGroupDismiss closes every pending proposal in one rail group -- a
+// taxonomy section (?group=) or a split plan (?plan=) -- one at a time, so each
+// keeps its own event and its own row in Recently decided and stays
+// individually undoable. It is best-effort: it dismisses what it can and
+// reports how many landed.
+//
+// Only Dismiss is offered in bulk. Apply stays per-proposal (a plan's
+// Apply-whole-plan aside): dismissing costs nothing but the suggestion, while
+// applying changes the knowledge agents receive.
+func (s *Service) gardenerGroupDismiss(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	ctx := r.Context()
+	group := strings.TrimSpace(r.PostFormValue("group"))
+	plan := strings.TrimSpace(r.PostFormValue("plan"))
+	if (group == "") == (plan == "") {
+		s.badRequest(w, r, "dismiss a group by exactly one of group=<section> or plan=<slug>")
+		return
+	}
+	label := plan
+	if group != "" {
+		sec, ok := taxonomySection(group)
+		if !ok {
+			s.badRequest(w, r, fmt.Sprintf("invalid group %q: valid values are %s",
+				group, strings.Join(groupFilterKeys(), ", ")))
+			return
+		}
+		label = sec.Label
+	}
+
+	proposals, err := store.PendingProposals(ctx, s.cfg.DB, "")
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	var batch []string
+	for _, p := range proposals {
+		inPlan := payloadStr(p.Payload, "plan")
+		if plan != "" {
+			if inPlan == plan {
+				batch = append(batch, p.ID)
+			}
+			continue
+		}
+		if inPlan == "" && sectionOfKind[p.Kind] == group {
+			batch = append(batch, p.ID)
+		}
+	}
+	if len(batch) == 0 {
+		gardenerRedirect(w, r, "", "error", "no pending proposals in "+label)
+		return
+	}
+	dismissed, firstErr := 0, ""
+	for _, id := range batch {
+		if derr := s.cfg.Gardener.Dismiss(ctx, id); derr != nil {
+			if firstErr == "" {
+				firstErr = derr.Error()
+			}
+			continue
+		}
+		dismissed++
+	}
+	if firstErr != "" {
+		gardenerRedirect(w, r, "", "error",
+			fmt.Sprintf("dismissed %d of %d -- first error: %s", dismissed, len(batch), firstErr))
+		return
+	}
+	gardenerRedirect(w, r, "", "notice",
+		fmt.Sprintf("Dismissed %s from %s. Undo any of them from Recently decided.",
+			plural(dismissed, "proposal", "proposals"), label))
+}
+
+// taxonomySection looks up a section by its ?group= key.
+func taxonomySection(key string) (queueSection, bool) {
+	for _, sec := range queueTaxonomy {
+		if sec.Key == key {
+			return sec, true
+		}
+	}
+	return queueSection{}, false
+}
+
+// nextSelection reads the queue position a decision form posted back and keeps
+// it only while it is still pending -- another tab may have decided it in the
+// meantime, and redirecting to a resolved proposal would bounce straight back
+// out with an error. An empty result means the bare list, which auto-selects.
+func (s *Service) nextSelection(r *http.Request) string {
+	next := strings.TrimSpace(r.PostFormValue("next"))
+	if next == "" {
+		return ""
+	}
+	p, ok, err := store.ProposalByID(r.Context(), s.cfg.DB, next)
+	if err != nil || !ok || p.Status != store.ProposalPending {
+		return ""
+	}
+	return next
 }
 
 // gardenerRequest interprets a natural-language maintenance request into pending
@@ -713,12 +1318,28 @@ func (s *Service) gardenerApplyPlan(w http.ResponseWriter, r *http.Request) {
 	redirectNotice(w, r, fmt.Sprintf("Applied all %d proposal(s) in %s.", applied, slug))
 }
 
+// gardenerRedirect completes a mutation the PRG way, sending the owner back to
+// the queue with a flash. sel names the proposal the reader should open (empty
+// = the bare list, which auto-selects the top of the queue); param is "notice"
+// or "error".
+//
+// Carrying the selection in the redirect is what keeps triage moving: the next
+// page render decides what is selected, so the morph after a decision lands on
+// a real proposal rather than an empty pane.
+func gardenerRedirect(w http.ResponseWriter, r *http.Request, sel, param, msg string) {
+	path := "/console/gardener"
+	if sel != "" {
+		path += "/" + sel
+	}
+	http.Redirect(w, r, path+"?"+param+"="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
 func redirectFlash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/gardener?error="+url.QueryEscape(msg), http.StatusSeeOther)
+	gardenerRedirect(w, r, "", "error", msg)
 }
 
 func redirectNotice(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/gardener?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+	gardenerRedirect(w, r, "", "notice", msg)
 }
 
 // payloadFloat reads a numeric field from a payload map (0 if absent).

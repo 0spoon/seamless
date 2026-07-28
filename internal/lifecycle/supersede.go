@@ -30,6 +30,12 @@ var (
 	// is itself invalid; pointing superseded_by at an inactive memory could form
 	// a cycle or a dangling chain.
 	ErrInvalidReplacement = errors.New("replacement memory is not active")
+	// ErrNotArchived is returned when unarchiving a memory that is not archived
+	// -- either still active or superseded (whose undo is Unsupersede).
+	ErrNotArchived = errors.New("memory is not archived")
+	// ErrNotSuperseded is returned when unsuperseding a memory that carries no
+	// superseded_by edge -- either still active or plainly archived.
+	ErrNotSuperseded = errors.New("memory is not superseded")
 )
 
 // MemoryWriter is the subset of files.Manager that Supersede needs, so the flow

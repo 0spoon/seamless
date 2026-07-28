@@ -48,6 +48,7 @@ func TestQueryControls_AreWiredAcrossConsole(t *testing.T) {
 		"notes":     2,
 		"plans":     1,
 		"trials":    2,
+		"gardener":  2,
 	}
 	for name, want := range wantMarkers {
 		source, err := templateFS.ReadFile("templates/" + name + ".html")
