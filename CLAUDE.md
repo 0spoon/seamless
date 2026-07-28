@@ -184,7 +184,9 @@ A "plan" is not a primitive -- it is a composition keyed by `plan:<slug>`:
 
 Claude Code plan mode feeds this automatically (`internal/hooks` capture +
 `internal/plans` vocabulary): plan-file saves upsert a `cc-plan-<basename>` note
-(`plan-status:draft|presented|approved|abandoned` tag), planning subagents cache
+(`plan-status:draft|presented|approved|abandoned|shipped` tag -- the last two
+are the gardener's stale-plan settlements: shipped when git evidence shows the
+work landed unapproved, abandoned otherwise), planning subagents cache
 as `cc-agent-<id>` notes in the composition, approval creates the tracking task,
 and the briefing lists unapproved captures as `PLAN (awaiting approval)` lines.
 Owner surfaces: `/console/plans` and `seam plan list|show|check|approve` (check =

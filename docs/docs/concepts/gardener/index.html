@@ -231,9 +231,10 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   </details>
   <p>The Seamless gardener is the background pass that keeps an agent-written memory
 store from rotting: it detects near-duplicate memories by embedding similarity,
-memories gone stale, and plans abandoned with steps still open, and files each
-finding as a proposal. Nothing is applied until you approve it with
-<code>gardener_apply</code> - the gardener has no write path of its own.</p>
+memories gone stale, and captured plans left unapproved (including ones whose
+work quietly shipped), and files each finding as a proposal. Nothing is applied
+until you approve it with <code>gardener_apply</code> - the gardener has no write path of
+its own.</p>
 <p>Any store that agents write to accumulates cruft: two memories saying the same
 thing in different words, a runbook for a system that no longer exists, a plan
 abandoned three weeks ago with its steps still open.</p>
@@ -276,8 +277,8 @@ found, <code>gardener_apply</code> to act on one.</p>
 </tr>
 <tr>
 <td><strong>stale-plan</strong></td>
-<td>A plan idle for <code>gardener.stale_plan_days</code> (14) with steps still open</td>
-<td>surfacing it, so it is abandoned deliberately rather than by neglect</td>
+<td>A captured plan still unapproved after <code>gardener.stale_plan_days</code> (14)</td>
+<td>settling it deliberately rather than by neglect: <strong>ship_plan</strong> when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), <strong>abandon_plan</strong> otherwise</td>
 </tr>
 <tr>
 <td><strong>stale-stage</strong></td>

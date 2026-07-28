@@ -108,6 +108,9 @@ type proposalCard struct {
 	// AbandonPlan (retag a never-approved captured plan).
 	AbandonPlan *abandonPlanView `json:"abandonPlan,omitempty"`
 
+	// ShipPlan (retag an implemented-but-unapproved captured plan).
+	ShipPlan *shipPlanView `json:"shipPlan,omitempty"`
+
 	// MemoryWanted (open a task to write knowledge agents searched for in vain).
 	MemoryWanted *memoryWantedView `json:"memoryWanted,omitempty"`
 
@@ -147,6 +150,21 @@ type abandonPlanView struct {
 	Title   string `json:"title"`
 	Project string `json:"project,omitempty"`
 	Status  string `json:"status"` // draft | presented
+}
+
+// shipPlanView is the ship_plan projection: the stale captured plan whose work
+// the repo's history shows landed, with the matching commits as evidence.
+type shipPlanView struct {
+	NoteID       string   `json:"noteId"`
+	Slug         string   `json:"slug"` // plan:<slug> composition key
+	Title        string   `json:"title"`
+	Project      string   `json:"project,omitempty"`
+	Status       string   `json:"status"` // draft | presented
+	Repo         string   `json:"repo,omitempty"`
+	Stamp        string   `json:"stamp,omitempty"`
+	CommitsSince int      `json:"commitsSince"`
+	MatchedCount int      `json:"matchedCount"`
+	Commits      []string `json:"commits"` // "sha message" lines, capped by the gardener
 }
 
 // planGroup collects the pending proposals of one plan (a split batch) so the
@@ -368,6 +386,17 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			Status: payloadStr(p.Payload, "plan_status"),
 		}
 		c.Reason = payloadStr(p.Payload, "reason")
+	case store.ProposalShipPlan:
+		c.ShipPlan = &shipPlanView{
+			NoteID: payloadStr(p.Payload, "id"), Slug: payloadStr(p.Payload, "slug"),
+			Title: payloadStr(p.Payload, "title"), Project: payloadStr(p.Payload, "project"),
+			Status: payloadStr(p.Payload, "plan_status"),
+			Repo:   payloadStr(p.Payload, "repo"), Stamp: payloadStr(p.Payload, "stamp"),
+			CommitsSince: int(payloadFloat(p.Payload, "commits_since")),
+			MatchedCount: int(payloadFloat(p.Payload, "matched_count")),
+			Commits:      payloadStrList(p.Payload, "commits"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalMemoryWanted:
 		c.MemoryWanted = &memoryWantedView{
 			Project:        payloadStr(p.Payload, "project"),
@@ -431,6 +460,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Restructure a project", "Project topology", "split", "pop"
 	case store.ProposalAbandonPlan:
 		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
+	case store.ProposalShipPlan:
+		return "Mark a plan shipped", "Planning hygiene", "git-commit-horizontal", "ok"
 	case store.ProposalMemoryWanted:
 		return "Write a missing memory", "Knowledge gap", "search", "pop"
 	case store.ProposalToolError:

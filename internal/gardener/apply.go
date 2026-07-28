@@ -9,6 +9,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/lifecycle"
+	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -48,7 +49,9 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 	case store.ProposalSplit:
 		result, err = s.applySplit(ctx, p, now)
 	case store.ProposalAbandonPlan:
-		result, err = s.applyAbandonPlan(ctx, p, now)
+		result, err = s.applySettlePlan(ctx, p, plans.StatusAbandoned, now)
+	case store.ProposalShipPlan:
+		result, err = s.applySettlePlan(ctx, p, plans.StatusShipped, now)
 	case store.ProposalMemoryWanted:
 		result, err = s.applyMemoryWanted(ctx, p, now)
 	case store.ProposalToolError:

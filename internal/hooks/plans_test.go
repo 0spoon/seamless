@@ -423,29 +423,5 @@ func TestFirstPlanCaptureInjectRelatedDisabled(t *testing.T) {
 	require.Empty(t, eventsOfKind(t, e.rec, core.EventInjected))
 }
 
-func TestGitHeadStamp(t *testing.T) {
-	// A plan capture from a cwd with a readable .git stamps the commit hash.
-	repo := t.TempDir()
-	gitDir := filepath.Join(repo, ".git")
-	require.NoError(t, os.MkdirAll(filepath.Join(gitDir, "refs", "heads"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "HEAD"),
-		[]byte("ref: refs/heads/main\n"), 0o644))
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "refs", "heads", "main"),
-		[]byte("0123456789abcdef0123456789abcdef01234567\n"), 0o644))
-	require.Equal(t, "0123456789abcdef0123456789abcdef01234567", gitHead(repo))
-
-	// packed-refs fallback when the loose ref is absent.
-	require.NoError(t, os.Remove(filepath.Join(gitDir, "refs", "heads", "main")))
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "packed-refs"),
-		[]byte("# pack-refs with: peeled fully-peeled sorted\nfeedfacefeedfacefeedfacefeedfacefeedface refs/heads/main\n"), 0o644))
-	require.Equal(t, "feedfacefeedfacefeedfacefeedfacefeedface", gitHead(repo))
-
-	// Detached HEAD is the hash itself.
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "HEAD"),
-		[]byte("aaaabbbbccccddddeeeeffff0000111122223333\n"), 0o644))
-	require.Equal(t, "aaaabbbbccccddddeeeeffff0000111122223333", gitHead(repo))
-
-	// No repo -> empty, never an error.
-	require.Equal(t, "", gitHead(t.TempDir()))
-	require.Equal(t, "", gitHead(""))
-}
+// The direct git-reading tests moved with the reader to internal/gitread; the
+// capture tests above still cover the stamp end to end.

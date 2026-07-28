@@ -284,7 +284,9 @@ func checkEntry(cwd, head, body string) (verdict, detail string) {
 }
 
 // stampHead extracts the short git head from a capture stamp line
-// ("> captured from ... | git <head> | ..."), or "".
+// ("> captured from ... | git <head> | ..."), or "". A local transcription of
+// plans.StampHead -- seam must not link internal/store, which internal/plans
+// imports (see the planWindows comment above for the same reasoning).
 func stampHead(body string) string {
 	for line := range strings.Lines(body) {
 		line = strings.TrimSpace(line)

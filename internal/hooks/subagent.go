@@ -28,6 +28,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
 )
@@ -142,7 +143,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p subagentPayload) {
 	note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
 	note.Body = agentStamp(
 		h.ambientDisplayName(ctx, ClientClaudeCode, p.ParentSessionID),
-		p.AgentID, gitHead(p.CWD), now,
+		p.AgentID, gitread.Head(p.CWD), now,
 	) +
 		"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
 	note.Tags = agentNoteTags(meta.PlanSlug, p.AgentType)

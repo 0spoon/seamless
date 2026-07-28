@@ -128,7 +128,7 @@ List pending gardener proposals (merge/consolidate duplicate memories, archive s
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`. |
 
 ## gardener_request {#gardener_request}
 

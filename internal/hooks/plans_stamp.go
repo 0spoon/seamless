@@ -44,6 +44,8 @@ func planBasename(path string) string {
 }
 
 // planStamp is the provenance blockquote prepended to every captured plan body.
+// plans.StampHead (and cmd/seam's local transcription) parse the git field back
+// out; keep the formats in step.
 func planStamp(sessionName, basename string, iter int, head string, now time.Time) string {
 	return fmt.Sprintf("> captured from %s | %s.md | iter %d | git %s | %s",
 		stampSession(sessionName), basename, iter, shortHead(head), now.UTC().Format(time.RFC3339))

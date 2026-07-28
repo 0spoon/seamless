@@ -37,11 +37,12 @@ Captured-plan lifecycle
 2 · presented Awaiting approval The briefing names the presented plan.
 3a · approved Tracking begins Status becomes approved and an implementation task is created.
 3b · abandoned Closed deliberately An unapproved plan can be marked abandoned instead of lingering.
+3c · shipped Landed without ceremony When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.
 A captured plan remains one composition across edits; approval changes its state and opens the execution loop.
 ```
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
-`draft`, `presented`, `approved`, `abandoned`.
+`draft`, `presented`, `approved`, `abandoned`, `shipped`.
 
 ## Why unapproved plans show up in the briefing
 

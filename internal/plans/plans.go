@@ -33,13 +33,17 @@ const (
 )
 
 // Plan lifecycle statuses, stored as a plan-status:<v> note tag. Draft ->
-// presented -> approved is the capture flow; abandoned is the gardener's
-// terminal state for plans that were never approved.
+// presented -> approved is the capture flow; abandoned and shipped are the
+// gardener's terminal settlements for plans that were never approved --
+// abandoned when nothing came of the plan, shipped when the repo's history
+// shows the work landed without the approval ceremony. Both leave the
+// briefing's awaiting-approval lines; the note stays recallable.
 const (
 	StatusDraft     = "draft"
 	StatusPresented = "presented"
 	StatusApproved  = "approved"
 	StatusAbandoned = "abandoned"
+	StatusShipped   = "shipped"
 )
 
 // statusTagPrefix prefixes the lifecycle tag value.
@@ -88,6 +92,27 @@ func SlugTagPrefix() string { return slugTagPrefix }
 
 // Basename recovers the CC plan file basename from a captured-plan note slug.
 func Basename(noteSlug string) string { return strings.TrimPrefix(noteSlug, NotePrefix) }
+
+// StampHead extracts the short git head from a captured note's provenance
+// stamp line ("> captured from ... | git <head> | ...", written by the hooks
+// capture). "" means no stamp; "unknown" means the capture ran outside a git
+// repo. cmd/seam/plan.go keeps a local transcription (the seam binary must not
+// link internal/store, which this package imports).
+func StampHead(body string) string {
+	for line := range strings.Lines(body) {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "> captured from") {
+			continue
+		}
+		for part := range strings.SplitSeq(line, "|") {
+			part = strings.TrimSpace(part)
+			if after, ok := strings.CutPrefix(part, "git "); ok {
+				return strings.TrimSpace(after)
+			}
+		}
+	}
+	return ""
+}
 
 // NoteIteration reads a captured-plan note's plan_iteration frontmatter
 // (preserved in Extra), tolerating the numeric types YAML/JSON round-trips

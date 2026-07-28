@@ -381,6 +381,7 @@ func TestPlanPhase(t *testing.T) {
 	}{
 		{"wip wins over everything", planRow{TasksWIP: 1, TasksOpen: 2, TasksTotal: 3}, planPhaseInProgress},
 		{"abandoned capture is done", planRow{Status: plans.StatusAbandoned}, planPhaseDone},
+		{"shipped capture is done", planRow{Status: plans.StatusShipped}, planPhaseDone},
 		{"all steps closed is done", planRow{TasksDone: 2, TasksTotal: 2}, planPhaseDone},
 		{"open steps remain is ready", planRow{TasksOpen: 1, TasksTotal: 2, TasksDone: 1}, planPhaseReady},
 		{"no steps is ready", planRow{}, planPhaseReady},

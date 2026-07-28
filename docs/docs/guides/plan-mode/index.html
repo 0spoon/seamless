@@ -287,11 +287,12 @@ the agent that executes it can read the research that justified it.</p>
   <div class="flow-split flow-outcomes">
     <div class="flow-node success no-arrow"><span class="flow-step">3a · approved</span><strong>Tracking begins</strong><small>Status becomes approved and an implementation task is created.</small></div>
     <div class="flow-node warn no-arrow"><span class="flow-step">3b · abandoned</span><strong>Closed deliberately</strong><small>An unapproved plan can be marked abandoned instead of lingering.</small></div>
+    <div class="flow-node success no-arrow"><span class="flow-step">3c · shipped</span><strong>Landed without ceremony</strong><small>When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.</small></div>
   </div>
   <figcaption id="plan-lifecycle-caption">A captured plan remains one composition across edits; approval changes its state and opens the execution loop.</figcaption>
 </figure>
 <p>The statuses are stored as a <code>plan-status:&lt;value&gt;</code> tag on the note:
-<code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>.</p>
+<code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>, <code>shipped</code>.</p>
 <h2 id="why-unapproved-plans-show-up-in-the-briefing">Why unapproved plans show up in the briefing</h2>
 <p>A captured-but-unapproved plan appears in briefings as:</p>
 <div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)

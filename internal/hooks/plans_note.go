@@ -13,6 +13,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/validate"
@@ -80,7 +81,7 @@ func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, c
 		note.Title = title
 		note.Body = planStamp(
 			h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
-			basename, iter, gitHead(p.CWD), now,
+			basename, iter, gitread.Head(p.CWD), now,
 		) + "\n\n" + content
 		// New plan content is attributed to the capturing session's model; an
 		// unknown model keeps the note's prior attribution.

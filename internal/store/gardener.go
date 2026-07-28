@@ -29,6 +29,7 @@ const (
 	ProposalMemoryWanted = "memory_wanted" // agents repeatedly searched for knowledge that does not exist
 	ProposalToolError    = "tool_error"    // agents keep hitting the same tool-call or hook-stage error
 	ProposalRekind       = "rekind"        // change one memory's kind classification in place
+	ProposalShipPlan     = "ship_plan"     // retag an implemented-but-unapproved captured plan plan-status:shipped
 )
 
 // ProposalKinds lists every valid proposal kind. This is the canonical set:
@@ -37,7 +38,7 @@ const (
 var ProposalKinds = []string{
 	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
 	ProposalReproject, ProposalSplit, ProposalAbandonPlan, ProposalMemoryWanted,
-	ProposalToolError, ProposalRekind,
+	ProposalToolError, ProposalRekind, ProposalShipPlan,
 }
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

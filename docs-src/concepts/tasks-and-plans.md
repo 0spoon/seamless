@@ -140,7 +140,7 @@ You do not have to build the composition by hand. Claude Code's plan mode is
 captured:
 
 - Saving a plan file upserts a `cc-plan-<basename>` note, tagged with its status
-  (`plan-status:draft|presented|approved|abandoned`).
+  (`plan-status:draft|presented|approved|abandoned|shipped`).
 - Planning subagents are cached as `cc-agent-<id>` notes in the same composition.
 - Approving the plan creates the tracking task.
 - Unapproved captures appear in the briefing's Plans section as

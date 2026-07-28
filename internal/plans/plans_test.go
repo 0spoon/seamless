@@ -28,10 +28,22 @@ func TestVocabularyWireFormat(t *testing.T) {
 	require.Equal(t, "presented", StatusPresented)
 	require.Equal(t, "approved", StatusApproved)
 	require.Equal(t, "abandoned", StatusAbandoned)
+	require.Equal(t, "shipped", StatusShipped)
 
 	require.Equal(t, "plan:", SlugTagPrefix())
 	require.Equal(t, "plan:deep-audit-refactor", SlugTag("deep-audit-refactor"))
 	require.Equal(t, []string{"plan-status:draft"}, SetStatusTag(nil, StatusDraft))
+}
+
+// StampHead parses the provenance line hooks' planStamp writes; cmd/seam keeps
+// a transcription of this parser, so its behavior is pinned here.
+func TestStampHead(t *testing.T) {
+	body := "> captured from cc/ab12cd34 | clever-stallman.md | iter 2 | git feedfacef00d | 2026-07-01T00:00:00Z\n\n# Plan\n\nbody"
+	require.Equal(t, "feedfacef00d", StampHead(body))
+	require.Equal(t, "unknown",
+		StampHead("> captured from cc/ab12cd34 | x.md | iter 1 | git unknown | 2026-07-01T00:00:00Z"))
+	require.Equal(t, "", StampHead("# Plan\n\nno stamp here"))
+	require.Equal(t, "", StampHead(""))
 }
 
 // "plan:" is a prefix of nothing else, but "plan-status:" starts with "plan"

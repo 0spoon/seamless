@@ -290,6 +290,17 @@
   {{end}}
   {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
   <div class="proposal-assurance">{{icon "file-text"}} Re-tags the capture as abandoned; the plan note is not deleted.</div>
+{{else if eq .Kind "ship_plan"}}
+  {{with .ShipPlan}}
+  <div class="proposal-object">
+    <span class="proposal-object-icon ok">{{icon "git-commit-horizontal"}}</span>
+    <div><span>Captured plan whose work already landed</span><a href="/console/plans/{{.Slug}}">{{.Title}}</a><p>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}global{{end}} &middot; currently {{.Status}}</p></div>
+    <span class="badge {{planTone .Status}}">{{.Status}}</span>
+  </div>
+  {{if .Commits}}<div class="proposal-query-list"><span>Commits since the capture that match the plan</span><div>{{range .Commits}}<em>{{.}}</em>{{end}}</div></div>{{end}}
+  {{end}}
+  {{if .Reason}}<div class="proposal-reason"><span>Why it was flagged</span><p>{{.Reason}}</p></div>{{end}}
+  <div class="proposal-assurance">{{icon "file-text"}} Re-tags the capture as shipped; the plan note is not deleted.</div>
 {{else if eq .Kind "memory_wanted"}}
   {{with .MemoryWanted}}
   <div class="proposal-signal">Agents searched for this and recall returned nothing &mdash; {{.MissCount}} miss{{if ne .MissCount 1}}es{{end}} across {{.SessionCount}} session{{if ne .SessionCount 1}}s{{end}}.</div>

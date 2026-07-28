@@ -41,12 +41,13 @@ the agent that executes it can read the research that justified it.
   <div class="flow-split flow-outcomes">
     <div class="flow-node success no-arrow"><span class="flow-step">3a · approved</span><strong>Tracking begins</strong><small>Status becomes approved and an implementation task is created.</small></div>
     <div class="flow-node warn no-arrow"><span class="flow-step">3b · abandoned</span><strong>Closed deliberately</strong><small>An unapproved plan can be marked abandoned instead of lingering.</small></div>
+    <div class="flow-node success no-arrow"><span class="flow-step">3c · shipped</span><strong>Landed without ceremony</strong><small>When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.</small></div>
   </div>
   <figcaption id="plan-lifecycle-caption">A captured plan remains one composition across edits; approval changes its state and opens the execution loop.</figcaption>
 </figure>
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
-`draft`, `presented`, `approved`, `abandoned`.
+`draft`, `presented`, `approved`, `abandoned`, `shipped`.
 
 ## Why unapproved plans show up in the briefing
 
