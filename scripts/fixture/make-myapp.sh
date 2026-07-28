@@ -10,7 +10,7 @@
 #     "HTML responses are slow -- add caching" landmine: the wrong fix caches the
 #     HTML, the right fix caches the assets only (edge-cache-gotcha memory).
 #
-# Usage: scripts/scene-fixture/make-myapp.sh <target-dir>
+# Usage: scripts/fixture/make-myapp.sh <target-dir>
 #   Recreates <target-dir> from scratch and leaves it as a committed git repo.
 set -euo pipefail
 
@@ -271,7 +271,7 @@ git init -q
 # so the demo repo an agent explores contains nothing that reveals it is a
 # Seamless fixture -- the vanilla with/without capture must not read a file that
 # breaks the fiction.
-printf '%s\n' 'Throwaway myapp scaffold for plan:terminal-scenes (scripts/scene-fixture/make-myapp.sh). Safe to delete.' >.git/seamless-scene-fixture
+printf '%s\n' 'Throwaway myapp scaffold for plan:terminal-scenes (scripts/fixture/make-myapp.sh). Safe to delete.' >.git/seamless-scene-fixture
 git add -A
 git -c user.name='myapp' -c user.email='dev@myapp.local' commit -qm 'myapp: initial scaffold'
 echo "make-myapp: scaffolded $dir"
