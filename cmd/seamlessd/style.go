@@ -11,7 +11,7 @@ import (
 // colorEnabled reports whether ANSI styling should be emitted on stdout: it is a
 // terminal and NO_COLOR is unset (https://no-color.org -- presence disables,
 // regardless of value). Computed once so styling is a cheap string wrap, and so
-// a piped install (scene-fixture, CI) stays plain text with no escape codes.
+// a piped install (fixture harness, CI) stays plain text with no escape codes.
 var colorEnabled = func() bool {
 	if _, noColor := os.LookupEnv("NO_COLOR"); noColor {
 		return false
