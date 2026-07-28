@@ -300,6 +300,27 @@
     window.addEventListener("hashchange", revealHashTarget);
   }
 
+  /* ------------------------------------------------------- hover prefetch */
+  /* Warm the next navigation on intent (hover or first touch), once per URL.
+     Same-origin page links only, and not on data-saver connections. */
+  if (!(navigator.connection && navigator.connection.saveData)) {
+    var prefetched = {};
+    var prefetch = function (ev) {
+      if (!ev.target.closest) return;
+      var a = ev.target.closest(".docs-sidebar a, .prose a, .page-nav a, .card-grid a");
+      if (!a || a.origin !== location.origin) return;
+      var url = a.href.split("#")[0];
+      if (prefetched[url] || url === location.href.split("#")[0]) return;
+      prefetched[url] = true;
+      var link = document.createElement("link");
+      link.rel = "prefetch";
+      link.href = url;
+      document.head.appendChild(link);
+    };
+    document.addEventListener("mouseover", prefetch);
+    document.addEventListener("touchstart", prefetch, { passive: true });
+  }
+
   /* ------------------------------------------------------------ configurator */
   /* The setup page's optional command composer. It reads the SAME state the
      context picker writes (data-os / data-clients on <html>), composes the
