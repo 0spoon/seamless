@@ -3,10 +3,11 @@
 //
 //   pnpm add playwright-core          # once, anywhere; or run from a dir that has it
 //   SEAMLESS_SHOT_BASE=http://127.0.0.1:8090 SEAMLESS_MCP_API_KEY=<key> \
-//     node scripts/console-shots.js /tmp/shots
+//     node scripts/branding/console-shots.js /tmp/shots
 //
 // Point it at a THROWAWAY instance seeded by cmd/demoseed, never a live one.
 // Convert the PNGs with `cwebp -q 84` into docs/static/shots/.
+// Full recipe: scripts/branding/README.md.
 const { createHash } = require('node:crypto');
 const path = require('node:path');
 const { chromium } = require('playwright-core');

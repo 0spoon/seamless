@@ -330,7 +330,7 @@ SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
 
 # 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
 SEAMLESS_SHOT_BASE=http://127.0.0.1:8090 SEAMLESS_MCP_API_KEY=<same key> \
-  node scripts/console-shots.js /tmp/shots
+  node scripts/branding/console-shots.js /tmp/shots
 
 # 4. convert into place
 for f in /tmp/shots/*.png; do
@@ -340,6 +340,18 @@ done
 
 Capture within ~an hour of seeding: the demo's "live" sessions and leases are
 anchored to the seeding time and go stale on screen after that.
+
+`scripts/branding/README.md` is the operator-facing version of this recipe, next
+to the other branding flow (record -> distill -> `docs/static/scenes.js`).
+
+## Regenerate the terminal scenes
+
+`docs/static/scenes.js` holds the verbatim with/without transcripts the scene
+player animates and `/scenarios/` renders. It is produced by recording two real
+interactive Claude Code sessions against the throwaway fixture and distilling
+them; the whole flow lives in `scripts/branding/` (`record.sh` -> `distill.py`)
+and is documented in `scripts/branding/README.md`. Regenerating it replaces live
+marketing surface, so it is a deliberate act, never a side effect of a build.
 
 ## Pending (owner approval required)
 

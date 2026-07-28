@@ -39,6 +39,10 @@ Thumbs.db
 .idea/
 .vscode/
 
+# Python bytecode (scripts/branding/distill.py is the only Python in the tree)
+__pycache__/
+*.pyc
+
 # Scratch / logs
 tmp/
 *.log
