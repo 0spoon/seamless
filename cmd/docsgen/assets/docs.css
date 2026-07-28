@@ -756,6 +756,7 @@ a.nav-head.current { color: var(--brand); }
   margin-bottom: 24px;
 }
 .doc-card {
+  position: relative;
   display: block;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -764,6 +765,30 @@ a.nav-head.current { color: var(--brand); }
   text-decoration: none;
   box-shadow: var(--shadow-sm);
   transition: transform var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+/* Corner arrow on hover -- garnish on the generic cards; the router cards
+   already carry their own arrow in the Set up line. */
+.doc-card:not(.router-card)::after {
+  content: "\2192";
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--brand);
+  opacity: 0;
+  transform: translateX(-3px);
+  transition: opacity var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.doc-card:not(.router-card):hover::after { opacity: 1; transform: none; }
+.card-count {
+  display: block;
+  margin-top: 10px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--faint);
 }
 .doc-card:hover {
   transform: translateY(-2px);
@@ -1290,7 +1315,7 @@ a.nav-head.current { color: var(--brand); }
 @keyframes scrim-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after,
-  .prose .h-anchor { transition: none; }
+  .doc-card:not(.router-card)::after, .prose .h-anchor { transition: none; }
   body.docs.drawer-open::after { animation: none; }
 }
 

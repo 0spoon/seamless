@@ -13,6 +13,7 @@
   <a class="doc-card" href="{{$docsRoot}}{{.Index.URL}}">
     <h2>{{.Title}}</h2>
     {{with .Description}}<p>{{.}}</p>{{end}}
+    {{$n := len .Pages}}<span class="card-count">{{$n}} page{{if ne $n 1}}s{{end}}</span>
   </a>
   {{end}}{{end}}
 </div>
