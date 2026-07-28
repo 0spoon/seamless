@@ -97,7 +97,7 @@ DOCS_ADDR ?= 127.0.0.1:8899
 INSTALLER    := docs/install
 PS_INSTALLER := docs/install.ps1
 
-.PHONY: help build test test-race bench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
+.PHONY: help build test test-race bench seambench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve changelog installer-check site-check site-stamp indexnow metrics release-snapshot install-git-hooks uninstall-git-hooks \
 	install uninstall update _seed-config _reload-service _wait-healthy start stop restart status \
 	logs install-onboard-skill uninstall-onboard-skill \
@@ -108,7 +108,11 @@ help:
 	@echo "  build      compile ./bin/$(BINARY) and ./bin/$(CLI) (touches nothing live)"
 	@echo "  test       run unit tests"
 	@echo "  test-race  run unit tests with the race detector"
-	@echo "  bench      run hot-path benchmarks (BENCHTIME=1x for a quick smoke run)"
+	@echo "  bench      run hot-path Go micro-benchmarks, ns/op (BENCHTIME=1x for a quick smoke run)"
+	@echo "  seambench  the AGENT-SCENARIO benchmark: runs a real agent over seeded fixtures and"
+	@echo "             prints with-vs-without uplift. SPENDS REAL API TOKENS; needs a 'claude'"
+	@echo "             binary + credentials. MANUAL ONLY -- not in check, CI, or any schedule."
+	@echo "             Unrelated to 'bench' above (see cmd/seambench/README.md)"
 	@echo "  check      the full gate: build + vet + fmt + docs + installer + site + lint + vulncheck + test-race"
 	@echo "  check-fast the pre-commit subset: same minus build and test-race"
 	@echo "  lint       run golangci-lint"
@@ -172,6 +176,57 @@ test-race:
 BENCHTIME ?= 1s
 bench:
 	$(GO) test -run '^$$' -bench . -benchmem -benchtime $(BENCHTIME) $(PKG)
+
+# The AGENT-SCENARIO benchmark (cmd/seambench): stand up the condition arms,
+# run every scenario under each of them, grade the captured runs, and print the
+# with-vs-without uplift plus a baseline-vs-candidate version delta.
+#
+# THIS IS NOT `make bench`. That target above is the Go hot-path
+# micro-benchmarks -- ns/op, offline, free, part of nobody's bill. This one
+# drives a real `claude` through real sessions.
+#
+# MANUAL ONLY. It is deliberately absent from `check`, `check-fast`,
+# .githooks/pre-commit, CI, the release flow, and every schedule, and it must
+# stay that way until the owner decides otherwise: each run spends real API
+# tokens, needs a `claude` binary with working credentials, and is nondeterministic
+# enough that one run is a data point rather than a gate (plan:seambench, owner
+# decision 2026-07-28 -- several monitored manual runs first, automation is a
+# separate decision).
+#
+#   make seambench                             the default matrix, 1 run per cell
+#   make seambench N=5                         5 runs per scenario x condition cell
+#   make seambench BASELINE=v0.4.5             + the version-delta table against that ref
+#   make seambench CONDITIONS=vanilla,mechanism SCENARIO=auth-refresh
+#   make seambench REPORT_ARGS=--no-trials     keep the results on disk only
+#   make seambench RUN_ARGS='--timeout 25m' REPORT_ARGS=--regrade
+#
+# Everything runs under a throwaway base dir with its own homes, demo repos,
+# data dirs, keys, and non-live ports; the live ~/.seamless, ~/.claude, and
+# ~/.codex are never touched. The one live write is the results trial the report
+# records in the `seambench` lab (REPORT_ARGS=--no-trials skips it).
+#
+# OUT is passed to both halves so `report` reads the tree `run` just wrote. If
+# you point RUN_ARGS at another --base, set OUT too or the two will disagree.
+N           ?= 1
+SCENARIO    ?=
+CONDITIONS  ?=
+BASELINE    ?=
+OUT         ?=
+RUN_ARGS    ?=
+REPORT_ARGS ?=
+SEAMBENCH_OUT = $(if $(strip $(OUT)),--out $(OUT),)
+seambench:
+	@command -v claude >/dev/null 2>&1 \
+	    || { echo "ERROR: seambench needs a 'claude' binary on PATH with working credentials."; \
+	         echo "       (looking for the free ns/op micro-benchmarks? that is 'make bench')"; exit 1; }
+	@echo "==> seambench: the AGENT-SCENARIO benchmark. This runs a real agent and SPENDS REAL API TOKENS."
+	@echo "    Cost scales with scenarios x conditions x N (currently N=$(N)). Ctrl-C now if you meant 'make bench'."
+	$(GO) run ./cmd/seambench run -n $(N) $(SEAMBENCH_OUT) \
+	    $(if $(strip $(SCENARIO)),--scenario $(SCENARIO),) \
+	    $(if $(strip $(CONDITIONS)),--conditions $(CONDITIONS),) \
+	    $(if $(strip $(BASELINE)),--baseline $(BASELINE),) \
+	    $(RUN_ARGS)
+	$(GO) run ./cmd/seambench report $(SEAMBENCH_OUT) $(REPORT_ARGS)
 
 lint:
 	golangci-lint run

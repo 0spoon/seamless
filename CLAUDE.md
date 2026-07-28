@@ -25,6 +25,11 @@ cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks, map-repo
                    family, console-open
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
 cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see SITE.md)
+cmd/demoseed/      thin CLI over internal/demokit: the console-fleet seed
+                   (branding screenshots) and `-scenes` (the shared fixture)
+cmd/seambench/     agent-scenario benchmark: `run` (headless scenario x condition
+                   matrix) + `report` (grade, uplift, version deltas). Driven by
+                   `make seambench`; see cmd/seambench/README.md
 docs-src/          docs site markdown + nav.yaml (source; docs/docs/ is output)
 internal/core/     domain types: Project, Memory, Session, Task, Trial, Event
 internal/config/   single YAML + env config (static key, budgets, briefing tunables, llm)
@@ -49,6 +54,15 @@ internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
 internal/importer/ one-shot import of the v1 (~/.seam) snapshot
+internal/demokit/  importable fixture-seeding primitives + the demo spec sets;
+                   the shared seam under BOTH branding and the benchmark
+internal/bench/    agent-scenario benchmark: scenario table, condition arms,
+                   graders (repo assertions + event log + optional LLM judge),
+                   results/uplift aggregation, the on-disk artifact contract
+scripts/fixture/   the shared throwaway fixture: make-myapp.sh (demo repo) +
+                   harness.sh --mode record|bench (branding | benchmark arms)
+scripts/branding/  GH-Pages surface: record.sh, distill.py (verbatim-audited
+                   scene data), console-shots.js -- see its README.md
 ```
 
 Bracketed tags mark the phase that introduces the package; unbuilt ones do not
@@ -63,8 +77,9 @@ make install    # build + snapshot binaries/config to ~/.local/bin +
 make test       # unit tests
 make test-race  # unit tests with the race detector
 make check      # the full gate: build + vet + fmt-check + docs-check +
-                # installer-check + site-check + lint + test-race
-make check-fast # the pre-commit subset (no build/test-race); .githooks/pre-commit runs it
+                # installer-check + site-check + lint + vulncheck + test-race
+make check-fast # the pre-commit subset (no build/vulncheck/test-race);
+                # .githooks/pre-commit runs it
 make lint       # golangci-lint
 make vet        # go vet
 make fmt        # gofmt tracked files -- NOT `gofmt -w .`, which rewrites other
@@ -85,6 +100,17 @@ make metrics    # GitHub stars + release-asset download counts (needs gh)
 
 # single test
 go test ./internal/validate -run TestTitle -v
+
+# Two different things called "benchmark". Do not conflate them:
+make bench      # Go hot-path MICRO-benchmarks (ns/op, offline, free)
+make seambench  # the AGENT-SCENARIO benchmark: runs a real `claude` over the
+                # seeded fixture in each condition arm (vanilla/mechanism/full),
+                # grades it, and prints with-vs-without uplift + version deltas.
+                # SPENDS REAL API TOKENS; needs a `claude` binary + credentials.
+                # MANUAL ONLY -- deliberately not in check, check-fast, the
+                # pre-commit hook, CI, the release flow, or any schedule.
+                # N=5, BASELINE=<ref>, SCENARIO=, CONDITIONS=, OUT=,
+                # RUN_ARGS=, REPORT_ARGS=--no-trials. See cmd/seambench/README.md
 ```
 
 ## Tech stack
@@ -191,6 +217,24 @@ as `cc-agent-<id>` notes in the composition, approval creates the tracking task,
 and the briefing lists unapproved captures as `PLAN (awaiting approval)` lines.
 Owner surfaces: `/console/plans` and `seam plan list|show|check|approve` (check =
 git-stamp staleness; approve = escape hatch when CC skips the approval hook).
+
+## One fixture, two workflows
+
+`scripts/fixture/harness.sh` stands up the shared throwaway fixture -- the
+`myapp` demo repo plus a seeded Seamless instance on a non-live port, never the
+live `~/.seamless`/`~/.claude`/`~/.codex`. Above that seam the two halves are
+independent and non-interfering:
+
+- **Branding** (`--mode record`): record interactive with/without takes, distill
+  them **verbatim** into `docs/static/scenes.js`, publish. Entry point
+  `scripts/branding/record.sh`; recipe in `scripts/branding/README.md`.
+- **Benchmark** (`--mode bench`): build the `vanilla`/`mechanism`/`full`
+  condition arms, run scenarios **headless**, grade, report uplift. Entry point
+  `make seambench`; recipe in `cmd/seambench/README.md`.
+
+The demo repo must contain zero Seamless vocabulary (memory
+`scene-demo-repo-must-be-seamless-free`), or the without/vanilla side reads its
+way out of character. Grading discipline for benchmark code is in `AGENTS.md`.
 
 ## Working here
 

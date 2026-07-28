@@ -27,11 +27,14 @@ Strict layering, no circular imports. `cmd/` wires everything; no package import
 `cmd/` and no domain package imports another's HTTP layer:
 
 ```
-cmd/seamlessd, cmd/seam
+cmd/seamlessd, cmd/seam, cmd/seambench, cmd/demoseed, cmd/docsgen
   -> internal/{mcp,hooks,console}         (API surfaces)
-    -> internal/{retrieve,lifecycle,gardener,tasks,files,capture}  (domains)
+    -> internal/{retrieve,lifecycle,gardener,files,capture,bench,demokit} (domains)
       -> internal/{store,events,llm,core,config,validate}          (foundations)
 ```
+
+(The dependency-aware ready-queue and lease-based claiming live in
+`internal/store/tasks*.go`; there is no `internal/tasks` package.)
 
 ### Naming
 
@@ -178,6 +181,73 @@ the pointer is where to look, not a substitute for reading it.
   is advisory and must never block `memory_write`; indexing is best-effort with
   a hash-retry). Leave them.
 
+### Benchmark scenarios and graders (`internal/bench`, `cmd/seambench`)
+
+The agent-scenario benchmark produces a NUMBER the owner acts on, so its
+invariants are about the number meaning the same thing on every arm and in six
+months. Workflow and flags: `cmd/seambench/README.md`. (`make seambench`, not
+`make bench` -- the latter is the unrelated ns/op micro-benchmarks.)
+
+- **The run directory is the whole handoff.** `run` writes artifacts and grades
+  nothing; `report` reads artifacts and runs nothing. A grader takes a
+  `RunArtifacts` whose every path points inside one preserved run dir -- never a
+  live arm, never the runner's process state. Keep it that way: it is what makes
+  `report --regrade` re-apply a grader fix to runs that already cost their
+  tokens, and what lets a run tree be graded on another machine. The layout is
+  frozen in `internal/bench/artifacts.go`; adding a file is fine, repurposing one
+  breaks the other half. Never read a run's coordinates out of its path -- the
+  `run.json` manifest carries them (a version comparison nests one level deeper).
+- **`Metrics` has two disjoint halves.** The runner owns turns/tokens/cost/
+  duration; the grader owns everything derived from the artifacts.
+  `MergeMetrics` recombines them FIELD-WISE, not "whichever is non-zero", so an
+  agent that genuinely made no tool calls stays at zero.
+- **Gate vs observed.** Every check reports; only a `gate: true` check can fail
+  the run. Outcome checks (the repo-state assertions) gate on every arm. Of the
+  event-log checks, only DEFECTS gate -- the mechanism failing to fire at all,
+  or a durable write landing outside the scenario's project. "The agent read the
+  memory / moved the plan step / left a finding" is recorded and measured but
+  MUST NOT gate: gating it would fail a Seamless arm that solved the task while
+  the vanilla arm doing the same thing passes, which understates the very uplift
+  being measured. The LLM judge never gates; its absence degrades the run
+  (constraint `llm-degradation-remote-vs-local`), it does not fail it.
+- **Three outcomes, never two.** `graded` / `failed to run` / `ungradeable`.
+  Only graded runs enter a pass-rate or a trial verdict; an infrastructure flake
+  recorded as a `fail` is how a later reader mistakes it for a regression. An
+  unrecognized status falls to ungradeable, not to a verdict. Rates are
+  `bench.Rate` (passed + graded) so a rate can never be quoted without its
+  counts.
+- **Never string-match briefing layout.** Not in a grader, not in a seed test.
+  The briefing is the fastest-churning surface in the repo AND is itself prime
+  regression surface for this benchmark, so a layout assertion both breaks
+  constantly and measures the wrong thing. Assert DB rows, event-log entries,
+  and stable markers instead: memory names, tool names, task ids, session
+  findings, project scope. `internal/bench/eventlog.go` is the vocabulary, and
+  the seed tests assert through store queries and files on disk.
+- **Seeds write to the data dir, never into the demo repo working tree.** The
+  repo must stay Seamless-free (memory `scene-demo-repo-must-be-seamless-free`)
+  or the vanilla arm reads its way out of character; the `full` arm's CLAUDE.md
+  block is the one deliberate exception and the harness writes it. A `SeedFunc`
+  gets a `*demokit.Seeder` already opened on a throwaway dir -- never point
+  `demokit.New` at a live instance.
+- **Bench scenario fixtures are FORKED from `internal/demokit`'s scene specs, not
+  imported.** The scene defs are branding surface that must stay stable while
+  this suite churns. Reuse demokit's seeding PRIMITIVES; copy its data.
+- **The arm env file is the only interface to the shell harness.** `harness.sh
+  --mode bench` owns what an arm contains (throwaway HOME, demo-repo copy, data
+  dir, config, key, port, `install-hooks --client claude` under the arm's own
+  HOME); the runner reads that env file and reimplements none of it -- in
+  particular it never runs `install-hooks` itself, which is what keeps the live
+  `~/.claude`/`~/.codex`/`~/.seamless` out of reach (memory
+  `fixture-install-hooks-needs-home-override`). The condition grammar
+  `name[:profile[:client]]` is parsed on both sides on purpose; a mismatch
+  between the requested and the built arm is fatal, not adaptive.
+- **One live write, and it is the results trial.** Everything else seambench
+  touches is throwaway. `results.json` is written BEFORE any trial, an
+  unreachable instance is a warning with a retry line rather than an error, and
+  recording is idempotent per run (the trial id is stamped into `grade.json`).
+  Do not add a second live write, and pass `--no-trials` for dry runs -- fake-agent
+  results in the live lab are indistinguishable from measurements later.
+
 ## Common pitfalls (checklist before declaring done)
 
 ### Meta-rules
@@ -236,14 +306,17 @@ the pointer is where to look, not a substitute for reading it.
 ## Verification before declaring done
 
 1. **`make check`** -- build + vet + fmt-check + docs-check + installer-check +
-   site-check + lint + test-race, in that order. This is the gate; the individual
-   targets exist for iterating.
+   site-check + lint + vulncheck + test-race, in that order. This is the gate;
+   the individual targets exist for iterating. `make seambench` is NOT part of
+   it and must never be added: it spends real API tokens (see the benchmark
+   section above).
 2. Update `*_test.go` in the same change if a signature changed.
 3. For any change touching a recurring pattern above, grep for siblings and fix
    them together.
 
 `make install-git-hooks` (once per clone) enables `.githooks/pre-commit`, which
-runs **`make check-fast`** -- `check` minus test-race, ~3s against ~39s. It is a
+runs **`make check-fast`** -- `check` minus build, vulncheck, and test-race (~3s
+against ~39s). It is a
 convenience, not the gate: git runs hooks against the working tree rather than
 the index, so under partial staging it describes the tree you are in and not the
 commit you are making. It catches gofmt/docs/lint drift early; `make check` and
