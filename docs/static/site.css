@@ -222,7 +222,10 @@ body::before {
   border-bottom: 1px solid var(--border);
 }
 .site-head .wrap {
-  display: flex; align-items: center; justify-content: space-between;
+  /* Left cluster (hamburger, then wordmark -- the docs header's corner
+     order) with the nav pushed right by its own auto margin. space-between
+     would spread all three children and float the wordmark mid-header. */
+  display: flex; align-items: center; gap: 12px;
   height: 60px;
 }
 .wordmark {
@@ -237,7 +240,7 @@ body::before {
   color: var(--term-green);
   animation: blink 1.1s steps(1) infinite;
 }
-.head-nav { display: flex; align-items: center; gap: 22px; }
+.head-nav { display: flex; align-items: center; gap: 22px; margin-left: auto; }
 .head-nav a {
   font-size: 14.5px; font-weight: 500;
   color: var(--ink-2);
@@ -310,10 +313,9 @@ body::before {
 .nav-panel a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
 
 @media (max-width: 720px) {
-  /* The inline anchors give way to the nav-menu disclosure; Docs stays a
-     destination, not an anchor -- without it the only mobile path to the
-     docs is the footer. Direct children only: the panel's copies of these
-     anchors must keep rendering. */
+  /* The inline anchors give way to the nav-menu disclosure in the header's
+     left corner; Docs stays a destination, not an anchor -- without it the
+     only mobile path to the docs is the footer. */
   .head-nav > a:not(.gh-link):not(.docs-link) { display: none; }
   .nav-menu { display: block; }
 }

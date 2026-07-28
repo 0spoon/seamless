@@ -137,7 +137,7 @@
 <link rel="preload" as="font" type="font/woff2" href="static/fonts/hanken-grotesk.woff2" crossorigin>
 <link rel="preload" as="font" type="font/woff2" href="static/fonts/jetbrains-mono.woff2" crossorigin>
 <script>(function(){var d=document.documentElement,t=localStorage.getItem("theme");if(t)d.dataset.theme=t;var o=localStorage.getItem("os");if(o==="macos"||o==="linux")o="unix";if(o!=="unix"&&o!=="windows")o=/Windows/i.test(navigator.userAgent)?"windows":"unix";d.dataset.os=o;})();</script>
-<link rel="stylesheet" href="static/site.css?v=48225666">
+<link rel="stylesheet" href="static/site.css?v=8d1e7f91">
 </head>
 <body>
 
@@ -145,6 +145,24 @@
 
 <header class="site-head">
   <div class="wrap">
+    <!-- The docs header's corner order, mirrored: hamburger far left, wordmark
+         right after it. The panel carries the same six anchors as the inline
+         row below -- a closed details never renders its children, so the row
+         cannot double as the menu. Desktop hides .nav-menu; <=720px hides the
+         inline anchors. Keep the two lists identical. -->
+    <details class="nav-menu">
+      <summary aria-label="Menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </summary>
+      <nav class="nav-panel" aria-label="Menu">
+        <a href="#why">Why</a>
+        <a href="#scenes">Demo</a>
+        <a href="#how">How it works</a>
+        <a href="#console">Console</a>
+        <a href="#quickstart">Quickstart</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+    </details>
     <a class="wordmark" href="#" aria-label="Seamless home">seam<span class="caret">l</span>ess</a>
     <nav class="head-nav" aria-label="Site">
       <a href="#why">Why</a>
@@ -153,23 +171,6 @@
       <a href="#console">Console</a>
       <a href="#quickstart">Quickstart</a>
       <a href="#faq">FAQ</a>
-      <!-- The same six anchors again, as a native disclosure for phones: a
-           closed details never renders its children, so the inline row above
-           cannot double as the menu. Desktop hides .nav-menu; <=720px hides
-           the inline anchors. Keep the two lists identical. -->
-      <details class="nav-menu">
-        <summary aria-label="Menu">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
-        </summary>
-        <div class="nav-panel">
-          <a href="#why">Why</a>
-          <a href="#scenes">Demo</a>
-          <a href="#how">How it works</a>
-          <a href="#console">Console</a>
-          <a href="#quickstart">Quickstart</a>
-          <a href="#faq">FAQ</a>
-        </div>
-      </details>
       <a class="docs-link" href="docs/">Docs</a>
       <button class="theme-toggle" type="button" aria-label="Toggle color theme">
         <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>
