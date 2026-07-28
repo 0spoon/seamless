@@ -25,7 +25,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../static/site.css?v=7fc27d20">
-<link rel="stylesheet" href="static/docs.css?v=e0b48ac5">
+<link rel="stylesheet" href="static/docs.css?v=3234ec95">
 </head>
 <body class="docs" data-docs-root="">
 
@@ -203,54 +203,36 @@ markdown files in a directory you own, indexed by one SQLite database, and
 served over MCP by the local <code>seamlessd</code> daemon. The companion <code>seam</code> CLI gives
 headless agents a direct interface. There is no hosted Seamless service,
 external vector database, or account.</p>
-<p>Its clients are agents. You are the observer and editor - there is a console, but
-nothing in Seamless requires you to be in the loop for agents to use it. And it
-is one instance on one machine, bound to loopback: a personal substrate, not a
-hosted team knowledge base.</p>
-<h2 id="what-it-gives-a-fleet">What it gives a fleet</h2>
-<ul>
-<li><strong>Memory with a lifecycle.</strong> Not an append-only log: memories are superseded
-and archived, so what an agent recalls is what is currently true.</li>
-<li><strong>Ambient sessions.</strong> Claude Code and Codex hooks open a session per agent,
-inject a budgeted briefing at startup, and harvest findings. No tool calls are
-required from the agent.</li>
-<li><strong>A ready-queue.</strong> Dependency-aware tasks with atomic lease-based claiming, so
-parallel agents divide work without stepping on each other.</li>
-<li><strong>Hybrid recall.</strong> One search entry point fusing keyword and vector search.</li>
-<li><strong>A console you can read.</strong> Every memory, session, task, and retrieval decision
-is inspectable. The files are plain markdown; the store is not a black box.</li>
-</ul>
-<h2 id="design-principles">Design principles</h2>
-<p><strong>Files are the source of truth.</strong> Durable knowledge lives in markdown you can
-read, <code>grep</code>, edit, and put in git. The database is a rebuildable index over
-them, plus the record for high-churn state (sessions, tasks, events).</p>
-<p><strong>Local-first.</strong> One daemon process, one SQLite file, bound to loopback. No
-external database, no required cloud service, and no outbound product
-telemetry.</p>
-<p><strong>Propose, don't act.</strong> The gardener finds duplicates, staleness, and drift - and
-proposes. Nothing rewrites your knowledge behind your back.</p>
 <h2 id="which-agent-do-you-run">Which agent do you run?</h2>
 <p>Setup is client-shaped: pick yours and that page walks install, wiring, and
 verification end to end. The <a href="quickstart/">Quickstart</a> is the same path for
 everyone - one install command, then your client.</p>
 <!-- Raw HTML, so hrefs are relative to the docs home (rewriteDocLinks only
      rewrites markdown links). This page renders at /docs/, one level deep. -->
-<div class="card-grid">
-  <a class="doc-card" href="claude-code/">
+<div class="card-grid router-grid">
+  <a class="doc-card router-card" href="claude-code/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></span>
     <h2>Claude Code</h2>
     <p>The terminal CLI and the Claude app's code sessions - one setup covers both.</p>
+    <span class="card-cta">Set up</span>
   </a>
-  <a class="doc-card" href="claude-app/">
+  <a class="doc-card router-card" href="claude-app/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
     <h2>Claude app chat</h2>
     <p>Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.</p>
+    <span class="card-cta">Set up</span>
   </a>
-  <a class="doc-card" href="codex-cli/">
+  <a class="doc-card router-card" href="codex-cli/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></span>
     <h2>Codex</h2>
     <p>CLI, desktop app, and IDE extension - one shared local profile named codex.</p>
+    <span class="card-cta">Set up</span>
   </a>
-  <a class="doc-card" href="guides/mcp-clients/">
+  <a class="doc-card router-card" href="guides/mcp-clients/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg></span>
     <h2>Any other MCP client</h2>
     <p>Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.</p>
+    <span class="card-cta">Set up</span>
   </a>
 </div>
 <h2 id="or-start-from-the-task">Or start from the task</h2>
@@ -298,6 +280,32 @@ everyone - one install command, then your client.</p>
 </tbody>
 </table>
 </div>
+<p>Its clients are agents. You are the observer and editor - there is a console, but
+nothing in Seamless requires you to be in the loop for agents to use it. And it
+is one instance on one machine, bound to loopback: a personal substrate, not a
+hosted team knowledge base.</p>
+<h2 id="what-it-gives-a-fleet">What it gives a fleet</h2>
+<ul>
+<li><strong>Memory with a lifecycle.</strong> Not an append-only log: memories are superseded
+and archived, so what an agent recalls is what is currently true.</li>
+<li><strong>Ambient sessions.</strong> Claude Code and Codex hooks open a session per agent,
+inject a budgeted briefing at startup, and harvest findings. No tool calls are
+required from the agent.</li>
+<li><strong>A ready-queue.</strong> Dependency-aware tasks with atomic lease-based claiming, so
+parallel agents divide work without stepping on each other.</li>
+<li><strong>Hybrid recall.</strong> One search entry point fusing keyword and vector search.</li>
+<li><strong>A console you can read.</strong> Every memory, session, task, and retrieval decision
+is inspectable. The files are plain markdown; the store is not a black box.</li>
+</ul>
+<h2 id="design-principles">Design principles</h2>
+<p><strong>Files are the source of truth.</strong> Durable knowledge lives in markdown you can
+read, <code>grep</code>, edit, and put in git. The database is a rebuildable index over
+them, plus the record for high-churn state (sessions, tasks, events).</p>
+<p><strong>Local-first.</strong> One daemon process, one SQLite file, bound to loopback. No
+external database, no required cloud service, and no outbound product
+telemetry.</p>
+<p><strong>Propose, don't act.</strong> The gardener finds duplicates, staleness, and drift - and
+proposes. Nothing rewrites your knowledge behind your back.</p>
 
 </article>
 
@@ -340,7 +348,7 @@ everyone - one install command, then your client.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-it-gives-a-fleet">What it gives a fleet</a></li><li class="lvl-2"><a href="#design-principles">Design principles</a></li><li class="lvl-2"><a href="#which-agent-do-you-run">Which agent do you run?</a></li><li class="lvl-2"><a href="#or-start-from-the-task">Or start from the task</a></li>
+      <li class="lvl-2"><a href="#which-agent-do-you-run">Which agent do you run?</a></li><li class="lvl-2"><a href="#or-start-from-the-task">Or start from the task</a></li><li class="lvl-2"><a href="#what-it-gives-a-fleet">What it gives a fleet</a></li><li class="lvl-2"><a href="#design-principles">Design principles</a></li>
     </ul>
   </aside>
   

@@ -760,6 +760,43 @@ a.nav-head.current { color: var(--brand); }
 }
 .doc-card p { font-size: 14px; line-height: 1.55; color: var(--muted); margin: 0; }
 
+/* Router cards -- the docs home's "Which agent do you run?" grid. They extend
+   .doc-card with a glyph tile and a set-up call to action so the router reads
+   as the page's main move, not another navigation grid. One brand accent for
+   all four: the router routes by client, it does not rank them. */
+.router-grid { grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); }
+.router-card { display: flex; flex-direction: column; padding: 20px; }
+.router-card .card-glyph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 12px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  border-radius: var(--radius-sm);
+}
+.router-card .card-glyph svg { width: 18px; height: 18px; }
+.router-card p { flex: 1 1 auto; }
+.router-card .card-cta {
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand);
+}
+.router-card .card-cta::after {
+  content: "\2192";
+  display: inline-block;
+  margin-left: 6px;
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.router-card:hover .card-cta::after { transform: translateX(2px); }
+
 /* ==========================================================================
    CONTEXT PICKER -- the OS/client bar and the `::: when` variant blocks.
    The head script sets data-os / data-clients on <html> before first paint;
@@ -1059,7 +1096,7 @@ a.nav-head.current { color: var(--brand); }
   .tree-leaf { margin-left: 20px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .docs-sidebar, .doc-card, .copy-code { transition: none; }
+  .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after { transition: none; }
 }
 
 /* ==========================================================================

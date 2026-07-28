@@ -11,6 +11,52 @@ served over MCP by the local `seamlessd` daemon. The companion `seam` CLI gives
 headless agents a direct interface. There is no hosted Seamless service,
 external vector database, or account.
 
+## Which agent do you run?
+
+Setup is client-shaped: pick yours and that page walks install, wiring, and
+verification end to end. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) is the same path for
+everyone - one install command, then your client.
+
+<div class="card-grid router-grid">
+  <a class="doc-card router-card" href="claude-code/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></span>
+    <h2>Claude Code</h2>
+    <p>The terminal CLI and the Claude app's code sessions - one setup covers both.</p>
+    <span class="card-cta">Set up</span>
+  </a>
+  <a class="doc-card router-card" href="claude-app/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <h2>Claude app chat</h2>
+    <p>Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.</p>
+    <span class="card-cta">Set up</span>
+  </a>
+  <a class="doc-card router-card" href="codex-cli/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17l6-5-6-5"/><path d="M12 19h8"/></svg></span>
+    <h2>Codex</h2>
+    <p>CLI, desktop app, and IDE extension - one shared local profile named codex.</p>
+    <span class="card-cta">Set up</span>
+  </a>
+  <a class="doc-card router-card" href="guides/mcp-clients/">
+    <span class="card-glyph" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v6M15 2v6"/><path d="M6 8h12v3a6 6 0 0 1-12 0z"/><path d="M12 17v5"/></svg></span>
+    <h2>Any other MCP client</h2>
+    <p>Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.</p>
+    <span class="card-cta">Set up</span>
+  </a>
+</div>
+
+## Or start from the task
+
+| If you want to | Read |
+|---|---|
+| Install from zero in ten minutes | [Quickstart](https://thereisnospoon.org/docs/quickstart/) |
+| Update, uninstall, or add a client later | [Update & uninstall](https://thereisnospoon.org/docs/updating/) |
+| Control the service, find logs and paths | [The service & where things live](https://thereisnospoon.org/docs/reference/service/) |
+| Understand the model before trusting it | [How Seamless works](https://thereisnospoon.org/docs/concepts/how-it-works/) |
+| Point a hand-rolled agent at it | [Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/) |
+| Make a fleet divide work without colliding | [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/) |
+| Look up a tool, key, or command | [Reference](https://thereisnospoon.org/docs/reference/) |
+| Fix something that is silently not working | [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/) |
+
 Its clients are agents. You are the observer and editor - there is a console, but
 nothing in Seamless requires you to be in the loop for agents to use it. And it
 is one instance on one machine, bound to loopback: a personal substrate, not a
@@ -41,27 +87,3 @@ telemetry.
 
 **Propose, don't act.** The gardener finds duplicates, staleness, and drift - and
 proposes. Nothing rewrites your knowledge behind your back.
-
-## Which agent do you run?
-
-Setup is client-shaped: pick yours and that page walks install, wiring, and
-verification end to end. The [Quickstart](https://thereisnospoon.org/docs/quickstart/) is the same path for
-everyone - one install command, then your client.
-
-- [Claude Code](https://thereisnospoon.org/docs/claude-code/): The terminal CLI and the Claude app's code sessions - one setup covers both.
-- [Claude app chat](https://thereisnospoon.org/docs/claude-app/): Chat conversations in the desktop app - MCP only, no hooks, wired through the app's own config.
-- [Codex](https://thereisnospoon.org/docs/codex-cli/): CLI, desktop app, and IDE extension - one shared local profile named codex.
-- [Any other MCP client](https://thereisnospoon.org/docs/guides/mcp-clients/): Cursor, Cline, Windsurf, Zed, or an agent you wrote - point it at the MCP endpoint.
-
-## Or start from the task
-
-| If you want to | Read |
-|---|---|
-| Install from zero in ten minutes | [Quickstart](https://thereisnospoon.org/docs/quickstart/) |
-| Update, uninstall, or add a client later | [Update & uninstall](https://thereisnospoon.org/docs/updating/) |
-| Control the service, find logs and paths | [The service & where things live](https://thereisnospoon.org/docs/reference/service/) |
-| Understand the model before trusting it | [How Seamless works](https://thereisnospoon.org/docs/concepts/how-it-works/) |
-| Point a hand-rolled agent at it | [Integrate your agent](https://thereisnospoon.org/docs/guides/integrate-your-agent/) |
-| Make a fleet divide work without colliding | [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/) |
-| Look up a tool, key, or command | [Reference](https://thereisnospoon.org/docs/reference/) |
-| Fix something that is silently not working | [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/) |
