@@ -224,6 +224,10 @@ func (s *Server) handleSessionUpdate(ctx context.Context, req mcp.CallToolReques
 	if !ok {
 		return errResult("session_update", errNoSession)
 	}
+	// The resolved session -- possibly an explicit session_id/session naming a
+	// session this connection is not bound to -- is what this call operates on;
+	// attribute its tool.call there, not to the binding/ambient guess.
+	stashAttribution(ctx, sess.ID, sess.ProjectSlug)
 	sess.Findings = findings
 	sess.UpdatedAt = time.Now().UTC()
 	if err := store.UpdateSession(ctx, s.cfg.DB, sess); err != nil {
@@ -254,6 +258,11 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	if !ok {
 		return errResult("session_end", errNoSession)
 	}
+	// Stash before completing: once the session flips to completed and its
+	// bindings are evicted, neither the binding nor the active-only ambient
+	// fallback can see it, and the tool.call (plus heartbeat) would land on a
+	// surviving sibling session.
+	stashAttribution(ctx, sess.ID, sess.ProjectSlug)
 	now := time.Now().UTC()
 	sess.Status = core.SessionCompleted
 	sess.Findings = findings

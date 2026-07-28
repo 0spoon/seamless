@@ -11,6 +11,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	mcpserver "github.com/0spoon/seamless/internal/mcp"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // toolCallEvents returns the recorded tool.call events, newest first.
@@ -105,6 +106,95 @@ func TestLogMiddleware_Truncation(t *testing.T) {
 	body, _ := args["body"].(string)
 	require.Contains(t, body, "truncated", "long arg value should be truncated")
 	require.Less(t, len([]rune(body)), len([]rune(long)))
+}
+
+// TestLogMiddleware_SessionEndExplicitIDAttribution is the regression test for
+// the session_end misattribution: an unbound connection ends one of two
+// same-project ambient sessions by explicit session_id. The ended session is
+// then invisible to the active-only ambient fallback, so pre-fix the tool.call
+// (and its heartbeat) landed on the surviving sibling. The handler's stashed
+// target must win instead.
+func TestLogMiddleware_SessionEndExplicitIDAttribution(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	target := seedAmbient(t, ctx, db, "cx/target00", "demo")
+	sibling := seedAmbient(t, ctx, db, "cc/sibling0", "demo")
+	before, ok, err := store.SessionByID(ctx, db, sibling)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	cli := dialClient(t, ctx, url, testKey)
+	end := callJSON(t, ctx, cli, "session_end", map[string]any{
+		"findings": "done", "session_id": target,
+	})
+	require.Equal(t, target, end["session_id"])
+
+	e := findToolCall(t, db, "session_end")
+	require.Equal(t, target, e.SessionID,
+		"tool.call must be attributed to the ended session, not the surviving sibling")
+	require.Equal(t, "demo", e.ProjectSlug)
+
+	after, ok, err := store.SessionByID(ctx, db, sibling)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, core.SessionActive, after.Status)
+	require.True(t, after.UpdatedAt.Equal(before.UpdatedAt),
+		"ending one agent's session must not heartbeat the sibling's updated_at")
+}
+
+// TestLogMiddleware_SessionUpdateExplicitNameAttribution pins the same contract
+// for session_update naming its target: with ambient sessions spanning two
+// projects the fallback refuses, so pre-fix the tool.call landed unattributed
+// even though the call named exactly the session it operated on.
+func TestLogMiddleware_SessionUpdateExplicitNameAttribution(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	target := seedAmbient(t, ctx, db, "cx/target00", "demo")
+	seedAmbient(t, ctx, db, "cc/elsewher", "other")
+
+	cli := dialClient(t, ctx, url, testKey)
+	callJSON(t, ctx, cli, "session_update", map[string]any{
+		"findings": "progress", "session": "cx/target00",
+	})
+
+	e := findToolCall(t, db, "session_update")
+	require.Equal(t, target, e.SessionID,
+		"tool.call must carry the named target, not fall to the ambiguous ambient guess")
+	require.Equal(t, "demo", e.ProjectSlug)
+}
+
+// TestLogMiddleware_BoundSessionEndAttribution covers the bound variant of the
+// same bug: session_end evicts the connection's binding inside the handler, so
+// the post-handler attribution read found no binding and fell through to the
+// ambient fallback -- a sibling ambient in the same project.
+func TestLogMiddleware_BoundSessionEndAttribution(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+
+	cli := dialClient(t, ctx, url, testKey)
+	start := callJSON(t, ctx, cli, "session_start", map[string]any{"cwd": "/work/demo", "source": "startup"})
+	bound, _ := start["session_id"].(string)
+	require.NotEmpty(t, bound)
+
+	sibling := seedAmbient(t, ctx, db, "cc/sibling0", "demo")
+	before, ok, err := store.SessionByID(ctx, db, sibling)
+	require.NoError(t, err)
+	require.True(t, ok)
+
+	callJSON(t, ctx, cli, "session_end", map[string]any{"findings": "done"})
+
+	e := findToolCall(t, db, "session_end")
+	require.Equal(t, bound, e.SessionID,
+		"a bound session_end must be attributed to the session it completed, binding eviction notwithstanding")
+	require.Equal(t, "demo", e.ProjectSlug)
+
+	after, ok, err := store.SessionByID(ctx, db, sibling)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.True(t, after.UpdatedAt.Equal(before.UpdatedAt),
+		"the sibling ambient must not receive the ended session's heartbeat")
 }
 
 func TestLogMiddleware_UnauthorizedLogsNothing(t *testing.T) {

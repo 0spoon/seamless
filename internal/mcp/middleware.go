@@ -96,19 +96,27 @@ func argumentsMap(req mcp.CallToolRequest) (map[string]any, bool) {
 // authMiddleware -- registered after it in New(), and mcp-go applies middlewares
 // in reverse registration order -- so an unauthorized call is rejected before it
 // reaches here and is never logged. Attribution is read AFTER next() so that a
-// session_start's own event carries the session it just bound. Logging is
+// handler's stashed target is visible: session_start's own event carries the
+// session it just bound, session_end's the session it just completed. Logging is
 // best-effort: a recorder failure never affects the tool's result.
 func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHandlerFunc {
 	return func(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Plant the pre-allocated attribution slot the session handlers write the
+		// call's resolved target into (stashAttribution). It must go in BEFORE
+		// next(): a context value set inside the handler could not propagate out,
+		// so the slot is planted here and mutated in place.
+		ctx = context.WithValue(ctx, attributionSlotKey{}, &attributionSlot{})
 		start := time.Now()
 		result, err := next(ctx, req)
 		durMS := time.Since(start).Milliseconds()
 
 		// Attribution doubles as the session heartbeat: any tool call is proof the
 		// agent is alive, so bump the attributed session's updated_at to keep the
-		// idle reaper from expiring it. Covers bound (explicit session_start) and
-		// ambient-fallback sessions alike; the active-only guard in TouchSession
-		// makes it a no-op for a just-ended one. Best-effort.
+		// idle reaper from expiring it. Covers stashed targets, bound (explicit
+		// session_start) and ambient-fallback sessions alike; the active-only guard
+		// in TouchSession makes it a no-op for a just-ended one -- and because a
+		// stashed target wins attribution, ending one agent's session never bumps a
+		// surviving sibling's liveness. Best-effort.
 		sessionID, project := s.attribution(ctx)
 		if sessionID != "" {
 			if terr := store.TouchSession(ctx, s.cfg.DB, sessionID, time.Now().UTC()); terr != nil {
@@ -149,13 +157,46 @@ func (s *Server) logMiddleware(next mcpserver.ToolHandlerFunc) mcpserver.ToolHan
 	}
 }
 
+// attributionSlotKey keys the pre-allocated attribution slot logMiddleware
+// plants into the call context before running the handler.
+type attributionSlotKey struct{}
+
+// attributionSlot carries the session a handler resolved as the call's target
+// out to logMiddleware's post-next() attribution read. The middleware
+// pre-allocates it and the handler mutates it in place -- a context value set
+// inside the handler could not propagate back out. The hand-off is
+// same-goroutine (the middleware chain is synchronous), so no locking.
+type attributionSlot struct {
+	sessionID string
+	project   string
+}
+
+// stashAttribution records the session a handler actually operated on, so the
+// logged tool.call is attributed to it rather than to whatever the connection
+// binding or ambient fallback would guess after the handler ran. session_end is
+// the sharp case: the handler completes its target and evicts its bindings, so
+// by the time logMiddleware reads attribution the target is invisible to both
+// the binding and the active-only ambient lookup -- the stamp (and heartbeat)
+// would land on a surviving sibling session instead. No-op outside the
+// middleware chain (no slot in ctx).
+func stashAttribution(ctx context.Context, sessionID, project string) {
+	if slot, ok := ctx.Value(attributionSlotKey{}).(*attributionSlot); ok {
+		slot.sessionID = sessionID
+		slot.project = project
+	}
+}
+
 // attribution resolves the (sessionID, project) a logged tool.call should carry:
-// the connection's binding if it has one, else a single unambiguous ambient
-// session, else empty. It never errors -- an unattributable call (stateless
-// transport, or before any session_start) simply lands in the feed's
-// "unattributed" tab. It is read after the handler runs so session_start's event
-// reflects the binding it just created.
+// the session the handler stashed (the call's actual target -- see
+// stashAttribution), else the connection's binding, else a single unambiguous
+// ambient session, else empty. It never errors -- an unattributable call
+// (stateless transport, or before any session_start) simply lands in the feed's
+// "unattributed" tab. It is read after the handler runs so a stashed target is
+// visible.
 func (s *Server) attribution(ctx context.Context) (sessionID, project string) {
+	if slot, ok := ctx.Value(attributionSlotKey{}).(*attributionSlot); ok && slot.sessionID != "" {
+		return slot.sessionID, slot.project
+	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID, b.project
 	}

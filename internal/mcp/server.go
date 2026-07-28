@@ -385,6 +385,11 @@ func (s *Server) mcpSessionID(ctx context.Context) string {
 }
 
 func (s *Server) setBinding(ctx context.Context, sessionID, project string) {
+	// The freshly bound session is the call's target: stash it so
+	// session_start's own tool.call carries the binding it just created --
+	// uniformly with session_update/end, and even on a stateless transport
+	// (no client session id, so no bindings entry to read back).
+	stashAttribution(ctx, sessionID, project)
 	id := s.mcpSessionID(ctx)
 	if id == "" {
 		return
