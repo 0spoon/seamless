@@ -116,9 +116,23 @@ or removing a page keeps them current automatically, and a release's
 
 ## The context picker and variant containers
 
-The docs carry an OS/client reading context: a `Steps for` bar (rendered only
-on pages that vary) filters authored variant blocks page-wide. Authors gate a
-span of markdown with a fence-style container:
+The docs carry one OS/client reading context with three presentations:
+
+- **The header chip + popover**, on every docs page: the chip states the
+  active context (`macOS · Claude Code`) and opens a popover with the same
+  segmented controls the bar renders, so the filter is visible and editable
+  on pages that render no variants. On narrow widths the chip shortens to its
+  OS half but stays.
+- **The `Steps for` bar**, rendered only on pages that vary, below the
+  h1/lede (the `ctxbar` template, invoked by `page.html`/`home.html` -- it is
+  point-of-use chrome, not a banner). It also counts variant blocks the
+  current filter hides ("2 blocks for other setups hidden"; clicking shows
+  everything). On phones the bar is non-sticky and collapses to a one-row
+  summary plus a Change button that opens the header popover.
+- **The docs-home router cards** ("Which agent do you run?"), which are plain
+  links -- they route, they never set context as a side effect.
+
+Authors gate a span of markdown with a fence-style container:
 
 ```text
 ::: when os=windows client=codex
@@ -130,16 +144,20 @@ span of markdown with a fence-style container:
 `.ctx-variant` div; visibility is pure CSS off `data-os` / `data-clients` on
 `<html>`, set pre-paint by the layout's head script (UA detect, then
 `localStorage`, then `?os=` / `?client=` query params, which win -- use them
-for deep links, e.g. `/docs/quickstart/?os=windows&client=codex`). Unknown
-values, nesting, an unclosed container, or a heading inside one fail
-`make docs`. Value sets live in `variantDimensions`; extending them means
-extending the CSS visibility rules in `assets/docs.css` and the bar in
-`templates/layout.html` too.
+for deep links, e.g. `/docs/quickstart/?os=windows&client=codex`). Picking is
+one delegated handler in `docs.js` shared by the bar and the popover; a pick
+rewrites `<html>` and `syncCtx` repaints every control, the chip, the bar
+summary, the hidden count, and the aria-live status. Unknown values, nesting,
+an unclosed container, or a heading inside one fail `make docs`. Value sets
+live in `variantDimensions`; extending them means extending the CSS
+visibility rules in `assets/docs.css` and BOTH segmented-control copies in
+`templates/layout.html` (the ctxbar template and the header popover) too.
 
 Degradation is part of the contract: without JS no attribute is set, so every
-variant shows (labeled by its chips) and the bar hides; the markdown twins,
-`llms-full.txt`, and the search index run `textifyVariants`, so text
-consumers get every variant under a bold label and never the `:::` syntax.
+variant shows (labeled by its chips) and all picker chrome -- chip, popover,
+and bar -- hides; the markdown twins, `llms-full.txt`, and the search index
+run `textifyVariants`, so text consumers get every variant under a bold label
+and never the `:::` syntax.
 
 The `localStorage("os")` key is shared with the landing page's coarser
 unix/windows switch: the docs write `macos|linux|windows|all`; the landing
