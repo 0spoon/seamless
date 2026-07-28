@@ -378,16 +378,35 @@ console-chrome: build
 
 # Boot the (freshly rendered) $(SVC_PLIST): evict any old instance, bootstrap
 # with retry (bootout is async, so the label lingers briefly and bootstrapping
-# too soon fails with "Bootstrap failed: 5: Input/output error"), kick it, and
-# verify. Only needed when the plist itself changed; `install` kickstarts in
-# place otherwise.
+# too soon fails with "Bootstrap failed: 5: Input/output error"), and verify.
+#
+# The plist sets RunAtLoad, so a bootstrap that succeeds has already started the
+# daemon -- kickstart is the fallback for the path where it did not (a wedged job
+# that bootout could not evict, leaving every bootstrap to fail as already
+# loaded). Kicking unconditionally would kill a process launchd spawned
+# milliseconds earlier, and the replacement is then held for the full 10s
+# ThrottleInterval: a correct-but-10s-late restart, which is what _wait-healthy
+# was tripping over.
+#
+# `install` always routes through here, including when the plist is unchanged.
+# launchd caches the code-signing identity of a loaded job's executable, so
+# re-execing in place (kickstart -k) after the binary underneath it was replaced
+# runs against a stale identity: macOS 26 AMFI launch constraints are enforcing,
+# and the spawn is killed after ~14ms with OS_REASON_CODESIGNING. KeepAlive then
+# retries, but only once the 10s throttle interval elapses -- so the daemon
+# returns ~10s late (blowing _wait-healthy) and every install leaves a crash
+# report. bootout/bootstrap re-registers the job against the new binary, so the
+# first spawn survives and the restart costs ~2s. Go binaries are adhoc
+# linker-signed with no CMS blob, which is what the constraint rejects; nothing
+# here can be signed away.
 _reload-service:
 	@launchctl bootout gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
-	@for i in 1 2 3 4 5 6 7 8 9 10; do \
-	    launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null && break; \
+	@booted=0; \
+	for i in 1 2 3 4 5 6 7 8 9 10; do \
+	    if launchctl bootstrap gui/$(UID) $(SVC_PLIST) 2>/dev/null; then booted=1; break; fi; \
 	    sleep 1; \
-	done
-	@launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
+	done; \
+	[ $$booted -eq 1 ] || launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) 2>/dev/null || true
 	@launchctl print gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1 \
 	    || { echo "ERROR: $(SVC_LABEL) failed to bootstrap; check $(SVC_LOG)"; exit 1; }
 
@@ -398,9 +417,9 @@ _reload-service:
 # branch switch, or a moved/cleaned repo cannot change what the running daemon
 # and every agent's hooks execute -- swapping them is this target, deliberately.
 #
-# It is also the iterate loop: when the rendered plist is unchanged (the common
-# case) this skips the bootout/bootstrap dance and kickstarts in place, so the
-# marginal cost over `make build` is two file copies.
+# It is also the iterate loop: the marginal cost over `make build` is two file
+# copies and a service reload (see _reload-service for why that reload is
+# unconditional rather than a kickstart in place).
 #
 # One instance per machine (data dir ~/.seamless; bind from the config's addr).
 # Override the location with `make install PREFIX=/opt`.
@@ -414,16 +433,15 @@ install: build
 	        -e 's#__CONFIG__#$(CONFIG)#g' \
 	        -e 's#__LOG__#$(SVC_LOG)#g' \
 	        $(SVC_TEMPLATE) > $$tmp || exit 1; \
-	    if cmp -s $$tmp $(SVC_PLIST) && launchctl print gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1; then \
+	    if cmp -s $$tmp $(SVC_PLIST); then \
 	        rm -f $$tmp; \
-	        launchctl kickstart -k gui/$(UID)/$(SVC_LABEL) >/dev/null 2>&1 \
-	            && echo "restarted $(SVC_LABEL) (plist unchanged)" \
-	            || { echo "ERROR: kickstart failed; check $(SVC_LOG)"; exit 1; }; \
+	        echo "reloading $(SVC_LABEL) (plist unchanged)"; \
 	    else \
 	        install -m 0644 $$tmp $(SVC_PLIST) || exit 1; \
 	        rm -f $$tmp; \
-	        $(MAKE) _reload-service; \
+	        echo "reloading $(SVC_LABEL) (plist updated)"; \
 	    fi
+	@$(MAKE) _reload-service
 	@SEAMLESS_CONFIG=$(CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --client $(CLIENT) --seam $(PREFIX_BIN)/$(CLI)
 	@$(MAKE) _wait-healthy
 	@$(PREFIX_BIN)/$(BINARY) install-summary --bin-dir $(PREFIX_BIN) --config $(CONFIG) --bins $(BINARY),$(CLI)
