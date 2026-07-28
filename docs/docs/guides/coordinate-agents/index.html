@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -243,10 +243,11 @@ work without colliding, and what happens when one of them dies holding something
 <h2 id="fan-out-over-the-ready-queue">Fan-out over the ready queue</h2>
 <p>The pattern is a seeder and N identical workers. The seeder decomposes the work
 once:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">tasks_add title=&#34;extract the parser&#34;          → 01K...A
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">tasks_add title=&#34;extract the parser&#34;          → 01K...A
 </span></span><span class="line"><span class="cl">tasks_add title=&#34;port callers&#34;  depends_on=A  → 01K...B
 </span></span><span class="line"><span class="cl">tasks_add title=&#34;delete the old path&#34; depends_on=B
-</span></span></code></pre><p><code>depends_on</code> is the whole schedule. A task is <strong>ready</strong> when no blocker is still
+</span></span></code></pre></div>
+<p><code>depends_on</code> is the whole schedule. A task is <strong>ready</strong> when no blocker is still
 <code>open</code> or <code>in_progress</code>; either <code>done</code> or <code>dropped</code> unblocks a dependent, because
 work abandoned on purpose should not wedge the queue forever. Cycles are rejected
 at creation rather than discovered at scheduling time.</p>
@@ -269,8 +270,9 @@ task, and a claim by nobody could never be released, reclaimed, or attributed.</
 and identical for every worker - which means every worker tries the <em>same task
 first</em>. Contention on the head of the queue is the designed behavior, not a
 thundering-herd bug, because losing is cheap and unambiguous:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">task already claimed: task &#34;01K7ABCD...&#34; held by &#34;01K7SESS...&#34;
-</span></span></code></pre><p>The holder is named as a <strong>session id</strong>, not an agent name. One claim landed; the
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">task already claimed: task &#34;01K7ABCD...&#34; held by &#34;01K7SESS...&#34;
+</span></span></code></pre></div>
+<p>The holder is named as a <strong>session id</strong>, not an agent name. One claim landed; the
 loser got a clean error, not a corrupted second claim.</p>
 <p>What the loser does next matters more than the error. <strong>Do not retry the same
 id</strong> - someone is working it, and a retry loop is just a slower way to do nothing.
@@ -312,18 +314,20 @@ by <code>plan:&lt;slug&gt;</code>. That is what makes the split possible:</p>
 </div>
 <p>The executors never need the planner. They read the narrative note, then work the
 plan's queue:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">tasks_ready plan=&lt;slug&gt;   ─▶ that plan&#39;s claimable steps
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">tasks_ready plan=&lt;slug&gt;   ─▶ that plan&#39;s claimable steps
 </span></span><span class="line"><span class="cl">tasks_claim &lt;id&gt;          ─▶ same race, same rules
-</span></span></code></pre><p><strong>Plan steps are excluded from the default queue.</strong> <code>tasks_ready</code> and <code>tasks_list</code>
+</span></span></code></pre></div>
+<p><strong>Plan steps are excluded from the default queue.</strong> <code>tasks_ready</code> and <code>tasks_list</code>
 skip them unless you pass <code>plan=</code>, so a twelve-step plan does not bury the handful
 of tasks that are genuinely loose work. This is why a planner can decompose
 aggressively without drowning every other agent on the machine.</p>
 <p>The briefing surfaces each active plan as one rolled-up row rather than a step
 list:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">Plans:
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">Plans:
 </span></span><span class="line"><span class="cl">- marketing -- 2/3 done, 1 claimable, 0 in flight
 </span></span><span class="line"><span class="cl">(steps: tasks_ready plan=&lt;slug&gt;; claim: tasks_claim id=&lt;task id&gt;; attach work via the plan:&lt;slug&gt; tag)
-</span></span></code></pre><p>That is enough for an arriving agent to decide whether to pick something up,
+</span></span></code></pre></div>
+<p>That is enough for an arriving agent to decide whether to pick something up,
 without spending briefing budget on steps it will not touch.</p>
 <p>Claude Code's plan mode builds this composition automatically - plan-file saves
 become notes, approval creates the tracking task. See
@@ -333,11 +337,12 @@ become notes, approval creates the tracking task. See
 agents trying things, and the expensive failure is two of them trying the same
 thing an hour apart.</p>
 <p>A lab is the shared record for one line of investigation:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">lab_open lab=dfu-timeout        ─▶ binds the lab; returns up to 10 recent trials
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">lab_open lab=dfu-timeout        ─▶ binds the lab; returns up to 10 recent trials
 </span></span><span class="line"><span class="cl">trial_record title=&#34;...&#34; changes=&#34;...&#34; expected=&#34;...&#34; actual=&#34;...&#34; outcome=fail
 </span></span><span class="line"><span class="cl">              metrics={&#34;hz&#34;:497}
 </span></span><span class="line"><span class="cl">trial_query outcome=fail metrics_filter={&#34;hz&#34;:497}
-</span></span></code></pre><p><code>lab_open</code> binds the lab to the connection the way <code>session_start</code> binds the
+</span></span></code></pre></div>
+<p><code>lab_open</code> binds the lab to the connection the way <code>session_start</code> binds the
 project, so <code>trial_record</code> inherits it. The context it returns on open is the
 point: an agent joining an investigation already in progress sees what has been
 tried before it tries anything.</p>
@@ -439,10 +444,11 @@ being in its loop.</p>
 </table>
 </div>
 <p>The same view without a browser:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam ready --blocked                 <span class="c1"># the queue plus what is blocking what</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam ready --blocked                 <span class="c1"># the queue plus what is blocking what</span>
 </span></span><span class="line"><span class="cl">seam task list --status in_progress  <span class="c1"># what is claimed right now</span>
 </span></span><span class="line"><span class="cl">seam sessions --status active        <span class="c1"># who is alive</span>
-</span></span></code></pre><p>A task sitting in <strong>In progress</strong> with an <strong>expired</strong> lease is the signature of a
+</span></span></code></pre></div>
+<p>A task sitting in <strong>In progress</strong> with an <strong>expired</strong> lease is the signature of a
 crashed holder. If the gardener is running, leave it - the reaper will return it.
 If you need it now, release the lock.</p>
 <h2 id="one-more-collision-to-know-about">One more collision to know about</h2>

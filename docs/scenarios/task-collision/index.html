@@ -254,10 +254,11 @@ working guide.</p>
 <h2 id="how-to-reproduce-this">How to reproduce this</h2>
 <p>Seed the fixture with the race flag, which leaves two steps claimable so the
 collision can happen:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
+<div class="code-block" data-lang="sh"><pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
 </span></span><span class="line"><span class="cl">go run ./cmd/demoseed -scenes -race -data /tmp/seamless-demo -repo /path/to/your/test/repo
 </span></span><span class="line"><span class="cl"><span class="nv">SEAMLESS_DATA_DIR</span><span class="o">=</span>/tmp/seamless-demo go run ./cmd/seamlessd serve
-</span></span></code></pre><p>Then start two agent sessions in the mapped repo and give both the same
+</span></span></code></pre></div>
+<p>Then start two agent sessions in the mapped repo and give both the same
 prompt at the same time. The bounce is deterministic - whoever's claim lands
 second gets the holder's session id back. For a real setup, start at the
 <a href="../../docs/quickstart/">quickstart</a>.</p>

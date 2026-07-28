@@ -46,6 +46,29 @@ var docsMD = goldmark.New(
 		// to --syn-* variables for both light and dark.
 		highlighting.NewHighlighting(
 			highlighting.WithFormatOptions(chromahtml.WithClasses(true)),
+			// Chroma's output carries no language marker, so wrap every fence in
+			// a div whose data-lang docs.css renders as the block's label. With a
+			// wrapper set, the library skips its own <pre><code> for the fences it
+			// does not highlight (bare fences -- GuessLanguage is off), so this
+			// writes that pair itself in the non-highlighted case.
+			highlighting.WithWrapperRenderer(func(w util.BufWriter, c highlighting.CodeBlockContext, entering bool) {
+				lang, _ := c.Language()
+				if entering {
+					_, _ = w.WriteString(`<div class="code-block"`)
+					if len(lang) > 0 {
+						_, _ = w.WriteString(` data-lang="` + template.HTMLEscapeString(string(lang)) + `"`)
+					}
+					_, _ = w.WriteString(">")
+					if !c.Highlighted() {
+						_, _ = w.WriteString("<pre><code>")
+					}
+					return
+				}
+				if !c.Highlighted() {
+					_, _ = w.WriteString("</code></pre>\n")
+				}
+				_, _ = w.WriteString("</div>\n")
+			}),
 		),
 	),
 	goldmark.WithParserOptions(

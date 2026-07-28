@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -294,8 +294,9 @@ the agent that executes it can read the research that justified it.</p>
 <code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>.</p>
 <h2 id="why-unapproved-plans-show-up-in-the-briefing">Why unapproved plans show up in the briefing</h2>
 <p>A captured-but-unapproved plan appears in briefings as:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
-</span></span></code></pre><p>This is deliberate. A plan that was designed, presented, and then forgotten is
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)
+</span></span></code></pre></div>
+<p>This is deliberate. A plan that was designed, presented, and then forgotten is
 the most expensive kind of lost work - the thinking already happened. Surfacing
 it costs one briefing line and makes the decision explicit: pick it up, or
 abandon it on purpose.</p>
@@ -306,11 +307,12 @@ lapse rather than crowd out your actual memories.</p>
 <h2 id="the-escape-hatches">The escape hatches</h2>
 <p>Sometimes Claude Code skips the approval hook, and a plan you did approve stays
 <code>presented</code>.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan list                  <span class="c1"># every captured plan and its status</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam plan list                  <span class="c1"># every captured plan and its status</span>
 </span></span><span class="line"><span class="cl">seam plan show &lt;slug&gt;           <span class="c1"># the narrative + its steps</span>
 </span></span><span class="line"><span class="cl">seam plan check &lt;slug&gt;          <span class="c1"># staleness: has the repo moved since capture?</span>
 </span></span><span class="line"><span class="cl">seam plan approve &lt;slug&gt;        <span class="c1"># force approval + create the tracking task</span>
-</span></span></code></pre><p><code>seam plan check</code> compares the git stamp recorded at capture against the repo
+</span></span></code></pre></div>
+<p><code>seam plan check</code> compares the git stamp recorded at capture against the repo
 now. A plan written against a tree that has since moved on is not automatically
 wrong, but it is worth re-reading before executing - that is the question this
 answers.</p>

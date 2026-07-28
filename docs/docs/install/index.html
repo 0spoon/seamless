@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -258,14 +258,16 @@ Where everything lands - the service, logs, ports, and every path - is on
 <h2 id="install-in-one-command">Install in one command</h2>
 <div class="ctx-variant" data-ctx-os="macos linux">
 <p class="ctx-label"><span class="ctx-chip">macOS</span><span class="ctx-chip">Linux</span></p>
-<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
 </span></span></code></pre></div>
+</div>
 <div class="ctx-variant" data-ctx-os="windows">
 <p class="ctx-label"><span class="ctx-chip">Windows</span></p>
 <p>The <a href="https://thereisnospoon.org/install.ps1">PowerShell installer</a> does the
 same steps with a Scheduled Task in place of launchd/systemd:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
 </span></span></span></code></pre></div>
+</div>
 <p>This is the path for using Seamless (as opposed to working on it). The POSIX
 script needs <code>curl</code> and <code>tar</code>; the PowerShell one needs nothing beyond Windows
 itself. No Go toolchain is involved. In order, it:</p>
@@ -385,22 +387,25 @@ the script refuses root unless you insist.</p>
 <h2 id="installing-without-the-one-liner">Installing without the one-liner</h2>
 <p>The other routes end up in the same place with more of the steps left to you.</p>
 <h3 id="homebrew">Homebrew</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">brew install 0spoon/tap/seamless
-</span></span></code></pre><p>Every release publishes a cask to the <code>0spoon/homebrew-tap</code> tap, on macOS and
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">brew install 0spoon/tap/seamless
+</span></span></code></pre></div>
+<p>Every release publishes a cask to the <code>0spoon/homebrew-tap</code> tap, on macOS and
 Linux alike. It delivers the <strong>binaries only</strong> - <code>seamlessd</code> and <code>seam</code> on your
 PATH, with the Gatekeeper quarantine attribute stripped on macOS (the release
 binaries are unsigned). It does not wire clients or register a service, so
 finish with the two commands the cask's caveats print:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks   <span class="c1"># bearer key on first run, hooks, MCP, skills</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks   <span class="c1"># bearer key on first run, hooks, MCP, skills</span>
 </span></span><span class="line"><span class="cl">seamlessd serve           <span class="c1"># or set up the service yourself</span>
-</span></span></code></pre><p><code>brew upgrade</code> moves you to the latest release. The hooks keep working - they
+</span></span></code></pre></div>
+<p><code>brew upgrade</code> moves you to the latest release. The hooks keep working - they
 resolve <code>seam</code> through brew's stable bin path - but restart the daemon
 yourself so it runs the new build.</p>
 <h3 id="from-a-clone">From a clone</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make install                    <span class="c1"># -&gt; ~/.local/bin + ~/.config/seamless/seamless.yaml</span>
 </span></span><span class="line"><span class="cl">make install <span class="nv">PREFIX</span><span class="o">=</span>/opt/seam   <span class="c1"># custom prefix (binaries land in $PREFIX/bin)</span>
 </span></span><span class="line"><span class="cl">make uninstall                  <span class="c1"># remove service, hooks, MCP, skills + binaries (data kept)</span>
-</span></span></code></pre><p><code>make install</code> is the same destination from your own build, and it is macOS-only
+</span></span></code></pre></div>
+<p><code>make install</code> is the same destination from your own build, and it is macOS-only
 (it renders the launchd plist from <code>deploy/launchd/</code>). It snapshots the binaries
 and config to stable locations, then points launchd <strong>and</strong> the selected clients'
 hooks/MCP definitions at the copies. Nothing live resolves through your working

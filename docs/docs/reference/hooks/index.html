@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -399,7 +399,7 @@ the agent's own prompt.</li>
 <li><strong>A closing footer</strong> naming <code>recall</code> and <code>memory_read</code>, so even a child in a
 project with two constraints knows how to pull more.</li>
 </ul>
-<pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">&lt;seam-briefing&gt;
 </span></span><span class="line"><span class="cl">Seam project: seamless -- 24 constraints (subagent scope).
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">Constraints (binding for every session):
@@ -410,7 +410,8 @@ project with two constraints knows how to pull more.</li>
 </span></span><span class="line"><span class="cl">- chroma-boot-race: chroma container health check startup race
 </span></span><span class="line"><span class="cl">Recall on demand with recall; read a memory with memory_read.
 </span></span><span class="line"><span class="cl">&lt;/seam-briefing&gt;
-</span></span></code></pre><h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>
+</span></span></code></pre></div>
+<h2 id="codex-local-host-five-hooks">Codex local host: five hooks</h2>
 <p><code>seamlessd install-hooks --client codex</code> installs five hooks into
 <code>~/.codex/hooks.json</code> (or <code>$CODEX_HOME/hooks.json</code>) instead of the seven above.
 The desktop app, CLI, and IDE extension share this profile for the same Codex
@@ -495,9 +496,10 @@ is logged and the hook still acks 200.</p>
 a <code>seam</code> binary that moved - none of these produce an error an agent or the user
 will see. Work simply proceeds without a briefing, and nothing announces it.</p>
 <p>So troubleshooting starts with the doctor checks, not with looking for an error:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># desired definitions, Codex trust/activity, and MCP state</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># desired definitions, Codex trust/activity, and MCP state</span>
 </span></span><span class="line"><span class="cl">seam doctor        <span class="c1"># server reachable, key accepted, tools/list count</span>
-</span></span></code></pre><p>For Claude Code, <code>seamlessd doctor</code> looks in <code>~/.claude/settings.json</code> and then
+</span></span></code></pre></div>
+<p>For Claude Code, <code>seamlessd doctor</code> looks in <code>~/.claude/settings.json</code> and then
 <code>./.claude/settings.json</code> and compares installed entries with the definitions the
 installer would write now. For Codex it separately reports exact
 current/stale/missing definitions, separately discoverable CLI/app runtime
@@ -536,20 +538,21 @@ differs.</p>
 <p>One practical consequence: the bearer key is only written into settings.json for
 the <code>http</code> hook. Command hooks read it from the config file at hook time.</p>
 <h2 id="what-install-hooks-writes">What install-hooks writes</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks                        <span class="c1"># default: --client detect</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks                        <span class="c1"># default: --client detect</span>
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --settings ./.claude/settings.json
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --url http://127.0.0.1:8081
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --seam /path/to/seam
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --client codex         <span class="c1"># hooks + codex mcp add + ~/.codex/skills</span>
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --client all           <span class="c1"># both clients in one pass</span>
-</span></span></code></pre><p>The base URL defaults to one derived from the config's bind address (a bind-all
+</span></span></code></pre></div>
+<p>The base URL defaults to one derived from the config's bind address (a bind-all
 host maps to loopback). <code>--seam</code> defaults to the <code>seam</code> binary sitting next to
 the running <code>seamlessd</code>, falling back to a bare <code>seam</code> resolved from <code>PATH</code> at
 hook time. The command fails if <code>mcp.api_key</code> is empty. The examples below are the
 Claude Code (<code>settings.json</code>) shapes; the Codex profile is
 <a href="#the-codex-profile-is-shell-strings">shell strings, not exec form</a>.</p>
 <p>An http entry looks like this:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">{
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">{
 </span></span><span class="line"><span class="cl">  &#34;hooks&#34;: {
 </span></span><span class="line"><span class="cl">    &#34;UserPromptSubmit&#34;: [
 </span></span><span class="line"><span class="cl">      {
@@ -566,9 +569,10 @@ Claude Code (<code>settings.json</code>) shapes; the Codex profile is
 </span></span><span class="line"><span class="cl">    ]
 </span></span><span class="line"><span class="cl">  }
 </span></span><span class="line"><span class="cl">}
-</span></span></code></pre><p>A command entry carries no key and uses <strong>exec form</strong> - a bare <code>command</code> plus an
+</span></span></code></pre></div>
+<p>A command entry carries no key and uses <strong>exec form</strong> - a bare <code>command</code> plus an
 <code>args</code> array, spawned directly with no shell:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">{
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">{
 </span></span><span class="line"><span class="cl">  &#34;seamless_managed&#34;: true,
 </span></span><span class="line"><span class="cl">  &#34;matcher&#34;: &#34;startup|resume|clear|compact&#34;,
 </span></span><span class="line"><span class="cl">  &#34;hooks&#34;: [
@@ -580,7 +584,8 @@ Claude Code (<code>settings.json</code>) shapes; the Codex profile is
 </span></span><span class="line"><span class="cl">    }
 </span></span><span class="line"><span class="cl">  ]
 </span></span><span class="line"><span class="cl">}
-</span></span></code></pre><p>Exec form is deliberate: it is the one shape that behaves identically on every
+</span></span></code></pre></div>
+<p>Exec form is deliberate: it is the one shape that behaves identically on every
 OS. Claude Code runs a shell-form command hook through <code>sh -c</code> on Unix but
 PowerShell on Windows, where a POSIX string (an env prefix plus single-quoting)
 is not valid syntax; exec form passes each argument verbatim with no quoting at
@@ -595,7 +600,7 @@ that have none.</p>
 <code>command</code> + <code>args</code> array Claude Code uses. So the Codex profile writes a
 POSIX-quoted <code>command</code> and a double-quoted <code>command_windows</code>, both resolving the
 same <code>seam</code> binary plus <code>hook &lt;event&gt; --config &lt;yaml&gt; --client codex</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">{
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">{
 </span></span><span class="line"><span class="cl">  &#34;hooks&#34;: {
 </span></span><span class="line"><span class="cl">    &#34;SessionStart&#34;: [
 </span></span><span class="line"><span class="cl">      {
@@ -612,7 +617,8 @@ same <code>seam</code> binary plus <code>hook &lt;event&gt; --config &lt;yaml&gt
 </span></span><span class="line"><span class="cl">    ]
 </span></span><span class="line"><span class="cl">  }
 </span></span><span class="line"><span class="cl">}
-</span></span></code></pre><p>Both forms carry the same resolved paths; the installer runs once per OS, so only
+</span></span></code></pre></div>
+<p>Both forms carry the same resolved paths; the installer runs once per OS, so only
 the matching one ever fires. Codex's own file struct rejects unknown keys at the
 top level (only <code>description</code> and <code>hooks</code> are allowed there), but its matcher
 group and command handler tolerate extra fields, so the <code>seamless_managed</code> marker

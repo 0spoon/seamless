@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -343,8 +343,9 @@ done, headerless, or unparseable is proposed for archiving once it has sat
 unchanged for <code>gardener.stale_stage_days</code>. Both passes respect <code>[[links]]</code>: a
 memory another body points at is not proposed.</p>
 <h2 id="asking-for-it-in-words">Asking for it in words</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">gardener_request &#34;fold the two console theme memories together&#34;
-</span></span></code></pre><p><code>gardener_request</code> takes natural language and turns it into the same reviewable
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">gardener_request &#34;fold the two console theme memories together&#34;
+</span></span></code></pre></div>
+<p><code>gardener_request</code> takes natural language and turns it into the same reviewable
 proposals as the timed passes. It is a way to <em>aim</em> the gardener, not a way to
 bypass the review step - what comes back is still a proposal.</p>
 <h2 id="where-you-review">Where you review</h2>

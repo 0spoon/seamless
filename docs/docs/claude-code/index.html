@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -233,8 +233,9 @@ independent halves - <strong>the MCP endpoint</strong> (what an agent can call) 
 hooks</strong> (what happens without an agent calling anything) - and you want both.
 One command installs both.</p>
 <h2 id="install-the-hooks-and-register-mcp">Install the hooks and register MCP</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude
-</span></span></code></pre><p>The explicit flag selects only Claude Code. Omit it to use the normal
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude
+</span></span></code></pre></div>
+<p>The explicit flag selects only Claude Code. Omit it to use the normal
 detection-based installer, which prompts on a terminal and can wire Codex too.</p>
 <p>This merges seven hook entries into your Claude Code <code>settings.json</code>, preserving
 everything already there and backing the file up once before the first change.
@@ -262,9 +263,10 @@ the network. The full rationale, hook by hook, is in
 <h2 id="registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</h2>
 <p>For a different MCP client, or when <code>install-hooks</code> could not find the
 <code>claude</code> CLI:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">claude mcp add-json --scope user seamless <span class="se">\
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">claude mcp add-json --scope user seamless <span class="se">\
 </span></span></span><span class="line"><span class="cl">  <span class="s1">&#39;{&#34;type&#34;:&#34;http&#34;,&#34;url&#34;:&#34;http://127.0.0.1:8081/api/mcp&#34;,&#34;headersHelper&#34;:&#34;/abs/path/seam mcp-headers --config /abs/path/seamless.yaml&#34;}&#39;</span>
-</span></span></code></pre><p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
+</span></span></code></pre></div>
+<p><strong><code>--scope user</code> is required.</strong> Without it, <code>claude mcp add</code> defaults to <code>local</code>,
 which ties the registration to whichever directory you happened to run it from.
 The tools then work in that one directory and silently vanish everywhere else -
 which reads exactly like &quot;the MCP server is broken&quot; rather than &quot;the
@@ -279,16 +281,18 @@ slug from that directory's name, and records the mapping. Agents then inherit
 project scope from their cwd - no <code>project</code> argument on any call.</p>
 <p>Map by hand to override the derived slug - an <code>ios</code> directory that should be the
 <code>arctop-ios</code> project:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
-</span></span></code></pre><p>See <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
+</span></span></code></pre></div>
+<p>See <a href="../concepts/projects/">Projects &amp; scope</a> for the full precedence chain and why
 unmapped writes are rejected rather than defaulted to global.</p>
 <h2 id="tell-your-agents-it-exists">Tell your agents it exists</h2>
 <p>Installing the tools does not mean an agent will use them well. Two things help.</p>
 <p>First, run <code>/seam-onboard</code>. The installer drops the portable Claude Code copy
 into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-skill</code>
 (re)installs it for the explicit Claude profile:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>claude
-</span></span></code></pre><p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>claude
+</span></span></code></pre></div>
+<p><code>/seam-onboard</code> walks an agent through the setup above, verifies each step, and
 shows the marked Seamless-awareness block it can add to global or project
 <code>CLAUDE.md</code>. It edits only after you choose a scope and approve the change, then
 removes its own one-shot skill directory.</p>
@@ -336,8 +340,9 @@ transient one named after the worktree.</li>
 hooks, no <code>CLAUDE.md</code>, an explicit opt-in MCP registration of its own. See
 <a href="../claude-app/">Claude app chat setup</a>.</p>
 <h2 id="verify">Verify</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd doctor    <span class="c1"># config, database, tool count, and the hooks check</span>
-</span></span></code></pre><p>Then start a Claude Code session in a mapped repo and look for the injected
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">./bin/seamlessd doctor    <span class="c1"># config, database, tool count, and the hooks check</span>
+</span></span></code></pre></div>
+<p>Then start a Claude Code session in a mapped repo and look for the injected
 block:</p>
 <figure class="doc-figure" data-tone="ok" aria-labelledby="claude-briefing-caption">
   <div class="sample-panel">

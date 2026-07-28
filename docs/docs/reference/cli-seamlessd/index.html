@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -239,8 +239,9 @@ except <code>family</code>, which takes only positionals.</p>
 <p>For the keys every command below resolves, see
 <a href="../../reference/configuration/">Configuration</a>.</p>
 <h2 id="seamlessd_serve">seamlessd serve</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd serve <span class="o">[</span>--addr HOST:PORT<span class="o">]</span>
-</span></span></code></pre><p>Starts the HTTP server and blocks until SIGINT or SIGTERM, then shuts down
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd serve <span class="o">[</span>--addr HOST:PORT<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Starts the HTTP server and blocks until SIGINT or SIGTERM, then shuts down
 gracefully. <code>--addr</code> overrides the configured bind address (default
 <code>127.0.0.1:8081</code>).</p>
 <p>On a true first run - no config file anywhere in the search order and no
@@ -269,8 +270,9 @@ warning, and every MCP and hook request is then rejected.</li>
 <p>The startup line carries the version, commit, and data directory, which is how
 you spot a daemon running older code than your working tree.</p>
 <h2 id="seamlessd_doctor">seamlessd doctor</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor
-</span></span></code></pre><p>Server-side self-checks. Each line reports <code>ok</code>, <code>warn</code>, or <code>fail</code>; <strong>only a
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor
+</span></span></code></pre></div>
+<p>Server-side self-checks. Each line reports <code>ok</code>, <code>warn</code>, or <code>fail</code>; <strong>only a
 <code>fail</code> exits non-zero</strong> - warnings are informational. Checks stop early if
 config or the database cannot be loaded at all.</p>
 <div class="table-wrap">
@@ -366,8 +368,9 @@ healthy.</p>
 <p>Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.</p>
 <h2 id="seamlessd_import">seamlessd import</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd import <span class="o">[</span>--from DIR<span class="o">]</span> <span class="o">[</span>--skip LIST<span class="o">]</span> <span class="o">[</span>--embed<span class="o">=</span>false<span class="o">]</span>
-</span></span></code></pre><p>Imports a Seam v1 data directory into this instance. Memory and note files are
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import <span class="o">[</span>--from DIR<span class="o">]</span> <span class="o">[</span>--skip LIST<span class="o">]</span> <span class="o">[</span>--embed<span class="o">=</span>false<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Imports a Seam v1 data directory into this instance. Memory and note files are
 written and indexed under the v2 data directory; trials, sessions, and tool-call
 events are inserted into the database.</p>
 <div class="table-wrap">
@@ -403,8 +406,9 @@ a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
 prints a report even when the import ends in an error. With <code>--embed</code> on and no
 usable embedder, it warns and imports without vectors rather than failing.</p>
 <h2 id="seamlessd_install_hooks">seamlessd install-hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--desktop-config PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
-</span></span></code></pre><p>Wires the selected install target(s) to Seamless: merges the hook entries into
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--desktop-config PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Wires the selected install target(s) to Seamless: merges the hook entries into
 each hook client's file (Claude Code <code>settings.json</code>, Codex <code>hooks.json</code>),
 registers the MCP server (via the client's CLI, or for the Claude app chat
 surface by editing <code>claude_desktop_config.json</code> directly), and installs the
@@ -506,8 +510,9 @@ often be lost. The Codex profile is five shell-string command hooks. Both
 profiles include safe constraint injection and parent-only lifecycle handling
 for subagents; the <a href="../../reference/hooks/">hooks reference</a> has both tables.</p>
 <h2 id="seamlessd_uninstall">seamlessd uninstall</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
-</span></span></code></pre><p>Reverses a full install on any supported OS: stops and removes the per-user
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--yes<span class="o">]</span> <span class="o">[</span>--purge<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Reverses a full install on any supported OS: stops and removes the per-user
 service, strips the Seamless hook entries, deregisters the MCP server
 (including the chat surface's <code>claude_desktop_config.json</code> entry - only the
 reserved <code>seamless</code> key is removed, everything else stays byte-for-byte),
@@ -584,8 +589,9 @@ one-shot delivery marker in each selected client's skill root.</p>
 </table>
 </div>
 <h2 id="seamlessd_update">seamlessd update</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd update <span class="o">[</span>--check<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--url URL<span class="o">]</span>
-</span></span></code></pre><p>Upgrades Seamless in place to the latest published release by re-running the
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update <span class="o">[</span>--check<span class="o">]</span> <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--url URL<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Upgrades Seamless in place to the latest published release by re-running the
 canonical installer for this OS - the same script a fresh
 <code>curl ... | sh</code> / <code>irm ... | iex</code> install runs, fetched from the latest GitHub
 release's assets. There is deliberately no second upgrade implementation:
@@ -629,8 +635,9 @@ HTTPS-only, including every redirect hop.</p>
 <p>The installer's env knobs pass through: <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version, <code>SEAMLESS_INSTALL_DIR=...</code> retargets, exactly as the
 curl installer does.</p>
 <h2 id="seamlessd_map_repo">seamlessd map-repo</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
-</span></span></code></pre><p>Adds an entry to the <code>repo_project_map</code> setting, so an agent whose working
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --project SLUG <span class="o">[</span>--path DIR<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Adds an entry to the <code>repo_project_map</code> setting, so an agent whose working
 directory is under that path resolves to that project - in the hooks and in
 <code>session_start</code>. This is what makes a briefing arrive scoped to the right
 project without the agent passing <code>project</code> anywhere.</p>
@@ -641,10 +648,11 @@ derived slug, or to map a directory that is not a git repo.</p>
 absolute. The command also ensures the project exists, so mapping a new slug
 registers it. Writes straight to the database; no running daemon needed.</p>
 <h2 id="seamlessd_family">seamlessd family</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd family list
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd family list
 </span></span><span class="line"><span class="cl">seamlessd family add &lt;name&gt; &lt;slug&gt; <span class="o">[</span>&lt;slug&gt;...<span class="o">]</span>
 </span></span><span class="line"><span class="cl">seamlessd family remove &lt;name&gt; <span class="o">[</span>&lt;slug&gt;...<span class="o">]</span>
-</span></span></code></pre><p>Manages the <code>project_families</code> setting: named groupings whose members surface
+</span></span></code></pre></div>
+<p>Manages the <code>project_families</code> setting: named groupings whose members surface
 each other's recent findings in briefings. Use it when two projects are really
 one body of work and an agent in either should see what happened in the other.</p>
 <p>Members are <strong>project slugs, not repo paths</strong> - resolve a repo to its slug with
@@ -654,8 +662,9 @@ removes just those members. <code>rm</code> is accepted as an alias for <code>re
 succeeds: the membership starts taking effect once an agent opens that repo and
 registers it.</p>
 <h2 id="seamlessd_console_open">seamlessd console-open</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open <span class="o">[</span>--browser APP<span class="o">]</span>
-</span></span></code></pre><p>Opens the console in a browser, already authenticated. It renders a one-shot
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open <span class="o">[</span>--browser APP<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Opens the console in a browser, already authenticated. It renders a one-shot
 self-submitting login page to a <code>0600</code> temp file and opens it; the page POSTs
 the static key to the console's login endpoint, which sets the session cookie
 and redirects into the console - so you land on an authenticated page without
@@ -668,8 +677,9 @@ error on other platforms rather than silently opening the default browser.</p>
 answer <code>/healthz</code> within two seconds - the page has nowhere to POST otherwise.
 Any HTTP response counts as reachable, including a degraded 503.</p>
 <h2 id="seamlessd_service">seamlessd start / stop / restart / status</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd start      <span class="c1"># or: stop | restart | status</span>
-</span></span></code></pre><p>Control the installed background service without remembering each platform's
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd start      <span class="c1"># or: stop | restart | status</span>
+</span></span></code></pre></div>
+<p>Control the installed background service without remembering each platform's
 service manager. <code>start</code>, <code>stop</code>, and <code>restart</code> act on the LaunchAgent (macOS),
 the systemd <code>--user</code> unit (Linux), or the Scheduled Task (Windows); <code>status</code>
 prints that manager's own state output.</p>
@@ -682,8 +692,9 @@ be resurrected. Idempotent no-ops - starting a running service, stopping a
 stopped one - are reported as a note, not a failure.</p>
 <p>From a clone, <code>make start</code> / <code>stop</code> / <code>restart</code> / <code>status</code> wrap these exactly.</p>
 <h2 id="seamlessd_version">seamlessd version</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
-</span></span></code></pre><p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd version
+</span></span></code></pre></div>
+<p>Prints the version, commit, and build date. <code>-v</code> and <code>--version</code> are aliases.</p>
 <p>Commit and build date are link-time metadata set by the Makefile; a plain
 <code>go build</code> leaves them <code>unknown</code>. The same version string appears in <code>/healthz</code>,
 the MCP handshake, and the startup log - compare them when you suspect the

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -242,8 +242,9 @@ a local beta. Each non-CLI mode still needs the live hook-trust and chat evidenc
 listed in <a href="#compatibility-evidence">Compatibility evidence</a> before Seamless
 claims it as fully verified.</p>
 <h2 id="install-the-hooks-and-register-mcp">Install the hooks and register MCP</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client codex
-</span></span></code></pre><p><code>--client codex</code> is the switch, but you rarely need it: without the flag, an
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client codex
+</span></span></code></pre></div>
+<p><code>--client codex</code> is the switch, but you rarely need it: without the flag, an
 interactive <code>install-hooks</code> run prompts for the client(s) to wire (defaulting to
 what it found on the machine), and a non-interactive run resolves <code>--client detect</code> - the clients actually present, Codex included. The Codex profile:</p>
 <ol>
@@ -320,8 +321,9 @@ the existing instructions, explains the marker-wrapped block it proposes, and
 asks whether to add it globally (<code>${CODEX_HOME:-$HOME/.codex}/AGENTS.md</code>) or to this
 project (<code>./AGENTS.md</code>). It never silently edits an instruction file and removes
 only its own skill directory after success. Reinstall it from a clone with:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>codex
-</span></span></code></pre><p><code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> opens or resumes the same structured,
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>codex
+</span></span></code></pre></div>
+<p><code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> opens or resumes the same structured,
 multi-agent research-lab workflow as Claude Code. It remains installed and is
 refreshed on upgrades.</p>
 <h2 id="the-five-hooks-and-what-they-inject">The five hooks, and what they inject</h2>
@@ -375,10 +377,11 @@ safe path. Fully headless automation of the Seamless loop needs <strong>both</st
 <summary>Direct Streamable HTTP instead of the bridge</summary>
 <p>If you prefer direct Streamable HTTP over the stdio bridge, add it to
 <code>~/.codex/config.toml</code> yourself:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">[</span><span class="nx">mcp_servers</span><span class="p">.</span><span class="nx">seamless</span><span class="p">]</span>
+<div class="code-block" data-lang="toml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">[</span><span class="nx">mcp_servers</span><span class="p">.</span><span class="nx">seamless</span><span class="p">]</span>
 </span></span><span class="line"><span class="cl"><span class="nx">url</span> <span class="p">=</span> <span class="s2">&#34;http://127.0.0.1:8081/api/mcp&#34;</span>
 </span></span><span class="line"><span class="cl"><span class="nx">http_headers</span> <span class="p">=</span> <span class="p">{</span> <span class="nx">Authorization</span> <span class="p">=</span> <span class="s2">&#34;Bearer &lt;mcp.api_key&gt;&#34;</span> <span class="p">}</span>
-</span></span></code></pre><p>The key is <code>mcp.api_key</code> from your config (<code>grep api_key ~/.config/seamless/seamless.yaml</code>). This is the plain alternative to the proxy,
+</span></span></code></pre></div>
+<p>The key is <code>mcp.api_key</code> from your config (<code>grep api_key ~/.config/seamless/seamless.yaml</code>). This is the plain alternative to the proxy,
 at the cost of duplicating the key into Codex's TOML - which is exactly what the
 bridge exists to avoid. <code>codex mcp add seamless --url http://127.0.0.1:8081/api/mcp --bearer-token-env-var SEAMLESS_MCP_API_KEY</code> is a third route, but it reads the
 key from an environment variable that Codex's own process must have set when it
@@ -418,8 +421,9 @@ ones, precisely so Codex's harvest is not invisible. The practical consequence i
 that a Codex session's findings appear a few minutes after the last turn (once the
 reaper runs), rather than the instant the window closes.</p>
 <h2 id="verify">Verify</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor    <span class="c1"># config, database, tool count, hooks - now Codex-aware</span>
-</span></span></code></pre><p><code>doctor</code> reports distinct Codex facts instead of rolling them into one
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor    <span class="c1"># config, database, tool count, hooks - now Codex-aware</span>
+</span></span></code></pre></div>
+<p><code>doctor</code> reports distinct Codex facts instead of rolling them into one
 plausible-looking success:</p>
 <ul>
 <li><strong>runtime versions</strong> - the PATH CLI and, on macOS when it belongs to the same

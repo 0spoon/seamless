@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -240,18 +240,20 @@ fixes land often, so update at least weekly to stay on the latest version.</p>
 latest release by re-running the canonical installer for you - so there is a
 single upgrade path to trust, not a second copy of the download-and-swap logic
 that could drift from the installer:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs latest, change nothing</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd update --check   <span class="c1"># report installed vs latest, change nothing</span>
 </span></span><span class="line"><span class="cl">seamlessd update --dry-run <span class="c1"># print exactly what it would fetch and run</span>
 </span></span><span class="line"><span class="cl">seamlessd update           <span class="c1"># fetch the latest release and swap it in</span>
-</span></span></code></pre><p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
+</span></span></code></pre></div>
+<p>It honors the same knobs as the installer, so <code>SEAMLESS_VERSION=0.3.0 seamlessd update</code> pins a version and <code>SEAMLESS_INSTALL_DIR=... seamlessd update</code> retargets.
 Under the hood it fetches the installer script (the PowerShell one on Windows)
 from the latest release's assets together with the Sigstore bundle the release
 workflow signed it with, verifies the signature in-process - the script must
 have been produced by this repository's release workflow on a version tag, or
 update refuses to run it - and then runs it. That is the same script as doing
 it by hand, minus the signature check:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
-</span></span></code></pre><p>Your config and <code>~/.seamless</code> are preserved, binaries are swapped by rename
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+</span></span></code></pre></div>
+<p>Your config and <code>~/.seamless</code> are preserved, binaries are swapped by rename
 (safe while the daemon holds them open), and the service restarts on the new
 build. The selected clients are reconciled to the new stable paths: owned
 stale hooks and the Codex stdio registration are repaired, current definitions
@@ -264,11 +266,12 @@ your installed copy (<code>make update CHECK=1</code> only reports).</p>
 <p>Both <code>seamlessd update</code> and <code>make update</code> install the latest <em>release</em>, which
 may be older than your clone's HEAD. To deploy the build from your working
 tree instead:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">git pull
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">git pull
 </span></span><span class="line"><span class="cl">make check             <span class="c1"># everything green before you swap the running daemon</span>
 </span></span><span class="line"><span class="cl">make install           <span class="c1"># swap it</span>
 </span></span><span class="line"><span class="cl">make doctor            <span class="c1"># confirm config + DB after the swap</span>
-</span></span></code></pre></details>
+</span></span></code></pre></div>
+</details>
 <p>Migrations apply automatically at startup - there is no separate migrate step.
 Run <code>make doctor</code> afterwards anyway: it is the cheapest way to learn that the new
 build disagrees with your config before an agent does.</p>
@@ -283,9 +286,10 @@ Claude app's <code>claude_desktop_config.json</code>, removes both hook clients'
 <code>seam-onboard</code> and <code>seam-research</code> packages/one-shot markers, and deletes the
 binaries - and it is idempotent, so a second run is a clean no-op. Preview it
 first with <code>--dry-run</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall --dry-run   <span class="c1"># print exactly what would be removed</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd uninstall --dry-run   <span class="c1"># print exactly what would be removed</span>
 </span></span><span class="line"><span class="cl">seamlessd uninstall             <span class="c1"># do it (asks to confirm on a terminal)</span>
-</span></span></code></pre><p>From a clone it is <code>make uninstall</code>, which builds first and then runs that same
+</span></span></code></pre></div>
+<p>From a clone it is <code>make uninstall</code>, which builds first and then runs that same
 command against your installed copy.</p>
 <p><strong>Your knowledge is kept by default.</strong> <code>~/.config/seamless</code> (your bearer key) and
 <code>~/.seamless</code> (the database, and your memories and notes as markdown) are left in
@@ -309,10 +313,11 @@ live with the rest of the OS-specific detail:
 <p>Client wiring is independent per target, and adding one never disturbs
 another - Claude's and Codex's skills live in separate homes with independent
 delivery markers, and <code>install-hooks</code> touches only the target you name:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client codex            <span class="c1"># add Codex to an existing install</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client codex            <span class="c1"># add Codex to an existing install</span>
 </span></span><span class="line"><span class="cl">seamlessd install-hooks --client claude-desktop   <span class="c1"># add the Claude app chat surface</span>
 </span></span><span class="line"><span class="cl">seamlessd install-hooks                           <span class="c1"># or re-run the interactive multi-select</span>
-</span></span></code></pre><p>Restart the client you added so it loads hooks, MCP, and skills; Codex
+</span></span></code></pre></div>
+<p>Restart the client you added so it loads hooks, MCP, and skills; Codex
 additionally gates new hook definitions behind
 <a href="../codex-cli/#trust-the-hooks-once">/hooks approval</a>, and the Claude app reads
 its config only at startup.</p>

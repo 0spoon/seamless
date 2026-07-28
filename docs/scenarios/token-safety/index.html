@@ -217,7 +217,7 @@ Seam session: cc/5b64a7b0 (ambient)
 <p class="scn-caption">real sessions against a seeded demo instance — transcripts verbatim, only the typing is animated</p>
 
       <h2 id="the-memory-file-that-made-the-difference">The memory file that made the difference</h2>
-<pre><code>---
+<div class="code-block"><pre><code>---
 id: 01JZFB93JA738YS86HFKMQTB2R
 kind: gotcha
 name: persist-refresh-tokens
@@ -239,6 +239,7 @@ credentials. Hashing makes a stolen snapshot useless. The in-memory store keeps
 raw tokens today, which is fine for process memory but not for anything that
 reaches disk or a backup.
 </code></pre>
+</div>
 <p>The description deserves a second look: it deliberately does <em>not</em> contain the
 answer. It is written as a pointer - &quot;one hard rule about what the token
 column may store&quot; - so the one-line index entry in the briefing invites the
@@ -250,10 +251,11 @@ surface, body as payload - is the craft the
 <h2 id="how-to-reproduce-this">How to reproduce this</h2>
 <p>Seed the fixture from the repo - the <code>myapp</code> project with this memory among
 its nine:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
+<div class="code-block" data-lang="sh"><pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
 </span></span><span class="line"><span class="cl">go run ./cmd/demoseed -scenes -data /tmp/seamless-demo -repo /path/to/your/test/repo
 </span></span><span class="line"><span class="cl"><span class="nv">SEAMLESS_DATA_DIR</span><span class="o">=</span>/tmp/seamless-demo go run ./cmd/seamlessd serve
-</span></span></code></pre><p>Then give your agent a task whose safe version depends on a fact the code
+</span></span></code></pre></div>
+<p>Then give your agent a task whose safe version depends on a fact the code
 cannot reveal, with and without the <a href="../../docs/claude-code/">hooks</a> installed. The
 <code>myapp</code> source was a small fictional Go auth service and is not committed. For
 a real setup, start at the <a href="../../docs/quickstart/">quickstart</a>.</p>

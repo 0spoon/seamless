@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -263,9 +263,10 @@ address into the service itself.</p>
 <h2 id="control-it-from-anywhere">Control it from anywhere</h2>
 <p>Whatever the platform, one set of verbs controls the service - they resolve
 your OS's service manager for you:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd start       <span class="c1"># start | stop | restart | status</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd start       <span class="c1"># start | stop | restart | status</span>
 </span></span><span class="line"><span class="cl">make start            <span class="c1"># the same, from a clone (start | stop | restart | status)</span>
-</span></span></code></pre><p>These act on the already-installed service and print a hint if it was never
+</span></span></code></pre></div>
+<p>These act on the already-installed service and print a hint if it was never
 installed. The platform-native commands below are what they wrap - you need
 them only when you want to talk to the service manager directly.</p>
 <h2 id="the-service-on-your-os">The service on your OS</h2>
@@ -274,20 +275,22 @@ them only when you want to talk to the service manager directly.</p>
 <p>A user LaunchAgent labelled <code>org.thereisnospoon.seamless</code> in
 <code>~/Library/LaunchAgents/</code>, logging to <code>~/.seamless/seamlessd.log</code> (<code>make logs</code>
 follows it from a clone). The universal verbs wrap:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">launchctl print gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless        <span class="c1"># state</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">launchctl print gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless        <span class="c1"># state</span>
 </span></span><span class="line"><span class="cl">launchctl kickstart -k gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless <span class="c1"># restart</span>
 </span></span><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless      <span class="c1"># stop</span>
 </span></span></code></pre></div>
+</div>
 <div class="ctx-variant" data-ctx-os="linux">
 <p class="ctx-label"><span class="ctx-chip">Linux</span></p>
 <p>The installer writes a systemd user unit to
 <code>~/.config/systemd/user/seamless.service</code> and enables lingering, so the daemon
 starts at boot rather than at your next login:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">systemctl --user status seamless      <span class="c1"># state, pid, last exit</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">systemctl --user status seamless      <span class="c1"># state, pid, last exit</span>
 </span></span><span class="line"><span class="cl">journalctl --user -u seamless -f      <span class="c1"># follow the log</span>
 </span></span><span class="line"><span class="cl">systemctl --user restart seamless
 </span></span><span class="line"><span class="cl">systemctl --user stop seamless
-</span></span></code></pre><p>No systemd user session (some containers, WSL1)? The installer says so and
+</span></span></code></pre></div>
+<p>No systemd user session (some containers, WSL1)? The installer says so and
 skips the step; run <code>seamlessd serve</code> under whatever supervises processes
 there.</p>
 </div>
@@ -296,11 +299,12 @@ there.</p>
 <p>An at-logon Scheduled Task named <code>Seamless</code>, running as you (<code>LogonType Interactive</code>, no admin), logging to <code>~/.seamless/seamlessd.log</code>. The task
 action is a bare exec - <code>seamlessd.exe serve --config &lt;path&gt; --log-file &lt;path&gt;</code> - because a task cannot carry the <code>SEAMLESS_CONFIG</code> env prefix a plist
 or systemd unit does; the two flags pass exactly what that prefix would have:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Get-ScheduledTask</span> <span class="n">Seamless</span> <span class="p">|</span> <span class="nb">Get-ScheduledTaskInfo</span>   <span class="c"># state, last run, last result</span>
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Get-ScheduledTask</span> <span class="n">Seamless</span> <span class="p">|</span> <span class="nb">Get-ScheduledTaskInfo</span>   <span class="c"># state, last run, last result</span>
 </span></span><span class="line"><span class="cl"><span class="nb">Get-Content</span> <span class="p">~/.</span><span class="n">seamless</span><span class="p">/</span><span class="n">seamlessd</span><span class="p">.</span><span class="py">log</span> <span class="n">-Wait</span>          <span class="c"># follow the log</span>
 </span></span><span class="line"><span class="cl"><span class="nb">Restart-ScheduledTask</span> <span class="n">Seamless</span>                        <span class="c"># stop + start</span>
 </span></span><span class="line"><span class="cl"><span class="nb">Stop-ScheduledTask</span> <span class="n">Seamless</span>                           <span class="c"># stop (it restarts at next logon)</span>
-</span></span></code></pre><p>It restarts on failure and never hits the default execution time limit, so it
+</span></span></code></pre></div>
+<p>It restarts on failure and never hits the default execution time limit, so it
 behaves like launchd's <code>KeepAlive</code>. Because it triggers at logon, it runs while
 you are signed in and stops when you sign out - a single-user desktop, which is
 the shape Seamless is built for.</p>
@@ -369,10 +373,12 @@ the same relative locations on every OS.</p>
 <p><a href="../../updating/">Update &amp; uninstall</a> covers <code>seamlessd uninstall</code>, which removes
 the service along with everything else. For a bare binary you never registered
 a service for - or a machine you are cleaning by hand - the native teardown is:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless   <span class="c1"># macOS</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">launchctl bootout gui/<span class="k">$(</span>id -u<span class="k">)</span>/org.thereisnospoon.seamless   <span class="c1"># macOS</span>
 </span></span><span class="line"><span class="cl">systemctl --user disable --now seamless                      <span class="c1"># Linux</span>
-</span></span></code></pre><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="n">Seamless</span>                  <span class="c"># Windows</span>
-</span></span></code></pre>
+</span></span></code></pre></div>
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">Unregister-ScheduledTask</span> <span class="n">-TaskName</span> <span class="n">Seamless</span>                  <span class="c"># Windows</span>
+</span></span></code></pre></div>
+
 </article>
 
 

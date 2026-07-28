@@ -331,6 +331,31 @@ a.nav-head.current { color: var(--brand); }
   border: 0;
   padding: 0;
 }
+/* Build-time language labels: markdown.go wraps every fence in .code-block
+   carrying the fence's info string as data-lang, rendered here in the
+   sample-panel-head idiom -- mono, uppercase, muted -- at the panel's top
+   left (the copy button owns the top right). Bare and `text` fences carry
+   no label and keep the compact padding. */
+.prose .code-block { position: relative; }
+.prose .code-block::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 10px;
+  left: 14px;
+  /* Above the pre: it is positioned too (for the copy button) and later in
+     tree order, so without this its opaque panel paints over the label. */
+  z-index: 1;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--term-muted);
+  pointer-events: none;
+}
+.prose .code-block:not([data-lang])::before,
+.prose .code-block[data-lang="text"]::before { content: none; }
+.prose .code-block[data-lang]:not([data-lang="text"]) pre { padding-top: 32px; }
+
 .copy-code {
   position: absolute;
   top: 8px;

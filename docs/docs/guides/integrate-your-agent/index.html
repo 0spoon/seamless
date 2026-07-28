@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -266,15 +266,16 @@ the handshake is two calls.</p>
 which speaks stdio to the client and forwards each frame to <code>/api/mcp</code>, carrying
 the bearer key from config and preserving <code>Mcp-Session-Id</code> so session binding
 survives:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy --config /abs/path/seamless.yaml   <span class="c1"># invoked by the MCP client, not by hand</span>
-</span></span></code></pre><p>Register it the way your client registers a stdio server. Codex supports both
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy --config /abs/path/seamless.yaml   <span class="c1"># invoked by the MCP client, not by hand</span>
+</span></span></code></pre></div>
+<p>Register it the way your client registers a stdio server. Codex supports both
 stdio and direct Streamable HTTP; Seamless deliberately installs the bridge with
 <code>codex mcp add seamless -- /abs/path/seam mcp-proxy --config /abs/path/seamless.yaml</code>,
 because this keeps the bearer key in Seamless's 0600 config. <code>seamlessd install-hooks --client codex</code> does that for you. See <a href="../../codex-cli/">Codex local
 setup</a>.
 The rest of this page - session binding, scope, findings - applies to direct and
 bridged clients unchanged.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">KEY</span><span class="o">=</span>&lt;mcp.api_key&gt;
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">KEY</span><span class="o">=</span>&lt;mcp.api_key&gt;
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">curl -sD - -X POST http://127.0.0.1:8081/api/mcp <span class="se">\
 </span></span></span><span class="line"><span class="cl">  -H <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span> <span class="se">\
@@ -283,14 +284,15 @@ bridged clients unchanged.</p>
 </span></span></span><span class="line"><span class="cl">  -d <span class="s1">&#39;{&#34;jsonrpc&#34;:&#34;2.0&#34;,&#34;id&#34;:1,&#34;method&#34;:&#34;initialize&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">       &#34;params&#34;:{&#34;protocolVersion&#34;:&#34;2025-06-18&#34;,&#34;capabilities&#34;:{},
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;clientInfo&#34;:{&#34;name&#34;:&#34;my-agent&#34;,&#34;version&#34;:&#34;1&#34;}}}&#39;</span>
-</span></span></code></pre><p>The response body carries <code>serverInfo</code> (name and build version) plus concise
+</span></span></code></pre></div>
+<p>The response body carries <code>serverInfo</code> (name and build version) plus concise
 server <code>instructions</code> describing the Seamless workflow. The part your transport
 must keep is a <strong>header</strong>: <code>Mcp-Session-Id: mcp-session-&lt;uuid&gt;</code>. Send it on every
 subsequent request. A <code>tools/call</code> without it - or with one the daemon does not
 know - is refused by the transport with <code>Invalid session ID</code> before any tool
 runs.</p>
 <p>Acknowledge the handshake, then call tools:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">SID</span><span class="o">=</span>&lt;the Mcp-Session-Id from above&gt;
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nv">SID</span><span class="o">=</span>&lt;the Mcp-Session-Id from above&gt;
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl">curl -s -X POST http://127.0.0.1:8081/api/mcp <span class="se">\
 </span></span></span><span class="line"><span class="cl">  -H <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span> -H <span class="s2">&#34;Content-Type: application/json&#34;</span> <span class="se">\
@@ -303,15 +305,18 @@ runs.</p>
 </span></span></span><span class="line"><span class="cl">  -d <span class="s1">&#39;{&#34;jsonrpc&#34;:&#34;2.0&#34;,&#34;id&#34;:2,&#34;method&#34;:&#34;tools/call&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">       &#34;params&#34;:{&#34;name&#34;:&#34;session_start&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;arguments&#34;:{&#34;cwd&#34;:&#34;/abs/path/to/repo&#34;,&#34;source&#34;:&#34;explicit&#34;}}}&#39;</span>
-</span></span></code></pre><p>Every tool returns its payload as JSON <strong>encoded into a text content block</strong>, not
+</span></span></code></pre></div>
+<p>Every tool returns its payload as JSON <strong>encoded into a text content block</strong>, not
 as a JSON-RPC result object:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;jsonrpc&#34;</span><span class="p">:</span><span class="s2">&#34;2.0&#34;</span><span class="p">,</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">&#34;result&#34;</span><span class="p">:{</span><span class="nt">&#34;content&#34;</span><span class="p">:[{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span><span class="s2">&#34;text&#34;</span><span class="p">,</span><span class="nt">&#34;text&#34;</span><span class="p">:</span><span class="s2">&#34;{\&#34;session_id\&#34;:\&#34;01K...\&#34;,\&#34;project\&#34;:\&#34;myrepo\&#34;,\&#34;briefing\&#34;:\&#34;&lt;seam-briefing&gt;...\&#34;}&#34;</span><span class="p">}]}}</span>
-</span></span></code></pre><p>So parse twice: once for the envelope, once for the <code>text</code>.</p>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;jsonrpc&#34;</span><span class="p">:</span><span class="s2">&#34;2.0&#34;</span><span class="p">,</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">&#34;result&#34;</span><span class="p">:{</span><span class="nt">&#34;content&#34;</span><span class="p">:[{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span><span class="s2">&#34;text&#34;</span><span class="p">,</span><span class="nt">&#34;text&#34;</span><span class="p">:</span><span class="s2">&#34;{\&#34;session_id\&#34;:\&#34;01K...\&#34;,\&#34;project\&#34;:\&#34;myrepo\&#34;,\&#34;briefing\&#34;:\&#34;&lt;seam-briefing&gt;...\&#34;}&#34;</span><span class="p">}]}}</span>
+</span></span></code></pre></div>
+<p>So parse twice: once for the envelope, once for the <code>text</code>.</p>
 <h3 id="auth-is-enforced-at-the-tool-not-the-transport">Auth is enforced at the tool, not the transport</h3>
 <p><code>initialize</code> and <code>tools/list</code> answer without a key. Only <code>tools/call</code> checks it,
 and a rejected call comes back as a <strong>successful HTTP 200 carrying a tool error</strong>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;jsonrpc&#34;</span><span class="p">:</span><span class="s2">&#34;2.0&#34;</span><span class="p">,</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">&#34;result&#34;</span><span class="p">:{</span><span class="nt">&#34;content&#34;</span><span class="p">:[{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span><span class="s2">&#34;text&#34;</span><span class="p">,</span><span class="nt">&#34;text&#34;</span><span class="p">:</span><span class="s2">&#34;unauthorized: valid bearer key required&#34;</span><span class="p">}],</span><span class="nt">&#34;isError&#34;</span><span class="p">:</span><span class="kc">true</span><span class="p">}}</span>
-</span></span></code></pre><p>A client that trusts HTTP status codes will read that as a working integration
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span><span class="nt">&#34;jsonrpc&#34;</span><span class="p">:</span><span class="s2">&#34;2.0&#34;</span><span class="p">,</span><span class="nt">&#34;id&#34;</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">&#34;result&#34;</span><span class="p">:{</span><span class="nt">&#34;content&#34;</span><span class="p">:[{</span><span class="nt">&#34;type&#34;</span><span class="p">:</span><span class="s2">&#34;text&#34;</span><span class="p">,</span><span class="nt">&#34;text&#34;</span><span class="p">:</span><span class="s2">&#34;unauthorized: valid bearer key required&#34;</span><span class="p">}],</span><span class="nt">&#34;isError&#34;</span><span class="p">:</span><span class="kc">true</span><span class="p">}}</span>
+</span></span></code></pre></div>
+<p>A client that trusts HTTP status codes will read that as a working integration
 returning odd text. Check <code>isError</code> on every result. This is the same shape every
 other tool failure takes - errors are tool results with a <code>&lt;tool&gt;: &lt;reason&gt;</code>
 message, never transport failures - so handling <code>isError</code> once handles all of
@@ -438,13 +443,14 @@ twin at the same path), the endpoint is <code>/api/a2a</code> (JSON-RPC), and th
 skill is <code>recall</code>: <code>message/send</code> with text parts as the query returns a
 completed message - a text summary plus a data part carrying the same
 <code>{&quot;hits&quot;: [...]}</code> payload the MCP recall tool returns.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">curl -s -X POST http://127.0.0.1:8081/api/a2a <span class="se">\
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -s -X POST http://127.0.0.1:8081/api/a2a <span class="se">\
 </span></span></span><span class="line"><span class="cl">  -H <span class="s2">&#34;Authorization: Bearer </span><span class="nv">$KEY</span><span class="s2">&#34;</span> -H <span class="s2">&#34;Content-Type: application/json&#34;</span> <span class="se">\
 </span></span></span><span class="line"><span class="cl">  -d <span class="s1">&#39;{&#34;jsonrpc&#34;:&#34;2.0&#34;,&#34;id&#34;:1,&#34;method&#34;:&#34;message/send&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">       &#34;params&#34;:{&#34;message&#34;:{&#34;kind&#34;:&#34;message&#34;,&#34;messageId&#34;:&#34;m1&#34;,&#34;role&#34;:&#34;user&#34;,
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;parts&#34;:[{&#34;kind&#34;:&#34;text&#34;,&#34;text&#34;:&#34;why is the console theme split&#34;}],
 </span></span></span><span class="line"><span class="cl"><span class="s1">                 &#34;metadata&#34;:{&#34;project&#34;:&#34;seamless&#34;,&#34;limit&#34;:5}}}}&#39;</span>
-</span></span></code></pre><p>There is no session binding on this surface: scope comes entirely from message
+</span></span></code></pre></div>
+<p>There is no session binding on this surface: scope comes entirely from message
 metadata. <code>metadata.project</code> widens the search from global-only to a project
 plus global, <code>metadata.scope</code> narrows the kinds (<code>all|memories|notes</code>), and
 <code>metadata.limit</code> caps the hits. The rest of A2A - tasks, streaming, push
@@ -463,13 +469,14 @@ delivered.</p>
 <h2 id="the-seam-cli-as-a-fallback-client">The seam CLI as a fallback client</h2>
 <p>An agent that can run a shell but cannot speak MCP still has the loop. <code>seam</code> is
 a headless client for the same daemon, authenticating with the same key:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam prime --cwd /abs/path/to/repo        <span class="c1"># session_start; prints the briefing</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam prime --cwd /abs/path/to/repo        <span class="c1"># session_start; prints the briefing</span>
 </span></span><span class="line"><span class="cl">seam recall <span class="s2">&#34;why is the console theme split&#34;</span>
 </span></span><span class="line"><span class="cl">seam remember --name lease-steal-window --kind gotcha <span class="se">\
 </span></span></span><span class="line"><span class="cl">  --description <span class="s2">&#34;...&#34;</span> --body <span class="s2">&#34;...&#34;</span>        <span class="c1"># or pipe the body on stdin</span>
 </span></span><span class="line"><span class="cl">seam ready                                <span class="c1"># the actionable queue</span>
 </span></span><span class="line"><span class="cl">seam task claim --lease <span class="m">1800</span> 01K7ABCD     <span class="c1"># flags on either side of the id</span>
-</span></span></code></pre><p>Two things to know before you script it.</p>
+</span></span></code></pre></div>
+<p>Two things to know before you script it.</p>
 <p><strong>Flags go on either side of a positional.</strong> Every <code>seam</code> command parses flags
 and positionals in any order, so <code>seam task claim 01K7ABCD --lease 1800</code> and
 <code>seam task claim --lease 1800 01K7ABCD</code> are the same line. A typo'd flag is an
@@ -482,8 +489,9 @@ the idle reaper closes, and contributes nothing to the next briefing. If finding
 matter - and they are the whole point of <code>session_end</code> - that agent needs the MCP
 surface.</p>
 <h2 id="verify-the-integration">Verify the integration</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seam doctor        <span class="c1"># /healthz, key acceptance, tools/list count, project_list</span>
-</span></span></code></pre><p>A green <code>mcp_tools</code> line proves the endpoint answers <em>and</em> your key works, which
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam doctor        <span class="c1"># /healthz, key acceptance, tools/list count, project_list</span>
+</span></span></code></pre></div>
+<p>A green <code>mcp_tools</code> line proves the endpoint answers <em>and</em> your key works, which
 is most of what an integration can get wrong. <code>seamlessd doctor</code> covers the other
 half - config, database, embedder, hooks - on the server side. If something is
 wrong and nothing is complaining, start at

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -259,8 +259,9 @@ environment - <code>seamlessd serve</code> (or <code>install-hooks</code>) gener
 it to <code>~/.config/seamless/seamless.yaml</code>, so a fresh install never handles the
 key by hand. An existing config file is never edited, even when its key is
 empty; set one yourself:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">openssl rand -hex <span class="m">32</span>
-</span></span></code></pre><p>The daemon still starts with an empty key, but every MCP and hook request is
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">openssl rand -hex <span class="m">32</span>
+</span></span></code></pre></div>
+<p>The daemon still starts with an empty key, but every MCP and hook request is
 rejected until one is set - <code>seamlessd doctor</code> reports it as a warning.</p>
 <h2 id="every-key">Every key</h2>
 <div class="table-wrap">
@@ -518,7 +519,7 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </div>
 <h2 id="annotated-example">Annotated example</h2>
 <p>This is <code>seamless.yaml.example</code> from the repository, verbatim.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="c"># Seamless configuration example: every key, at its default. Safe to commit --</span><span class="w">
+<div class="code-block" data-lang="yaml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="c"># Seamless configuration example: every key, at its default. Safe to commit --</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># it holds no secrets.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c">#</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># `make install` seeds ~/.config/seamless/seamless.yaml from this file when that</span><span class="w">
@@ -738,7 +739,8 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># memories to the planning agent as additionalContext.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_PLAN_CAPTURE_INJECT_RELATED</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">inject_related</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w">
-</span></span></span></code></pre>
+</span></span></span></code></pre></div>
+
 </article>
 
 

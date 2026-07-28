@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -253,13 +253,15 @@ Every fork in the road is a link, not a branch in these steps.</p>
 <h2 id="install">Install</h2>
 <div class="ctx-variant" data-ctx-os="macos linux">
 <p class="ctx-label"><span class="ctx-chip">macOS</span><span class="ctx-chip">Linux</span></p>
-<pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">curl -fsSL https://thereisnospoon.org/install <span class="p">|</span> sh
 </span></span></code></pre></div>
+</div>
 <div class="ctx-variant" data-ctx-os="windows">
 <p class="ctx-label"><span class="ctx-chip">Windows</span></p>
 <p>The same install, in PowerShell:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
+<div class="code-block" data-lang="powershell"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">irm </span><span class="n">https</span><span class="err">:</span><span class="p">//</span><span class="n">thereisnospoon</span><span class="p">.</span><span class="n">org</span><span class="p">/</span><span class="n">install</span><span class="p">.</span><span class="py">ps1</span> <span class="p">|</span> <span class="nb">iex
 </span></span></span></code></pre></div>
+</div>
 <!-- The setup configurator: JS-only sugar that composes the canonical
      one-liner with documented env knobs from the picker state above. It
      ships hidden; without JS the labeled blocks above teach the install.
@@ -301,16 +303,18 @@ step.</p>
 <p class="ctx-label"><span class="ctx-chip">Claude Code</span></p>
 <p>Start Claude Code in any git repo - restart it first if it was already
 running, so it reloads hooks, MCP, and skills:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude
-</span></span></code></pre><p>The same setup covers code sessions inside the Claude desktop app - they
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> claude
+</span></span></code></pre></div>
+<p>The same setup covers code sessions inside the Claude desktop app - they
 share <code>~/.claude</code>. See <a href="../claude-code/">Claude Code setup</a>.</p>
 </div>
 <div class="ctx-variant" data-ctx-client="codex">
 <p class="ctx-label"><span class="ctx-chip">Codex</span></p>
 <p>Start Codex in any git repo - restart it first if it was already running, so
 it reloads hooks, MCP, and skills:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex
-</span></span></code></pre><p>Codex asks you to approve the hooks once: open <code>/hooks</code>, review the exact
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/code/myrepo <span class="o">&amp;&amp;</span> codex
+</span></span></code></pre></div>
+<p>Codex asks you to approve the hooks once: open <code>/hooks</code>, review the exact
 Seamless commands, and accept them - until then, no briefing appears
 (<a href="../codex-cli/#trust-the-hooks-once">why</a>). See
 <a href="../codex-cli/">Codex local setup</a>.</p>
@@ -341,8 +345,9 @@ and the <code>seamlessd map-repo</code> override.</p>
 project, the daemon assembled a briefing within its token budget, and the agent
 started with your knowledge already in context.</p>
 <p>Open the console to watch it happen:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open                               <span class="c1"># opens pre-authenticated</span>
-</span></span></code></pre><h2 id="next-steps">Next steps</h2>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd console-open                               <span class="c1"># opens pre-authenticated</span>
+</span></span></code></pre></div>
+<h2 id="next-steps">Next steps</h2>
 <ul>
 <li>Run <code>/seam-onboard</code> in Claude Code or <code>$seam-onboard</code> in Codex once - it
 shows the Seamless-awareness block it can add to global or project

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -241,11 +241,13 @@ host (<code>0.0.0.0</code>, <code>::</code>, or empty) mapped to loopback.</p>
 <h2 id="flags-and-positionals">Flags and positionals</h2>
 <p>Every <code>seam</code> command takes flags on either side of its positionals. These two
 lines are the same line:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam capture --project myproj https://example.com/page
 </span></span><span class="line"><span class="cl">seam capture https://example.com/page --project myproj
-</span></span></code></pre><pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
+</span></span></code></pre></div>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
 </span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force applies here too</span>
-</span></span></code></pre><p>An unknown flag is rejected rather than absorbed into the positionals, so a typo
+</span></span></code></pre></div>
+<p>An unknown flag is rejected rather than absorbed into the positionals, so a typo
 is an error instead of a silently different command: <code>seam recall foo --projct p</code>
 reports <code>flag provided but not defined: -projct</code>. A positional that starts with
 <code>-</code> needs the <code>--</code> terminator (<code>seam recall -- -foo</code>).</p>
@@ -256,16 +258,18 @@ all. Commands that take only flags and no positionals (<code>ready</code>, <code
 <p>The four commands an agent - or you, standing in for one - uses to start a
 session, write knowledge, and search it back.</p>
 <h3 id="seam_prime">seam prime</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam prime <span class="o">[</span>--cwd DIR<span class="o">]</span> <span class="o">[</span>--name NAME<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>session_start</code> with <code>source=explicit</code> and prints the briefing to stdout;
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam prime <span class="o">[</span>--cwd DIR<span class="o">]</span> <span class="o">[</span>--name NAME<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>session_start</code> with <code>source=explicit</code> and prints the briefing to stdout;
 the session id and resolved project go to stderr, so the briefing pipes cleanly.
 <code>--cwd</code> defaults to the current directory and is what resolves the project via
 the repo mapping. Reusing a <code>--name</code> resumes that session rather than opening a
 new one. When there is no briefing content yet, it says so on stderr.</p>
 <p>This is the explicit form of what the SessionStart hook does automatically.</p>
 <h3 id="seam_remember">seam remember</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam remember --name N --kind K --description D <span class="o">[</span>--body TEXT<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>memory_write</code>. <code>--name</code>, <code>--kind</code>, and <code>--description</code> are required.
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam remember --name N --kind K --description D <span class="o">[</span>--body TEXT<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>memory_write</code>. <code>--name</code>, <code>--kind</code>, and <code>--description</code> are required.
 <code>--kind</code> is one of <code>constraint</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>,
 <code>refuted</code>, <code>reference</code>, or <code>stage</code>. <code>--description</code> is the one-line summary
 (&lt;=150 chars) that indexes show.</p>
@@ -276,8 +280,9 @@ session's project and is an error when nothing pins it, and <code>global</code> 
 explicit escape hatch. Output reports whether the write created or updated the
 memory, and names a similar existing memory when the server flags one.</p>
 <h3 id="seam_recall">seam recall</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam recall QUERY <span class="o">[</span>--scope all<span class="p">|</span>memories<span class="p">|</span>notes<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--limit N<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>recall</code>, the single RRF-fused search entry point. Scope defaults to <code>all</code>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam recall QUERY <span class="o">[</span>--scope all<span class="p">|</span>memories<span class="p">|</span>notes<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--limit N<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>recall</code>, the single RRF-fused search entry point. Scope defaults to <code>all</code>
 and limit to <code>10</code>. Query words are joined with spaces, and flags may sit on
 either side of them. A query word that starts with <code>-</code> needs the <code>--</code> terminator
 (<code>seam recall -- -foo</code>), which is the only reason to reach for it. Each hit
@@ -287,8 +292,9 @@ prints its kind, name, age, source, score, and description; no matches prints
 reports <code>flag provided but not defined: -projct</code> rather than quietly searching
 for the literal text <code>foo --projct p</code>.</p>
 <h3 id="seam_capture">seam capture</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
-</span></span></code></pre><p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam capture <span class="o">[</span>--project P<span class="o">]</span> URL
+</span></span></code></pre></div>
+<p>Calls <code>capture_url</code> to fetch a page through the SSRF-safe fetcher and store it
 as a note. An empty <code>--project</code> does not mean global: the scope resolves to the
 session's project - the bound session's, or a single unambiguous ambient one.
 The server refuses to guess rather than pick a default, so a capture with
@@ -301,44 +307,51 @@ is an error naming the fix. Pass <code>--project global</code> to file the note 
 <p>The queue side of the CLI. See <a href="../../reference/mcp/tasks/">Tasks</a> for what ready,
 blocked, and claimed mean.</p>
 <h3 id="seam_ready">seam ready</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam ready <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--blocked<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>tasks_ready</code> and lists the actionable queue by short id and title.
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam ready <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--blocked<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>tasks_ready</code> and lists the actionable queue by short id and title.
 <code>--blocked</code> additionally lists blocked tasks, each followed by its blockers and
 their statuses. <code>--plan S</code> shows that plan's step tasks instead of the default
 queue - plan steps are excluded from the default view. Prints
 <code>ready: (nothing actionable)</code> when the queue is empty.</p>
 <h3 id="seam_task_list">seam task list</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task list <span class="o">[</span>--id ID<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--status S<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>tasks_list</code>. <code>--status</code> filters to <code>open</code>, <code>in_progress</code>, <code>done</code>, or
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task list <span class="o">[</span>--id ID<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--status S<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>tasks_list</code>. <code>--status</code> filters to <code>open</code>, <code>in_progress</code>, <code>done</code>, or
 <code>dropped</code>. <code>--id</code> loads a single task by its globally-unique id and ignores the
 project, status, and plan filters. <code>--plan</code> lists a plan's steps instead of the
 default non-plan tasks. Bare <code>seam task</code> is not an alias: it names the available
 task subcommands and exits 2. Use <code>seam task list</code> when listing is what you mean.</p>
 <h3 id="seam_task_add">seam task add</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task add --title T <span class="o">[</span>--body B<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--depends id,id<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
-</span></span></code></pre><p>Calls <code>tasks_add</code>. <code>--title</code> is required. <code>--depends</code> takes a comma-separated
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task add --title T <span class="o">[</span>--body B<span class="o">]</span> <span class="o">[</span>--project P<span class="o">]</span> <span class="o">[</span>--depends id,id<span class="o">]</span> <span class="o">[</span>--plan S<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Calls <code>tasks_add</code>. <code>--title</code> is required. <code>--depends</code> takes a comma-separated
 list of blocker task ids. <code>--plan S</code> composes the task as a step of the plan
 <code>plan:&lt;slug&gt;</code>, which keeps it out of the default queue.</p>
 <h3 id="seam_task_transition">seam task done|start|drop|reopen</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task <span class="k">done</span> &lt;id&gt;
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task <span class="k">done</span> &lt;id&gt;
 </span></span><span class="line"><span class="cl">seam task start &lt;id&gt;
 </span></span><span class="line"><span class="cl">seam task drop &lt;id&gt;
 </span></span><span class="line"><span class="cl">seam task reopen &lt;id&gt;
-</span></span></code></pre><p>Calls <code>tasks_update</code> with the mapped status: <code>done</code> → <code>done</code>, <code>start</code> →
+</span></span></code></pre></div>
+<p>Calls <code>tasks_update</code> with the mapped status: <code>done</code> → <code>done</code>, <code>start</code> →
 <code>in_progress</code>, <code>drop</code> → <code>dropped</code>, <code>reopen</code> → <code>open</code>. These parse no flags.</p>
 <h3 id="seam_task_claim">seam task claim</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task claim <span class="o">[</span>--lease SECS<span class="o">]</span> &lt;id&gt;
-</span></span></code></pre><p>Calls <code>tasks_claim</code> to atomically take a ready task, printing the new status and
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task claim <span class="o">[</span>--lease SECS<span class="o">]</span> &lt;id&gt;
+</span></span></code></pre></div>
+<p>Calls <code>tasks_claim</code> to atomically take a ready task, printing the new status and
 the lease expiry. <code>--lease</code> overrides the server's default lease (900 seconds);
 it is only sent when greater than zero.</p>
 <h3 id="seam_task_heartbeat">seam task heartbeat</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task heartbeat <span class="o">[</span>--lease SECS<span class="o">]</span> &lt;id&gt;
-</span></span></code></pre><p>The same <code>tasks_claim</code> call as <code>claim</code>. Re-claiming a task you already hold
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task heartbeat <span class="o">[</span>--lease SECS<span class="o">]</span> &lt;id&gt;
+</span></span></code></pre></div>
+<p>The same <code>tasks_claim</code> call as <code>claim</code>. Re-claiming a task you already hold
 refreshes its lease, so <code>heartbeat</code> is that path under a name that says what it
 is for during long work. There is no separate heartbeat tool.</p>
 <h3 id="seam_task_release">seam task release</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task release <span class="o">[</span>--force<span class="o">]</span> &lt;id&gt;
-</span></span></code></pre><p>Without <code>--force</code>, calls <code>tasks_release</code>, which only releases a claim you hold.</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task release <span class="o">[</span>--force<span class="o">]</span> &lt;id&gt;
+</span></span></code></pre></div>
+<p>Without <code>--force</code>, calls <code>tasks_release</code>, which only releases a claim you hold.</p>
 <p><code>--force</code> is the owner override and takes a different route entirely: it POSTs
 to the console's release endpoint, which is bearer-authenticated and force-releases
 any holder's claim. Agents on the MCP surface cannot reach that path.</p>
@@ -348,8 +361,9 @@ any holder's claim. Agents on the MCP surface cannot reach that path.</p>
 locally. Bare <code>seam plan</code> is not a command - it names its subcommands and exits
 2, the same as bare <code>seam task</code>.</p>
 <h3 id="seam_plan_list">seam plan list</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan list <span class="o">[</span>--project SLUG<span class="o">]</span> <span class="o">[</span>--window WINDOW<span class="o">]</span>
-</span></span></code></pre><p>Lists captured plans with slug, status, title, project, iteration, agent count,
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam plan list <span class="o">[</span>--project SLUG<span class="o">]</span> <span class="o">[</span>--window WINDOW<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Lists captured plans with slug, status, title, project, iteration, agent count,
 task progress, and age. <code>--window</code> is <code>24h</code>, <code>7d</code>, <code>30d</code>, or <code>all</code> (default
 <code>all</code>) and is applied by the server; anything else is a parse error rather than a
 silent fall back to the server's <code>24h</code> default. <code>--project</code> filters the returned
@@ -358,13 +372,15 @@ Prints <code>(no captured plans)</code> when nothing matches.</p>
 <p><code>plan list</code> takes no positional: <code>seam plan list &lt;slug&gt;</code> is an error pointing at
 <code>seam plan show</code>, not a listing of every plan.</p>
 <h3 id="seam_plan_show">seam plan show</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan show &lt;slug&gt;
-</span></span></code></pre><p>Prints one plan: its status, project, title, source file and iteration, the
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam plan show &lt;slug&gt;
+</span></span></code></pre></div>
+<p>Prints one plan: its status, project, title, source file and iteration, the
 notes attached to the composition (each marked <code>note</code> or <code>agent</code>), its tasks,
 and then the plan body.</p>
 <h3 id="seam_plan_check">seam plan check</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan check <span class="o">[</span>--cwd DIR<span class="o">]</span> &lt;slug&gt;
-</span></span></code></pre><p>Staleness check against a repo's git history. <code>--cwd</code> defaults to the current
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam plan check <span class="o">[</span>--cwd DIR<span class="o">]</span> &lt;slug&gt;
+</span></span></code></pre></div>
+<p>Staleness check against a repo's git history. <code>--cwd</code> defaults to the current
 directory and must be a git repo. For the plan body and each attached note, it
 reads the capture stamp (the <code>&gt; captured from ... | git &lt;head&gt; | ...</code> line) and
 compares it to the repo's current HEAD:</p>
@@ -380,14 +396,16 @@ longer resolves (rebased away), or the note could not be read.</li>
 note wrote them absolute or repo-relative. <strong>The command exits non-zero when any
 note is stale</strong>, so it works as a gate in a script.</p>
 <h3 id="seam_plan_approve">seam plan approve</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam plan approve &lt;slug&gt;
-</span></span></code></pre><p>Escape hatch for when Claude Code skips the approval hook: flips the plan to
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam plan approve &lt;slug&gt;
+</span></span></code></pre></div>
+<p>Escape hatch for when Claude Code skips the approval hook: flips the plan to
 approved and creates its tracking task, reporting the new task or noting that
 one already exists.</p>
 <h2 id="observability">Observability</h2>
 <h3 id="seam_status">seam status</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam status
-</span></span></code></pre><p>Server health from the unauthenticated <code>/healthz</code> endpoint (status and version),
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam status
+</span></span></code></pre></div>
+<p>Server health from the unauthenticated <code>/healthz</code> endpoint (status and version),
 the configured data directory, then the project count and slugs via
 <code>project_list</code> - which doubles as proof the static key works.</p>
 <p><strong><code>seam status</code> exits non-zero if any check failed</strong>, so it works as a scripted
@@ -397,8 +415,9 @@ than reporting success. The printed lines are its output; the exit code is its
 result. Exit 1 means the server had a problem, not that the command line did
 (that is exit 2).</p>
 <h3 id="seam_sessions">seam sessions</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam sessions <span class="o">[</span>--status STATUS<span class="o">]</span> <span class="o">[</span>&lt;id&gt;<span class="o">]</span>
-</span></span></code></pre><p>With no positional, lists sessions with name (or short id), project, status, age,
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam sessions <span class="o">[</span>--status STATUS<span class="o">]</span> <span class="o">[</span>&lt;id&gt;<span class="o">]</span>
+</span></span></code></pre></div>
+<p>With no positional, lists sessions with name (or short id), project, status, age,
 and an ambient marker, under a total/active count. With an id, prints that
 session's detail: status, project, tool calls, memory writes and reads, the
 read-after-inject ratio, and findings when present. Both read the console's JSON
@@ -407,8 +426,9 @@ endpoint.</p>
 error. The console rejects an unrecognized <code>?status=</code> too, so a direct URL cannot
 silently list everything either.</p>
 <h3 id="seam_fav">seam fav</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam fav &lt;kind&gt; &lt;id&gt; <span class="o">[</span>--off<span class="o">]</span> <span class="o">[</span>--project SLUG<span class="o">]</span>
-</span></span></code></pre><p>Stars (or with <code>--off</code>, unstars) an item via <code>favorite_set</code>. <code>kind</code> is one of
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam fav &lt;kind&gt; &lt;id&gt; <span class="o">[</span>--off<span class="o">]</span> <span class="o">[</span>--project SLUG<span class="o">]</span>
+</span></span></code></pre></div>
+<p>Stars (or with <code>--off</code>, unstars) an item via <code>favorite_set</code>. <code>kind</code> is one of
 <code>memory</code>, <code>note</code>, <code>project</code>, <code>plan</code>, <code>task</code>, <code>session</code>, or <code>trial</code>; <code>id</code> is the
 kind's natural identifier - a memory name, note id or slug, project slug, plan
 slug, task id, session id or name, or trial id. <code>--project</code> scopes memory-name
@@ -417,14 +437,16 @@ and note-slug resolution when the ambient scope is not the right one.</p>
 memories are pinned into every session briefing and rank-boosted in recall. A
 plan's star lives on its primary note, so a task-only plan cannot be starred.</p>
 <h3 id="seam_usage">seam usage</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam usage
-</span></span></code></pre><p>Activity roll-up from <code>usage_summary</code>: active memories broken down by kind, note
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam usage
+</span></span></code></pre></div>
+<p>Activity roll-up from <code>usage_summary</code>: active memories broken down by kind, note
 count, session and task counts by status, retrieval injections and reads with a
 read-after-inject percentage, the most-injected items, the highest-utility
 memories by decayed demand, and pending gardener proposals.</p>
 <h3 id="seam_doctor">seam doctor</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam doctor
-</span></span></code></pre><p>Client-side checks, each reported <code>ok</code> or <code>FAIL</code>, exiting non-zero if any failed:</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam doctor
+</span></span></code></pre></div>
+<p>Client-side checks, each reported <code>ok</code> or <code>FAIL</code>, exiting non-zero if any failed:</p>
 <ol>
 <li><strong>server</strong> - <code>/healthz</code> reachable and reporting <code>ok</code>.</li>
 <li><strong>mcp_tools</strong> - <code>tools/list</code> returns the tool count this CLI was built to
@@ -435,13 +457,15 @@ expect. A mismatch means the running daemon is a different build.</li>
 credentials on the server side; they are different commands answering different
 questions.</p>
 <h3 id="seam_version">seam version</h3>
-<pre class="chroma"><code><span class="line"><span class="cl">seam version
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam version
 </span></span><span class="line"><span class="cl">seam -v
 </span></span><span class="line"><span class="cl">seam --version
-</span></span></code></pre><p>Prints the version of the daemon this CLI is configured to talk to, in the same
+</span></span></code></pre></div>
+<p>Prints the version of the daemon this CLI is configured to talk to, in the same
 form as <code>seamlessd version</code>:</p>
-<pre><code>seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
+<div class="code-block"><pre><code>seamlessd 0.3.8 (commit 6d664d2, built 2026-07-18T09:12:04Z)
 </code></pre>
+</div>
 <p><code>seam</code> carries no version of its own. Both binaries ship from one tag and one
 commit, so a number stamped into <code>seam</code> could only repeat this one or contradict
 it - and only the daemon can report what is actually <em>running</em>. An installed CLI
@@ -453,9 +477,10 @@ printing the CLI's own build is the confusion this avoids. <code>seamlessd versi
 accepts the same three spellings and answers from the binary directly, without a
 running server.</p>
 <h2 id="mcp-bridge-and-auth-helper">MCP bridge and auth helper</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy <span class="o">[</span>--config PATH<span class="o">]</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam mcp-proxy <span class="o">[</span>--config PATH<span class="o">]</span>
 </span></span><span class="line"><span class="cl">seam mcp-headers <span class="o">[</span>--config PATH<span class="o">]</span>
-</span></span></code></pre><p>These are client-launched helpers, not interactive commands.</p>
+</span></span></code></pre></div>
+<p>These are client-launched helpers, not interactive commands.</p>
 <ul>
 <li><code>mcp-proxy</code> speaks MCP over stdio to its parent and forwards frames to
 Seamless's Streamable HTTP <code>/api/mcp</code>, preserving <code>Mcp-Session-Id</code>. The Codex
@@ -469,9 +494,10 @@ argv and stored client configuration.</li>
 <p><code>--config</code> selects the exact <code>seamless.yaml</code> both helpers read. Installers bake
 an absolute path into the client registration so it works from every repository.</p>
 <h2 id="hooks">Hooks</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seam hook session-start<span class="p">|</span>user-prompt-submit<span class="p">|</span>session-end<span class="p">|</span>stop
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam hook session-start<span class="p">|</span>user-prompt-submit<span class="p">|</span>session-end<span class="p">|</span>stop
 </span></span><span class="line"><span class="cl">seam hook subagent-start<span class="p">|</span>subagent-stop<span class="p">|</span>post-tool-use<span class="p">|</span>permission-request
-</span></span></code></pre><p>Invoked by Claude Code or Codex, not by hand. Each reads the hook payload from stdin,
+</span></span></code></pre></div>
+<p>Invoked by Claude Code or Codex, not by hand. Each reads the hook payload from stdin,
 forwards it to the matching <code>/api/hooks/...</code> endpoint with the bearer key, and
 copies the JSON response to stdout - so a <code>command</code> hook drives the same server
 logic an <code>http</code> hook would. Claude Code requires a command hook for SessionStart;

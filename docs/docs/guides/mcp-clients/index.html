@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -231,9 +231,10 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   </details>
   <p>Seamless serves its whole tool surface as a <strong>local streamable-HTTP MCP
 server</strong> on localhost:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
 </span></span><span class="line"><span class="cl">Authorization: Bearer &lt;mcp.api_key&gt;
-</span></span></code></pre><p>Any MCP client that can send a URL plus a bearer header - or spawn a local
+</span></span></code></pre></div>
+<p>Any MCP client that can send a URL plus a bearer header - or spawn a local
 stdio server - can connect to it. This page is the verified configuration for
 four such clients: Cursor, Cline, Windsurf, and Zed.</p>
 <p>First, the honest part.</p>
@@ -314,7 +315,7 @@ Register Seamless globally in <code>~/.cursor/mcp.json</code> - one daemon serve
 repository, so the global file is the right scope (a per-project
 <code>.cursor/mcp.json</code> also works, but would put the key in the repo's
 working tree):</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;mcpServers&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="nt">&#34;seamless&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">      <span class="nt">&#34;url&#34;</span><span class="p">:</span> <span class="s2">&#34;http://127.0.0.1:8081/api/mcp&#34;</span><span class="p">,</span>
@@ -324,14 +325,15 @@ working tree):</p>
 </span></span><span class="line"><span class="cl">    <span class="p">}</span>
 </span></span><span class="line"><span class="cl">  <span class="p">}</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>A bare <code>url</code> is treated as streamable HTTP; no transport field is needed. If
+</span></span></code></pre></div>
+<p>A bare <code>url</code> is treated as streamable HTTP; no transport field is needed. If
 you would rather not store the key as a literal, Cursor interpolates
 <code>${env:VAR}</code> inside <code>headers</code> - or skip the problem entirely with the
 <a href="#keep-the-key-out-of-client-config">stdio bridge</a>.</p>
 <h2 id="cline">Cline</h2>
 <p>Cline configures MCP servers from its panel: MCP Servers, then Configure MCP
 Servers, which opens <code>cline_mcp_settings.json</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;mcpServers&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="nt">&#34;seamless&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;streamableHttp&#34;</span><span class="p">,</span>
@@ -344,7 +346,8 @@ Servers, which opens <code>cline_mcp_settings.json</code>:</p>
 </span></span><span class="line"><span class="cl">    <span class="p">}</span>
 </span></span><span class="line"><span class="cl">  <span class="p">}</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>The <code>type</code> must be exactly <code>streamableHttp</code> - camelCase, no hyphen. Spelled
+</span></span></code></pre></div>
+<p>The <code>type</code> must be exactly <code>streamableHttp</code> - camelCase, no hyphen. Spelled
 <code>streamable-http</code>, or omitted, Cline falls back to the legacy SSE transport,
 which the daemon does not serve, and the connection fails with an unhelpful
 error.</p>
@@ -353,7 +356,7 @@ error.</p>
 spells both fields differently from the clients above: the endpoint goes in
 <code>serverUrl</code> (not <code>url</code>), and the transport is <code>streamable-http</code> (hyphenated
 where Cline camelCases - neither client accepts the other's spelling):</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;mcpServers&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="nt">&#34;seamless&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">      <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;streamable-http&#34;</span><span class="p">,</span>
@@ -364,7 +367,8 @@ where Cline camelCases - neither client accepts the other's spelling):</p>
 </span></span><span class="line"><span class="cl">    <span class="p">}</span>
 </span></span><span class="line"><span class="cl">  <span class="p">}</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>Windsurf interpolates <code>${env:VAR}</code> and <code>${file:/abs/path}</code> inside <code>headers</code>
+</span></span></code></pre></div>
+<p>Windsurf interpolates <code>${env:VAR}</code> and <code>${file:/abs/path}</code> inside <code>headers</code>
 if you want the key out of the JSON.</p>
 <h2 id="zed">Zed</h2>
 <p>Zed's custom context servers speak <strong>stdio only</strong> - there is no native
@@ -372,7 +376,7 @@ streamable-HTTP registration. That is exactly the shape <code>seam mcp-proxy</co
 exists for: it speaks MCP over stdio to the client and forwards every frame
 to <code>/api/mcp</code>, reading the bearer key from Seamless's own 0600 config. In
 Zed's <code>settings.json</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;context_servers&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="nt">&#34;seamless&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">      <span class="nt">&#34;source&#34;</span><span class="p">:</span> <span class="s2">&#34;custom&#34;</span><span class="p">,</span>
@@ -382,7 +386,8 @@ Zed's <code>settings.json</code>:</p>
 </span></span><span class="line"><span class="cl">    <span class="p">}</span>
 </span></span><span class="line"><span class="cl">  <span class="p">}</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>Use absolute paths for both the binary and the config - Zed launches the
+</span></span></code></pre></div>
+<p>Use absolute paths for both the binary and the config - Zed launches the
 command from its own working directory, not your repo. The generic
 <code>mcp-remote</code> proxy would also bridge Zed to a local HTTP server, but it takes
 the bearer token on its command line, which lands the secret in
@@ -392,7 +397,7 @@ the bearer token on its command line, which lands the secret in
 server, so every one of them can trade its HTTP block for <code>command</code> + <code>args</code>
 and hold no key at all - the same policy choice Seamless makes when
 <a href="../../codex-cli/">installing for Codex</a>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;mcpServers&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">    <span class="nt">&#34;seamless&#34;</span><span class="p">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">      <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;/abs/path/to/seam&#34;</span><span class="p">,</span>
@@ -400,7 +405,8 @@ and hold no key at all - the same policy choice Seamless makes when
 </span></span><span class="line"><span class="cl">    <span class="p">}</span>
 </span></span><span class="line"><span class="cl">  <span class="p">}</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>(Adapt the envelope to the client: Cline keeps its <code>disabled</code>/<code>autoApprove</code>
+</span></span></code></pre></div>
+<p>(Adapt the envelope to the client: Cline keeps its <code>disabled</code>/<code>autoApprove</code>
 fields, Zed uses <code>context_servers</code> with <code>source: &quot;custom&quot;</code> as above.)</p>
 <p>Direct HTTP is one fewer process; the bridge is one fewer place the key
 lives. Both carry the full protocol, including the <code>Mcp-Session-Id</code> binding
@@ -410,7 +416,7 @@ this page changes between them.</p>
 <p>Without hooks, nothing tells the agent that Seamless exists or when to use
 it. The fix is standing instructions in whatever rules file the client reads
 (Cursor's <code>.cursor/rules</code>, <code>.clinerules</code>, <code>.windsurfrules</code>, Zed's <code>.rules</code>):</p>
-<pre class="chroma"><code><span class="line"><span class="cl">Seamless is this machine&#39;s shared agent memory (MCP server &#34;seamless&#34;).
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">Seamless is this machine&#39;s shared agent memory (MCP server &#34;seamless&#34;).
 </span></span><span class="line"><span class="cl">- Start every task by calling session_start with cwd set to the repo root,
 </span></span><span class="line"><span class="cl">  and read the briefing it returns.
 </span></span><span class="line"><span class="cl">- Call recall before re-deriving project knowledge or asking the user.
@@ -418,13 +424,15 @@ it. The fix is standing instructions in whatever rules file the client reads
 </span></span><span class="line"><span class="cl">  do not duplicate what the code or the current conversation already holds.
 </span></span><span class="line"><span class="cl">- Before finishing, call session_end with findings - it is what the next
 </span></span><span class="line"><span class="cl">  agent&#39;s briefing is built from.
-</span></span></code></pre><p>That is the whole loop. The subtleties - scope resolution, when a write is
+</span></span></code></pre></div>
+<p>That is the whole loop. The subtleties - scope resolution, when a write is
 rejected as ambiguous, what deserves to be a memory - are covered in
 <a href="../../guides/integrate-your-agent/">Integrate your agent</a> and <a href="../../guides/write-good-memories/">Write memories
 that get recalled</a>.</p>
 <h2 id="verify-the-connection">Verify the connection</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seam doctor        <span class="c1"># /healthz, key acceptance, tools/list count</span>
-</span></span></code></pre><p>A green <code>mcp_tools</code> line proves the endpoint answers and the key works - the
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam doctor        <span class="c1"># /healthz, key acceptance, tools/list count</span>
+</span></span></code></pre></div>
+<p>A green <code>mcp_tools</code> line proves the endpoint answers and the key works - the
 two things a client config can get wrong. Then, in the client, ask the agent
 to call <code>session_start</code>: getting a briefing back end-to-end exercises auth,
 session binding, and scope in one call. If the tool list shows up but calls

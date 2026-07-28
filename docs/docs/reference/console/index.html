@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -360,9 +360,10 @@ validated against an open-redirect (an off-site or absolute candidate becomes
 <p>Public routes are the login page and the static assets (<code>console.css</code>,
 <code>interactions.js</code>, <code>search.js</code>, <code>favicon.svg</code>). Everything else requires the key.</p>
 <h3 id="make-console"><code>make console</code></h3>
-<pre class="chroma"><code><span class="line"><span class="cl">make console          <span class="c1"># open in the default browser, already signed in</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make console          <span class="c1"># open in the default browser, already signed in</span>
 </span></span><span class="line"><span class="cl">make console-chrome   <span class="c1"># same, but force Google Chrome</span>
-</span></span></code></pre><p>This builds, then runs <code>seamlessd console-open</code>, which renders a one-shot
+</span></span></code></pre></div>
+<p>This builds, then runs <code>seamlessd console-open</code>, which renders a one-shot
 self-submitting login page to a <code>0600</code> temp file and opens it. The page POSTs the
 key to <code>/console/login</code>, which sets the cookie and 303s into the console - so you
 land on an authenticated page with nothing to paste. It refuses to run if

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -238,7 +238,7 @@ what is <em>true</em>; work artifacts belong in <a href="#memory-or-note">notes<
 <p>That the store is plain markdown is not an implementation detail - it is the
 design. You can read it, <code>grep</code> it, edit it, and put it in git, and no part of
 the system needs your permission to be inspected.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
+<div class="code-block" data-lang="yaml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...                </span><span class="w"> </span><span class="c"># ULID, assigned once, stable forever</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">gotcha              </span><span class="w"> </span><span class="c"># what sort of knowledge this is (see below)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">chroma-boot-race    </span><span class="w"> </span><span class="c"># kebab-case, unique within the project</span><span class="w">
@@ -254,7 +254,8 @@ the system needs your permission to be inspected.</p>
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">x, y]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
-</span></span></span></code></pre><h2 id="the-description-is-the-product">The description is the product</h2>
+</span></span></span></code></pre></div>
+<h2 id="the-description-is-the-product">The description is the product</h2>
 <p>Everything above the body is bookkeeping except one field. <strong>The <code>description</code> is
 the only text an index ever shows</strong> - the briefing, the memory list, the recall
 result. An agent decides whether to read the body based on nothing but that line.</p>

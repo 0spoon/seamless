@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -238,9 +238,10 @@ proceeds as if Seamless were not installed.</p>
 getting briefings. That is a deliberate trade - a memory system must never block
 an agent - but it means you cannot wait for an error. You have to go ask.</p>
 <h2 id="start-here-always">Start here, always</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># server side: config, database, credentials, embedder, hooks</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor   <span class="c1"># server side: config, database, credentials, embedder, hooks</span>
 </span></span><span class="line"><span class="cl">seam doctor        <span class="c1"># client side: reachable, key accepted, tool count matches</span>
-</span></span></code></pre><p>They answer different questions and neither subsumes the other.</p>
+</span></span></code></pre></div>
+<p>They answer different questions and neither subsumes the other.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -442,9 +443,10 @@ memory. Any daemon restart drops it - see below.</p>
 <p><strong>This no longer happens.</strong> A trailing flag was once dropped in silence - <code>seam task release 01K7ABCD --force</code> took the normal holder-checked path and the
 override never happened, with no error and no warning. Both halves of that are
 gone:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seam task release --force 01K7ABCD    <span class="c1"># --force applies</span>
 </span></span><span class="line"><span class="cl">seam task release 01K7ABCD --force    <span class="c1"># --force applies here too</span>
-</span></span></code></pre><p>Every <code>seam</code> command parses flags and positionals in any order. A typo'd flag
+</span></span></code></pre></div>
+<p>Every <code>seam</code> command parses flags and positionals in any order. A typo'd flag
 (<code>--projct</code>) is an error everywhere rather than being absorbed into the
 positionals, and an unrecognized enum value (<code>--status bogus</code>) is rejected at
 parse time rather than quietly widening the filter.</p>

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -236,8 +236,9 @@ superseded memory is marked invalid, points at its replacement, and drops out
 of every index and retrieval path - but stays on disk as provenance. The store
 converges on current truth while keeping the audit trail of how it got there.</p>
 <p>In Seamless, supersession is one write:</p>
-<pre><code>memory_write name=new-truth supersedes=old-truth
+<div class="code-block"><pre><code>memory_write name=new-truth supersedes=old-truth
 </code></pre>
+</div>
 <p>The old memory gets <code>invalid_at</code> set and <code>superseded_by</code> pointing at the new
 one's ID, plus a tombstone line naming the replacement; from that moment it is
 out of session briefings and <a href="../../concepts/recall/">recall</a>, but the markdown

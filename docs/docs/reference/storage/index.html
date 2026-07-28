@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -255,7 +255,7 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 <code>notes/_global/</code>. A memory's filename is its <code>name</code>; a note's is its <code>slug</code>.</p>
 <h2 id="memory-frontmatter">Memory frontmatter</h2>
 <p>One memory per file, YAML frontmatter plus a markdown body:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
+<div class="code-block" data-lang="yaml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">kind</span><span class="p">:</span><span class="w"> </span><span class="l">gotcha</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">name</span><span class="p">:</span><span class="w"> </span><span class="l">chroma-boot-race</span><span class="w">
@@ -271,7 +271,8 @@ the file lands in <code>memory/_global/</code>. Notes work the same way, under
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">x, y]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
-</span></span></span></code></pre><p>Field by field:</p>
+</span></span></span></code></pre></div>
+<p>Field by field:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -420,7 +421,7 @@ another.</p>
 <h2 id="note-frontmatter">Note frontmatter</h2>
 <p>A note is a work artifact - research finding, decision record, meeting summary.
 Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
+<div class="code-block" data-lang="yaml"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">id</span><span class="p">:</span><span class="w"> </span><span class="l">01K...</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">title</span><span class="p">:</span><span class="w"> </span><span class="l">Human-facing title</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">slug</span><span class="p">:</span><span class="w"> </span><span class="l">human-facing-title</span><span class="w">
@@ -433,7 +434,8 @@ Unlike a memory it has <strong>no lifecycle and no validity window</strong>:</p>
 </span></span></span><span class="line"><span class="cl"><span class="nt">tags</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="l">research, plan:my-feature]</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nn">---</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="l">body markdown</span><span class="w">
-</span></span></span></code></pre><p><code>id</code>, <code>title</code>, <code>created</code>, and <code>updated</code> are always emitted. <code>slug</code>,
+</span></span></span></code></pre></div>
+<p><code>id</code>, <code>title</code>, <code>created</code>, and <code>updated</code> are always emitted. <code>slug</code>,
 <code>description</code>, <code>project</code>, <code>source_url</code>, <code>model</code>, <code>favorite</code>, and <code>tags</code> are
 omitted when empty (or, for <code>favorite</code>, false). <code>source_url</code> is set when the
 note came from <code>capture_url</code>; <code>model</code> is the producing model, stamped exactly

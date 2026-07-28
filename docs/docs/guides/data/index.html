@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -268,11 +268,12 @@ people either over-protect it or under-protect it:</p>
 of what is true.</strong> Every memory and note survives, because they are files.</p>
 <h2 id="put-it-in-git">Put it in git</h2>
 <p>The strongest backup is the one you already know how to use:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/.seamless
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nb">cd</span> ~/.seamless
 </span></span><span class="line"><span class="cl">git init
 </span></span><span class="line"><span class="cl"><span class="nb">printf</span> <span class="s1">&#39;seam.db\nseam.db-wal\nseam.db-shm\n&#39;</span> &gt; .gitignore
 </span></span><span class="line"><span class="cl">git add . <span class="o">&amp;&amp;</span> git commit -m <span class="s2">&#34;seamless: initial&#34;</span>
-</span></span></code></pre><p>Ignoring the database is deliberate. It is a binary that changes constantly, it
+</span></span></code></pre></div>
+<p>Ignoring the database is deliberate. It is a binary that changes constantly, it
 does not diff usefully, and its contents are either rebuildable or high-churn
 state that a nightly commit would capture uselessly. What you want in git is the
 knowledge - and that diffs beautifully, because it is markdown.</p>
@@ -281,23 +282,26 @@ that <code>git log</code> over your memory directory is a real history of what y
 learned and when they changed their minds.</p>
 <p>If you would rather keep the tasks and sessions too, back up <code>seam.db</code> with
 SQLite's own tooling rather than copying the file while the daemon is running:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">sqlite3 ~/.seamless/seam.db <span class="s2">&#34;.backup &#39;/tmp/seam-backup.db&#39;&#34;</span>
-</span></span></code></pre><p>A plain <code>cp</code> of a WAL-mode database under a live writer can capture a torn state.
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">sqlite3 ~/.seamless/seam.db <span class="s2">&#34;.backup &#39;/tmp/seam-backup.db&#39;&#34;</span>
+</span></span></code></pre></div>
+<p>A plain <code>cp</code> of a WAL-mode database under a live writer can capture a torn state.
 <code>.backup</code> will not.</p>
 <h2 id="restore">Restore</h2>
 <p>Restoring is: put the files back, start the daemon.</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># files back in place</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># files back in place</span>
 </span></span><span class="line"><span class="cl">cp -R backup/memory backup/notes ~/.seamless/
 </span></span><span class="line"><span class="cl">make run
-</span></span></code></pre><p>Startup reconciliation walks the tree, notices which files the index does not
+</span></span></code></pre></div>
+<p>Startup reconciliation walks the tree, notices which files the index does not
 know about (or whose content hash changed), and indexes them. A file watcher
 keeps it in sync from then on. You do not run a reindex command, because there
 isn't one to forget.</p>
 <p>To force a full rebuild, stop the daemon, delete <code>seam.db</code>, and start it again.
 You lose sessions, tasks, trials, and events; you lose no knowledge.</p>
 <h2 id="import-from-seam-v1">Import from Seam v1</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd import --help
-</span></span></code></pre><p>The importer brings a v1 store's memories, sessions, and tool-call events into
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import --help
+</span></span></code></pre></div>
+<p>The importer brings a v1 store's memories, sessions, and tool-call events into
 <code>seam.db</code>. It is <strong>idempotent</strong>: running it twice does not double anything, so a
 partial import is safe to re-run.</p>
 <h2 id="hand-editing">Hand-editing</h2>
@@ -317,14 +321,15 @@ point only at an active memory, never self-supersede) stop being true. Use
 <p>Everything else - the body, the description, tags, the kind - is yours to edit in
 any text editor.</p>
 <h2 id="moving-machines">Moving machines</h2>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># on the old machine</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># on the old machine</span>
 </span></span><span class="line"><span class="cl"><span class="nb">cd</span> ~/.seamless <span class="o">&amp;&amp;</span> git push          <span class="c1"># or: tar czf seamless.tgz memory notes</span>
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl"><span class="c1"># on the new one</span>
 </span></span><span class="line"><span class="cl">git clone &lt;remote&gt; ~/.seamless      <span class="c1"># or untar</span>
 </span></span><span class="line"><span class="cl">make install                        <span class="c1"># seeds a config with a NEW generated key</span>
 </span></span><span class="line"><span class="cl">make doctor
-</span></span></code></pre><p>The index rebuilds itself on first start. The install generates a fresh
+</span></span></code></pre></div>
+<p>The index rebuilds itself on first start. The install generates a fresh
 <code>mcp.api_key</code> rather than copying the old config: the key is the only
 credential, and a machine migration is a good moment not to spread it around.
 See <a href="../../install/">Install &amp; deploy</a>.</p>

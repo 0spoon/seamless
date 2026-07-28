@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -299,8 +299,9 @@ derives a different slug - and that is what the override below is for.
 <code>seamlessd doctor</code> lists mapped paths that no longer exist.</p>
 <p>Map by hand only to override the derived slug - an <code>ios</code> directory that should be
 the <code>arctop-ios</code> project, or a renamed repo that should keep its old project:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
-</span></span></code></pre><p>Either way, agents in that repo inherit its scope through rung 3 without any tool
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd map-repo --path ~/code/ios --project arctop-ios
+</span></span></code></pre></div>
+<p>Either way, agents in that repo inherit its scope through rung 3 without any tool
 call at all.</p>
 <h2 id="families-parents-and-siblings">Families: parents and siblings</h2>
 <p>Projects can have parents, which makes <strong>families</strong>. A family exists so that

@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -233,7 +233,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 of truth. This page is the orientation: what to run, what the gate checks, and the
 handful of rules that are worth knowing before you write a line.</p>
 <h2 id="the-targets">The targets</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># ./bin/seamlessd and ./bin/seam, with build metadata stamped in</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># ./bin/seamlessd and ./bin/seam, with build metadata stamped in</span>
 </span></span><span class="line"><span class="cl">make <span class="nb">test</span>       <span class="c1"># unit tests</span>
 </span></span><span class="line"><span class="cl">make test-race  <span class="c1"># unit tests under the race detector</span>
 </span></span><span class="line"><span class="cl">make vet        <span class="c1"># go vet</span>
@@ -243,17 +243,19 @@ handful of rules that are worth knowing before you write a line.</p>
 </span></span><span class="line"><span class="cl">make docs       <span class="c1"># regenerate docs-src/ -&gt; docs/docs/ (committed)</span>
 </span></span><span class="line"><span class="cl">make docs-check <span class="c1"># fail if the committed site is stale</span>
 </span></span><span class="line"><span class="cl">make check      <span class="c1"># the gate - everything above, in order</span>
-</span></span></code></pre><p><code>make help</code> prints the full list, including the launchd dev-loop and prod-install
+</span></span></code></pre></div>
+<p><code>make help</code> prints the full list, including the launchd dev-loop and prod-install
 targets.</p>
 <h2 id="the-edit-test-loop-make-install">The edit-test loop: make install</h2>
 <p><code>make install</code> (macOS-only; it renders the launchd plist from <code>deploy/launchd/</code>)
 is also the dev loop. When the rendered plist is unchanged - the common case -
 it skips the launchd bootout/bootstrap and kickstarts the service in place, so
 its marginal cost over <code>make build</code> is two file copies.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make build      <span class="c1"># compile only; nothing live changes</span>
 </span></span><span class="line"><span class="cl">make install    <span class="c1"># ...and now it does</span>
 </span></span><span class="line"><span class="cl">make logs       <span class="c1"># follow ~/.seamless/seamlessd.log</span>
-</span></span></code></pre><p>That split is the point. <code>make build</code> on a half-finished edit is free, because
+</span></span></code></pre></div>
+<p>That split is the point. <code>make build</code> on a half-finished edit is free, because
 the daemon and hooks keep running the last thing you installed. Rebuilding is not
 deploying.</p>
 <p>Note that <code>make build</code> is not the same as <code>go build</code>: it stamps the commit and
@@ -261,8 +263,9 @@ build date into the binary via <code>-ldflags</code>, and those show up in <code
 MCP handshake, and the startup log. A plain <code>go build</code> leaves them <code>unknown</code>,
 which makes a stale running daemon invisible.</p>
 <h2 id="the-check-gate">The <code>check</code> gate</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">make check
-</span></span></code></pre><p>That is the one command that must be green before work is done. It runs six steps
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make check
+</span></span></code></pre></div>
+<p>That is the one command that must be green before work is done. It runs six steps
 sequentially - as separate <code>$(MAKE)</code> invocations rather than prerequisites, so it
 stops at the first red step and stays ordered under <code>make -j</code>:</p>
 <div class="table-wrap">
@@ -515,9 +518,10 @@ tool reference without constructing a <code>Server</code>: the constructors are 
 <p><code>internal/mcp/catalog_test.go</code> enforces the parity, and it is a same-package test
 so it can read the server's private <code>toolNames</code> - the registration record itself,
 not a second hand-maintained list:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="nx">require</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">toolNames</span><span class="p">,</span><span class="w"> </span><span class="nx">names</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;Catalog order/content must mirror registerTools&#34;</span><span class="p">)</span><span class="w">
+<div class="code-block" data-lang="go"><pre class="chroma"><code><span class="line"><span class="cl"><span class="nx">require</span><span class="p">.</span><span class="nf">Equal</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">srv</span><span class="p">.</span><span class="nx">toolNames</span><span class="p">,</span><span class="w"> </span><span class="nx">names</span><span class="p">,</span><span class="w"> </span><span class="s">&#34;Catalog order/content must mirror registerTools&#34;</span><span class="p">)</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nx">require</span><span class="p">.</span><span class="nf">Len</span><span class="p">(</span><span class="nx">t</span><span class="p">,</span><span class="w"> </span><span class="nx">names</span><span class="p">,</span><span class="w"> </span><span class="nx">ToolCount</span><span class="p">)</span><span class="w">
-</span></span></span></code></pre><p>A second test, <code>TestCatalogToolsAreDocumentable</code>, guards what docsgen renders: a
+</span></span></span></code></pre></div>
+<p>A second test, <code>TestCatalogToolsAreDocumentable</code>, guards what docsgen renders: a
 tool with no description would emit an empty docs section, and a duplicate name
 would collide on the page anchor.</p>
 <p>Two places outside <code>internal/mcp</code> also track the surface:</p>

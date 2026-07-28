@@ -234,7 +234,7 @@ Seam session: cc/52a41f8a (ambient)
 <p>The with-side agent did not get lucky. <code>rate-limit-not-in-memory</code> was recorded
 by an earlier session, and it is a plain markdown file on disk - the SQLite
 index could vanish and this would not:</p>
-<pre><code>---
+<div class="code-block"><pre><code>---
 id: 01JZFJ4S6M3T9BWKS60AQNDAA
 kind: gotcha
 name: rate-limit-not-in-memory
@@ -254,6 +254,7 @@ out across them and each instance sees a fraction of the limit -- the endpoint
 is effectively unthrottled. Keep the counter in shared storage (Redis) keyed by
 IP and token family, with a short sliding window.
 </code></pre>
+</div>
 <p>Two things carry the weight here. The <code>description</code> is the only line the
 session-start briefing shows, so it is written to be recognized in an index;
 the body is what <code>memory_read</code> returns at the moment of action, and it names
@@ -265,10 +266,11 @@ covers the craft.</p>
 <h2 id="how-to-reproduce-this">How to reproduce this</h2>
 <p>The fixture is in the repo. Seed a throwaway instance with exactly this state -
 the <code>myapp</code> project, its nine memories, and the <code>auth-refresh</code> plan at 4/6:</p>
-<pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
+<div class="code-block" data-lang="sh"><pre class="chroma"><code><span class="line"><span class="cl">git clone https://github.com/0spoon/seamless <span class="o">&amp;&amp;</span> <span class="nb">cd</span> seamless
 </span></span><span class="line"><span class="cl">go run ./cmd/demoseed -scenes -data /tmp/seamless-demo -repo /path/to/your/test/repo
 </span></span><span class="line"><span class="cl"><span class="nv">SEAMLESS_DATA_DIR</span><span class="o">=</span>/tmp/seamless-demo go run ./cmd/seamlessd serve
-</span></span></code></pre><p>The <code>myapp</code> source itself was a small fictional Go auth service (it is not
+</span></span></code></pre></div>
+<p>The <code>myapp</code> source itself was a small fictional Go auth service (it is not
 committed; any repo with an obvious unfinished thread works). Run your agent in
 the mapped repo twice with the same prompt: once vanilla, once with the
 <a href="../../docs/claude-code/">Claude Code hooks</a> installed, and diff what comes back.

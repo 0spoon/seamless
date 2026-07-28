@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -231,9 +231,10 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   </details>
   <p>Seamless serves its tool surface over <strong>streamable HTTP MCP</strong> at
 <code>/api/mcp</code>, guarded by a single static bearer key.</p>
-<pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">POST http://127.0.0.1:8081/api/mcp
 </span></span><span class="line"><span class="cl">Authorization: Bearer &lt;mcp.api_key&gt;
-</span></span></code></pre><p><code>GET /healthz</code> needs no auth and reports the running build - the fastest way to
+</span></span></code></pre></div>
+<p><code>GET /healthz</code> needs no auth and reports the running build - the fastest way to
 tell whether a daemon is up and which version it is.</p>
 <h2 id="client-transports-and-key-handling">Client transports and key handling</h2>
 <p>The daemon endpoint is always Streamable HTTP. A client can reach it in either

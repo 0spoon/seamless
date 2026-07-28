@@ -29,7 +29,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=48225666">
-<link rel="stylesheet" href="../static/docs.css?v=93f60420">
+<link rel="stylesheet" href="../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -273,8 +273,9 @@ server instructions give the model that baseline workflow, but nothing forces
 it - if a conversation never calls <code>session_start</code>, Seamless never hears about
 it.</p>
 <h2 id="register-the-bridge">Register the bridge</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude-desktop
-</span></span></code></pre><p>This is the same registration the interactive installer offers as menu entry
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks --client claude-desktop
+</span></span></code></pre></div>
+<p>This is the same registration the interactive installer offers as menu entry
 <code>[2] Claude app (chat)</code> - answers are comma lists, so <code>1,2</code> wires Claude Code
 and the chat surface together, and <code>all</code> includes the chat surface on the
 platforms that can host it (the Claude app ships for macOS and Windows; on
@@ -316,11 +317,12 @@ overwritten - the installer refuses and names the manual fix.</li>
 <h2 id="registering-by-hand">Registering by hand</h2>
 <p>In the app: <strong>Settings &gt; Developer &gt; Edit Config</strong>, then add under
 <code>mcpServers</code>:</p>
-<pre class="chroma"><code><span class="line"><span class="cl"><span class="s2">&#34;seamless&#34;</span><span class="err">:</span> <span class="p">{</span>
+<div class="code-block" data-lang="json"><pre class="chroma"><code><span class="line"><span class="cl"><span class="s2">&#34;seamless&#34;</span><span class="err">:</span> <span class="p">{</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;/abs/path/seam&#34;</span><span class="p">,</span>
 </span></span><span class="line"><span class="cl">  <span class="nt">&#34;args&#34;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&#34;mcp-proxy&#34;</span><span class="p">,</span> <span class="s2">&#34;--config&#34;</span><span class="p">,</span> <span class="s2">&#34;/abs/path/seamless.yaml&#34;</span><span class="p">]</span>
 </span></span><span class="line"><span class="cl"><span class="p">}</span>
-</span></span></code></pre><p>Use the absolute installed <code>seam</code> and config paths, save, and restart the app.
+</span></span></code></pre></div>
+<p>Use the absolute installed <code>seam</code> and config paths, save, and restart the app.
 This is also the repair path whenever the automatic edit refuses to run.</p>
 <h2 id="scope-discipline-in-a-chat">Scope discipline in a chat</h2>
 <p>A chat conversation has no working directory, and cwd is how every other
@@ -359,8 +361,9 @@ since the app also loads config at startup only. To drop just this entry and
 keep Seamless, edit the config by hand:
 <a href="../updating/#add-or-remove-one-client">Add or remove one client</a>.</p>
 <h2 id="verify">Verify</h2>
-<pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor
-</span></span></code></pre><p>Look for the <code>claude desktop mcp</code> line. Not registered is an <strong>info</strong> line, not
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd doctor
+</span></span></code></pre></div>
+<p>Look for the <code>claude desktop mcp</code> line. Not registered is an <strong>info</strong> line, not
 a warning - the chat surface is an explicit opt-in, so doctor never nags you
 into it. An exact registration reports OK with one honest caveat: whether the
 <em>running</em> app has actually loaded it is unverifiable, because the app reads the
