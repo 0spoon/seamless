@@ -8,8 +8,12 @@ package bench
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"strings"
 	"time"
 )
 
@@ -17,14 +21,21 @@ import (
 //
 //	<out>/<scenario>/<condition>/run-01/
 //	  run.json          the RunRecord manifest
+//	  grade.json        the Grade the report wrote back (absent until graded)
 //	  diff.patch        git diff of the demo repo against the pre-run snapshot
 //	  events.json       the arm's event log, dumped as a JSON array of core.Event
 //	  transcript.jsonl  the agent transcript
 //	  agent.log         the agent process's stdout+stderr
 //	  repo/             preserved copy of the arm's demo-repo working tree
 //	  data/             preserved copy of the arm's Seamless data dir (absent on vanilla)
+//
+// A version comparison nests the whole tree one level deeper, under the version
+// label: <out>/<version>/<scenario>/<condition>/run-01/. Nothing reads a run's
+// coordinates out of its path -- the manifest carries them -- so the extra level
+// costs the readers nothing (RunDirs finds run dirs by manifest, not by depth).
 const (
 	RunManifestFile = "run.json"
+	GradeFile       = "grade.json"
 	DiffFile        = "diff.patch"
 	EventsFile      = "events.json"
 	TranscriptFile  = "transcript.jsonl"
@@ -60,6 +71,59 @@ type Metrics struct {
 	Mishaps         int            `json:"mishaps,omitempty"`
 	ToolErrors      int            `json:"toolErrors,omitempty"`
 }
+
+// MergeMetrics recombines the two disjoint halves of a run's measurements: the
+// runner's (recorded from the agent process, carried on the RunRecord) and the
+// grader's (derived from the preserved artifacts, carried on the Grade). The
+// split is by field, not by "whichever is non-zero", so a legitimately zero
+// measurement -- an agent that made no tool calls -- stays zero instead of
+// being back-filled from the other half.
+func MergeMetrics(runner, grader Metrics) Metrics {
+	m := grader
+	m.Turns = runner.Turns
+	m.InputTokens = runner.InputTokens
+	m.OutputTokens = runner.OutputTokens
+	m.CostUSD = runner.CostUSD
+	m.DurationMS = runner.DurationMS
+	return m
+}
+
+// Fields renders the scalar metrics as name -> value for aggregation and for
+// trial metrics, keyed by the JSON field names so the report, results.json, and
+// a recorded trial all speak one vocabulary. Derived by reflection rather than
+// transcribed: a hand-kept list is exactly the kind that drifts one field
+// behind the struct. ToolCallsByName is not scalar and is left out.
+func (m Metrics) Fields() map[string]float64 {
+	v := reflect.ValueOf(m)
+	t := v.Type()
+	out := make(map[string]float64, t.NumField())
+	for i := range t.NumField() {
+		name, _, _ := strings.Cut(t.Field(i).Tag.Get("json"), ",")
+		if name == "" || name == "-" {
+			continue
+		}
+		switch f := v.Field(i); f.Kind() {
+		case reflect.Int, reflect.Int64:
+			out[name] = float64(f.Int())
+		case reflect.Float64:
+			out[name] = f.Float()
+		}
+	}
+	return out
+}
+
+// MetricNames is every scalar metric name, sorted -- the canonical vocabulary
+// Fields produces.
+func MetricNames() []string {
+	names := slices.Collect(maps.Keys(Metrics{}.Fields()))
+	slices.Sort(names)
+	return names
+}
+
+// ReportedMetrics is the subset the terminal table shows. Everything else is
+// still in results.json and in the recorded trials; this is a width budget, not
+// a claim about what matters (a test keeps every name here real).
+var ReportedMetrics = []string{"turns", "inputTokens", "outputTokens", "costUsd", "toolCalls"}
 
 // RunRecord is the manifest one completed run leaves in its artifact
 // directory. It carries everything the report needs to place the run in the

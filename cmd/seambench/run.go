@@ -41,6 +41,10 @@ func runRun(args []string) error {
 		fmt.Fprintf(fs.Output(), "Usage: seambench run [flags]\n\n"+
 			"Runs every selected scenario under every selected condition arm n times,\n"+
 			"capturing each run into <out>/<scenario>/<condition>/run-NN/.\n\n"+
+			"With --baseline REF the whole suite runs twice -- once against a throwaway\n"+
+			"checkout of REF built from its own ref, once against the working tree -- and\n"+
+			"each version's captures nest under <out>/<version>/.\n\n"+
+			"Nothing is graded here: `seambench report` grades the captured run dirs.\n\n"+
 			"Known scenarios: %s\n\nFlags:\n", strings.Join(scenarioNames(), ", "))
 		fs.PrintDefaults()
 	}
@@ -59,6 +63,7 @@ func runRun(args []string) error {
 		noBuild       = fs.Bool("no-build", false, "pass --no-build to the harness (reuse the existing bin/)")
 		agentCmd      = fs.String("agent-cmd", "claude", "agent CLI to run headless; the injection point for dry runs")
 		permission    = fs.String("permission-mode", "bypassPermissions", "value for the agent's --permission-mode flag (empty omits it)")
+		baselineRef   = fs.String("baseline", "", "also run the whole suite against this git ref, built from its own checkout, for a version comparison")
 	)
 	var agentArgs stringList
 	fs.Var(&agentArgs, "agent-arg", "extra argument appended to the agent command (repeatable)")
@@ -100,36 +105,182 @@ func runRun(args []string) error {
 		version = repoVersion(ctx, repoRoot)
 	}
 
-	r := &runner{
-		base:       baseDir,
+	s := &suite{
 		out:        outDir,
-		version:    version,
 		scenarios:  scenarios,
 		conditions: conditions,
 		n:          *n,
 		timeout:    *timeout,
+		model:      *model,
+		reuseArms:  *reuseArms,
+		noBuild:    *noBuild,
 		agent: agentOpts{
 			command:        *agentCmd,
 			permissionMode: *permission,
 			extra:          agentArgs,
 		},
-		serve: execServe(filepath.Join(repoRoot, "bin", "seamlessd")),
-		w:     os.Stdout,
+		w: os.Stdout,
 	}
-	if !*reuseArms {
+	candidate := versionArm{
+		role: "candidate", label: version, repoRoot: repoRoot, base: baseDir, port: *port,
+	}
+	if *baselineRef == "" {
+		return s.run(ctx, candidate)
+	}
+	return s.compare(ctx, candidate, *baselineRef)
+}
+
+// suite is one `run` invocation's configuration, minus the per-version parts.
+type suite struct {
+	out        string
+	scenarios  []bench.Scenario
+	conditions []bench.Condition
+	n          int
+	timeout    time.Duration
+	model      string
+	reuseArms  bool
+	noBuild    bool
+	agent      agentOpts
+	w          io.Writer
+}
+
+// versionArm is one version under test: whose code builds the arms, what the
+// runs are labelled, and which throwaway base and port range they get. Two
+// versions never share a base dir, so they never share a seeded data dir
+// either (see version.go for why that is load-bearing rather than tidy).
+type versionArm struct {
+	role     string // "candidate" or "baseline", for the log line only
+	label    string
+	repoRoot string
+	base     string
+	port     int
+	// outSub nests this version's captures under <out>/<slug>/. Empty keeps the
+	// single-version layout, which is what a plain `run` still writes.
+	outSub string
+}
+
+// versionPortStride keeps a second version's arms clear of the first's. The two
+// run sequentially, so this is belt-and-braces against a daemon that outlives
+// its stop.
+const versionPortStride = 20
+
+// run builds one version's arms and walks the matrix.
+func (s *suite) run(ctx context.Context, v versionArm) error {
+	out := s.out
+	if v.outSub != "" {
+		out = filepath.Join(s.out, v.outSub)
+	}
+	r := &runner{
+		base:       v.base,
+		out:        out,
+		version:    v.label,
+		scenarios:  s.scenarios,
+		conditions: s.conditions,
+		n:          s.n,
+		timeout:    s.timeout,
+		agent:      s.agent,
+		serve:      execServe(filepath.Join(v.repoRoot, "bin", "seamlessd")),
+		w:          s.w,
+	}
+	if !s.reuseArms {
 		if err := buildArms(ctx, harnessOpts{
-			repoRoot:   repoRoot,
-			base:       baseDir,
-			model:      *model,
-			port:       *port,
-			conditions: conditions,
-			noBuild:    *noBuild,
-			w:          r.w,
+			repoRoot:   v.repoRoot,
+			base:       v.base,
+			model:      s.model,
+			port:       v.port,
+			conditions: s.conditions,
+			// A baseline checkout has no bin/ yet, so its build is not optional.
+			noBuild: s.noBuild && v.role == "candidate",
+			w:       s.w,
 		}); err != nil {
 			return err
 		}
 	}
+	fmt.Fprintf(s.w, "\n===> %s version %s (from %s)\n", v.role, v.label, v.repoRoot)
 	return r.run(ctx)
+}
+
+// compare runs the suite twice: once against a throwaway checkout of the
+// baseline ref, once against the working tree. Each version's arms are built
+// from its own ref, under its own base dir -- see version.go.
+func (s *suite) compare(ctx context.Context, candidate versionArm, ref string) error {
+	if s.reuseArms {
+		return fmt.Errorf("--reuse-arms cannot be combined with --baseline: " +
+			"a version comparison builds each version's arms from its own ref")
+	}
+
+	src, err := addBaselineWorktree(ctx, candidate.repoRoot,
+		ref, filepath.Join(candidate.base, "baseline-src"))
+	if err != nil {
+		return err
+	}
+	defer src.remove(ctx)
+
+	if err := s.checkMigrationSkew(candidate.repoRoot, src.dir); err != nil {
+		return err
+	}
+
+	baseline := versionArm{
+		role:     "baseline",
+		label:    repoVersion(ctx, src.dir),
+		repoRoot: src.dir,
+		base:     filepath.Join(candidate.base, "baseline"),
+		port:     candidate.port + versionPortStride,
+	}
+	if baseline.label == candidate.label {
+		return fmt.Errorf("the baseline ref %q and the working tree are both %q: "+
+			"there is nothing to compare (pass --version to label them apart if that is intended)",
+			ref, baseline.label)
+	}
+	baseline.outSub = versionSlug(baseline.label)
+	candidate.outSub = versionSlug(candidate.label)
+	candidate.base = filepath.Join(candidate.base, "candidate")
+
+	// Recorded before the runs so an interrupted comparison still says which
+	// way round the two labels go.
+	if err := bench.WriteVersionPair(s.out, bench.VersionPair{
+		Baseline: baseline.label, Candidate: candidate.label,
+	}); err != nil {
+		return err
+	}
+	if err := s.run(ctx, baseline); err != nil {
+		return fmt.Errorf("baseline %s: %w", baseline.label, err)
+	}
+	if err := s.run(ctx, candidate); err != nil {
+		return fmt.Errorf("candidate %s: %w", candidate.label, err)
+	}
+	fmt.Fprintf(s.w, "\nversion comparison captured: baseline %s, candidate %s\n"+
+		"Report it with: seambench report --out %s\n", baseline.label, candidate.label, s.out)
+	return nil
+}
+
+// checkMigrationSkew refuses a comparison whose two refs disagree about
+// already-applied schema history, and names the migrations the candidate has
+// beyond the baseline so an operator can see what the baseline daemon will meet
+// in a candidate-seeded data dir.
+func (s *suite) checkMigrationSkew(candidateRoot, baselineRoot string) error {
+	cand, err := migrationNames(candidateRoot)
+	if err != nil {
+		return err
+	}
+	base, err := migrationNames(baselineRoot)
+	if err != nil {
+		return err
+	}
+	extra, err := migrationSkew(base, cand)
+	if err != nil {
+		return fmt.Errorf("baseline/candidate schema mismatch: %w", err)
+	}
+	if len(extra) == 0 {
+		return nil
+	}
+	fmt.Fprintf(s.w, "\n==> NOTE: the candidate has %d migration(s) the baseline does not:\n      %s\n"+
+		"    Both arms are seeded by the candidate's store code (the fixture must be identical\n"+
+		"    on both sides), so the baseline daemon opens a data dir already migrated past its\n"+
+		"    own list. That is harmless for additive migrations and NOT harmless for a\n"+
+		"    destructive or renaming one -- check the SQL above before trusting the delta.\n",
+		len(extra), strings.Join(extra, "\n      "))
+	return nil
 }
 
 // runner holds one invocation's resolved configuration and the arms it drives.

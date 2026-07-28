@@ -6,12 +6,14 @@
 //
 // Subcommands:
 //
-//	seambench run   build the arms, run the scenario x condition matrix, capture
+//	seambench run      build the arms, run the scenario x condition matrix, capture
+//	seambench report   grade the captured runs, export results.json, print the
+//	                   with-vs-without uplift and the baseline-vs-candidate delta
 //
-// A `report` subcommand -- aggregate with-vs-without uplift and version deltas
-// over the same run dirs -- lands with step 7 of plan:seambench; it plugs into
-// the dispatch below and reads nothing but the artifact directories `run`
-// writes. The run dir is the entire handoff: this command never calls a grader.
+// The two halves meet only on disk. `run` writes run directories and grades
+// nothing; `report` reads them and runs nothing. That split is what makes a
+// grader fix re-appliable to runs that already cost their tokens
+// (`report --regrade`), and what lets a run tree be graded on another machine.
 //
 // This is the AGENT-SCENARIO benchmark (make seambench), not the Go hot-path
 // micro-benchmarks behind `make bench`. Keep the two distinct.
@@ -41,6 +43,8 @@ func main() {
 	switch cmd {
 	case "run":
 		err = runRun(args)
+	case "report":
+		err = runReport(args, os.Stdout)
 	case "help", "-h", "--help":
 		usage()
 	default:
@@ -58,8 +62,10 @@ func usage() {
 	fmt.Fprint(os.Stderr, `seambench -- the Seamless agent-scenario benchmark
 
 Usage:
-  seambench run [flags]     run the scenario x condition matrix and capture it
+  seambench run [flags]      run the scenario x condition matrix and capture it
+                             (--baseline REF also runs it against that ref)
+  seambench report [flags]   grade the captured runs and print uplift + version deltas
 
-Run "seambench run -h" for the flags.
+Run "seambench <cmd> -h" for the flags.
 `)
 }
