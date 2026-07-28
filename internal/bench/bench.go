@@ -55,19 +55,26 @@ type Scenario struct {
 }
 
 // RunArtifacts is what the headless runner captures from one completed run
-// and hands to the grader.
+// and hands to the grader. Every path points inside the run's preserved
+// artifact directory (see RunDir), not at the live arm, so grading is fully
+// decoupled from running: a run dir can be graded later, on another machine,
+// or synthesized by a test.
 type RunArtifacts struct {
+	Scenario   string
 	Condition  Condition
-	RepoDir    string // the arm's demo-repo working tree after the run
+	Dir        string // the run's artifact directory
+	RepoDir    string // preserved copy of the arm's demo-repo working tree after the run
 	RepoDiff   string // unified git diff against the pre-run snapshot
-	DataDir    string // the arm's throwaway Seamless data dir; "" on vanilla arms
-	Transcript string // path to the agent transcript (.jsonl)
+	DataDir    string // preserved copy of the arm's Seamless data dir; "" on vanilla arms
+	Transcript string // path to the copied agent transcript (.jsonl); "" if none was produced
 }
 
-// Result is one graded run.
+// Result is one graded run: the verdict, the per-check trace behind it, and
+// the measurements the report aggregates.
 type Result struct {
 	Pass    bool
 	Details []string // one human-readable line per check
+	Metrics Metrics
 }
 
 // Grader scores one captured run, combining repo-state assertions, event-log
