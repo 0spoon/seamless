@@ -2406,8 +2406,19 @@ enclosing git repository, derives a slug from the repo root's directory name,
 registers the project, and records `repoRoot -> slug`. No recompile, no setup
 step. A cwd outside any git repo registers nothing and stays global.
 
+The map also heals itself when a repo moves. A session starting from the new
+location derives the same slug, and when every mapped path that owns that slug
+no longer exists on disk, Seamless treats it as the same repo at a new path:
+the existing project is adopted, the dead entries are replaced by the new root,
+and a `repo.moved` event records the remap in the console feed. Two *live*
+repos sharing a directory name still get distinct projects (`backend`,
+`backend-2`) so unrelated repos never inherit each other's memories. The one
+case the healing cannot recognize is a repo that was moved *and renamed* - it
+derives a different slug - and that is what the override below is for.
+`seamlessd doctor` lists mapped paths that no longer exist.
+
 Map by hand only to override the derived slug - an `ios` directory that should be
-the `arctop-ios` project:
+the `arctop-ios` project, or a renamed repo that should keep its old project:
 
 ```bash
 seamlessd map-repo --path ~/code/ios --project arctop-ios
@@ -4211,6 +4222,13 @@ working directory via the repo map. Three outcomes:
 - **A project named after your directory** - an unmapped *git* repo
   auto-registers a project named after the repository root. It is real, it is
   just new and therefore empty.
+- **A `<slug>-2` project after moving a repo on disk** - the repo's old path
+  still owned the slug, so registration minted a fresh project and the
+  briefing lost the original's memories. Current daemons adopt the existing
+  project automatically when the old path is gone (a `repo.moved` event lands
+  in the console feed); if a split already happened, point the path back with
+  `seamlessd map-repo --path <new-root> --project <slug>`. `seamlessd doctor`
+  lists mapped paths that no longer exist on disk.
 - **No project at all** - the cwd is not inside a git repo, so nothing resolved
   and the session is global.
 
@@ -5621,6 +5639,7 @@ config or the database cannot be loaded at all.
 | `llm` | The provider, or a warning that its credential is missing. |
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
+| `repo map` | Warns when `repo_project_map` entries name paths that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
 | `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
 | `hooks` | Claude Code definitions compared with today's desired profile. |

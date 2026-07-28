@@ -2,6 +2,7 @@
 <article class="prose home-intro">
   <h1>{{.Title}}</h1>
   {{with .Description}}<p class="lede">{{.}}</p>{{end}}
+  {{template "ctxbar" .}}
   {{.Body}}
 </article>
 

@@ -119,36 +119,79 @@
 
   /* ------------------------------------------------------- context picker */
   /* The head script seeded data-os / data-clients on <html> pre-paint (UA
-     detect, localStorage, or ?os=&client= query params). The bar's buttons
-     rewrite that state for the whole page and persist it; block visibility
-     is pure CSS off the two attributes. */
-  var ctxBar = document.querySelector(".ctx-bar");
-  if (ctxBar) {
+     detect, localStorage, or ?os=&client= query params). Three presentations
+     share that one state: the header chip + popover on every docs page, the
+     per-page "Steps for" bar on variant pages, and the router home's plain
+     links. Picks rewrite <html> for the whole page and persist; block
+     visibility stays pure CSS off the two attributes. */
+  var ctxChip = document.querySelector(".ctx-chip-btn");
+  if (ctxChip) {
     var OS_LABELS = { macos: "macOS", linux: "Linux", windows: "Windows" };
     var CLIENT_ORDER = ["claude", "claude-desktop", "codex"];
     var CLIENT_LABELS = { claude: "Claude Code", "claude-desktop": "Claude app chat", codex: "Codex" };
-    var ctxStatus = ctxBar.querySelector(".ctx-status");
+    var ctxPop = document.querySelector(".ctx-pop");
+    var chipOs = ctxChip.querySelector(".ctx-chip-os");
+    var chipRest = ctxChip.querySelector(".ctx-chip-rest");
+    var ctxStatus = document.querySelector(".ctx-status");
+    var barSummary = document.querySelector(".ctx-bar-summary");
+    var hiddenNote = document.querySelector(".ctx-hidden-note");
 
     var selectedClients = function () {
       return (root.dataset.clients || "").split(" ").filter(Boolean);
     };
+    var hiddenBlocks = function () {
+      /* Computed style, not attribute math: the CSS visibility rules are the
+         truth, and a page has at most a handful of variants to walk. */
+      var n = 0;
+      document.querySelectorAll(".ctx-variant").forEach(function (el) {
+        if (getComputedStyle(el).display === "none") n++;
+      });
+      return n;
+    };
     var syncCtx = function () {
       var os = root.dataset.os || "all";
-      ctxBar.querySelectorAll("[data-ctx-os-pick]").forEach(function (btn) {
+      var picked = selectedClients();
+      document.querySelectorAll("[data-ctx-os-pick]").forEach(function (btn) {
         btn.setAttribute("aria-pressed", btn.dataset.ctxOsPick === os ? "true" : "false");
       });
-      var picked = selectedClients();
-      ctxBar.querySelectorAll("[data-ctx-client-pick]").forEach(function (btn) {
+      document.querySelectorAll("[data-ctx-client-pick]").forEach(function (btn) {
         var v = btn.dataset.ctxClientPick;
         var on = v === "all" ? picked.length === 0 : picked.indexOf(v) >= 0;
         btn.setAttribute("aria-pressed", on ? "true" : "false");
       });
+      var osName = OS_LABELS[os] || "Any OS";
+      var clientShort = picked.length === 0 ? "All" :
+        picked.length === 1 ? CLIENT_LABELS[picked[0]] : picked.length + " clients";
+      chipOs.textContent = osName;
+      chipRest.textContent = " · " + clientShort;
+      if (barSummary) {
+        barSummary.textContent = "Showing " + osName + " · " +
+          (picked.length === 0 ? "All clients" : clientShort);
+      }
+      var hidden = 0;
+      if (hiddenNote) {
+        hidden = hiddenBlocks();
+        hiddenNote.hidden = hidden === 0;
+        hiddenNote.textContent = hidden + (hidden === 1 ? " block" : " blocks") + " for other setups hidden";
+      }
       if (ctxStatus) {
         ctxStatus.textContent = "Showing steps for " + (OS_LABELS[os] || "every OS") + ", " +
-          (picked.length ? picked.map(function (v) { return CLIENT_LABELS[v]; }).join(" + ") : "every client") + ".";
+          (picked.length ? picked.map(function (v) { return CLIENT_LABELS[v]; }).join(" + ") : "every client") + "." +
+          (hidden ? " " + hidden + (hidden === 1 ? " block" : " blocks") + " for other setups hidden." : "");
       }
     };
-    ctxBar.addEventListener("click", function (ev) {
+
+    var setPop = function (open) {
+      if (!ctxPop) return;
+      ctxPop.hidden = !open;
+      ctxChip.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    ctxChip.addEventListener("click", function () { if (ctxPop) setPop(ctxPop.hidden); });
+
+    /* One delegated handler serves the bar and the popover: both render the
+       same [data-ctx-*-pick] segments, and every copy stays in sync because
+       syncCtx repaints all of them off the <html> state. */
+    document.addEventListener("click", function (ev) {
       var osBtn = ev.target.closest("[data-ctx-os-pick]");
       var clientBtn = ev.target.closest("[data-ctx-client-pick]");
       if (osBtn) {
@@ -170,10 +213,27 @@
           if (picked.length) localStorage.setItem("clients", picked.join(","));
           else localStorage.removeItem("clients");
         } catch (e) { /* private mode */ }
+      } else if (ev.target.closest(".ctx-bar-open")) {
+        setPop(true);
+        return;
+      } else if (ev.target.closest(".ctx-hidden-note")) {
+        /* "N blocks hidden" resolves to showing everything, both axes. */
+        root.dataset.os = "all";
+        delete root.dataset.clients;
+        try {
+          localStorage.setItem("os", "all");
+          localStorage.removeItem("clients");
+        } catch (e) { /* private mode */ }
       } else {
+        if (ctxPop && !ctxPop.hidden && !ctxPop.contains(ev.target) && !ctxChip.contains(ev.target)) setPop(false);
         return;
       }
       syncCtx();
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape" || !ctxPop || ctxPop.hidden) return;
+      setPop(false);
+      ctxChip.focus();
     });
 
     /* A deep link or search landing can target an element inside a block the

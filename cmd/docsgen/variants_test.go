@@ -71,6 +71,25 @@ func TestTextifyVariants(t *testing.T) {
 	require.Equal(t, fenced, textifyVariants(fenced))
 }
 
+// TestCtxBarPlacement: the bar is point-of-use chrome. On a variant page it
+// renders below the h1 (demoted, not a banner); on a page without variants it
+// does not render at all -- the header chip is the only picker chrome there.
+func TestCtxBarPlacement(t *testing.T) {
+	repoRoot(t)
+
+	files := renderRepoSite(t)
+	qs, ok := files["quickstart/index.html"]
+	require.True(t, ok, "the quickstart page is emitted")
+	require.Contains(t, qs, `class="ctx-bar"`)
+	require.Greater(t, strings.Index(qs, `class="ctx-bar"`), strings.Index(qs, "</h1>"),
+		"the bar renders after the page heading")
+
+	concept, ok := files["concepts/how-it-works/index.html"]
+	require.True(t, ok, "the concept page is emitted")
+	require.NotContains(t, concept, `class="ctx-bar"`)
+	require.Contains(t, concept, `class="ctx-chip-btn"`, "the header chip renders on every docs page")
+}
+
 // TestVariantPageEndToEnd: a page authored with a container renders the
 // picker-visible div with its chips and real inner markdown, gates the bar
 // via HasVariants, and keeps its twin and search text clean of syntax.

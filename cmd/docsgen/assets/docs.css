@@ -798,13 +798,17 @@ a.nav-head.current { color: var(--brand); }
 .router-card:hover .card-cta::after { transform: translateX(2px); }
 
 /* ==========================================================================
-   CONTEXT PICKER -- the OS/client bar and the `::: when` variant blocks.
-   The head script sets data-os / data-clients on <html> before first paint;
-   picking a button rewrites them everywhere on the page. Without JS neither
-   attribute is set, so every variant shows (labeled by its chips) and the
-   bar hides -- the same no-JS strategy as the landing page's OS switch.
+   CONTEXT PICKER -- one OS/client state, three presentations: the header
+   chip + popover (every docs page), the per-page "Steps for" bar (variant
+   pages only), and the `::: when` variant blocks it filters. The head script
+   sets data-os / data-clients on <html> before first paint; picking a button
+   rewrites them everywhere on the page. Without JS neither attribute is set,
+   so every variant shows (labeled by its chips) and all picker chrome hides
+   -- the same no-JS strategy as the landing page's OS switch.
    ========================================================================== */
-:root:not([data-os]) .ctx-bar { display: none; }
+:root:not([data-os]) .ctx-bar,
+:root:not([data-os]) .ctx-chip-btn,
+:root:not([data-os]) .ctx-pop { display: none; }
 
 :root[data-os="macos"] .ctx-variant[data-ctx-os]:not([data-ctx-os~="macos"]),
 :root[data-os="linux"] .ctx-variant[data-ctx-os]:not([data-ctx-os~="linux"]),
@@ -818,6 +822,48 @@ a.nav-head.current { color: var(--brand); }
 :root[data-clients~="claude-desktop"] .ctx-variant[data-ctx-client~="claude-desktop"],
 :root[data-clients~="codex"] .ctx-variant[data-ctx-client~="codex"] { display: block; }
 
+/* The header chip: the always-there indicator and editor of the context.
+   Styled after .docs-badge so it reads as header chrome, not page content. */
+.ctx-chip-btn {
+  flex: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+.ctx-chip-btn:hover, .ctx-chip-btn[aria-expanded="true"] { border-color: var(--brand); }
+/* The popover anchors to the sticky header (its containing block), so it is
+   reachable mid-scroll from anywhere; above .search-results (z-index 40). */
+.ctx-pop {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 20px;
+  z-index: 41;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+.ctx-pop[hidden] { display: none; }
+.ctx-pop-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .ctx-bar {
   position: sticky;
   top: var(--head-h);
@@ -828,12 +874,44 @@ a.nav-head.current { color: var(--brand); }
   gap: 10px;
   max-width: 46rem;
   margin: 0 0 22px;
-  padding: 9px 12px;
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
-  backdrop-filter: saturate(140%) blur(8px);
+  padding: 7px 10px;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
 }
+/* Mobile-only bar chrome (see the 900px block): the one-line summary of the
+   active context and the button that hands editing to the header popover. */
+.ctx-bar-summary { display: none; font-size: 13px; color: var(--ink-2); }
+.ctx-bar-open {
+  display: none;
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid color-mix(in srgb, var(--brand) 22%, transparent);
+  border-radius: var(--radius-pill);
+  padding: 3px 9px;
+}
+.ctx-bar-open:hover { border-color: var(--brand); }
+/* The count of blocks the current filter hides; clicking shows everything. */
+.ctx-hidden-note {
+  appearance: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: var(--tracking-wide);
+  text-transform: uppercase;
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius-pill);
+  padding: 2px 8px;
+}
+.ctx-hidden-note:hover { color: var(--ink); border-color: var(--ink-2); }
 .ctx-bar-label {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -983,7 +1061,7 @@ a.nav-head.current { color: var(--brand); }
 /* ==========================================================================
    SEARCH
    ========================================================================== */
-.docs-search { position: relative; flex: 1 1 auto; max-width: 380px; margin-left: auto; }
+.docs-search { position: relative; flex: 1 1 auto; max-width: 320px; margin-left: auto; }
 .docs-search input {
   width: 100%;
   font-family: var(--font-sans);
@@ -1061,6 +1139,16 @@ a.nav-head.current { color: var(--brand); }
   .docs-head { gap: 10px; padding: 0 14px; }
   .docs-badge, .gh-link span { display: none; }
   .docs-search { max-width: none; }
+  /* The chip shortens to its OS half but stays: it is the bar's "Change"
+     target and the only always-visible signal that a filter is active. */
+  .ctx-chip-btn .ctx-chip-rest { display: none; }
+  .ctx-pop { right: 14px; }
+  /* The bar gives up stickiness (the header chip is the mid-scroll recourse)
+     and collapses to one row: summary + Change. */
+  .ctx-bar { position: static; }
+  .ctx-bar .ctx-bar-label, .ctx-bar .ctx-seg { display: none; }
+  .ctx-bar-summary { display: block; flex: 1 1 auto; }
+  .ctx-bar-open { display: inline-block; }
   .doc-flow,
   .doc-flow.cols-2,
   .doc-flow.cols-4,
