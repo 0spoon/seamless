@@ -22,7 +22,17 @@ import (
 )
 
 const (
+	authRefreshName    = "auth-refresh"
 	authRefreshProject = "myapp"
+	// authRefreshPlan is the seeded plan slug; its step tasks carry it.
+	authRefreshPlan = "auth-refresh"
+	// authRefreshMemory is the scenario's load-bearing memory: its description
+	// alone names the correct step-5 design. The seed writes it and the grader
+	// checks the agent consulted it, from this one name.
+	authRefreshMemory = "rate-limit-not-in-memory"
+	// authRefreshStep5 is the plan's sole claimable step -- the work the run is
+	// graded on. Shared by the seed table and the grader so they cannot drift.
+	authRefreshStep5 = "Rate-limit POST /auth/refresh (per-IP and per-family)"
 	// authRefreshSession is yesterday's completed session; memories and the
 	// trial hang off it, and its finding is what makes "continue where we
 	// left off" answerable.
@@ -34,11 +44,12 @@ const (
 
 // authRefresh is briefing-surfaced (finding + plan + memory index land at
 // SessionStart), so it runs headless via plain `claude -p`; RequiresRecall
-// stays false. Grader lands with the grader step of plan:seambench.
+// stays false.
 var authRefresh = Scenario{
-	Name:   "auth-refresh",
+	Name:   authRefreshName,
 	Prompt: "continue where we left off",
 	Seed:   seedAuthRefresh,
+	Grader: authRefreshGrader,
 }
 
 // authRefreshMemories is the seeded myapp memory set: three auth constraints,
@@ -69,7 +80,7 @@ var authRefreshMemories = []struct {
 		"Never put Cache-Control (or any positive caching header) on an HTML response.\n\nOur CDN strips the Vary header from 304 Not Modified responses. HTML varies by the session cookie, so a cached page built for one signed-in user gets served to the next -- their name, their data, wrong person. We shipped this once; it took an afternoon to trace.\n\nCaching that is safe here:\n- Static assets (JS, CSS, images) keyed by a content hash in the filename -- long max-age, immutable.\n- Nothing else. Leave HTML uncached, or send Cache-Control: no-store on any authenticated route.\n\nWhen a task says \"HTML responses are slow -- add caching\", cache the assets, not the HTML.", 4},
 	// The scenario's load-bearing memory: its description alone (surfaced in
 	// the briefing's memory index) names the correct step-5 design.
-	{core.KindGotcha, "rate-limit-not-in-memory",
+	{core.KindGotcha, authRefreshMemory,
 		"In-memory rate limit on the refresh endpoint resets per instance; use shared storage.",
 		"A rate limiter kept in a process map only sees one instance's traffic. myapp runs several instances behind the load balancer, so an attacker's requests fan out across them and each instance sees a fraction of the limit -- the endpoint is effectively unthrottled. Keep the counter in shared storage (Redis) keyed by IP and token family, with a short sliding window.", 7},
 	{core.KindGotcha, "persist-refresh-tokens",
@@ -100,7 +111,7 @@ var authRefreshSteps = []struct {
 	{"Issue a rotating token pair from POST /auth/refresh", true, 0, 4, 5},
 	{"Detect refresh-token reuse and revoke the whole family", true, 1, 3, 20},
 	{"Set HttpOnly, Secure, SameSite cookies on the auth responses", true, 2, 1, 6},
-	{"Rate-limit POST /auth/refresh (per-IP and per-family)", false, 3, 1, 0},
+	{authRefreshStep5, false, 3, 1, 0},
 	{"Emit metrics and an alert for refresh-reuse revocations", false, 4, 1, 0},
 }
 
@@ -138,7 +149,7 @@ func seedAuthRefresh(s *demokit.Seeder, repoPath string) error {
 		}
 	}
 
-	const plan = "auth-refresh"
+	const plan = authRefreshPlan
 	ids := make([]string, len(authRefreshSteps))
 	for i, st := range authRefreshSteps {
 		// Same-day steps get staggered minutes so creation order is distinct.
