@@ -41,6 +41,18 @@
     syncOsButtons();
   });
 
+  /* mobile nav menu: the native details disclosure needs no JS to open;
+     closing on pick or Escape is the whole enhancement */
+  var navMenu = document.querySelector(".nav-menu");
+  if (navMenu) {
+    navMenu.addEventListener("click", function (ev) {
+      if (ev.target.closest("a")) navMenu.open = false;
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key === "Escape" && navMenu.open) navMenu.open = false;
+    });
+  }
+
   /* copy buttons: copy the nearest [data-copy] text */
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest(".copy-btn");

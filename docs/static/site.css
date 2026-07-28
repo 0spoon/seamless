@@ -255,10 +255,54 @@ body::before {
   :root:not([data-theme="light"]) .icon-moon { display: none; }
   :root:not([data-theme="light"]) .icon-sun { display: block; }
 }
+/* mobile nav menu: a native details disclosure (the FAQ's idiom) carrying the
+   same six anchors as the inline row. Hidden on desktop, where the inline
+   anchors show; the panel drops under the sticky header as a full-width card. */
+.nav-menu { display: none; }
+.nav-menu summary {
+  list-style: none;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 34px; height: 34px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--dur-fast) var(--ease-out);
+}
+.nav-menu summary::-webkit-details-marker { display: none; }
+.nav-menu summary:hover, .nav-menu[open] summary { border-color: var(--ink-2); }
+.nav-menu summary svg { width: 18px; height: 18px; display: block; }
+.nav-panel {
+  /* Anchored to .site-head (the nearest positioned ancestor), so left/right
+     span the whole header, not the details box. */
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+.nav-panel a {
+  padding: 12px;
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+}
+.nav-panel a:hover { color: var(--ink); background: var(--surface-2); text-decoration: none; }
+
 @media (max-width: 720px) {
-  /* Anchors collapse on phones, but Docs is a destination, not an anchor --
-     without it the only mobile path to the docs is the footer. */
-  .head-nav a:not(.gh-link):not(.docs-link) { display: none; }
+  /* The inline anchors give way to the nav-menu disclosure; Docs stays a
+     destination, not an anchor -- without it the only mobile path to the
+     docs is the footer. Direct children only: the panel's copies of these
+     anchors must keep rendering. */
+  .head-nav > a:not(.gh-link):not(.docs-link) { display: none; }
+  .nav-menu { display: block; }
 }
 
 /* ==========================================================================

@@ -28,15 +28,26 @@
   var sidebar = document.getElementById("sidebar");
   var navToggle = document.querySelector(".nav-toggle");
   if (navToggle && sidebar) {
-    navToggle.addEventListener("click", function () {
-      var open = sidebar.classList.toggle("open");
+    /* body.drawer-open carries the scrim (body::after) and the scroll lock;
+       the scrim needs no click handler of its own -- a click on it is an
+       outside click, which the document handler below already closes on. */
+    var setDrawer = function (open) {
+      sidebar.classList.toggle("open", open);
+      document.body.classList.toggle("drawer-open", open);
       navToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    };
+    navToggle.addEventListener("click", function () {
+      setDrawer(!sidebar.classList.contains("open"));
     });
     document.addEventListener("click", function (ev) {
       if (!sidebar.classList.contains("open")) return;
       if (sidebar.contains(ev.target) || navToggle.contains(ev.target)) return;
-      sidebar.classList.remove("open");
-      navToggle.setAttribute("aria-expanded", "false");
+      setDrawer(false);
+    });
+    document.addEventListener("keydown", function (ev) {
+      if (ev.key !== "Escape" || !sidebar.classList.contains("open")) return;
+      setDrawer(false);
+      navToggle.focus();
     });
   }
   /* Keep the current page visible in a long sidebar without scrolling the page. */

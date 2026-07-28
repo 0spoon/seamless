@@ -1136,6 +1136,20 @@ a.nav-head.current { color: var(--brand); }
     transition: transform var(--dur-med) var(--ease-out);
   }
   .docs-sidebar.open { transform: translateX(0); box-shadow: var(--shadow-lg); }
+  /* Scrim + scroll lock while the drawer is open. z-index 24 covers the page
+     (the sticky ctx-bar at 20 included) while staying under the sidebar (25)
+     and header (30). Pseudo-elements take no clicks: a tap on the scrim hits
+     whatever sits beneath it, which is an outside click, and the document
+     handler already closes the drawer on those. */
+  body.docs.drawer-open { overflow: hidden; }
+  body.docs.drawer-open::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 24;
+    background: color-mix(in srgb, var(--ink) 35%, transparent);
+    animation: scrim-in var(--dur-med) var(--ease-out);
+  }
   .docs-head { gap: 10px; padding: 0 14px; }
   .docs-badge, .gh-link span { display: none; }
   .docs-search { max-width: none; }
@@ -1183,8 +1197,10 @@ a.nav-head.current { color: var(--brand); }
   .tree-branch { margin-left: 10px; }
   .tree-leaf { margin-left: 20px; }
 }
+@keyframes scrim-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after { transition: none; }
+  body.docs.drawer-open::after { animation: none; }
 }
 
 /* ==========================================================================
