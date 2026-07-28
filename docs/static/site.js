@@ -31,7 +31,13 @@
     var btn = ev.target.closest("[data-os-pick]");
     if (!btn) return;
     root.dataset.os = btn.dataset.osPick;
-    try { localStorage.setItem("os", btn.dataset.osPick); } catch (e) { /* private mode */ }
+    /* The docs picker shares this key with a finer vocabulary (macos, linux,
+       windows, all). Store the UA-refined canonical value while this page
+       keeps its coarse unix|windows display, so a pick made here survives
+       into the docs instead of being re-UA-detected there. */
+    var stored = btn.dataset.osPick === "unix"
+      ? (/Mac/i.test(navigator.userAgent) ? "macos" : "linux") : "windows";
+    try { localStorage.setItem("os", stored); } catch (e) { /* private mode */ }
     syncOsButtons();
   });
 

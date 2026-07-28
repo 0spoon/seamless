@@ -142,10 +142,13 @@ variant shows (labeled by its chips) and the bar hides; the markdown twins,
 consumers get every variant under a bold label and never the `:::` syntax.
 
 The `localStorage("os")` key is shared with the landing page's coarser
-unix/windows switch: the docs write `macos|linux|windows|all`, the landing
-bootstrap folds `macos|linux` back to `unix` (site-check assertion 12), and
-the docs bootstrap UA-refines a stored `unix`. Change either side only in
-lockstep. The setup page's configurator widget (`class="cfg"`) composes the
+unix/windows switch: the docs write `macos|linux|windows|all`; the landing
+bootstrap folds `macos|linux` back to `unix` for display (site-check
+assertion 12); and a landing pick stores the UA-refined canonical value --
+`macos` or `linux`, never the coarse `unix` (assertion 13) -- while the page
+keeps its two-way display, so a pick made on the landing survives into the
+docs instead of being re-UA-detected there. The docs bootstrap still
+UA-refines a legacy stored `unix`. Change any side only in lockstep. The setup page's configurator widget (`class="cfg"`) composes the
 canonical install command from this same picker state; its `data-cmd-*`
 attributes are pinned to the canonical commands by site-check assertion 11.
 

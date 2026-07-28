@@ -10,7 +10,7 @@
 # run `go install github.com/0spoon/seamless/cmd/...@latest`. The front door
 # advertised the old front door for a day.
 #
-# Twelve assertions, each one a thing a machine can actually verify:
+# Thirteen assertions, each one a thing a machine can actually verify:
 #
 #   1. the hero pills run $INSTALL_CMD and $WIN_INSTALL_CMD, not other routes
 #   2. every surface that teaches installing teaches the SAME two commands
@@ -26,6 +26,8 @@
 #  11. the setup configurator composes from the two canonical commands
 #  12. the landing bootstrap folds the docs' localStorage("os") values back
 #      to its coarse unix|windows pair
+#  13. the landing OS switch stores the UA-refined canonical value (macos or
+#      linux, never the coarse unix) so the docs honor the pick
 #
 # Deliberately not a prose linter: claims like "one binary, no ceremony" are the
 # author's problem. Commands are checkable, so these are checked.
@@ -272,6 +274,18 @@ fi
 #     value, or a pick made in the docs silently resets on the landing page.
 grep -qF 'if(o==="macos"||o==="linux")o="unix";' "$PAGE" ||
 	err "$PAGE bootstrap lost the macos/linux -> unix localStorage(\"os\") mapping"
+
+# 13. The landing switch stays 2-way (it shows exactly two commands), but what
+#     it STORES must be the docs' canonical vocabulary: a "macOS / Linux" pick
+#     that stored the coarse unix would be rejected by the docs bootstrap and
+#     re-UA-detected -- inverting the pick for a Windows-UA user who chose
+#     unix. site.js refines on write; the coarse value stays display-only.
+SITEJS=docs/static/site.js
+grep -qF '/Mac/i.test(navigator.userAgent) ? "macos" : "linux"' "$SITEJS" ||
+	err "$SITEJS lost the UA-refine-on-write of the coarse unix pick"
+if grep -qF 'setItem("os", btn.dataset.osPick)' "$SITEJS"; then
+	err "$SITEJS stores the coarse os pick verbatim; store the UA-refined canonical value instead"
+fi
 
 [ "$fail" -eq 0 ] || exit 1
 echo "site-check: $PAGE agrees with the installer, the CLI, and its own structured data"
