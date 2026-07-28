@@ -157,6 +157,19 @@ img, svg { max-width: 100%; height: auto; }
 
 .wrap { max-width: var(--content-max); margin: 0 auto; padding: 0 24px; }
 
+/* same rules as the docs shell's skip link (docs.css) */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--brand);
+  color: var(--brand-ink);
+  padding: 10px 16px;
+  border-radius: 0 0 var(--radius-sm) 0;
+}
+.skip-link:focus { left: 0; }
+
 /* paper grain -- barely-there texture so the page reads as a made object */
 body::before {
   content: "";
@@ -370,6 +383,8 @@ body::before {
 }
 .copy-btn:hover { color: var(--term-ink); border-color: var(--term-muted); }
 .copy-btn.ok { color: var(--term-green); border-color: var(--term-green); }
+/* The clipboard-refused state: the command is selected, one keystroke finishes. */
+.copy-btn.sel { color: var(--term-pop); border-color: var(--term-pop); }
 /* OS switch (hero + quickstart): the head script sets data-os on <html> from
    the UA before first paint; picking a button overrides it. Without JS the
    attribute is never set, so both commands show and the switch hides. */
@@ -1218,6 +1233,11 @@ body::before {
   .rv { opacity: 1; transform: none; transition: none; }
   .live-dot, .cursor, .wordmark .caret { animation: none; }
   html { scroll-behavior: auto; }
+}
+/* Reveal-on-scroll never fires on paper: without this, every .rv section a
+   visitor had not scrolled past prints invisible. */
+@media print {
+  .rv { opacity: 1; transform: none; }
 }
 
 /* focus visibility */

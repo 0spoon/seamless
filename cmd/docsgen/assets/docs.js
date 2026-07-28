@@ -16,11 +16,21 @@
     if (root.dataset.theme) return root.dataset.theme;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
+  /* An explicit toggle overrides the OS preference, so the browser chrome
+     color must follow the page, not the media query the metas were born with. */
+  function syncThemeColor() {
+    var paper = getComputedStyle(root).getPropertyValue("--paper").trim();
+    if (!paper) return;
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      m.setAttribute("content", paper);
+    });
+  }
   if (toggle) {
     toggle.addEventListener("click", function () {
       var next = effectiveTheme() === "dark" ? "light" : "dark";
       root.dataset.theme = next;
       try { localStorage.setItem("theme", next); } catch (e) { /* private mode */ }
+      syncThemeColor();
     });
   }
 
@@ -66,16 +76,43 @@
     btn.setAttribute("aria-label", "Copy code to clipboard");
     btn.addEventListener("click", function () {
       var code = pre.querySelector("code");
-      navigator.clipboard.writeText(code ? code.innerText : pre.innerText).then(function () {
-        btn.textContent = "copied";
-        btn.classList.add("ok");
+      var flash = function (label, cls) {
+        btn.textContent = label;
+        btn.classList.add(cls);
         setTimeout(function () {
           btn.textContent = "copy";
-          btn.classList.remove("ok");
+          btn.classList.remove(cls);
         }, 1600);
-      });
+      };
+      /* No clipboard API (plain-HTTP origins), or it refused: select the
+         code so one keystroke finishes the copy. */
+      var fallback = function () {
+        var range = document.createRange();
+        range.selectNodeContents(code || pre);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+        flash("selected", "sel");
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(code ? code.innerText : pre.innerText)
+          .then(function () { flash("copied", "ok"); }, fallback);
+      } else {
+        fallback();
+      }
     });
     pre.appendChild(btn);
+  });
+
+  /* ------------------------------------------------------ heading anchors */
+  /* goldmark already stamps the ids; this only adds the visible handle. */
+  document.querySelectorAll(".prose h2[id], .prose h3[id]").forEach(function (h) {
+    var a = document.createElement("a");
+    a.className = "h-anchor";
+    a.href = "#" + h.id;
+    a.textContent = "#";
+    a.setAttribute("aria-label", "Link to this section");
+    h.appendChild(a);
   });
 
   /* ----------------------------------------------------- scrollable tables */

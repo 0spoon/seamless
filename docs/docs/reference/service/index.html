@@ -25,8 +25,8 @@
 <script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
-<link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
+<link rel="stylesheet" href="../../../static/site.css?v=48225666">
+<link rel="stylesheet" href="../../static/docs.css?v=8b78e24f">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -41,6 +41,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 
   <div class="docs-search">
     <input type="search" id="search-input" placeholder="Search docs" autocomplete="off" aria-label="Search documentation" aria-controls="search-results" aria-expanded="false">
+    <kbd class="search-key" aria-hidden="true">/</kbd>
     <div class="search-results" id="search-results" role="listbox" hidden></div>
   </div>
 
@@ -393,10 +394,10 @@ a service for - or a machine you are cleaning by hand - the native teardown is:<
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="../../../compare/">Compare</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=2e606b97"></script>
+<script src="../../static/docs.js?v=97372762"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

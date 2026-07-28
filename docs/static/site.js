@@ -10,11 +10,21 @@
     if (root.dataset.theme) return root.dataset.theme;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
+  /* An explicit toggle overrides the OS preference, so the browser chrome
+     color must follow the page, not the media query the metas were born with. */
+  function syncThemeColor() {
+    var paper = getComputedStyle(root).getPropertyValue("--paper").trim();
+    if (!paper) return;
+    document.querySelectorAll('meta[name="theme-color"]').forEach(function (m) {
+      m.setAttribute("content", paper);
+    });
+  }
   if (toggle) {
     toggle.addEventListener("click", function () {
       var next = effectiveTheme() === "dark" ? "light" : "dark";
       root.dataset.theme = next;
       try { localStorage.setItem("theme", next); } catch (e) { /* private mode */ }
+      syncThemeColor();
     });
   }
 
@@ -60,14 +70,31 @@
     var scope = btn.closest(".install-pill, .code");
     var src = scope && scope.querySelector("[data-copy]");
     if (!src) return;
-    navigator.clipboard.writeText(src.getAttribute("data-copy")).then(function () {
-      btn.textContent = "copied";
-      btn.classList.add("ok");
+    var flash = function (label, cls) {
+      btn.textContent = label;
+      btn.classList.add(cls);
       setTimeout(function () {
         btn.textContent = "copy";
-        btn.classList.remove("ok");
+        btn.classList.remove(cls);
       }, 1600);
-    });
+    };
+    /* No clipboard API (plain-HTTP origins), or it refused: select the
+       visible command -- the same text the attribute carries -- so one
+       keystroke finishes the copy. */
+    var fallback = function () {
+      var range = document.createRange();
+      range.selectNodeContents(src);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      flash("selected", "sel");
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(src.getAttribute("data-copy"))
+        .then(function () { flash("copied", "ok"); }, fallback);
+    } else {
+      fallback();
+    }
   });
 
   /* reveal on scroll */

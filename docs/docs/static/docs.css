@@ -51,6 +51,9 @@ body.docs {
   background: var(--paper);
   color: var(--ink);
   font-family: var(--font-sans);
+  /* Pinned, not inherited: site.css sets the body to 17px for the landing
+     page, and a landing type change must not silently resize the docs. */
+  font-size: 17px;
   margin: 0;
 }
 
@@ -353,6 +356,24 @@ a.nav-head.current { color: var(--brand); }
 }
 .copy-code:hover { color: var(--term-ink); border-color: var(--term-muted); }
 .copy-code.ok { color: var(--term-green); border-color: var(--term-green); opacity: 1; }
+/* The clipboard-refused state: the code is selected, one keystroke finishes. */
+.copy-code.sel { color: var(--term-pop); border-color: var(--term-pop); opacity: 1; }
+
+/* Heading anchor handles, added by docs.js next to the goldmark ids. The
+   .copy-code idiom: invisible until the heading is hovered or the anchor is
+   focused, always present where there is no hover to give. */
+.prose .h-anchor {
+  margin-left: 8px;
+  color: var(--faint);
+  text-decoration: none;
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.prose h2:hover .h-anchor, .prose h3:hover .h-anchor, .prose .h-anchor:focus-visible { opacity: 1; }
+.prose .h-anchor:hover { color: var(--brand); }
+@media (hover: none) {
+  .prose .h-anchor { opacity: 1; }
+}
 
 /* tables: the scroll box is the wrapper, never the table (see tableWrapRenderer) */
 .table-wrap {
@@ -1107,6 +1128,23 @@ a.nav-head.current { color: var(--brand); }
 }
 .docs-search input::placeholder { color: var(--faint); }
 .docs-search input:focus { border-color: var(--brand); box-shadow: var(--shadow-focus); }
+/* The "/" affordance for the focus shortcut; it yields once focus arrives
+   and never shows where a hardware keyboard is unlikely (the 900px block). */
+.docs-search .search-key {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.6;
+  color: var(--faint);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 0 5px;
+  pointer-events: none;
+}
+.docs-search input:focus + .search-key { display: none; }
 .search-results {
   position: absolute;
   top: calc(100% + 8px);
@@ -1204,6 +1242,7 @@ a.nav-head.current { color: var(--brand); }
   .docs-head { gap: 10px; padding: 0 14px; }
   .docs-badge, .gh-link span { display: none; }
   .docs-search { max-width: none; }
+  .docs-search .search-key { display: none; }
   /* The chip shortens to its OS half but stays: it is the bar's "Change"
      target and the only always-visible signal that a filter is active. */
   .ctx-chip-btn .ctx-chip-rest { display: none; }
@@ -1250,8 +1289,27 @@ a.nav-head.current { color: var(--brand); }
 }
 @keyframes scrim-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after { transition: none; }
+  .docs-sidebar, .doc-card, .copy-code, .router-card .card-cta::after,
+  .prose .h-anchor { transition: none; }
   body.docs.drawer-open::after { animation: none; }
+}
+
+/* ==========================================================================
+   PRINT -- prose only, one column, nothing sticky and nothing interactive
+   ========================================================================== */
+@media print {
+  .docs-head, .docs-sidebar, .docs-toc, .page-nav, .copy-code, .ctx-bar,
+  .docs-search, .skip-link, .toc-inline, .ctx-pop, .docs-foot,
+  .prose .h-anchor { display: none !important; }
+  .docs-shell { display: block; max-width: none; padding: 0; }
+  .docs-main { padding: 0; }
+  .prose { max-width: none; }
+  .prose pre {
+    white-space: pre-wrap;
+    overflow-x: visible;
+    border: 1px solid var(--border-strong);
+  }
+  .prose pre code { white-space: pre-wrap; }
 }
 
 /* ==========================================================================

@@ -42,6 +42,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 
   <div class="docs-search">
     <input type="search" id="search-input" placeholder="Search docs" autocomplete="off" aria-label="Search documentation" aria-controls="search-results" aria-expanded="false">
+    <kbd class="search-key" aria-hidden="true">/</kbd>
     <div class="search-results" id="search-results" role="listbox" hidden></div>
   </div>
 
@@ -113,7 +114,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </div>
 
 <footer class="docs-foot">
-  <p>Seamless - local-first agent memory and coordination. <a href="{{.Root}}">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
+  <p>Seamless - local-first agent memory and coordination. <a href="{{.Root}}">Home</a> · <a href="{{.Root}}compare/">Compare</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
 <script src="{{.DocsRoot}}static/docs.js{{.Assets.DocsJS}}"></script>
