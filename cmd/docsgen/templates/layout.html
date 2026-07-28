@@ -23,6 +23,9 @@
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="{{.Root}}static/favicon.svg">
+<link rel="preload" as="font" type="font/woff2" href="{{.Root}}static/fonts/space-grotesk.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="{{.Root}}static/fonts/hanken-grotesk.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="{{.Root}}static/fonts/jetbrains-mono.woff2" crossorigin>
 <script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
