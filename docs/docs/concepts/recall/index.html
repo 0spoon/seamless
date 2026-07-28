@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Recall</h1>
   <p class="lede">One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
+    </ul>
+  </details>
   <p>In Seamless, <code>recall</code> is the single search entry point an agent calls to
 retrieve durable knowledge - memories and notes - from the store. It fuses
 SQLite FTS5 keyword matching with float32 cosine vector similarity using
@@ -358,7 +363,7 @@ retrieval surface - see <a href="../../concepts/memory/">Memory &amp; notes</a>.
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

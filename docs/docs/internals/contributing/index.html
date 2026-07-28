@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Contributing</h1>
   <p class="lede">The make targets, the check gate, the conventions that matter, the forbidden APIs, and the three places a new MCP tool must be wired.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#the-targets">The targets</a></li><li class="lvl-2"><a href="#the-edit-test-loop-make-install">The edit-test loop: make install</a></li><li class="lvl-2"><a href="#the-check-gate">The check gate</a></li><li class="lvl-2"><a href="#use-make-fmt-never-gofmt--w-">Use make fmt, never gofmt -w .</a></li><li class="lvl-2"><a href="#style-essentials">Style essentials</a></li><li class="lvl-2"><a href="#database-rules">Database rules</a></li><li class="lvl-2"><a href="#testing-rules">Testing rules</a></li><li class="lvl-2"><a href="#forbidden-apis">Forbidden APIs</a></li><li class="lvl-2"><a href="#required-patterns">Required patterns</a></li><li class="lvl-2"><a href="#adding-an-mcp-tool">Adding an MCP tool</a></li><li class="lvl-2"><a href="#before-declaring-done">Before declaring done</a></li>
+    </ul>
+  </details>
   <p>The conventions live in <code>AGENTS.md</code> at the repo root, and that file is the source
 of truth. This page is the orientation: what to run, what the gate checks, and the
 handful of rules that are worth knowing before you write a line.</p>
@@ -561,7 +566,7 @@ error.</li>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

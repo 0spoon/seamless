@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>How Seamless works</h1>
   <p class="lede">One daemon, three surfaces, and a hard line between the files that are truth and the database that is an index.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#one-daemon-three-surfaces">One daemon, three surfaces</a></li><li class="lvl-2"><a href="#files-are-truth-the-database-is-an-index">Files are truth; the database is an index</a></li><li class="lvl-2"><a href="#the-write-path">The write path</a></li><li class="lvl-2"><a href="#the-read-path">The read path</a></li><li class="lvl-2"><a href="#what-seamless-is-not">What Seamless is not</a></li>
+    </ul>
+  </details>
   <p>Seamless is a local-first memory and coordination system for coding agents.
 The release ships a daemon (<code>seamlessd</code>) and its headless client (<code>seam</code>); one
 daemon process owns one SQLite database and one directory of markdown files,
@@ -372,7 +377,7 @@ months.</li>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

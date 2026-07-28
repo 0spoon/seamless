@@ -995,6 +995,37 @@ a.nav-head.current { color: var(--brand); }
 }
 .prose .cfg-out { margin: 12px 0 0; }
 
+/* The inline TOC disclosure, shown only where the right rail dies (the
+   1100px breakpoint below). Explicit overrides of the generic .prose
+   details/summary panel styling: this is chrome, not an alternative route. */
+.prose .toc-inline { display: none; margin: 0 0 20px; padding: 10px 14px; }
+.prose .toc-inline summary {
+  font-family: var(--font-display);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: var(--tracking-wider);
+  text-transform: uppercase;
+  color: var(--faint);
+}
+.prose .toc-inline summary:hover { color: var(--ink); }
+.prose .toc-inline[open] summary { margin-bottom: 10px; color: var(--ink); }
+.prose .toc-inline ul { list-style: none; margin: 0; padding: 0; }
+.prose .toc-inline li { margin: 0; }
+.prose .toc-inline li a {
+  display: block;
+  padding: 4px 0 4px 12px;
+  border-left: 2px solid var(--border);
+  font-size: 14px;
+  color: var(--muted);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+.prose .toc-inline li.lvl-3 a { padding-left: 24px; font-size: 13px; }
+.prose .toc-inline li a:hover { color: var(--ink); }
+@media (max-width: 1100px) {
+  .prose .toc-inline { display: block; }
+}
+
 /* Native disclosure for alternative routes -- never put headings inside. */
 .prose details {
   margin: 16px 0;
@@ -1097,15 +1128,35 @@ a.nav-head.current { color: var(--brand); }
   text-decoration: none;
 }
 .search-results a .r-title { display: block; font-weight: 600; color: var(--ink); font-size: 14px; }
-.search-results a .r-section {
-  display: block;
+.search-results a .r-snippet {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--muted);
+  margin-top: 2px;
+}
+.search-results .r-snippet mark {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+/* Section label rows between result groups -- labels, not options. */
+.search-results .r-group {
+  margin: 6px 0 2px;
+  padding: 8px 10px 0;
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: var(--tracking-wide);
   text-transform: uppercase;
   color: var(--faint);
-  margin-top: 2px;
+  border-top: 1px solid var(--border);
 }
+.search-results .r-group:first-child { margin-top: 0; padding-top: 2px; border-top: 0; }
 .search-results a:hover, .search-results a.sel { background: var(--brand-soft); }
 .search-results a:hover .r-title, .search-results a.sel .r-title { color: var(--brand); }
 .search-empty { padding: 12px 10px; font-size: 13px; color: var(--muted); }

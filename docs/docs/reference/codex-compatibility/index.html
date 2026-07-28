@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Codex compatibility matrix</h1>
   <p class="lede">Versioned, platform-specific evidence for the Codex hooks, MCP transports, trust gate, output limit, and the contract-recapture procedure.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#maintained-matrix">Maintained matrix</a></li><li class="lvl-2"><a href="#what-seamless-relies-on">What Seamless relies on</a></li><li class="lvl-2"><a href="#refreshing-the-matrix-for-a-codex-release">Refreshing the matrix for a Codex release</a></li>
+    </ul>
+  </details>
   <p>This matrix records what Seamless has <strong>observed</strong>, what is pinned only by a
 released schema or source, and what remains unverified. It is an evidence ledger,
 not a claim that an older Codex release is a supported minimum. The current
@@ -407,7 +412,7 @@ the primary harvest path even if its current shape happens to remain unchanged.<
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

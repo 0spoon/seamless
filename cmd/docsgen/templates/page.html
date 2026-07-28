@@ -4,6 +4,14 @@
   <h1>{{.Title}}</h1>
   {{with .Description}}<p class="lede">{{.}}</p>{{end}}
   {{template "ctxbar" .}}
+  {{/* The inline twin of the right-rail TOC, for the widths that lose it
+       (<=1100px). After the ctx bar: the bar controls what renders below,
+       so it reads first. Hidden by CSS on desktop. */ -}}
+  {{if .Headings}}<details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      {{range .Headings}}<li class="lvl-{{.Level}}"><a href="#{{.ID}}">{{.Text}}</a></li>{{end}}
+    </ul>
+  </details>{{end}}
   {{.Body}}
 </article>
 

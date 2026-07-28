@@ -335,17 +335,22 @@
     var headings = doc.headings.join(" ").toLowerCase();
     var text = doc.text.toLowerCase();
     var total = 0;
+    var first = -1; /* earliest body match, where the snippet window opens */
     for (var i = 0; i < terms.length; i++) {
       var t = terms[i];
       var hit = 0;
       if (title.indexOf(t) >= 0) hit += title === t ? 120 : 60;
       if (section.indexOf(t) >= 0) hit += 12;
       if (headings.indexOf(t) >= 0) hit += 25;
-      if (text.indexOf(t) >= 0) hit += 6;
-      if (!hit) return 0; /* every term must appear somewhere */
+      var at = text.indexOf(t);
+      if (at >= 0) {
+        hit += 6;
+        if (first < 0 || at < first) first = at;
+      }
+      if (!hit) return null; /* every term must appear somewhere */
       total += hit;
     }
-    return total;
+    return { total: total, first: first };
   }
 
   function run() {
@@ -355,27 +360,85 @@
     var hits = [];
     index.forEach(function (doc) {
       var s = score(doc, terms);
-      if (s > 0) hits.push({ doc: doc, score: s });
+      if (s) hits.push({ doc: doc, score: s.total, at: s.first });
     });
     /* Ties keep nav order: index order is the sidebar's, so equal-scoring pages
        come back in the order the reader already knows. */
     hits.sort(function (a, b) { return b.score - a.score; });
-    render(hits.slice(0, 10));
+    render(hits.slice(0, 10), terms);
   }
 
-  function render(hits) {
+  /* A ~90-char window around the first body match, cut at word boundaries
+     and marked with ellipses; a title-only match falls back to the opening
+     of the page text. */
+  function snippetAround(text, at) {
+    if (!text) return "";
+    if (at < 0) at = 0;
+    var start = at <= 30 ? 0 : at - 30;
+    if (start > 0) {
+      var sp = text.indexOf(" ", start);
+      if (sp >= 0 && sp < at) start = sp + 1;
+    }
+    var end = Math.min(text.length, start + 90);
+    if (end < text.length) {
+      var cut = text.lastIndexOf(" ", end);
+      if (cut > start) end = cut;
+    }
+    return (start > 0 ? "…" : "") + text.slice(start, end) + (end < text.length ? "…" : "");
+  }
+
+  /* Term highlighting via text nodes and <mark> elements -- the snippet is
+     index content, so it never goes through innerHTML. */
+  function highlight(container, text, terms) {
+    var lower = text.toLowerCase();
+    var i = 0;
+    while (i < text.length) {
+      var best = -1, len = 0;
+      for (var j = 0; j < terms.length; j++) {
+        var at = lower.indexOf(terms[j], i);
+        if (at >= 0 && (best < 0 || at < best)) { best = at; len = terms[j].length; }
+      }
+      if (best < 0) break;
+      container.appendChild(document.createTextNode(text.slice(i, best)));
+      var mark = document.createElement("mark");
+      mark.textContent = text.slice(best, best + len);
+      container.appendChild(mark);
+      i = best + len;
+    }
+    container.appendChild(document.createTextNode(text.slice(i)));
+  }
+
+  function render(hits, terms) {
     results.innerHTML = "";
     selected = -1;
     if (!hits.length) {
       results.innerHTML = '<p class="search-empty">No matches.</p>';
     } else {
+      var lastSection = null;
       hits.forEach(function (h) {
+        /* Non-interactive section label rows between groups; keyboard nav
+           queries only anchors, so these are invisible to it. */
+        if (h.doc.section !== lastSection) {
+          lastSection = h.doc.section;
+          var g = document.createElement("p");
+          g.className = "r-group";
+          g.textContent = h.doc.section;
+          results.appendChild(g);
+        }
         var a = document.createElement("a");
         a.href = docsRoot + h.doc.url;
         a.setAttribute("role", "option");
-        a.innerHTML = '<span class="r-title"></span><span class="r-section"></span>';
-        a.querySelector(".r-title").textContent = h.doc.title;
-        a.querySelector(".r-section").textContent = h.doc.section;
+        var title = document.createElement("span");
+        title.className = "r-title";
+        title.textContent = h.doc.title;
+        a.appendChild(title);
+        var snip = snippetAround(h.doc.text || "", h.at);
+        if (snip) {
+          var s = document.createElement("span");
+          s.className = "r-snippet";
+          highlight(s, snip, terms);
+          a.appendChild(s);
+        }
         results.appendChild(a);
       });
     }

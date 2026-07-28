@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -219,6 +219,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Internals</h1>
   <p class="lede">For contributors - how the Go packages layer, what the check gate enforces, and the domain invariants that plausible-looking code breaks.</p>
   
+  
   <p>These pages are for people changing Seamless rather than running it. They
 document the things a contributor cannot recover from the code alone: why the
 packages layer the way they do, what the build gate is actually defending, and
@@ -281,7 +282,7 @@ hard way.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=7ef4aa80"></script>
+<script src="../static/docs.js?v=2e606b97"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

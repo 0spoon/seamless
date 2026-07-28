@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Coordinate multiple agents</h1>
   <p class="lede">Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#fan-out-over-the-ready-queue">Fan-out over the ready queue</a></li><li class="lvl-3"><a href="#what-the-loser-of-a-race-sees">What the loser of a race sees</a></li><li class="lvl-2"><a href="#planner-and-executor-split-by-plan-composition">Planner and executor, split by plan composition</a></li><li class="lvl-2"><a href="#shared-lab-investigation">Shared-lab investigation</a></li><li class="lvl-2"><a href="#leases-crashes-and-reclaiming">Leases, crashes, and reclaiming</a></li><li class="lvl-2"><a href="#what-you-see-while-it-runs">What you see while it runs</a></li><li class="lvl-2"><a href="#one-more-collision-to-know-about">One more collision to know about</a></li>
+    </ul>
+  </details>
   <p>Coordinating multiple coding agents with Seamless means pointing N workers -
 Claude Code, Codex, or any MCP client - at one shared, dependency-aware task
 queue with atomic lease-based claiming: every worker runs the same claim loop,
@@ -473,7 +478,7 @@ silently landing in another agent's project.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

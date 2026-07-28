@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Lab, gardener &amp; usage</h1>
   <p class="lede">Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#the-research-lab">The research lab</a></li><li class="lvl-2"><a href="#the-gardener-proposes-it-never-acts">The gardener proposes; it never acts</a></li><li class="lvl-2"><a href="#splits-are-a-different-thing">Splits are a different thing</a></li><li class="lvl-2"><a href="#usage-summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite-set">favorite_set</a></li><li class="lvl-2"><a href="#applying-is-an-explicit-boundary">Applying is an explicit boundary</a></li><li class="lvl-2"><a href="#lab_open">lab_open</a></li><li class="lvl-2"><a href="#trial_record">trial_record</a></li><li class="lvl-2"><a href="#trial_query">trial_query</a></li><li class="lvl-2"><a href="#gardener_proposals">gardener_proposals</a></li><li class="lvl-2"><a href="#gardener_request">gardener_request</a></li><li class="lvl-2"><a href="#gardener_split">gardener_split</a></li><li class="lvl-2"><a href="#gardener_apply">gardener_apply</a></li><li class="lvl-2"><a href="#usage_summary">usage_summary</a></li><li class="lvl-2"><a href="#favorite_set">favorite_set</a></li>
+    </ul>
+  </details>
   <h2 id="the-research-lab">The research lab</h2>
 <p>A lab is a shared workspace for a systematic investigation: a hypothesis, a
 series of trials, and what each one actually did. <code>lab_open</code> binds a lab to the
@@ -630,7 +635,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../../static/docs.js?v=2e606b97"></script>
 <script src="../../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

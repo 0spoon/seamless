@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../">
 
@@ -219,6 +219,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Claude Code setup</h1>
   <p class="lede">Register the MCP endpoint, install the hooks that make sessions ambient, map your repos, and verify each step.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#install-the-hooks-and-register-mcp">Install the hooks and register MCP</a></li><li class="lvl-3"><a href="#why-some-hooks-are-commands-and-others-are-http">Why some hooks are commands and others are http</a></li><li class="lvl-2"><a href="#registering-the-mcp-endpoint-by-hand">Registering the MCP endpoint by hand</a></li><li class="lvl-2"><a href="#map-your-repos">Map your repos</a></li><li class="lvl-2"><a href="#tell-your-agents-it-exists">Tell your agents it exists</a></li><li class="lvl-2"><a href="#the-claude-apps-code-surface">The Claude app&#39;s code surface</a></li><li class="lvl-2"><a href="#verify">Verify</a></li>
+    </ul>
+  </details>
   <p>Claude Code is the client Seamless is built around. Wiring it up is two
 independent halves - <strong>the MCP endpoint</strong> (what an agent can call) and <strong>the
 hooks</strong> (what happens without an agent calling anything) - and you want both.
@@ -372,7 +377,7 @@ organized by symptom.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../static/docs.js?v=7ef4aa80"></script>
+<script src="../static/docs.js?v=2e606b97"></script>
 <script src="../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>What is a coordination substrate?</h1>
   <p class="lede">A definition - the durable, shared layer underneath a fleet of AI agents where memory, tasks, and plans live, so agents in different processes, sessions, and clients can act like one team.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#what-qualifies">What qualifies</a></li><li class="lvl-2"><a href="#seamless-as-one-implementation">Seamless as one implementation</a></li>
+    </ul>
+  </details>
   <p>A coordination substrate for AI agents is the durable, shared layer <em>underneath</em>
 a fleet of agents: the place where memory, tasks, plans, and findings live so
 that agents which never share a process, a context window, or even a vendor can
@@ -292,7 +297,7 @@ orchestrator that schedules or spawns agents. It is the ground they stand on.</p
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Troubleshooting</h1>
   <p class="lede">Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#start-here-always">Start here, always</a></li><li class="lvl-2"><a href="#no-seam-briefing-appears-at-session-start">No &lt;seam-briefing&gt; appears at session start</a></li><li class="lvl-2"><a href="#codex-hooks-are-current-but-doctor-says-trust-unverified">Codex hooks are current, but doctor says trust unverified</a></li><li class="lvl-2"><a href="#codex-mcp-is-stale-or-incompatible">Codex MCP is stale or incompatible</a></li><li class="lvl-2"><a href="#a-briefing-appears-but-it-is-nearly-empty-or-names-the-wrong-project">A briefing appears, but it is nearly empty or names the wrong project</a></li><li class="lvl-2"><a href="#a-write-is-rejected-as-ambiguous-scope">A write is rejected as ambiguous scope</a></li><li class="lvl-2"><a href="#recall-returns-junk-or-misses-what-you-just-wrote">Recall returns junk, or misses what you just wrote</a></li><li class="lvl-2"><a href="#a-task-is-stuck-in-progress-and-nobody-is-working-it">A task is stuck in_progress and nobody is working it</a></li><li class="lvl-2"><a href="#tasks-update-says-the-task-is-already-claimed---by-my-own-session">tasks_update says the task is already claimed - by my own session</a></li><li class="lvl-2"><a href="#a-seam-flag-did-nothing">A seam flag did nothing</a></li><li class="lvl-2"><a href="#a-briefing-setting-in-the-yaml-is-ignored">A briefing setting in the YAML is ignored</a></li><li class="lvl-2"><a href="#two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</a></li><li class="lvl-2"><a href="#memory-write-says-the-name-is-held-by-a-superseded-memory">memory_write says the name is held by a superseded memory</a></li><li class="lvl-2"><a href="#a-supersedes-failed-but-the-memory-was-written">A supersedes failed but the memory was written</a></li>
+    </ul>
+  </details>
   <p>Seamless has one property that makes troubleshooting unlike most software:
 <strong>hooks fail open</strong>. A stopped daemon, a wrong key, a <code>seam</code> binary that moved -
 none of these produce an error you or your agent will see. The handler returns
@@ -526,7 +531,7 @@ name is a lossless in-place update, so retrying is safe.</p>
   <p>Seamless - local-first agent memory and coordination. <a href="../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../static/docs.js?v=2e606b97"></script>
 <script src="../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>

@@ -26,7 +26,7 @@
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
 <link rel="stylesheet" href="../../../../static/site.css?v=3115653f">
-<link rel="stylesheet" href="../../../static/docs.css?v=f4d15038">
+<link rel="stylesheet" href="../../../static/docs.css?v=1c3da85d">
 </head>
 <body class="docs" data-docs-root="../../../">
 
@@ -220,6 +220,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   <h1>Sessions, memory &amp; recall</h1>
   <p class="lede">The eight tools an agent uses most - open a session, write and read memory, and search the store.</p>
   
+  <details class="toc-inline"><summary>On this page</summary>
+    <ul>
+      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete?</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
+    </ul>
+  </details>
   <p>These eight tools are the agent loop. In a repo mapped to a project, most of them
 need no <code>project</code> argument at all: <code>session_start</code> binds the connection, and
 everything after it inherits that scope.</p>
@@ -670,7 +675,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
   <p>Seamless - local-first agent memory and coordination. <a href="../../../../">Home</a> · <a href="https://github.com/0spoon/seamless">GitHub</a></p>
 </footer>
 
-<script src="../../../static/docs.js?v=7ef4aa80"></script>
+<script src="../../../static/docs.js?v=2e606b97"></script>
 <script src="../../../../static/webmcp.js?v=b8c80228"></script>
 </body>
 </html>
