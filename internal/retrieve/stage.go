@@ -75,7 +75,7 @@ func stagesSection(stages []stageLine) string {
 	var b strings.Builder
 	b.WriteString("\nStages (world-state gates):\n")
 	for _, st := range stages {
-		b.WriteString("- " + sanitizeField(st.name, 80) + " -- ")
+		b.WriteString("- " + sanitizeName(st.name, 80) + " -- ")
 		if st.status != "" {
 			b.WriteString(sanitizeField(st.status, 40))
 		} else {

@@ -74,13 +74,28 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 
 func notesReadTool() mcp.Tool {
 	return mcp.NewTool("notes_read",
-		mcp.WithDescription("Read a note by id."),
-		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
+		mcp.WithDescription("Read a note by id, or by slug within the current project (falling back to a global note of the same slug)."),
+		mcp.WithString("id", mcp.Description("note id (ULID)")),
+		mcp.WithString("slug", mcp.Description("note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name)")),
+		mcp.WithString("project", mcp.Description("project slug for the slug lookup; defaults to the bound session's project")),
 	)
 }
 
 func (s *Server) handleNotesRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	note, err := s.loadNote(ctx, argString(req, "id"))
+	id, slug := argString(req, "id"), argString(req, "slug")
+	if id != "" && slug != "" {
+		return errResult("notes_read", errors.New("pass exactly one of id or slug"))
+	}
+	var note core.Note
+	var err error
+	if slug != "" {
+		note, err = s.loadNoteBySlug(ctx, req, slug)
+	} else {
+		if id == "" {
+			return errResult("notes_read", errors.New("id or slug is required (notes_read reads one note by ULID or exact slug; to search text use recall)"))
+		}
+		note, err = s.loadNote(ctx, id)
+	}
 	if err != nil {
 		return errResult("notes_read", err)
 	}
@@ -243,7 +258,33 @@ func (s *Server) loadNote(ctx context.Context, id string) (core.Note, error) {
 		return core.Note{}, err
 	}
 	if !ok {
-		return core.Note{}, fmt.Errorf("no note with id %q", id)
+		return core.Note{}, fmt.Errorf("no note with id %q; read by slug=<slug>, or use recall to search by text", id)
+	}
+	return s.cfg.Files.Store().ReadNote(idx.FilePath)
+}
+
+// loadNoteBySlug resolves a note slug to its full on-disk content, searching the
+// request's read scope first and falling back to the global scope -- the same
+// resolution memory_read applies to names, because briefings, plan compositions,
+// and notes_create responses all name notes by slug.
+func (s *Server) loadNoteBySlug(ctx context.Context, req mcp.CallToolRequest, slug string) (core.Note, error) {
+	slug = core.Slugify(slug)
+	project, err := s.resolveReadScope(ctx, argString(req, "project"))
+	if err != nil {
+		return core.Note{}, err
+	}
+	idx, ok, err := store.NoteBySlug(ctx, s.cfg.DB, project, slug)
+	if err != nil {
+		return core.Note{}, err
+	}
+	if !ok && project != "" {
+		idx, ok, err = store.NoteBySlug(ctx, s.cfg.DB, "", slug)
+		if err != nil {
+			return core.Note{}, err
+		}
+	}
+	if !ok {
+		return core.Note{}, fmt.Errorf("%w; check the slug, pass project=<slug> or project=global, read by id=<ULID>, or use recall to search by text", scopedNotFound("note", project, slug))
 	}
 	return s.cfg.Files.Store().ReadNote(idx.FilePath)
 }

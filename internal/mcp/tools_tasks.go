@@ -22,9 +22,9 @@ const defaultClaimLease = 15 * time.Minute
 // errAmbiguousActor cannot get anywhere else: its own identity is the cc/<id> or
 // cx/<id> its briefing prints, and passing it is how a concurrent agent names the claim as its
 // own instead of having one guessed for it.
-const actorSessionArgDesc = "the acting agent's session: your cc/<id> or cx/<id> from the briefing, or a session name. " +
-	"Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when " +
-	"several agents are active and the actor is otherwise ambiguous."
+const actorSessionArgDesc = "the acting agent's session: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a session name. " +
+	"Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run " +
+	"session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses."
 
 // actorSessionIDArgDesc documents the `session_id` argument -- the ULID power form
 // of actorSessionArgDesc, taking precedence over the name and the binding.
@@ -83,7 +83,7 @@ func tasksUpdateTool() mcp.Tool {
 		mcp.WithString("body", mcp.Description("new body (aliases: content, text)")),
 		mcp.WithString("project", mcp.Description("reassign the task to another project slug (used when a split moves a project's open work to a child)")),
 		mcp.WithArray("add_depends_on", mcp.WithStringItems(), mcp.Description("task ids to add as blockers (a comma-separated string is also accepted)")),
-		mcp.WithString("session", mcp.Description("the acting agent's session (your cc/<id> or cx/<id> from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active")),
+		mcp.WithString("session", mcp.Description("the acting agent's session (the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a session name); needed only to mutate a task you hold a live claim on when several agents are active")),
 		mcp.WithString("session_id", mcp.Description(actorSessionIDArgDesc)),
 	)
 }

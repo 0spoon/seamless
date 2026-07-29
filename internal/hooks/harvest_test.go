@@ -64,15 +64,18 @@ func TestHarvestFindingsCapsLength(t *testing.T) {
 }
 
 func TestInjectAmbientLine(t *testing.T) {
-	// Into an existing briefing: line goes just before the closing tag.
+	// Into an existing briefing: line goes just before the closing tag, and
+	// coaches passing session=<name> on the identity-sensitive tools.
 	brief := "<seam-briefing>\nSeam project: demo\n</seam-briefing>"
 	got := injectAmbientLine(brief, "cc/abc12345")
 	require.Contains(t, got, "Seam session: cc/abc12345 (ambient)")
-	require.True(t, strings.HasSuffix(got, "(ambient)\n</seam-briefing>"))
+	require.Contains(t, got, "pass session=cc/abc12345 on tasks_claim")
+	require.True(t, strings.HasSuffix(got, "when several agents are active\n</seam-briefing>"))
 
 	// No briefing: a minimal wrapper is produced.
 	got = injectAmbientLine("", "cc/abc12345")
-	require.Equal(t, "<seam-briefing>\nSeam session: cc/abc12345 (ambient)\n</seam-briefing>", got)
+	require.True(t, strings.HasPrefix(got, "<seam-briefing>\nSeam session: cc/abc12345 (ambient)"))
+	require.True(t, strings.HasSuffix(got, "\n</seam-briefing>"))
 }
 
 func TestAmbientName(t *testing.T) {

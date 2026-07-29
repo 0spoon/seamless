@@ -71,7 +71,7 @@ Update a task: change status (open|in_progress|done|dropped), edit title/body, o
 | `add_depends_on` | array | no | task ids to add as blockers (a comma-separated string is also accepted) |
 | `body` | string | no | new body (aliases: content, text) |
 | `project` | string | no | reassign the task to another project slug (used when a split moves a project's open work to a child) |
-| `session` | string | no | the acting agent's session (your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active |
+| `session` | string | no | the acting agent's session (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name); needed only to mutate a task you hold a live claim on when several agents are active |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |
 | `status` | string | no | new status. One of: `open`, `in_progress`, `done`, `dropped`. |
 | `title` | string | no | new title |
@@ -104,7 +104,7 @@ Atomically claim a task for the current session, moving it to in_progress with a
 |---|---|---|---|
 | `id` | string | **yes** | task id to claim |
 | `lease_seconds` | number | no | lease duration in seconds before the claim lapses and the task becomes reclaimable (default 900) |
-| `session` | string | no | the acting agent's session: your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when several agents are active and the actor is otherwise ambiguous. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |
 
 ## tasks_release {#tasks_release}
@@ -114,5 +114,5 @@ Release a task the current session holds, reopening it (status back to open, cla
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | task id to release |
-| `session` | string | no | the acting agent's session: your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when several agents are active and the actor is otherwise ambiguous. |
+| `session` | string | no | the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses. |
 | `session_id` | string | no | the acting agent's session ULID; takes precedence over session and the bound session |

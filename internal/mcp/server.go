@@ -84,7 +84,8 @@ var errNoScope = errors.New(
 // overwrite another agent's session, so the caller must name it explicitly.
 var errAmbiguousSession = errors.New(
 	"ambiguous session: no bound session, and multiple active ambient sessions " +
-		"could be the target; pass session_id=<ULID> or session=<name>")
+		"could be the target; name yours with session=<the cc/... or cx/... on your briefing's 'Seam session' line> " +
+		"or session_id=<ULID>")
 
 var errAmbiguousScope = errors.New(
 	"ambiguous scope: no bound session, and active ambient sessions span multiple " +
@@ -100,7 +101,8 @@ var errAmbiguousScope = errors.New(
 // in the session briefing.
 var errAmbiguousActor = errors.New(
 	"ambiguous agent: no bound session and multiple agents are active, so the acting " +
-		"session cannot be inferred; name yourself with session=<your cc/... or cx/... from the briefing> or session_id=<ULID>")
+		"session cannot be inferred; name yourself with session=<the cc/... or cx/... on your briefing's " +
+		"'Seam session' line> or session_id=<ULID>")
 
 // writeScopeHelp is the tail resolveWriteScope appends to either scope error. It
 // carries the two facts an agent stuck at this decision cannot get anywhere else,

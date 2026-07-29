@@ -364,7 +364,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 </table>
 </div>
 <h2 id="notes_read">notes_read</h2>
-<p>Read a note by id.</p>
+<p>Read a note by id, or by slug within the current project (falling back to a global note of the same slug).</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -379,8 +379,20 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 <tr>
 <td><code>id</code></td>
 <td>string</td>
-<td><strong>yes</strong></td>
+<td>no</td>
 <td>note id (ULID)</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>no</td>
+<td>project slug for the slug lookup; defaults to the bound session's project</td>
+</tr>
+<tr>
+<td><code>slug</code></td>
+<td>string</td>
+<td>no</td>
+<td>note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name)</td>
 </tr>
 </tbody>
 </table>

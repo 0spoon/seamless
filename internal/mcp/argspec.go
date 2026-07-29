@@ -55,8 +55,13 @@ const maxSafeInteger = 1 << 53
 // These aliases are load-bearing, not politeness: per the field logs
 // (mcp-tool-failures-mostly-infra-not-reasoning) ~11% of real agent tool
 // failures were memory_append being sent "body" instead of "content".
+// slug/name likewise: memories are addressed by name and notes by slug, and
+// the gardener's tool-error evidence showed agents sending notes_read the
+// other vocabulary. A tool declaring both (project_create) is unaffected --
+// an exactly-declared name always wins over an alias.
 var aliasGroups = map[string][]string{
 	"body": {"content", "text"},
+	"slug": {"name"},
 }
 
 // aliasesFor returns the alternate names accepted for a canonical parameter.
@@ -528,14 +533,27 @@ func jsonTypeName(v any) string {
 	}
 }
 
+// paramRedirects maps a rejected parameter name to a pointer at the tool the
+// caller most likely wants: an agent sending query= is trying to search, and
+// the fix is a different call, not a different spelling. A tool that declares
+// the parameter (recall declares query) never reaches the unknown path, so the
+// hint only ever shows where it applies.
+var paramRedirects = map[string]string{
+	"query": "to search by text, use the recall tool (recall query=<text>)",
+}
+
 // unknownParamError names the bad parameter, suggests the intended one when it
 // can, and lists what the tool accepts. errResult prefixes the tool name.
 func unknownParamError(key string, known []string) error {
-	if s := suggestParam(key, known); s != "" {
-		return fmt.Errorf("unknown parameter %q: did you mean %q? valid parameters are: %s",
-			key, s, strings.Join(known, ", "))
+	suffix := ""
+	if hint, ok := paramRedirects[key]; ok {
+		suffix = "; " + hint
 	}
-	return fmt.Errorf("unknown parameter %q: valid parameters are: %s", key, strings.Join(known, ", "))
+	if s := suggestParam(key, known); s != "" {
+		return fmt.Errorf("unknown parameter %q: did you mean %q? valid parameters are: %s%s",
+			key, s, strings.Join(known, ", "), suffix)
+	}
+	return fmt.Errorf("unknown parameter %q: valid parameters are: %s%s", key, strings.Join(known, ", "), suffix)
 }
 
 // missingRequiredError reports every absent required parameter in one message --

@@ -58,20 +58,42 @@ func (s *Service) SetBriefingConfig(b config.Briefing) { s.briefing = b }
 // SetSearchConfig sets the file/env search knobs (Defaults() until called).
 func (s *Service) SetSearchConfig(c config.Search) { s.search = c }
 
-// injectionRe strips imperative prompt-injection phrases from any field lifted
-// out of stored content and shown to an agent as trusted context.
-var injectionRe = regexp.MustCompile(`(?i)\b(ignore|disregard|from now on|you must|override)\b[^\n]*`)
+// injectionRe strips imperative prompt-injection phrases from any free-prose
+// field lifted out of stored content and shown to an agent as trusted context.
+// The left boundary rejects hyphen-attached matches so a slug mentioned in
+// prose ("fixture-install-hooks-needs-home-override") survives the scrub; the
+// consumed prefix character is restored by the $1 in the replacement.
+var injectionRe = regexp.MustCompile(`(?i)(^|[^\w-])(?:ignore|disregard|from now on|you must|override)\b[^\n]*`)
 
-// sanitizeField scrubs a single field for safe interpolation into a briefing:
-// newlines flattened, injection phrases removed, whitespace collapsed, and the
-// result capped at maxRunes (with an ellipsis). maxRunes <= 3 disables the cap.
+// sanitizeField scrubs a single free-prose field for safe interpolation into a
+// briefing: newlines flattened, injection phrases removed, whitespace
+// collapsed, and the result capped at maxRunes (with an ellipsis). maxRunes <=
+// 3 disables the cap. Identifier fields go through sanitizeName instead.
 func sanitizeField(s string, maxRunes int) string {
 	s = strings.ReplaceAll(s, "\r", " ")
 	s = strings.ReplaceAll(s, "\n", " ")
-	s = injectionRe.ReplaceAllString(s, "")
+	s = injectionRe.ReplaceAllString(s, "$1")
 	s = strings.Join(strings.Fields(s), " ")
 	// maxRunes <= 3 disables the cap (the historical contract); above it, cut on
 	// a word boundary with a trailing ellipsis rather than mid-word.
+	if maxRunes > 3 {
+		s = core.TruncateWords(s, maxRunes)
+	}
+	return s
+}
+
+// sanitizeName scrubs an identifier field -- a memory/note/plan name, project
+// slug, or session name -- for briefing interpolation: newlines flattened,
+// whitespace collapsed, capped at maxRunes. It deliberately skips the
+// injection scrub: identifiers are validated slugs that cannot carry an
+// imperative phrase, and they are lookup keys the reader passes back verbatim
+// (memory_read name=<name>), so scrubbing one turns into a not-found error on
+// the agent's next call -- memories named "...-override" were briefed with the
+// tail silently amputated, and agents faithfully read the mangled name back.
+func sanitizeName(s string, maxRunes int) string {
+	s = strings.ReplaceAll(s, "\r", " ")
+	s = strings.ReplaceAll(s, "\n", " ")
+	s = strings.Join(strings.Fields(s), " ")
 	if maxRunes > 3 {
 		s = core.TruncateWords(s, maxRunes)
 	}

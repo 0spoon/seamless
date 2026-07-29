@@ -98,8 +98,8 @@ Record interim progress on the current session (working findings so far). Uses t
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `findings` | string | **yes** | Working findings / progress note so far |
-| `session` | string | no | Optional session name; defaults to the bound session |
-| `session_id` | string | no | Optional session ULID; takes precedence over session and the bound session |
+| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## session_end {#session_end}
 
@@ -109,8 +109,8 @@ Complete the current session, persisting its findings for future briefings. Uses
 |---|---|---|---|
 | `findings` | string | **yes** | Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected. |
 | `mishaps` | array | no | Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. "violated chroma-boot-race by ...") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered. |
-| `session` | string | no | Optional session name; defaults to the bound session |
-| `session_id` | string | no | Optional session ULID; takes precedence over session and the bound session |
+| `session` | string | no | Session name to operate on: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses |
+| `session_id` | string | no | Session ULID to operate on; takes precedence over session and the bound session |
 
 ## memory_write {#memory_write}
 
@@ -138,11 +138,12 @@ Append markdown to an existing memory's body. The memory keeps its id. To create
 
 ## memory_read {#memory_read}
 
-Read a memory by name within the current project, falling back to a global memory of the same name.
+Read a memory by name within the current project (falling back to a global memory of the same name), or directly by id.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | **yes** | memory name |
+| `id` | string | no | memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution |
+| `name` | string | no | memory name |
 | `project` | string | no | project slug; defaults to the bound session's project |
 
 ## memory_delete {#memory_delete}

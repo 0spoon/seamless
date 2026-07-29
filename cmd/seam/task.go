@@ -110,14 +110,33 @@ func runTaskAdd(ctx context.Context, e *env, o *taskAddOpts, _ []string) error {
 
 // --- task done / start / drop / reopen ---
 
+// actorSessionFlag declares --session on the identity-sensitive task commands.
+// Every seam invocation dials a fresh connection, so it never has a bound
+// session; with several agents active the server refuses to guess the actor
+// (errAmbiguousActor), and this flag is how the caller names itself -- the
+// cc/... or cx/... on its briefing's 'Seam session' line, or a sess/* name.
+func actorSessionFlag(fs *flag.FlagSet) *string {
+	return fs.String("session", "",
+		"act as session `NAME` (a cc/..., cx/..., or sess/... name); required when several agents are active, since a fresh CLI connection cannot be attributed automatically")
+}
+
+// taskActorOpts carries --session for the commands whose only option it is.
+type taskActorOpts struct {
+	session *string
+}
+
+func bindTaskActor(fs *flag.FlagSet) *taskActorOpts {
+	return &taskActorOpts{session: actorSessionFlag(fs)}
+}
+
 // taskTransitionSpec builds the four one-word status changes from one declaration.
 // They differ only in the status they send, so each stays a real command with its
 // own name in the help rather than a hidden alias -- and the status comes from the
 // spec, replacing a map lookup that yielded "" for anything unrecognized.
 func taskTransitionSpec(sub, status, summary string) cmd {
-	return spec("task "+sub, groupTasks, summary, exactly(1, "id"), bindNoOpts,
-		func(ctx context.Context, e *env, _ *noOpts, pos []string) error {
-			return runTaskTransition(ctx, e, sub, status, pos[0])
+	return spec("task "+sub, groupTasks, summary, exactly(1, "id"), bindTaskActor,
+		func(ctx context.Context, e *env, o *taskActorOpts, pos []string) error {
+			return runTaskTransition(ctx, e, o, sub, status, pos[0])
 		})
 }
 
@@ -128,13 +147,13 @@ var (
 	taskReopenCmd = taskTransitionSpec("reopen", "open", "reopen a closed task")
 )
 
-func runTaskTransition(ctx context.Context, e *env, sub, status, id string) error {
+func runTaskTransition(ctx context.Context, e *env, o *taskActorOpts, sub, status, id string) error {
 	cli, _, err := e.dial(ctx)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "tasks_update", map[string]any{"id": id, "status": status})
+	out, err := callTool(ctx, cli, "tasks_update", map[string]any{"id": id, "status": status, "session": *o.session})
 	if err != nil {
 		return err
 	}
@@ -160,7 +179,8 @@ var (
 )
 
 type taskClaimOpts struct {
-	lease *int
+	lease   *int
+	session *string
 }
 
 func bindTaskClaim(fs *flag.FlagSet) *taskClaimOpts {
@@ -168,7 +188,8 @@ func bindTaskClaim(fs *flag.FlagSet) *taskClaimOpts {
 	// silent fall-through to the server's 900s default. That is what makes the 0
 	// default unambiguous below: 0 can now only mean absent.
 	return &taskClaimOpts{
-		lease: posIntFlag(fs, "lease", 0, "lease `SECONDS` before the claim lapses (default: the server's 900)"),
+		lease:   posIntFlag(fs, "lease", 0, "lease `SECONDS` before the claim lapses (default: the server's 900)"),
+		session: actorSessionFlag(fs),
 	}
 }
 
@@ -178,7 +199,7 @@ func runTaskClaim(ctx context.Context, e *env, o *taskClaimOpts, sub, id string)
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	call := map[string]any{"id": id}
+	call := map[string]any{"id": id, "session": *o.session}
 	if *o.lease > 0 {
 		call["lease_seconds"] = *o.lease
 	}
@@ -198,13 +219,15 @@ var taskReleaseCmd = spec("task release", groupTasks,
 	exactly(1, "id"), bindTaskRelease, runTaskRelease)
 
 type taskReleaseOpts struct {
-	force *bool
+	force   *bool
+	session *string
 }
 
 func bindTaskRelease(fs *flag.FlagSet) *taskReleaseOpts {
 	return &taskReleaseOpts{
 		force: fs.Bool("force", false,
 			"owner override: release the lock even if you do not hold it (routes through the console owner surface, not the agent claim path)"),
+		session: actorSessionFlag(fs),
 	}
 }
 
@@ -235,7 +258,7 @@ func runTaskRelease(ctx context.Context, e *env, o *taskReleaseOpts, pos []strin
 		return err
 	}
 	defer func() { _ = cli.Close() }()
-	out, err := callTool(ctx, cli, "tasks_release", map[string]any{"id": id})
+	out, err := callTool(ctx, cli, "tasks_release", map[string]any{"id": id, "session": *o.session})
 	if err != nil {
 		return err
 	}

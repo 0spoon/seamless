@@ -353,7 +353,7 @@ func alsoBindingLine(compact []core.Memory) string {
 	}
 	names := make([]string, 0, len(compact))
 	for _, c := range compact {
-		names = append(names, sanitizeField(c.Name, 80))
+		names = append(names, sanitizeName(c.Name, 80))
 	}
 	return fmt.Sprintf("- +%d more, equally binding -- memory_read name=<name> before working near one: %s\n",
 		len(compact), strings.Join(names, ", "))
@@ -631,7 +631,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	breakdown := kindBreakdown(len(constraints), len(sec.conventions), len(sec.stages))
 	headLine := func(renderedFindings int) string {
 		return fmt.Sprintf("<seam-briefing>\nSeam project: %s -- %d memories%s, %d recent findings.\n",
-			sanitizeField(label, 80), totalMems, breakdown, renderedFindings)
+			sanitizeName(label, 80), totalMems, breakdown, renderedFindings)
 	}
 
 	// Pinned sections are composed up front so their cost is reserved before
@@ -642,7 +642,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		constraintsSec.WriteString("\nConstraints (binding for every session):\n")
 		full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
 		for _, c := range full {
-			constraintsSec.WriteString("- " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+			constraintsSec.WriteString("- " + sanitizeName(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
 			ids = append(ids, c.ID)
 		}
 		// The compact tier is part of the same pinned section -- budget can drop
@@ -671,9 +671,9 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	if len(sec.plans) > 0 {
 		for _, p := range sec.plans {
 			fmt.Fprintf(&rollups, "- %s -- %d/%d done, %d claimable, %d in flight\n",
-				sanitizeField(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
+				sanitizeName(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
 		}
-		plansTrailer = "(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id>; attach work via the plan:<slug> tag)\n"
+		plansTrailer = "(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id> session=<your Seam session>; attach work via the plan:<slug> tag)\n"
 	}
 
 	var tail strings.Builder
@@ -750,7 +750,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 		full, _ := conventionTiers(sec.conventions, cfg.ConventionMaxFull)
 		shown := 0
 		for _, m := range full {
-			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			line := "- " + sanitizeName(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
 			if !m.Favorite && used+estTokens(line) > budget {
 				break
 			}
@@ -774,7 +774,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 			body.WriteString(lead)
 			used += estTokens(lead)
 			for _, f := range findings {
-				line := "- " + sanitizeField(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 200) + "\n"
+				line := "- " + sanitizeName(f.Name, 80) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 200) + "\n"
 				if used+estTokens(line) > budget {
 					break
 				}
@@ -804,20 +804,20 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 
 	dropped := 0
 	if len(sec.favorites) > 0 || len(index) > 0 || sec.indexOmitted > 0 {
-		lead := "\nMemories (" + sanitizeField(label, 80) + "):\n"
+		lead := "\nMemories (" + sanitizeName(label, 80) + "):\n"
 		body.WriteString(lead)
 		used += estTokens(lead)
 		// Starred memories head the list, exempt from the budget check: the
 		// favorite pin folded into the section (partitioned out before the
 		// recency/count trims, so those never saw them either).
 		for _, m := range sec.favorites {
-			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			line := "- " + sanitizeName(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
 			body.WriteString(line)
 			used += estTokens(line)
 			ids = append(ids, m.ID)
 		}
 		for i, m := range index {
-			line := "- " + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+			line := "- " + sanitizeName(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
 			if used+estTokens(line) > budget && (i > 0 || len(sec.favorites) > 0) {
 				dropped = len(index) - i
 				break
@@ -841,7 +841,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 			body.WriteString(lead)
 			used += estTokens(lead)
 			for _, f := range sec.siblings {
-				line := "- " + sanitizeField(f.ProjectSlug, 60) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 150) + "\n"
+				line := "- " + sanitizeName(f.ProjectSlug, 60) + " (" + humanAge(f.UpdatedAt) + "): " + clipWords(sanitizeField(f.Findings, 0), 150) + "\n"
 				if used+estTokens(line) > budget {
 					break
 				}
@@ -859,7 +859,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 			body.WriteString(lead)
 			used += estTokens(lead)
 			for _, m := range sec.siblingMems {
-				line := "- " + sanitizeField(m.Project, 60) + "/" + sanitizeField(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
+				line := "- " + sanitizeName(m.Project, 60) + "/" + sanitizeName(m.Name, 80) + ": " + sanitizeField(m.Description, 160) + "\n"
 				if used+estTokens(line) > budget {
 					break
 				}
@@ -878,7 +878,7 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 // budget-competes (see assembleBriefing).
 func pendingPlanLine(n core.Note) string {
 	return fmt.Sprintf("- %s -- awaiting approval: %s (%s, %s)\n",
-		sanitizeField(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
+		sanitizeName(plans.SlugFromTags(n.Tags), 80), sanitizeField(n.Title, 80),
 		plans.StatusFromTags(n.Tags), humanAge(n.Updated))
 }
 
@@ -906,7 +906,7 @@ func readyTasksSection(ready []core.Task, shown int) string {
 		}
 		b.WriteString("- " + sanitizeField(t.Title, 60) + "\n")
 	}
-	b.WriteString("(full queue with ids: tasks_ready; claim: tasks_claim id=<id>)\n")
+	b.WriteString("(full queue with ids: tasks_ready; claim: tasks_claim id=<id> session=<your Seam session>)\n")
 	return b.String()
 }
 
@@ -999,12 +999,12 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, re
 	ids := make([]string, 0, len(constraints)+len(relevant))
 	var b strings.Builder
 	b.WriteString("<seam-briefing>\n")
-	fmt.Fprintf(&b, "Seam project: %s -- %s (subagent scope).\n", sanitizeField(label, 80),
+	fmt.Fprintf(&b, "Seam project: %s -- %s (subagent scope).\n", sanitizeName(label, 80),
 		countNoun(len(constraints), "constraint", "constraints"))
 	b.WriteString("\nConstraints (binding for every session):\n")
 	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
 	for _, c := range full {
-		b.WriteString("- " + sanitizeField(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
+		b.WriteString("- " + sanitizeName(c.Name, 80) + ": " + sanitizeField(c.Description, 160) + "\n")
 		ids = append(ids, c.ID)
 	}
 	b.WriteString(alsoBindingLine(compact))
@@ -1014,7 +1014,7 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, re
 	if len(relevant) > 0 {
 		b.WriteString("\nRelevant to this task:\n")
 		for _, h := range relevant {
-			b.WriteString("- " + sanitizeField(h.name, 80) + ": " + sanitizeField(h.description, 160) + "\n")
+			b.WriteString("- " + sanitizeName(h.name, 80) + ": " + sanitizeField(h.description, 160) + "\n")
 			ids = append(ids, h.id)
 		}
 	}

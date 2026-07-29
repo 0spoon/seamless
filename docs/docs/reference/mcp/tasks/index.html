@@ -376,7 +376,7 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td><code>session</code></td>
 <td>string</td>
 <td>no</td>
-<td>the acting agent's session (your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name); needed only to mutate a task you hold a live claim on when several agents are active</td>
+<td>the acting agent's session (the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name); needed only to mutate a task you hold a live claim on when several agents are active</td>
 </tr>
 <tr>
 <td><code>session_id</code></td>
@@ -496,7 +496,7 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td><code>session</code></td>
 <td>string</td>
 <td>no</td>
-<td>the acting agent's session: your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when several agents are active and the actor is otherwise ambiguous.</td>
+<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses.</td>
 </tr>
 <tr>
 <td><code>session_id</code></td>
@@ -530,7 +530,7 @@ the exact lease boundary, even while its status remains <code>in_progress</code>
 <td><code>session</code></td>
 <td>string</td>
 <td>no</td>
-<td>the acting agent's session: your cc/&lt;id&gt; or cx/&lt;id&gt; from the briefing, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it to name yourself when several agents are active and the actor is otherwise ambiguous.</td>
+<td>the acting agent's session: the cc/&lt;id&gt; or cx/&lt;id&gt; on your briefing's 'Seam session' line, or a session name. Defaults to the connection's bound session, then a sole active ambient. Pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses.</td>
 </tr>
 <tr>
 <td><code>session_id</code></td>

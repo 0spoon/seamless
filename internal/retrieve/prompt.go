@@ -351,7 +351,7 @@ func renderPromptRecall(hits []promptHit) string {
 	b.WriteString("<seam-recall>Seam has possibly relevant memories:")
 	for _, h := range hits {
 		fmt.Fprintf(&b, "\n- %s (%s): %s",
-			sanitizeField(h.name, 80), humanAge(h.updatedAt), sanitizeField(h.description, 160))
+			sanitizeName(h.name, 80), humanAge(h.updatedAt), sanitizeField(h.description, 160))
 	}
 	b.WriteString("\nRead with memory_read before re-deriving.</seam-recall>")
 	return b.String()

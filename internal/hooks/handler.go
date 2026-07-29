@@ -520,9 +520,14 @@ func ambientName(client Client, externalSessionID string) string {
 
 // injectAmbientLine adds the "Seam session: cc/<handle> (ambient)" line to a briefing,
 // placing it just before the closing tag, or wrapping a fresh minimal briefing
-// when there was none.
+// when there was none. The line names the reading agent's own identity -- the
+// value the briefing's "session=<your Seam session>" hints refer to -- and
+// spells out when to pass it: an ambient session is not bound to the MCP
+// connection, so with several agents active, a bare tasks_claim/session_end
+// cannot infer its caller and fails asking for exactly this value.
 func injectAmbientLine(briefing, sessionName string) string {
-	line := "Seam session: " + sessionName + " (ambient)"
+	line := "Seam session: " + sessionName + " (ambient) -- pass session=" + sessionName +
+		" on tasks_claim/tasks_release/session_end/session_update when several agents are active"
 	if briefing == "" {
 		return "<seam-briefing>\n" + line + "\n</seam-briefing>"
 	}

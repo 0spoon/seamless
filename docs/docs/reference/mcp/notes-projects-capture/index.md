@@ -77,11 +77,13 @@ Create a work note (research finding, decision record, summary). Auto-tagged cre
 
 ## notes_read {#notes_read}
 
-Read a note by id.
+Read a note by id, or by slug within the current project (falling back to a global note of the same slug).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `id` | string | **yes** | note id (ULID) |
+| `id` | string | no | note id (ULID) |
+| `project` | string | no | project slug for the slug lookup; defaults to the bound session's project |
+| `slug` | string | no | note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name) |
 
 ## notes_update {#notes_update}
 

@@ -207,8 +207,8 @@ func sessionUpdateTool() mcp.Tool {
 	return mcp.NewTool("session_update",
 		mcp.WithDescription("Record interim progress on the current session (working findings so far). Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Working findings / progress note so far")),
-		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
-		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
+		mcp.WithString("session", mcp.Description("Session name to operate on: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses")),
+		mcp.WithString("session_id", mcp.Description("Session ULID to operate on; takes precedence over session and the bound session")),
 	)
 }
 
@@ -241,8 +241,8 @@ func sessionEndTool() mcp.Tool {
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
 		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. \"violated chroma-boot-race by ...\") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered.")),
-		mcp.WithString("session", mcp.Description("Optional session name; defaults to the bound session")),
-		mcp.WithString("session_id", mcp.Description("Optional session ULID; takes precedence over session and the bound session")),
+		mcp.WithString("session", mcp.Description("Session name to operate on: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses")),
+		mcp.WithString("session_id", mcp.Description("Session ULID to operate on; takes precedence over session and the bound session")),
 	)
 }
 

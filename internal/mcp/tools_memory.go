@@ -295,38 +295,57 @@ func stageHeaderHint(kind core.MemoryKind, body string) string {
 
 func memoryReadTool() mcp.Tool {
 	return mcp.NewTool("memory_read",
-		mcp.WithDescription("Read a memory by name within the current project, falling back to a global memory of the same name."),
-		mcp.WithString("name", mcp.Required(), mcp.Description("memory name")),
+		mcp.WithDescription("Read a memory by name within the current project (falling back to a global memory of the same name), or directly by id."),
+		mcp.WithString("name", mcp.Description("memory name")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
+		mcp.WithString("id", mcp.Description("memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution")),
 	)
 }
 
 func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	name, err := memoryName(argString(req, "name"))
-	if err != nil {
-		return errResult("memory_read", err)
+	id := argString(req, "id")
+	rawName := argString(req, "name")
+	if id != "" && rawName != "" {
+		return errResult("memory_read", errors.New("pass exactly one of name or id"))
 	}
-	if name == "" {
-		return errResult("memory_read", errors.New("name is required (memory_read reads one memory by exact name; to search text use recall)"))
-	}
-	project, err := s.resolveReadScope(ctx, argString(req, "project"))
-	if err != nil {
-		return errResult("memory_read", err)
-	}
-	idx, found, err := s.resolveMemory(ctx, project, name, true)
-	if err != nil {
-		return errResult("memory_read", err)
-	}
-	if !found {
-		// The active lookup missed; a superseded memory (excluded from the active
-		// index) is still readable, returned with a warning pointing at its
-		// replacement so the agent reads the current knowledge instead.
-		idx, found, err = s.resolveSupersededMemory(ctx, project, name)
+	var idx core.Memory
+	if id != "" {
+		m, found, err := store.MemoryByID(ctx, s.cfg.DB, id)
 		if err != nil {
 			return errResult("memory_read", err)
 		}
 		if !found {
-			return errResult("memory_read", fmt.Errorf("%w; check the name, pass project=<slug> or project=global, or use recall to search by text", scopedNotFound("memory", project, name)))
+			return errResult("memory_read", fmt.Errorf("no memory with id %q; use recall to search by text, or memory_read name=<name>", id))
+		}
+		idx = m
+	} else {
+		name, err := memoryName(rawName)
+		if err != nil {
+			return errResult("memory_read", err)
+		}
+		if name == "" {
+			return errResult("memory_read", errors.New("name or id is required (memory_read reads one memory by exact name or ULID; to search text use recall)"))
+		}
+		project, err := s.resolveReadScope(ctx, argString(req, "project"))
+		if err != nil {
+			return errResult("memory_read", err)
+		}
+		var found bool
+		idx, found, err = s.resolveMemory(ctx, project, name, true)
+		if err != nil {
+			return errResult("memory_read", err)
+		}
+		if !found {
+			// The active lookup missed; a superseded memory (excluded from the
+			// active index) is still readable, returned with a warning pointing at
+			// its replacement so the agent reads the current knowledge instead.
+			idx, found, err = s.resolveSupersededMemory(ctx, project, name)
+			if err != nil {
+				return errResult("memory_read", err)
+			}
+			if !found {
+				return errResult("memory_read", fmt.Errorf("%w; check the name, pass project=<slug> or project=global, read by id=<ULID>, or use recall to search by text", scopedNotFound("memory", project, name)))
+			}
 		}
 	}
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
@@ -335,7 +354,7 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	// Carry index-only lifecycle fields onto the file-parsed memory for the response.
 	mem.InvalidAt, mem.SupersededBy = idx.InvalidAt, idx.SupersededBy
-	s.record(ctx, core.EventMemoryRead, s.boundSession(ctx), mem.Project, mem.ID, map[string]any{"name": name})
+	s.record(ctx, core.EventMemoryRead, s.boundSession(ctx), mem.Project, mem.ID, map[string]any{"name": mem.Name})
 
 	out := map[string]any{
 		"id": mem.ID, "kind": string(mem.Kind), "name": mem.Name,
