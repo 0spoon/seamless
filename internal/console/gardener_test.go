@@ -85,6 +85,22 @@ func TestProposalPresentation_CoversCanonicalKinds(t *testing.T) {
 	}
 }
 
+func TestGardenerPage_PolishContracts(t *testing.T) {
+	source, err := templateFS.ReadFile("templates/gardener.html")
+	require.NoError(t, err)
+	require.Contains(t, string(source), `class="gardener-contract-copy"`,
+		"the contract explanation must wrap independently of its badge")
+
+	_, mux := newConsole(t)
+	css := getPeek(t, mux, "/console/static/console.css").Body.String()
+	require.Contains(t, css, ".lib-page.gardener-page { --lib-accent: var(--ok); }",
+		"the Gardener accent selector must outrank the later shared library default")
+	require.Contains(t, css, "grid-template-columns: minmax(0, min(100%, var(--content-max)));",
+		"the centered content track must shrink inside the usable viewport")
+	require.Contains(t, css, ".gardener-page .lib-controlbar .seg { max-width: 100%; overflow-x: auto; }",
+		"the proposal filters must not force the page wider than the viewport")
+}
+
 func TestGardenerPage_CardsDismissApply(t *testing.T) {
 	ctx, db, _, mux := newConsoleWithGardener(t)
 
