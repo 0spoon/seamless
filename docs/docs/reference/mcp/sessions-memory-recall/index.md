@@ -148,7 +148,7 @@ Read a memory by name within the current project (falling back to a global memor
 
 ## memory_delete {#memory_delete}
 
-Delete a memory by name (removes the file and its index).
+Delete a memory by name: the markdown file leaves the disk and its index row goes with it, with no provenance and no pointer left behind. Prefer nearly anything else. To replace knowledge that turned out to be wrong, use memory_write with supersedes -- the old memory drops out of every index (briefings, recall) but stays readable, pointing at what replaced it, which is how a later reader learns the thing was reconsidered rather than that it was never believed. To retire something merely stale, leave it for the gardener's archive proposal. Reserve deletion for memories written by mistake: a duplicate, a test, a write into the wrong project.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

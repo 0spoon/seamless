@@ -18,7 +18,7 @@ import (
 
 func notesCreateTool() mcp.Tool {
 	return mcp.NewTool("notes_create", hintAdd(),
-		mcp.WithDescription("Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent."),
+		mcp.WithDescription("Create a work note -- a research finding, decision record, meeting summary, or any artifact long enough to deserve its own file. Auto-tagged created-by:agent. Notes carry the long form; memory_write carries the compact durable knowledge a future session must not miss, so put the write-up here and the one-line lesson there rather than duplicating either. Pass plan=<slug> when the note is a plan's narrative or supporting context, so it joins that plan's composition beside its tasks. Do not use this for what the repo, AGENTS.md/CLAUDE.md, or the current conversation already records, and use notes_append to extend an existing note rather than creating a near-duplicate of it."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("note title")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
 		mcp.WithString("description", mcp.Description("optional one-line summary")),
@@ -198,7 +198,7 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 
 func notesAppendTool() mcp.Tool {
 	return mcp.NewTool("notes_append", hintAdd(),
-		mcp.WithDescription("Append a timestamped line to a note's body."),
+		mcp.WithDescription("Append a UTC-timestamped line to an existing note's body, by id. Use it when a note is already the right home for what you learned -- a running investigation log, a decision record gaining one more data point -- so the note keeps its id, slug, and place in any plan composition instead of fragmenting into near-duplicates. Appending only ever adds: use notes_update to correct or restructure what is already there, and notes_create when the finding deserves an artifact of its own. Needs the note's id (ULID), which notes_create returns and briefings and plan compositions carry; notes_read resolves one from a slug."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("text to append (aliases: content, text)")),
 	)
@@ -225,7 +225,7 @@ func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest)
 
 func notesDeleteTool() mcp.Tool {
 	return mcp.NewTool("notes_delete", hintOverwrite(),
-		mcp.WithDescription("Delete a note by id (removes the file and its index)."),
+		mcp.WithDescription("Delete a note by id: the markdown file leaves the disk and its index row goes with it. Permanent, and it leaves no pointer behind, so reserve it for notes that should never have existed -- a duplicate, a write into the wrong project, an agent's own scratch. To fix a note's content use notes_update, and to add to it notes_append; neither loses the artifact. A note tagged into a plan (plan:<slug>) is that plan's narrative for whoever inherits it, so read it with notes_read before deciding it is disposable."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 	)
 }

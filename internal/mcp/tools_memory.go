@@ -405,7 +405,7 @@ func (s *Server) supersededWarning(ctx context.Context, mem core.Memory) string 
 
 func memoryDeleteTool() mcp.Tool {
 	return mcp.NewTool("memory_delete", hintOverwrite(),
-		mcp.WithDescription("Delete a memory by name (removes the file and its index)."),
+		mcp.WithDescription("Delete a memory by name: the markdown file leaves the disk and its index row goes with it, with no provenance and no pointer left behind. Prefer nearly anything else. To replace knowledge that turned out to be wrong, use memory_write with supersedes -- the old memory drops out of every index (briefings, recall) but stays readable, pointing at what replaced it, which is how a later reader learns the thing was reconsidered rather than that it was never believed. To retire something merely stale, leave it for the gardener's archive proposal. Reserve deletion for memories written by mistake: a duplicate, a test, a write into the wrong project."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("memory name")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 	)

@@ -306,7 +306,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 2 MB of the response is read, and the stored readable body is capped again at
 50,000 runes with a visible <code>[content truncated]</code> marker.</p>
 <h2 id="notes_create">notes_create</h2>
-<p>Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent.</p>
+<p>Create a work note -- a research finding, decision record, meeting summary, or any artifact long enough to deserve its own file. Auto-tagged created-by:agent. Notes carry the long form; memory_write carries the compact durable knowledge a future session must not miss, so put the write-up here and the one-line lesson there rather than duplicating either. Pass plan=&lt;slug&gt; when the note is a plan's narrative or supporting context, so it joins that plan's composition beside its tasks. Do not use this for what the repo, AGENTS.md/CLAUDE.md, or the current conversation already records, and use notes_append to extend an existing note rather than creating a near-duplicate of it.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -450,7 +450,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 </table>
 </div>
 <h2 id="notes_append">notes_append</h2>
-<p>Append a timestamped line to a note's body.</p>
+<p>Append a UTC-timestamped line to an existing note's body, by id. Use it when a note is already the right home for what you learned -- a running investigation log, a decision record gaining one more data point -- so the note keeps its id, slug, and place in any plan composition instead of fragmenting into near-duplicates. Appending only ever adds: use notes_update to correct or restructure what is already there, and notes_create when the finding deserves an artifact of its own. Needs the note's id (ULID), which notes_create returns and briefings and plan compositions carry; notes_read resolves one from a slug.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -478,7 +478,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 </table>
 </div>
 <h2 id="notes_delete">notes_delete</h2>
-<p>Delete a note by id (removes the file and its index).</p>
+<p>Delete a note by id: the markdown file leaves the disk and its index row goes with it. Permanent, and it leaves no pointer behind, so reserve it for notes that should never have existed -- a duplicate, a write into the wrong project, an agent's own scratch. To fix a note's content use notes_update, and to add to it notes_append; neither loses the artifact. A note tagged into a plan (plan:&lt;slug&gt;) is that plan's narrative for whoever inherits it, so read it with notes_read before deciding it is disposable.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -500,10 +500,10 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 </table>
 </div>
 <h2 id="project_list">project_list</h2>
-<p>List all projects (slug, name, description).</p>
+<p>List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall.</p>
 <p>Takes no parameters.</p>
 <h2 id="project_create">project_create</h2>
-<p>Create a project. The slug defaults to a slugified name.</p>
+<p>Register a project up front, with a human-readable name and an optional description. You rarely need this: any durable write naming an unknown project slug (memory_write, notes_create, tasks_add, capture_url, trial_record) already registers that project, and a git repo maps itself to one on its first session. Reach for this only to give a project a proper name and description BEFORE anything is written into it, or to create one you will not write to yet -- an auto-registered project is named after its own slug until someone fixes it. Call project_list first: coining a near-duplicate of an existing slug is the failure mode here. To divide an existing project into children, use gardener_split rather than creating them by hand. The slug defaults to a slugified name; &quot;global&quot; and &quot;all&quot; are reserved, and an existing slug is an error, not an update -- this never renames or edits a project.</p>
 <div class="table-wrap">
 <table>
 <thead>

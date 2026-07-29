@@ -15,7 +15,7 @@ import (
 
 func projectListTool() mcp.Tool {
 	return mcp.NewTool("project_list", hintRead(),
-		mcp.WithDescription("List all projects (slug, name, description)."),
+		mcp.WithDescription("List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall."),
 	)
 }
 
@@ -35,7 +35,7 @@ func (s *Server) handleProjectList(ctx context.Context, _ mcp.CallToolRequest) (
 
 func projectCreateTool() mcp.Tool {
 	return mcp.NewTool("project_create", hintSet(),
-		mcp.WithDescription("Create a project. The slug defaults to a slugified name."),
+		mcp.WithDescription("Register a project up front, with a human-readable name and an optional description. You rarely need this: any durable write naming an unknown project slug (memory_write, notes_create, tasks_add, capture_url, trial_record) already registers that project, and a git repo maps itself to one on its first session. Reach for this only to give a project a proper name and description BEFORE anything is written into it, or to create one you will not write to yet -- an auto-registered project is named after its own slug until someone fixes it. Call project_list first: coining a near-duplicate of an existing slug is the failure mode here. To divide an existing project into children, use gardener_split rather than creating them by hand. The slug defaults to a slugified name; \"global\" and \"all\" are reserved, and an existing slug is an error, not an update -- this never renames or edits a project."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("human-readable project name")),
 		mcp.WithString("slug", mcp.Description("optional explicit slug")),
 		mcp.WithString("description", mcp.Description("optional one-line description")),
