@@ -87,7 +87,12 @@ if [[ -z "$base" ]]; then
   esac
 fi
 
-base=$(mkdir -p "$base" && cd "$base" && pwd)
+# -P: the PHYSICAL path, symlinks resolved. Every fixture path derives from
+# $base, and the agent's client reports a resolved cwd -- so a logical base (on
+# macOS $TMPDIR sits under /var -> /private/var) registers the repo under a key
+# no session start can match, minting a second empty project and hiding the whole
+# seeded fixture from the agent. Keep -P here and in cmd/seambench's --base.
+base=$(mkdir -p "$base" && cd "$base" && pwd -P)
 seamlessd="$repo_root/bin/seamlessd"
 seam="$repo_root/bin/seam"
 

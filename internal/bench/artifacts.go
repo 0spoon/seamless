@@ -172,6 +172,15 @@ type RunRecord struct {
 	// A failed run is not a graded failure; the report counts it separately.
 	Error   string  `json:"error,omitempty"`
 	Metrics Metrics `json:"metrics"`
+	// Concurrent records that this run shared the machine with the other
+	// conditions of its scenario (`run --parallel-conditions`). Turns, tokens
+	// and cost are unaffected by that; WALL-CLOCK IS. A concurrent run's
+	// durationMs carries contention from two other agent sessions and their
+	// daemons, so it is not comparable with a serial run's -- including across
+	// the two halves of a version comparison, where a mode difference would
+	// read as a timing regression. Absent on serial runs, whose manifests are
+	// unchanged.
+	Concurrent bool `json:"concurrent,omitempty"`
 	// Steps is a multi-step run's per-session breakdown, in run order, holding
 	// every session that was ATTEMPTED (a step the run never reached is not
 	// recorded). Prompt is empty on such a run -- the prompts live on the

@@ -12,6 +12,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -21,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -65,6 +67,8 @@ func runRun(args []string) error {
 		permission    = fs.String("permission-mode", "bypassPermissions", "value for the agent's --permission-mode flag (empty omits it)")
 		baselineRef   = fs.String("baseline", "", "also run the whole suite against this git ref, built from its own checkout, for a version comparison")
 		credsMode     = fs.String("credentials", string(credAuto), "how an arm gets the agent's credentials: "+joinModes())
+		parallelConds = fs.Bool("parallel-conditions", false,
+			"run a scenario's condition arms concurrently (scenarios and the N runs of a cell stay serial); inflates durationMs, which the manifest then stamps")
 	)
 	var agentArgs stringList
 	fs.Var(&agentArgs, "agent-arg", "extra argument appended to the agent command (repeatable)")
@@ -90,7 +94,7 @@ func runRun(args []string) error {
 	if err != nil {
 		return err
 	}
-	baseDir, err := filepath.Abs(*base)
+	baseDir, err := physicalBase(*base)
 	if err != nil {
 		return fmt.Errorf("resolve --base %s: %w", *base, err)
 	}
@@ -131,8 +135,9 @@ func runRun(args []string) error {
 			permissionMode: *permission,
 			extra:          agentArgs,
 		},
-		creds: creds,
-		w:     os.Stdout,
+		creds:              creds,
+		parallelConditions: *parallelConds,
+		w:                  os.Stdout,
 	}
 	candidate := versionArm{
 		role: "candidate", label: version, repoRoot: repoRoot, base: baseDir, port: *port,
@@ -155,7 +160,11 @@ type suite struct {
 	noBuild    bool
 	agent      agentOpts
 	creds      *credentials
-	w          io.Writer
+	// parallelConditions widens the condition dimension of every version's
+	// matrix. A version comparison keeps it identical on both halves -- one
+	// serial half and one concurrent half would differ in their timings.
+	parallelConditions bool
+	w                  io.Writer
 }
 
 // versionArm is one version under test: whose code builds the arms, what the
@@ -195,7 +204,9 @@ func (s *suite) run(ctx context.Context, v versionArm) error {
 		agent:      s.agent,
 		creds:      s.creds,
 		serve:      execServe(filepath.Join(v.repoRoot, "bin", "seamlessd")),
-		w:          s.w,
+
+		parallelConditions: s.parallelConditions,
+		w:                  s.w,
 	}
 	if !s.reuseArms {
 		if err := buildArms(ctx, harnessOpts{
@@ -314,38 +325,151 @@ type runner struct {
 	creds *credentials
 	// serve starts an arm's daemon; a field so a dry run can substitute one.
 	serve serveFunc
-	w     io.Writer
+	// parallelConditions runs a scenario's condition arms concurrently. Only
+	// this dimension is safe to widen: see run.
+	parallelConditions bool
+	w                  io.Writer
+	// wmu serializes whole output blocks; a concurrent scenario has three
+	// goroutines writing to w.
+	wmu sync.Mutex
 }
 
 // run walks the scenario x condition x N matrix.
+//
+// Scenarios stay serial and the N runs of one cell stay serial; only the
+// condition dimension may widen, and each of those three limits is load-bearing:
+//
+//   - N runs of a cell SHARE AN ARM. Every run git-restores that arm's demo repo
+//     and wipes and re-seeds its data dir to re-establish the starting state, so
+//     two overlapping runs would reset each other's tree and database mid-flight.
+//     This is not a tuning choice; it is what makes run N+1 see what run N saw.
+//   - Scenarios stay serial so a systemic failure -- a misconfigured arm, an
+//     expired credential, an empty briefing -- surfaces after ONE scenario
+//     instead of after the whole matrix. For a suite metered in real tokens,
+//     that early exit is worth more than the wall clock it costs.
+//   - Condition arms are genuinely independent: separate demo repo, data dir,
+//     HOME, config dir and port (vanilla runs no daemon at all), so nothing they
+//     touch is shared. That is why this is the one dimension that widens safely.
+//
+// The cost is paid in the metrics: three concurrent agent sessions contend for
+// one machine, so durationMs inflates. Every run of a concurrent scenario is
+// stamped Concurrent in its manifest for exactly that reason.
 func (r *runner) run(ctx context.Context) error {
 	if err := r.loadArms(ctx); err != nil {
 		return err
 	}
 	total, failed := 0, 0
 	for _, sc := range r.scenarios {
-		for _, cond := range r.conditions {
-			for i := 1; i <= r.n; i++ {
-				if err := ctx.Err(); err != nil {
-					return err
-				}
-				rec, dir, err := r.runOne(ctx, sc, cond, i)
-				if err != nil {
-					return err
-				}
-				total++
-				if rec.Error != "" {
-					failed++
-				}
-				r.report(rec, dir)
-			}
+		var stats []cellStats
+		var err error
+		if r.parallelConditions && len(r.conditions) > 1 {
+			stats, err = r.runConditionsConcurrently(ctx, sc)
+		} else {
+			stats, err = r.runConditionsSerially(ctx, sc)
+		}
+		for _, s := range stats {
+			total += s.total
+			failed += s.failed
+		}
+		if err != nil {
+			return err
 		}
 	}
 	fmt.Fprintf(r.w, "\n%d run(s), %d failed. Artifacts under %s\n", total, failed, r.out)
+	if total == 0 {
+		return fmt.Errorf("no runs completed; see %s", r.out)
+	}
 	if failed == total {
 		return fmt.Errorf("every run failed; see the run records under %s", r.out)
 	}
 	return nil
+}
+
+// cellStats is one scenario x condition cell's contribution to the totals.
+type cellStats struct {
+	total  int
+	failed int
+}
+
+// runConditionsSerially walks one scenario's arms one at a time.
+func (r *runner) runConditionsSerially(ctx context.Context, sc bench.Scenario) ([]cellStats, error) {
+	stats := make([]cellStats, 0, len(r.conditions))
+	for _, cond := range r.conditions {
+		s, err := r.runCell(ctx, sc, cond)
+		stats = append(stats, s)
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
+}
+
+// runConditionsConcurrently runs one scenario's arms at the same time, and does
+// not return until every one of them has stopped -- a daemon left running past
+// its capture, or a credential left in an arm, is worse than the wall clock.
+//
+// A cell that cannot be RECORDED still aborts the suite (runOne's contract), so
+// the first such error cancels its siblings and is what run returns; the counts
+// of whatever finished are returned alongside it rather than discarded.
+func (r *runner) runConditionsConcurrently(ctx context.Context, sc bench.Scenario) ([]cellStats, error) {
+	cctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	stats := make([]cellStats, len(r.conditions))
+	errs := make([]error, len(r.conditions))
+	var wg sync.WaitGroup
+	for i, cond := range r.conditions {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stats[i], errs[i] = r.runCell(cctx, sc, cond)
+			if errs[i] != nil {
+				cancel() // stop the sibling arms; their captures still finish
+			}
+		}()
+	}
+	wg.Wait()
+	// Report in condition order, not completion order, so the returned error is
+	// the same one on every re-run of the same failure.
+	for _, err := range errs {
+		if err != nil {
+			return stats, err
+		}
+	}
+	return stats, nil
+}
+
+// runCell performs the N runs of one scenario x condition cell, in order.
+func (r *runner) runCell(ctx context.Context, sc bench.Scenario, cond bench.Condition) (cellStats, error) {
+	var s cellStats
+	for i := 1; i <= r.n; i++ {
+		if err := ctx.Err(); err != nil {
+			return s, err
+		}
+		// One buffer per run, flushed whole: with three arms reporting into the
+		// same stream, a run's header and its result must not be split apart by
+		// another arm's output.
+		var out bytes.Buffer
+		rec, dir, err := r.runOne(ctx, sc, cond, i, &out)
+		if err != nil {
+			r.flush(&out)
+			return s, err
+		}
+		s.total++
+		if rec.Error != "" {
+			s.failed++
+		}
+		r.report(&out, rec, dir)
+		r.flush(&out)
+	}
+	return s, nil
+}
+
+// flush writes one completed run's output block to the shared writer.
+func (r *runner) flush(buf *bytes.Buffer) {
+	r.wmu.Lock()
+	defer r.wmu.Unlock()
+	fmt.Fprint(r.w, buf.String())
 }
 
 // loadArms reads each condition's env file and records the demo-repo commit
@@ -369,7 +493,7 @@ func (r *runner) loadArms(ctx context.Context) error {
 // could not be RECORDED (the artifact dir or its manifest is unwritable) and
 // aborts the suite; everything else -- a timeout, a crashed agent, a failed
 // seed -- lands in the run record's Error and the suite moves on.
-func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condition, i int) (bench.RunRecord, string, error) {
+func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condition, i int, out io.Writer) (bench.RunRecord, string, error) {
 	a := r.arms[cond.Name]
 	dir := filepath.Join(r.out, sc.Name, cond.Name, fmt.Sprintf("run-%02d", i))
 	// A re-run of the same cell replaces it rather than merging into a
@@ -382,18 +506,19 @@ func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condi
 	}
 
 	rec := bench.RunRecord{
-		Scenario:  sc.Name,
-		Condition: cond,
-		Run:       i,
-		Version:   r.version,
-		Model:     a.model,
-		StartedAt: time.Now().UTC(),
+		Scenario:   sc.Name,
+		Condition:  cond,
+		Run:        i,
+		Version:    r.version,
+		Model:      a.model,
+		StartedAt:  time.Now().UTC(),
+		Concurrent: r.parallelConditions && len(r.conditions) > 1,
 	}
 	if len(sc.Sessions()) == 1 {
 		// A multi-step run's prompts live on its StepRecords instead.
 		rec.Prompt = sc.Sessions()[0].Prompt
 	}
-	fmt.Fprintf(r.w, "\n==> %s / %s run %d/%d\n", sc.Name, cond.Name, i, r.n)
+	fmt.Fprintf(out, "\n==> %s / %s run %d/%d\n", sc.Name, cond.Name, i, r.n)
 
 	outcome := r.execute(ctx, sc, a, dir)
 	rec.EndedAt = time.Now().UTC()
@@ -584,13 +709,13 @@ func (r *runner) prepare(ctx context.Context, sc bench.Scenario, a *arm) error {
 }
 
 // report prints one run's outcome.
-func (r *runner) report(rec bench.RunRecord, dir string) {
+func (r *runner) report(out io.Writer, rec bench.RunRecord, dir string) {
 	took := rec.EndedAt.Sub(rec.StartedAt).Round(time.Second)
 	status := "ok"
 	if rec.Error != "" {
 		status = "FAILED: " + rec.Error
 	}
-	fmt.Fprintf(r.w, "    %s in %s (%d turns, %d in / %d out tokens, $%.4f)\n      %s\n",
+	fmt.Fprintf(out, "    %s in %s (%d turns, %d in / %d out tokens, $%.4f)\n      %s\n",
 		status, took, rec.Metrics.Turns, rec.Metrics.InputTokens, rec.Metrics.OutputTokens,
 		rec.Metrics.CostUSD, dir)
 }
@@ -679,6 +804,32 @@ func defaultConditionList() string {
 // defaultBase mirrors the harness's own default base dir, so running either by
 // hand lands in the same place.
 func defaultBase() string { return filepath.Join(os.TempDir(), "seamless-bench") }
+
+// physicalBase resolves the base dir to its symlink-free form, matching the
+// `pwd -P` the harness applies to the same directory.
+//
+// Every arm path -- demo repo, data dir, env file -- hangs off this string, and
+// the repo->project mapping a seed writes from it is compared TEXTUALLY against
+// the cwd the agent's client reports, which is resolved. On macOS $TMPDIR lives
+// under /var -> /private/var, so a logical base makes SessionStart miss the
+// mapping, mint a second project for the same repo, and hand the agent an empty
+// briefing on an arm whose fixture seeded perfectly -- a silent zero-uplift
+// reading with no error anywhere. Creating the dir first is what lets
+// EvalSymlinks resolve a base that does not exist yet.
+func physicalBase(base string) (string, error) {
+	abs, err := filepath.Abs(base)
+	if err != nil {
+		return "", err
+	}
+	if err := os.MkdirAll(abs, 0o755); err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return abs, nil
+	}
+	return resolved, nil
+}
 
 // joinMessages appends a second error message to a possibly-empty first.
 func joinMessages(a, b string) string {

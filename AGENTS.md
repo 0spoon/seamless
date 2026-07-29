@@ -210,6 +210,14 @@ months. Workflow and flags: `cmd/seambench/README.md`. (`make seambench`, not
   the vanilla arm doing the same thing passes, which understates the very uplift
   being measured. The LLM judge never gates; its absence degrades the run
   (constraint `llm-degradation-remote-vs-local`), it does not fail it.
+- **Only the condition dimension may run concurrently.** The N runs of a cell
+  share an arm and re-establish its starting state (git-restore + wipe and
+  re-seed) on every run, so overlapping them would reset each other mid-flight;
+  scenarios stay serial so a systemic failure surfaces after one scenario rather
+  than after the whole token-metered matrix. Condition arms own separate repos,
+  data dirs, HOMEs and ports, which is why `--parallel-conditions` is safe --
+  and why a run made under it is stamped `Concurrent`, since its wall clock
+  carries contention the serial runs it would be compared against do not.
 - **Three outcomes, never two.** `graded` / `failed to run` / `ungradeable`.
   Only graded runs enter a pass-rate or a trial verdict; an infrastructure flake
   recorded as a `fail` is how a later reader mistakes it for a regression. An

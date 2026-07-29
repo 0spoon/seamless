@@ -309,10 +309,16 @@ func TestSeeds_State(t *testing.T) {
 				}
 			}
 
-			// The repo mapping binds sessions starting in the demo repo.
+			// The repo mapping binds sessions starting in the demo repo. The
+			// key is the PHYSICAL path -- the form the agent's client reports
+			// (see TestScenarioSeed_BindsRepoThroughASymlinkedPath) -- so
+			// resolve before looking it up, or this passes only on a
+			// symlink-free temp dir.
 			repoMap, err := store.RepoProjectMap(ctx, db)
 			require.NoError(t, err)
-			require.Equal(t, benchProject, repoMap[repo])
+			physical, err := filepath.EvalSymlinks(repo)
+			require.NoError(t, err)
+			require.Equal(t, benchProject, repoMap[physical])
 		})
 	}
 }

@@ -12,7 +12,6 @@ package demokit
 import (
 	"fmt"
 	"log"
-	"path/filepath"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -47,14 +46,14 @@ func (s *Seeder) Scenes(repoPath string, race bool) {
 		log.Fatalf("demoseed: scenes: project: %v", err)
 	}
 	if repoPath != "" {
-		abs, err := filepath.Abs(repoPath)
+		key, err := repoMapKey(repoPath)
 		if err != nil {
 			log.Fatalf("demoseed: scenes: repo path: %v", err)
 		}
-		if err := store.AddRepoMapping(s.ctx, s.db, abs, sceneProject); err != nil {
+		if err := store.AddRepoMapping(s.ctx, s.db, key, sceneProject); err != nil {
 			log.Fatalf("demoseed: scenes: map repo: %v", err)
 		}
-		log.Printf("demoseed: scenes: mapped %s -> %s", abs, sceneProject)
+		log.Printf("demoseed: scenes: mapped %s -> %s", key, sceneProject)
 	}
 
 	// Yesterday's completed session, ~18h old, whose finding scene 1 opens on.

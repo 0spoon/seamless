@@ -30,14 +30,41 @@ func (s *Seeder) EnsureProject(slug, name string) error {
 // MapRepo records repoPath -> project in the repo map, so sessions starting in
 // that repo bind to the project without a setup step.
 func (s *Seeder) MapRepo(repoPath, project string) error {
-	abs, err := filepath.Abs(repoPath)
+	key, err := repoMapKey(repoPath)
 	if err != nil {
 		return fmt.Errorf("demokit: map repo %s: %w", repoPath, err)
 	}
-	if err := store.AddRepoMapping(s.ctx, s.db, abs, project); err != nil {
-		return fmt.Errorf("demokit: map repo %s: %w", abs, err)
+	if err := store.AddRepoMapping(s.ctx, s.db, key, project); err != nil {
+		return fmt.Errorf("demokit: map repo %s: %w", key, err)
 	}
 	return nil
+}
+
+// repoMapKey turns a fixture's repo path into the key the agent's client will
+// actually be matched against.
+//
+// Absolute is not enough. Claude Code reports a symlink-RESOLVED cwd, and the
+// store's repo-map lookup compares paths textually -- so on macOS, where a
+// fixture under $TMPDIR lives beneath /var -> /private/var, a mapping written in
+// the unresolved form is never matched. SessionStart then falls through to
+// registration and mints a SECOND project for the same directory, leaving the
+// seeded memories, plan, and findings under the first one and invisible to the
+// agent. The failure is silent and reads exactly like "Seamless did not help",
+// which is the one wrong answer a benchmark fixture must never give.
+//
+// EvalSymlinks needs the path to exist. A fixture always scaffolds the repo
+// before seeding it, but a path that cannot be resolved falls back to the
+// absolute form rather than failing the seed over it.
+func repoMapKey(repoPath string) (string, error) {
+	abs, err := filepath.Abs(repoPath)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return abs, nil
+	}
+	return resolved, nil
 }
 
 // WriteMemory writes one memory file plus its index row, keeping the caller's

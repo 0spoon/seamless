@@ -162,6 +162,7 @@ go run ./cmd/seambench run [flags]
 | `--no-build` | off | passed through to the harness (reuse the existing `bin/`) |
 | `--agent-cmd` | `claude` | the agent CLI. **The dry-run seam** -- see below. |
 | `--permission-mode` | `bypassPermissions` | empty omits the flag |
+| `--parallel-conditions` | off | run a scenario's arms concurrently -- see [Why the matrix is walked serially](#why-the-matrix-is-walked-serially) |
 | `--agent-arg` | -- | repeatable; appended verbatim to the agent command |
 | `--baseline REF` | -- | also run the whole suite against that ref (see [Version comparison](#3-version-comparison)) |
 
@@ -183,6 +184,33 @@ itself:
    arm snapshot first, so nothing an earlier session left in the TREE carries
    over. The data dir is deliberately never reset between steps.
 4. Capture everything into the run directory.
+
+### Why the matrix is walked serially
+
+By default `run` walks scenario x condition x N one cell at a time. Two of those
+three dimensions cannot widen, and the third is a deliberate trade:
+
+- **The N runs of a cell SHARE AN ARM.** Every run git-restores that arm's demo
+  repo and wipes and re-seeds its data dir to re-establish the starting state, so
+  two overlapping runs would reset each other's tree and database mid-flight.
+  This is what makes run N+1 see what run N saw; it is not tunable.
+- **Scenarios stay serial on purpose.** A systemic failure -- a misconfigured
+  arm, an expired credential, an empty briefing -- hits every cell identically,
+  so surfacing it after ONE scenario instead of after the whole matrix is worth
+  the wall clock. That early exit has already paid for itself once.
+- **Condition arms are independent**, with their own demo repo, data dir, HOME,
+  config dir and port (vanilla runs no daemon at all). `--parallel-conditions`
+  widens that one dimension, for a ~3x speedup on the default three arms.
+
+The cost lands in the metrics: three agent sessions and their daemons contend for
+one machine, so `durationMs` inflates while turns, tokens and cost do not. Runs
+made that way are stamped `"concurrent": true` in `run.json`, because a
+concurrent run's wall clock is not comparable with a serial one's -- including
+across the halves of a `--baseline` comparison, where a mode difference would
+read as a timing regression. Keep the flag the same on both halves.
+
+At `n=1` on a fast model the whole matrix is minutes and serial is fine. It is
+`-n 5` on Opus, where cells stabilize, that the flag earns its contention.
 
 **Dry-running the whole loop without tokens.** `--agent-cmd` points at any
 executable that accepts `-p <prompt> --output-format json` and prints a result
