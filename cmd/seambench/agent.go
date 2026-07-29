@@ -37,6 +37,10 @@ type agentOpts struct {
 	permissionMode string
 	// extra arguments appended verbatim, for a flag this runner does not model.
 	extra []string
+	// env is appended to the arm's environment as KEY=VALUE, for credentials
+	// that authenticate the agent without a file on disk (see credentials.go).
+	// It holds secrets, so it is never logged.
+	env []string
 }
 
 // runOutcome is what one attempt at a run produced, before capture.
@@ -74,7 +78,7 @@ func runAgent(ctx context.Context, a *arm, prompt string, o agentOpts, logPath s
 	var stdout bytes.Buffer
 	cmd := exec.CommandContext(ctx, o.command, o.argv(prompt)...)
 	cmd.Dir = a.repo
-	cmd.Env = a.agentEnv()
+	cmd.Env = append(a.agentEnv(), o.env...)
 	cmd.Stdout = io.MultiWriter(&stdout, logFile)
 	cmd.Stderr = logFile
 	cmd.WaitDelay = 10 * time.Second

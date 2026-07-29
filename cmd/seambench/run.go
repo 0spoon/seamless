@@ -64,6 +64,7 @@ func runRun(args []string) error {
 		agentCmd      = fs.String("agent-cmd", "claude", "agent CLI to run headless; the injection point for dry runs")
 		permission    = fs.String("permission-mode", "bypassPermissions", "value for the agent's --permission-mode flag (empty omits it)")
 		baselineRef   = fs.String("baseline", "", "also run the whole suite against this git ref, built from its own checkout, for a version comparison")
+		credsMode     = fs.String("credentials", string(credAuto), "how an arm gets the agent's credentials: "+joinModes())
 	)
 	var agentArgs stringList
 	fs.Var(&agentArgs, "agent-arg", "extra argument appended to the agent command (repeatable)")
@@ -104,6 +105,17 @@ func runRun(args []string) error {
 	if version == "" {
 		version = repoVersion(ctx, repoRoot)
 	}
+	mode, err := parseCredentialMode(*credsMode)
+	if err != nil {
+		return err
+	}
+	creds, why, err := newCredentials(ctx, mode)
+	if err != nil {
+		return err
+	}
+	if why != "" {
+		fmt.Fprintf(os.Stdout, "==> credentials: %s (%s)\n", creds.mode, why)
+	}
 
 	s := &suite{
 		out:        outDir,
@@ -119,7 +131,8 @@ func runRun(args []string) error {
 			permissionMode: *permission,
 			extra:          agentArgs,
 		},
-		w: os.Stdout,
+		creds: creds,
+		w:     os.Stdout,
 	}
 	candidate := versionArm{
 		role: "candidate", label: version, repoRoot: repoRoot, base: baseDir, port: *port,
@@ -141,6 +154,7 @@ type suite struct {
 	reuseArms  bool
 	noBuild    bool
 	agent      agentOpts
+	creds      *credentials
 	w          io.Writer
 }
 
@@ -179,6 +193,7 @@ func (s *suite) run(ctx context.Context, v versionArm) error {
 		n:          s.n,
 		timeout:    s.timeout,
 		agent:      s.agent,
+		creds:      s.creds,
 		serve:      execServe(filepath.Join(v.repoRoot, "bin", "seamlessd")),
 		w:          s.w,
 	}
@@ -294,6 +309,9 @@ type runner struct {
 	n          int
 	timeout    time.Duration
 	agent      agentOpts
+	// creds provisions each arm with the agent's credentials for the duration
+	// of a run; nil means provision nothing (what the fake-agent tests use).
+	creds *credentials
 	// serve starts an arm's daemon; a field so a dry run can substitute one.
 	serve serveFunc
 	w     io.Writer
@@ -412,6 +430,17 @@ func (r *runner) execute(ctx context.Context, sc bench.Scenario, a *arm, dir str
 		defer stop()
 	}
 
+	// The credential lives in the arm for this run only, and is taken back out
+	// before the caller captures -- capture copies the arm's repo, data dir and
+	// transcript, never its config dir, but the narrow window is the point.
+	if r.creds != nil {
+		release, err := r.creds.provision(a)
+		if err != nil {
+			return runOutcome{exitCode: -1, err: err}
+		}
+		defer release()
+	}
+
 	runCtx, cancel := context.WithTimeout(ctx, r.timeout)
 	defer cancel()
 
@@ -419,7 +448,11 @@ func (r *runner) execute(ctx context.Context, sc bench.Scenario, a *arm, dir str
 	if sc.RequiresRecall {
 		return recallCheck(runCtx, a, sc.Prompt, logPath)
 	}
-	return runAgent(runCtx, a, sc.Prompt, r.agent, logPath)
+	agent := r.agent
+	if r.creds != nil {
+		agent.env = r.creds.env()
+	}
+	return runAgent(runCtx, a, sc.Prompt, agent, logPath)
 }
 
 // prepare puts the arm back to the scenario's starting state.
