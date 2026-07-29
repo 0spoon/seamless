@@ -20,7 +20,7 @@ func sessionStartTool() mcp.Tool {
 		mcp.WithDescription("Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again."),
 		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
 		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
-		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default startup)")),
+		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default explicit)")),
 		mcp.WithString("model", mcp.Description("Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients")),
 	)
 }

@@ -4682,7 +4682,7 @@ Begin or resume an agent work session and bind it to this connection. Returns th
 | `cwd` | string | no | Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug) |
 | `model` | string | no | Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients |
 | `name` | string | no | Optional stable session name; reusing a name resumes that session |
-| `source` | string | no | what began this session (default startup). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
+| `source` | string | no | what began this session (default explicit). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
 
 ## session_update {#session_update}
 
@@ -4707,7 +4707,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 
 ## memory_write {#memory_write}
 
-Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active.
+Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -4736,7 +4736,7 @@ Read a memory by name within the current project (falling back to a global memor
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | no | memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution |
-| `name` | string | no | memory name |
+| `name` | string | no | memory name; pass exactly one of name or id |
 | `project` | string | no | project slug; defaults to the bound session's project |
 
 ## memory_delete {#memory_delete}
@@ -4846,7 +4846,7 @@ Read a note by id, or by slug within the current project (falling back to a glob
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `id` | string | no | note id (ULID) |
+| `id` | string | no | note id (ULID); pass exactly one of id or slug |
 | `project` | string | no | project slug for the slug lookup; defaults to the bound session's project |
 | `slug` | string | no | note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name) |
 
@@ -5121,7 +5121,7 @@ writes, and occupied-path protections remain the same as direct tools.
 
 ## lab_open {#lab_open}
 
-Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.
+Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5140,12 +5140,12 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `expected` | string | no | expected result |
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
-| `outcome` | string | no | pass\|fail\|partial\|inconclusive (free-form) |
+| `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
 
 ## trial_query {#trial_query}
 
-Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record).
+Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

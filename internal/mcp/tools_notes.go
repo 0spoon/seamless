@@ -75,7 +75,7 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 func notesReadTool() mcp.Tool {
 	return mcp.NewTool("notes_read", hintRead(),
 		mcp.WithDescription("Read a note by id, or by slug within the current project (falling back to a global note of the same slug)."),
-		mcp.WithString("id", mcp.Description("note id (ULID)")),
+		mcp.WithString("id", mcp.Description("note id (ULID); pass exactly one of id or slug")),
 		mcp.WithString("slug", mcp.Description("note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name)")),
 		mcp.WithString("project", mcp.Description("project slug for the slug lookup; defaults to the bound session's project")),
 	)

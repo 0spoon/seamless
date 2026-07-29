@@ -89,7 +89,7 @@ writes, and occupied-path protections remain the same as direct tools.
 
 ## lab_open {#lab_open}
 
-Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.
+Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -108,12 +108,12 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `expected` | string | no | expected result |
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
-| `outcome` | string | no | pass\|fail\|partial\|inconclusive (free-form) |
+| `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
 
 ## trial_query {#trial_query}
 
-Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record).
+Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

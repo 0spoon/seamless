@@ -16,7 +16,7 @@ const trialContextLimit = 10
 
 func labOpenTool() mcp.Tool {
 	return mcp.NewTool("lab_open", hintSet(),
-		mcp.WithDescription("Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record."),
+		mcp.WithDescription("Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded."),
 		mcp.WithString("lab", mcp.Required(), mcp.Description("lab name (a stable label for a line of investigation)")),
 		mcp.WithString("goal", mcp.Description("optional note on what this lab is investigating")),
 	)
@@ -48,7 +48,7 @@ func trialRecordTool() mcp.Tool {
 		mcp.WithString("changes", mcp.Description("what was changed for this trial")),
 		mcp.WithString("expected", mcp.Description("expected result")),
 		mcp.WithString("actual", mcp.Description("observed result")),
-		mcp.WithString("outcome", mcp.Description("pass|fail|partial|inconclusive (free-form)")),
+		mcp.WithString("outcome", mcp.Description("suggested values pass|fail|partial|inconclusive; free text accepted")),
 		mcp.WithObject("metrics", mcp.Description(`optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted)`)),
 	)
 }
@@ -92,7 +92,7 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 
 func trialQueryTool() mcp.Tool {
 	return mcp.NewTool("trial_query", hintRead(),
-		mcp.WithDescription("Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record)."),
+		mcp.WithDescription("Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record."),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
 		mcp.WithString("outcome", mcp.Description("filter by outcome (e.g. fail)")),
 		mcp.WithObject("metrics_filter", mcp.Description(`optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted)`)),

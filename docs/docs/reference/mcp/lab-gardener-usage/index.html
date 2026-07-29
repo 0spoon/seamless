@@ -331,7 +331,7 @@ target disappeared or a file/store mutation failed. Memory-changing actions
 route through the lifecycle/files services, so supersession, atomic Markdown
 writes, and occupied-path protections remain the same as direct tools.</p>
 <h2 id="lab_open">lab_open</h2>
-<p>Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record.</p>
+<p>Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -411,7 +411,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 <td><code>outcome</code></td>
 <td>string</td>
 <td>no</td>
-<td>pass|fail|partial|inconclusive (free-form)</td>
+<td>suggested values pass|fail|partial|inconclusive; free text accepted</td>
 </tr>
 <tr>
 <td><code>project</code></td>
@@ -423,7 +423,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 </table>
 </div>
 <h2 id="trial_query">trial_query</h2>
-<p>Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record).</p>
+<p>Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.</p>
 <div class="table-wrap">
 <table>
 <thead>

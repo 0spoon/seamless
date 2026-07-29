@@ -81,7 +81,7 @@ Read a note by id, or by slug within the current project (falling back to a glob
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `id` | string | no | note id (ULID) |
+| `id` | string | no | note id (ULID); pass exactly one of id or slug |
 | `project` | string | no | project slug for the slug lookup; defaults to the bound session's project |
 | `slug` | string | no | note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name) |
 

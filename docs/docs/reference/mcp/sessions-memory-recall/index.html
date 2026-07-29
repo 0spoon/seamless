@@ -378,7 +378,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>source</code></td>
 <td>string</td>
 <td>no</td>
-<td>what began this session (default startup). One of: <code>startup</code>, <code>resume</code>, <code>clear</code>, <code>compact</code>, <code>explicit</code>.</td>
+<td>what began this session (default explicit). One of: <code>startup</code>, <code>resume</code>, <code>clear</code>, <code>compact</code>, <code>explicit</code>.</td>
 </tr>
 </tbody>
 </table>
@@ -458,7 +458,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 </table>
 </div>
 <h2 id="memory_write">memory_write</h2>
-<p>Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active.</p>
+<p>Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -572,7 +572,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>name</code></td>
 <td>string</td>
 <td>no</td>
-<td>memory name</td>
+<td>memory name; pass exactly one of name or id</td>
 </tr>
 <tr>
 <td><code>project</code></td>

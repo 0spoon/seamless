@@ -21,7 +21,7 @@ const maxDescriptionRunes = 150
 
 func memoryWriteTool() mcp.Tool {
 	return mcp.NewTool("memory_write", hintOverwrite(),
-		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active."),
+		mcp.WithDescription("Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
 		mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds), mcp.Description("memory kind; "+agentguide.KindDiscriminator+"; "+agentguide.StageContract)),
 		mcp.WithString("description", mcp.Required(), mcp.Description("one line, <=150 chars -- the only text shown in indexes")),
@@ -296,7 +296,7 @@ func stageHeaderHint(kind core.MemoryKind, body string) string {
 func memoryReadTool() mcp.Tool {
 	return mcp.NewTool("memory_read", hintRead(),
 		mcp.WithDescription("Read a memory by name within the current project (falling back to a global memory of the same name), or directly by id."),
-		mcp.WithString("name", mcp.Description("memory name")),
+		mcp.WithString("name", mcp.Description("memory name; pass exactly one of name or id")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithString("id", mcp.Description("memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution")),
 	)

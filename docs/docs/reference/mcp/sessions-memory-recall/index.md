@@ -89,7 +89,7 @@ Begin or resume an agent work session and bind it to this connection. Returns th
 | `cwd` | string | no | Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug) |
 | `model` | string | no | Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients |
 | `name` | string | no | Optional stable session name; reusing a name resumes that session |
-| `source` | string | no | what began this session (default startup). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
+| `source` | string | no | what began this session (default explicit). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
 
 ## session_update {#session_update}
 
@@ -114,7 +114,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 
 ## memory_write {#memory_write}
 
-Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active.
+Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -143,7 +143,7 @@ Read a memory by name within the current project (falling back to a global memor
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | no | memory id (ULID), as carried by events, recall results, and gardener proposals; bypasses name/project resolution |
-| `name` | string | no | memory name |
+| `name` | string | no | memory name; pass exactly one of name or id |
 | `project` | string | no | project slug; defaults to the bound session's project |
 
 ## memory_delete {#memory_delete}
