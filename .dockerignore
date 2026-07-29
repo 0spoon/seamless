@@ -1,0 +1,24 @@
+# Build context for deploy/glama/Dockerfile (the Glama directory image). Only
+# the Go source tree matters: everything below is either regenerated, host
+# state, or secrets, and none of it is reachable from a go:embed.
+.git
+.github
+bin
+dist
+sigs
+docs
+docs-src
+scripts/branding
+.claude
+.DS_Store
+
+# Config that may hold secrets; the image is configured entirely by env.
+seamless.yaml
+seam-server.yaml
+
+# Runtime state
+*.db
+*.db-wal
+*.db-shm
+*.log
+tmp
