@@ -10,6 +10,52 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.6 {#v0-4-6}
+
+Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.6)
+
+### Features
+
+- feat(deploy): add the Glama directory image
+- feat(bench): replace the scenario suite with five mechanism scenarios
+- feat(bench): authenticate the agent inside an arm
+- feat(bench): add the edge-caching briefing-catch scenario
+- feat(bench): results, uplift report, and version comparison
+- feat(bench): headless runner cmd/seambench run
+- feat(bench): grade a captured run from its artifact directory
+- feat(bench): freeze the run-artifact contract between runner and grader
+- feat(branding): carve out scripts/branding with a verbatim distill tool
+- feat(gardener): rebuild the console queue as an inbox with undo
+- feat(gardener): settle implemented-but-unapproved captures as shipped, not abandoned
+- feat(bench): benchmark scenario + conditions model in internal/bench
+- feat(fixture): generalize the scene fixture into a dual-mode harness
+- feat(docs): language labels on fenced code blocks
+- feat(docs): card micro-affordances - hover arrow, section page counts
+- feat(site,docs): polish sweep - clipboard fallback, anchors, print, hints
+- feat(docs): inline TOC below the right-rail breakpoint, search snippets
+- feat(projects): adopt a moved repo's project instead of minting slug-2
+- feat(site): mobile navigation release - drawer scrim, landing menu
+- feat(docs): global context chip, demoted per-page bar, hidden-block count
+- feat(docs): route from the top of the docs home
+- feat(docs): one reading context - OS/client picker, router home, single-home IA
+
+### Fixes
+
+- fix(mcp): resolve the five recurring agent tool errors the gardener collected
+- fix(bench): bind arms through the physical repo path
+- fix(console): preserve Gardener reader position
+- fix(console): polish Gardener layout
+- fix(install): reload the launchd job instead of kickstarting in place
+- fix(mcp): attribute session tool.calls to the session they operate on
+- fix(site): put the landing hamburger in the left corner
+- fix(site): store the UA-refined OS from the landing switch
+- fix(changelog): exempt the release commit from the drift check
+
+### Other
+
+- perf(docs): prefetch same-origin pages on hover intent
+- perf(site,docs): preload the three variable woff2 fonts
+
 ## v0.4.5 {#v0-4-5}
 
 Released 2026-07-26 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.5)
