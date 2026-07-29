@@ -86,7 +86,7 @@ type Grader interface {
 
 // scenarios is the benchmark scenario table. Grow it here; every entry needs
 // a distinct name, a prompt, and a seed (bench_test asserts the shape).
-var scenarios = []Scenario{authRefresh}
+var scenarios = []Scenario{authRefresh, edgeCaching}
 
 // Scenarios returns the benchmark scenario table.
 func Scenarios() []Scenario { return slices.Clone(scenarios) }

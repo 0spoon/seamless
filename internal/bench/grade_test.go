@@ -271,9 +271,44 @@ func fullRun() runShape {
 	return runShape{briefing: true, readMemory: true, moveTask: true, finding: true, noise: true}
 }
 
-// newRunDir writes a run directory in the layout artifacts.go freezes and
-// returns it loaded through LoadRun, exactly as cmd/seambench report would.
+// scenarioFixture is the seeded state a synthesized run dir belongs to: which
+// scenario to seed, and the stable markers (project, load-bearing memory, plan
+// step) the run's events refer to. One per scenario, so both graders are
+// exercised through the same synthesis path.
+type scenarioFixture struct {
+	scenario   string
+	prompt     string
+	project    string
+	memory     string
+	plan       string
+	step       string
+	written    string // the memory name the run's memory_write records
+	findings   string // the summary its session_end carries
+	transcript string // the one transcript line the judge layer sees
+}
+
+var authRefreshFixture = scenarioFixture{
+	scenario:   authRefreshName,
+	prompt:     "continue where we left off",
+	project:    authRefreshProject,
+	memory:     authRefreshMemory,
+	plan:       authRefreshPlan,
+	step:       authRefreshStep5,
+	written:    "refresh-limiter-keys",
+	findings:   "Shipped step 5: the refresh limiter keys on IP + token family in Redis.",
+	transcript: "picking up step 5",
+}
+
+// newRunDir writes an auth-refresh run directory.
 func newRunDir(t *testing.T, cond Condition, files map[string]string, diff string, shape *runShape) RunArtifacts {
+	t.Helper()
+	return newScenarioRunDir(t, authRefreshFixture, cond, files, diff, shape)
+}
+
+// newScenarioRunDir writes a run directory in the layout artifacts.go freezes
+// and returns it loaded through LoadRun, exactly as cmd/seambench report would.
+// A nil shape synthesizes a vanilla arm: no data dir is preserved.
+func newScenarioRunDir(t *testing.T, fx scenarioFixture, cond Condition, files map[string]string, diff string, shape *runShape) RunArtifacts {
 	t.Helper()
 	dir := t.TempDir()
 
@@ -288,14 +323,14 @@ func newRunDir(t *testing.T, cond Condition, files map[string]string, diff strin
 		require.NoError(t, os.WriteFile(filepath.Join(dir, DiffFile), []byte(diff), 0o644))
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(dir, TranscriptFile),
-		[]byte(`{"type":"assistant","text":"picking up step 5"}`+"\n"), 0o644))
+		[]byte(`{"type":"assistant","text":"`+fx.transcript+`"}`+"\n"), 0o644))
 
 	if shape != nil {
-		seedRunDataDir(t, dir, *shape)
+		seedRunDataDir(t, dir, fx, *shape)
 	}
 	require.NoError(t, WriteRunRecord(dir, RunRecord{
-		Scenario: authRefreshName, Condition: cond, Run: 1, Version: "test",
-		Prompt: "continue where we left off", Metrics: Metrics{Turns: 9, InputTokens: 1000},
+		Scenario: fx.scenario, Condition: cond, Run: 1, Version: "test",
+		Prompt: fx.prompt, Metrics: Metrics{Turns: 9, InputTokens: 1000},
 	}))
 
 	_, a, err := LoadRun(dir)
@@ -307,12 +342,12 @@ func newRunDir(t *testing.T, cond Condition, files map[string]string, diff strin
 // seed into a fresh demokit dir) and then records the events the run itself
 // would have produced. The seed writes no events, so everything in the log
 // below is unambiguously the run's.
-func seedRunDataDir(t *testing.T, dir string, shape runShape) {
+func seedRunDataDir(t *testing.T, dir string, fx scenarioFixture, shape runShape) {
 	t.Helper()
 	dataDir := filepath.Join(dir, DataDirName)
 	s, err := demokit.New(dataDir)
 	require.NoError(t, err)
-	sc, ok := ScenarioByName(authRefreshName)
+	sc, ok := ScenarioByName(fx.scenario)
 	require.True(t, ok)
 	require.NoError(t, sc.Seed(s, ""))
 	require.NoError(t, s.Close())
@@ -335,11 +370,11 @@ func seedRunDataDir(t *testing.T, dir string, shape runShape) {
 		require.NoError(t, err)
 	}
 	tool := func(name string, args map[string]any) {
-		put(core.EventToolCall, authRefreshProject, "",
+		put(core.EventToolCall, fx.project, "",
 			map[string]any{"tool": name, "args": args, "duration_ms": 12})
 	}
 
-	mem, ok, err := store.MemoryByName(ctx, db, authRefreshProject, authRefreshMemory)
+	mem, ok, err := store.MemoryByName(ctx, db, fx.project, fx.memory)
 	require.NoError(t, err)
 	require.True(t, ok)
 
@@ -348,38 +383,38 @@ func seedRunDataDir(t *testing.T, dir string, shape runShape) {
 		if hook == "" {
 			hook = "session-start"
 		}
-		put(core.EventInjected, authRefreshProject, "", map[string]any{
+		put(core.EventInjected, fx.project, "", map[string]any{
 			"hook": hook, "claude_session_id": "b2e7c9d4", "content": "<seam-briefing>...</seam-briefing>",
 			"item_ids": []string{mem.ID}, "item_ids_exact": true,
 		})
 	}
 	if shape.readMemory {
-		tool("memory_read", map[string]any{"name": authRefreshMemory})
-		put(core.EventMemoryRead, authRefreshProject, mem.ID, map[string]any{"name": authRefreshMemory})
+		tool("memory_read", map[string]any{"name": fx.memory})
+		put(core.EventMemoryRead, fx.project, mem.ID, map[string]any{"name": fx.memory})
 	}
 	if shape.moveTask {
-		tasks, err := store.ListTasksForPlan(ctx, db, authRefreshProject, "", authRefreshPlan)
+		tasks, err := store.ListTasksForPlan(ctx, db, fx.project, "", fx.plan)
 		require.NoError(t, err)
 		var target core.Task
 		for _, tk := range tasks {
-			if tk.Title == authRefreshStep5 {
+			if tk.Title == fx.step {
 				target = tk
 			}
 		}
-		require.NotEmpty(t, target.ID, "seeded plan has no step-5 task")
+		require.NotEmpty(t, target.ID, "seeded plan %s has no step %q", fx.plan, fx.step)
 		inProgress := core.TaskInProgress
 		_, err = store.UpdateTask(ctx, db, target.ID, store.TaskPatch{Status: &inProgress}, sessionID, at)
 		require.NoError(t, err)
 		tool("tasks_claim", map[string]any{"id": target.ID})
-		put(core.EventTaskTransition, authRefreshProject, target.ID,
+		put(core.EventTaskTransition, fx.project, target.ID,
 			map[string]any{"action": "claim", "status": string(core.TaskInProgress)})
 	}
 	if shape.finding {
-		tool("memory_write", map[string]any{"name": "refresh-limiter-keys"})
-		put(core.EventMemoryWritten, authRefreshProject, mem.ID, map[string]any{"name": "refresh-limiter-keys"})
-		tool("session_end", map[string]any{"findings": "shipped step 5"})
-		put(core.EventSessionEnded, authRefreshProject, "", map[string]any{
-			"claims_released": 1, "findings": "Shipped step 5: the refresh limiter keys on IP + token family in Redis.",
+		tool("memory_write", map[string]any{"name": fx.written})
+		put(core.EventMemoryWritten, fx.project, mem.ID, map[string]any{"name": fx.written})
+		tool("session_end", map[string]any{"findings": "done"})
+		put(core.EventSessionEnded, fx.project, "", map[string]any{
+			"claims_released": 1, "findings": fx.findings,
 		})
 	}
 	if shape.globalWrite {
@@ -387,18 +422,18 @@ func seedRunDataDir(t *testing.T, dir string, shape runShape) {
 		put(core.EventMemoryWritten, "", "01JSTRAY", map[string]any{"name": "stray-note"})
 	}
 	if shape.noise {
-		tool("recall", map[string]any{"query": "rate limit refresh"})
-		put(core.EventInjected, authRefreshProject, "", map[string]any{
-			"query": "rate limit refresh", "item_ids": []string{mem.ID}, "source": "recall",
+		tool("recall", map[string]any{"query": "cache headers"})
+		put(core.EventInjected, fx.project, "", map[string]any{
+			"query": "cache headers", "item_ids": []string{mem.ID}, "source": "recall",
 		})
-		tool("recall", map[string]any{"query": "redis helper module"})
-		put(core.EventRecallMiss, authRefreshProject, "", map[string]any{
-			"query": "redis helper module", "scope": "all", "limit": 10, "source": "recall",
+		tool("recall", map[string]any{"query": "a helper module that does not exist"})
+		put(core.EventRecallMiss, fx.project, "", map[string]any{
+			"query": "a helper module that does not exist", "scope": "all", "limit": 10, "source": "recall",
 		})
-		put(core.EventToolCall, authRefreshProject, "", map[string]any{
+		put(core.EventToolCall, fx.project, "", map[string]any{
 			"tool": "tasks_update", "is_error": true, "error": "task already claimed",
 		})
-		put(core.EventAgentMishap, authRefreshProject, "", map[string]any{
+		put(core.EventAgentMishap, fx.project, "", map[string]any{
 			"description": "edited the wrong file first",
 		})
 	}

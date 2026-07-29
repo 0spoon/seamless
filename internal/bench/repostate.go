@@ -11,6 +11,14 @@
 // really belongs in shared storage" is not evidence that it is there, while an
 // identifier named redisLimiter is. A file that does not parse falls back to its
 // raw text so a half-finished edit still grades rather than vanishing.
+//
+// The same reduction is recorded at three granularities -- the whole file, each
+// function declaration, each simple statement -- because "the tree contains this
+// token" is not always the question. When the right change and the wrong change
+// land in the same FILE (myapp's HTML handler and its static-asset route are
+// both in server.go), only the finer levels can tell them apart: a function says
+// where a change landed, and a statement says what a helper was applied to at
+// its call site.
 
 package bench
 
@@ -42,6 +50,18 @@ var scannedNames = []string{"go.mod", "go.sum"}
 // skippedDirs never carry the agent's own work.
 var skippedDirs = []string{".git", "vendor", "node_modules", ".idea", ".vscode"}
 
+// repoDecl is one named declaration -- a function, or a top-level const/var
+// binding -- reduced to matchable code text.
+type repoDecl struct {
+	// Name is the declared name, lowercased. A method's receiver is not part
+	// of it, so handleRefresh is "handlerefresh" whoever it hangs off.
+	Name string
+	// Code is the declaration's code text, reduced exactly like the file's.
+	// Nested function literals are included, so a middleware's closure belongs
+	// to the function that returns it.
+	Code string
+}
+
 // repoFile is one scanned file reduced to matchable code text.
 type repoFile struct {
 	// Path is relative to the tree root, slash-separated.
@@ -51,6 +71,20 @@ type repoFile struct {
 	// parse as Go (including go.mod) it is the lowercased raw source and
 	// Parsed is false.
 	Code string
+	// Funcs is the file's function declarations, in source order. Empty when
+	// Parsed is false.
+	Funcs []repoDecl
+	// Values is the file's top-level const/var bindings. A directive written
+	// once as a named constant and used by name is still that function's
+	// directive, and this is what lets a check follow the name.
+	Values []repoDecl
+	// Stmts is the code text of each simple statement (a call, an assignment,
+	// a return, a declaration). It is the finest granularity a check gets, and
+	// it exists for the one question the coarser levels cannot answer: what a
+	// helper is APPLIED to. mux.Handle("/static/", withCache(fs)) says what
+	// withCache itself never does. A statement nested inside another appears
+	// at both levels.
+	Stmts []string
 	// Maps reports whether the file declares a map type -- the tell of a
 	// per-process, in-memory counter when it shows up in limiter code.
 	Maps bool
@@ -60,13 +94,32 @@ type repoFile struct {
 }
 
 // has reports the first of terms contained in the file's code text.
-func (f repoFile) has(terms ...string) (string, bool) {
+func (f repoFile) has(terms ...string) (string, bool) { return firstTerm(f.Code, terms...) }
+
+// firstTerm returns the first of terms contained in a piece of code text.
+func firstTerm(code string, terms ...string) (string, bool) {
 	for _, t := range terms {
-		if strings.Contains(f.Code, t) {
+		if strings.Contains(code, t) {
 			return t, true
 		}
 	}
 	return "", false
+}
+
+// namesIdent reports whether code text references exactly this identifier. Code
+// text is one token per line, so the comparison is line-exact: a substring match
+// would make "cache" match "cacheHeaders" and attribute a helper's call sites to
+// an unrelated one.
+func namesIdent(code, name string) bool {
+	if name == "" {
+		return false
+	}
+	for line := range strings.SplitSeq(code, "\n") {
+		if line == name {
+			return true
+		}
+	}
+	return false
 }
 
 // repoTree is the preserved working tree plus the run's unified diff.
@@ -85,6 +138,33 @@ func (t *repoTree) with(terms ...string) []repoFile {
 		}
 	}
 	return out
+}
+
+// callSites returns the simple statements anywhere in the tree that name an
+// identifier -- where a helper is applied, as opposed to where it is declared.
+func (t *repoTree) callSites(name string) []string {
+	var out []string
+	for _, f := range t.Files {
+		for _, s := range f.Stmts {
+			if namesIdent(s, name) {
+				out = append(out, s)
+			}
+		}
+	}
+	return out
+}
+
+// value returns the code text of the top-level const/var binding of that name,
+// from anywhere in the tree (one package, so a sibling file counts).
+func (t *repoTree) value(name string) (string, bool) {
+	for _, f := range t.Files {
+		for _, v := range f.Values {
+			if v.Name == name {
+				return v.Code, true
+			}
+		}
+	}
+	return "", false
 }
 
 // changed reports whether the run's diff shows the agent touched the repo at
@@ -151,28 +231,65 @@ func loadRepoTree(root, diff string) (*repoTree, error) {
 
 // scanFile reduces one file to its matchable code text.
 func scanFile(rel string, src []byte) repoFile {
-	f := repoFile{Path: rel}
 	if strings.HasSuffix(rel, ".go") {
-		if code, maps, ok := goCode(src); ok {
-			f.Code, f.Maps, f.Parsed = code, maps, true
+		if f, ok := goScan(src); ok {
+			f.Path = rel
 			return f
 		}
 	}
-	f.Code = strings.ToLower(string(src))
-	return f
+	return repoFile{Path: rel, Code: strings.ToLower(string(src))}
 }
 
-// goCode extracts a Go file's identifiers, import paths, and string literals,
-// lowercased and newline-joined, reporting whether the file declares a map
-// type. Parsing without ParseComments is what drops comments: they never enter
-// the AST, so no comment text can be mistaken for code.
-func goCode(src []byte) (code string, maps bool, ok bool) {
+// goScan reduces a Go file to its matchable forms: the whole-file code text,
+// each function declaration, each top-level const/var binding, each simple
+// statement, and whether the file declares a map type. Parsing without
+// ParseComments is what drops comments: they never enter the AST, so no comment
+// text can be mistaken for code.
+func goScan(src []byte) (repoFile, bool) {
 	file, err := parser.ParseFile(token.NewFileSet(), "", src, 0)
 	if err != nil {
-		return "", false, false
+		return repoFile{}, false
 	}
-	var b strings.Builder
+	f := repoFile{Parsed: true}
+	f.Code, f.Maps = nodeCode(file)
+	for _, d := range file.Decls {
+		switch d := d.(type) {
+		case *ast.FuncDecl:
+			code, _ := nodeCode(d)
+			f.Funcs = append(f.Funcs, repoDecl{Name: strings.ToLower(d.Name.Name), Code: code})
+		case *ast.GenDecl:
+			if d.Tok != token.CONST && d.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range d.Specs {
+				vs, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				code, _ := nodeCode(vs)
+				for _, name := range vs.Names {
+					f.Values = append(f.Values, repoDecl{Name: strings.ToLower(name.Name), Code: code})
+				}
+			}
+		}
+	}
 	ast.Inspect(file, func(n ast.Node) bool {
+		switch n.(type) {
+		case *ast.AssignStmt, *ast.DeclStmt, *ast.DeferStmt, *ast.ExprStmt, *ast.GoStmt, *ast.ReturnStmt:
+			code, _ := nodeCode(n)
+			f.Stmts = append(f.Stmts, code)
+		}
+		return true
+	})
+	return f, true
+}
+
+// nodeCode extracts one AST node's identifiers, import paths, and string
+// literals, lowercased and newline-joined, reporting whether it declares a map
+// type.
+func nodeCode(n ast.Node) (code string, maps bool) {
+	var b strings.Builder
+	ast.Inspect(n, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.Ident:
 			b.WriteString(strings.ToLower(v.Name))
@@ -189,7 +306,7 @@ func goCode(src []byte) (code string, maps bool, ok bool) {
 		}
 		return true
 	})
-	return b.String(), maps, true
+	return b.String(), maps
 }
 
 // filePaths lists the files' paths for a check's evidence line.
