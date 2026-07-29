@@ -31,7 +31,7 @@ const actorSessionArgDesc = "the acting agent's session: the cc/<id> or cx/<id> 
 const actorSessionIDArgDesc = "the acting agent's session ULID; takes precedence over session and the bound session"
 
 func tasksAddTool() mcp.Tool {
-	return mcp.NewTool("tasks_add",
+	return mcp.NewTool("tasks_add", hintAdd(),
 		mcp.WithDescription("Add a task to the dependency-aware ready queue. depends_on lists task ids that must finish first (done or dropped unblocks); each must exist and must not create a cycle. The task is 'ready' once it has no open/in_progress blocker."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short task title")),
 		mcp.WithString("body", mcp.Description("optional details / acceptance criteria (aliases: content, text)")),
@@ -75,7 +75,7 @@ func (s *Server) handleTasksAdd(ctx context.Context, req mcp.CallToolRequest) (*
 }
 
 func tasksUpdateTool() mcp.Tool {
-	return mcp.NewTool("tasks_update",
+	return mcp.NewTool("tasks_update", hintSet(),
 		mcp.WithDescription("Update a task: change status (open|in_progress|done|dropped), edit title/body, or add dependencies. Moving to done/dropped closes it and unblocks its dependents. A task another session holds via a live claim is locked to its holder: updating it fails with 'already claimed' until the lease lapses or the holder releases it."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id")),
 		mcp.WithString("status", enumOf(core.TaskStatuses), mcp.Description("new status")),
@@ -145,7 +145,7 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func tasksReadyTool() mcp.Tool {
-	return mcp.NewTool("tasks_ready",
+	return mcp.NewTool("tasks_ready", hintRead(),
 		mcp.WithDescription("List the actionable (ready) tasks for a project -- open tasks with no unfinished blocker -- oldest first, plus the blocked tasks with their still-open blockers. By default plan-step tasks are excluded; pass plan=<slug> to list that plan's steps instead."),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithString("plan", mcp.Description("optional plan slug: return that plan's ready/blocked step tasks instead of the default (non-plan) queue")),
@@ -194,7 +194,7 @@ func (s *Server) handleTasksReady(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 func tasksListTool() mcp.Tool {
-	return mcp.NewTool("tasks_list",
+	return mcp.NewTool("tasks_list", hintRead(),
 		mcp.WithDescription("List a project's tasks, optionally filtered by status, newest first. By default plan-step tasks are excluded; pass plan=<slug> to list that plan's steps instead. Pass id=<task id> to load a single task by its globally-unique id (a direct lookup that ignores project/status/plan and needs no session scope)."),
 		mcp.WithString("id", mcp.Description("load exactly one task by its globally-unique id; when set, project/status/plan are ignored and the response's tasks array holds just that task")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
@@ -244,7 +244,7 @@ func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (
 }
 
 func tasksClaimTool() mcp.Tool {
-	return mcp.NewTool("tasks_claim",
+	return mcp.NewTool("tasks_claim", hintAdd(),
 		mcp.WithDescription("Atomically claim a task for the current session, moving it to in_progress with a lease. A refused claim names its cause: held by another live claim ('task already claimed'), waiting on unfinished dependencies ('task blocked', naming the blockers -- finish those first), or already done/dropped ('task closed'). Re-claiming a task you already hold refreshes (heartbeats) the lease; a task whose lease has expired can be reclaimed. Release it with tasks_release or by closing it (tasks_update done/dropped); session_end releases all of a session's claims."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id to claim")),
 		// No Min/Max: the handler owns this parameter's range, because its upper
@@ -295,7 +295,7 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 }
 
 func tasksReleaseTool() mcp.Tool {
-	return mcp.NewTool("tasks_release",
+	return mcp.NewTool("tasks_release", hintSet(),
 		mcp.WithDescription("Release a task the current session holds, reopening it (status back to open, claim cleared) so another agent can claim it. Only the current holder may release."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("task id to release")),
 		mcp.WithString("session", mcp.Description(actorSessionArgDesc)),

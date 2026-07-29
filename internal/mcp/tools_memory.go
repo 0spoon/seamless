@@ -20,7 +20,7 @@ import (
 const maxDescriptionRunes = 150
 
 func memoryWriteTool() mcp.Tool {
-	return mcp.NewTool("memory_write",
+	return mcp.NewTool("memory_write", hintOverwrite(),
 		mcp.WithDescription("Create or update a durable memory. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If the supersede step fails the new memory is still written and kept, but the call returns an error naming it -- the target is then still active."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("kebab-case identifier, unique within the project")),
 		mcp.WithString("kind", mcp.Required(), enumOf(core.MemoryKinds), mcp.Description("memory kind; "+agentguide.KindDiscriminator+"; "+agentguide.StageContract)),
@@ -221,7 +221,7 @@ func (s *Server) supersedeMemory(ctx context.Context, project, target string, re
 }
 
 func memoryAppendTool() mcp.Tool {
-	return mcp.NewTool("memory_append",
+	return mcp.NewTool("memory_append", hintAdd(),
 		mcp.WithDescription("Append markdown to an existing memory's body. The memory keeps its id. To create a new memory, use memory_write."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("memory name")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown to append (aliases: content, text)")),
@@ -294,7 +294,7 @@ func stageHeaderHint(kind core.MemoryKind, body string) string {
 }
 
 func memoryReadTool() mcp.Tool {
-	return mcp.NewTool("memory_read",
+	return mcp.NewTool("memory_read", hintRead(),
 		mcp.WithDescription("Read a memory by name within the current project (falling back to a global memory of the same name), or directly by id."),
 		mcp.WithString("name", mcp.Description("memory name")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
@@ -404,7 +404,7 @@ func (s *Server) supersededWarning(ctx context.Context, mem core.Memory) string 
 }
 
 func memoryDeleteTool() mcp.Tool {
-	return mcp.NewTool("memory_delete",
+	return mcp.NewTool("memory_delete", hintOverwrite(),
 		mcp.WithDescription("Delete a memory by name (removes the file and its index)."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("memory name")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),

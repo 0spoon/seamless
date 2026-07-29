@@ -14,7 +14,7 @@ import (
 )
 
 func projectListTool() mcp.Tool {
-	return mcp.NewTool("project_list",
+	return mcp.NewTool("project_list", hintRead(),
 		mcp.WithDescription("List all projects (slug, name, description)."),
 	)
 }
@@ -34,7 +34,7 @@ func (s *Server) handleProjectList(ctx context.Context, _ mcp.CallToolRequest) (
 }
 
 func projectCreateTool() mcp.Tool {
-	return mcp.NewTool("project_create",
+	return mcp.NewTool("project_create", hintSet(),
 		mcp.WithDescription("Create a project. The slug defaults to a slugified name."),
 		mcp.WithString("name", mcp.Required(), mcp.Description("human-readable project name")),
 		mcp.WithString("slug", mcp.Description("optional explicit slug")),

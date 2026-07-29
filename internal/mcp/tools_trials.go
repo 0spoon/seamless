@@ -15,7 +15,7 @@ import (
 const trialContextLimit = 10
 
 func labOpenTool() mcp.Tool {
-	return mcp.NewTool("lab_open",
+	return mcp.NewTool("lab_open", hintSet(),
 		mcp.WithDescription("Open a research lab and get its recent trial history for context. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label; opening a new one creates it implicitly on first trial_record."),
 		mcp.WithString("lab", mcp.Required(), mcp.Description("lab name (a stable label for a line of investigation)")),
 		mcp.WithString("goal", mcp.Description("optional note on what this lab is investigating")),
@@ -40,7 +40,7 @@ func (s *Server) handleLabOpen(ctx context.Context, req mcp.CallToolRequest) (*m
 }
 
 func trialRecordTool() mcp.Tool {
-	return mcp.NewTool("trial_record",
+	return mcp.NewTool("trial_record", hintAdd(),
 		mcp.WithDescription("Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("short trial title")),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
@@ -91,7 +91,7 @@ func (s *Server) handleTrialRecord(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func trialQueryTool() mcp.Tool {
-	return mcp.NewTool("trial_query",
+	return mcp.NewTool("trial_query", hintRead(),
 		mcp.WithDescription("Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter (native structured query over the metrics recorded by trial_record)."),
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
 		mcp.WithString("outcome", mcp.Description("filter by outcome (e.g. fail)")),

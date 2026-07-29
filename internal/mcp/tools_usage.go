@@ -9,7 +9,7 @@ import (
 )
 
 func usageSummaryTool() mcp.Tool {
-	return mcp.NewTool("usage_summary",
+	return mcp.NewTool("usage_summary", hintRead(),
 		mcp.WithDescription("Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only."),
 	)
 }

@@ -18,7 +18,7 @@ import (
 var favoriteKinds = []string{"memory", "note", "project", "plan", "task", "session", "trial"}
 
 func favoriteSetTool() mcp.Tool {
-	return mcp.NewTool("favorite_set",
+	return mcp.NewTool("favorite_set", hintSet(),
 		mcp.WithDescription("Star or unstar an item. Favorites sort first in the console, are pinned "+
 			"into session briefings (memories), and get a mild recall rank boost. For memories and notes "+
 			"the flag is stored in the file's frontmatter; starring never bumps an item's updated time."),

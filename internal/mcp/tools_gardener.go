@@ -12,7 +12,7 @@ import (
 )
 
 func gardenerProposalsTool() mcp.Tool {
-	return mcp.NewTool("gardener_proposals",
+	return mcp.NewTool("gardener_proposals", hintRead(),
 		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only."),
 		mcp.WithString("kind", enumOf(store.ProposalKinds), mcp.Description("filter by proposal kind (default: all pending)")),
 	)
@@ -28,7 +28,7 @@ func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRe
 }
 
 func gardenerRequestTool() mcp.Tool {
-	return mcp.NewTool("gardener_request",
+	return mcp.NewTool("gardener_request", hintAdd(),
 		mcp.WithDescription("The natural-language entry point for REORGANIZING memory. Describe the change in plain language and it returns reviewable pending proposals -- fold duplicates together (\"these two memories are duplicates -- keep the newer\"), retire stale memories (\"archive anything about the old port 8080\"), synthesize several into one (\"combine the three auth-flow notes\"), move a mis-filed memory to another EXISTING project (\"the iOS DFU memory belongs in arctop-ios\"), or reclassify a memory's kind (\"the wordmark memory is a convention, not a constraint\"). Use this whenever the user describes how they want their knowledge organized; if the intended change is ambiguous, ask them a clarifying question first. It NEVER mutates memories: it only creates pending proposals -- review with gardener_proposals, resolve with gardener_apply. If the request is to split one project into NEW child projects, it recognizes that and returns guidance (splitSource) pointing you at gardener_split instead. Needs an LLM chat client."),
 		mcp.WithString("request", mcp.Required(), mcp.Description("the reorganization request in plain language")),
 		mcp.WithString("project", mcp.Description("scope candidate memories: a project slug (its memories + globals), \"global\" for globals only, or \"all\" for every project on the machine. Omit to use the session's project.")),
@@ -98,7 +98,7 @@ func (s *Server) gardenerRequestScope(ctx context.Context, explicit string) (gar
 }
 
 func gardenerSplitTool() mcp.Tool {
-	return mcp.NewTool("gardener_split",
+	return mcp.NewTool("gardener_split", hintAdd(),
 		mcp.WithDescription("Plan a project SPLIT: divide one existing project into two or more NEW child projects, keeping cross-platform memories in a shared parent (e.g. split arctop-app into arctop-ios + arctop-android with shared arctop-mobile-apps). Use this when the user wants to break one project into several -- gardener_request points you here (via splitSource) when it detects that intent. It NEVER creates a project or moves a memory: it only creates reviewable pending proposals -- one 'split' setup proposal plus one 'reproject' per memory, all under plan 'split-<source>'. Review with gardener_proposals, then apply each with gardener_apply (or retarget a memory first in the console). Needs an LLM chat client and a known source project slug (see project_list)."),
 		mcp.WithString("source", mcp.Required(), mcp.Description("the project slug to split (its own memories are classified into the children/shared parent)")),
 		mcp.WithString("instruction", mcp.Description("optional guidance: which children, what stays shared")),
@@ -121,7 +121,7 @@ func (s *Server) handleGardenerSplit(ctx context.Context, req mcp.CallToolReques
 }
 
 func gardenerApplyTool() mcp.Tool {
-	return mcp.NewTool("gardener_apply",
+	return mcp.NewTool("gardener_apply", hintOverwrite(),
 		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; rekind -> reclassify the memory's kind in place; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory; tool_error -> open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
 		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),

@@ -16,7 +16,7 @@ import (
 )
 
 func sessionStartTool() mcp.Tool {
-	return mcp.NewTool("session_start",
+	return mcp.NewTool("session_start", hintSet(),
 		mcp.WithDescription("Begin or resume an agent work session and bind it to this connection. Returns the project briefing. Later memory/recall/notes calls inherit this session's project scope, so you rarely pass project again."),
 		mcp.WithString("name", mcp.Description("Optional stable session name; reusing a name resumes that session")),
 		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
@@ -204,7 +204,7 @@ func (s *Server) soleAmbientByCWD(ctx context.Context, cwd string) (core.Session
 }
 
 func sessionUpdateTool() mcp.Tool {
-	return mcp.NewTool("session_update",
+	return mcp.NewTool("session_update", hintSet(),
 		mcp.WithDescription("Record interim progress on the current session (working findings so far). Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Working findings / progress note so far")),
 		mcp.WithString("session", mcp.Description("Session name to operate on: the cc/<id> or cx/<id> on your briefing's 'Seam session' line, or a sess/* name. Defaults to the bound session; pass it whenever you have not run session_start and several agents are active -- the bare call is then ambiguous and fails rather than guesses")),
@@ -237,7 +237,7 @@ func (s *Server) handleSessionUpdate(ctx context.Context, req mcp.CallToolReques
 }
 
 func sessionEndTool() mcp.Tool {
-	return mcp.NewTool("session_end",
+	return mcp.NewTool("session_end", hintSet(),
 		mcp.WithDescription("Complete the current session, persisting its findings for future briefings. Uses the bound session unless you pass one."),
 		mcp.WithString("findings", mcp.Required(), mcp.Description("Final findings: what was learned, decided, or left open. Prefer a tight summary (briefings show a short preview), but long findings are stored in full -- they are not rejected.")),
 		mcp.WithArray("mishaps", mcp.WithStringItems(), mcp.Description("Self-report mishaps this session caused: an action a warning or convention said not to take, live state touched by mistake, a command that hit the wrong target. Pass an array with one short entry per incident; omit when none happened. When a mishap violated a stored memory, name that memory by its exact slug in the entry (e.g. \"violated chroma-boot-race by ...\") -- the report is then linked to it. Recorded for recurrence review, not blame -- report them even when fully recovered.")),

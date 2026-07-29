@@ -16,7 +16,7 @@ import (
 const captureBodyMaxRunes = 50000
 
 func captureURLTool() mcp.Tool {
-	return mcp.NewTool("capture_url",
+	return mcp.NewTool("capture_url", hintFetch(),
 		mcp.WithDescription("Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and save its readable content as a note. Returns the new note's id."),
 		mcp.WithString("url", mcp.Required(), mcp.Description("http(s) URL to capture")),
 		mcp.WithString("project", mcp.Description(writeProjectArgDesc)),

@@ -17,7 +17,7 @@ import (
 )
 
 func notesCreateTool() mcp.Tool {
-	return mcp.NewTool("notes_create",
+	return mcp.NewTool("notes_create", hintAdd(),
 		mcp.WithDescription("Create a work note (research finding, decision record, summary). Auto-tagged created-by:agent."),
 		mcp.WithString("title", mcp.Required(), mcp.Description("note title")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("markdown body (aliases: content, text)")),
@@ -73,7 +73,7 @@ func (s *Server) handleNotesCreate(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func notesReadTool() mcp.Tool {
-	return mcp.NewTool("notes_read",
+	return mcp.NewTool("notes_read", hintRead(),
 		mcp.WithDescription("Read a note by id, or by slug within the current project (falling back to a global note of the same slug)."),
 		mcp.WithString("id", mcp.Description("note id (ULID)")),
 		mcp.WithString("slug", mcp.Description("note slug, as briefings, plan compositions, and notes_create responses name notes (alias: name)")),
@@ -113,7 +113,7 @@ func (s *Server) handleNotesRead(ctx context.Context, req mcp.CallToolRequest) (
 }
 
 func notesUpdateTool() mcp.Tool {
-	return mcp.NewTool("notes_update",
+	return mcp.NewTool("notes_update", hintOverwrite(),
 		mcp.WithDescription("Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; tags replace all. The slug and id stay stable."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 		mcp.WithString("title", mcp.Description("new title")),
@@ -197,7 +197,7 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func notesAppendTool() mcp.Tool {
-	return mcp.NewTool("notes_append",
+	return mcp.NewTool("notes_append", hintAdd(),
 		mcp.WithDescription("Append a timestamped line to a note's body."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 		mcp.WithString("body", mcp.Required(), mcp.Description("text to append (aliases: content, text)")),
@@ -224,7 +224,7 @@ func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest)
 }
 
 func notesDeleteTool() mcp.Tool {
-	return mcp.NewTool("notes_delete",
+	return mcp.NewTool("notes_delete", hintOverwrite(),
 		mcp.WithDescription("Delete a note by id (removes the file and its index)."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("note id (ULID)")),
 	)
