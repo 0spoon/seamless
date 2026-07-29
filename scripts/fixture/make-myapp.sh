@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
-# make-myapp.sh -- scaffold the throwaway `myapp` demo repo the terminal-scenes
-# captures record against (plan:terminal-scenes). This repo is NEVER committed to
-# the Seamless tree; only this generator is. It is a tiny stdlib-only Go web
-# service with exactly the two work surfaces the scenes need:
+# make-myapp.sh -- scaffold the throwaway `myapp` demo repo that both the
+# terminal-scenes captures (plan:terminal-scenes) and the agent-scenario
+# benchmark (internal/bench) work against. This repo is NEVER committed to the
+# Seamless tree; only this generator is. It is a tiny stdlib-only Go web
+# service whose surfaces the scenarios lean on:
 #
-#   - POST /auth/refresh (auth.go) -- the auth-refresh plan's next step (step 5,
-#     rate-limiting) is a real, missing thing an agent can add.
-#   - an HTML home handler + a static asset handler (server.go) -- scene 2's
-#     "HTML responses are slow -- add caching" landmine: the wrong fix caches the
-#     HTML, the right fix caches the assets only (edge-cache-gotcha memory).
+#   - POST /auth/refresh (auth.go) -- rotating refresh tokens, replay
+#     detection that revokes the whole family, Lax auth cookies.
+#   - an in-memory token store (tokens.go) -- families die with the process.
+#   - an HTML home handler + a static asset handler (server.go) -- per-user
+#     HTML next to content-addressable assets, plus a request/auth access log
+#     whose line shapes incident evidence can quote.
+#   - a bare ListenAndServe + an unconditional /healthz (main.go, server.go)
+#     -- no graceful shutdown, nothing drains.
+#
+# Nothing in here may hint which of those surfaces a scenario grades (no
+# planted TODOs) and nothing may name Seamless (memory
+# scene-demo-repo-must-be-seamless-free): the vanilla arm reads this repo.
 #
 # Usage: scripts/fixture/make-myapp.sh <target-dir>
 #   Recreates <target-dir> from scratch and leaves it as a committed git repo.
@@ -46,10 +54,12 @@ import (
 	"net/http"
 )
 
+const version = "1.4.2"
+
 func main() {
 	srv := newServer()
 	addr := ":8080"
-	log.Printf("myapp listening on %s", addr)
+	log.Printf("myapp %s listening on %s", version, addr)
 	if err := http.ListenAndServe(addr, srv.routes()); err != nil {
 		log.Fatal(err)
 	}
@@ -61,6 +71,7 @@ package main
 
 import (
 	"html/template"
+	"log"
 	"net/http"
 )
 
@@ -83,7 +94,26 @@ func (s *server) routes() http.Handler {
 	mux.HandleFunc("/auth/refresh", s.handleRefresh)
 	// Static assets (JS, CSS) live under /static/ with content-hashed names.
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
-	return mux
+	return logRequests(mux)
+}
+
+// logRequests writes one access-log line per request.
+func logRequests(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rec := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(rec, r)
+		log.Printf("%s %s %d", r.Method, r.URL.Path, rec.status)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(code int) {
+	r.status = code
+	r.ResponseWriter.WriteHeader(code)
 }
 
 // handleHome renders the dashboard HTML. It varies by the session cookie, so its
@@ -128,6 +158,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -135,9 +166,6 @@ import (
 // token, mints a fresh access+refresh pair, and invalidates the old refresh
 // token. A replayed (already-rotated) token means it leaked, so the whole family
 // is revoked.
-//
-// TODO: this endpoint has no rate limit. A credential-stuffing attack can hammer
-// it. Add a limiter before the token lookup.
 func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -145,11 +173,13 @@ func (s *server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	c, err := r.Cookie("refresh")
 	if err != nil || c.Value == "" {
+		log.Printf("auth: refresh failed: no refresh cookie")
 		http.Error(w, "missing refresh token", http.StatusUnauthorized)
 		return
 	}
 	pair, err := s.tokens.rotate(c.Value)
 	if err != nil {
+		log.Printf("auth: refresh failed: %v", err)
 		http.Error(w, "invalid refresh token", http.StatusUnauthorized)
 		return
 	}

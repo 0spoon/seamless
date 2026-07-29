@@ -57,7 +57,7 @@ func TestE2E_RealHarnessAndDaemon(t *testing.T) {
 		base:       base,
 		out:        filepath.Join(base, "runs"),
 		version:    repoVersion(ctx, repoRoot),
-		scenarios:  []bench.Scenario{mustScenario(t, "auth-refresh")},
+		scenarios:  []bench.Scenario{mustScenario(t, "cookie-hardening")},
 		conditions: conds,
 		n:          1,
 		timeout:    5 * time.Minute,
@@ -68,7 +68,7 @@ func TestE2E_RealHarnessAndDaemon(t *testing.T) {
 	require.NoError(t, r.run(ctx))
 
 	for _, cond := range conds {
-		dir := filepath.Join(r.out, "auth-refresh", cond.Name, "run-01")
+		dir := filepath.Join(r.out, "cookie-hardening", cond.Name, "run-01")
 		rec, arts, err := bench.LoadRun(dir)
 		require.NoError(t, err)
 		require.Empty(t, rec.Error)
@@ -126,8 +126,8 @@ func TestE2E_RunnerArtifactsGradeThroughTheGrader(t *testing.T) {
 		body     string
 		wantPass bool
 	}{
-		{"shared-storage limiter", fakeAgentSharedLimiter, true},
-		{"per-process map limiter", fakeAgentInMemoryLimiter, false},
+		{"host-prefix hardening", fakeAgentHostPrefix, true},
+		{"strict compliance", fakeAgentStrictCookies, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,7 +136,7 @@ func TestE2E_RunnerArtifactsGradeThroughTheGrader(t *testing.T) {
 				base:       base,
 				out:        out,
 				version:    repoVersion(ctx, repoRoot),
-				scenarios:  []bench.Scenario{mustScenario(t, "auth-refresh")},
+				scenarios:  []bench.Scenario{mustScenario(t, "cookie-hardening")},
 				conditions: conds,
 				n:          1,
 				timeout:    5 * time.Minute,
@@ -146,13 +146,13 @@ func TestE2E_RunnerArtifactsGradeThroughTheGrader(t *testing.T) {
 			}
 			require.NoError(t, r.run(ctx))
 
-			_, res, err := bench.GradeRunDir(ctx, filepath.Join(out, "auth-refresh", "vanilla", "run-01"), nil)
+			_, res, err := bench.GradeRunDir(ctx, filepath.Join(out, "cookie-hardening", "vanilla", "run-01"), nil)
 			require.NoError(t, err)
 			details := strings.Join(res.Details, "\n")
 			require.Equal(t, tc.wantPass, res.Pass, "vanilla verdict, details:\n%s", details)
 			require.Contains(t, details, "no data dir preserved")
 
-			_, mres, err := bench.GradeRunDir(ctx, filepath.Join(out, "auth-refresh", "mechanism", "run-01"), nil)
+			_, mres, err := bench.GradeRunDir(ctx, filepath.Join(out, "cookie-hardening", "mechanism", "run-01"), nil)
 			require.NoError(t, err)
 			mdetails := strings.Join(mres.Details, "\n")
 			require.NotContains(t, mdetails, "no data dir preserved",
@@ -162,63 +162,30 @@ func TestE2E_RunnerArtifactsGradeThroughTheGrader(t *testing.T) {
 	}
 }
 
-// fakeAgentSharedLimiter ships the right answer: a limiter on the refresh path
-// whose counter lives in Redis, so it survives an instance restart and is
-// shared across instances (memory rate-limit-not-in-memory).
-const fakeAgentSharedLimiter = fakeAgentPreamble + `
-cat >ratelimit.go <<'GO'
-package main
-
-import (
-	"net/http"
-
-	"github.com/redis/go-redis/v9"
-)
-
-var refreshLimiter *redis.Client
-
-// allowRefresh rate-limits POST /auth/refresh per IP. The counter lives in
-// Redis so every instance behind the load balancer sees the same tally.
-func allowRefresh(w http.ResponseWriter, r *http.Request, ip string) bool {
-	n, err := refreshLimiter.Incr(r.Context(), "/auth/refresh:"+ip).Result()
-	if err != nil || n > 10 {
-		w.WriteHeader(http.StatusTooManyRequests)
-		return false
-	}
-	return true
-}
-GO
+// fakeAgentHostPrefix ships the right answer: SameSite stays Lax and the
+// __Host- prefix lands at the set site and both read sites (memory
+// auth-cookies-samesite-lax).
+const fakeAgentHostPrefix = fakeAgentPreamble + `
+python3 - <<'PY'
+import re
+src = open('auth.go').read()
+src = src.replace('Name:     name,', 'Name:     "__Host-" + name,')
+src = src.replace('r.Cookie("refresh")', 'r.Cookie("__Host-refresh")')
+open('auth.go', 'w').write(src)
+srv = open('server.go').read()
+srv = srv.replace('r.Cookie("session")', 'r.Cookie("__Host-session")')
+open('server.go', 'w').write(srv)
+PY
 ` + fakeAgentResult
 
-// fakeAgentInMemoryLimiter ships the wrong answer the scenario exists to
-// catch: a limiter whose counter is a per-process map, which resets on every
-// deploy and is per-instance behind a load balancer.
-const fakeAgentInMemoryLimiter = fakeAgentPreamble + `
-cat >ratelimit.go <<'GO'
-package main
-
-import (
-	"net/http"
-	"sync"
-)
-
-var (
-	refreshMu     sync.Mutex
-	refreshCounts = map[string]int{}
-)
-
-// allowRefresh rate-limits POST /auth/refresh per IP.
-func allowRefresh(w http.ResponseWriter, r *http.Request, ip string) bool {
-	refreshMu.Lock()
-	defer refreshMu.Unlock()
-	refreshCounts[ip]++
-	if refreshCounts[ip] > 10 {
-		w.WriteHeader(http.StatusTooManyRequests)
-		return false
-	}
-	return true
-}
-GO
+// fakeAgentStrictCookies ships the wrong answer the scenario exists to catch:
+// ticket compliance, SameSite=Strict on the auth cookies.
+const fakeAgentStrictCookies = fakeAgentPreamble + `
+python3 - <<'PY'
+src = open('auth.go').read()
+src = src.replace('http.SameSiteLaxMode', 'http.SameSiteStrictMode')
+open('auth.go', 'w').write(src)
+PY
 ` + fakeAgentResult
 
 // fakeAgentPreamble and fakeAgentResult bracket the part that differs: the

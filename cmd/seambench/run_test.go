@@ -143,6 +143,160 @@ func TestRunner_FullLoopCapturesEveryCell(t *testing.T) {
 	}
 }
 
+// twoStepScenario mirrors the handoff shape: evidence materialized for the
+// first session only, a fresh working tree for the second.
+func twoStepScenario() bench.Scenario {
+	sc := fakeScenario()
+	sc.Name = "fake-two-step"
+	sc.Prompt = ""
+	sc.Steps = []bench.Step{
+		{Name: "investigate", Prompt: "find the root cause",
+			Evidence: map[string]string{"logs/app.log": "the incident evidence\n"}},
+		{Name: "fix", Prompt: "land the fix", FreshRepo: true},
+	}
+	return sc
+}
+
+// twoStepAgentBody plays both sessions and ASSERTS the boundary from the
+// inside: session 1 must see the evidence, session 2 must see neither the
+// evidence nor session 1's working-tree leftovers. A violated boundary exits
+// non-zero, which surfaces as the run's Error.
+const twoStepAgentBody = `#!/usr/bin/env bash
+set -eu
+printf '%s\n' "$*" >>"$FAKE_AGENT_ARGS"
+mkdir -p "$CLAUDE_CONFIG_DIR/projects/-fixture-myapp"
+case "$2" in
+"find the root cause")
+	[ -f logs/app.log ] || exit 7
+	echo 'scratch notes' >NOTES.md
+	echo '// investigated' >>main.go
+	printf '{"type":"assistant"}\n' >"$CLAUDE_CONFIG_DIR/projects/-fixture-myapp/fake-s1.jsonl"
+	cat <<'JSON'
+{"type":"result","subtype":"success","is_error":false,"duration_ms":1000,"num_turns":4,"session_id":"fake-s1","total_cost_usd":0.1,"usage":{"input_tokens":100,"output_tokens":10}}
+JSON
+	;;
+"land the fix")
+	[ ! -e logs/app.log ] || exit 8
+	[ ! -e NOTES.md ] || exit 9
+	printf 'package main\n' >fix.go
+	printf '{"type":"assistant"}\n' >"$CLAUDE_CONFIG_DIR/projects/-fixture-myapp/fake-s2.jsonl"
+	cat <<'JSON'
+{"type":"result","subtype":"success","is_error":false,"duration_ms":2000,"num_turns":9,"session_id":"fake-s2","total_cost_usd":0.3,"usage":{"input_tokens":200,"output_tokens":30}}
+JSON
+	;;
+*)
+	exit 5
+	;;
+esac
+`
+
+func TestRunner_TwoStepRunKeepsTheBoundaries(t *testing.T) {
+	requireGit(t)
+	base := t.TempDir()
+	mechanism := bench.Condition{Name: "mechanism", Profile: bench.ProfileMechanism, Client: bench.ClientClaude}
+	newArmFixture(t, base, mechanism, 8099)
+
+	logDir := t.TempDir()
+	t.Setenv("FAKE_AGENT_ARGS", filepath.Join(logDir, "args"))
+	script := writeScript(t, t.TempDir(), "two-step.sh", twoStepAgentBody)
+
+	r, _ := newTestRunner(t, base, []bench.Condition{mechanism}, script, 1)
+	r.scenarios = []bench.Scenario{twoStepScenario()}
+	require.NoError(t, r.run(context.Background()))
+
+	dir := filepath.Join(r.out, "fake-two-step", "mechanism", "run-01")
+	rec, arts, err := bench.LoadRun(dir)
+	require.NoError(t, err)
+	require.Empty(t, rec.Error, "the agent's own boundary assertions must hold")
+
+	// The manifest: prompts on the steps, runner metrics summed on top.
+	require.Empty(t, rec.Prompt)
+	require.Len(t, rec.Steps, 2)
+	require.Equal(t, "investigate", rec.Steps[0].Name)
+	require.Equal(t, "fake-s1", rec.Steps[0].SessionID)
+	require.Equal(t, 4, rec.Steps[0].Metrics.Turns)
+	require.Equal(t, "fix", rec.Steps[1].Name)
+	require.Equal(t, "fake-s2", rec.Steps[1].SessionID)
+	require.Equal(t, 13, rec.Metrics.Turns)
+	require.InDelta(t, 0.4, rec.Metrics.CostUSD, 1e-9)
+
+	// Session 1's artifacts: its own diff (evidence-free, leftovers included)
+	// and its own transcript.
+	require.Len(t, arts.Steps, 1)
+	require.Contains(t, arts.Steps[0].RepoDiff, "main.go")
+	require.Contains(t, arts.Steps[0].RepoDiff, "NOTES.md")
+	require.NotContains(t, arts.Steps[0].RepoDiff, "app.log")
+	require.NotContains(t, arts.Steps[0].RepoDiff, "fix.go")
+	b, err := os.ReadFile(arts.Steps[0].Transcript)
+	require.NoError(t, err)
+	require.Contains(t, filepath.Base(arts.Steps[0].Transcript), "transcript")
+	require.NotEmpty(t, b)
+
+	// The final artifacts are session 2's alone: the fresh-repo boundary
+	// dropped session 1's tree, and the evidence never reaches a capture.
+	require.Contains(t, arts.RepoDiff, "fix.go")
+	require.NotContains(t, arts.RepoDiff, "main.go")
+	require.NotContains(t, arts.RepoDiff, "app.log")
+	require.NotContains(t, arts.RepoDiff, "NOTES.md")
+	require.FileExists(t, filepath.Join(arts.RepoDir, "fix.go"))
+	require.NoFileExists(t, filepath.Join(arts.RepoDir, "NOTES.md"))
+	require.NoDirExists(t, filepath.Join(arts.RepoDir, "logs"))
+	require.FileExists(t, filepath.Join(dir, bench.StepDirName(1), bench.AgentLogFile))
+
+	// Both sessions ran, in order.
+	args, err := os.ReadFile(filepath.Join(logDir, "args"))
+	require.NoError(t, err)
+	require.Regexp(t, `(?s)find the root cause.*land the fix`, string(args))
+}
+
+func TestRunner_AFailedStepAbortsTheRemainingSteps(t *testing.T) {
+	requireGit(t)
+	base := t.TempDir()
+	mechanism := bench.Condition{Name: "mechanism", Profile: bench.ProfileMechanism, Client: bench.ClientClaude}
+	newArmFixture(t, base, mechanism, 8099)
+
+	logDir := t.TempDir()
+	t.Setenv("FAKE_AGENT_ARGS", filepath.Join(logDir, "args"))
+	script := writeScript(t, t.TempDir(), "boom.sh", "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >>\"$FAKE_AGENT_ARGS\"\nexit 3\n")
+
+	r, _ := newTestRunner(t, base, []bench.Condition{mechanism}, script, 1)
+	r.scenarios = []bench.Scenario{twoStepScenario()}
+	err := r.run(context.Background())
+	require.ErrorContains(t, err, "every run failed")
+
+	dir := filepath.Join(r.out, "fake-two-step", "mechanism", "run-01")
+	rec, _, err := bench.LoadRun(dir)
+	require.NoError(t, err)
+	require.Contains(t, rec.Error, "step 1/2 (investigate)")
+	require.Len(t, rec.Steps, 1, "a step the run never reached is not recorded")
+
+	args, err := os.ReadFile(filepath.Join(logDir, "args"))
+	require.NoError(t, err)
+	require.NotContains(t, string(args), "land the fix", "the second session must never start")
+}
+
+func TestValidateScenario(t *testing.T) {
+	ok := twoStepScenario()
+	require.NoError(t, validateScenario(ok))
+
+	both := ok
+	both.Prompt = "also a prompt"
+	require.ErrorContains(t, validateScenario(both), "both Prompt and Steps")
+
+	recall := ok
+	recall.RequiresRecall = true
+	require.ErrorContains(t, validateScenario(recall), "multi-step")
+
+	escape := fakeScenario()
+	escape.Prompt = ""
+	escape.Steps = []bench.Step{{Prompt: "p", Evidence: map[string]string{"../out": "x"}}}
+	require.ErrorContains(t, validateScenario(escape), "escapes the repo")
+
+	empty := fakeScenario()
+	empty.Prompt = ""
+	require.ErrorContains(t, validateScenario(empty), "no prompt")
+}
+
 func TestRunner_FailedRunsAreRecordedAndTheSuiteContinues(t *testing.T) {
 	requireGit(t)
 	base := t.TempDir()
@@ -203,11 +357,11 @@ func TestSelectScenarios(t *testing.T) {
 	require.NotEmpty(t, all)
 	require.Equal(t, scenarioNames(), namesOf(all))
 
-	one, err := selectScenarios(" auth-refresh ")
+	one, err := selectScenarios(" cookie-hardening ")
 	require.NoError(t, err)
-	require.Equal(t, []string{"auth-refresh"}, namesOf(one))
+	require.Equal(t, []string{"cookie-hardening"}, namesOf(one))
 
-	_, err = selectScenarios("auth-refresh,auth-refresh")
+	_, err = selectScenarios("cookie-hardening,cookie-hardening")
 	require.ErrorContains(t, err, "duplicate")
 
 	_, err = selectScenarios("nope")

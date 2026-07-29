@@ -30,6 +30,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -140,20 +141,6 @@ func (t *repoTree) with(terms ...string) []repoFile {
 	return out
 }
 
-// callSites returns the simple statements anywhere in the tree that name an
-// identifier -- where a helper is applied, as opposed to where it is declared.
-func (t *repoTree) callSites(name string) []string {
-	var out []string
-	for _, f := range t.Files {
-		for _, s := range f.Stmts {
-			if namesIdent(s, name) {
-				out = append(out, s)
-			}
-		}
-	}
-	return out
-}
-
 // value returns the code text of the top-level const/var binding of that name,
 // from anywhere in the tree (one package, so a sibling file counts).
 func (t *repoTree) value(name string) (string, bool) {
@@ -171,6 +158,80 @@ func (t *repoTree) value(name string) (string, bool) {
 // all. It is diagnostic only: an empty diff with a correct tree means the
 // runner failed to capture the diff, not that nothing happened.
 func (t *repoTree) changed() bool { return strings.TrimSpace(t.Diff) != "" }
+
+// diffPaths lists the repo-relative paths the run's diff touches, from its
+// "--- a/" and "+++ b/" header lines. Like changed, it reads the diff and is
+// therefore for OBSERVED checks only: an incomplete diff must dull a
+// measurement, never flip a verdict.
+func (t *repoTree) diffPaths() []string {
+	seen := map[string]bool{}
+	var out []string
+	for line := range strings.SplitSeq(t.Diff, "\n") {
+		var p string
+		switch {
+		case strings.HasPrefix(line, "--- a/"):
+			p = strings.TrimPrefix(line, "--- a/")
+		case strings.HasPrefix(line, "+++ b/"):
+			p = strings.TrimPrefix(line, "+++ b/")
+		default:
+			continue
+		}
+		// A tab can trail the path in traditional diff headers.
+		p, _, _ = strings.Cut(p, "\t")
+		if p == "" || p == "/dev/null" || seen[p] {
+			continue
+		}
+		seen[p] = true
+		out = append(out, p)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// diffTouches reports whether the run's diff touches the exact path.
+func (t *repoTree) diffTouches(path string) bool {
+	return slices.Contains(t.diffPaths(), path)
+}
+
+// linesMatching returns the code-text lines anywhere in the tree that match
+// re. Code text is one token per line -- an identifier, an import path, or a
+// whole string literal -- so this is how a check matches the SHAPE of a
+// literal (a content-hashed asset path) rather than the presence of a term.
+func (t *repoTree) linesMatching(re *regexp.Regexp) []string {
+	var out []string
+	for _, f := range t.Files {
+		for line := range strings.SplitSeq(f.Code, "\n") {
+			if line != "" && re.MatchString(line) {
+				out = append(out, line)
+			}
+		}
+	}
+	return out
+}
+
+// fileExists reports whether the preserved tree holds a regular file at the
+// repo-relative path -- for checks on files the token scan does not read
+// (static assets), where "the link points at something real" is the question.
+func (t *repoTree) fileExists(rel string) bool {
+	info, err := os.Lstat(filepath.Join(t.Root, filepath.FromSlash(rel)))
+	return err == nil && info.Mode().IsRegular()
+}
+
+// filesUnder lists the preserved tree's file names under a repo-relative
+// directory (non-recursive), token-scanned or not.
+func (t *repoTree) filesUnder(rel string) []string {
+	entries, err := os.ReadDir(filepath.Join(t.Root, filepath.FromSlash(rel)))
+	if err != nil {
+		return nil
+	}
+	var out []string
+	for _, e := range entries {
+		if e.Type().IsRegular() {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
 
 // loadRepoTree reads the preserved working tree at root into matchable form.
 func loadRepoTree(root, diff string) (*repoTree, error) {

@@ -70,15 +70,43 @@ of the delta is real.
 
 ---
 
+## The scenarios
+
+Five scenarios, one per **mechanism of value**, all on the same `myapp` demo
+repo. Each is built to the same discipline: the prompt is something a real
+developer would type, the graded surface is small (an attribute, a function,
+one file -- never "build a feature"), the correct answer is not derivable from
+the repo alone, and the vanilla arm fails for an honest, attributable reason --
+under-informed, never sabotaged. A vanilla run that does the right thing anyway
+passes; the uplift is a reliability delta, not an impossibility proof.
+
+| Scenario | Mechanism under test | The trap, in one line |
+| --- | --- | --- |
+| `cookie-hardening` | a constraint memory vetoes a confidently-wrong ticket | the security ticket asks for SameSite=Strict; memory knows Strict logged everyone out once -- keep Lax, harden with `__Host-` instead |
+| `stale-assets` | a gotcha steers the fix around invisible infrastructure | `?v=` cache busting is the canonical fix and a silent no-op here: the CDN's cache key ignores query strings -- version the asset *path* |
+| `deploy-drain` | continue-work: the plan names the step, the memory its shape | textbook `signal` + `Shutdown` is not graceful *here*: the LB polls `/healthz` on a cadence, so healthz must fail first, then drain, then shut down |
+| `restart-logouts` | the two-session handoff (the write half of the loop) | session A diagnoses an incident from an ephemeral log; session B -- fresh tree, log gone -- lands the fix. What A recorded is all B can inherit |
+| `refresh-grace` | recorded failed trials rule the tempting fix out | the visible fix is client-side timer hygiene, and it is the recorded dead end; the fix is a server-side grace window in `rotate` |
+
+`restart-logouts` is the suite's only **multi-step** scenario: two headless
+sessions against one arm, with runner-materialized *evidence* (an untracked
+`logs/app.log`) for session A only and a fresh working tree for session B. The
+data dir persists across the boundary -- that persistence is the thing being
+measured, and on a vanilla arm nothing persists, which is exactly the control.
+Evidence is removed before any diff or capture, so it never appears in a graded
+tree; `--timeout` bounds each session, so a two-step run may take twice it.
+
+---
+
 ## 0. What you need
 
 - A `claude` binary on `PATH` with working credentials. Every run is a real
   session; there is no offline mode.
 - Enough budget. Cost is roughly `scenarios x conditions x N x (one agent
   session)`. The default matrix is every scenario x three arms x 1 run.
-- Nothing else. No node, no external services. The judge layer would want an
-  `internal/llm` provider, but nothing enables it today (see
-  [The judge](#the-judge-layer)).
+- Nothing else. No node, no external services. The optional judge layer wants
+  an `internal/llm` provider and is off unless `report --judge` asks for it
+  (see [The judge](#the-judge-layer)).
 
 `seambench run -h` lists the scenarios that exist; the list is derived from the
 table in `internal/bench`, so it is never stale.
@@ -98,7 +126,7 @@ Knobs:
 ```bash
 make seambench N=5                          # 5 runs per scenario x condition cell
 make seambench BASELINE=v0.4.5              # + the version-delta table vs that ref
-make seambench CONDITIONS=vanilla,mechanism SCENARIO=auth-refresh
+make seambench CONDITIONS=vanilla,mechanism SCENARIO=cookie-hardening
 make seambench REPORT_ARGS=--no-trials      # keep the results on disk only
 make seambench RUN_ARGS='--timeout 25m' OUT=/tmp/mybench
 ```
@@ -127,7 +155,7 @@ go run ./cmd/seambench run [flags]
 | `--out` | `<base>/runs` | artifact root for the captured runs |
 | `--model` | harness default (`claude-opus-5`) | pinned in every arm's `settings.json`, so runs compare Seamless conditions and never model drift |
 | `--port` | 8099 | first port; each Seamless-ful arm takes the next. Live is 8081. |
-| `--timeout` | 15m | per-run wall-clock budget for the agent |
+| `--timeout` | 15m | per-SESSION wall-clock budget for the agent; a multi-step run may take one per step |
 | `--version` | `git describe --tags --always --dirty` | the label stamped into every `run.json` |
 | `--repo` | git top-level of the cwd | the Seamless checkout holding `scripts/fixture/harness.sh` and `bin/` |
 | `--reuse-arms` | off | reuse the arms already under `--base` instead of rebuilding |
@@ -146,8 +174,14 @@ itself:
 2. On a Seamless-ful arm: wipe the data dir and re-seed it from the scenario's
    own `seedFn`. Leases, finding ages, and plan state are anchored to seeding
    time, so run N+1 sees exactly what run N saw.
-3. Start that arm's daemon, run the agent headless in the demo repo, stop the
-   daemon (which is what lets the event dump read a cleanly closed database).
+3. Start that arm's daemon, run the scenario's agent session(s) headless in the
+   demo repo, stop the daemon (which is what lets the event dump read a cleanly
+   closed database). A multi-step scenario runs its sessions in order under the
+   one daemon: per step, the runner materializes that step's evidence files,
+   runs the agent, removes the evidence again (unconditionally, before any diff
+   can see it), and -- for a `FreshRepo` step -- resets the working tree to the
+   arm snapshot first, so nothing an earlier session left in the TREE carries
+   over. The data dir is deliberately never reset between steps.
 4. Capture everything into the run directory.
 
 **Dry-running the whole loop without tokens.** `--agent-cmd` points at any
@@ -178,6 +212,8 @@ directories.
 | `--json` | `<out>/results.json` | where the results set is exported |
 | `--regrade` | off | re-grade every run instead of reusing cached `grade.json` verdicts |
 | `--baseline` / `--candidate` | from `versions.json` | version labels for the delta table |
+| `--judge` | off | enable the advisory LLM judge on runs graded in THIS pass; cached verdicts skip it, so pair with `--regrade` to judge existing runs |
+| `--judge-config` | the standard config search order | Seamless config file whose `llm:` section builds the judge (also how a bench-specific judge model is chosen) |
 | `--no-trials` | off | skip the live trial write |
 | `--trials-url` / `--trials-key-file` | the configured live instance | override the target instance |
 | `--trials-project` | `seamless` | the project the trials are scoped to |
@@ -197,20 +233,20 @@ seambench report -- /tmp/seamless-bench/runs
 
 === version v0.4.5-34-g8719e35-dirty ===
 
-scenario      condition  pass-rate   uplift  failed  ungradeable
-auth-refresh  vanilla    1.00 (2/2)  -       0       0
-auth-refresh  mechanism  0.00 (0/2)  -1.00   0       0
+scenario          condition  pass-rate   uplift  failed  ungradeable
+cookie-hardening  vanilla    1.00 (2/2)  -       0       0
+cookie-hardening  mechanism  0.00 (0/2)  -1.00   0       0
 
 metrics (mean +- sd over graded runs)
-scenario      condition  n  turns  inputTokens  outputTokens  costUsd  toolCalls
-auth-refresh  vanilla    2  9.00   52000        900.0         0.3100   0
-auth-refresh  mechanism  2  9.00   52000        900.0         0.3100   0
+scenario          condition  n  turns  inputTokens  outputTokens  costUsd  toolCalls
+cookie-hardening  vanilla    2  9.00   52000        900.0         0.3100   0
+cookie-hardening  mechanism  2  9.00   52000        900.0         0.3100   0
 
 results: /tmp/seamless-bench/runs/results.json
 ```
 
-(That is a real report, paths shortened -- from the fake-agent dry run above,
-which is why the mechanism arm sits at zero. Do not read it as a finding.)
+(That is the shape of a fake-agent dry run -- the mechanism arm sits at zero
+because a fake agent fires no hooks. Do not read it as a finding.)
 
 `results.json` carries every run: its manifest, its verdict, its per-check
 details, and both halves of its metrics. It is the portable artifact; the tables
@@ -307,7 +343,7 @@ The `{version, condition, scenario, run}` coordinates go into trial *metrics*
 rather than the title, so they are exactly matchable later:
 
 ```
-trial_query lab=seambench metrics_filter={"scenario":"auth-refresh","condition":"mechanism"}
+trial_query lab=seambench metrics_filter={"scenario":"cookie-hardening","condition":"mechanism"}
 ```
 
 Outcome is `pass`, `fail`, or **`inconclusive`** -- a failed-to-run or ungradeable
@@ -359,6 +395,8 @@ carries them.
 <out>/<scenario>/<condition>/run-01/     (a version comparison nests under <out>/<version>/)
   run.json          the manifest: scenario, condition, version, run index, model,
                     prompt, exit code, timings, and the runner's half of the metrics
+                    (a multi-step run carries a per-session breakdown under "steps",
+                    with the top-level metrics as the runner-half sum)
   grade.json        the verdict the report wrote back (absent until graded)
   diff.patch        git diff of the demo repo against the pre-run snapshot
   events.json       the arm's whole event log as a JSON array of core.Event
@@ -366,7 +404,15 @@ carries them.
   agent.log         the agent process's stdout + stderr
   repo/             preserved copy of the demo-repo working tree after the run
   data/             preserved copy of the arm's data dir (absent on a vanilla arm)
+  steps/step-01/    a multi-step run's NON-final sessions, oldest first: each holds
+                    its own agent.log, transcript.jsonl, and diff.patch; the
+                    top-level artifacts are the final session's (absent otherwise)
 ```
+
+For a multi-step run the graded tree is the FINAL session's, and the one event
+log spans every session -- two SessionStart injections in a two-session run is
+the truth, not a double-count. The judge reads every session's transcript in
+order.
 
 `data/` is copied **whole**, `-wal` and `-shm` included: the daemon runs in WAL
 mode, so the tail of the event log -- the `session_end` finding, the last tool
@@ -383,26 +429,39 @@ them field-wise.
 ## The judge layer
 
 `internal/bench` has an optional LLM-judge layer over the transcript, for the
-fuzzy remainder that assertions cannot capture. It **never gates** -- it is
-additive commentary in `Details`, and its absence (no provider, or an outage)
-degrades the run instead of failing it, per the constraint
-`llm-degradation-remote-vs-local`.
+fuzzy remainder that assertions cannot capture -- did the agent *explain* the
+constraint it honored, is a two-session diagnosis actually correct. It **never
+gates** -- it is additive commentary in `Details`, and its absence (no
+provider, or an outage) degrades the run instead of failing it, per the
+constraint `llm-degradation-remote-vs-local`.
 
-No CLI flag enables it today: `bench.CollectOptions` takes a `Judge` and
-`report` passes none, so every graded run reads
-`judge: n/a -- no LLM judge configured`. Wiring a flag is a one-line change when
-a scenario needs one.
+Enable it with `report --judge`. The judge's provider and model come from the
+Seamless config's `llm:` section (the standard search order, or an explicit
+`--judge-config FILE` -- which is also how a bench-specific judge model is
+chosen: a yaml, not a flag). Because the operator asked explicitly, a provider
+that cannot be BUILT is a loud error; only per-run judge failures degrade. Two
+things to know:
+
+- Cached `grade.json` verdicts skip the judge: `--judge` alone only judges
+  newly-graded runs. Pair it with `--regrade` to judge a tree that is already
+  graded.
+- Every scenario ships a rubric, so `--judge` adds one advisory line per run;
+  without it each run reads `judge: n/a -- no LLM judge configured`.
 
 ---
 
 ## Adding a scenario
 
-A scenario is `{Name, Prompt, Seed, Grader, RequiresRecall}` in the
+A scenario is `{Name, Prompt (or Steps), Seed, Grader, RequiresRecall}` in the
 `internal/bench` table -- Go, not YAML, because a seed and a grader are code.
-Fixtures there are **forked** from the terminal-scene specs in
-`internal/demokit`, deliberately: those specs are branding surface that must stay
-stable while this suite churns. The fork reuses demokit's seeding primitives and
-owns its data.
+`Prompt` is sugar for a single agent session; a multi-session scenario sets
+`Steps` instead (per-step prompt, optional runner-materialized `Evidence`
+files, optional `FreshRepo` boundary), and setting both is a table error. The
+shared seeding vocabulary -- the myapp project, the common noise-memory pool,
+the session/plan/trial helpers -- lives in `internal/bench/seed.go`; fixtures
+are **forked** from the terminal-scene specs in `internal/demokit`,
+deliberately: those specs are branding surface that must stay stable while this
+suite churns. The fork reuses demokit's seeding primitives and owns its data.
 
 The grading discipline (what may gate, what may only be observed, and why you
 must never string-match briefing layout) is in `AGENTS.md` under "Benchmark

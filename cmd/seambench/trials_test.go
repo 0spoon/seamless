@@ -64,9 +64,9 @@ func trialTree(t *testing.T) (string, bench.Results) {
 	root := t.TempDir()
 	conds := bench.DefaultConditions()
 	write := func(cond bench.Condition, i int, rec bench.RunRecord, g bench.Grade) {
-		dir := filepath.Join(root, "auth-refresh", cond.Name, fmt.Sprintf("run-%02d", i))
+		dir := filepath.Join(root, "cookie-hardening", cond.Name, fmt.Sprintf("run-%02d", i))
 		require.NoError(t, os.MkdirAll(dir, 0o755))
-		rec.Scenario, rec.Condition, rec.Run = "auth-refresh", cond, i
+		rec.Scenario, rec.Condition, rec.Run = "cookie-hardening", cond, i
 		rec.Version, rec.Model = "v9.9.9-test", "claude-opus-5"
 		require.NoError(t, bench.WriteRunRecord(dir, rec))
 		g.Schema = bench.GradeSchema
@@ -109,16 +109,16 @@ func TestRecordTrials_OneTrialPerRunAndIdempotent(t *testing.T) {
 		byTitle[tr.Title] = tr
 	}
 
-	pass := byTitle["auth-refresh / mechanism @ v9.9.9-test run 1"]
+	pass := byTitle["cookie-hardening / mechanism @ v9.9.9-test run 1"]
 	require.Equal(t, core.TrialOutcome("pass"), pass.Outcome)
 	require.Equal(t, "PASS", pass.Actual)
 	require.Contains(t, pass.Changes, "profile mechanism")
 	require.Contains(t, pass.Changes, "model claude-opus-5")
 	require.Contains(t, pass.Changes, "control arm is vanilla")
-	require.Contains(t, pass.Expected, "auth-refresh")
+	require.Contains(t, pass.Expected, "cookie-hardening")
 	// The {version, condition, scenario, run} tags live in metrics so
 	// trial_query can filter on them exactly.
-	require.Equal(t, "auth-refresh", pass.Metrics["scenario"])
+	require.Equal(t, "cookie-hardening", pass.Metrics["scenario"])
 	require.Equal(t, "mechanism", pass.Metrics["condition"])
 	require.Equal(t, "v9.9.9-test", pass.Metrics["version"])
 	require.EqualValues(t, 1, pass.Metrics["run"])
@@ -127,14 +127,14 @@ func TestRecordTrials_OneTrialPerRunAndIdempotent(t *testing.T) {
 	require.EqualValues(t, 9, pass.Metrics["turns"])
 	require.EqualValues(t, 6, pass.Metrics["toolCalls"], "the grader's half of the metrics rides along")
 
-	fail := byTitle["auth-refresh / vanilla @ v9.9.9-test run 1"]
+	fail := byTitle["cookie-hardening / vanilla @ v9.9.9-test run 1"]
 	require.Equal(t, core.TrialOutcome("fail"), fail.Outcome)
 	require.Contains(t, fail.Actual, "FAIL -- failing gates: repo/gate: refresh limiter present")
 
 	// A run that never produced a verdict is INCONCLUSIVE. Recording it as a
 	// failure is how a later reader mistakes an infrastructure flake for a
 	// regression.
-	crashed := byTitle["auth-refresh / mechanism @ v9.9.9-test run 2"]
+	crashed := byTitle["cookie-hardening / mechanism @ v9.9.9-test run 2"]
 	require.Equal(t, core.TrialOutcome("inconclusive"), crashed.Outcome)
 	require.Contains(t, crashed.Actual, "the run itself failed")
 	require.Equal(t, "failed_to_run", crashed.Metrics["status"])

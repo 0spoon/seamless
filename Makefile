@@ -196,7 +196,7 @@ bench:
 #   make seambench                             the default matrix, 1 run per cell
 #   make seambench N=5                         5 runs per scenario x condition cell
 #   make seambench BASELINE=v0.4.5             + the version-delta table against that ref
-#   make seambench CONDITIONS=vanilla,mechanism SCENARIO=auth-refresh
+#   make seambench CONDITIONS=vanilla,mechanism SCENARIO=cookie-hardening
 #   make seambench REPORT_ARGS=--no-trials     keep the results on disk only
 #   make seambench RUN_ARGS='--timeout 25m' REPORT_ARGS=--regrade
 #

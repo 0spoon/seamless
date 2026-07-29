@@ -2,6 +2,7 @@ package bench
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,249 +22,307 @@ func TestScenarios_TableShape(t *testing.T) {
 	seen := map[string]bool{}
 	for _, sc := range scs {
 		require.NotEmpty(t, sc.Name, "scenario with empty name")
-		require.NotEmpty(t, sc.Prompt, "scenario %s: empty prompt", sc.Name)
 		require.NotNil(t, sc.Seed, "scenario %s: nil seed", sc.Name)
+		require.NotNil(t, sc.Grader, "scenario %s: nil grader", sc.Name)
 		require.False(t, seen[sc.Name], "duplicate scenario name %s", sc.Name)
 		seen[sc.Name] = true
+
+		// Prompt is sugar for a single step; setting both is a table error.
+		require.False(t, sc.Prompt != "" && len(sc.Steps) > 0,
+			"scenario %s sets both Prompt and Steps", sc.Name)
+		steps := sc.Sessions()
+		require.NotEmpty(t, steps, "scenario %s has no sessions", sc.Name)
+		for i, st := range steps {
+			require.NotEmpty(t, st.Prompt, "scenario %s: step %d has no prompt", sc.Name, i+1)
+			for path := range st.Evidence {
+				require.True(t, filepath.IsLocal(path),
+					"scenario %s: step %d evidence path %q escapes the repo", sc.Name, i+1, path)
+			}
+		}
+		if sc.RequiresRecall {
+			require.Len(t, steps, 1,
+				"scenario %s: RequiresRecall is a component check and cannot be multi-step", sc.Name)
+		}
+	}
+}
+
+// The suite is five scenarios, one per mechanism of value. Growing it is
+// expected -- update the list here when it happens.
+func TestScenarios_FiveGradedScenarios(t *testing.T) {
+	names := make([]string, 0, len(Scenarios()))
+	for _, sc := range Scenarios() {
+		names = append(names, sc.Name)
+	}
+	require.ElementsMatch(t, []string{
+		cookieHardeningName, staleAssetsName, deployDrainName, restartLogoutsName, refreshGraceName,
+	}, names)
+}
+
+// The two-session scenario's control-blinding is carried by exactly two
+// flags. Losing either silently un-blinds the vanilla arm -- the evidence
+// (or the step-1 working tree) would leak into session B -- and the uplift
+// number would quietly stop measuring the handoff. Pinned here for that
+// reason.
+func TestRestartLogouts_BoundaryPins(t *testing.T) {
+	sc, ok := ScenarioByName(restartLogoutsName)
+	require.True(t, ok)
+	require.Len(t, sc.Steps, 2)
+
+	investigate, fix := sc.Steps[0], sc.Steps[1]
+	require.Contains(t, investigate.Evidence, restartLogoutsLogPath)
+	require.Contains(t, investigate.Prompt, restartLogoutsLogPath,
+		"the prompt must point the agent at the evidence it was given")
+	require.NotContains(t, investigate.Prompt, "restart",
+		"the prompt must not leak the root cause")
+
+	require.True(t, fix.FreshRepo, "session B must start from a clean tree")
+	require.Empty(t, fix.Evidence, "session B must not get the evidence back")
+
+	// The log's line shapes must match what the fixture app actually logs,
+	// or a careful agent will notice the evidence is synthetic.
+	for _, shape := range []string{
+		"myapp 1.4.2 listening on :8080",
+		"auth: refresh failed: unknown refresh token",
+		"auth: refresh failed: refresh token reuse detected; family revoked",
+		"POST /auth/refresh 401",
+	} {
+		require.Contains(t, restartLogoutsLog, shape)
 	}
 }
 
 func TestScenarioByName(t *testing.T) {
-	sc, ok := ScenarioByName("auth-refresh")
+	sc, ok := ScenarioByName(cookieHardeningName)
 	require.True(t, ok)
-	require.Equal(t, "auth-refresh", sc.Name)
-	require.False(t, sc.RequiresRecall, "auth-refresh is briefing-surfaced and must stay headless-runnable")
+	require.Equal(t, cookieHardeningName, sc.Name)
+	require.False(t, sc.RequiresRecall, "cookie-hardening is briefing-surfaced and must stay headless-runnable")
 
 	_, ok = ScenarioByName("no-such-scenario")
 	require.False(t, ok)
 }
 
-// The plan's done-criterion is an uplift number on at least two scenarios, so
-// the table having two graded entries is itself the assertion. Growing it past
-// two is expected -- update the count here when it happens.
-func TestScenarios_TwoGradedScenarios(t *testing.T) {
-	scs := Scenarios()
-	require.Len(t, scs, 2)
-	names := make([]string, len(scs))
-	for i, sc := range scs {
-		names[i] = sc.Name
-		require.NotNil(t, sc.Grader, "scenario %s has no grader", sc.Name)
-	}
-	require.ElementsMatch(t, []string{"auth-refresh", "edge-caching"}, names)
+// seedExpect is one scenario's expected fixture state, asserted against DB
+// and file state -- expected memories by name/kind, plan topology, backdated
+// finding age -- never against briefing text: the briefing layout churns by
+// design and is itself the benchmark's regression surface.
+type seedExpect struct {
+	scenario      string
+	loadBearing   string // memory name; "" for a scenario whose record is the trials
+	descContains  string // the briefing's index line must carry the constraint
+	extraMemories map[string]core.MemoryKind
+	plan          string
+	readyTitle    string
+	blockedTitle  string
+	doneCount     int
+	session       string
+	findingAgoH   float64
+	// findingMustNotContain guards the leak: the finding sets the work up,
+	// the memory (or the trials) carries the constraint.
+	findingMustNotContain []string
+	findingMustContain    []string
+	trialLab              string
+	trials                int
 }
 
-// TestSeedAuthRefresh_State asserts the seeded fixture against DB and file
-// state -- expected memories by name/kind, plan topology, backdated finding
-// age -- never against briefing text: the briefing layout churns by design
-// and is itself the benchmark's regression surface.
-func TestSeedAuthRefresh_State(t *testing.T) {
-	dataDir := t.TempDir()
-	repo := t.TempDir()
-
-	s, err := demokit.New(dataDir)
-	require.NoError(t, err)
-	sc, ok := ScenarioByName("auth-refresh")
-	require.True(t, ok)
-	require.NoError(t, sc.Seed(s, repo))
-	require.NoError(t, s.Close())
-
-	ctx := context.Background()
-	db, err := store.Open(filepath.Join(dataDir, "seam.db"))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, db.Close()) }()
-
-	// Memories: active, correctly named, kinded, and scoped to myapp.
-	wantKinds := map[string]core.MemoryKind{
-		"refresh-token-single-use":     core.KindConstraint,
-		"auth-cookies-httponly-secure": core.KindConstraint,
-		"auth-cookies-samesite-lax":    core.KindConstraint,
-		"edge-cache-gotcha":            core.KindGotcha,
-		"rate-limit-not-in-memory":     core.KindGotcha,
-		"persist-refresh-tokens":       core.KindGotcha,
-		"chroma-boot-race":             core.KindGotcha,
-		"deploy-runbook":               core.KindRunbook,
-		"postgres-timeouts":            core.KindGotcha,
+// commonNoiseKinds is the pool subset every scenario seeds, by kind.
+func kindsOf(names ...string) map[string]core.MemoryKind {
+	out := map[string]core.MemoryKind{}
+	for _, n := range names {
+		m, ok := commonMemories[n]
+		if !ok {
+			panic("unknown common memory " + n)
+		}
+		out[n] = m.kind
 	}
-	mems, err := store.ActiveMemories(ctx, db, "myapp")
-	require.NoError(t, err)
-	require.Len(t, mems, len(wantKinds))
-	now := time.Now().UTC()
-	for _, m := range mems {
-		kind, ok := wantKinds[m.Name]
-		require.True(t, ok, "unexpected memory %s", m.Name)
-		require.Equal(t, kind, m.Kind, "memory %s", m.Name)
-		require.Equal(t, "myapp", m.Project, "memory %s", m.Name)
-		require.True(t, m.Created.Before(now.Add(-24*time.Hour)), "memory %s not backdated: %s", m.Name, m.Created)
-	}
-	// Files are the source of truth: each memory exists on disk too.
-	for name := range wantKinds {
-		_, err := os.Stat(filepath.Join(dataDir, "memory", "myapp", name+".md"))
-		require.NoError(t, err, "memory file %s missing", name)
-	}
-
-	// Plan topology: step 5 is the sole ready step, step 6 is blocked on it,
-	// four steps are done.
-	ready, err := store.ReadyTasksForPlan(ctx, db, "myapp", "auth-refresh")
-	require.NoError(t, err)
-	require.Len(t, ready, 1)
-	require.Equal(t, "Rate-limit POST /auth/refresh (per-IP and per-family)", ready[0].Title)
-
-	blocked, err := store.BlockedTasksForPlan(ctx, db, "myapp", "auth-refresh")
-	require.NoError(t, err)
-	require.Len(t, blocked, 1)
-	require.Equal(t, "Emit metrics and an alert for refresh-reuse revocations", blocked[0].Task.Title)
-	require.Len(t, blocked[0].Blockers, 1)
-	require.Equal(t, ready[0].ID, blocked[0].Blockers[0].ID)
-
-	done, err := store.ListTasksForPlan(ctx, db, "myapp", core.TaskDone, "auth-refresh")
-	require.NoError(t, err)
-	require.Len(t, done, 4)
-
-	// The backdated finding: a completed session ~18h old carrying the
-	// continue-work summary, visible to the briefing's data source.
-	sess, ok, err := store.SessionByName(ctx, db, "cc/1a2b3c4d")
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, core.SessionCompleted, sess.Status)
-	require.Equal(t, authRefreshFinding, sess.Findings)
-	age := now.Sub(sess.UpdatedAt)
-	require.InDelta(t, (18 * time.Hour).Minutes(), age.Minutes(), 30, "finding age drifted from ~18h: %s", age)
-
-	recents, err := store.RecentFindings(ctx, db, "myapp", 5)
-	require.NoError(t, err)
-	var found bool
-	for _, r := range recents {
-		found = found || r.ID == sess.ID
-	}
-	require.True(t, found, "the 18h finding is not in RecentFindings")
-
-	// The failed pool-timeout trial, tied to that session.
-	trials, err := store.QueryTrials(ctx, db, store.TrialFilter{Lab: "refresh-500s"})
-	require.NoError(t, err)
-	require.Len(t, trials, 1)
-	require.Equal(t, core.OutcomeFail, trials[0].Outcome)
-	require.Equal(t, sess.ID, trials[0].SessionID)
-	require.Equal(t, "myapp", trials[0].ProjectSlug)
-
-	// The repo mapping binds sessions starting in the demo repo to myapp.
-	repoMap, err := store.RepoProjectMap(ctx, db)
-	require.NoError(t, err)
-	require.Equal(t, "myapp", repoMap[repo])
+	return out
 }
 
-// TestSeedEdgeCaching_State asserts the briefing-catch fixture against DB and
-// file state -- memories by name/kind, plan topology, backdated finding age --
-// never against briefing text, for the same reason as the auth-refresh seed.
-func TestSeedEdgeCaching_State(t *testing.T) {
-	dataDir := t.TempDir()
-	repo := t.TempDir()
-
-	s, err := demokit.New(dataDir)
-	require.NoError(t, err)
-	sc, ok := ScenarioByName("edge-caching")
-	require.True(t, ok)
-	require.NoError(t, sc.Seed(s, repo))
-	require.NoError(t, s.Close())
-
-	ctx := context.Background()
-	db, err := store.Open(filepath.Join(dataDir, "seam.db"))
-	require.NoError(t, err)
-	defer func() { require.NoError(t, db.Close()) }()
-
-	wantKinds := map[string]core.MemoryKind{
-		"edge-cache-gotcha":            core.KindGotcha,
-		"refresh-token-single-use":     core.KindConstraint,
-		"auth-cookies-httponly-secure": core.KindConstraint,
-		"auth-cookies-samesite-lax":    core.KindConstraint,
-		"dashboard-latency-budget":     core.KindReference,
-		"cdn-purge-by-tag":             core.KindRunbook,
-		"deploy-runbook":               core.KindRunbook,
-		"postgres-timeouts":            core.KindGotcha,
-		"chroma-boot-race":             core.KindGotcha,
-	}
-	mems, err := store.ActiveMemories(ctx, db, "myapp")
-	require.NoError(t, err)
-	require.Len(t, mems, len(wantKinds))
-	now := time.Now().UTC()
-	for _, m := range mems {
-		kind, ok := wantKinds[m.Name]
-		require.True(t, ok, "unexpected memory %s", m.Name)
-		require.Equal(t, kind, m.Kind, "memory %s", m.Name)
-		require.Equal(t, "myapp", m.Project, "memory %s", m.Name)
-		require.True(t, m.Created.Before(now.Add(-24*time.Hour)), "memory %s not backdated: %s", m.Name, m.Created)
-	}
-	for name := range wantKinds {
-		_, err := os.Stat(filepath.Join(dataDir, "memory", "myapp", name+".md"))
-		require.NoError(t, err, "memory file %s missing", name)
-	}
-
-	// The load-bearing memory has to carry the constraint in the ONE line the
-	// briefing's memory index shows, or the mechanism under test never fires.
-	edge, ok, err := store.MemoryByName(ctx, db, "myapp", edgeCacheMemory)
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Contains(t, strings.ToLower(edge.Description), "never cache html")
-
-	// Plan topology: the caching step is the sole ready step, the alerting step
-	// is blocked on it, two steps are done.
-	ready, err := store.ReadyTasksForPlan(ctx, db, "myapp", "page-speed")
-	require.NoError(t, err)
-	require.Len(t, ready, 1)
-	require.Equal(t, edgeCacheStep, ready[0].Title)
-
-	blocked, err := store.BlockedTasksForPlan(ctx, db, "myapp", "page-speed")
-	require.NoError(t, err)
-	require.Len(t, blocked, 1)
-	require.Equal(t, "Alert on the dashboard's p95 latency budget", blocked[0].Task.Title)
-	require.Len(t, blocked[0].Blockers, 1)
-	require.Equal(t, ready[0].ID, blocked[0].Blockers[0].ID)
-
-	done, err := store.ListTasksForPlan(ctx, db, "myapp", core.TaskDone, "page-speed")
-	require.NoError(t, err)
-	require.Len(t, done, 2)
-
-	// The backdated finding: a completed session ~20h old that sets the work up
-	// without naming the constraint.
-	sess, ok, err := store.SessionByName(ctx, db, edgeCacheSession)
-	require.NoError(t, err)
-	require.True(t, ok)
-	require.Equal(t, core.SessionCompleted, sess.Status)
-	require.Equal(t, edgeCacheFinding, sess.Findings)
-	age := now.Sub(sess.UpdatedAt)
-	require.InDelta(t, (20 * time.Hour).Minutes(), age.Minutes(), 30, "finding age drifted from ~20h: %s", age)
-	for _, leak := range []string{"vary", "304", "no-store", "cdn"} {
-		require.NotContains(t, strings.ToLower(sess.Findings), leak,
-			"the finding leaks the constraint the memory is supposed to carry")
+func TestSeeds_State(t *testing.T) {
+	expects := []seedExpect{
+		{
+			scenario:     cookieHardeningName,
+			loadBearing:  cookieHardeningMemory,
+			descContains: "never strict",
+			extraMemories: kindsOf("refresh-token-single-use", "auth-cookies-httponly-secure",
+				"persist-refresh-tokens", "dashboard-latency-budget", "deploy-runbook",
+				"postgres-timeouts", "chroma-boot-race"),
+			plan: cookieHardeningPlan, readyTitle: cookieHardeningStep,
+			blockedTitle: "Send the resolution write-up back to security", doneCount: 1,
+			session: cookieHardeningSession, findingAgoH: 20,
+			findingMustNotContain: []string{"external link", "logged out", "__host"},
+			trialLab:              "scanner-findings", trials: 1,
+		},
+		{
+			scenario:     staleAssetsName,
+			loadBearing:  staleAssetsMemory,
+			descContains: "query strings are ignored",
+			extraMemories: kindsOf("refresh-token-single-use", "auth-cookies-httponly-secure",
+				"auth-cookies-samesite-lax", "dashboard-latency-budget", "cdn-purge-by-tag",
+				"deploy-runbook", "postgres-timeouts", "chroma-boot-race"),
+			plan: staleAssetsPlan, readyTitle: staleAssetsStep,
+			blockedTitle: "Raise the asset max-age once the URLs are immutable", doneCount: 1,
+			session: staleAssetsSession, findingAgoH: 20,
+			findingMustNotContain: []string{"query", "?v", "hash", "path-only", "fingerprint"},
+			trialLab:              "stale-assets", trials: 1,
+		},
+		{
+			scenario:     deployDrainName,
+			loadBearing:  deployDrainMemory,
+			descContains: "fail healthz first",
+			extraMemories: kindsOf("refresh-token-single-use", "auth-cookies-httponly-secure",
+				"auth-cookies-samesite-lax", "persist-refresh-tokens", "dashboard-latency-budget",
+				"deploy-runbook", "postgres-timeouts", "chroma-boot-race"),
+			plan: deployDrainPlan, readyTitle: deployDrainStep,
+			blockedTitle: "Rely on the drain window in the deploy flow and drop the sleep hack", doneCount: 1,
+			session: deployDrainSession, findingAgoH: 18,
+			findingMustNotContain: []string{"healthz", "poll", "503", "consecutive", "drain"},
+			trialLab:              "deploy-drops", trials: 1,
+		},
+		{
+			scenario: restartLogoutsName,
+			extraMemories: kindsOf("persist-refresh-tokens", "refresh-token-single-use",
+				"auth-cookies-httponly-secure", "auth-cookies-samesite-lax",
+				"dashboard-latency-budget", "deploy-runbook", "postgres-timeouts", "chroma-boot-race"),
+			plan: restartLogoutsPlan, readyTitle: restartLogoutsRootStep,
+			blockedTitle: restartLogoutsFixStep, doneCount: 1,
+			session: restartLogoutsSession, findingAgoH: 44,
+			findingMustNotContain: []string{"restart", "recycle", "persist", "in-memory", "unknown refresh"},
+		},
+		{
+			scenario: refreshGraceName,
+			extraMemories: kindsOf("refresh-token-single-use", "auth-cookies-httponly-secure",
+				"auth-cookies-samesite-lax", "persist-refresh-tokens", "dashboard-latency-budget",
+				"deploy-runbook", "postgres-timeouts", "chroma-boot-race"),
+			plan: refreshGracePlan, readyTitle: refreshGraceStep,
+			blockedTitle: "Add a counter and alert for family revocations", doneCount: 1,
+			session: refreshGraceSession, findingAgoH: 18,
+			// This finding deliberately PRESCRIBES: the investigation record
+			// is the scenario's channel.
+			findingMustContain: []string{"grace window", "already-minted pair"},
+			trialLab:           refreshGraceLab, trials: 2,
+		},
 	}
 
-	recents, err := store.RecentFindings(ctx, db, "myapp", 5)
-	require.NoError(t, err)
-	var found bool
-	for _, r := range recents {
-		found = found || r.ID == sess.ID
+	for _, want := range expects {
+		t.Run(want.scenario, func(t *testing.T) {
+			dataDir := t.TempDir()
+			repo := t.TempDir()
+
+			s, err := demokit.New(dataDir)
+			require.NoError(t, err)
+			sc, ok := ScenarioByName(want.scenario)
+			require.True(t, ok)
+			require.NoError(t, sc.Seed(s, repo))
+			require.NoError(t, s.Close())
+
+			ctx := context.Background()
+			db, err := store.Open(filepath.Join(dataDir, "seam.db"))
+			require.NoError(t, err)
+			defer func() { require.NoError(t, db.Close()) }()
+
+			// Memories: active, correctly named, kinded, scoped, backdated,
+			// and on disk (files are the source of truth).
+			wantKinds := maps.Clone(want.extraMemories)
+			if want.loadBearing != "" {
+				if m, ok := commonMemories[want.loadBearing]; ok {
+					wantKinds[want.loadBearing] = m.kind
+				} else {
+					wantKinds[want.loadBearing] = core.KindGotcha
+				}
+			}
+			mems, err := store.ActiveMemories(ctx, db, benchProject)
+			require.NoError(t, err)
+			require.Len(t, mems, len(wantKinds))
+			now := time.Now().UTC()
+			for _, m := range mems {
+				kind, ok := wantKinds[m.Name]
+				require.True(t, ok, "unexpected memory %s", m.Name)
+				require.Equal(t, kind, m.Kind, "memory %s", m.Name)
+				require.Equal(t, benchProject, m.Project, "memory %s", m.Name)
+				require.True(t, m.Created.Before(now.Add(-24*time.Hour)), "memory %s not backdated: %s", m.Name, m.Created)
+				_, err := os.Stat(filepath.Join(dataDir, "memory", benchProject, m.Name+".md"))
+				require.NoError(t, err, "memory file %s missing", m.Name)
+			}
+
+			// The load-bearing memory has to carry the constraint in the ONE
+			// line the briefing's memory index shows, or the mechanism under
+			// test never fires.
+			if want.loadBearing != "" {
+				lb, ok, err := store.MemoryByName(ctx, db, benchProject, want.loadBearing)
+				require.NoError(t, err)
+				require.True(t, ok)
+				require.Contains(t, strings.ToLower(lb.Description), want.descContains)
+			}
+
+			// Plan topology: exactly one claimable step -- the work the run
+			// is graded on -- with the follow-up blocked behind it.
+			ready, err := store.ReadyTasksForPlan(ctx, db, benchProject, want.plan)
+			require.NoError(t, err)
+			require.Len(t, ready, 1)
+			require.Equal(t, want.readyTitle, ready[0].Title)
+
+			blocked, err := store.BlockedTasksForPlan(ctx, db, benchProject, want.plan)
+			require.NoError(t, err)
+			require.Len(t, blocked, 1)
+			require.Equal(t, want.blockedTitle, blocked[0].Task.Title)
+			require.Len(t, blocked[0].Blockers, 1)
+			require.Equal(t, ready[0].ID, blocked[0].Blockers[0].ID)
+
+			done, err := store.ListTasksForPlan(ctx, db, benchProject, core.TaskDone, want.plan)
+			require.NoError(t, err)
+			require.Len(t, done, want.doneCount)
+
+			// The backdated finding, in RecentFindings' reach, carrying the
+			// setup but not the answer (or, where noted, deliberately the
+			// answer).
+			sess, ok, err := store.SessionByName(ctx, db, want.session)
+			require.NoError(t, err)
+			require.True(t, ok)
+			require.Equal(t, core.SessionCompleted, sess.Status)
+			age := now.Sub(sess.UpdatedAt)
+			require.InDelta(t, want.findingAgoH*60, age.Minutes(), 30,
+				"finding age drifted from ~%vh: %s", want.findingAgoH, age)
+			for _, leak := range want.findingMustNotContain {
+				require.NotContains(t, strings.ToLower(sess.Findings), leak,
+					"the finding leaks what the memory/trials are supposed to carry")
+			}
+			for _, must := range want.findingMustContain {
+				require.Contains(t, strings.ToLower(sess.Findings), must)
+			}
+
+			recents, err := store.RecentFindings(ctx, db, benchProject, 5)
+			require.NoError(t, err)
+			var found bool
+			for _, r := range recents {
+				found = found || r.ID == sess.ID
+			}
+			require.True(t, found, "the finding is not in RecentFindings")
+
+			// The trials, tied to that session and all failed.
+			if want.trialLab != "" {
+				trials, err := store.QueryTrials(ctx, db, store.TrialFilter{Lab: want.trialLab})
+				require.NoError(t, err)
+				require.Len(t, trials, want.trials)
+				for _, tr := range trials {
+					require.Equal(t, core.OutcomeFail, tr.Outcome)
+					require.Equal(t, sess.ID, tr.SessionID)
+					require.Equal(t, benchProject, tr.ProjectSlug)
+				}
+			}
+
+			// The repo mapping binds sessions starting in the demo repo.
+			repoMap, err := store.RepoProjectMap(ctx, db)
+			require.NoError(t, err)
+			require.Equal(t, benchProject, repoMap[repo])
+		})
 	}
-	require.True(t, found, "the 20h finding is not in RecentFindings")
-
-	// The failed server-push trial, tied to that session.
-	trials, err := store.QueryTrials(ctx, db, store.TrialFilter{Lab: "dashboard-latency"})
-	require.NoError(t, err)
-	require.Len(t, trials, 1)
-	require.Equal(t, core.OutcomeFail, trials[0].Outcome)
-	require.Equal(t, sess.ID, trials[0].SessionID)
-	require.Equal(t, "myapp", trials[0].ProjectSlug)
-
-	repoMap, err := store.RepoProjectMap(ctx, db)
-	require.NoError(t, err)
-	require.Equal(t, "myapp", repoMap[repo])
 }
 
-// TestSeedAuthRefresh_NoRepoMapping covers the "" repo path: seeding must
-// succeed and simply skip the mapping.
-func TestSeedAuthRefresh_NoRepoMapping(t *testing.T) {
+// The "" repo path skips the mapping -- what newScenarioRunDir relies on.
+func TestSeed_NoRepoMapping(t *testing.T) {
 	dataDir := t.TempDir()
 	s, err := demokit.New(dataDir)
 	require.NoError(t, err)
-	sc, ok := ScenarioByName("auth-refresh")
+	sc, ok := ScenarioByName(cookieHardeningName)
 	require.True(t, ok)
 	require.NoError(t, sc.Seed(s, ""))
 	require.NoError(t, s.Close())
@@ -276,4 +335,11 @@ func TestSeedAuthRefresh_NoRepoMapping(t *testing.T) {
 	repoMap, err := store.RepoProjectMap(ctx, db)
 	require.NoError(t, err)
 	require.Empty(t, repoMap)
+}
+
+// noiseMemories must refuse an unknown pool name instead of silently seeding
+// a thinner corpus.
+func TestNoiseMemories_UnknownNameIsAnError(t *testing.T) {
+	_, err := noiseMemories("refresh-token-single-use", "no-such-memory")
+	require.ErrorContains(t, err, "no-such-memory")
 }

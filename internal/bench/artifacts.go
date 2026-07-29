@@ -28,6 +28,10 @@ import (
 //	  agent.log         the agent process's stdout+stderr
 //	  repo/             preserved copy of the arm's demo-repo working tree
 //	  data/             preserved copy of the arm's Seamless data dir (absent on vanilla)
+//	  steps/step-01/    a multi-step run's NON-final sessions, oldest first:
+//	                    each holds its own agent.log, transcript.jsonl, and
+//	                    diff.patch; the top-level artifacts are the final
+//	                    session's (absent on single-step runs)
 //
 // A version comparison nests the whole tree one level deeper, under the version
 // label: <out>/<version>/<scenario>/<condition>/run-01/. Nothing reads a run's
@@ -42,7 +46,14 @@ const (
 	AgentLogFile    = "agent.log"
 	RepoDirName     = "repo"
 	DataDirName     = "data"
+	StepsDirName    = "steps"
 )
+
+// StepDirName is the per-step artifact directory of a multi-step run's
+// non-final session, 1-based: steps/step-01.
+func StepDirName(i int) string {
+	return filepath.Join(StepsDirName, fmt.Sprintf("step-%02d", i))
+}
 
 // Metrics is the per-run measurement set the report aggregates.
 //
@@ -86,6 +97,23 @@ func MergeMetrics(runner, grader Metrics) Metrics {
 	m.CostUSD = runner.CostUSD
 	m.DurationMS = runner.DurationMS
 	return m
+}
+
+// SumRunnerMetrics sums the RUNNER-owned half over a multi-step run's
+// sessions -- turns, tokens, cost, wall-clock -- for the manifest's top-level
+// Metrics. The grader half is left zero: it is derived once from the whole
+// run's preserved event log, never summed per step (MergeMetrics recombines
+// the two halves field-wise later, same as on a single-step run).
+func SumRunnerMetrics(ms ...Metrics) Metrics {
+	var out Metrics
+	for _, m := range ms {
+		out.Turns += m.Turns
+		out.InputTokens += m.InputTokens
+		out.OutputTokens += m.OutputTokens
+		out.CostUSD += m.CostUSD
+		out.DurationMS += m.DurationMS
+	}
+	return out
 }
 
 // Fields renders the scalar metrics as name -> value for aggregation and for
@@ -144,6 +172,27 @@ type RunRecord struct {
 	// A failed run is not a graded failure; the report counts it separately.
 	Error   string  `json:"error,omitempty"`
 	Metrics Metrics `json:"metrics"`
+	// Steps is a multi-step run's per-session breakdown, in run order, holding
+	// every session that was ATTEMPTED (a step the run never reached is not
+	// recorded). Prompt is empty on such a run -- the prompts live on the
+	// steps -- and the top-level Metrics is the runner-half sum over them
+	// (SumRunnerMetrics), so every existing reader of run.json keeps working.
+	// Absent on single-step runs, whose manifests are unchanged.
+	Steps []StepRecord `json:"steps,omitempty"`
+}
+
+// StepRecord is one agent session's slice of a multi-step run's manifest.
+type StepRecord struct {
+	Name      string    `json:"name"`
+	Prompt    string    `json:"prompt"`
+	SessionID string    `json:"sessionId,omitempty"`
+	StartedAt time.Time `json:"startedAt"`
+	EndedAt   time.Time `json:"endedAt"`
+	ExitCode  int       `json:"exitCode"`
+	Error     string    `json:"error,omitempty"`
+	// Metrics is the runner-owned half for this session alone; the grader half
+	// spans the whole run (one preserved event log covers every session).
+	Metrics Metrics `json:"metrics"`
 }
 
 // WriteRunRecord writes the manifest into a run directory.
@@ -196,6 +245,25 @@ func LoadRun(dir string) (RunRecord, RunArtifacts, error) {
 		a.RepoDiff = string(b)
 	} else if !os.IsNotExist(err) {
 		return rec, RunArtifacts{}, fmt.Errorf("bench: read run diff in %s: %w", dir, err)
+	}
+	// A multi-step run's non-final sessions: the last StepRecord's artifacts
+	// are the top-level ones, so only its predecessors live under steps/.
+	// Missing per-step artifacts come back empty, same tolerance as above.
+	for i, st := range rec.Steps {
+		if i == len(rec.Steps)-1 {
+			break
+		}
+		stepDir := filepath.Join(dir, StepDirName(i+1))
+		sa := StepArtifacts{
+			Name:       st.Name,
+			Transcript: existingPath(filepath.Join(stepDir, TranscriptFile)),
+		}
+		if b, err := os.ReadFile(filepath.Join(stepDir, DiffFile)); err == nil {
+			sa.RepoDiff = string(b)
+		} else if !os.IsNotExist(err) {
+			return rec, RunArtifacts{}, fmt.Errorf("bench: read step %d diff in %s: %w", i+1, dir, err)
+		}
+		a.Steps = append(a.Steps, sa)
 	}
 	return rec, a, nil
 }

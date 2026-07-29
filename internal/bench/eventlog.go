@@ -156,19 +156,109 @@ func (l *runLog) metrics() Metrics {
 // briefing said.
 func briefingInjected() eventCheck {
 	return eventCheck{name: "SessionStart briefing injected", gate: true, fn: func(l *runLog) (bool, string, error) {
-		byHook := map[string]int{}
-		for _, e := range l.ofKind(core.EventInjected) {
-			if hook := payloadString(e, "hook"); hook != "" {
-				byHook[normalizeHook(hook)]++
-			}
-		}
-		if n := byHook[normalizeHook(hookSessionStart)]; n > 0 {
+		n, hooks := l.sessionStartInjections()
+		if n > 0 {
 			return true, fmt.Sprintf("%d session-start injection(s)", n), nil
 		}
-		if len(byHook) == 0 {
+		if len(hooks) == 0 {
 			return false, "no hook injection reached the agent", nil
 		}
-		return false, "no session-start injection; hooks that did fire: " + strings.Join(sortedKeys(byHook), ", "), nil
+		return false, "no session-start injection; hooks that did fire: " + strings.Join(hooks, ", "), nil
+	}}
+}
+
+// sessionStartInjections counts the SessionStart briefing injections in the
+// log, and reports which other hooks fired for the evidence line.
+func (l *runLog) sessionStartInjections() (n int, others []string) {
+	byHook := map[string]int{}
+	for _, e := range l.ofKind(core.EventInjected) {
+		if hook := payloadString(e, "hook"); hook != "" {
+			byHook[normalizeHook(hook)]++
+		}
+	}
+	n = byHook[normalizeHook(hookSessionStart)]
+	return n, sortedKeys(byHook)
+}
+
+// briefingInjectedTimes asserts the SessionStart injection fired at least n
+// times -- the multi-step form of briefingInjected, one per agent session: a
+// handoff run where the second session never got its briefing is a mechanism
+// defect, not an agent choice.
+func briefingInjectedTimes(n int) eventCheck {
+	name := fmt.Sprintf("SessionStart briefing injected in all %d sessions", n)
+	return eventCheck{name: name, gate: true, fn: func(l *runLog) (bool, string, error) {
+		got, hooks := l.sessionStartInjections()
+		if got >= n {
+			return true, fmt.Sprintf("%d session-start injection(s)", got), nil
+		}
+		if got == 0 && len(hooks) == 0 {
+			return false, "no hook injection reached any session", nil
+		}
+		return false, fmt.Sprintf("%d of %d session-start injection(s); hooks that did fire: %s",
+			got, n, strings.Join(hooks, ", ")), nil
+	}}
+}
+
+// handoffCarried asserts the write half of a handoff: some durable record --
+// a session_end with findings, a memory write, or a note write -- existed
+// BEFORE the last session's briefing was injected, so the later session had
+// something to inherit. Observed, not a gate: whether the earlier agent
+// recorded anything is exactly the behaviour under measurement.
+func handoffCarried() eventCheck {
+	return eventCheck{name: "handoff recorded before the next session", fn: func(l *runLog) (bool, string, error) {
+		lastStart := -1
+		for i, e := range l.Events {
+			if e.Kind == core.EventInjected && normalizeHook(payloadString(e, "hook")) == normalizeHook(hookSessionStart) {
+				lastStart = i
+			}
+		}
+		if lastStart < 0 {
+			return false, "no session-start injection to hand off to", nil
+		}
+		for _, e := range l.Events[:lastStart] {
+			switch e.Kind {
+			case core.EventMemoryWritten, core.EventNoteWritten:
+				return true, string(e.Kind) + " before the last session started", nil
+			case core.EventSessionEnded:
+				if strings.TrimSpace(payloadString(e, "findings")) != "" {
+					return true, "session_end findings before the last session started", nil
+				}
+			}
+		}
+		return false, "nothing durable was recorded before the last session started", nil
+	}}
+}
+
+// trialsQueried asserts the agent consulted the research lab's recorded
+// trials -- the dead-end record -- via the trial_query tool. Observed.
+func trialsQueried() eventCheck {
+	return eventCheck{name: "recorded trials consulted (trial_query)", fn: func(l *runLog) (bool, string, error) {
+		n := 0
+		for _, e := range l.ofKind(core.EventToolCall) {
+			if payloadString(e, "tool") == "trial_query" {
+				n++
+			}
+		}
+		if n > 0 {
+			return true, fmt.Sprintf("%d trial_query call(s)", n), nil
+		}
+		return false, "trial_query was never called", nil
+	}}
+}
+
+// trialRecorded asserts the agent logged its own trial into the lab --
+// continuing the investigation record rather than just consuming it. Observed.
+func trialRecorded() eventCheck {
+	return eventCheck{name: "a new trial recorded", fn: func(l *runLog) (bool, string, error) {
+		if n := len(l.ofKind(core.EventTrialRecorded)); n > 0 {
+			return true, fmt.Sprintf("%d trial(s) recorded", n), nil
+		}
+		for _, e := range l.ofKind(core.EventToolCall) {
+			if payloadString(e, "tool") == "trial_record" {
+				return true, "tool.call trial_record", nil
+			}
+		}
+		return false, "no trial was recorded", nil
 	}}
 }
 

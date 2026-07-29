@@ -36,7 +36,7 @@ func twoVersionResults() bench.Results {
 	var runs []bench.RunResult
 	add := func(version, cond string, p bench.Profile, passes ...bool) {
 		for i, pass := range passes {
-			runs = append(runs, benchRun("auth-refresh", cond, p, version, i+1, bench.StatusGraded, pass))
+			runs = append(runs, benchRun("cookie-hardening", cond, p, version, i+1, bench.StatusGraded, pass))
 		}
 	}
 	add("v1", "vanilla", bench.ProfileVanilla, false, false)
@@ -57,12 +57,12 @@ func render(t *testing.T, res bench.Results, baseline, candidate string) string 
 
 func TestRenderReport_PerScenarioUpliftAndCounts(t *testing.T) {
 	runs := []bench.RunResult{
-		benchRun("auth-refresh", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, false),
-		benchRun("auth-refresh", "vanilla", bench.ProfileVanilla, "v1", 2, bench.StatusGraded, false),
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 2, bench.StatusGraded, false),
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 3, bench.StatusFailedToRun, false),
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 4, bench.StatusUngradeable, false),
+		benchRun("cookie-hardening", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, false),
+		benchRun("cookie-hardening", "vanilla", bench.ProfileVanilla, "v1", 2, bench.StatusGraded, false),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 2, bench.StatusGraded, false),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 3, bench.StatusFailedToRun, false),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 4, bench.StatusUngradeable, false),
 	}
 	out := render(t, bench.NewResults("/tmp/runs", runs), "", "")
 
@@ -72,18 +72,18 @@ func TestRenderReport_PerScenarioUpliftAndCounts(t *testing.T) {
 	require.Contains(t, out, "smallest cell: n=2")
 
 	// vanilla 0/2, mechanism 1/2 -> +0.50, with the two lost runs visible.
-	require.Regexp(t, `auth-refresh\s+vanilla\s+0\.00 \(0/2\)\s+-\s+0\s+0`, out)
-	require.Regexp(t, `auth-refresh\s+mechanism\s+0\.50 \(1/2\)\s+\+0\.50\s+1\s+1`, out)
+	require.Regexp(t, `cookie-hardening\s+vanilla\s+0\.00 \(0/2\)\s+-\s+0\s+0`, out)
+	require.Regexp(t, `cookie-hardening\s+mechanism\s+0\.50 \(1/2\)\s+\+0\.50\s+1\s+1`, out)
 
 	// Metrics carry their spread, never a bare mean.
 	require.Contains(t, out, "metrics (mean +- sd over graded runs)")
-	require.Regexp(t, `auth-refresh\s+mechanism\s+2\s+9\.50 \+- 0\.7071`, out)
+	require.Regexp(t, `cookie-hardening\s+mechanism\s+2\s+9\.50 \+- 0\.7071`, out)
 }
 
 func TestRenderReport_AggregateRowOnlyWithMoreThanOneScenario(t *testing.T) {
 	one := []bench.RunResult{
-		benchRun("auth-refresh", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, false),
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
+		benchRun("cookie-hardening", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, false),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
 	}
 	require.NotContains(t, render(t, bench.NewResults("", one), "", ""), aggregateRow)
 
@@ -100,12 +100,12 @@ func TestRenderReport_AggregateRowOnlyWithMoreThanOneScenario(t *testing.T) {
 // printing an absolute pass-rate in the uplift column.
 func TestRenderReport_NoControlArm(t *testing.T) {
 	runs := []bench.RunResult{
-		benchRun("auth-refresh", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
-		benchRun("auth-refresh", "full", bench.ProfileFull, "v1", 1, bench.StatusGraded, false),
+		benchRun("cookie-hardening", "mechanism", bench.ProfileMechanism, "v1", 1, bench.StatusGraded, true),
+		benchRun("cookie-hardening", "full", bench.ProfileFull, "v1", 1, bench.StatusGraded, false),
 	}
 	out := render(t, bench.NewResults("", runs), "", "")
 	require.Contains(t, out, "control:   NONE -- no arm with the vanilla profile")
-	require.Regexp(t, `auth-refresh\s+mechanism\s+1\.00 \(1/1\)\s+n/a`, out)
+	require.Regexp(t, `cookie-hardening\s+mechanism\s+1\.00 \(1/1\)\s+n/a`, out)
 	require.NotContains(t, out, "+1.00")
 }
 
@@ -115,7 +115,7 @@ func TestRenderReport_VersionDeltaAndControlCalibration(t *testing.T) {
 	require.Contains(t, out, "=== version v1 (baseline) ===")
 	require.Contains(t, out, "=== version v2 (candidate) ===")
 	require.Contains(t, out, "=== version delta: v1 -> v2 ===")
-	require.Regexp(t, `auth-refresh\s+mechanism\s+\+1\.00\s+\+0\.00\s+-1\.00\s+REGRESSION`, out)
+	require.Regexp(t, `cookie-hardening\s+mechanism\s+\+1\.00\s+\+0\.00\s+-1\.00\s+REGRESSION`, out)
 	require.Contains(t, out, "control calibration")
 	require.Contains(t, out, "v1: 0.00 (0/2)  ->  v2: 0.00 (0/2)   (change +0.00)")
 	require.NotContains(t, out, "The control moved")
@@ -127,7 +127,7 @@ func TestRenderReport_ControlDriftIsCalledOut(t *testing.T) {
 	var runs []bench.RunResult
 	add := func(version, cond string, p bench.Profile, passes ...bool) {
 		for i, pass := range passes {
-			runs = append(runs, benchRun("auth-refresh", cond, p, version, i+1, bench.StatusGraded, pass))
+			runs = append(runs, benchRun("cookie-hardening", cond, p, version, i+1, bench.StatusGraded, pass))
 		}
 	}
 	add("v1", "vanilla", bench.ProfileVanilla, true, true)
@@ -136,7 +136,7 @@ func TestRenderReport_ControlDriftIsCalledOut(t *testing.T) {
 	add("v2", "mechanism", bench.ProfileMechanism, false, false)
 
 	out := render(t, bench.NewResults("", runs), "v1", "v2")
-	require.Regexp(t, `auth-refresh\s+mechanism\s+\+0\.00\s+\+0\.00\s+\+0\.00`, out)
+	require.Regexp(t, `cookie-hardening\s+mechanism\s+\+0\.00\s+\+0\.00\s+\+0\.00`, out)
 	require.Equal(t, 1, strings.Count(out, "REGRESSION"),
 		"only the legend mentions it: nothing regressed")
 	require.Contains(t, out, "v1: 1.00 (2/2)  ->  v2: 0.00 (0/2)   (change -1.00)")
@@ -147,8 +147,8 @@ func TestRenderReport_ControlDriftIsCalledOut(t *testing.T) {
 // heading reads as a bug, so the report says what is missing.
 func TestRenderReport_VersionDeltaWithOnlyTheControlArm(t *testing.T) {
 	runs := []bench.RunResult{
-		benchRun("auth-refresh", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, true),
-		benchRun("auth-refresh", "vanilla", bench.ProfileVanilla, "v2", 1, bench.StatusGraded, true),
+		benchRun("cookie-hardening", "vanilla", bench.ProfileVanilla, "v1", 1, bench.StatusGraded, true),
+		benchRun("cookie-hardening", "vanilla", bench.ProfileVanilla, "v2", 1, bench.StatusGraded, true),
 	}
 	out := render(t, bench.NewResults("", runs), "v1", "v2")
 	require.Contains(t, out, "nothing to compare: vanilla is the only arm")
@@ -218,16 +218,16 @@ func TestRunReport_EndToEndWithoutTrials(t *testing.T) {
 	root := t.TempDir()
 
 	cond := bench.DefaultConditions()[0]
-	crashed := filepath.Join(root, "auth-refresh", cond.Name, "run-01")
+	crashed := filepath.Join(root, "cookie-hardening", cond.Name, "run-01")
 	require.NoError(t, os.MkdirAll(crashed, 0o755))
 	require.NoError(t, bench.WriteRunRecord(crashed, bench.RunRecord{
-		Scenario: "auth-refresh", Condition: cond, Run: 1, Version: "v9.9.9-test",
+		Scenario: "cookie-hardening", Condition: cond, Run: 1, Version: "v9.9.9-test",
 		Error: "agent timed out",
 	}))
-	empty := filepath.Join(root, "auth-refresh", cond.Name, "run-02")
+	empty := filepath.Join(root, "cookie-hardening", cond.Name, "run-02")
 	require.NoError(t, os.MkdirAll(empty, 0o755))
 	require.NoError(t, bench.WriteRunRecord(empty, bench.RunRecord{
-		Scenario: "auth-refresh", Condition: cond, Run: 2, Version: "v9.9.9-test",
+		Scenario: "cookie-hardening", Condition: cond, Run: 2, Version: "v9.9.9-test",
 	}))
 
 	var out bytes.Buffer
@@ -271,6 +271,27 @@ func TestRunReport_EndToEndWithoutTrials(t *testing.T) {
 		err := runReport([]string{"--out", filepath.Join(t.TempDir(), "nope"), "--no-trials"}, &out)
 		require.ErrorContains(t, err, "no run tree at")
 	})
+}
+
+// The judge is opt-in and its construction failures are loud: the operator
+// asked for a layer that costs tokens, so a provider that cannot be built is
+// an error, never a silent judge-less pass.
+func TestBuildJudge(t *testing.T) {
+	j, err := buildJudge(false, "")
+	require.NoError(t, err)
+	require.Nil(t, j, "without --judge there is no judge")
+
+	bogus := filepath.Join(t.TempDir(), "judge.yaml")
+	require.NoError(t, os.WriteFile(bogus, []byte("llm:\n  provider: bogus\n"), 0o600))
+	_, err = buildJudge(true, bogus)
+	require.ErrorContains(t, err, "--judge")
+	require.ErrorContains(t, err, "bogus")
+
+	keyless := filepath.Join(t.TempDir(), "judge.yaml")
+	require.NoError(t, os.WriteFile(keyless, []byte("llm:\n  provider: openai\n  openai:\n    api_key: \"\"\n"), 0o600))
+	t.Setenv("SEAMLESS_OPENAI_API_KEY", "")
+	_, err = buildJudge(true, keyless)
+	require.ErrorContains(t, err, "api_key")
 }
 
 // isolateLiveConfig points config.Load() at a throwaway file, so no test in

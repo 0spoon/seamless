@@ -576,17 +576,19 @@ func writeRunDirAt(t *testing.T, dir string, rec RunRecord, files map[string]str
 	repo := filepath.Join(dir, RepoDirName)
 	require.NoError(t, os.MkdirAll(repo, 0o755))
 	for name, body := range files {
-		require.NoError(t, os.WriteFile(filepath.Join(repo, name), []byte(body), 0o644))
+		path := filepath.Join(repo, filepath.FromSlash(name))
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(body), 0o644))
 	}
 	require.NoError(t, os.WriteFile(filepath.Join(dir, DiffFile),
-		[]byte("--- a/auth.go\n+++ b/auth.go\n+limiter\n"), 0o644))
+		[]byte(cookieDiff), 0o644))
 	require.NoError(t, WriteRunRecord(dir, rec))
 }
 
 // runDirRec is the manifest for one synthesized run of the real scenario.
 func runDirRec(cond Condition, version string, i int) RunRecord {
 	return RunRecord{
-		Scenario: authRefreshName, Condition: cond, Run: i, Version: version,
+		Scenario: cookieHardeningName, Condition: cond, Run: i, Version: version,
 		Metrics: Metrics{Turns: 9, InputTokens: 1000},
 	}
 }
@@ -595,20 +597,20 @@ func TestCollect_GradesTheTreeAndCachesTheVerdicts(t *testing.T) {
 	root := t.TempDir()
 	vanilla := DefaultConditions()[0]
 	cell := func(version string, i int, files map[string]string) string {
-		dir := filepath.Join(root, version, authRefreshName, vanilla.Name, "run-0"+string(rune('0'+i)))
+		dir := filepath.Join(root, version, cookieHardeningName, vanilla.Name, "run-0"+string(rune('0'+i)))
 		writeRunDirAt(t, dir, runDirRec(vanilla, version, i), files)
 		return dir
 	}
-	passDir := cell("v1", 1, sharedStorageRepo())
+	passDir := cell("v1", 1, cookieHardenedRepo())
 	failDir := cell("v1", 2, baselineRepo())
 
 	// A run that never produced a verdict, and one that produced no evidence.
-	crashed := filepath.Join(root, "v1", authRefreshName, vanilla.Name, "run-03")
+	crashed := filepath.Join(root, "v1", cookieHardeningName, vanilla.Name, "run-03")
 	rec := runDirRec(vanilla, "v1", 3)
 	rec.Error = "agent timed out"
-	writeRunDirAt(t, crashed, rec, sharedStorageRepo())
+	writeRunDirAt(t, crashed, rec, cookieHardenedRepo())
 
-	empty := filepath.Join(root, "v1", authRefreshName, vanilla.Name, "run-04")
+	empty := filepath.Join(root, "v1", cookieHardeningName, vanilla.Name, "run-04")
 	require.NoError(t, os.MkdirAll(empty, 0o755))
 	require.NoError(t, WriteRunRecord(empty, runDirRec(vanilla, "v1", 4)))
 
@@ -637,7 +639,7 @@ func TestCollect_GradesTheTreeAndCachesTheVerdicts(t *testing.T) {
 	require.Contains(t, byDir[rel(empty)].Grade.Error, "missing artifacts")
 
 	// One pass out of two graded; the crash and the empty run stay out of it.
-	c, ok := res.Cell(authRefreshName, vanilla.Name, "v1")
+	c, ok := res.Cell(cookieHardeningName, vanilla.Name, "v1")
 	require.True(t, ok)
 	require.Equal(t, Rate{1, 2}, c.Rate)
 	require.Equal(t, 1, c.FailedToRun)
@@ -685,10 +687,10 @@ func TestCollect_GradesTheTreeAndCachesTheVerdicts(t *testing.T) {
 func TestRunDirs(t *testing.T) {
 	root := t.TempDir()
 	vanilla := DefaultConditions()[0]
-	a := filepath.Join(root, "v1", authRefreshName, "vanilla", "run-01")
-	b := filepath.Join(root, "v2", authRefreshName, "vanilla", "run-01")
-	writeRunDirAt(t, a, runDirRec(vanilla, "v1", 1), sharedStorageRepo())
-	writeRunDirAt(t, b, runDirRec(vanilla, "v2", 1), sharedStorageRepo())
+	a := filepath.Join(root, "v1", cookieHardeningName, "vanilla", "run-01")
+	b := filepath.Join(root, "v2", cookieHardeningName, "vanilla", "run-01")
+	writeRunDirAt(t, a, runDirRec(vanilla, "v1", 1), cookieHardenedRepo())
+	writeRunDirAt(t, b, runDirRec(vanilla, "v2", 1), cookieHardenedRepo())
 
 	// A stray manifest inside a preserved copy must not be mistaken for a run.
 	require.NoError(t, os.MkdirAll(filepath.Join(a, RepoDirName, "nested"), 0o755))

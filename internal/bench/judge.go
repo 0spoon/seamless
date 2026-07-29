@@ -130,13 +130,16 @@ func (g *rubricGrader) judgeLine(ctx context.Context, a RunArtifacts) string {
 		return "judge: n/a -- scenario has no rubric"
 	case g.judge == nil:
 		return "judge: n/a -- no LLM judge configured (graded on assertions + event log)"
-	case a.Transcript == "":
+	case a.Transcript == "" && len(a.Steps) == 0:
 		return "judge: n/a -- run preserved no transcript"
 	}
-	transcript, err := readTranscript(a.Transcript)
+	transcript, err := runTranscript(a)
 	if err != nil {
 		slog.Warn("bench: judge transcript unreadable", "path", a.Transcript, "error", err)
 		return "judge: degraded -- transcript unreadable: " + firstLine(err.Error())
+	}
+	if transcript == "" {
+		return "judge: n/a -- run preserved no transcript"
 	}
 	v, err := g.judge.Judge(ctx, JudgeRequest{
 		Scenario: g.scenario, Condition: a.Condition.Name, Prompt: promptFor(g.scenario),
@@ -164,32 +167,91 @@ func (g *rubricGrader) judgeLine(ctx context.Context, a RunArtifacts) string {
 	return line
 }
 
-// readTranscript reads a run's transcript, keeping the tail when it is large.
+// runTranscript assembles what the judge reads: a single-step run's one
+// transcript, or a multi-step run's session transcripts in order with the
+// final session last, each under a step header. A session that preserved no
+// transcript contributes a line saying so rather than silently vanishing --
+// the judge must not credit work it cannot see.
+func runTranscript(a RunArtifacts) (string, error) {
+	if len(a.Steps) == 0 {
+		if a.Transcript == "" {
+			return "", nil
+		}
+		return readTranscript(a.Transcript)
+	}
+	var b strings.Builder
+	part := func(i int, name, path string) error {
+		if name == "" {
+			name = fmt.Sprintf("step-%02d", i)
+		}
+		fmt.Fprintf(&b, "=== session %d (%s) ===\n", i, name)
+		if path == "" {
+			b.WriteString("[no transcript preserved for this session]\n")
+			return nil
+		}
+		s, err := readTranscript(path)
+		if err != nil {
+			return err
+		}
+		b.WriteString(s)
+		b.WriteByte('\n')
+		return nil
+	}
+	for i, st := range a.Steps {
+		if err := part(i+1, st.Name, st.Transcript); err != nil {
+			return "", err
+		}
+	}
+	if err := part(len(a.Steps)+1, "final", a.Transcript); err != nil {
+		return "", err
+	}
+	return clipTranscript(b.String()), nil
+}
+
+// readTranscript reads one transcript file, keeping the tail when it is large.
 func readTranscript(path string) (string, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return "", fmt.Errorf("bench: read transcript: %w", err)
 	}
-	runes := []rune(string(b))
-	if len(runes) <= judgeTranscriptMaxRunes {
-		return string(runes), nil
-	}
-	return "... [transcript truncated to its last " + fmt.Sprint(judgeTranscriptMaxRunes) + " characters]\n" +
-		string(runes[len(runes)-judgeTranscriptMaxRunes:]), nil
+	return clipTranscript(string(b)), nil
 }
 
-// promptFor returns the scenario's prompt so the judge sees what the agent was
-// actually asked; an unknown scenario simply omits it.
-func promptFor(scenario string) string {
-	if sc, ok := ScenarioByName(scenario); ok {
-		return sc.Prompt
+// clipTranscript keeps a transcript's tail: that is what carries the agent's
+// reasoning and closing summary.
+func clipTranscript(s string) string {
+	runes := []rune(s)
+	if len(runes) <= judgeTranscriptMaxRunes {
+		return s
 	}
-	return ""
+	return "... [transcript truncated to its last " + fmt.Sprint(judgeTranscriptMaxRunes) + " characters]\n" +
+		string(runes[len(runes)-judgeTranscriptMaxRunes:])
+}
+
+// promptFor returns what the agent was actually asked, so the judge grades
+// against the real instruction(s): the single prompt, or every session's in
+// order for a multi-step scenario. An unknown scenario simply omits it.
+func promptFor(scenario string) string {
+	sc, ok := ScenarioByName(scenario)
+	if !ok {
+		return ""
+	}
+	steps := sc.Sessions()
+	if len(steps) == 1 {
+		return steps[0].Prompt
+	}
+	var b strings.Builder
+	for i, st := range steps {
+		name := st.Name
+		if name == "" {
+			name = fmt.Sprintf("step-%02d", i+1)
+		}
+		fmt.Fprintf(&b, "Session %d (%s): %s\n", i+1, name, st.Prompt)
+	}
+	return strings.TrimSuffix(b.String(), "\n")
 }
 
 func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
+	line, _, _ := strings.Cut(s, "\n")
+	return line
 }

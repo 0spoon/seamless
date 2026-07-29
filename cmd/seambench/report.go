@@ -28,6 +28,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/0spoon/seamless/internal/bench"
+	"github.com/0spoon/seamless/internal/config"
 )
 
 // aggregateRow is the scenario-column label for a row pooled over scenarios.
@@ -51,6 +52,8 @@ func runReport(args []string, w io.Writer) error {
 		candidate = fs.String("candidate", "", "candidate version label for the delta table (default: from "+bench.VersionsFile+")")
 		regrade   = fs.Bool("regrade", false, "re-grade every run instead of reusing cached verdicts")
 		noTrials  = fs.Bool("no-trials", false, "do not record the results as research-lab trials in the live instance")
+		judgeOn   = fs.Bool("judge", false, "enable the advisory LLM judge on runs graded in THIS pass (never gates; cached grade.json verdicts skip it, so pair with --regrade to judge existing runs)")
+		judgeCfg  = fs.String("judge-config", "", "Seamless config file whose llm: section builds the judge (default: the standard search order incl. $SEAMLESS_CONFIG)")
 	)
 	trials := addTrialFlags(fs)
 	if err := fs.Parse(args); err != nil {
@@ -72,7 +75,11 @@ func runReport(args []string, w io.Writer) error {
 		return fmt.Errorf("no run tree at %s (run `seambench run` first): %w", root, err)
 	}
 
-	res, err := bench.Collect(ctx, root, bench.CollectOptions{Regrade: *regrade})
+	judge, err := buildJudge(*judgeOn, *judgeCfg)
+	if err != nil {
+		return err
+	}
+	res, err := bench.Collect(ctx, root, bench.CollectOptions{Regrade: *regrade, Judge: judge})
 	if err != nil {
 		return err
 	}
@@ -99,6 +106,36 @@ func runReport(args []string, w io.Writer) error {
 		return nil
 	}
 	return recordTrialsForReport(ctx, trials, root, res, w)
+}
+
+// buildJudge constructs the advisory LLM judge when --judge asks for one. The
+// operator asked explicitly, so a provider that cannot be built is a LOUD
+// error here -- construction is where misconfiguration must surface; only a
+// per-run judge failure degrades (internal/bench/judge.go). The report is a
+// daemon-less CLI, so the LLM config comes from the standard Seamless config
+// search order, or from an explicit --judge-config file (which is also how a
+// bench-specific judge model is chosen: a yaml, not a flag).
+func buildJudge(on bool, cfgPath string) (bench.Judge, error) {
+	if !on {
+		return nil, nil
+	}
+	var (
+		cfg config.Config
+		err error
+	)
+	if cfgPath != "" {
+		cfg, err = config.LoadFrom(cfgPath)
+	} else {
+		cfg, err = config.Load()
+	}
+	if err != nil {
+		return nil, fmt.Errorf("--judge: %w", err)
+	}
+	judge, err := bench.NewLLMJudge(cfg.LLM)
+	if err != nil {
+		return nil, fmt.Errorf("--judge: %w", err)
+	}
+	return judge, nil
 }
 
 // resolveVersionPair settles which two version labels the delta table compares:

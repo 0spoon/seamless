@@ -43,15 +43,72 @@ type agentOpts struct {
 	env []string
 }
 
-// runOutcome is what one attempt at a run produced, before capture.
-type runOutcome struct {
+// stepOutcome is what one agent session produced, before capture. A
+// single-step run has exactly one; a multi-step run collects one per session
+// attempted.
+type stepOutcome struct {
+	name      string // the step's label; "" on a single-step run
+	prompt    string
 	metrics   bench.Metrics
 	exitCode  int
 	sessionID string // the agent's own session id, used to find its transcript
-	// err is set when the RUN failed -- a timeout, a non-zero exit, an
+	startedAt time.Time
+	endedAt   time.Time
+	// repoDiff is a NON-final step's diff against the arm snapshot, computed
+	// by the runner before the next step's boundary destroys that state.
+	repoDiff string
+	// err is set when the SESSION failed -- a timeout, a non-zero exit, an
 	// unreadable result -- as opposed to the agent merely doing the wrong
 	// thing, which is the grader's business.
 	err error
+}
+
+// runOutcome aggregates a run's step outcomes: what runOne records and capture
+// preserves. For a single-step run it is a thin wrapper around the one step.
+type runOutcome struct {
+	steps    []stepOutcome
+	planned  int // how many sessions the scenario defines; len(steps) < planned means an aborted run
+	metrics  bench.Metrics
+	exitCode int
+	// sessionID and startedAt are the FINAL attempted session's, for the
+	// top-level transcript match.
+	sessionID string
+	startedAt time.Time
+	err       error
+}
+
+// finishRun folds attempted steps into the run's aggregate: runner-half
+// metrics summed, the last session's exit code and transcript coordinates,
+// and the first failing step's error -- named by position when the scenario
+// has more than one session.
+func finishRun(planned int, steps []stepOutcome) runOutcome {
+	out := runOutcome{steps: steps, planned: planned, exitCode: -1}
+	ms := make([]bench.Metrics, 0, len(steps))
+	for i, so := range steps {
+		ms = append(ms, so.metrics)
+		if so.err != nil && out.err == nil {
+			out.err = so.err
+			if planned > 1 {
+				label := so.name
+				if label == "" {
+					label = fmt.Sprintf("step-%02d", i+1)
+				}
+				out.err = fmt.Errorf("step %d/%d (%s): %w", i+1, planned, label, so.err)
+			}
+		}
+	}
+	out.metrics = bench.SumRunnerMetrics(ms...)
+	if last := len(steps) - 1; last >= 0 {
+		out.exitCode = steps[last].exitCode
+		out.sessionID = steps[last].sessionID
+		out.startedAt = steps[last].startedAt
+	}
+	return out
+}
+
+// failedRun is a run that never reached its first agent session.
+func failedRun(err error) runOutcome {
+	return runOutcome{exitCode: -1, err: err}
 }
 
 // argv builds the headless invocation for one prompt.
@@ -63,15 +120,15 @@ func (o agentOpts) argv(prompt string) []string {
 	return append(args, o.extra...)
 }
 
-// runAgent runs the agent in the arm's demo repo under the arm's environment,
-// tees its output to the run's agent.log, and extracts the runner-owned
-// metrics from the result JSON. A timeout or a non-zero exit is a failed run
-// recorded in the outcome, never a crash of the suite: the caller still
-// captures the artifacts and moves to the next run.
-func runAgent(ctx context.Context, a *arm, prompt string, o agentOpts, logPath string) runOutcome {
+// runAgent runs one agent session in the arm's demo repo under the arm's
+// environment, tees its output to the session's agent.log, and extracts the
+// runner-owned metrics from the result JSON. A timeout or a non-zero exit is a
+// failed session recorded in the outcome, never a crash of the suite: the
+// caller still captures the artifacts and moves to the next run.
+func runAgent(ctx context.Context, a *arm, prompt string, o agentOpts, logPath string) stepOutcome {
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		return runOutcome{exitCode: -1, err: fmt.Errorf("create agent log %s: %w", logPath, err)}
+		return stepOutcome{exitCode: -1, err: fmt.Errorf("create agent log %s: %w", logPath, err)}
 	}
 	defer func() { _ = logFile.Close() }()
 
@@ -90,7 +147,7 @@ func runAgent(ctx context.Context, a *arm, prompt string, o agentOpts, logPath s
 	// ProcessState is nil when the command never started (a missing binary), so
 	// -1 stands for "no exit status", the same value ExitCode reports for a
 	// signalled process.
-	out := runOutcome{exitCode: -1}
+	out := stepOutcome{exitCode: -1, prompt: prompt, startedAt: started.UTC(), endedAt: time.Now().UTC()}
 	if cmd.ProcessState != nil {
 		out.exitCode = cmd.ProcessState.ExitCode()
 	}

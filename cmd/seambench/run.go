@@ -387,8 +387,11 @@ func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condi
 		Run:       i,
 		Version:   r.version,
 		Model:     a.model,
-		Prompt:    sc.Prompt,
 		StartedAt: time.Now().UTC(),
+	}
+	if len(sc.Sessions()) == 1 {
+		// A multi-step run's prompts live on its StepRecords instead.
+		rec.Prompt = sc.Sessions()[0].Prompt
 	}
 	fmt.Fprintf(r.w, "\n==> %s / %s run %d/%d\n", sc.Name, cond.Name, i, r.n)
 
@@ -399,8 +402,11 @@ func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condi
 	if outcome.err != nil {
 		rec.Error = outcome.err.Error()
 	}
+	if outcome.planned > 1 {
+		rec.Steps = stepRecords(outcome.steps)
+	}
 
-	if err := capture(ctx, a, dir, rec.StartedAt, outcome.sessionID); err != nil {
+	if err := capture(ctx, a, dir, outcome); err != nil {
 		rec.Error = joinMessages(rec.Error, err.Error())
 	}
 	if err := bench.WriteRunRecord(dir, rec); err != nil {
@@ -415,15 +421,18 @@ func (r *runner) runOne(ctx context.Context, sc bench.Scenario, cond bench.Condi
 }
 
 // execute prepares the arm, holds its daemon up for the duration, and runs the
-// agent (or, for a recall-dependent scenario, the hook-level component check).
+// scenario's agent sessions in order (or, for a recall-dependent scenario, the
+// hook-level component check). The daemon and the credential wrap the WHOLE
+// session sequence: a handoff scenario's sessions share one live instance,
+// which is precisely the persistence being measured.
 func (r *runner) execute(ctx context.Context, sc bench.Scenario, a *arm, dir string) runOutcome {
 	if err := r.prepare(ctx, sc, a); err != nil {
-		return runOutcome{exitCode: -1, err: err}
+		return failedRun(err)
 	}
 	if a.seamless {
 		stop, err := r.serve(ctx, a, filepath.Join(a.dir, "daemon.log"))
 		if err != nil {
-			return runOutcome{exitCode: -1, err: err}
+			return failedRun(err)
 		}
 		// Stopping here -- before the caller captures -- is what lets the event
 		// dump and the data/ copy read a cleanly closed database.
@@ -436,23 +445,117 @@ func (r *runner) execute(ctx context.Context, sc bench.Scenario, a *arm, dir str
 	if r.creds != nil {
 		release, err := r.creds.provision(a)
 		if err != nil {
-			return runOutcome{exitCode: -1, err: err}
+			return failedRun(err)
 		}
 		defer release()
 	}
 
-	runCtx, cancel := context.WithTimeout(ctx, r.timeout)
-	defer cancel()
-
-	logPath := filepath.Join(dir, bench.AgentLogFile)
 	if sc.RequiresRecall {
-		return recallCheck(runCtx, a, sc.Prompt, logPath)
+		runCtx, cancel := context.WithTimeout(ctx, r.timeout)
+		defer cancel()
+		so := recallCheck(runCtx, a, sc.Prompt, filepath.Join(dir, bench.AgentLogFile))
+		return finishRun(1, []stepOutcome{so})
 	}
+
 	agent := r.agent
 	if r.creds != nil {
 		agent.env = r.creds.env()
 	}
-	return runAgent(runCtx, a, sc.Prompt, agent, logPath)
+	steps := sc.Sessions()
+	outcomes := make([]stepOutcome, 0, len(steps))
+	for i, st := range steps {
+		so := r.executeStep(ctx, a, dir, st, i, len(steps), agent)
+		outcomes = append(outcomes, so)
+		if so.err != nil {
+			break // an aborted run: the remaining sessions never happen
+		}
+	}
+	return finishRun(len(steps), outcomes)
+}
+
+// executeStep runs one of a scenario's agent sessions: the fresh-repo boundary
+// and evidence materialization before it, the evidence removal and (for a
+// non-final step) the step diff after it. --timeout bounds each session.
+func (r *runner) executeStep(ctx context.Context, a *arm, dir string, st bench.Step, i, total int, agent agentOpts) stepOutcome {
+	name := st.Name
+	if name == "" {
+		name = fmt.Sprintf("step-%02d", i+1)
+	}
+	fail := func(err error) stepOutcome {
+		return stepOutcome{name: name, prompt: st.Prompt, exitCode: -1, err: err}
+	}
+	final := i == total-1
+
+	// The boundary: a fresh-repo step starts from the arm snapshot, so nothing
+	// a previous session left in the WORKING TREE carries over. The data dir
+	// is deliberately untouched -- what a session recorded there is the only
+	// channel across the boundary, and on a vanilla arm there is none.
+	if i > 0 && st.FreshRepo {
+		if err := gitRestore(ctx, a.repo, a.snapshot); err != nil {
+			return fail(err)
+		}
+	}
+	removeEvidence, err := writeEvidence(a.repo, st.Evidence)
+	if err != nil {
+		return fail(err)
+	}
+
+	logPath := filepath.Join(dir, bench.AgentLogFile)
+	if !final {
+		stepDir := filepath.Join(dir, bench.StepDirName(i+1))
+		if err := os.MkdirAll(stepDir, 0o755); err != nil {
+			err = fmt.Errorf("create step dir %s: %w", stepDir, err)
+			if rerr := removeEvidence(); rerr != nil {
+				err = errors.Join(err, rerr)
+			}
+			return fail(err)
+		}
+		logPath = filepath.Join(stepDir, bench.AgentLogFile)
+	}
+
+	stepCtx, cancel := context.WithTimeout(ctx, r.timeout)
+	so := runAgent(stepCtx, a, st.Prompt, agent, logPath)
+	cancel()
+	so.name = name
+
+	// Evidence comes out UNCONDITIONALLY -- error paths included -- before any
+	// diff or capture can see it: gitDiff stages untracked files, so evidence
+	// left behind would read as agent work on every arm.
+	if err := removeEvidence(); err != nil && so.err == nil {
+		so.err = err
+	}
+	if !final && so.err == nil {
+		// This state is destroyed by the next boundary (or left to accumulate
+		// under a carry-over step), so the step's diff is taken now.
+		if so.repoDiff, err = gitDiff(ctx, a.repo, a.snapshot); err != nil {
+			so.err = err
+		} else if err := gitUnstage(ctx, a.repo); err != nil {
+			// Drop the intent-to-add entries gitDiff staged, so a carry-over
+			// successor session does not see phantom staged files.
+			so.err = err
+		}
+	}
+	return so
+}
+
+// stepRecords renders attempted step outcomes for the run manifest.
+func stepRecords(steps []stepOutcome) []bench.StepRecord {
+	out := make([]bench.StepRecord, len(steps))
+	for i, so := range steps {
+		out[i] = bench.StepRecord{
+			Name:      so.name,
+			Prompt:    so.prompt,
+			SessionID: so.sessionID,
+			StartedAt: so.startedAt,
+			EndedAt:   so.endedAt,
+			ExitCode:  so.exitCode,
+			Metrics:   so.metrics,
+		}
+		if so.err != nil {
+			out[i].Error = so.err.Error()
+		}
+	}
+	return out
 }
 
 // prepare puts the arm back to the scenario's starting state.
@@ -518,14 +621,38 @@ func selectScenarios(list string) ([]bench.Scenario, error) {
 		return nil, fmt.Errorf("scenario list %q selected nothing", list)
 	}
 	for _, sc := range out {
-		if sc.Prompt == "" {
-			return nil, fmt.Errorf("scenario %s has no prompt", sc.Name)
-		}
-		if sc.Seed == nil {
-			return nil, fmt.Errorf("scenario %s has no seed", sc.Name)
+		if err := validateScenario(sc); err != nil {
+			return nil, err
 		}
 	}
 	return out, nil
+}
+
+// validateScenario refuses a malformed table entry before any arm is touched.
+// bench_test asserts the same shape; this is the runtime guard for a table
+// edited without its test.
+func validateScenario(sc bench.Scenario) error {
+	if sc.Seed == nil {
+		return fmt.Errorf("scenario %s has no seed", sc.Name)
+	}
+	if sc.Prompt != "" && len(sc.Steps) > 0 {
+		return fmt.Errorf("scenario %s sets both Prompt and Steps; Prompt is sugar for a single step", sc.Name)
+	}
+	steps := sc.Sessions()
+	if sc.RequiresRecall && len(steps) > 1 {
+		return fmt.Errorf("scenario %s: RequiresRecall is a component check and cannot be multi-step", sc.Name)
+	}
+	for i, st := range steps {
+		if st.Prompt == "" {
+			return fmt.Errorf("scenario %s: step %d has no prompt", sc.Name, i+1)
+		}
+		for path := range st.Evidence {
+			if !filepath.IsLocal(path) {
+				return fmt.Errorf("scenario %s: step %d evidence path %q escapes the repo", sc.Name, i+1, path)
+			}
+		}
+	}
+	return nil
 }
 
 // scenarioNames lists the bench table, for help text and errors.

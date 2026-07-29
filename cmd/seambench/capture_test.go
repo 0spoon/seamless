@@ -169,7 +169,7 @@ func TestCapture_WritesTheFrozenLayout(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(a.repo, "ratelimit.go"), []byte("package main\n"), 0o644))
 
 	dir := t.TempDir()
-	require.NoError(t, capture(ctx, a, dir, time.Now().Add(-time.Minute), "sess"))
+	require.NoError(t, capture(ctx, a, dir, runOutcome{sessionID: "sess", startedAt: time.Now().Add(-time.Minute)}))
 
 	for _, name := range []string{bench.DiffFile, bench.EventsFile, bench.TranscriptFile} {
 		require.FileExists(t, filepath.Join(dir, name))
@@ -214,7 +214,7 @@ func TestCapture_PreservesTheWriteAheadLogTail(t *testing.T) {
 	require.NoError(t, err)
 
 	dir := t.TempDir()
-	require.NoError(t, capture(ctx, a, dir, time.Now().Add(-time.Minute), ""))
+	require.NoError(t, capture(ctx, a, dir, runOutcome{startedAt: time.Now().Add(-time.Minute)}))
 
 	var evs []core.Event
 	b, err := os.ReadFile(filepath.Join(dir, bench.EventsFile))
@@ -238,7 +238,7 @@ func TestCapture_MissingTranscriptIsNotAnError(t *testing.T) {
 	a.snapshot = f.head
 
 	dir := t.TempDir()
-	require.NoError(t, capture(context.Background(), a, dir, time.Now(), ""))
+	require.NoError(t, capture(context.Background(), a, dir, runOutcome{startedAt: time.Now()}))
 	require.NoFileExists(t, filepath.Join(dir, bench.TranscriptFile))
 	require.NoDirExists(t, filepath.Join(dir, bench.DataDirName), "a vanilla arm has no data dir to preserve")
 

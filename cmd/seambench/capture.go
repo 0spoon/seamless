@@ -45,7 +45,12 @@ const transcriptSlack = 2 * time.Second
 // capture writes every artifact for one run. Failures are collected rather than
 // short-circuited, so a broken git or a missing transcript still leaves the
 // rest of the evidence on disk, and the reason lands in the run record.
-func capture(ctx context.Context, a *arm, dir string, since time.Time, sessionID string) error {
+//
+// The top-level artifacts are the FINAL session's; a multi-step run's earlier
+// sessions land under steps/step-NN/ (their diff was taken by the runner
+// before the next session's boundary destroyed that state, and their
+// transcript is matched by each session's own id and start time).
+func capture(ctx context.Context, a *arm, dir string, out runOutcome) error {
 	var errs error
 
 	diff, err := gitDiff(ctx, a.repo, a.snapshot)
@@ -59,17 +64,24 @@ func capture(ctx context.Context, a *arm, dir string, since time.Time, sessionID
 		errs = errors.Join(errs, err)
 	}
 
-	switch path, err := findTranscript(a.configDir, sessionID, since); {
-	case err != nil:
+	if err := captureTranscript(a, dir, out.sessionID, out.startedAt, true); err != nil {
 		errs = errors.Join(errs, err)
-	case path == "":
-		// Not an error: a crashed agent, and any run of a client that flushes
-		// its transcript only on a clean exit, legitimately leaves none.
-		// LoadRun reports the artifact as absent.
-		slog.Warn("no agent transcript found for this run",
-			"condition", a.condition.Name, "configDir", a.configDir)
-	default:
-		if err := copyFile(path, filepath.Join(dir, bench.TranscriptFile)); err != nil {
+	}
+	for i, so := range out.steps {
+		if i == len(out.steps)-1 {
+			break // the final session's artifacts are the top-level ones
+		}
+		stepDir := filepath.Join(dir, bench.StepDirName(i+1))
+		if err := os.MkdirAll(stepDir, 0o755); err != nil {
+			errs = errors.Join(errs, fmt.Errorf("create %s: %w", stepDir, err))
+			continue
+		}
+		if so.repoDiff != "" {
+			if err := os.WriteFile(filepath.Join(stepDir, bench.DiffFile), []byte(so.repoDiff), 0o644); err != nil {
+				errs = errors.Join(errs, fmt.Errorf("write step %d %s: %w", i+1, bench.DiffFile, err))
+			}
+		}
+		if err := captureTranscript(a, stepDir, so.sessionID, so.startedAt, false); err != nil {
 			errs = errors.Join(errs, err)
 		}
 	}
@@ -130,11 +142,39 @@ func dumpEvents(ctx context.Context, a *arm, path string) error {
 	return nil
 }
 
-// findTranscript locates this run's agent transcript under the arm's config
+// captureTranscript copies one session's transcript into its artifact dir. A
+// session that never started (a run aborted before it, or the recall component
+// check) has nothing to search for; warn is set only for the top-level call so
+// a legitimately transcript-less earlier step does not double-log.
+func captureTranscript(a *arm, dir, sessionID string, since time.Time, warn bool) error {
+	if sessionID == "" && since.IsZero() {
+		return nil
+	}
+	switch path, err := findTranscript(a.configDir, sessionID, since); {
+	case err != nil:
+		return err
+	case path == "":
+		// Not an error: a crashed agent, and any run of a client that flushes
+		// its transcript only on a clean exit, legitimately leaves none.
+		// LoadRun reports the artifact as absent.
+		if warn {
+			slog.Warn("no agent transcript found for this run",
+				"condition", a.condition.Name, "configDir", a.configDir)
+		}
+		return nil
+	default:
+		return copyFile(path, filepath.Join(dir, bench.TranscriptFile))
+	}
+}
+
+// findTranscript locates one agent session's transcript under the arm's config
 // home. The agent names the file after its own session id, so that is the
-// primary match; otherwise the newest jsonl written since the run started wins,
-// which is what keeps a previous run's transcript in the same (re-used) arm
-// from being captured as this one's. "" means none was produced.
+// primary match; otherwise the newest jsonl written since the session started
+// wins, which is what keeps a previous run's transcript in the same (re-used)
+// arm -- or an earlier step's in the same run -- from being captured as this
+// one's. A crashed session has no result JSON and so no session id; its
+// fallback cannot mismatch a later step's file, because a crashed step aborts
+// the run. "" means none was produced.
 func findTranscript(configDir, sessionID string, since time.Time) (string, error) {
 	matches, err := filepath.Glob(filepath.Join(configDir, "projects", "*", "*.jsonl"))
 	if err != nil {
@@ -198,6 +238,14 @@ func gitDiff(ctx context.Context, repo, sha string) (string, error) {
 		return "", err
 	}
 	return git(ctx, repo, "diff", "--no-color", sha)
+}
+
+// gitUnstage drops the index entries gitDiff's intent-to-add staged, so a
+// later agent session in the same working tree does not see phantom staged
+// files. The working tree itself is untouched.
+func gitUnstage(ctx context.Context, repo string) error {
+	_, err := git(ctx, repo, "reset", "-q")
+	return err
 }
 
 // git runs one git command in dir and returns its stdout.

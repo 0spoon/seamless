@@ -40,10 +40,10 @@ const recallMarker = "<seam-recall>"
 
 // recallCheck POSTs the arm's UserPromptSubmit hook with the scenario prompt
 // and asserts the recall block came back.
-func recallCheck(ctx context.Context, a *arm, prompt, logPath string) runOutcome {
+func recallCheck(ctx context.Context, a *arm, prompt, logPath string) stepOutcome {
 	logFile, err := os.Create(logPath)
 	if err != nil {
-		return runOutcome{exitCode: -1, err: fmt.Errorf("create agent log %s: %w", logPath, err)}
+		return stepOutcome{exitCode: -1, err: fmt.Errorf("create agent log %s: %w", logPath, err)}
 	}
 	defer func() { _ = logFile.Close() }()
 
@@ -56,12 +56,12 @@ func recallCheck(ctx context.Context, a *arm, prompt, logPath string) runOutcome
 		// "not applicable" state instead.)
 		err := fmt.Errorf("the recall component check needs a Seamless daemon; condition %s has none", a.condition.Name)
 		fmt.Fprintf(logFile, "%v\n", err)
-		return runOutcome{exitCode: -1, err: err}
+		return stepOutcome{exitCode: -1, err: err}
 	}
 
 	key, err := a.key()
 	if err != nil {
-		return runOutcome{exitCode: -1, err: err}
+		return stepOutcome{exitCode: -1, err: err}
 	}
 	body, err := json.Marshal(map[string]string{
 		"session_id":  "seambench-recall",
@@ -69,7 +69,7 @@ func recallCheck(ctx context.Context, a *arm, prompt, logPath string) runOutcome
 		"user_prompt": prompt,
 	})
 	if err != nil {
-		return runOutcome{exitCode: -1, err: fmt.Errorf("marshal hook body: %w", err)}
+		return stepOutcome{exitCode: -1, err: fmt.Errorf("marshal hook body: %w", err)}
 	}
 
 	started := time.Now()
@@ -78,14 +78,14 @@ func recallCheck(ctx context.Context, a *arm, prompt, logPath string) runOutcome
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		a.url+"/api/hooks/user-prompt-submit", bytes.NewReader(body))
 	if err != nil {
-		return runOutcome{exitCode: -1, err: fmt.Errorf("build hook request: %w", err)}
+		return stepOutcome{exitCode: -1, err: fmt.Errorf("build hook request: %w", err)}
 	}
 	req.Header.Set("Authorization", "Bearer "+key)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
-		return runOutcome{exitCode: -1, err: fmt.Errorf("post user-prompt-submit hook: %w", err)}
+		return stepOutcome{exitCode: -1, err: fmt.Errorf("post user-prompt-submit hook: %w", err)}
 	}
 	defer func() { _ = resp.Body.Close() }()
 
@@ -103,14 +103,14 @@ func recallCheck(ctx context.Context, a *arm, prompt, logPath string) runOutcome
 
 	switch {
 	case resp.StatusCode != http.StatusOK:
-		return runOutcome{exitCode: 1, metrics: metrics,
+		return stepOutcome{exitCode: 1, metrics: metrics,
 			err: fmt.Errorf("user-prompt-submit hook returned %s", resp.Status)}
 	case decErr != nil:
-		return runOutcome{exitCode: 1, metrics: metrics,
+		return stepOutcome{exitCode: 1, metrics: metrics,
 			err: fmt.Errorf("parse hook response: %w", decErr)}
 	case !strings.Contains(injected, recallMarker):
-		return runOutcome{exitCode: 1, metrics: metrics,
+		return stepOutcome{exitCode: 1, metrics: metrics,
 			err: fmt.Errorf("no %s block in the hook response (see %s)", recallMarker, logPath)}
 	}
-	return runOutcome{metrics: metrics}
+	return stepOutcome{metrics: metrics}
 }

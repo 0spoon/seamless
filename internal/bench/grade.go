@@ -33,6 +33,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // ErrMissingArtifacts means the run directory cannot be graded at all -- no
@@ -158,6 +159,19 @@ func (g *rubricGrader) Grade(ctx context.Context, a RunArtifacts) (Result, error
 
 	res.Details = append(res.Details, g.judgeLine(ctx, a))
 	return res, nil
+}
+
+// repoTouched is the one repo check every scenario shares. It is diagnostic,
+// not a gate: the tree is the ground truth, and the diff exists to separate
+// "the agent changed nothing" from "the runner captured no diff" when the
+// tree already proves otherwise.
+func repoTouched() repoCheck {
+	return repoCheck{name: "the working tree changed", fn: func(t *repoTree) (bool, string) {
+		if !t.changed() {
+			return false, "empty diff -- the agent changed nothing, or the run captured no diff"
+		}
+		return true, fmt.Sprintf("%d diff lines", strings.Count(strings.TrimSpace(t.Diff), "\n")+1)
+	}}
 }
 
 // checkLine renders one check for Result.Details. The layer and the gate/obs
