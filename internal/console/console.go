@@ -328,9 +328,9 @@ func (s *Service) serveSearchJS(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(searchJS)
 }
 
-// serveLibraryJS serves the library-screen client (rail selection + in-place
-// reader swap on the six library screens), loaded on every page and inert
-// without a #lib-reader.
+// serveLibraryJS serves the library-style client (rail selection + in-place
+// reader swap on the library screens and Gardener), loaded on every page and
+// inert without a #lib-reader.
 func (s *Service) serveLibraryJS(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 	w.Header().Set("Cache-Control", "public, max-age=300")

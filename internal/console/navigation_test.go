@@ -85,6 +85,12 @@ func TestDataRefreshClients_NeverReloadDocument(t *testing.T) {
 	}
 	require.NotContains(t, string(libraryJS), "location.href = href",
 		"a reader fetch failure must surface the error, not degrade into a document navigation")
+	require.NotContains(t, string(libraryJS), "window.scrollTo(",
+		"a reader swap must preserve the document position instead of looking like a reload")
+	require.Contains(t, string(libraryJS), "reader=1",
+		"a reader selection must request only the server-rendered reader fragment")
+	require.Contains(t, string(libraryJS), "el.innerHTML = html",
+		"a reader selection must render the fetched fragment into the existing reader")
 	require.Contains(t, string(navigationJS), "morphNode(currentMain, freshMain)")
 	require.Contains(t, string(navigationJS), "The current data is unchanged")
 }

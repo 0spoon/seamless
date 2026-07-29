@@ -1,10 +1,11 @@
-/* Library screens (Memories / Notes / Tasks / Plans / Labs / Trials): a grouped rail on
-   the left and a document reader on the right. Every rail item is a real server-rendered link;
-   this module upgrades clicks to an in-place reader swap (?reader=1 fragment +
-   history.pushState of the item's canonical URL) so the rail keeps its scroll
-   position and the switch is instant. j / k move the selection. The delegated
-   handlers stay inert without #lib-reader, but can enhance one inserted by an
-   in-place mutation response later. */
+/* Library-style screens (Memories / Notes / Tasks / Plans / Labs / Trials /
+   Gardener): a grouped rail on the left and a document reader on the right.
+   Every rail item is a real server-rendered link; this module upgrades clicks
+   to an in-place reader swap (?reader=1 fragment + history.pushState of the
+   item's canonical URL) so the document and rail keep their scroll positions
+   and the switch is instant. j / k move the selection. The delegated handlers
+   stay inert without #lib-reader, but can enhance one inserted by an in-place
+   mutation response later. */
 (function () {
   'use strict';
 
@@ -132,7 +133,6 @@
           revealInRail(sel);
         }
         ensureReaderNav();
-        window.scrollTo({ top: 0 });
       })
       .catch(function () {
         // Keep the current reader intact. A fetch failure is not permission to
