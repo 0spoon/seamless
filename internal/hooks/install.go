@@ -378,6 +378,12 @@ func loadSettings(path string) (map[string]any, os.FileMode, error) {
 	if info, statErr := os.Stat(path); statErr == nil {
 		mode = info.Mode().Perm()
 	}
+	// PowerShell 5.1 file tooling (Set-Content and friends) prepends a UTF-8
+	// BOM, which encoding/json rejects as garbage before the first token. A
+	// user or agent hand-editing hooks.json on Windows is exactly who produces
+	// this (seen live on the first Windows Codex install); tolerate it on read
+	// -- the post-merge write is BOM-free, which quietly repairs the file.
+	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
 	settings := map[string]any{}
 	if len(bytes.TrimSpace(data)) > 0 {
 		if err := json.Unmarshal(data, &settings); err != nil {
@@ -420,8 +426,8 @@ func buildEntry(client Client, hs hookSpec, baseURL, apiKey, seamBin, configPath
 		}
 		hook = map[string]any{
 			"type":            "command",
-			"command":         codexCommand(bin, hs.CLIArg, configPath, posixQuote),
-			"command_windows": codexCommand(bin, hs.CLIArg, configPath, winQuote),
+			"command":         codexCommand(bin, hs.CLIArg, configPath, posixQuote, posixQuote),
+			"command_windows": codexCommand(bin, hs.CLIArg, configPath, winCommandPath, winQuote),
 			"timeout":         hs.Timeout,
 		}
 	case hs.CLIArg != "":
@@ -474,15 +480,17 @@ func buildEntry(client Client, hs hookSpec, baseURL, apiKey, seamBin, configPath
 //
 //	<seam> hook <event> [--config <yaml>] --client codex
 //
-// quote is the shell quoter for the target OS (posixQuote for `command`,
-// winQuote for `command_windows`) so a binary or config path with a space is
-// not word-split by the shell Codex runs the string through. The `hook <event>`
-// token is left unquoted for readability; classification parses the full known
-// command shape and verifies the seam executable rather than matching tokens.
-func codexCommand(seamBin, cliArg, configPath string, quote func(string) string) string {
-	parts := []string{quote(seamBin), "hook", cliArg}
+// binQuote renders the executable in COMMAND position and argQuote the config
+// path in ARGUMENT position; the split exists because PowerShell treats the two
+// positions differently (see winCommandPath). posixQuote serves both roles in
+// `command`; command_windows pairs winCommandPath with winQuote. The `hook
+// <event>` token is left unquoted for readability; classification parses the
+// full known command shape and verifies the seam executable rather than
+// matching tokens.
+func codexCommand(seamBin, cliArg, configPath string, binQuote, argQuote func(string) string) string {
+	parts := []string{binQuote(seamBin), "hook", cliArg}
 	if configPath != "" {
-		parts = append(parts, "--config", quote(configPath))
+		parts = append(parts, "--config", argQuote(configPath))
 	}
 	parts = append(parts, "--client", string(ClientCodex))
 	return strings.Join(parts, " ")
@@ -495,10 +503,33 @@ func posixQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-// winQuote double-quotes s for cmd.exe / PowerShell. Windows paths cannot
-// contain a double quote, so no escaping is needed.
+// winQuote double-quotes s for a Windows ARGUMENT position, where both
+// PowerShell and cmd.exe accept it. Windows paths cannot contain a double
+// quote, so no escaping is needed. Never use it for the executable itself --
+// that is winCommandPath's job.
 func winQuote(s string) string {
 	return `"` + s + `"`
+}
+
+// winCommandPath renders the executable of a `command_windows` string. Pinned
+// live on Codex CLI 0.146.0 (Windows): command hooks run through PowerShell,
+// where a leading double-quoted path is a string EXPRESSION, not an invocation
+// -- every hook died with "Unexpected token 'hook'" (exit 1) before seam ever
+// ran. A bare path is a command in both PowerShell and cmd.exe (verified live
+// in both), so plain paths go unquoted; a path PowerShell cannot take bare
+// (space, paren, apostrophe, ...) gets the call operator form `& "<path>"`,
+// which PowerShell requires and cmd.exe cannot parse -- acceptable because
+// PowerShell is the only shell observed running command_windows.
+func winCommandPath(s string) string {
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '\\' || r == '/' || r == ':' || r == '.' || r == '-' || r == '_' || r == '~':
+		default:
+			return `& "` + s + `"`
+		}
+	}
+	return s
 }
 
 // isManaged reports whether e is a hook entry carrying the Seamless managed marker.

@@ -183,9 +183,12 @@ func TestInstalledStatusCodexSeparatesCurrentFromStale(t *testing.T) {
 			},
 		},
 		{
-			name: "wrong Windows quoting",
+			// The pre-0.4.8 emission: a leading double-quoted executable, which
+			// PowerShell reads as a string expression (exit 1). It must classify
+			// stale so a re-install repairs live Windows files.
+			name: "legacy quoted Windows executable",
 			mutate: func(entry map[string]any) {
-				onlyHookHandler(entry)["command_windows"] = `/opt/seam hook stop --config /etc/seamless.yaml --client codex`
+				onlyHookHandler(entry)["command_windows"] = `"/opt/seam" hook stop --config "/etc/seamless.yaml" --client codex`
 			},
 		},
 		{
@@ -271,7 +274,9 @@ func TestCodexWindowsPathsClassifyAndRoundTrip(t *testing.T) {
 
 	settings := readHookSettings(t, path)
 	command := onlyHookHandler(settings["hooks"].(map[string]any)["Stop"].([]any)[0].(map[string]any))["command_windows"].(string)
-	require.Contains(t, command, `"C:\Program Files\Seam\seam.exe"`)
+	// A space forces quoting, and quoting under PowerShell requires the call
+	// operator; the config path is argument position, so plain quotes suffice.
+	require.True(t, strings.HasPrefix(command, `& "C:\Program Files\Seam\seam.exe" hook `), command)
 	require.Contains(t, command, `"C:\Users\dev\AppData\Roaming\seamless\seamless.yaml"`)
 
 	res, err := Uninstall(UninstallOptions{Client: ClientCodex, SettingsPath: path, BaseURL: opts.BaseURL})

@@ -88,9 +88,11 @@ func TestInstallCodexProfile(t *testing.T) {
 	require.NotContains(t, string(raw), "Bearer")
 	require.NotContains(t, string(raw), "\"k\"")
 
-	// Windows variant carries Windows quoting of the same binary + config paths.
+	// Windows variant: the executable is UNQUOTED -- Codex runs command_windows
+	// through PowerShell (pinned live on 0.146.0), where a leading quoted path
+	// is a string expression, not an invocation. Argument position keeps quotes.
 	winCmd := hooksObj["SessionStart"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)["command_windows"].(string)
-	require.Contains(t, winCmd, `"/opt/seam"`)
+	require.True(t, strings.HasPrefix(winCmd, "/opt/seam hook "), winCmd)
 	require.Contains(t, winCmd, `"/etc/seamless.yaml"`)
 	require.Contains(t, winCmd, "--client codex")
 
@@ -139,6 +141,40 @@ func TestInstallCodexPreservesForeignEntries(t *testing.T) {
 	require.Len(t, ss, 2)
 	require.Contains(t, string(raw), "echo mine")
 	requireCodexCommandHook(t, hooksObj, "SessionStart", "session-start")
+}
+
+// winCommandPath decides between the bare-path and call-operator forms; both
+// choices are load-bearing under PowerShell (pinned live on Codex 0.146.0),
+// where a leading double-quoted path is an expression, not an invocation.
+func TestWinCommandPath(t *testing.T) {
+	require.Equal(t, `C:\Users\dev\.local\bin\seam.exe`,
+		winCommandPath(`C:\Users\dev\.local\bin\seam.exe`))
+	require.Equal(t, `& "C:\Program Files\Seam\seam.exe"`,
+		winCommandPath(`C:\Program Files\Seam\seam.exe`))
+	require.Equal(t, `& "C:\Users\o'brien\seam.exe"`,
+		winCommandPath(`C:\Users\o'brien\seam.exe`))
+	require.Equal(t, "seam", winCommandPath("seam"))
+}
+
+// PowerShell 5.1 file tooling prepends a UTF-8 BOM, which strict JSON parsers
+// reject; a hand-edited hooks.json on Windows arrives exactly like this (seen
+// live). Install must read it, keep the user's entries, and write it back clean.
+func TestInstallCodexToleratesUTF8BOM(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	body := `{"hooks":{"SessionStart":[{"hooks":[{"type":"command","command":"echo mine"}]}]}}`
+	require.NoError(t, os.WriteFile(path, append([]byte("\xef\xbb\xbf"), body...), 0o600))
+
+	res, err := Install(codexOpts(path))
+	require.NoError(t, err)
+	require.True(t, res.Changed)
+
+	raw, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.False(t, strings.HasPrefix(string(raw), "\xef\xbb\xbf"), "rewrite must drop the BOM")
+	require.Contains(t, string(raw), "echo mine", "foreign entry survives a BOM'd merge")
+	var got map[string]any
+	require.NoError(t, json.Unmarshal(raw, &got))
+	requireCodexCommandHook(t, got["hooks"].(map[string]any), "SessionStart", "session-start")
 }
 
 // A prior Seamless Codex install whose marker was stripped, plus an unmarked
