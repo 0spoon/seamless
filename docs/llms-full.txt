@@ -1261,6 +1261,17 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.8 {#v0-4-8}
+
+Released 2026-07-30 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.8)
+
+### Fixes
+
+- fix(hooks): emit PowerShell-valid Codex command_windows and tolerate a BOM
+- fix(install): fall back to a Startup shortcut when the task store is closed
+- fix(install): authenticate to the system proxy on Windows
+- fix(install): report the real download failure instead of assuming 404
+
 ## v0.4.7 {#v0-4-7}
 
 Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.7)
