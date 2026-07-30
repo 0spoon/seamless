@@ -327,17 +327,26 @@ function Test-Signature {
 # A running .exe cannot be overwritten in place -- the image is locked -- and
 # re-running this script over a live install IS the upgrade path. Windows does
 # allow *renaming* a loaded exe, so move the old one aside first, then drop the
-# new one into the freed name. The stale copy is removed best-effort (it may still
-# be locked for a moment); the next run clears any leftover.
+# new one into the freed name. The aside name must be UNIQUE per swap: seam.exe
+# stays held by long-lived `seam mcp-proxy` processes while an agent app is
+# open, so a fixed ".old" from the previous upgrade can still be locked -- its
+# removal fails, the rename collides with it, and the copy then hits the live
+# image ("in use by another process", seen live on the second Windows upgrade).
+# Leftover asides are swept best-effort here and on every later run.
 function Install-OneBinary {
     param([string]$Src, [string]$Dst)
+    Get-ChildItem -Path "$Dst.old*" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     if (Test-Path $Dst) {
-        $old = "$Dst.old"
-        Remove-Item -Force $old -ErrorAction SilentlyContinue
+        $old = "$Dst.old-" + [Guid]::NewGuid().ToString('N')
         try { Rename-Item -Path $Dst -NewName ([IO.Path]::GetFileName($old)) -Force } catch {}
     }
-    Copy-Item -Path $Src -Destination $Dst -Force
-    Remove-Item -Force "$Dst.old" -ErrorAction SilentlyContinue
+    try { Copy-Item -Path $Src -Destination $Dst -Force }
+    catch {
+        Die "could not replace $Dst ($($_.Exception.Message))`nclose the agent apps using it (Claude/Codex run 'seam mcp-proxy' from it), then re-run"
+    }
+    Get-ChildItem -Path "$Dst.old*" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 function Install-Binaries {
@@ -347,6 +356,9 @@ function Install-Binaries {
     Install-OneBinary (Join-Path $Tmp 'seamlessd.exe') (Join-Path $InstallDir 'seamlessd.exe')
     Install-OneBinary (Join-Path $Tmp 'seam.exe') (Join-Path $InstallDir 'seam.exe')
     Step 'installed' "$InstallDir\seamlessd.exe, $InstallDir\seam.exe"
+    if (Get-ChildItem -Path (Join-Path $InstallDir '*.old-*') -ErrorAction SilentlyContinue) {
+        Say 'note: a running agent app still holds the previous seam.exe; restart it to pick up the new version'
+    }
 }
 
 # install-hooks does the config bootstrap too: it calls config.EnsureAPIKey, which
