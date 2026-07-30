@@ -207,6 +207,26 @@ could not resolve the latest release (GitHub API rate limit?); pin one instead:
     return ($tag -replace '^v', '')
 }
 
+# Only a real 404 means the asset does not exist; anything else (proxy, TLS
+# inspection, a firewall that allows github.com but blocks the asset CDN on
+# *.githubusercontent.com) must surface as itself, not masquerade as a missing
+# release -- that misdiagnosis has cost real support time.
+function Format-DownloadError {
+    param([string]$Url, $Err)
+    $status = $null
+    try { $status = [int]$Err.Exception.Response.StatusCode } catch { $status = $null }
+    if ($status -eq 404) {
+        return "no such release asset: $Url`ncheck the version at https://github.com/$Repo/releases"
+    }
+    return @"
+download failed: $Url
+  $($Err.Exception.Message)
+the asset likely exists but the download was blocked; a proxy or firewall that
+allows github.com but blocks *.githubusercontent.com (the release asset CDN)
+is the usual cause on managed machines
+"@
+}
+
 # Download the zip and checksums.txt, and verify the SHA-256 before unpacking
 # anything. Match the filename exactly in checksums.txt -- a substring match would
 # happily verify amd64 against arm64.
@@ -219,9 +239,9 @@ function Get-Release {
 
     Step 'downloading' $zip
     try { Invoke-WebRequest -UseBasicParsing "$base/$zip" -OutFile $zipPath }
-    catch { Die "no such release asset: $base/$zip`ncheck the version at https://github.com/$Repo/releases" }
+    catch { Die (Format-DownloadError "$base/$zip" $_) }
     try { Invoke-WebRequest -UseBasicParsing "$base/checksums.txt" -OutFile $sumPath }
-    catch { Die "could not fetch $base/checksums.txt" }
+    catch { Die (Format-DownloadError "$base/checksums.txt" $_) }
 
     $want = Get-Content $sumPath |
         Where-Object { ($_ -split '\s+')[1] -eq $zip } |

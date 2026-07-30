@@ -233,9 +233,35 @@ fetch() {
 
 fetch_to() {
 	if have curl; then curl -fsSL -o "$2" "$1"
-	elif have wget; then wget -qO "$2" "$1"
+	elif have wget; then
+		# not -q, which would eat the failure reason: capture the chatter and
+		# surface only the tail (where wget puts the error) on failure
+		out=$(wget -O "$2" "$1" 2>&1) || {
+			rc=$?
+			printf '%s\n' "$out" | tail -3 >&2
+			return $rc
+		}
 	else die "need curl or wget"
 	fi
+}
+
+# Only a real 404 means the asset does not exist; anything else (proxy, TLS
+# inspection, a firewall that allows github.com but blocks the asset CDN on
+# *.githubusercontent.com) must surface as itself, not masquerade as a missing
+# release -- that misdiagnosis has cost real support time. The fetcher already
+# printed the underlying error just above this message.
+download_die() {
+	code=000
+	if have curl; then
+		code=$(curl -sILo /dev/null -w '%{http_code}' --max-time 15 "$1" 2>/dev/null) || code=000
+	fi
+	[ "$code" != 404 ] ||
+		die "no such release asset: $1
+check the version at https://github.com/$REPO/releases"
+	die "download failed: $1
+the message above shows why; if the asset exists on the releases page, a proxy
+or firewall that allows github.com but blocks *.githubusercontent.com (the
+release asset CDN) is the usual cause"
 }
 
 http_ok() {
@@ -290,10 +316,9 @@ download() {
 
 	step downloading "$TARBALL"
 	fetch_to "$base/$TARBALL" "$TMP/$TARBALL" ||
-		die "no such release asset: $base/$TARBALL
-check the version at https://github.com/$REPO/releases"
+		download_die "$base/$TARBALL"
 	fetch_to "$base/checksums.txt" "$TMP/checksums.txt" ||
-		die "could not fetch $base/checksums.txt"
+		download_die "$base/checksums.txt"
 
 	# Every archive is listed in one checksums.txt, so match the filename
 	# exactly -- a substring match would happily verify amd64 against arm64.
