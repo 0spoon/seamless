@@ -15,6 +15,15 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.7 {#v0-4-7}
+
+Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.7)
+
+### Fixes
+
+- fix(mcp): declare tool behaviour hints instead of shipping spec defaults
+- fix(deploy): build the Glama image from the admin form
+
 ## v0.4.6 {#v0-4-6}
 
 Released 2026-07-29 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.6)
