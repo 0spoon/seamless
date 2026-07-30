@@ -46,6 +46,24 @@ try {
         [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 } catch {}
 
+# Authenticating corporate proxies answer 407 unless the request carries the
+# logged-in user's credentials, and Invoke-WebRequest does not send them on its
+# own. Attach the default (domain) credentials to the system proxy: Windows
+# PowerShell 5.1 routes requests through WebRequest.DefaultWebProxy, PowerShell 7
+# through HttpClient.DefaultProxy (absent on 5.1, hence the second try). Harmless
+# where there is no proxy; a proxy needing non-SSO credentials still 407s, which
+# the download error reports as itself.
+try {
+    $sysProxy = [System.Net.WebRequest]::DefaultWebProxy
+    if ($sysProxy) {
+        $sysProxy.Credentials = [System.Net.CredentialCache]::DefaultNetworkCredentials
+    }
+} catch {}
+try {
+    [System.Net.Http.HttpClient]::DefaultProxy.Credentials =
+        [System.Net.CredentialCache]::DefaultNetworkCredentials
+} catch {}
+
 $Repo = '0spoon/seamless'
 $TaskName = 'Seamless'
 $DocsUrl = 'https://thereisnospoon.org/docs/'
@@ -217,6 +235,14 @@ function Format-DownloadError {
     try { $status = [int]$Err.Exception.Response.StatusCode } catch { $status = $null }
     if ($status -eq 404) {
         return "no such release asset: $Url`ncheck the version at https://github.com/$Repo/releases"
+    }
+    if ($status -eq 407) {
+        return @"
+download failed: $Url
+the proxy requires authentication (HTTP 407) and rejected the logged-in user's
+credentials; ask IT to exempt *.githubusercontent.com (the GitHub release CDN)
+from proxy authentication, or download the zip in a browser instead
+"@
     }
     return @"
 download failed: $Url
