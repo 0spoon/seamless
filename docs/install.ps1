@@ -14,7 +14,8 @@
 # Code/Codex, and the MCP bridge for the Claude app chat surface (it has no
 # hooks or skills) -- generating the bearer key on first run, then run the
 # daemon as a per-user Scheduled Task
-# -- an at-logon task running as you, no admin. Codex gets the secret-preserving
+# -- an at-logon task running as you, no admin (falling back to a per-user
+# Startup-folder shortcut where the task store is closed to standard users). Codex gets the secret-preserving
 # stdio proxy by default; direct HTTP remains a supported manual Codex
 # configuration. That is
 # the Windows analog of launchd / systemd --user: the whole install is per-user,
@@ -470,10 +471,50 @@ function Register-Service {
         -StartWhenAvailable -ExecutionTimeLimit ([TimeSpan]::Zero) `
         -RestartInterval (New-TimeSpan -Minutes 1) -RestartCount 3 -MultipleInstances IgnoreNew
 
-    Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
-        -Principal $principal -Settings $settings -Force | Out-Null
+    try {
+        Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger `
+            -Principal $principal -Settings $settings -Force | Out-Null
+    } catch {
+        Register-ServiceFallback $seamlessd $_
+        return
+    }
     Start-ScheduledTask -TaskName $TaskName
     Step 'service' "$TaskName (Scheduled Task, at logon)"
+}
+
+# Managed machines can close the task store to a standard user: group policy can
+# bar task creation outright, and the task name is global, so a \Seamless task
+# registered by ANOTHER user of the machine cannot be replaced without admin.
+# Neither should abort an otherwise complete install. Fall back to the per-user
+# Startup folder -- always writable, no special rights -- and start the daemon
+# directly so this session still comes up and the health check still means
+# something. The shortcut routes through a hidden powershell because a console
+# exe launched straight from a shortcut keeps a visible window for its lifetime.
+function Register-ServiceFallback {
+    param([string]$Seamlessd, $Err)
+    $owner = $null
+    try { $owner = (Get-ScheduledTask -TaskName $TaskName -ErrorAction Stop).Principal.UserId } catch {}
+    if ($owner -and $owner -ne [Security.Principal.WindowsIdentity]::GetCurrent().Name) {
+        Warn ("the $TaskName Scheduled Task belongs to $owner and replacing it needs admin " +
+            "(one-time fix: an elevated 'schtasks /delete /tn $TaskName /f', then re-run this installer)")
+    } else {
+        Warn ("could not register the $TaskName Scheduled Task ($($Err.Exception.Message)); " +
+            'group policy may bar task creation for standard users')
+    }
+
+    $sq = { param([string]$s) "'" + ($s -replace "'", "''") + "'" }
+    $inner = '& {0} serve --config {1} --log-file {2}' -f (& $sq $Seamlessd), (& $sq $Config), (& $sq $LogFile)
+    $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut(
+        (Join-Path ([Environment]::GetFolderPath('Startup')) 'Seamless.lnk'))
+    $lnk.TargetPath = Join-Path $env:SystemRoot 'System32\WindowsPowerShell\v1.0\powershell.exe'
+    $lnk.Arguments = '-NoProfile -WindowStyle Hidden -Command "{0}"' -f $inner
+    $lnk.WorkingDirectory = $HOME
+    $lnk.Description = 'Seamless daemon (Scheduled Task unavailable at install time)'
+    $lnk.Save()
+
+    Start-Process -WindowStyle Hidden $Seamlessd `
+        -ArgumentList ('serve --config "{0}" --log-file "{1}"' -f $Config, $LogFile)
+    Step 'service' 'Startup shortcut (no Scheduled Task rights); daemon started directly'
 }
 
 # The Scheduled Task reports success as soon as it has started the process, but the
@@ -513,6 +554,12 @@ function Main {
         if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) {
             Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
         }
+        # A daemon from the Startup-shortcut fallback (or a manual start) is not
+        # under the task's control; stop our own copy too, so the swap replaces a
+        # closed image and the health check answers from the NEW binary. Stopping
+        # another user's daemon is denied without admin, which is the right scope.
+        Get-Process -Name seamlessd -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
 
         Install-Binaries $zip $tmp $InstallDir
         Invoke-WireHooks $tmp $InstallDir $agentClient $version
