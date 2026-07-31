@@ -1261,6 +1261,21 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.9 {#v0-4-9}
+
+Released 2026-07-31 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.9)
+
+### Features
+
+- feat(search): rank exact names, slugs, and ULIDs in their own lookup lane
+- feat(console): order plan steps frontier-first and rewrite the ledger row
+- feat(console): make the project workspace's Plans &amp; tasks tab interactive
+
+### Fixes
+
+- fix(security): remediate deep audit findings
+- fix(install): unique aside names for the Windows binary swap
+
 ## v0.4.8 {#v0-4-8}
 
 Released 2026-07-30 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.8)
