@@ -66,21 +66,56 @@
   </div>
 </div>
 
-<!-- TAB: tasks -->
+<!-- TAB: tasks. Each plan is a live card: rollup, narrative status, the last few
+     transitions, and step rows that expand IN PLACE into a lazily fetched task
+     dossier. The dossier container carries data-live-skip so an SSE morph never
+     clobbers the client-owned fragment inside it. -->
 <div class="tabpanel{{if eq .ActiveTab "tasks"}} on{{end}}" data-panel="tasks">
+  {{$proj := .Slug}}
+  {{/* The ?notice= flash an owner action redirects back with is rendered once,
+       by the shared layout banner. */}}
   {{range .Plans}}
-  <div class="plan-card">
-    <div class="plan-head">{{icon "git-merge"}}<span class="nm">plan:{{.Slug}}</span><span class="prog">{{.Done}} done &middot; {{.InFlight}} in progress &middot; {{.Open}} open &middot; {{.Total}} steps</span></div>
-    <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
-    {{range .Steps}}
-    <div id="{{.ID}}" class="step {{.State}}">
-      <div class="marker"><span class="dot"></span><span class="rail"></span></div>
-      <div class="body"><div class="t">{{.Title}}</div><div class="meta"><span class="mono">{{shortID .ID}}</span>{{if .ClaimedBy}}<span class="claim">{{icon "lock"}}claimed by {{.ClaimedBy}}</span>{{if .LeaseLeft}}<span>{{icon "timer"}} lease {{.LeaseLeft}}</span>{{end}}{{end}}{{if .BlockedBy}}<span class="edge">{{icon "link"}}blocked by {{.BlockedBy}}</span>{{end}}</div></div>
-      <span class="kind {{taskTone .Status}}" style="align-self:start">{{.Status}}</span>
+  <div class="plan-card" id="plan-{{.Slug}}">
+    <div class="plan-head">
+      {{icon "git-merge"}}<a class="nm" href="/console/plans/{{.Slug}}">plan:{{.Slug}}</a>
+      {{if .Status}}<span class="kind {{planTone .Status}}">{{.Status}}</span>{{end}}
+      {{if .Stale}}<a class="kind warn" href="/console/gardener" title="A gardener settlement is pending for this plan">stale?</a>{{end}}
+      {{if .HasNote}}
+      <form class="star-form" method="post" action="/console/favorites/plan/{{.Slug}}">
+        <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+        <input type="hidden" name="next" value="/console/projects/{{$proj}}?tab=tasks">
+        <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this plan">{{icon "star"}}</button>
+      </form>
+      {{end}}
+      <span class="prog">{{.Done}}/{{.Total}} done{{if .InFlight}} &middot; {{.InFlight}} in flight{{end}}{{if .Claimable}} &middot; <b class="ready-n">{{.Claimable}} ready</b>{{end}} &middot; moved {{ago .LastActivity}}</span>
     </div>
+    <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
+    {{if .Recent}}
+    <div class="plan-ledger">
+      {{range .Recent}}
+      <span class="led">{{icon .Icon}}<a href="#{{.StepID}}" data-jump>{{.StepTitle}}</a><span class="v">{{.Verb}}</span>{{if .Owner}}<span class="who owner">you</span>{{else if .SessionID}}<a class="who" href="/console/sessions/{{.SessionID}}">{{.Session}}</a>{{end}}<span class="when">{{ago .When}}</span></span>
+      {{end}}
+    </div>
+    {{end}}
+    {{range .Groups}}
+      {{if .DoneRun}}
+      <details class="step-run" id="run-{{(index .Steps 0).ID}}">
+        <summary>{{len .Steps}} completed steps{{if .LastTitle}} &middot; last: {{.LastTitle}}{{end}}{{if not .LastClosed.IsZero}} &middot; {{ago .LastClosed}}{{end}}</summary>
+        {{range .Steps}}{{template "plan-step" .}}{{end}}
+      </details>
+      {{else}}{{range .Steps}}{{template "plan-step" .}}{{end}}{{end}}
     {{end}}
   </div>
   {{else}}<div class="empty">No active plans in {{.Slug}}</div>{{end}}
+
+  {{if .DonePlans}}
+  <details class="plan-done-group" id="plans-completed">
+    <summary>{{len .DonePlans}} completed plan{{if ne (len .DonePlans) 1}}s{{end}}{{if .DonePlansMore}} <span class="muted">&middot; {{.DonePlansMore}} older not shown</span>{{end}}</summary>
+    {{range .DonePlans}}
+    <div class="done-plan"><a href="/console/plans/{{.Slug}}">plan:{{.Slug}}</a><span class="muted">{{.Total}} step{{if ne .Total 1}}s{{end}} &middot; last moved {{ago .LastActivity}}</span></div>
+    {{end}}
+  </details>
+  {{end}}
 
   <div class="card">
     <h2>Ready queue <span class="h2-meta">off-plan &middot; claimable now</span></h2>
@@ -198,6 +233,42 @@
 {{end}}
 {{end}}
 
+<!-- One step row. A <details> so the dossier expands in place; the summary
+     carries the grid the old div row had, and the state dot replaces the
+     disclosure triangle. The lapsed-claim strip sits OUTSIDE the details on
+     purpose: a form nested in a summary would toggle the row on every click. -->
+{{define "plan-step"}}
+<details class="step {{.State}}{{if .Claimable}} ready{{end}}" id="{{.ID}}">
+  <summary class="step-row">
+    <span class="marker"><span class="dot"></span><span class="rail"></span></span>
+    <span class="body">
+      <span class="t">{{.Title}}</span>
+      <span class="meta">
+        <span class="mono">{{shortID .ID}}</span>
+        {{if .ClaimedBy}}<span class="claim">{{icon "lock"}}{{.ClaimedBy}}</span>{{end}}
+        {{if .LeaseExp}}<span class="lease{{if .LeaseLapsed}} lease-lapsed{{end}}" data-lease-exp="{{.LeaseExp}}">{{icon "timer"}}<span class="v">{{.LeaseLeft}}</span></span>{{end}}
+        {{range .Chain}}<a class="edge" href="{{if .OnPage}}#{{.ID}}{{else}}/console/tasks/{{.ID}}{{end}}"{{if .OnPage}} data-jump{{end}} title="blocked by {{.Title}} &middot; {{.Status}}">{{icon "link"}}{{.Title}}</a>{{end}}
+        {{if .Unblocks}}<span class="edge ok" title="unblocks {{.UnblocksTitle}}">{{icon "arrow-right"}}unblocks {{len .Unblocks}}</span>{{end}}
+      </span>
+    </span>
+    <span class="kind {{taskTone .Status}}">{{.Status}}</span>
+  </summary>
+  <div class="step-dossier" id="dossier-{{.ID}}" data-live-skip data-dossier="/console/tasks/{{.ID}}"></div>
+</details>
+{{/* No confirm on this release, unlike the dossier's: the lease is already
+     gone, so any agent can reclaim the step anyway -- there is no live holder
+     to interrupt, only a stale lock to clear. */}}
+{{if .LeaseLapsed}}
+<div class="step-alert">
+  {{icon "triangle-alert"}}<span>lease lapsed &mdash; reclaimable</span>
+  <form method="post" action="/console/tasks/{{.ID}}/release">
+    <input type="hidden" name="next" value="/console/projects/{{.Project}}?tab=tasks">
+    <button class="link-act danger" type="submit">release claim</button>
+  </form>
+</div>
+{{end}}
+{{end}}
+
 {{define "scripts"}}
 <script>
 (function () {
@@ -220,6 +291,113 @@
     if (!t) return;
     e.preventDefault();
     activate(t.getAttribute('data-tab'));
+  });
+})();
+
+(function () {
+  /* Plans & tasks panel. Step rows are <details>; opening one fetches the task's
+     peek fragment into its dossier once and the client owns it from then on
+     (the container is data-live-skip, so a live morph leaves it alone). Every
+     listener is delegated from the document and every lookup is re-queried, so
+     a morph that replaces panel nodes cannot leave a stale handle behind.
+     Nothing here navigates: a failed fetch writes an error line into the
+     dossier and the visible data stays exactly as it was. */
+  var PANEL = '.tabpanel[data-panel="tasks"]';
+  function inPanel(el) { return !!(el && el.closest && el.closest(PANEL)); }
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  function fill(box) {
+    var src = box.getAttribute('data-dossier');
+    if (!src) return;
+    box.setAttribute('data-loaded', 'loading');
+    var url = src + '?peek=1&next=' + encodeURIComponent(location.pathname + '?tab=tasks');
+    fetch(url, { credentials: 'same-origin', headers: { Accept: 'text/html' } })
+      .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.text(); })
+      .then(function (html) {
+        box.classList.remove('dossier-error');
+        box.innerHTML = html;
+        var open = document.createElement('a');
+        open.className = 'dossier-open';
+        open.href = src;
+        open.textContent = 'open full ↗';
+        box.appendChild(open);
+        box.setAttribute('data-loaded', '1');
+      })
+      .catch(function () {
+        box.textContent = 'Could not load this task. The row is unchanged.';
+        box.classList.add('dossier-error');
+        box.removeAttribute('data-loaded'); // a later open retries
+      });
+  }
+
+  // `toggle` does not bubble, so this delegation listens in the capture phase.
+  document.addEventListener('toggle', function (e) {
+    var row = e.target;
+    if (!row.matches || !row.matches('details.step') || !row.open || !inPanel(row)) return;
+    var box = row.querySelector('.step-dossier');
+    if (box && !box.getAttribute('data-loaded')) fill(box);
+  }, true);
+
+  // Chain / ledger chips scroll to their step instead of navigating. Blockers
+  // are always live rows, but a ledger entry can point into a folded done run,
+  // so open every <details> above the target first.
+  document.addEventListener('click', function (e) {
+    var chip = e.target.closest ? e.target.closest('[data-jump]') : null;
+    if (!chip || !inPanel(chip) || e.metaKey || e.ctrlKey || e.shiftKey || e.button === 1) return;
+    e.preventDefault(); // also stops the click from toggling the row it sits in
+    var id = (chip.getAttribute('href') || '').replace(/^#/, '');
+    var target = id ? document.getElementById(id) : null;
+    if (!target) return;
+    for (var p = target.parentElement; p; p = p.parentElement) {
+      if (p.tagName === 'DETAILS') p.open = true;
+      if (p.matches && p.matches(PANEL)) break;
+    }
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    target.classList.remove('flash');
+    void target.offsetWidth;
+    target.classList.add('flash');
+  });
+  document.addEventListener('animationend', function (e) {
+    if (e.target.classList && e.target.classList.contains('flash')) e.target.classList.remove('flash');
+  });
+
+  // Lease countdown. One interval, re-querying every tick so a morph that
+  // replaced the rows is picked up without any cached node going stale.
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll(PANEL + ' [data-lease-exp]').forEach(function (el) {
+      var exp = Date.parse(el.getAttribute('data-lease-exp'));
+      var v = el.querySelector('.v');
+      if (isNaN(exp) || !v) return;
+      var left = Math.floor((exp - now) / 1000);
+      if (left <= 0) {
+        v.textContent = 'lapsed';
+        el.classList.add('lease-lapsed');
+        el.classList.remove('lease-warn');
+        return;
+      }
+      if (left >= 3600) v.textContent = Math.floor(left / 3600) + 'h ' + Math.floor((left % 3600) / 60) + 'm';
+      else v.textContent = Math.floor(left / 60) + ':' + pad(left % 60);
+      el.classList.remove('lease-lapsed');
+      el.classList.toggle('lease-warn', left < 300);
+    });
+  }, 1000);
+
+  // A star or release posted from inside a dossier morphs the page around it,
+  // but the dossier itself is skipped by the morph -- so refetch that one
+  // fragment after the update lands, or it would keep showing the old state.
+  var stale = '';
+  document.addEventListener('submit', function (e) {
+    var box = e.target.closest ? e.target.closest('.step-dossier') : null;
+    if (box && inPanel(box)) stale = box.id;
+  }, true);
+  document.addEventListener('seam:content-updated', function () {
+    if (!stale) return;
+    var box = document.getElementById(stale);
+    stale = '';
+    if (!box) return;
+    box.removeAttribute('data-loaded');
+    fill(box);
   });
 })();
 

@@ -321,6 +321,10 @@ type taskDetail struct {
 	Created     time.Time     `json:"created"`
 	Updated     time.Time     `json:"updated"`
 	Closed      *time.Time    `json:"closed,omitempty"`
+	// Next is where this fragment's owner actions (star, release) return to,
+	// when the surface that fetched it asked for one. Empty leaves each action
+	// on its own default -- the task page or the tasks library.
+	Next string `json:"-"`
 }
 
 // taskDetailData projects a task into the full detail payload, resolving both
@@ -396,6 +400,11 @@ func (s *Service) taskDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if r.URL.Query().Get("peek") == "1" {
+		// An embedding surface (the project workspace's step dossier) passes the
+		// view it wants the fragment's actions to land back on.
+		if next := strings.TrimSpace(r.URL.Query().Get("next")); next != "" {
+			d.Next = safeNext(next)
+		}
 		s.renderFragment(w, r, "task", d)
 		return
 	}

@@ -5,7 +5,13 @@
     <span class="badge {{taskTone .Status}}">{{.Status}}</span>
     {{if .PlanSlug}}<span class="kind">plan:{{.PlanSlug}}</span>{{end}}
   </header>
-  <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}</h2>
+  <h2 class="peek-title">{{.Title}}{{copyBtn .Title}}
+    <form class="star-form" method="post" action="/console/favorites/task/{{.ID}}">
+      <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+      <input type="hidden" name="next" value="{{if .Next}}{{.Next}}{{else}}/console/tasks/{{.ID}}{{end}}">
+      <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this task">{{icon "star"}}</button>
+    </form>
+  </h2>
   {{template "detail-body" .}}
 </article>
 {{end}}
@@ -47,6 +53,7 @@
   {{if .ClaimedBy}}
   <div class="peek-actions">
     <form method="post" action="/console/tasks/{{.ID}}/release" onsubmit="return confirm('Release the lock on this task? It reopens for any agent to claim.');">
+      {{if .Next}}<input type="hidden" name="next" value="{{.Next}}">{{end}}
       <button class="link-act danger" type="submit">release lock</button>
     </form>
   </div>

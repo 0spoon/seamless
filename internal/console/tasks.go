@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -167,7 +168,27 @@ func (s *Service) taskRelease(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, taskDetailJSON(released))
 		return
 	}
-	http.Redirect(w, r, "/console/tasks/"+released.ID+"?notice="+url.QueryEscape("Released the claim."), http.StatusSeeOther)
+	http.Redirect(w, r, releaseNext(r.PostFormValue("next"), released.ID), http.StatusSeeOther)
+}
+
+// releaseNext resolves where a force-release returns to. The tasks library is
+// the default, but the release button also lives on surfaces that own their own
+// view -- the project workspace's plan timeline, which posts its own URL -- and
+// redirecting those to the library would morph the workspace into it. safeNext
+// refuses anything off-console; a refused next falls back to the task rather
+// than dumping the owner on the console root.
+func releaseNext(raw, taskID string) string {
+	dest := "/console/tasks/" + taskID
+	if raw = strings.TrimSpace(raw); raw != "" {
+		if next := safeNext(raw); next != "/console/" {
+			dest = next
+		}
+	}
+	sep := "?"
+	if strings.Contains(dest, "?") {
+		sep = "&"
+	}
+	return dest + sep + "notice=" + url.QueryEscape("Released the claim.")
 }
 
 // taskDetailJSON is the minimal task view returned to a CLI/JSON caller of

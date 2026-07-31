@@ -47,9 +47,11 @@ type projectWorkspaceData struct {
 	MemByKind []kindCount
 	Recent    []eventRow
 
-	Plans   []planTimelineVM
-	Ready   []taskRow
-	Blocked int // open tasks blocked by an unfinished dependency
+	Plans         []planTimelineVM
+	DonePlans     []donePlanVM // finished plans, rollup lines only
+	DonePlansMore int          // finished plans past the fold's cap
+	Ready         []taskRow
+	Blocked       int // open tasks blocked by an unfinished dependency
 
 	Sessions []projSessionVM
 

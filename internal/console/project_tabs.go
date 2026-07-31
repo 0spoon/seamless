@@ -8,38 +8,132 @@ import (
 	"context"
 	"encoding/json"
 	"html/template"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/markdown"
+	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// planTimelineVM is one plan's step timeline on the Plans & tasks tab.
+// Plans & tasks tab tuning. A run shorter than doneRunFold is not worth hiding;
+// donePlansCap bounds the completed-plans fold; the ledger scans
+// planLedgerScan recent transitions and keeps planLedgerRows per plan;
+// planChainDepth caps the blocker walk.
+const (
+	doneRunFold    = 3
+	donePlansCap   = 20
+	planLedgerScan = 300
+	planLedgerRows = 3
+	planChainDepth = 3
+)
+
+// planTimelineVM is one plan's card on the Plans & tasks tab: the rollup
+// counts, the composition's narrative note (status chip + star), the last few
+// transitions, and the step rows grouped so long done runs fold away.
 type planTimelineVM struct {
-	Slug     string
-	Total    int
-	Done     int
-	InFlight int
-	Open     int
-	DonePct  int
-	DoingPct int
-	Steps    []planStepVM
+	Slug         string
+	Total        int
+	Done         int
+	InFlight     int
+	Open         int
+	Claimable    int
+	DonePct      int
+	DoingPct     int
+	LastActivity time.Time
+
+	// The composition's primary note. A plan whose steps exist without one
+	// degrades to no chip and no star rather than to empty ones.
+	HasNote   bool
+	NoteID    string
+	NoteTitle string
+	Status    string
+	Favorite  bool
+
+	// Stale marks a plan a pending gardener settlement (ship/abandon) names.
+	Stale bool
+
+	Recent []planLedgerVM
+	Groups []planStepGroup
 }
 
-// planStepVM is one step in a plan timeline: its status, claim/lease, and the
-// blocking dependency (if any). State is the CSS row modifier (done/doing/
-// blocked/open); it is derived, never stored.
+// donePlanVM is one line in the completed-plans fold: a finished plan reduced
+// to its rollup, since none of it is claimable any more.
+type donePlanVM struct {
+	Slug         string
+	Total        int
+	LastActivity time.Time
+}
+
+// planStepGroup is one run of step rows. A DoneRun group is a run of closed
+// steps long enough to fold behind a summary (LastTitle/LastClosed describe the
+// most recently closed step in it); every other group is a single live step the
+// timeline renders in full.
+type planStepGroup struct {
+	DoneRun    bool
+	LastTitle  string
+	LastClosed time.Time
+	Steps      []planStepVM
+}
+
+// planLedgerVM is one transition in a plan's recent-activity ledger.
+type planLedgerVM struct {
+	Verb      string
+	Icon      string
+	StepID    string
+	StepTitle string
+	Session   string // session name, when the transition had an actor
+	SessionID string
+	Owner     bool // the console did it, not an agent
+	When      time.Time
+}
+
+// depChipVM is one dependency-edge chip on a step row: a blocker in the chain,
+// or a step this one unblocks. OnPage marks a target rendered on this page, so
+// the chip can jump to it instead of navigating away.
+type depChipVM struct {
+	ID     string
+	Title  string
+	Status string
+	State  string
+	OnPage bool
+}
+
+// planStepVM is one step in a plan timeline: its status, claim/lease, and both
+// dependency directions. State is the CSS row modifier (done/doing/blocked/
+// open); it is derived, never stored.
 type planStepVM struct {
-	ID          string
-	Title       string
-	Status      string
-	State       string
+	ID        string
+	Title     string
+	Project   string // the row's own actions post back to this project's tab
+	Status    string
+	State     string
+	Claimable bool      // open and unblocked: an agent could take it right now
+	Closed    time.Time // when it reached a terminal status (the done-run label)
+
 	ClaimedBy   string // session name
 	ClaimedByID string
-	LeaseLeft   string
-	BlockedBy   string
+	LeaseLeft   string // server-rendered remaining lease, the no-JS fallback
+	LeaseExp    string // RFC3339 expiry, for the client ticker
+	LeaseLapsed bool   // held by a session whose lease ran out: reclaimable
+
+	Chain         []depChipVM // unfinished blockers, nearest first
+	Unblocks      []depChipVM // steps waiting on this one
+	UnblocksTitle string      // those steps named, for the chip's tooltip
+}
+
+// planStepCtx is the per-page state every step projection reads: the task cache
+// the dependency walk fills, which ids render on this page, the reverse-edge
+// index, and the shared session namer.
+type planStepCtx struct {
+	cache    map[string]core.Task
+	onPage   map[string]bool
+	unblocks map[string][]depChipVM
+	namer    func(string) core.Session
+	now      time.Time
 }
 
 // projSessionVM is one row on the Sessions tab.
@@ -118,31 +212,83 @@ func (s *Service) fillOverviewTab(ctx context.Context, data *projectWorkspaceDat
 	return nil
 }
 
-// fillTasksTab loads the Plans & tasks panel: each active plan's step timeline
-// (claim/lease/blocked) and the off-plan ready queue.
+// fillTasksTab loads the Plans & tasks panel: each active plan's live card
+// (rollup, narrative note, recent-transition ledger, staleness) with its step
+// timeline, the completed plans as rollup lines, and the off-plan ready queue.
+//
+// Query budget: one rollup query, one ListTasksForPlan per ACTIVE plan (a
+// completed plan renders from its rollup alone), then exactly one query each
+// for the plan notes, the transition ledger and the pending settlements. No
+// per-step or per-plan lookup beyond the dependency walk's cache misses.
 func (s *Service) fillTasksTab(ctx context.Context, data *projectWorkspaceData, slug string) error {
-	plans, err := store.ActivePlans(ctx, s.cfg.DB, slug)
+	rollups, err := store.PlanRollupsForProject(ctx, s.cfg.DB, slug)
 	if err != nil {
 		return err
 	}
-	now := time.Now().UTC()
-	statusCache := map[string]core.Task{}
-	for _, pl := range plans {
-		steps, err := store.ListTasksForPlan(ctx, s.cfg.DB, slug, "", pl.Slug)
-		if err != nil {
-			return err
+	var active []store.PlanRollup
+	for _, pl := range rollups {
+		if pl.Done < pl.Total {
+			active = append(active, pl)
+			continue
 		}
-		for _, st := range steps {
-			statusCache[st.ID] = st
+		if len(data.DonePlans) < donePlansCap {
+			data.DonePlans = append(data.DonePlans, donePlanVM{
+				Slug: pl.Slug, Total: pl.Total, LastActivity: pl.LastActivity,
+			})
+		} else {
+			data.DonePlansMore++
 		}
+	}
+
+	// Load every active plan's steps first: the reverse-edge index, the ledger
+	// filter and the dependency walk all read the same in-memory set.
+	steps := make(map[string][]core.Task, len(active))
+	cache := map[string]core.Task{}
+	for _, pl := range active {
+		list, lerr := store.ListTasksForPlan(ctx, s.cfg.DB, slug, "", pl.Slug)
+		if lerr != nil {
+			return lerr
+		}
+		steps[pl.Slug] = list
+		for _, st := range list {
+			cache[st.ID] = st
+		}
+	}
+	onPage := make(map[string]bool, len(cache))
+	for id := range cache {
+		onPage[id] = true
+	}
+	namer := s.sessionNamer(ctx)
+	// Ordering matters: both of these read the cache while it still holds only
+	// this page's plan steps -- the dependency walk below adds their blockers.
+	unblocks := reverseEdges(cache)
+	ledger := s.planLedger(ctx, slug, cache, namer)
+
+	notes, err := s.planNoteMeta(ctx, slug)
+	if err != nil {
+		return err
+	}
+	stale := s.stalePlanSlugs(ctx, slug)
+
+	pc := planStepCtx{cache: cache, onPage: onPage, unblocks: unblocks, namer: namer, now: time.Now().UTC()}
+	for _, pl := range active {
 		tl := planTimelineVM{
 			Slug: pl.Slug, Total: pl.Total, Done: pl.Done, InFlight: pl.InFlight,
-			Open:    pl.Total - pl.Done - pl.InFlight,
+			Open:      pl.Total - pl.Done - pl.InFlight,
+			Claimable: pl.Claimable, LastActivity: pl.LastActivity,
 			DonePct: percent(pl.Done, pl.Total), DoingPct: percent(pl.InFlight, pl.Total),
+			Stale:  stale[pl.Slug],
+			Recent: ledger[pl.Slug],
 		}
-		for _, st := range steps {
-			tl.Steps = append(tl.Steps, s.planStep(ctx, st, statusCache, now))
+		if n, ok := notes[pl.Slug]; ok {
+			tl.HasNote, tl.NoteID, tl.NoteTitle = true, n.ID, n.Title
+			tl.Status, tl.Favorite = plans.StatusFromTags(n.Tags), n.Favorite
 		}
+		rows := make([]planStepVM, 0, len(steps[pl.Slug]))
+		for _, st := range steps[pl.Slug] {
+			rows = append(rows, s.planStep(ctx, st, pc))
+		}
+		tl.Groups = groupSteps(rows)
 		data.Plans = append(data.Plans, tl)
 	}
 
@@ -155,52 +301,296 @@ func (s *Service) fillTasksTab(ctx context.Context, data *projectWorkspaceData, 
 }
 
 // planStep projects a plan-step task into a timeline row, resolving its claim
-// (session name + remaining lease) and its blocking dependency (if open).
-func (s *Service) planStep(ctx context.Context, t core.Task, cache map[string]core.Task, now time.Time) planStepVM {
-	step := planStepVM{ID: t.ID, Title: t.Title, Status: string(t.Status)}
-	switch {
-	case t.Status == core.TaskDone || t.Status == core.TaskDropped:
-		step.State = "done"
-	case t.Status == core.TaskInProgress:
-		step.State = "doing"
-	default:
-		step.State = "open"
+// (holder + remaining lease, live or lapsed) and both dependency directions.
+func (s *Service) planStep(ctx context.Context, t core.Task, pc planStepCtx) planStepVM {
+	step := planStepVM{
+		ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
+		State: taskState(t.Status),
 	}
-	if t.ClaimLive(now) {
-		if sess, ok, err := store.SessionByID(ctx, s.cfg.DB, t.ClaimedBy); err == nil && ok {
+	if t.Status == core.TaskDone || t.Status == core.TaskDropped {
+		step.Closed = closedAt(t)
+	}
+	// A held row still names its holder once the lease runs out: that pairing --
+	// in_progress, a claimant, an expired lease -- is precisely the row an owner
+	// has to intervene on. core.Task.ClaimLive stays the authority on held-ness
+	// (constraint claimtask-claimless-inprogress-and-lease-boundary); this only
+	// reads it.
+	if t.ClaimedBy != "" && t.Status == core.TaskInProgress {
+		if sess := pc.namer(t.ClaimedBy); sess.ID != "" {
 			step.ClaimedBy, step.ClaimedByID = sess.Name, sess.ID
 		}
 		if t.LeaseExpiresAt != nil {
-			step.LeaseLeft = durUntil(*t.LeaseExpiresAt, now)
+			step.LeaseLeft = durUntil(*t.LeaseExpiresAt, pc.now)
+			step.LeaseExp = t.LeaseExpiresAt.UTC().Format(time.RFC3339)
 		}
+		step.LeaseLapsed = !t.ClaimLive(pc.now)
 	}
 	if t.Status == core.TaskOpen {
-		if blocker, blocked := s.blockingDep(ctx, t, cache); blocked {
+		if step.Chain = s.blockingChain(ctx, t, pc); len(step.Chain) > 0 {
 			step.State = "blocked"
-			step.BlockedBy = blocker
+		} else {
+			step.Claimable = true
 		}
+	}
+	// A closed step's reverse edges are spent: it already unblocked whatever was
+	// waiting, so saying so on the row is noise rather than a cue.
+	if step.State == "done" {
+		return step
+	}
+	if step.Unblocks = pc.unblocks[t.ID]; len(step.Unblocks) > 0 {
+		titles := make([]string, 0, len(step.Unblocks))
+		for _, u := range step.Unblocks {
+			titles = append(titles, u.Title)
+		}
+		step.UnblocksTitle = strings.Join(titles, " · ")
 	}
 	return step
 }
 
-// blockingDep reports whether an open step has an unfinished dependency and,
-// when possible, returns its title. The project plan timeline is the execution
-// surface that owns this dependency projection.
-func (s *Service) blockingDep(ctx context.Context, t core.Task, cache map[string]core.Task) (title string, blocked bool) {
-	for _, depID := range t.DependsOn {
-		dep, ok := cache[depID]
-		if !ok {
-			d, err := store.TaskByID(ctx, s.cfg.DB, depID)
-			if err != nil {
+// taskState is the CSS row modifier for a task status. "blocked" is not a
+// status: it is derived per row from the dependency walk.
+func taskState(status core.TaskStatus) string {
+	switch status {
+	case core.TaskDone, core.TaskDropped:
+		return "done"
+	case core.TaskInProgress:
+		return "doing"
+	default:
+		return "open"
+	}
+}
+
+// depChip projects a task into a dependency-edge chip.
+func depChip(t core.Task, onPage bool) depChipVM {
+	return depChipVM{
+		ID: t.ID, Title: t.Title, Status: string(t.Status),
+		State: taskState(t.Status), OnPage: onPage,
+	}
+}
+
+// blockingChain walks an open step's unfinished dependencies breadth-first and
+// returns them as chips, nearest blocker first. The walk is depth-capped and
+// cycle-guarded: nothing guarantees this graph is acyclic, and one bad edge
+// must not hang a page render. A dangling edge costs its chip, not the page.
+func (s *Service) blockingChain(ctx context.Context, t core.Task, pc planStepCtx) []depChipVM {
+	var chain []depChipVM
+	seen := map[string]bool{t.ID: true}
+	frontier := t.DependsOn
+	for depth := 0; depth < planChainDepth && len(frontier) > 0; depth++ {
+		var next []string
+		for _, depID := range frontier {
+			if seen[depID] {
 				continue
 			}
-			dep, cache[depID] = d, d
+			seen[depID] = true
+			dep, ok := pc.cache[depID]
+			if !ok {
+				d, err := store.TaskByID(ctx, s.cfg.DB, depID)
+				if err != nil {
+					continue
+				}
+				dep, pc.cache[depID] = d, d
+			}
+			if dep.Status != core.TaskOpen && dep.Status != core.TaskInProgress {
+				continue
+			}
+			chain = append(chain, depChip(dep, pc.onPage[dep.ID]))
+			next = append(next, dep.DependsOn...)
 		}
-		if dep.Status == core.TaskOpen || dep.Status == core.TaskInProgress {
-			return dep.Title, true
+		frontier = next
+	}
+	return chain
+}
+
+// reverseEdges inverts the dependency edges across a page's step set: for each
+// step, the steps waiting on it. Only in-set edges count -- the point is a chip
+// that jumps somewhere already on this page -- so this needs no query at all.
+// Map iteration is unordered, hence the title sort: the rendered chips must not
+// shuffle between two renders of the same data (a morph would rewrite them).
+func reverseEdges(steps map[string]core.Task) map[string][]depChipVM {
+	out := map[string][]depChipVM{}
+	for _, t := range steps {
+		for _, depID := range t.DependsOn {
+			if _, ok := steps[depID]; !ok {
+				continue
+			}
+			out[depID] = append(out[depID], depChip(t, true))
 		}
 	}
-	return "", false
+	for id := range out {
+		sort.SliceStable(out[id], func(i, j int) bool { return out[id][i].Title < out[id][j].Title })
+	}
+	return out
+}
+
+// groupSteps folds runs of consecutive closed steps into a collapsed group and
+// leaves every live step its own. A run shorter than doneRunFold is not worth
+// hiding, so it stays expanded. Pure: its only ordering input is the slice it
+// is given, which is the order the timeline renders.
+func groupSteps(steps []planStepVM) []planStepGroup {
+	var out []planStepGroup
+	single := func(st planStepVM) { out = append(out, planStepGroup{Steps: []planStepVM{st}}) }
+	for i := 0; i < len(steps); {
+		if steps[i].State != "done" {
+			single(steps[i])
+			i++
+			continue
+		}
+		j := i
+		for j < len(steps) && steps[j].State == "done" {
+			j++
+		}
+		run := steps[i:j]
+		i = j
+		if len(run) < doneRunFold {
+			for _, st := range run {
+				single(st)
+			}
+			continue
+		}
+		g := planStepGroup{DoneRun: true, Steps: run}
+		for _, st := range run {
+			if st.Closed.After(g.LastClosed) {
+				g.LastClosed, g.LastTitle = st.Closed, st.Title
+			}
+		}
+		if g.LastTitle == "" && len(run) > 0 {
+			g.LastTitle = run[0].Title // no closed stamps at all: still label the fold
+		}
+		out = append(out, g)
+	}
+	return out
+}
+
+// planNoteMeta resolves each plan slug's narrative note in one query. The note
+// FILE is deliberately not read: the tab needs the title, status and star, all
+// of which the index row already carries, and reading N plan files per page
+// load is exactly the N+1 the Plans library pays for its iteration column.
+func (s *Service) planNoteMeta(ctx context.Context, project string) (map[string]core.Note, error) {
+	notes, err := store.NotesByTagPrefix(ctx, s.cfg.DB, project, plans.SlugTagPrefix())
+	if err != nil {
+		return nil, err
+	}
+	primary := make(map[string]core.Note, len(notes))
+	for _, n := range notes {
+		if slices.Contains(n.Tags, plans.TagAgent) {
+			continue // an agent cache is in the composition, never its narrative
+		}
+		slug := plans.SlugFromTags(n.Tags)
+		if slug == "" {
+			continue
+		}
+		if cur, ok := primary[slug]; !ok || betterPrimary(n, cur) {
+			primary[slug] = n
+		}
+	}
+	return primary, nil
+}
+
+// betterPrimary reports whether note a represents a plan over b: a Claude Code
+// capture is the primary of its slug, otherwise the earlier note wins -- the
+// same rule composedPrimaries applies on the Plans library.
+func betterPrimary(a, b core.Note) bool {
+	aCap, bCap := slices.Contains(a.Tags, plans.TagPlan), slices.Contains(b.Tags, plans.TagPlan)
+	if aCap != bCap {
+		return aCap
+	}
+	return plans.EarlierPrimary(a, b)
+}
+
+// planLedger reads the recent task transitions once and buckets the newest few
+// per plan. Events carry no plan slug, so the filter is Go-side against the
+// page's step set -- the same shape fillOverviewTab uses for RecentExcluding.
+// Best-effort: a feed error costs the ledger line, not the tab.
+func (s *Service) planLedger(ctx context.Context, project string, steps map[string]core.Task, namer func(string) core.Session) map[string][]planLedgerVM {
+	if s.cfg.Events == nil {
+		return nil
+	}
+	evs, err := s.cfg.Events.ByKinds(ctx, []core.EventKind{core.EventTaskTransition}, "", "", planLedgerScan)
+	if err != nil {
+		s.logger.Warn("console: plan ledger", "project", project, "error", err)
+		return nil
+	}
+	out := map[string][]planLedgerVM{}
+	for _, e := range evs {
+		if e.ProjectSlug != project {
+			continue
+		}
+		step, ok := steps[e.ItemID]
+		if !ok || step.PlanSlug == "" || len(out[step.PlanSlug]) >= planLedgerRows {
+			continue
+		}
+		row := planLedgerVM{
+			StepID: step.ID, StepTitle: step.Title, When: e.TS,
+			Owner: payloadStr(e.Payload, "by") == "console",
+		}
+		row.Verb, row.Icon = transitionVerb(e.Payload)
+		// A claim stamps its holder in the payload; every other transition
+		// carries the acting session on the event itself.
+		actor := e.SessionID
+		if actor == "" {
+			actor = payloadStr(e.Payload, "claimed_by")
+		}
+		if sess := namer(actor); sess.ID != "" {
+			row.Session, row.SessionID = sess.Name, sess.ID
+		}
+		out[step.PlanSlug] = append(out[step.PlanSlug], row)
+	}
+	return out
+}
+
+// transitionVerb reads a task.transition payload as the verb the ledger shows,
+// covering the shapes tasks_add / tasks_claim / tasks_release / tasks_update
+// and the console's own force-release write emit.
+func transitionVerb(payload map[string]any) (verb, iconName string) {
+	switch {
+	case payloadBool(payload, "created"):
+		return "created", "circle"
+	case payloadBool(payload, "reclaimed"):
+		return "reclaimed", "lock"
+	case payloadStr(payload, "claimed_by") != "":
+		return "claimed", "lock"
+	case payloadBool(payload, "released"):
+		return "released", "arrow-up-down"
+	}
+	switch payloadStr(payload, "to") {
+	case string(core.TaskDone):
+		return "done", "check"
+	case string(core.TaskDropped):
+		return "dropped", "archive"
+	case string(core.TaskInProgress):
+		return "started", "loader"
+	default:
+		return "reopened", "circle"
+	}
+}
+
+// stalePlanSlugs flags the plans a pending gardener settlement names -- the
+// ship-plan / abandon-plan proposals /console/gardener is already showing.
+// This reuses that queue rather than re-running any git stamp check per page
+// load. One query; the badge is decoration, so an error costs it and nothing
+// else.
+func (s *Service) stalePlanSlugs(ctx context.Context, project string) map[string]bool {
+	proposals, err := store.PendingProposals(ctx, s.cfg.DB, "")
+	if err != nil {
+		s.logger.Warn("console: pending plan settlements", "project", project, "error", err)
+		return nil
+	}
+	out := map[string]bool{}
+	for _, p := range proposals {
+		if p.Kind != store.ProposalShipPlan && p.Kind != store.ProposalAbandonPlan {
+			continue
+		}
+		// The payload carries the captured note's project; a global note still
+		// settles a plan whose steps live here.
+		if proj := payloadStr(p.Payload, "project"); proj != "" && proj != project {
+			continue
+		}
+		if slug := payloadStr(p.Payload, "slug"); slug != "" {
+			out[slug] = true
+		}
+	}
+	return out
 }
 
 // fillSessionsTab loads the Sessions panel: the project's sessions newest first,
