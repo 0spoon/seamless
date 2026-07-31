@@ -52,7 +52,7 @@ type Hit struct {
 	Description string  `json:"description"`
 	Project     string  `json:"project,omitempty"`
 	Age         string  `json:"age"`
-	Source      string  `json:"source"` // semantic | fts | fused | link | browse
+	Source      string  `json:"source"` // semantic | fts | fused | identifier | link | browse
 	Score       float64 `json:"score"`
 	// Snippet is the matched text in context, with the matched terms wrapped in
 	// store.SnippetStartMark/SnippetEndMark. Only Search sets it, and only for
@@ -69,6 +69,10 @@ type Hit struct {
 	// Favorite marks a starred item. omitempty keeps the recall payload
 	// byte-identical to the pre-favorites contract for unstarred hits.
 	Favorite bool `json:"favorite,omitempty"`
+	// IdentifierMatch is set only by the human-facing Search entry point when
+	// the query matched a stable id, memory name, or note slug. Recall never
+	// sets it, so the agent-facing payload remains unchanged.
+	IdentifierMatch store.IdentifierMatchKind `json:"identifierMatch,omitempty"`
 	// Updated is carried internally so the human search page can sort and
 	// window hydrated hits. It is deliberately excluded from Recall's JSON
 	// contract, whose payload predates console Search and must remain stable.
@@ -100,13 +104,15 @@ type RecallInput struct {
 }
 
 type fusedItem struct {
-	kind     string
-	score    float64
-	semantic bool
-	fts      bool
-	linked   bool // pulled in via a [[name]] link from a top hit
-	snippet  string
-	cosine   float64 // raw semantic-leg similarity; meaningful only when semantic
+	kind            string
+	score           float64
+	semantic        bool
+	fts             bool
+	linked          bool // pulled in via a [[name]] link from a top hit
+	snippet         string
+	cosine          float64 // raw semantic-leg similarity; meaningful only when semantic
+	identifierMatch store.IdentifierMatchKind
+	identifierOrder int
 }
 
 // candidates runs both retrieval legs and fuses them with RRF, returning the

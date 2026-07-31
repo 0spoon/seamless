@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -57,6 +58,87 @@ func TestSearchTasks_TitleAndID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, "01TASKB", got[0].ID)
+}
+
+func TestSearchTasks_IDPrefixAndCaseInsensitiveExact(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := core.FormatTime(time.Now().UTC())
+
+	const (
+		first  = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+		second = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	)
+	insertSearchTask(t, db, first, "seam", "unrelated first", "", now)
+	insertSearchTask(t, db, second, "seam", "unrelated second", "", now)
+
+	got, err := SearchTasks(ctx, db, strings.ToLower(first), 20)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, first, got[0].ID)
+
+	got, err = SearchTasks(ctx, db, "01ARZ3ND", 20)
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+
+	got, err = SearchTasks(ctx, db, "01ARZ3N", 20)
+	require.NoError(t, err)
+	require.Empty(t, got, "a prefix shorter than eight characters must not fan out")
+}
+
+func TestSearchKnowledgeIdentifiers_PrioritizesNaturalIdentifiersAndIDs(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+	at := func(min int) string { return core.FormatTime(base.Add(time.Duration(min) * time.Minute)) }
+
+	const (
+		exactID  = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+		prefixID = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	)
+	insertSearchNote(t, db, exactID, "Deep code and security audit", "deep-code-and-security-audit-2026-07-31", "seam", `[]`, at(1))
+	insertSearchNote(t, db, prefixID, "Newer audit", "another-deep-audit", "seam", `[]`, at(2))
+	insertSearchNote(t, db, "01BXZ3NDEKTSV4RRFFQ69G5FAV", "Other project", "deep-code-and-security-audit-2026-07-31", "other", `[]`, at(3))
+
+	hits, err := SearchKnowledgeIdentifiersSince(ctx, db, "deep-code-and-security-audit-2026-07-31", []string{"note"}, nil, time.Time{}, 20)
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+	require.Equal(t, "01BXZ3NDEKTSV4RRFFQ69G5FAV", hits[0].ItemID,
+		"same-slug matches across projects are newest-first")
+	for _, hit := range hits {
+		require.Equal(t, IdentifierMatchExactIdentifier, hit.Match)
+	}
+
+	hits, err = SearchKnowledgeIdentifiersSince(ctx, db, strings.ToLower(exactID), []string{"note"}, []string{"seam"}, time.Time{}, 20)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, IdentifierMatchExactID, hits[0].Match)
+
+	hits, err = SearchKnowledgeIdentifiersSince(ctx, db, "01ARZ3ND", []string{"note"}, []string{"seam"}, time.Time{}, 20)
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+	for _, hit := range hits {
+		require.Equal(t, IdentifierMatchIDPrefix, hit.Match)
+	}
+}
+
+func TestSearchKnowledgeIdentifiers_FiltersBeforeLimit(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	old := core.FormatTime(now.Add(-48 * time.Hour))
+	recent := core.FormatTime(now.Add(-time.Hour))
+
+	insertMemory(t, db, "01OLD", "gotcha", "shared-identifier-old", "d", "seam", "body", old, "")
+	insertMemory(t, db, "01DEAD", "gotcha", "shared-identifier-dead", "d", "seam", "body", recent, recent)
+	insertMemory(t, db, "01LIVE", "gotcha", "shared-identifier-live", "d", "seam", "body", recent, "")
+	insertMemory(t, db, "01OTHER", "gotcha", "shared-identifier-other", "d", "other", "body", recent, "")
+
+	hits, err := SearchKnowledgeIdentifiersSince(ctx, db, "shared-identifier", []string{"memory"}, []string{"seam"}, now.Add(-24*time.Hour), 1)
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, "01LIVE", hits[0].ItemID,
+		"window, project, and active-memory filters must run before LIMIT")
 }
 
 // LIKE metacharacters in the needle must match themselves. Without ESCAPE, "%"
@@ -146,6 +228,35 @@ func TestSearchSessions_NameAndID(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 1)
 	require.Equal(t, "01SESSB", got[0].ID)
+}
+
+func TestSearchSessionsAndTrials_IDPrefixes(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	const (
+		sessionID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+		trialID   = "01BXZ3NDEKTSV4RRFFQ69G5FAV"
+	)
+
+	require.NoError(t, CreateSession(ctx, db, core.Session{
+		ID: sessionID, Name: "cc/unrelated", ProjectSlug: "seam",
+		Status: core.SessionActive, CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, CreateTrial(ctx, db, core.Trial{
+		ID: trialID, Lab: "unrelated-lab", Title: "unrelated trial",
+		ProjectSlug: "seam", CreatedAt: now,
+	}))
+
+	sessions, err := SearchSessions(ctx, db, "01ARZ3ND", 20)
+	require.NoError(t, err)
+	require.Len(t, sessions, 1)
+	require.Equal(t, sessionID, sessions[0].ID)
+
+	trials, err := SearchTrials(ctx, db, "01BXZ3ND", 20)
+	require.NoError(t, err)
+	require.Len(t, trials, 1)
+	require.Equal(t, trialID, trials[0].ID)
 }
 
 func TestSearchProjects_SlugAndName(t *testing.T) {
@@ -243,4 +354,20 @@ func TestSearchPlans_Limit(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, got, 2)
 	require.Equal(t, "plan-c", got[0].Slug, "the limit cuts the tail, not the head")
+}
+
+func TestSearchPlans_ExactSlugRanksBeforeTitleMatchAndLimit(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	base := time.Date(2026, 7, 10, 12, 0, 0, 0, time.UTC)
+
+	insertSearchTask(t, db, "01EXACT", "seam", "old exact step", "target-plan", core.FormatTime(base))
+	insertSearchNote(t, db, "01TITLE", "Newer target-plan narrative", "other-plan-note", "seam",
+		`["plan:other-plan"]`, core.FormatTime(base.Add(time.Hour)))
+
+	got, err := SearchPlans(ctx, db, "target-plan", 1)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	require.Equal(t, "target-plan", got[0].Slug,
+		"an exact stable slug must survive a limit ahead of a newer title-only match")
 }

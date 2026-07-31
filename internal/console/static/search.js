@@ -123,7 +123,12 @@
 
         var meta = document.createElement('span');
         meta.className = 'meta';
-        meta.textContent = (r.project || 'global') + ' · ' + r.age;
+        var bits = [];
+        if (r.identifier && r.identifier !== r.title) bits.push(r.identifier);
+        if (r.matchedId) bits.push(r.matchedId);
+        bits.push(r.project || 'global');
+        bits.push(r.age);
+        meta.textContent = bits.join(' · ');
         li.appendChild(meta);
 
         var idx = rows.length;

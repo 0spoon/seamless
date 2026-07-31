@@ -377,3 +377,59 @@ func TestSearch_SnippetCarriesSentinelsNotMarkup(t *testing.T) {
 	require.NotContains(t, hits[0].Snippet, "<mark>", "the store must not emit markup")
 	require.True(t, strings.Contains(hits[0].Snippet, store.SnippetStartMark))
 }
+
+func TestSearch_IdentifierLanePromotesExactNoteSlug(t *testing.T) {
+	db := setupDB(t)
+	now := time.Now().UTC()
+	const noteID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	slug := "deep-code-and-security-audit-2026-07-31"
+
+	// The note deliberately has no FTS row. The memory supplies noisy matches
+	// for the slug's common terms, reproducing the console failure where the
+	// intended note was buried among audit/date hits.
+	insNote(t, db, noteID, slug, "Deep code and security audit", "seam", `[]`, now.Add(-time.Hour))
+	insMem(t, db, "01NOISE", "reference", "newer-audit-summary", "deep code security audit 2026 07 31", "seam")
+
+	svc := New(db, nil, budgets(), nil)
+	hits, err := svc.Search(context.Background(), SearchInput{Query: slug, Scope: "notes", Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, noteID, hits[0].ID)
+	require.Equal(t, "identifier", hits[0].Source)
+	require.Equal(t, store.IdentifierMatchExactIdentifier, hits[0].IdentifierMatch)
+
+	// Recall intentionally remains the agent's fused text/semantic surface; it
+	// must not silently acquire console-only identifier behavior.
+	recalled, err := svc.Recall(context.Background(), RecallInput{Query: slug, Project: "seam", Scope: "notes", Limit: 20})
+	require.NoError(t, err)
+	require.Empty(t, recalled)
+}
+
+func TestSearch_IdentifierLaneFindsFullAndPrefixIDs(t *testing.T) {
+	db := setupDB(t)
+	now := time.Now().UTC()
+	const (
+		first  = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+		second = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	)
+	insNote(t, db, first, "first-note", "First", "seam", `[]`, now)
+	insNote(t, db, second, "second-note", "Second", "seam", `[]`, now.Add(-time.Minute))
+
+	svc := New(db, nil, budgets(), nil)
+	hits, err := svc.Search(context.Background(), SearchInput{Query: strings.ToLower(first), Scope: "notes", Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, hits, 1)
+	require.Equal(t, first, hits[0].ID)
+	require.Equal(t, store.IdentifierMatchExactID, hits[0].IdentifierMatch)
+
+	hits, err = svc.Search(context.Background(), SearchInput{Query: "01ARZ3ND", Scope: "notes", Limit: 20})
+	require.NoError(t, err)
+	require.Len(t, hits, 2)
+	for _, hit := range hits {
+		require.Equal(t, store.IdentifierMatchIDPrefix, hit.IdentifierMatch)
+	}
+
+	hits, err = svc.Search(context.Background(), SearchInput{Query: "01ARZ3N", Scope: "notes", Limit: 20})
+	require.NoError(t, err)
+	require.Empty(t, hits, "short ID prefixes must not fan out")
+}

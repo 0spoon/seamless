@@ -2062,6 +2062,11 @@ mark { background: var(--match); color: var(--match-ink); padding: 0 3px; border
   color: var(--search-accent); background: color-mix(in oklab, var(--search-accent) 13%, var(--surface));
   font-family: var(--font-mono); font-weight: 650;
 }
+.search-identifier {
+  max-width: 42ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink-2); font-family: var(--font-mono);
+}
+.search-matched-id { color: var(--brand); }
 .search-project, .search-age { display: inline-flex; align-items: center; gap: 4px; }
 .search-project { color: var(--ink-2); font-family: var(--font-mono); }
 
@@ -2076,14 +2081,17 @@ mark { background: var(--match); color: var(--match-ink); padding: 0 3px; border
 .search-score meter::-webkit-meter-bar { height: 7px; border: 0; border-radius: var(--radius-pill); background: var(--surface-3); box-shadow: none; }
 .search-score meter::-webkit-meter-optimum-value { border-radius: var(--radius-pill); background: var(--score-color); }
 .search-score meter::-moz-meter-bar { border-radius: var(--radius-pill); background: var(--score-color); }
-.search-score small, .search-text-match small, .search-related small { color: var(--faint); font-size: var(--text-2xs); }
-.search-text-match {
+.search-score small, .search-text-match small, .search-identifier-match small, .search-related small { color: var(--faint); font-size: var(--text-2xs); }
+.search-text-match, .search-identifier-match {
   display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 10px; border-radius: var(--radius-sm);
   color: var(--ok); background: var(--ok-soft); border: 1px solid color-mix(in oklab, var(--ok) 22%, transparent);
 }
-.search-text-match .ico { width: 15px; height: 15px; flex: none; }
-.search-text-match span, .search-related { display: flex; flex-direction: column; line-height: 1.25; }
-.search-text-match strong, .search-related strong { font-size: var(--text-xs); }
+.search-identifier-match {
+  color: var(--brand); background: var(--brand-soft); border-color: color-mix(in oklab, var(--brand) 24%, transparent);
+}
+.search-text-match .ico, .search-identifier-match .ico { width: 15px; height: 15px; flex: none; }
+.search-text-match span, .search-identifier-match span, .search-related { display: flex; flex-direction: column; line-height: 1.25; }
+.search-text-match strong, .search-identifier-match strong, .search-related strong { font-size: var(--text-xs); }
 .search-related { align-items: center; color: var(--muted); }
 .search-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 56px 20px; }
 .search-empty a { font-style: normal; font-weight: 650; }

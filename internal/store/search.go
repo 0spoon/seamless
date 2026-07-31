@@ -1,13 +1,9 @@
-// Free-text search over the structured entities -- tasks, sessions, projects,
-// plans, trials. Memories and notes are not here: they are indexed in the fts
-// table and searched through FTSSearch (fused with semantic hits by
-// internal/retrieve). These five have no FTS mirror, so they match with LIKE
-// over the one or two columns a human would search by (a task's title, a
-// session's name, a project's slug/name). That is a deliberate floor, not a
-// stopgap: they are short,
-// low-cardinality labels where substring matching is what the observer expects,
-// and mirroring them into fts would mean maintaining index rows for high-churn
-// state the files layer does not own.
+// Human-facing search over stable identifiers and structured entities. Memories
+// and notes still get their text candidates from FTSSearch (fused with semantic
+// hits by internal/retrieve), but their ids, memory names, and note slugs are
+// resolved here from the index mirrors so an exact reference cannot be lost in
+// tokenized FTS results. Tasks, sessions, projects, plans, and trials have no FTS
+// mirror and match with LIKE over their short, low-cardinality labels.
 //
 // Every query takes the search text as a bound parameter escaped through
 // escapeLikePrefix, so a literal % or _ matches itself rather than acting as a
@@ -18,11 +14,251 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
 )
+
+// IdentifierMatchKind describes how a search query matched an entity's stable
+// identifier. The order is significant: lower priorities are stronger and are
+// promoted ahead of ordinary text/semantic matches by the console search.
+type IdentifierMatchKind string
+
+const (
+	IdentifierMatchExactID         IdentifierMatchKind = "exact_id"
+	IdentifierMatchExactIdentifier IdentifierMatchKind = "exact_identifier"
+	IdentifierMatchIDPrefix        IdentifierMatchKind = "id_prefix"
+	IdentifierMatchIdentifier      IdentifierMatchKind = "identifier"
+)
+
+const minSearchIDPrefix = 8
+
+// IdentifierMatchPriority returns the relevance tier for a match kind. The
+// empty/unknown value is deliberately last so callers can stable-sort ordinary
+// search results after every recognized identifier match.
+func IdentifierMatchPriority(kind IdentifierMatchKind) int {
+	switch kind {
+	case IdentifierMatchExactID:
+		return 0
+	case IdentifierMatchExactIdentifier:
+		return 1
+	case IdentifierMatchIDPrefix:
+		return 2
+	case IdentifierMatchIdentifier:
+		return 3
+	default:
+		return 4
+	}
+}
+
+// IDIdentifierMatch classifies a query against an entity id. Full ids match
+// case-insensitively. A partial match is accepted only for an 8-25 character
+// Crockford-base32 ULID prefix; this prevents a query such as "01" from
+// flooding search with nearly every recently-created entity.
+func IDIdentifierMatch(query, id string) IdentifierMatchKind {
+	query = strings.TrimSpace(query)
+	if query == "" || id == "" {
+		return ""
+	}
+	if strings.EqualFold(query, id) {
+		return IdentifierMatchExactID
+	}
+	if prefix, ok := searchIDPrefix(query); ok && strings.HasPrefix(strings.ToUpper(id), prefix) {
+		return IdentifierMatchIDPrefix
+	}
+	return ""
+}
+
+// NaturalIdentifierMatch classifies a query against a human-facing identifier
+// such as a memory name, note slug, project slug, or plan slug.
+func NaturalIdentifierMatch(query, identifier string) IdentifierMatchKind {
+	query = strings.TrimSpace(query)
+	if query == "" || identifier == "" {
+		return ""
+	}
+	if strings.EqualFold(query, identifier) {
+		return IdentifierMatchExactIdentifier
+	}
+	if strings.Contains(strings.ToLower(identifier), strings.ToLower(query)) {
+		return IdentifierMatchIdentifier
+	}
+	return ""
+}
+
+// searchIDPrefix returns an upper-case, validated partial ULID. Full 26-byte
+// ids are exact matches and therefore intentionally return ok=false here.
+func searchIDPrefix(query string) (string, bool) {
+	prefix := strings.ToUpper(strings.TrimSpace(query))
+	if len(prefix) < minSearchIDPrefix || len(prefix) >= 26 {
+		return "", false
+	}
+	if prefix[0] < '0' || prefix[0] > '7' {
+		return "", false
+	}
+	const crockford = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	for _, r := range prefix {
+		if !strings.ContainsRune(crockford, r) {
+			return "", false
+		}
+	}
+	return prefix, true
+}
+
+// idSearchSQL returns the ID predicate and relevance-order expression for a
+// trusted column name. Arguments are split because WHERE placeholders occur
+// before ORDER BY placeholders in the final query.
+func idSearchSQL(column, query string) (predicate string, predicateArgs []any, order string, orderArgs []any) {
+	exact := column + ` COLLATE NOCASE = ?`
+	predicate = exact
+	predicateArgs = append(predicateArgs, query)
+	order = `CASE WHEN ` + exact + ` THEN 0`
+	orderArgs = append(orderArgs, query)
+	if prefix, ok := searchIDPrefix(query); ok {
+		prefixPattern := escapeLikePrefix(prefix) + "%"
+		prefixExpr := column + ` COLLATE NOCASE LIKE ? ESCAPE '\'`
+		predicate += ` OR ` + prefixExpr
+		predicateArgs = append(predicateArgs, prefixPattern)
+		order += ` WHEN ` + prefixExpr + ` THEN 1`
+		orderArgs = append(orderArgs, prefixPattern)
+	}
+	order += ` ELSE 2 END`
+	return predicate, predicateArgs, order, orderArgs
+}
+
+// KnowledgeIdentifierHit is a memory/note candidate matched through its stable
+// id or natural identifier rather than through FTS or an embedding.
+type KnowledgeIdentifierHit struct {
+	ItemID  string
+	Kind    string
+	Match   IdentifierMatchKind
+	Updated time.Time
+}
+
+// SearchKnowledgeIdentifiersSince searches the index mirrors for memory names,
+// note slugs, and memory/note ids. Identifier predicates, project scope,
+// validity, and the time window all run before the limit so an exact match
+// cannot be crowded out by unrelated FTS candidates.
+func SearchKnowledgeIdentifiersSince(ctx context.Context, db *sql.DB, query string, kinds, projects []string, since time.Time, limit int) ([]KnowledgeIdentifierHit, error) {
+	limit = searchLimit(limit)
+	wants := func(kind string) bool {
+		return len(kinds) == 0 || slices.Contains(kinds, kind)
+	}
+
+	var hits []KnowledgeIdentifierHit
+	if wants("memory") {
+		rows, err := searchKnowledgeIdentifierTable(ctx, db, knowledgeIdentifierTable{
+			table: "memories_index", kind: "memory", identifier: "name",
+			validity: "invalid_at IS NULL",
+		}, query, projects, since, limit)
+		if err != nil {
+			return nil, fmt.Errorf("store.SearchKnowledgeIdentifiersSince: memories: %w", err)
+		}
+		hits = append(hits, rows...)
+	}
+	if wants("note") {
+		rows, err := searchKnowledgeIdentifierTable(ctx, db, knowledgeIdentifierTable{
+			table: "notes_index", kind: "note", identifier: "slug",
+		}, query, projects, since, limit)
+		if err != nil {
+			return nil, fmt.Errorf("store.SearchKnowledgeIdentifiersSince: notes: %w", err)
+		}
+		hits = append(hits, rows...)
+	}
+
+	sort.Slice(hits, func(i, j int) bool {
+		pi := IdentifierMatchPriority(hits[i].Match)
+		pj := IdentifierMatchPriority(hits[j].Match)
+		if pi != pj {
+			return pi < pj
+		}
+		if !hits[i].Updated.Equal(hits[j].Updated) {
+			return hits[i].Updated.After(hits[j].Updated)
+		}
+		return hits[i].ItemID < hits[j].ItemID
+	})
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits, nil
+}
+
+type knowledgeIdentifierTable struct {
+	table      string
+	kind       string
+	identifier string
+	validity   string
+}
+
+func searchKnowledgeIdentifierTable(ctx context.Context, db *sql.DB, table knowledgeIdentifierTable, query string, projects []string, since time.Time, limit int) ([]KnowledgeIdentifierHit, error) {
+	prefixExpr := ""
+	prefixPattern := ""
+	if prefix, ok := searchIDPrefix(query); ok {
+		prefixExpr = ` OR id COLLATE NOCASE LIKE ? ESCAPE '\'`
+		prefixPattern = escapeLikePrefix(prefix) + "%"
+	}
+
+	sqlStr := `SELECT id, ` + table.identifier + `, updated_at FROM ` + table.table + ` WHERE (` +
+		`id COLLATE NOCASE = ? OR ` + table.identifier + ` LIKE ? ESCAPE '\'` + prefixExpr + `)`
+	args := []any{query, likeContains(query)}
+	if prefixExpr != "" {
+		args = append(args, prefixPattern)
+	}
+	if table.validity != "" {
+		sqlStr += ` AND ` + table.validity
+	}
+	if len(projects) > 0 {
+		sqlStr += ` AND project IN (` + placeholders(len(projects)) + `)`
+		for _, project := range projects {
+			args = append(args, project)
+		}
+	}
+	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
+	sqlStr += ` ORDER BY CASE WHEN id COLLATE NOCASE = ? THEN 0 WHEN ` +
+		table.identifier + ` COLLATE NOCASE = ? THEN 1`
+	args = append(args, query, query)
+	if prefixExpr != "" {
+		sqlStr += ` WHEN id COLLATE NOCASE LIKE ? ESCAPE '\' THEN 2`
+		args = append(args, prefixPattern)
+	}
+	sqlStr += ` ELSE 3 END, updated_at DESC, id`
+	// Each kind is independently bounded before the final cross-kind merge.
+	// The shared final limit still decides the externally visible result set.
+	sqlStr += ` LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := db.QueryContext(ctx, sqlStr, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+
+	var out []KnowledgeIdentifierHit
+	for rows.Next() {
+		var id, identifier, updated string
+		if err := rows.Scan(&id, &identifier, &updated); err != nil {
+			return nil, fmt.Errorf("scan: %w", err)
+		}
+		at, err := core.ParseTime(updated)
+		if err != nil {
+			return nil, fmt.Errorf("updated_at: %w", err)
+		}
+		match := IDIdentifierMatch(query, id)
+		if match == "" {
+			match = NaturalIdentifierMatch(query, identifier)
+		}
+		if match == "" {
+			continue
+		}
+		out = append(out, KnowledgeIdentifierHit{ItemID: id, Kind: table.kind, Match: match, Updated: at})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
 
 // likeContains builds the bound argument for a case-insensitive "contains"
 // LIKE, with the needle's metacharacters escaped so it matches literally under
@@ -62,11 +298,13 @@ func SearchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time
 }
 
 func searchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Task, error) {
+	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
 	sqlStr := `SELECT ` + taskCols + ` FROM tasks
-		WHERE (title LIKE ? ESCAPE '\' OR id = ?)`
-	args := []any{likeContains(q), q}
+		WHERE (title LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{likeContains(q)}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
-	sqlStr += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	sqlStr += ` ORDER BY ` + idOrder + `, updated_at DESC, id DESC LIMIT ?`
+	args = append(args, idOrderArgs...)
 	args = append(args, searchLimit(limit))
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -92,11 +330,13 @@ func SearchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.T
 }
 
 func searchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Session, error) {
+	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
 	sqlStr := `SELECT ` + sessionCols + ` FROM sessions
-		WHERE (name LIKE ? ESCAPE '\' OR id = ?)`
-	args := []any{likeContains(q), q}
+		WHERE (name LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{likeContains(q)}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
-	sqlStr += ` ORDER BY updated_at DESC, id DESC LIMIT ?`
+	sqlStr += ` ORDER BY ` + idOrder + `, updated_at DESC, id DESC LIMIT ?`
+	args = append(args, idOrderArgs...)
 	args = append(args, searchLimit(limit))
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -136,7 +376,8 @@ func searchProjectsSince(ctx context.Context, db *sql.DB, q string, since time.T
 		WHERE (slug LIKE ? ESCAPE '\' OR name LIKE ? ESCAPE '\')`
 	args := []any{needle, needle}
 	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
-	sqlStr += ` ORDER BY slug LIMIT ?`
+	sqlStr += ` ORDER BY CASE WHEN slug COLLATE NOCASE = ? THEN 0 ELSE 1 END, slug LIMIT ?`
+	args = append(args, q)
 	args = append(args, searchLimit(limit))
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -171,11 +412,13 @@ func SearchTrialsSince(ctx context.Context, db *sql.DB, q string, since time.Tim
 
 func searchTrialsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Trial, error) {
 	needle := likeContains(q)
+	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
 	sqlStr := `SELECT ` + trialCols + ` FROM trials
-		WHERE (title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR id = ?)`
-	args := []any{needle, needle, q}
+		WHERE (title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{needle, needle}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "created_at", since)
-	sqlStr += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	sqlStr += ` ORDER BY ` + idOrder + `, created_at DESC, id DESC LIMIT ?`
+	args = append(args, idOrderArgs...)
 	args = append(args, searchLimit(limit))
 	rows, err := db.QueryContext(ctx, sqlStr, args...)
 	if err != nil {
@@ -328,18 +571,25 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 		}
 		out = append(out, row)
 	}
-	sortPlanSearchRows(out)
+	sortPlanSearchRows(out, q)
 	if len(out) > lim {
 		out = out[:lim]
 	}
 	return out, nil
 }
 
-// sortPlanSearchRows orders merged plan rows newest-updated first, ties broken
-// by (project, slug) so a merge over two unordered sources is deterministic.
-func sortPlanSearchRows(rows []PlanSearchRow) {
+// sortPlanSearchRows promotes natural-identifier matches before title-only
+// matches, then orders newest-updated first with a deterministic project/slug
+// tiebreak. This ordering runs before LIMIT so an exact slug cannot be crowded
+// out by newer notes whose titles merely contain the same text.
+func sortPlanSearchRows(rows []PlanSearchRow, query string) {
 	sort.Slice(rows, func(i, j int) bool {
 		a, b := rows[i], rows[j]
+		pi := IdentifierMatchPriority(NaturalIdentifierMatch(query, a.Slug))
+		pj := IdentifierMatchPriority(NaturalIdentifierMatch(query, b.Slug))
+		if pi != pj {
+			return pi < pj
+		}
 		if !a.Updated.Equal(b.Updated) {
 			return a.Updated.After(b.Updated)
 		}

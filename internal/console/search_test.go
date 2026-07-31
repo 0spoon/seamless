@@ -68,6 +68,22 @@ func seedSearchMemoryAt(t *testing.T, db *sql.DB, id, name, desc, project, body 
 	require.NoError(t, err)
 }
 
+func seedSearchNote(t *testing.T, db *sql.DB, id, slug, title, desc, project, body string, updated time.Time) {
+	t.Helper()
+	stamp := core.FormatTime(updated.UTC())
+	_, err := db.ExecContext(context.Background(), `
+		INSERT INTO notes_index
+		    (id, title, slug, description, project, file_path, tags, source_url,
+		     content_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, '[]', NULL, 'h', ?, ?)`,
+		id, title, slug, desc, project, "notes/x/"+slug+".md", stamp, stamp)
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO fts (item_id, kind, project, title, name, description, body)
+		VALUES (?, 'note', ?, ?, '', ?, ?)`, id, project, title, desc, body)
+	require.NoError(t, err)
+}
+
 func seedSearchTask(t *testing.T, db *sql.DB, id, project, title, planSlug string) {
 	t.Helper()
 	seedSearchTaskAt(t, db, id, project, title, planSlug, time.Now().UTC())
@@ -264,6 +280,69 @@ func TestSearch_RowsCarryPeekableHrefs(t *testing.T) {
 	require.True(t, row.Peek)
 }
 
+func TestSearch_ExactNoteSlugPromotesAndExposesCanonicalReference(t *testing.T) {
+	db, mux := newConsole(t)
+	now := time.Now().UTC()
+	const noteID = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+	slug := "deep-code-and-security-audit-2026-07-31"
+
+	seedSearchNote(t, db, noteID, slug, "Deep code and security audit", "audit findings", "seam", "deep code security audit", now.Add(-time.Hour))
+	seedSearchMemory(t, db, "01NOISE", "newer-audit-summary", "deep code security audit 2026 07 31", "seam", "deep code security audit 2026 07 31")
+
+	var data searchData
+	getJSON(t, mux, "/console/search?format=json&q="+slug, &data)
+	require.NotEmpty(t, data.Groups)
+	require.Equal(t, "notes", data.Groups[0].Kind,
+		"the palette group containing the exact identifier must be promoted")
+	row := data.Groups[0].Rows[0]
+	require.Equal(t, noteID, row.ID)
+	require.Equal(t, slug, row.Identifier)
+	require.Equal(t, store.IdentifierMatchExactIdentifier, row.MatchKind)
+	require.Equal(t, "/console/notes/"+noteID, row.Href)
+
+	rr := getSearch(t, mux, "/console/search?q="+slug)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	noteAt := strings.Index(body, "/console/notes/"+noteID)
+	noiseAt := strings.Index(body, "/console/memories/01NOISE")
+	require.NotEqual(t, -1, noteAt)
+	require.NotEqual(t, -1, noiseAt)
+	require.Less(t, noteAt, noiseAt)
+	require.Contains(t, body, "Exact identifier")
+	require.Contains(t, body, `class="search-identifier"`)
+}
+
+func TestSearch_KnowledgeIDAndPrefixCarryMatchMetadata(t *testing.T) {
+	db, mux := newConsole(t)
+	now := time.Now().UTC()
+	const (
+		first  = "01ARZ3NDEKTSV4RRFFQ69G5FAV"
+		second = "01ARZ3NDEKTSV4RRFFQ69G5FAW"
+	)
+	seedSearchNote(t, db, first, "first-note", "First note", "d", "seam", "body", now)
+	seedSearchNote(t, db, second, "second-note", "Second note", "d", "seam", "body", now.Add(-time.Minute))
+
+	var exact searchData
+	getJSON(t, mux, "/console/search?format=json&scope=notes&q="+strings.ToLower(first), &exact)
+	require.Len(t, exact.Groups, 1)
+	require.Len(t, exact.Groups[0].Rows, 1)
+	require.Equal(t, store.IdentifierMatchExactID, exact.Groups[0].Rows[0].MatchKind)
+	require.Equal(t, first, exact.Groups[0].Rows[0].MatchedID)
+
+	var prefix searchData
+	getJSON(t, mux, "/console/search?format=json&scope=notes&q=01ARZ3ND", &prefix)
+	require.Len(t, prefix.Groups, 1)
+	require.Len(t, prefix.Groups[0].Rows, 2)
+	for _, row := range prefix.Groups[0].Rows {
+		require.Equal(t, store.IdentifierMatchIDPrefix, row.MatchKind)
+		require.Equal(t, row.ID, row.MatchedID)
+	}
+
+	var short searchData
+	getJSON(t, mux, "/console/search?format=json&scope=notes&q=01ARZ3N", &short)
+	require.Empty(t, short.Groups)
+}
+
 func TestSearch_FTSHitCarriesMarkedSnippet(t *testing.T) {
 	db, mux := newConsole(t)
 	seedSearchMemory(t, db, "01MEM", "boot-race", "the description", "seam",
@@ -318,7 +397,7 @@ func TestSearch_SemanticHitCarriesSimilarityPercent(t *testing.T) {
 // cell rather than render a zero.
 func TestSearch_LexicalHitOmitsSimilarity(t *testing.T) {
 	db, mux := newConsole(t)
-	seedSearchMemory(t, db, "01MEM", "chroma-boot-race", "chroma health", "seam", "chroma body")
+	seedSearchMemory(t, db, "01MEM", "boot-race", "daemon health", "seam", "chroma body")
 
 	var data searchData
 	getJSON(t, mux, "/console/search?format=json&q=chroma&scope=memories", &data)
@@ -362,6 +441,19 @@ func TestSortSearchRows(t *testing.T) {
 	rows = clone()
 	sortSearchRows(rows, "confidence")
 	require.Equal(t, []string{"high", "low", "text"}, ids(rows))
+}
+
+func TestSortSearchRows_RelevancePromotesIdentifiersWithinFavoritePartitions(t *testing.T) {
+	rows := []searchRow{
+		{ID: "plain", Title: "Plain"},
+		{ID: "exact", Title: "Exact", MatchKind: store.IdentifierMatchExactIdentifier},
+		{ID: "starred-plain", Title: "Starred plain", Favorite: true},
+		{ID: "starred-prefix", Title: "Starred prefix", Favorite: true, MatchKind: store.IdentifierMatchIDPrefix},
+	}
+
+	sortSearchRows(rows, "relevance")
+	require.Equal(t, []string{"starred-prefix", "starred-plain", "exact", "plain"},
+		[]string{rows[0].ID, rows[1].ID, rows[2].ID, rows[3].ID})
 }
 
 // The palette script loads on every page including the login screen, so its

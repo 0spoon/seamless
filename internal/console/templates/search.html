@@ -77,12 +77,18 @@
           {{if .SnippetHTML}}<div class="search-result-desc">{{.SnippetHTML}}</div>{{else if .Description}}<div class="search-result-desc">{{.Description}}</div>{{end}}
           <div class="search-result-meta">
             <span class="search-kind">{{.Kind}}</span>
+            {{if and .Identifier (ne .Identifier .Title)}}<span class="search-identifier">{{.Identifier}}</span>{{end}}
+            {{if .MatchedID}}<span class="search-identifier search-matched-id">{{.MatchedID}}</span>{{end}}
             <span class="search-project">{{icon "folder-tree"}}{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
             <span class="search-age">{{icon "timer"}}updated {{.Age}}</span>
           </div>
         </div>
         <div class="search-match">
-          {{if .Similarity}}
+          {{if .MatchKind}}
+          <div class="search-identifier-match" title="The query matches this result's stable identifier">
+            {{icon "search"}}<span><strong>{{if eq .MatchKind "exact_id"}}Exact ID{{else if eq .MatchKind "exact_identifier"}}Exact identifier{{else if eq .MatchKind "id_prefix"}}ID prefix{{else}}Identifier match{{end}}</strong><small>{{if or (eq .MatchKind "exact_id") (eq .MatchKind "exact_identifier")}}Direct lookup{{else}}Stable reference{{end}}</small></span>
+          </div>
+          {{else if .Similarity}}
           <div class="search-score {{.ScoreTone}}" title="Semantic similarity to the query; this is match strength, not model certainty">
             <div class="search-score-value"><span>Match</span><strong>{{.Similarity}}%</strong></div>
             <meter min="0" max="100" value="{{.Similarity}}">{{.Similarity}}%</meter>

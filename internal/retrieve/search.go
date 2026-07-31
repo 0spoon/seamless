@@ -2,7 +2,10 @@ package retrieve
 
 import (
 	"context"
+	"sort"
 	"time"
+
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // searchSourceDepth is how many candidates each leg contributes before fusion.
@@ -61,11 +64,26 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		limit = 20
 	}
 
+	identifierHits, err := store.SearchKnowledgeIdentifiersSince(ctx, s.db, in.Query, kinds, in.Projects, in.Since, searchSourceDepth)
+	if err != nil {
+		return nil, err
+	}
 	acc, err := s.candidates(ctx, in.Query, kinds, in.Projects, "", in.Since, searchSourceDepth, in.Semantic, "retrieve.Search")
 	if err != nil {
 		return nil, err
 	}
-	ordered := rankFused(acc)
+	for i, hit := range identifierHits {
+		f := acc[hit.ItemID]
+		if f == nil {
+			f = &fusedItem{kind: hit.Kind}
+			acc[hit.ItemID] = f
+		}
+		if f.identifierMatch == "" || store.IdentifierMatchPriority(hit.Match) < store.IdentifierMatchPriority(f.identifierMatch) {
+			f.identifierMatch = hit.Match
+			f.identifierOrder = i
+		}
+	}
+	ordered := rankSearch(acc)
 
 	mems, notes, err := s.hydrate(ctx, ordered, acc)
 	if err != nil {
@@ -78,7 +96,7 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 			break
 		}
 		f := acc[id]
-		if f.semantic && !f.fts && f.cosine < s.search.SemanticFloor {
+		if f.identifierMatch == "" && f.semantic && !f.fts && f.cosine < s.search.SemanticFloor {
 			continue
 		}
 		var h Hit
@@ -100,7 +118,12 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 			}
 			h = memoryHit(m)
 		}
-		h.Source = fusedSource(f)
+		if f.identifierMatch != "" {
+			h.Source = "identifier"
+			h.IdentifierMatch = f.identifierMatch
+		} else {
+			h.Source = fusedSource(f)
+		}
 		h.Score = f.score
 		h.Snippet = f.snippet
 		if f.semantic {
@@ -109,4 +132,32 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		out = append(out, h)
 	}
 	return out, nil
+}
+
+// rankSearch promotes stable-identifier matches ahead of the ordinary RRF
+// ordering. The identifier source already sorted exact ids, exact names/slugs,
+// id prefixes, and identifier substrings; its ordinal preserves deterministic
+// newest/id ordering within each tier. Non-identifier candidates retain the
+// exact score/id ordering used by Recall.
+func rankSearch(acc map[string]*fusedItem) []string {
+	ids := make([]string, 0, len(acc))
+	for id := range acc {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool {
+		a, b := acc[ids[i]], acc[ids[j]]
+		pa := store.IdentifierMatchPriority(a.identifierMatch)
+		pb := store.IdentifierMatchPriority(b.identifierMatch)
+		if pa != pb {
+			return pa < pb
+		}
+		if a.identifierMatch != "" && a.identifierOrder != b.identifierOrder {
+			return a.identifierOrder < b.identifierOrder
+		}
+		if a.score != b.score {
+			return a.score > b.score
+		}
+		return ids[i] < ids[j]
+	})
+	return ids
 }

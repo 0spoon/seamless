@@ -62,16 +62,19 @@ const (
 // always an in-console path; Peek marks the rows the detail pane can load as a
 // fragment (every kind here can, but the flag keeps the template honest).
 type searchRow struct {
-	Kind        string        `json:"kind"`
-	ID          string        `json:"id"`
-	Title       string        `json:"title"`
-	Project     string        `json:"project,omitempty"`
-	Age         string        `json:"age"`
-	Href        string        `json:"href"`
-	Description string        `json:"description,omitempty"`
-	SnippetHTML template.HTML `json:"snippetHtml,omitempty"`
-	Updated     time.Time     `json:"updated"`
-	Lexical     bool          `json:"lexical,omitempty"`
+	Kind        string                    `json:"kind"`
+	ID          string                    `json:"id"`
+	Title       string                    `json:"title"`
+	Identifier  string                    `json:"identifier,omitempty"`
+	MatchedID   string                    `json:"matchedId,omitempty"`
+	MatchKind   store.IdentifierMatchKind `json:"matchKind,omitempty"`
+	Project     string                    `json:"project,omitempty"`
+	Age         string                    `json:"age"`
+	Href        string                    `json:"href"`
+	Description string                    `json:"description,omitempty"`
+	SnippetHTML template.HTML             `json:"snippetHtml,omitempty"`
+	Updated     time.Time                 `json:"updated"`
+	Lexical     bool                      `json:"lexical,omitempty"`
 	// Similarity is the semantic leg's cosine similarity as a percentage
 	// (1-100), so the observer can see where relevance falls off. Zero for a
 	// lexical-only hit -- an FTS match has a highlighted snippet instead of a
@@ -285,12 +288,17 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		}
 		rows := make([]searchRow, 0, len(tasks))
 		for _, t := range tasks {
-			rows = append(rows, searchRow{
+			row := searchRow{
 				Kind: "task", ID: t.ID, Title: t.Title, Project: t.ProjectSlug,
 				Age: ago(t.UpdatedAt), Href: "/console/tasks/" + t.ID,
 				Description: string(t.Status), Updated: t.UpdatedAt,
 				Favorite: t.Favorite, Lexical: true, Peek: true,
-			})
+			}
+			row.MatchKind = store.IDIdentifierMatch(data.Query, t.ID)
+			if row.MatchKind != "" {
+				row.MatchedID = t.ID
+			}
+			rows = append(rows, row)
 		}
 		add("tasks", "Tasks", rows)
 	}
@@ -302,11 +310,14 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		}
 		rows := make([]searchRow, 0, len(plans))
 		for _, p := range plans {
-			rows = append(rows, searchRow{
+			row := searchRow{
 				Kind: "plan", ID: p.Slug, Title: p.Title, Project: p.Project,
-				Age: ago(p.Updated), Updated: p.Updated, Href: "/console/plans/" + p.Slug,
+				Identifier: p.Slug,
+				Age:        ago(p.Updated), Updated: p.Updated, Href: "/console/plans/" + p.Slug,
 				Favorite: p.Favorite, Lexical: true, Peek: true,
-			})
+			}
+			row.MatchKind = store.NaturalIdentifierMatch(data.Query, p.Slug)
+			rows = append(rows, row)
 		}
 		add("plans", "Plans", rows)
 	}
@@ -322,12 +333,17 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 			if tr.Outcome != "" {
 				desc += " · " + string(tr.Outcome)
 			}
-			rows = append(rows, searchRow{
+			row := searchRow{
 				Kind: "trial", ID: tr.ID, Title: tr.Title, Project: tr.ProjectSlug,
 				Age: ago(tr.CreatedAt), Href: "/console/trials/" + tr.ID,
 				Description: desc, Updated: tr.CreatedAt,
 				Favorite: tr.Favorite, Lexical: true, Peek: true,
-			})
+			}
+			row.MatchKind = store.IDIdentifierMatch(data.Query, tr.ID)
+			if row.MatchKind != "" {
+				row.MatchedID = tr.ID
+			}
+			rows = append(rows, row)
 		}
 		add("trials", "Trials", rows)
 	}
@@ -339,11 +355,14 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		}
 		rows := make([]searchRow, 0, len(projects))
 		for _, p := range projects {
-			rows = append(rows, searchRow{
+			row := searchRow{
 				Kind: "project", ID: p.Slug, Title: p.Slug, Project: p.Slug, Age: ago(p.UpdatedAt),
-				Href: "/console/projects/" + p.Slug, Description: p.Name,
+				Identifier: p.Slug,
+				Href:       "/console/projects/" + p.Slug, Description: p.Name,
 				Updated: p.UpdatedAt, Favorite: p.Favorite, Lexical: true, Peek: true,
-			})
+			}
+			row.MatchKind = store.NaturalIdentifierMatch(data.Query, p.Slug)
+			rows = append(rows, row)
 		}
 		add("projects", "Projects", rows)
 	}
@@ -355,16 +374,22 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		}
 		rows := make([]searchRow, 0, len(sessions))
 		for _, sess := range sessions {
-			rows = append(rows, searchRow{
+			row := searchRow{
 				Kind: "session", ID: sess.ID, Title: sess.Name, Project: sess.ProjectSlug,
 				Age: ago(sess.UpdatedAt), Href: "/console/sessions/" + sess.ID,
 				Description: string(sess.Status), Updated: sess.UpdatedAt,
 				Favorite: sess.Favorite, Lexical: true, Peek: true,
-			})
+			}
+			row.MatchKind = store.IDIdentifierMatch(data.Query, sess.ID)
+			if row.MatchKind != "" {
+				row.MatchedID = sess.ID
+			}
+			rows = append(rows, row)
 		}
 		add("sessions", "Sessions", rows)
 	}
 
+	promoteIdentifierGroups(groups)
 	return groups, nil
 }
 
@@ -374,8 +399,12 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 func hitRow(h retrieve.Hit) searchRow {
 	row := searchRow{
 		Kind: h.Kind, ID: h.ID, Title: h.Title, Project: h.Project,
+		Identifier: h.Name, MatchKind: h.IdentifierMatch,
 		Age: h.Age, Description: h.Description, Updated: h.Updated,
 		Favorite: h.Favorite, Peek: true,
+	}
+	if h.IdentifierMatch == store.IdentifierMatchExactID || h.IdentifierMatch == store.IdentifierMatchIDPrefix {
+		row.MatchedID = h.ID
 	}
 	if h.Similarity > 0 {
 		row.Similarity = min(int(h.Similarity*100+0.5), 100)
@@ -390,7 +419,26 @@ func hitRow(h retrieve.Hit) searchRow {
 		row.SnippetHTML = highlightSnippet(h.Snippet)
 		row.Lexical = true
 	}
+	if h.IdentifierMatch != "" {
+		row.Lexical = true
+	}
 	return row
+}
+
+// promoteIdentifierGroups keeps the palette's grouped JSON shape while moving
+// the group containing the strongest identifier match first. Rows within every
+// group are already identifier-ranked by their store/retrieval source.
+func promoteIdentifierGroups(groups []searchGroup) {
+	priority := func(group searchGroup) int {
+		best := store.IdentifierMatchPriority("")
+		for _, row := range group.Rows {
+			best = min(best, store.IdentifierMatchPriority(row.MatchKind))
+		}
+		return best
+	}
+	sort.SliceStable(groups, func(i, j int) bool {
+		return priority(groups[i]) < priority(groups[j])
+	})
 }
 
 func similarityTone(score int) string {
@@ -420,6 +468,7 @@ func filterFavoriteGroups(groups []searchGroup) []searchGroup {
 			out = append(out, searchGroup{Kind: g.Kind, Label: g.Label, Count: len(kept), Rows: kept})
 		}
 	}
+	promoteIdentifierGroups(out)
 	return out
 }
 
@@ -430,7 +479,10 @@ func filterFavoriteGroups(groups []searchGroup) []searchGroup {
 func sortSearchRows(rows []searchRow, sortKey string) {
 	if sortKey == "relevance" {
 		sort.SliceStable(rows, func(i, j int) bool {
-			return rows[i].Favorite && !rows[j].Favorite
+			if rows[i].Favorite != rows[j].Favorite {
+				return rows[i].Favorite
+			}
+			return store.IdentifierMatchPriority(rows[i].MatchKind) < store.IdentifierMatchPriority(rows[j].MatchKind)
 		})
 		return
 	}

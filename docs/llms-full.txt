@@ -7155,6 +7155,15 @@ through the same fused FTS + semantic retrieval that [recall](/concepts/recall/)
 uses, with snippets; tasks, plans, trials, projects, and sessions have no FTS
 mirror and match by `LIKE`.
 
+Stable references get their own lookup lane. An exact memory name or note slug
+ranks ahead of token-overlap matches and is shown beside the result's display
+title. A full memory, note, task, session, or trial ULID works
+case-insensitively; an 8-character-or-longer ULID prefix finds every match of
+those kinds without
+letting a short prefix such as `01` flood the page. Identifier matches keep the
+canonical ID-based detail link and are labeled separately from keyword and
+semantic matches.
+
 The command palette (⌘K, available on every page) fetches this same route with
 `?format=json&fast=1`, which drops the semantic leg - a query per keystroke must
 never cost a remote embedding round-trip.
