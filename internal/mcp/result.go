@@ -39,7 +39,8 @@ func argRaw(r mcp.CallToolRequest, key string) string {
 	return r.GetString(key, "")
 }
 
-// argInt reads an integer argument, or def when absent/invalid.
+// argInt reads an integer argument, or def when absent. validateMiddleware has
+// already rejected wrong types, fractional values, and out-of-range values.
 func argInt(r mcp.CallToolRequest, key string, def int) int {
 	return r.GetInt(key, def)
 }

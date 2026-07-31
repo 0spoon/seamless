@@ -15,8 +15,10 @@ import (
 	"crypto/subtle"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"html/template"
 	"log/slog"
+	"mime"
 	"net/http"
 	"sort"
 	"strings"
@@ -34,6 +36,12 @@ import (
 // cookieName holds the console session token (a hash of the static key, never
 // the key itself). It is HttpOnly and scoped to /console.
 const cookieName = "seamless_console"
+
+const (
+	formBodySmall    int64 = 8 << 10
+	formBodyStandard int64 = 16 << 10
+	formBodyFamily   int64 = 64 << 10
+)
 
 // Config wires the console's dependencies. Files/Gardener/Events are used by the
 // write actions (archive, apply/dismiss) and the live feed; DB backs every read.
@@ -97,6 +105,9 @@ func New(cfg Config) (*Service, error) {
 // structural: a route added later cannot forget.
 func (s *Service) Register(mux *http.ServeMux) {
 	handle := func(pattern string, h http.HandlerFunc) { mux.HandleFunc(pattern, secured(h)) }
+	post := func(pattern string, maxBytes int64, h http.HandlerFunc) {
+		handle(pattern, s.auth(s.parseForm(maxBytes, h)))
+	}
 
 	handle("GET /console/static/console.css", s.serveCSS)
 	handle("GET /console/static/interactions.js", s.serveJS)
@@ -106,8 +117,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/static/navigation.js", s.serveNavigationJS)
 	handle("GET /console/static/favicon.svg", s.serveFavicon)
 	handle("GET /console/login", s.loginForm)
-	handle("POST /console/login", s.loginSubmit)
-	handle("POST /console/logout", s.logout)
+	handle("POST /console/login", s.parseForm(formBodySmall, s.loginSubmit))
+	post("POST /console/logout", formBodySmall, s.logout)
 
 	handle("GET /console/{$}", s.auth(s.overview))
 	handle("GET /console/search", s.auth(s.searchPage))
@@ -116,16 +127,16 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/sessions/{id}", s.auth(s.sessionDetail))
 	handle("GET /console/memories", s.auth(s.memoriesList))
 	handle("GET /console/memories/{id}", s.auth(s.memoryDetail))
-	handle("POST /console/memories/{id}/archive", s.auth(s.memoryArchive))
+	post("POST /console/memories/{id}/archive", formBodySmall, s.memoryArchive)
 	handle("GET /console/notes", s.auth(s.notesList))
 	handle("GET /console/notes/{id}", s.auth(s.noteDetail))
 	handle("GET /console/retrieval", s.auth(s.retrieval))
 	handle("GET /console/tasks", s.auth(s.tasks))
 	handle("GET /console/tasks/{id}", s.auth(s.taskDetail))
-	handle("POST /console/tasks/{id}/release", s.auth(s.taskRelease))
+	post("POST /console/tasks/{id}/release", formBodySmall, s.taskRelease)
 	handle("GET /console/plans", s.auth(s.plansList))
 	handle("GET /console/plans/{slug}", s.auth(s.planDetail))
-	handle("POST /console/plans/{slug}/approve", s.auth(s.planApprove))
+	post("POST /console/plans/{slug}/approve", formBodySmall, s.planApprove)
 	handle("GET /console/labs", s.auth(s.labsList))
 	handle("GET /console/labs/{name...}", s.auth(s.labDetail))
 	handle("GET /console/trials", s.auth(s.trialsList))
@@ -136,25 +147,64 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/relations", s.auth(s.relationsRedirect))
 	handle("GET /console/gardener", s.auth(s.gardenerPage))
 	handle("GET /console/gardener/{id}", s.auth(s.gardenerDetail))
-	handle("POST /console/gardener/request", s.auth(s.gardenerRequest))
-	handle("POST /console/gardener/split", s.auth(s.gardenerSplit))
-	handle("POST /console/gardener/group/dismiss", s.auth(s.gardenerGroupDismiss))
-	handle("POST /console/gardener/plan/{slug}/apply", s.auth(s.gardenerApplyPlan))
-	handle("POST /console/gardener/{id}/apply", s.auth(s.gardenerApply))
-	handle("POST /console/gardener/{id}/dismiss", s.auth(s.gardenerDismiss))
-	handle("POST /console/gardener/{id}/retarget", s.auth(s.gardenerRetarget))
-	handle("POST /console/gardener/{id}/undo", s.auth(s.gardenerUndo))
-	handle("POST /console/favorites/{kind}/{id}", s.auth(s.favoriteToggle))
+	post("POST /console/gardener/request", formBodyStandard, s.gardenerRequest)
+	post("POST /console/gardener/split", formBodyStandard, s.gardenerSplit)
+	post("POST /console/gardener/group/dismiss", formBodySmall, s.gardenerGroupDismiss)
+	post("POST /console/gardener/plan/{slug}/apply", formBodySmall, s.gardenerApplyPlan)
+	post("POST /console/gardener/{id}/apply", formBodySmall, s.gardenerApply)
+	post("POST /console/gardener/{id}/dismiss", formBodySmall, s.gardenerDismiss)
+	post("POST /console/gardener/{id}/retarget", formBodySmall, s.gardenerRetarget)
+	post("POST /console/gardener/{id}/undo", formBodySmall, s.gardenerUndo)
+	post("POST /console/favorites/{kind}/{id}", formBodySmall, s.favoriteToggle)
 	handle("GET /console/settings", s.auth(s.settings))
-	handle("POST /console/settings/briefing", s.auth(s.settingsBriefingSave))
-	handle("POST /console/settings/briefing/reset", s.auth(s.settingsBriefingReset))
-	handle("POST /console/settings/utility", s.auth(s.settingsUtilityForce))
-	handle("POST /console/settings/embeddings/mode", s.auth(s.settingsEmbeddingsMode))
-	handle("POST /console/settings/embeddings/reembed", s.auth(s.settingsEmbeddingsReembed))
-	handle("POST /console/settings/families/save", s.auth(s.settingsFamilySave))
-	handle("POST /console/settings/families/delete", s.auth(s.settingsFamilyDelete))
+	post("POST /console/settings/briefing", formBodyStandard, s.settingsBriefingSave)
+	post("POST /console/settings/briefing/reset", formBodySmall, s.settingsBriefingReset)
+	post("POST /console/settings/utility", formBodySmall, s.settingsUtilityForce)
+	post("POST /console/settings/embeddings/mode", formBodySmall, s.settingsEmbeddingsMode)
+	post("POST /console/settings/embeddings/reembed", formBodySmall, s.settingsEmbeddingsReembed)
+	post("POST /console/settings/families/save", formBodyFamily, s.settingsFamilySave)
+	post("POST /console/settings/families/delete", formBodySmall, s.settingsFamilyDelete)
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
+}
+
+// parseForm is the structural body boundary for every console POST. Auth wraps
+// it on protected routes, so an invalid credential is rejected before any body
+// is consumed. The console's own forms and CLI both use URL encoding; a present
+// body with another or malformed media type is an error, never an empty form.
+func (s *Service) parseForm(maxBytes int64, next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+		if r.ContentLength > maxBytes {
+			s.formError(w, r, http.StatusRequestEntityTooLarge, "form body exceeds the allowed size")
+			return
+		}
+		if r.ContentLength != 0 {
+			mediaType, _, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+			if err != nil || mediaType != "application/x-www-form-urlencoded" {
+				s.formError(w, r, http.StatusBadRequest, "form body must use application/x-www-form-urlencoded")
+				return
+			}
+		}
+		if err := r.ParseForm(); err != nil {
+			var maxErr *http.MaxBytesError
+			if errors.As(err, &maxErr) {
+				s.formError(w, r, http.StatusRequestEntityTooLarge, "form body exceeds the allowed size")
+				return
+			}
+			s.formError(w, r, http.StatusBadRequest, "could not parse form body")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Service) formError(w http.ResponseWriter, r *http.Request, status int, msg string) {
+	if wantsJSON(r) {
+		writeJSON(w, status, map[string]string{"error": msg})
+		return
+	}
+	http.Error(w, msg, status)
 }
 
 // ---------------------------------------------------------------------------
@@ -245,10 +295,6 @@ func (s *Service) loginForm(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) loginSubmit(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		s.renderLogin(w, r, "could not read form")
-		return
-	}
 	key := s.cfg.APIKey
 	given := strings.TrimSpace(r.PostFormValue("key"))
 	if key == "" || given == "" || subtle.ConstantTimeCompare([]byte(given), []byte(key)) != 1 {

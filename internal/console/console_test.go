@@ -153,7 +153,9 @@ func TestLogin_CorrectKeySetsCookieAndGrantsAccess(t *testing.T) {
 
 func TestLogout_ClearsCookie(t *testing.T) {
 	mux := newTestMux(t)
-	rr := do(mux, httptest.NewRequest(http.MethodPost, "/console/logout", nil))
+	req := httptest.NewRequest(http.MethodPost, "/console/logout", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
 	require.Equal(t, http.StatusSeeOther, rr.Code)
 	var found bool
 	for _, c := range rr.Result().Cookies() {
@@ -163,6 +165,51 @@ func TestLogout_ClearsCookie(t *testing.T) {
 		}
 	}
 	require.True(t, found)
+}
+
+func TestConsoleFormBoundary(t *testing.T) {
+	mux := newTestMux(t)
+
+	t.Run("known oversized login form", func(t *testing.T) {
+		body := strings.Repeat("x", int(formBodySmall)+1)
+		req := httptest.NewRequest(http.MethodPost, "/console/login", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	})
+
+	t.Run("unknown-length oversized login form", func(t *testing.T) {
+		body := "key=" + strings.Repeat("x", int(formBodySmall))
+		req := httptest.NewRequest(http.MethodPost, "/console/login", strings.NewReader(body))
+		req.ContentLength = -1
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusRequestEntityTooLarge, rr.Code)
+	})
+
+	t.Run("malformed encoding", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/console/login", strings.NewReader("key=%zz"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("wrong content type is not an empty form", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/console/login", strings.NewReader(`{"key":"`+testKey+`"}`))
+		req.Header.Set("Content-Type", "application/json")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusBadRequest, rr.Code)
+		require.Empty(t, rr.Result().Cookies())
+	})
+
+	t.Run("protected route authenticates before parsing", func(t *testing.T) {
+		body := strings.Repeat("x", int(formBodySmall)+1)
+		req := httptest.NewRequest(http.MethodPost, "/console/settings/briefing/reset", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusSeeOther, rr.Code)
+		require.Contains(t, rr.Header().Get("Location"), "/console/login")
+	})
 }
 
 func TestServeCSS(t *testing.T) {

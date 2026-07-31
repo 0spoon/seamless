@@ -11,6 +11,20 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
+func TestQueryTrials_LimitServiceBoundary(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+
+	for _, limit := range []int{-1, MaxTrialQueryLimit + 1} {
+		_, err := QueryTrials(ctx, db, TrialFilter{Limit: limit})
+		require.ErrorIs(t, err, ErrInvalidTrialQueryLimit)
+	}
+	for _, limit := range []int{0, 1, MaxTrialQueryLimit} {
+		_, err := QueryTrials(ctx, db, TrialFilter{Limit: limit})
+		require.NoError(t, err)
+	}
+}
+
 func addTrial(t *testing.T, db *sql.DB, lab, title string, outcome core.TrialOutcome, metrics map[string]any, seq int) string {
 	t.Helper()
 	return addTrialIn(t, db, lab, title, outcome, metrics, "demo", "", seq)

@@ -22,7 +22,8 @@ func recallTool() mcp.Tool {
 		mcp.WithString("scope", enumOf(retrieve.RecallScopes), mcp.Description("what to search (default all)")),
 		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
-		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("maximum results (default 10)")),
+		mcp.WithInteger("limit", mcp.Min(1), mcp.Max(retrieve.MaxRecallLimit),
+			mcp.Description("maximum results (default 10, max 100)")),
 	)
 }
 
@@ -40,7 +41,7 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 	}
 	hits, err := s.cfg.Retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: query, Project: project, Scope: argString(req, "scope"),
-		Kind: kind, Limit: argInt(req, "limit", 10),
+		Kind: kind, Limit: argInt(req, "limit", retrieve.DefaultRecallLimit),
 	})
 	if err != nil {
 		return errResult("recall", err)
@@ -76,7 +77,7 @@ func (s *Server) handleRecall(ctx context.Context, req mcp.CallToolRequest) (*mc
 		// demand for the pass to cluster, and "this project has no conventions
 		// yet" is not a missing memory.
 		payload := map[string]any{"query": events.Truncate(query, recallMissQueryMax), "scope": argString(req, "scope"),
-			"limit": argInt(req, "limit", 10), "source": "recall"}
+			"limit": argInt(req, "limit", retrieve.DefaultRecallLimit), "source": "recall"}
 		if kind != "" {
 			payload["kind"] = kind
 		}

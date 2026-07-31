@@ -51,6 +51,26 @@ func TestAddToolRecordsEverySchema(t *testing.T) {
 	}
 }
 
+func TestResultLimitsAreIntegerAndBounded(t *testing.T) {
+	wantMax := map[string]int{
+		"recall":      retrieve.MaxRecallLimit,
+		"trial_query": store.MaxTrialQueryLimit,
+	}
+	for _, tool := range Catalog() {
+		max, ok := wantMax[tool.Name]
+		if !ok {
+			continue
+		}
+		prop, ok := tool.InputSchema.Properties["limit"].(map[string]any)
+		require.True(t, ok, "%s limit schema", tool.Name)
+		require.Equal(t, "integer", prop["type"], "%s must advertise true integer semantics", tool.Name)
+		require.EqualValues(t, 1, prop["minimum"])
+		require.EqualValues(t, max, prop["maximum"])
+		delete(wantMax, tool.Name)
+	}
+	require.Empty(t, wantMax, "every bounded result tool must be present in the catalog")
+}
+
 // A tool the server never registered fails closed rather than dispatching
 // unvalidated. Unreachable through addTool by construction (the test above), so
 // this pins the fallback itself: mcp-go's per-session tools are the only path

@@ -116,6 +116,20 @@ func TestName(t *testing.T) {
 		{"leading-dot", ".hidden", true},
 		{"bare-dot", ".", true},
 		{"interior-dot-is-fine", "v1.2-notes", false},
+		{"canonical-slug", "team-alpha_2026", false},
+		{"unicode-is-portable", "café-東京", false},
+		{"forbidden-less-than", "team<alpha", true},
+		{"forbidden-greater-than", "team>alpha", true},
+		{"forbidden-colon", "team:alpha", true},
+		{"forbidden-quote", "team\"alpha", true},
+		{"forbidden-pipe", "team|alpha", true},
+		{"forbidden-question", "team?alpha", true},
+		{"forbidden-star", "team*alpha", true},
+		{"control-newline", "team\nalpha", true},
+		{"control-unit-separator", "team\x1falpha", true},
+		{"control-delete", "team\x7falpha", true},
+		{"trailing-dot", "team-alpha.", true},
+		{"trailing-space", "team-alpha ", true},
 
 		// Audit I11: Windows resolves these as devices in every directory, so
 		// the file cannot exist there. Rejected everywhere, because the corpus
@@ -137,5 +151,21 @@ func TestName(t *testing.T) {
 				require.NoError(t, err)
 			}
 		})
+	}
+}
+
+func TestProject(t *testing.T) {
+	for _, global := range []string{"global", "_global"} {
+		got, err := Project(global)
+		require.NoError(t, err)
+		require.Empty(t, got)
+	}
+	got, err := Project("team-alpha")
+	require.NoError(t, err)
+	require.Equal(t, "team-alpha", got)
+
+	for _, bad := range []string{"all", "../notes", "a/b", "team:alpha", "team-alpha."} {
+		_, err := Project(bad)
+		require.Error(t, err)
 	}
 }

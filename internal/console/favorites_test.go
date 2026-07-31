@@ -71,6 +71,39 @@ func TestFavoriteToggle_DBKindsAndRedirects(t *testing.T) {
 	require.Contains(t, rr.Body.String(), `"favorite": true`)
 }
 
+func TestFavoriteToggle_RequiresOneExplicitBooleanValue(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: "01P", Slug: "seam", Name: "Seam", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, store.SetProjectFavorite(ctx, db, "seam", true))
+
+	for _, tt := range []struct {
+		name string
+		path string
+		form url.Values
+	}{
+		{"missing", "/console/favorites/project/seam", url.Values{}},
+		{"invalid", "/console/favorites/project/seam", url.Values{"favorite": {"yes"}}},
+		{"multiple", "/console/favorites/project/seam", url.Values{"favorite": {"0", "1"}}},
+		{"query value does not substitute for body", "/console/favorites/project/seam?favorite=0", url.Values{}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodPost, tt.path, strings.NewReader(tt.form.Encode()))
+			req.Header.Set("Authorization", "Bearer "+testKey)
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rr := do(mux, req)
+			require.Equal(t, http.StatusBadRequest, rr.Code)
+			project, found, err := store.ProjectBySlug(ctx, db, "seam")
+			require.NoError(t, err)
+			require.True(t, found)
+			require.True(t, project.Favorite, "invalid input must not silently unstar")
+		})
+	}
+}
+
 func TestFavoriteToggle_FileKinds(t *testing.T) {
 	db, mgr, mux := newConsoleWithFiles(t)
 	ctx := context.Background()

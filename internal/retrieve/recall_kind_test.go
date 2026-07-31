@@ -8,6 +8,24 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestRecallLimitServiceBoundary(t *testing.T) {
+	db := setupDB(t)
+	svc := New(db, nil, budgets(), nil)
+	ctx := context.Background()
+
+	for _, limit := range []int{-1, MaxRecallLimit + 1} {
+		_, err := svc.Recall(ctx, RecallInput{Query: "anything", Limit: limit})
+		require.ErrorIs(t, err, ErrInvalidRecallLimit)
+	}
+
+	// Zero is the Go API's explicit zero-value default; transport boundaries
+	// distinguish an absent key from a caller-sent zero and reject the latter.
+	_, err := svc.Recall(ctx, RecallInput{Query: "anything", Limit: 0})
+	require.NoError(t, err)
+	_, err = svc.Recall(ctx, RecallInput{Query: "anything", Limit: MaxRecallLimit})
+	require.NoError(t, err)
+}
+
 // The kind filter is applied inside the candidate queries: only memories of
 // that frontmatter kind return, and notes are excluded even under the default
 // all scope -- a kind names a memory attribute, so it implies memories-only.

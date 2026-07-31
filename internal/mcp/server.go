@@ -46,18 +46,24 @@ const (
 	// gardener_request = 29; gardener_split = 30; favorite_set = 31.
 	ToolCount = 31
 
+	// maxRequestBodyBytes bounds the streamable-HTTP POST body before mcp-go
+	// buffers it. MCP calls are compact JSON-RPC envelopes; 1 MiB leaves ample
+	// room for long note bodies while preventing caller-controlled unbounded
+	// allocation at the transport boundary.
+	maxRequestBodyBytes int64 = 1 << 20
+
 	// globalNamespace is the reserved project token an agent passes to
 	// deliberately target the global (cross-project) scope, instead of relying on
 	// an empty project (which is easy to hit by accident). "_global" -- the
 	// on-disk directory name -- is accepted as a synonym.
-	globalNamespace = "global"
+	globalNamespace = validate.GlobalProject
 
 	// allProjectsToken is the reserved project token that widens a read to every
 	// project on the machine. Only gardener_request interprets it, and only
 	// because scanning everything is a real reorganization workflow -- but one
 	// that must be asked for. It exists so that capability could survive being
 	// taken off the empty project, where it was the silent default.
-	allProjectsToken = "all"
+	allProjectsToken = validate.AllProjects
 )
 
 // errNoSession is returned when a session-scoped tool is called with neither a
@@ -165,17 +171,7 @@ func normalizeProject(explicit string) string {
 // slug it is handed. The two ways to name a project scope agree on what a project
 // may be called.
 func validateProjectArg(explicit string) (string, error) {
-	project := normalizeProject(explicit)
-	if project == "" {
-		return "", nil
-	}
-	if project == allProjectsToken {
-		return "", fmt.Errorf("project %q is reserved: gardener_request reads it as every project; name a real slug", explicit)
-	}
-	if err := validate.Name(project); err != nil {
-		return "", fmt.Errorf("invalid project %q: %w", explicit, err)
-	}
-	return project, nil
+	return validate.Project(explicit)
 }
 
 // Config wires the MCP server's dependencies.
@@ -286,18 +282,33 @@ func New(cfg Config) *Server {
 	return s
 }
 
-// Handler returns the streamable-HTTP handler for /api/mcp. The static key is
-// verified in the HTTP context func (which tags the context on success); the
-// tool middleware rejects any call whose context was not tagged.
+// Handler returns the streamable-HTTP handler for /api/mcp. Authentication is
+// enforced outside mcp-go so every protocol method -- initialize, discovery,
+// SSE, termination, and tool calls -- is rejected before the dependency reads
+// a body or creates a session. Authorized POST bodies are capped before mcp-go
+// buffers them. The tool middleware remains as defense in depth for any future
+// non-HTTP transport or direct in-process dispatch.
 func (s *Server) Handler() http.Handler {
-	return mcpserver.NewStreamableHTTPServer(s.mcp,
-		mcpserver.WithHTTPContextFunc(func(ctx context.Context, r *http.Request) context.Context {
-			if verifyBearer(r, s.cfg.APIKey) {
-				ctx = context.WithValue(ctx, authedKey{}, true)
+	transport := mcpserver.NewStreamableHTTPServer(s.mcp)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !verifyBearer(r, s.cfg.APIKey) {
+			w.Header().Set("WWW-Authenticate", "Bearer")
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if r.Method == http.MethodPost {
+			// Reject a known-oversized body without consuming any of it. The
+			// MaxBytesReader below is still required for chunked/unknown-length
+			// bodies and for a dishonest Content-Length.
+			if r.ContentLength > maxRequestBodyBytes {
+				http.Error(w, "request body too large", http.StatusRequestEntityTooLarge)
+				return
 			}
-			return ctx
-		}),
-	)
+			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+		}
+		ctx := context.WithValue(r.Context(), authedKey{}, true)
+		transport.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func (s *Server) registerTools() {

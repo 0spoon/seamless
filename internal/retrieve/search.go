@@ -90,7 +90,10 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		return nil, err
 	}
 
-	out := make([]Hit, 0, limit)
+	// The requested limit can come from a library caller. Capacity only needs to
+	// cover the finite candidate set; bounding it here avoids a disproportionate
+	// allocation even when the caller supplies an unusually large limit.
+	out := make([]Hit, 0, min(limit, len(ordered)))
 	for _, id := range ordered {
 		if len(out) >= limit {
 			break

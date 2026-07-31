@@ -23,6 +23,17 @@ import (
 // behind the MCP layer's project validation.
 var ErrTreeEscape = errors.New("computed path escapes the item's tree")
 
+// ErrSymlink is returned when any path component below the configured data
+// directory is a symbolic link. Corpus operations deliberately do not follow
+// even an in-tree link: a synced or agent-created link must never make a file
+// outside the declared tree look like source-of-truth knowledge.
+var ErrSymlink = errors.New("symlink not allowed in corpus path")
+
+// ErrNotRegular is returned when a corpus file path names a directory, device,
+// socket, or other non-regular entry. Memory and note bodies are regular files;
+// treating another entry type as absent would make a later write ambiguous.
+var ErrNotRegular = errors.New("corpus path is not a regular file")
+
 // checkTree verifies that an item's project is a safe single path segment (the
 // same validate.Name rule the MCP layer applies to explicit project args) and
 // that the computed data-dir-relative path sits under the expected tree
@@ -271,11 +282,108 @@ func (s *Store) DataDir() string { return s.dataDir }
 
 // abs resolves a data-dir-relative path to an absolute path, rejecting escapes.
 func (s *Store) abs(relPath string) (string, error) {
-	clean := filepath.Clean(filepath.FromSlash(relPath))
-	if err := validate.PathWithinDir(clean, s.dataDir); err != nil {
+	clean, err := s.cleanRel(relPath)
+	if err != nil {
 		return "", fmt.Errorf("files: %s: %w", relPath, err)
 	}
 	return filepath.Join(s.dataDir, clean), nil
+}
+
+// cleanRel validates and normalizes a data-dir-relative path for os.Root.
+func (s *Store) cleanRel(relPath string) (string, error) {
+	clean := filepath.Clean(filepath.FromSlash(relPath))
+	if err := validate.PathWithinDir(clean, s.dataDir); err != nil {
+		return "", err
+	}
+	return clean, nil
+}
+
+// openRoot opens the configured data directory as a rooted filesystem handle.
+// Rooted operations cannot escape that directory even if a path component is
+// swapped after our explicit no-symlink check. The data directory itself is the
+// configured trust root and may be a user-selected symlink; every component
+// below it is checked by inspectNoSymlink.
+func (s *Store) openRoot(create bool) (*os.Root, error) {
+	if create {
+		if err := os.MkdirAll(s.dataDir, dirMode); err != nil {
+			return nil, fmt.Errorf("files: mkdir data dir: %w", err)
+		}
+	}
+	root, err := os.OpenRoot(s.dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("files: open data root: %w", err)
+	}
+	return root, nil
+}
+
+// closeRoot preserves a close failure when the operation itself succeeded.
+// Root holds a directory descriptor on supported platforms, so leaking it from
+// a long-running daemon would be material even though close failures are rare.
+func closeRoot(root *os.Root, retErr *error) {
+	if err := root.Close(); err != nil && *retErr == nil {
+		*retErr = fmt.Errorf("files: close data root: %w", err)
+	}
+}
+
+// inspectNoSymlink walks every existing component using Lstat. When
+// allowMissing is true, the first missing component ends the check successfully;
+// callers may then create the missing tail through os.Root and re-check it.
+func inspectNoSymlink(root *os.Root, relPath string, allowMissing bool) (os.FileInfo, error) {
+	parts := strings.Split(filepath.Clean(relPath), string(filepath.Separator))
+	current := ""
+	for i, part := range parts {
+		current = filepath.Join(current, part)
+		info, err := root.Lstat(current)
+		if err != nil {
+			if allowMissing && errors.Is(err, os.ErrNotExist) {
+				return nil, nil
+			}
+			return nil, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("%w: %s", ErrSymlink, filepath.ToSlash(current))
+		}
+		if i < len(parts)-1 && !info.IsDir() {
+			return nil, fmt.Errorf("%w: parent %s is not a directory", ErrNotRegular, filepath.ToSlash(current))
+		}
+		if i == len(parts)-1 {
+			return info, nil
+		}
+	}
+	return nil, fmt.Errorf("files: empty rooted path")
+}
+
+// ensureDir creates relPath below the data root and rejects any pre-existing
+// symlink or non-directory component. It is used for the fixed corpus trees so
+// startup cannot silently accept memory/ or notes/ redirected elsewhere.
+func (s *Store) ensureDir(relPath string) (err error) {
+	clean, err := s.cleanRel(relPath)
+	if err != nil {
+		return err
+	}
+	root, err := s.openRoot(true)
+	if err != nil {
+		return err
+	}
+	defer closeRoot(root, &err)
+
+	info, err := inspectNoSymlink(root, clean, true)
+	if err != nil {
+		return err
+	}
+	if info == nil {
+		if err := root.MkdirAll(clean, dirMode); err != nil {
+			return fmt.Errorf("files: mkdir %s: %w", filepath.ToSlash(clean), err)
+		}
+		info, err = inspectNoSymlink(root, clean, false)
+		if err != nil {
+			return err
+		}
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%w: %s is not a directory", ErrNotRegular, filepath.ToSlash(clean))
+	}
+	return nil
 }
 
 // WriteMemory renders m, writes it atomically to its computed path, and returns
@@ -340,12 +448,31 @@ func (s *Store) ReadNote(relPath string) (core.Note, error) {
 
 // Remove deletes the file at a data-dir-relative path. A missing file is not an
 // error (the desired end-state already holds).
-func (s *Store) Remove(relPath string) error {
-	abs, err := s.abs(relPath)
+func (s *Store) Remove(relPath string) (err error) {
+	clean, err := s.cleanRel(relPath)
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(abs); err != nil && !os.IsNotExist(err) {
+	root, err := s.openRoot(false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	defer closeRoot(root, &err)
+
+	info, err := inspectNoSymlink(root, clean, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("files.Remove: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("files.Remove: %w: %s", ErrNotRegular, relPath)
+	}
+	if err := root.Remove(clean); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("files.Remove: %w", err)
 	}
 	return nil
@@ -353,35 +480,102 @@ func (s *Store) Remove(relPath string) error {
 
 // Exists reports whether the file at a data-dir-relative path exists.
 func (s *Store) Exists(relPath string) bool {
-	abs, err := s.abs(relPath)
-	if err != nil {
-		return false
-	}
-	_, err = os.Stat(abs)
-	return err == nil
+	exists, err := s.fileExists(relPath)
+	return err == nil && exists
 }
 
-func (s *Store) readFile(relPath string) (string, error) {
-	abs, err := s.abs(relPath)
+func (s *Store) fileExists(relPath string) (exists bool, err error) {
+	clean, err := s.cleanRel(relPath)
+	if err != nil {
+		return false, err
+	}
+	root, err := s.openRoot(false)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer closeRoot(root, &err)
+
+	info, err := inspectNoSymlink(root, clean, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if !info.Mode().IsRegular() {
+		return false, fmt.Errorf("%w: %s", ErrNotRegular, relPath)
+	}
+	return true, nil
+}
+
+func (s *Store) readFile(relPath string) (content string, err error) {
+	clean, err := s.cleanRel(relPath)
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(abs)
+	root, err := s.openRoot(false)
+	if err != nil {
+		return "", err
+	}
+	defer closeRoot(root, &err)
+
+	info, err := inspectNoSymlink(root, clean, false)
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%w: %s", ErrNotRegular, relPath)
+	}
+	data, err := root.ReadFile(clean)
 	if err != nil {
 		return "", err
 	}
 	return string(data), nil
 }
 
-func (s *Store) writeFile(relPath, content string) error {
-	abs, err := s.abs(relPath)
+func (s *Store) writeFile(relPath, content string) (err error) {
+	clean, err := s.cleanRel(relPath)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(abs), dirMode); err != nil {
-		return fmt.Errorf("files: mkdir: %w", err)
+	root, err := s.openRoot(true)
+	if err != nil {
+		return err
 	}
-	return AtomicWrite(abs, []byte(content), fileMode)
+	defer closeRoot(root, &err)
+
+	parent := filepath.Dir(clean)
+	parentInfo, err := inspectNoSymlink(root, parent, true)
+	if err != nil {
+		return err
+	}
+	if parentInfo == nil {
+		if err := root.MkdirAll(parent, dirMode); err != nil {
+			return fmt.Errorf("files: mkdir: %w", err)
+		}
+	}
+	parentInfo, err = inspectNoSymlink(root, parent, false)
+	if err != nil {
+		return err
+	}
+	if !parentInfo.IsDir() {
+		return fmt.Errorf("%w: parent %s is not a directory", ErrNotRegular, filepath.ToSlash(parent))
+	}
+	if info, err := inspectNoSymlink(root, clean, true); err != nil {
+		return err
+	} else if info != nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: %s", ErrNotRegular, relPath)
+	}
+
+	parentRoot, err := root.OpenRoot(parent)
+	if err != nil {
+		return fmt.Errorf("files: open parent: %w", err)
+	}
+	defer closeRoot(parentRoot, &err)
+	return atomicWriteRoot(parentRoot, filepath.Base(clean), []byte(content), fileMode)
 }
 
 // treeAndRel splits a data-dir-relative path into its tree ("memory"|"notes")

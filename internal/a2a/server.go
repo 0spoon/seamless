@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"slices"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 // JSON-RPC error codes: the standard four plus the A2A-specific range. Only
@@ -180,14 +182,37 @@ func (s *Server) handleSend(w http.ResponseWriter, r *http.Request, id json.RawM
 		return
 	}
 
-	project := metaString(params.Message.Metadata, "project")
-	scope := metaString(params.Message.Metadata, "scope")
-	if scope != "" && !slices.Contains(retrieve.RecallScopes, scope) {
+	project, projectPresent, err := metaString(params.Message.Metadata, "project")
+	if err != nil {
+		s.writeError(w, id, codeInvalidParams, err.Error())
+		return
+	}
+	if projectPresent {
+		if project == "" {
+			s.writeError(w, id, codeInvalidParams, "metadata.project must be a non-empty project slug or global")
+			return
+		}
+		project, err = validate.Project(project)
+		if err != nil {
+			s.writeError(w, id, codeInvalidParams, "metadata.project: "+err.Error())
+			return
+		}
+	}
+	scope, scopePresent, err := metaString(params.Message.Metadata, "scope")
+	if err != nil {
+		s.writeError(w, id, codeInvalidParams, err.Error())
+		return
+	}
+	if scopePresent && !slices.Contains(retrieve.RecallScopes, scope) {
 		s.writeError(w, id, codeInvalidParams,
 			"metadata.scope must be one of "+strings.Join(retrieve.RecallScopes, "|"))
 		return
 	}
-	limit := metaInt(params.Message.Metadata, "limit")
+	limit, _, err := metaInt(params.Message.Metadata, "limit", retrieve.MaxRecallLimit)
+	if err != nil {
+		s.writeError(w, id, codeInvalidParams, err.Error())
+		return
+	}
 
 	hits, err := s.cfg.Retrieve.Recall(r.Context(), retrieve.RecallInput{
 		Query: query, Project: project, Scope: scope, Limit: limit,
@@ -331,19 +356,56 @@ func normalizeID(id json.RawMessage) json.RawMessage {
 	return id
 }
 
-func metaString(meta map[string]any, key string) string {
-	v, _ := meta[key].(string)
-	return strings.TrimSpace(v)
+func metaString(meta map[string]any, key string) (string, bool, error) {
+	v, present := meta[key]
+	if !present {
+		return "", false, nil
+	}
+	s, ok := v.(string)
+	if !ok {
+		return "", true, fmt.Errorf("metadata.%s must be a string, got %s", key, metadataType(v))
+	}
+	return strings.TrimSpace(s), true, nil
 }
 
-// metaInt reads a numeric metadata key; JSON numbers decode as float64.
-// Zero (absent, or nonsense) lets Recall apply its own default.
-func metaInt(meta map[string]any, key string) int {
-	v, ok := meta[key].(float64)
-	if !ok || v < 0 {
-		return 0
+// metaInt reads a positive integer metadata key. JSON numbers decode as
+// float64, so integrality must be checked before conversion; absent remains the
+// service's zero-value default, while every malformed present value is loud.
+func metaInt(meta map[string]any, key string, max int) (int, bool, error) {
+	v, present := meta[key]
+	if !present {
+		return 0, false, nil
 	}
-	return int(v)
+	f, ok := v.(float64)
+	if !ok {
+		return 0, true, fmt.Errorf("metadata.%s must be an integer, got %s", key, metadataType(v))
+	}
+	if math.IsNaN(f) || math.IsInf(f, 0) || math.Trunc(f) != f {
+		return 0, true, fmt.Errorf("metadata.%s must be an integer, got %v", key, f)
+	}
+	if f < 1 || f > float64(max) {
+		return 0, true, fmt.Errorf("metadata.%s must be between 1 and %d", key, max)
+	}
+	return int(f), true, nil
+}
+
+func metadataType(v any) string {
+	switch v.(type) {
+	case nil:
+		return "null"
+	case bool:
+		return "boolean"
+	case float64:
+		return "number"
+	case string:
+		return "string"
+	case []any:
+		return "array"
+	case map[string]any:
+		return "object"
+	default:
+		return fmt.Sprintf("%T", v)
+	}
 }
 
 // verifyBearer mirrors internal/mcp's check: constant-time compare, and an

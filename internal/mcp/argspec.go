@@ -286,8 +286,11 @@ func coerceProp(prop map[string]any, v any, name string) (out any, drop bool, er
 	case "string":
 		s, err := coerceString(v, name)
 		return s, false, err
-	case "number", "integer":
+	case "number":
 		f, err := coerceNumber(v, name)
+		return f, false, err
+	case "integer":
+		f, err := coerceInteger(v, name)
 		return f, false, err
 	case "array":
 		list, err := coerceStrings(v, name)
@@ -339,6 +342,21 @@ func coerceNumber(v any, key string) (float64, error) {
 	default:
 		return 0, fmt.Errorf("invalid %s: expected a number, got %s", key, jsonTypeName(v))
 	}
+}
+
+// coerceInteger accepts the same native and legacy string forms as
+// coerceNumber, then enforces mathematical integrality. JSON decoders represent
+// both 1 and 1.0 as float64, so checking the value -- rather than its lexical
+// spelling -- is the only stable integer rule.
+func coerceInteger(v any, key string) (float64, error) {
+	f, err := coerceNumber(v, key)
+	if err != nil {
+		return 0, err
+	}
+	if math.Trunc(f) != f {
+		return 0, fmt.Errorf("invalid %s: expected an integer, got %s", key, formatNumber(f))
+	}
+	return f, nil
 }
 
 // checkFinite rejects the float64 values that cannot survive the trip to an int.

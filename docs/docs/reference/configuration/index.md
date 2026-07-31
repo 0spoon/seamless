@@ -243,12 +243,14 @@ llm:
     embedding_model: "text-embedding-3-large"
     # Native dimensionality of the embedding model. 0 = auto-detect from the
     # first embedding response (the store records dims per row regardless).
+    # Maximum: 65536.
     embedding_dims: 3072
 
   ollama:
     base_url: "http://127.0.0.1:11434"
     chat_model: "llama3.3:latest"
     embedding_model: "qwen3-embedding:8b"
+    # 0 = auto-detect; maximum 65536.
     embedding_dims: 0
 
   anthropic:
@@ -296,7 +298,7 @@ gardener:
   # Minutes of no activity before an active session counts as dead: the reaper
   # expires it and the console stops showing it as live. One knob drives both,
   # so they never drift. Must comfortably exceed a long single agent turn.
-  # 0 = the built-in 45m default.
+  # Must be positive; omit the key to retain the built-in 45m default.
   # env: SEAMLESS_GARDENER_SESSION_IDLE_MINUTES
   session_idle_minutes: 45
 

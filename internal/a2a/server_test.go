@@ -24,12 +24,14 @@ const testKey = "test-key"
 
 // stubRecaller records the input it saw and returns canned hits or an error.
 type stubRecaller struct {
-	in   retrieve.RecallInput
-	hits []retrieve.Hit
-	err  error
+	in    retrieve.RecallInput
+	hits  []retrieve.Hit
+	err   error
+	calls int
 }
 
 func (s *stubRecaller) Recall(_ context.Context, in retrieve.RecallInput) ([]retrieve.Hit, error) {
+	s.calls++
 	s.in = in
 	return s.hits, s.err
 }
@@ -125,6 +127,74 @@ func TestHandler_MethodRouting(t *testing.T) {
 			_, rpcErr := rpc(t, ts.URL, testKey, body)
 			require.NotNil(t, rpcErr)
 			require.Equal(t, tt.wantCode, rpcErr.Code)
+		})
+	}
+}
+
+func TestMessageSend_MetadataRejectsEveryMalformedPresentValue(t *testing.T) {
+	tests := []struct {
+		name string
+		meta map[string]any
+		want string
+	}{
+		{"scope boolean", map[string]any{"scope": false}, "metadata.scope must be a string"},
+		{"scope null", map[string]any{"scope": nil}, "metadata.scope must be a string"},
+		{"scope number", map[string]any{"scope": 1}, "metadata.scope must be a string"},
+		{"scope array", map[string]any{"scope": []any{"all"}}, "metadata.scope must be a string"},
+		{"scope object", map[string]any{"scope": map[string]any{}}, "metadata.scope must be a string"},
+		{"scope empty", map[string]any{"scope": ""}, "metadata.scope must be one of"},
+		{"project boolean", map[string]any{"project": false}, "metadata.project must be a string"},
+		{"project null", map[string]any{"project": nil}, "metadata.project must be a string"},
+		{"project number", map[string]any{"project": 1}, "metadata.project must be a string"},
+		{"project array", map[string]any{"project": []any{"demo"}}, "metadata.project must be a string"},
+		{"project object", map[string]any{"project": map[string]any{}}, "metadata.project must be a string"},
+		{"project empty", map[string]any{"project": ""}, "metadata.project must be a non-empty"},
+		{"project traversal", map[string]any{"project": "../notes"}, "invalid project"},
+		{"project reserved", map[string]any{"project": "all"}, "reserved"},
+		{"limit boolean", map[string]any{"limit": false}, "metadata.limit must be an integer"},
+		{"limit null", map[string]any{"limit": nil}, "metadata.limit must be an integer"},
+		{"limit string", map[string]any{"limit": "5"}, "metadata.limit must be an integer"},
+		{"limit array", map[string]any{"limit": []any{5}}, "metadata.limit must be an integer"},
+		{"limit object", map[string]any{"limit": map[string]any{}}, "metadata.limit must be an integer"},
+		{"limit fraction", map[string]any{"limit": 1.9}, "metadata.limit must be an integer"},
+		{"limit zero", map[string]any{"limit": 0}, "metadata.limit must be between"},
+		{"limit negative", map[string]any{"limit": -1}, "metadata.limit must be between"},
+		{"limit too large", map[string]any{"limit": retrieve.MaxRecallLimit + 1}, "metadata.limit must be between"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stub := &stubRecaller{}
+			ts := newTestServer(t, stub, nil)
+			_, rpcErr := rpc(t, ts.URL, testKey, sendBody("q", tt.meta))
+			require.NotNil(t, rpcErr)
+			require.Equal(t, codeInvalidParams, rpcErr.Code)
+			require.Contains(t, rpcErr.Message, tt.want)
+			require.Zero(t, stub.calls, "invalid metadata must not reach retrieval")
+		})
+	}
+}
+
+func TestMessageSend_MetadataDefaultsAndBoundaries(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		meta        map[string]any
+		wantProject string
+		wantLimit   int
+	}{
+		{"absent defaults", nil, "", 0},
+		{"minimum", map[string]any{"limit": 1}, "", 1},
+		{"maximum", map[string]any{"limit": retrieve.MaxRecallLimit}, "", retrieve.MaxRecallLimit},
+		{"global token", map[string]any{"project": "global"}, "", 0},
+		{"named project", map[string]any{"project": "demo"}, "demo", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			stub := &stubRecaller{}
+			ts := newTestServer(t, stub, nil)
+			_, rpcErr := rpc(t, ts.URL, testKey, sendBody("q", tc.meta))
+			require.Nil(t, rpcErr)
+			require.Equal(t, 1, stub.calls)
+			require.Equal(t, tc.wantProject, stub.in.Project)
+			require.Equal(t, tc.wantLimit, stub.in.Limit)
 		})
 	}
 }

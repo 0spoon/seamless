@@ -3,6 +3,7 @@ package mcp_test
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -198,13 +199,10 @@ func TestLogMiddleware_BoundSessionEndAttribution(t *testing.T) {
 }
 
 func TestLogMiddleware_UnauthorizedLogsNothing(t *testing.T) {
-	ctx := context.Background()
 	url, db := newServer(t)
-	// A client with the wrong key: auth rejects before the logger runs.
-	cli := dialClient(t, ctx, url, "wrong-key")
-	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{Name: "project_list"}})
-	require.NoError(t, err)
-	require.True(t, res.IsError)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"project_list","arguments":{}}}`
+	status, _, _ := rawMCPRequest(t, url, http.MethodPost, "wrong-key", body)
+	require.Equal(t, http.StatusUnauthorized, status)
 
 	require.Empty(t, toolCallEvents(t, db), "unauthorized calls must not be logged")
 }

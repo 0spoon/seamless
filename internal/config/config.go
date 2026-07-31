@@ -6,14 +6,28 @@
 package config
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
+)
+
+const (
+	// MaxEmbeddingDimensions bounds a configured/requested vector size. Current
+	// providers are in the low thousands; 65,536 permits future models while
+	// preventing a typo from driving unbounded vector allocations downstream.
+	MaxEmbeddingDimensions = 65_536
+	maxDurationMinutes     = int64(math.MaxInt64) / int64(time.Minute)
+	maxDurationDays        = int64(math.MaxInt64) / int64(24*time.Hour)
 )
 
 // LLM provider identifiers.
@@ -157,7 +171,7 @@ func (b Briefing) Validate() error {
 			return fmt.Errorf("config: briefing.%s must be >= 0", f.name)
 		}
 	}
-	if b.UtilityWeight < 0 || b.UtilityWeight > 1 {
+	if !finite(b.UtilityWeight) || b.UtilityWeight < 0 || b.UtilityWeight > 1 {
 		return fmt.Errorf("config: briefing.utility_weight must be in [0, 1]")
 	}
 	// Absent (empty) means the default; present-but-unrecognized is an error,
@@ -291,7 +305,9 @@ type Gardener struct {
 	// is considered dead: the gardener reaper expires it and the console stops
 	// counting it as live. It is the single liveness threshold shared by both,
 	// so the reaper cutoff and the console "live" window never drift.
-	// 0 falls back to core.SessionIdleTTL (45m).
+	// Must be positive. The fully resolved config already supplies 45 when the
+	// key is absent, so zero is an explicit invalid value rather than a second,
+	// silent spelling of the default.
 	SessionIdleMinutes int `yaml:"session_idle_minutes"`
 }
 
@@ -372,9 +388,24 @@ func LoadFrom(path string) (Config, error) {
 		if err != nil {
 			return Config{}, fmt.Errorf("config.Load: read %s: %w", path, err)
 		}
-		// Unmarshal over the defaults: absent keys keep their default value.
-		if err := yaml.Unmarshal(data, &cfg); err != nil {
+		if nullPath := explicitNullPath(data); nullPath != "" {
+			return Config{}, fmt.Errorf("config.Load: parse %s: %s must not be null", path, nullPath)
+		}
+		// Decode over the defaults: absent keys keep their default value. KnownFields
+		// makes a typo fail at startup instead of quietly preserving a potentially
+		// privacy-sensitive default, and the second decode rejects appended YAML
+		// documents that would otherwise be ignored.
+		dec := yaml.NewDecoder(bytes.NewReader(data))
+		dec.KnownFields(true)
+		if err := dec.Decode(&cfg); err != nil && !errors.Is(err, io.EOF) {
 			return Config{}, fmt.Errorf("config.Load: parse %s: %w", path, err)
+		}
+		var trailing any
+		if err := dec.Decode(&trailing); !errors.Is(err, io.EOF) {
+			if err != nil {
+				return Config{}, fmt.Errorf("config.Load: parse %s: %w", path, err)
+			}
+			return Config{}, fmt.Errorf("config.Load: parse %s: multiple YAML documents are not allowed", path)
 		}
 		cfg.sourcePath = path
 	}
@@ -401,6 +432,52 @@ func LoadFrom(path string) (Config, error) {
 	return cfg, nil
 }
 
+// explicitNullPath returns the first YAML key explicitly assigned null. Config
+// has no nullable fields: a null scalar decoded over Defaults can otherwise
+// preserve or erase a value depending on its Go type, making a present value
+// indistinguishable from absence. Syntax, duplicate-key, and trailing-document
+// errors are left to the strict concrete decode below so diagnostics stay
+// canonical.
+func explicitNullPath(data []byte) string {
+	dec := yaml.NewDecoder(bytes.NewReader(data))
+	var doc yaml.Node
+	if err := dec.Decode(&doc); err != nil {
+		return ""
+	}
+	return nullNodePath(&doc, "config")
+}
+
+func nullNodePath(node *yaml.Node, path string) string {
+	if node == nil {
+		return ""
+	}
+	if node.Tag == "!!null" {
+		return path
+	}
+	switch node.Kind {
+	case yaml.DocumentNode:
+		if len(node.Content) == 1 {
+			return nullNodePath(node.Content[0], path)
+		}
+	case yaml.MappingNode:
+		for i := 0; i+1 < len(node.Content); i += 2 {
+			childPath := path + "." + node.Content[i].Value
+			if found := nullNodePath(node.Content[i+1], childPath); found != "" {
+				return found
+			}
+		}
+	case yaml.SequenceNode:
+		for i, child := range node.Content {
+			if found := nullNodePath(child, fmt.Sprintf("%s[%d]", path, i)); found != "" {
+				return found
+			}
+		}
+	case yaml.AliasNode:
+		return nullNodePath(node.Alias, path)
+	}
+	return ""
+}
+
 // Validate rejects hard-invalid configuration. Soft issues (empty API keys) are
 // surfaced as warnings by the doctor, not here.
 func (c Config) Validate() error {
@@ -424,31 +501,68 @@ func (c Config) Validate() error {
 	if c.Budgets.ToolEventMaxChars < 0 {
 		return fmt.Errorf("config: budgets.tool_event_max_chars must be >= 0")
 	}
+	if c.Gardener.IntervalMinutes <= 0 || int64(c.Gardener.IntervalMinutes) > maxDurationMinutes {
+		return fmt.Errorf("config: gardener.interval_minutes must be in [1, %d]", maxDurationMinutes)
+	}
+	if !finite(c.Gardener.DedupThreshold) || c.Gardener.DedupThreshold <= 0 || c.Gardener.DedupThreshold > 1 {
+		return fmt.Errorf("config: gardener.dedup_threshold must be finite and in (0, 1]")
+	}
+	if c.Gardener.StalenessDays <= 0 || int64(c.Gardener.StalenessDays) > maxDurationDays {
+		return fmt.Errorf("config: gardener.staleness_days must be in [1, %d]", maxDurationDays)
+	}
+	if c.Gardener.DigestDays <= 0 || int64(c.Gardener.DigestDays) > maxDurationDays {
+		return fmt.Errorf("config: gardener.digest_days must be in [1, %d]", maxDurationDays)
+	}
 	if c.Gardener.ToolEventRetentionDays < 0 {
 		return fmt.Errorf("config: gardener.tool_event_retention_days must be >= 0")
+	}
+	if int64(c.Gardener.ToolEventRetentionDays) > maxDurationDays {
+		return fmt.Errorf("config: gardener.tool_event_retention_days must be <= %d", maxDurationDays)
 	}
 	if c.Gardener.StalePlanDays < 0 {
 		return fmt.Errorf("config: gardener.stale_plan_days must be >= 0")
 	}
+	if int64(c.Gardener.StalePlanDays) > maxDurationDays {
+		return fmt.Errorf("config: gardener.stale_plan_days must be <= %d", maxDurationDays)
+	}
 	if c.Gardener.StaleStageDays < 0 {
 		return fmt.Errorf("config: gardener.stale_stage_days must be >= 0")
 	}
-	if c.Gardener.SessionIdleMinutes < 0 {
-		return fmt.Errorf("config: gardener.session_idle_minutes must be >= 0")
+	if int64(c.Gardener.StaleStageDays) > maxDurationDays {
+		return fmt.Errorf("config: gardener.stale_stage_days must be <= %d", maxDurationDays)
+	}
+	if c.Gardener.SessionIdleMinutes <= 0 || int64(c.Gardener.SessionIdleMinutes) > maxDurationMinutes {
+		return fmt.Errorf("config: gardener.session_idle_minutes must be in [1, %d]", maxDurationMinutes)
+	}
+	for _, dims := range []struct {
+		name string
+		v    int
+	}{
+		{"llm.openai.embedding_dims", c.LLM.OpenAI.EmbeddingDims},
+		{"llm.ollama.embedding_dims", c.LLM.Ollama.EmbeddingDims},
+	} {
+		if dims.v < 0 || dims.v > MaxEmbeddingDimensions {
+			return fmt.Errorf("config: %s must be in [0, %d]", dims.name, MaxEmbeddingDimensions)
+		}
 	}
 	for _, p := range c.Capture.AllowedPorts {
 		if p < 1 || p > 65535 {
 			return fmt.Errorf("config: capture.allowed_ports: %d is not a valid port (1-65535)", p)
 		}
 	}
-	if c.Search.SemanticFloor < 0 || c.Search.SemanticFloor > 1 {
+	if !finite(c.Search.SemanticFloor) || c.Search.SemanticFloor < 0 || c.Search.SemanticFloor > 1 {
 		return fmt.Errorf("config: search.semantic_floor must be in [0, 1]")
 	}
 	if err := c.Briefing.Validate(); err != nil {
 		return err
 	}
+	if c.Briefing.HardCapMultiplier > 0 && c.Budgets.MaxBriefingTokens > math.MaxInt/c.Briefing.HardCapMultiplier {
+		return fmt.Errorf("config: briefing.hard_cap_multiplier times budgets.max_briefing_tokens overflows int")
+	}
 	return nil
 }
+
+func finite(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) }
 
 // SourcePath returns the config file that was loaded, or "" if defaults+env only.
 func (c Config) SourcePath() string { return c.sourcePath }

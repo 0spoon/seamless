@@ -38,7 +38,12 @@ func (s *Service) favoriteToggle(w http.ResponseWriter, r *http.Request) {
 		s.notFound(w, r, "Unknown favorite kind "+kind+".")
 		return
 	}
-	fav := r.FormValue("favorite") == "1"
+	favorites, present := r.PostForm["favorite"]
+	if !present || len(favorites) != 1 || (favorites[0] != "0" && favorites[0] != "1") {
+		s.badRequest(w, r, "favorite must be exactly one of 0 or 1")
+		return
+	}
+	fav := favorites[0] == "1"
 
 	var project, itemID string
 	var err error
@@ -98,7 +103,7 @@ func (s *Service) favoriteToggle(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"kind": kind, "id": id, "favorite": fav})
 		return
 	}
-	next := safeNext(r.FormValue("next"))
+	next := safeNext(r.PostForm.Get("next"))
 	if next == "/console/" {
 		next = listPage
 	}

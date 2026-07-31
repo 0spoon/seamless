@@ -21,6 +21,20 @@ func TestBrowserHost(t *testing.T) {
 	}
 }
 
+func TestA2AEndpointUsesEffectiveBind(t *testing.T) {
+	tests := map[string]string{
+		"127.0.0.1:8081": "http://127.0.0.1:8081/api/a2a",
+		"127.0.0.1:9099": "http://127.0.0.1:9099/api/a2a", // concrete --addr override
+		"[::1]:8081":     "http://[::1]:8081/api/a2a",
+		"0.0.0.0:8081":   "http://127.0.0.1:8081/api/a2a",
+		":8081":          "http://127.0.0.1:8081/api/a2a",
+		"[::]:8081":      "http://127.0.0.1:8081/api/a2a",
+	}
+	for bind, want := range tests {
+		require.Equal(t, want, a2aEndpoint(bind), "bind %q", bind)
+	}
+}
+
 func TestRenderConsoleLoginPage(t *testing.T) {
 	page, err := renderConsoleLoginPage("127.0.0.1:8081", "deadbeefKEY")
 	require.NoError(t, err)

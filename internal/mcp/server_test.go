@@ -4,10 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
+	"net/http"
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
@@ -23,7 +26,6 @@ import (
 	mcpserver "github.com/0spoon/seamless/internal/mcp"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
-	"time"
 )
 
 const testKey = "test-bearer-key"
@@ -91,6 +93,28 @@ func dialClient(t *testing.T, ctx context.Context, url, key string) *mcpclient.C
 	return cli
 }
 
+func rawMCPRequest(t *testing.T, url, method, key, body string) (int, http.Header, string) {
+	t.Helper()
+	var reader io.Reader
+	if body != "" {
+		reader = strings.NewReader(body)
+	}
+	req, err := http.NewRequest(method, url, reader)
+	require.NoError(t, err)
+	if body != "" {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if key != "" {
+		req.Header.Set("Authorization", "Bearer "+key)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer func() { _ = resp.Body.Close() }()
+	raw, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	return resp.StatusCode, resp.Header, string(raw)
+}
+
 func TestServer_InitializeIncludesAgentGuidance(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
@@ -106,6 +130,10 @@ func TestServer_InitializeIncludesAgentGuidance(t *testing.T) {
 	result, err := cli.Initialize(ctx, initReq)
 	require.NoError(t, err)
 	require.Equal(t, agentguide.MCPInstructions, result.Instructions)
+
+	listed, err := cli.ListTools(ctx, mcp.ListToolsRequest{})
+	require.NoError(t, err)
+	require.Len(t, listed.Tools, mcpserver.ToolCount)
 }
 
 func callJSON(t *testing.T, ctx context.Context, cli *mcpclient.Client, name string, args map[string]any) map[string]any {
@@ -675,15 +703,12 @@ func TestSessionEndTargetsExplicitID(t *testing.T) {
 }
 
 func TestMCPAuthRejectsBadKey(t *testing.T) {
-	ctx := context.Background()
 	url, _ := newServer(t)
-	cli := dialClient(t, ctx, url, "wrong-key")
-
-	// Initialize is open, but a tool call with a bad key is rejected.
-	res, err := cli.CallTool(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{Name: "project_list"}})
-	require.NoError(t, err)
-	require.True(t, res.IsError)
-	require.Contains(t, resultText(t, res), "unauthorized")
+	initialize := `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}`
+	status, header, body := rawMCPRequest(t, url, http.MethodPost, "wrong-key", initialize)
+	require.Equal(t, http.StatusUnauthorized, status)
+	require.Equal(t, "Bearer", header.Get("WWW-Authenticate"))
+	require.Contains(t, body, "unauthorized")
 }
 
 // seedAmbientCWD inserts an active ambient (cc/*) session with a Claude session id

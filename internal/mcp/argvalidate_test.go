@@ -2,12 +2,17 @@ package mcp_test
 
 import (
 	"context"
+	"fmt"
+	"maps"
+	"net/http"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/retrieve"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // The MCP input-boundary matrix: what the server does with an argument it cannot
@@ -368,7 +373,7 @@ func TestArgsMissingRequired(t *testing.T) {
 	require.Contains(t, txt, `missing required parameter "kind"`)
 }
 
-func TestArgsLimitZeroRejected(t *testing.T) {
+func TestArgsResultLimitsAreStrictIntegersAndBounded(t *testing.T) {
 	ctx := context.Background()
 	url, _ := newServer(t)
 	cli := dialClient(t, ctx, url, testKey)
@@ -384,6 +389,31 @@ func TestArgsLimitZeroRejected(t *testing.T) {
 	isErr, txt := callErr(t, ctx, cli, "trial_query", map[string]any{"lab": "L", "limit": 0})
 	require.True(t, isErr)
 	require.Contains(t, txt, "invalid limit: must be >= 1")
+
+	for _, lim := range []any{1.9, "1.9"} {
+		isErr, txt = callErr(t, ctx, cli, "recall", map[string]any{"query": "q", "limit": lim})
+		require.True(t, isErr)
+		require.Contains(t, txt, "invalid limit: expected an integer, got 1.9")
+	}
+	for _, tc := range []struct {
+		tool string
+		args map[string]any
+		max  int
+	}{
+		{"recall", map[string]any{"query": "q"}, retrieve.MaxRecallLimit},
+		{"trial_query", map[string]any{"lab": "L"}, store.MaxTrialQueryLimit},
+	} {
+		atMax := maps.Clone(tc.args)
+		atMax["limit"] = tc.max
+		isErr, txt = callErr(t, ctx, cli, tc.tool, atMax)
+		require.False(t, isErr, "%s max must be accepted: %s", tc.tool, txt)
+
+		above := maps.Clone(tc.args)
+		above["limit"] = tc.max + 1
+		isErr, txt = callErr(t, ctx, cli, tc.tool, above)
+		require.True(t, isErr)
+		require.Contains(t, txt, fmt.Sprintf("invalid limit: must be <= %d", tc.max))
+	}
 
 	// Absent still means the library default -- the clamp stays where a zero value
 	// legitimately means "field unset".
@@ -418,12 +448,10 @@ func TestValidationRejectionIsLogged(t *testing.T) {
 // side: auth is outermost, so a bad key gets no schema feedback -- an unauthorized
 // caller must not be able to probe the tools' parameters through error messages.
 func TestValidationSkippedWhenUnauthorized(t *testing.T) {
-	ctx := context.Background()
 	url, db := newServer(t)
-	cli := dialClient(t, ctx, url, "wrong-key")
-
-	isErr, txt := callErr(t, ctx, cli, "tasks_add", map[string]any{"despends_on": 5, "zzz": "garbage"})
-	require.True(t, isErr)
+	body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"tasks_add","arguments":{"despends_on":5,"zzz":"garbage"}}}`
+	status, _, txt := rawMCPRequest(t, url, http.MethodPost, "wrong-key", body)
+	require.Equal(t, http.StatusUnauthorized, status)
 	require.Contains(t, txt, "unauthorized")
 	require.NotContains(t, txt, "unknown parameter", "an unauthorized caller learns nothing about the schema")
 	require.NotContains(t, txt, "valid parameters are")

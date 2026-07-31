@@ -2,6 +2,7 @@ package files
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -81,18 +82,32 @@ func newWatcher(dataDir string, handler changeHandler, debounce time.Duration, l
 // handleEvent already Adds a newly created directory without w.mu. Taking it
 // here would only mean holding a mutex across a full filesystem walk.
 func (w *watcher) watchTree(root string) error {
-	if _, err := os.Stat(root); os.IsNotExist(err) {
+	info, err := os.Lstat(root)
+	if errors.Is(err, os.ErrNotExist) {
 		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("files.watchTree: lstat %s: %w", root, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("files.watchTree: %w: %s", ErrSymlink, root)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("files.watchTree: %w: %s is not a directory", ErrNotRegular, root)
 	}
 	return filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
 		}
-		if !d.IsDir() {
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
 			return nil
 		}
-		if d.Type()&os.ModeSymlink != 0 {
-			return filepath.SkipDir // never follow symlinks out of the tree
+		if !info.IsDir() {
+			return nil
 		}
 		if err := w.fsw.Add(path); err != nil {
 			return fmt.Errorf("files.watchTree: add %s: %w", path, err)
@@ -171,9 +186,6 @@ func (w *watcher) handleEvent(ctx context.Context, ev fsnotify.Event) {
 	if !strings.HasSuffix(abs, ".md") {
 		return
 	}
-	if w.suppressedNow(abs) {
-		return
-	}
 
 	relPath, err := filepath.Rel(w.dataDir, abs)
 	if err != nil {
@@ -181,6 +193,16 @@ func (w *watcher) handleEvent(ctx context.Context, ev fsnotify.Event) {
 	}
 	relPath = filepath.ToSlash(relPath)
 	if _, _, ok := treeAndRel(relPath); !ok {
+		return
+	}
+	// A final symlink is never indexed. Fire immediately so a path that used to
+	// be a regular indexed file is removed from the mirror rather than leaving a
+	// stale row until the next startup reconciliation.
+	if info, err := os.Lstat(abs); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		w.fire(ctx, relPath)
+		return
+	}
+	if w.suppressedNow(abs) {
 		return
 	}
 
@@ -267,7 +289,15 @@ func (w *watcher) rescanDir(ctx context.Context, dir string) {
 			w.logger.Warn("files.watcher: rescan walk", "path", path, "error", walkErr)
 			return nil //nolint:nilerr // best-effort catch-up scan
 		}
-		if d.IsDir() || !strings.HasSuffix(path, ".md") {
+		info, err := d.Info()
+		if err != nil {
+			w.logger.Warn("files.watcher: rescan inspect", "path", path, "error", err)
+			return nil
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if info.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
 		rel, err := filepath.Rel(w.dataDir, path)

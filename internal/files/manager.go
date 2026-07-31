@@ -15,6 +15,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 // ErrPathOccupied is returned when a write would land on a file owned by a
@@ -135,7 +136,7 @@ func (m *Manager) Start(ctx context.Context) error {
 	}
 	for _, tree := range []string{memoryTree, notesTree} {
 		dir := filepath.Join(m.store.DataDir(), tree)
-		if err := os.MkdirAll(dir, dirMode); err != nil {
+		if err := m.store.ensureDir(tree); err != nil {
 			return fmt.Errorf("files.Start: mkdir %s: %w", dir, err)
 		}
 		m.hardenTree(dir)
@@ -175,11 +176,14 @@ func (m *Manager) hardenTree(root string) {
 	// only way this returns non-nil is if the callback does, which it never does.
 	//nolint:errcheck // hardening is best-effort; a walk failure must not block startup
 	_ = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.Type()&fs.ModeSymlink != 0 {
+		if err != nil {
 			return nil //nolint:nilerr // an unreadable entry is skipped, not fatal
 		}
 		info, ierr := d.Info()
 		if ierr != nil {
+			return nil
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
 			return nil
 		}
 		perm := info.Mode().Perm()
@@ -301,7 +305,15 @@ func (m *Manager) runReembed(ctx context.Context, done chan struct{}, paths []st
 // embeddable, so leaving it out of the vector index is the correct state.
 func (m *Manager) reembedOne(ctx context.Context, relPath string) bool {
 	tree, _, ok := treeAndRel(relPath)
-	if !ok || !m.store.Exists(relPath) {
+	if !ok {
+		return true
+	}
+	exists, err := m.store.fileExists(relPath)
+	if err != nil {
+		m.logger.Warn("files: reembed: unsafe file skipped", "file_path", relPath, "error", err)
+		return false
+	}
+	if !exists {
 		return true
 	}
 	content, err := m.store.readFile(relPath)
@@ -334,20 +346,34 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 
 	for _, tree := range []string{memoryTree, notesTree} {
 		root := filepath.Join(m.store.DataDir(), tree)
-		if _, err := os.Stat(root); os.IsNotExist(err) {
+		rootInfo, err := os.Lstat(root)
+		if errors.Is(err, os.ErrNotExist) {
 			continue
 		}
-		err := filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
+		if err != nil {
+			return fmt.Errorf("files.Reconcile: lstat %s: %w", root, err)
+		}
+		if rootInfo.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("files.Reconcile: %w: %s", ErrSymlink, root)
+		}
+		if !rootInfo.IsDir() {
+			return fmt.Errorf("files.Reconcile: %w: %s is not a directory", ErrNotRegular, root)
+		}
+		err = filepath.WalkDir(root, func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if d.IsDir() {
-				if d.Type()&os.ModeSymlink != 0 {
-					return filepath.SkipDir
-				}
+			info, err := d.Info()
+			if err != nil {
+				return err
+			}
+			if info.Mode()&os.ModeSymlink != 0 {
+				return nil // WalkDir does not follow it; final links are not corpus files.
+			}
+			if info.IsDir() {
 				return nil
 			}
-			if d.Type()&os.ModeSymlink != 0 || filepath.Ext(path) != ".md" {
+			if filepath.Ext(path) != ".md" {
 				return nil
 			}
 			select {
@@ -395,49 +421,109 @@ func (m *Manager) Reconcile(ctx context.Context) error {
 // following Reconcile re-parses each moved file and IndexNote upserts by id,
 // repointing file_path. Nothing is orphaned, because the row that used to name
 // notes/inbox/x.md IS the row now naming notes/_global/x.md.
-func (m *Manager) migrateNotesInboxToGlobal() error {
-	notesRoot := filepath.Join(m.store.DataDir(), notesTree)
-	oldDir := filepath.Join(notesRoot, notesLegacyGlobalDir)
-	if _, err := os.Lstat(oldDir); err != nil {
-		return nil // the common case: already migrated, or a fresh data dir
+func (m *Manager) migrateNotesInboxToGlobal() (retErr error) {
+	root, err := m.store.openRoot(true)
+	if err != nil {
+		return err
 	}
-	newDir := filepath.Join(notesRoot, notesGlobalDir)
+	defer closeRoot(root, &retErr)
+
+	notesRel := notesTree
+	oldRel := filepath.Join(notesRel, notesLegacyGlobalDir)
+	newRel := filepath.Join(notesRel, notesGlobalDir)
+	notesInfo, err := inspectNoSymlink(root, notesRel, true)
+	if err != nil {
+		return fmt.Errorf("legacy notes migration: %w", err)
+	}
+	if notesInfo == nil {
+		return nil // fresh data dir; Start creates notes/ after this migration.
+	}
+	if !notesInfo.IsDir() {
+		return fmt.Errorf("legacy notes migration: %w: %s is not a directory", ErrNotRegular, notesRel)
+	}
+	oldInfo, err := inspectNoSymlink(root, oldRel, false)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil // the common case: already migrated
+	}
+	if err != nil {
+		return fmt.Errorf("legacy notes migration: %w", err)
+	}
+	if !oldInfo.IsDir() {
+		return fmt.Errorf("legacy notes migration: %w: %s is not a directory", ErrNotRegular, oldRel)
+	}
+	newInfo, err := inspectNoSymlink(root, newRel, true)
+	if err != nil {
+		return fmt.Errorf("legacy notes migration: %w", err)
+	}
 
 	// No destination yet: one atomic rename, no window where a note is missing.
-	if _, err := os.Lstat(newDir); os.IsNotExist(err) {
-		if err := os.Rename(oldDir, newDir); err != nil {
-			return fmt.Errorf("move %s -> %s: %w", oldDir, newDir, err)
+	if newInfo == nil {
+		if err := root.Rename(oldRel, newRel); err != nil {
+			return fmt.Errorf("move %s -> %s: %w", oldRel, newRel, err)
+		}
+		movedInfo, err := inspectNoSymlink(root, newRel, false)
+		if err != nil {
+			return fmt.Errorf("verify moved legacy notes directory: %w", err)
+		}
+		if !movedInfo.IsDir() {
+			return fmt.Errorf("verify moved legacy notes directory: %w", ErrNotRegular)
 		}
 		m.logger.Info("files: moved legacy notes/inbox to notes/_global")
 		return nil
+	}
+	if !newInfo.IsDir() {
+		return fmt.Errorf("legacy notes migration: %w: %s is not a directory", ErrNotRegular, newRel)
 	}
 
 	// Both exist: merge file by file. A name owned by both trees is a real
 	// conflict, so refuse it rather than clobber a note -- same rule as
 	// notes_update's project move.
-	entries, err := os.ReadDir(oldDir)
+	oldDir, err := root.Open(oldRel)
 	if err != nil {
-		return fmt.Errorf("read %s: %w", oldDir, err)
+		return fmt.Errorf("open %s: %w", oldRel, err)
+	}
+	entries, readErr := oldDir.ReadDir(-1)
+	closeErr := oldDir.Close()
+	if readErr != nil {
+		return fmt.Errorf("read %s: %w", oldRel, readErr)
+	}
+	if closeErr != nil {
+		return fmt.Errorf("close %s: %w", oldRel, closeErr)
 	}
 	for _, e := range entries {
+		if e.Type()&os.ModeSymlink != 0 {
+			return fmt.Errorf("legacy notes migration: %w: %s", ErrSymlink, filepath.Join(oldRel, e.Name()))
+		}
 		if e.IsDir() {
 			continue
 		}
-		src, dst := filepath.Join(oldDir, e.Name()), filepath.Join(newDir, e.Name())
-		if _, err := os.Lstat(dst); err == nil {
+		info, err := e.Info()
+		if err != nil {
+			return fmt.Errorf("legacy notes migration: inspect %s: %w", e.Name(), err)
+		}
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("legacy notes migration: %w: %s", ErrNotRegular, filepath.Join(oldRel, e.Name()))
+		}
+		src, dst := filepath.Join(oldRel, e.Name()), filepath.Join(newRel, e.Name())
+		dstInfo, err := inspectNoSymlink(root, dst, true)
+		if err != nil {
+			return fmt.Errorf("legacy notes migration: %w", err)
+		}
+		if dstInfo != nil {
 			m.logger.Warn("files: legacy inbox note left in place, target name taken",
-				"note", e.Name(), "target", dst)
+				"note", e.Name(), "target", filepath.Join(m.store.DataDir(), dst))
 			continue
 		}
-		if err := os.Rename(src, dst); err != nil {
+		if err := root.Rename(src, dst); err != nil {
 			return fmt.Errorf("move %s -> %s: %w", src, dst, err)
 		}
 	}
 	// Succeeds only when everything moved; a conflict or stray file keeps the
 	// directory, which is the honest outcome -- do not report a partial move as
 	// complete.
-	if err := os.Remove(oldDir); err != nil {
-		m.logger.Warn("files: legacy notes/inbox not removed (not empty)", "dir", oldDir)
+	if err := root.Remove(oldRel); err != nil {
+		m.logger.Warn("files: legacy notes/inbox not removed (not empty)",
+			"dir", filepath.Join(m.store.DataDir(), oldRel))
 		return nil
 	}
 	m.logger.Info("files: merged legacy notes/inbox into notes/_global")
@@ -447,12 +533,27 @@ func (m *Manager) migrateNotesInboxToGlobal() error {
 // handleFile is the watcher/reconciler callback: it (re)indexes a changed file or
 // deletes the index row when the file is gone. Unchanged files (same content
 // hash) are skipped, so re-indexing is idempotent and cheap.
+//
+// Reconciliation deliberately keeps legacy non-portable names readable: an
+// older Unix corpus may already contain punctuation a Windows filesystem cannot
+// represent. Such an item is indexed with a warning, but every managed rewrite
+// uses validate.Name and remains blocked until the owner renames the file and
+// its name/slug/project frontmatter to a portable value. The next reconcile
+// repoints the same item id, so that manual migration preserves identity.
 func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 	tree, _, ok := treeAndRel(relPath)
 	if !ok {
 		return nil
 	}
-	if !m.store.Exists(relPath) {
+	exists, err := m.store.fileExists(relPath)
+	if errors.Is(err, ErrSymlink) || errors.Is(err, ErrNotRegular) {
+		m.logger.Warn("files.handleFile: unsafe corpus entry ignored", "file_path", relPath, "error", err)
+		return m.indexer.DeleteByFilePath(ctx, relPath)
+	}
+	if err != nil {
+		return fmt.Errorf("files.handleFile: inspect %s: %w", relPath, err)
+	}
+	if !exists {
 		return m.indexer.DeleteByFilePath(ctx, relPath)
 	}
 
@@ -477,6 +578,7 @@ func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 			m.logger.Warn("files.handleFile: memory file has no id, skipping", "file_path", relPath)
 			return nil
 		}
+		m.warnLegacyName(kindMemory, mem.ID, relPath, "name", mem.Name, mem.Project)
 		if err := m.indexer.IndexMemory(ctx, mem); err != nil {
 			return err
 		}
@@ -493,6 +595,7 @@ func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 			m.logger.Warn("files.handleFile: note file has no id, skipping", "file_path", relPath)
 			return nil
 		}
+		m.warnLegacyName(kindNote, note.ID, relPath, "slug", note.Slug, note.Project)
 		if err := m.indexer.IndexNote(ctx, note); err != nil {
 			return err
 		}
@@ -502,6 +605,19 @@ func (m *Manager) handleFile(ctx context.Context, relPath string) error {
 		return nil
 	default:
 		return nil
+	}
+}
+
+func (m *Manager) warnLegacyName(kind, id, relPath, itemField, itemName, project string) {
+	if err := validate.Name(itemName); err != nil {
+		m.logger.Warn("files: legacy non-portable corpus name indexed read-only; rename the file and frontmatter before a managed rewrite",
+			"kind", kind, "id", id, "file_path", relPath, "field", itemField, "error", err)
+	}
+	if project != "" {
+		if err := validate.Name(project); err != nil {
+			m.logger.Warn("files: legacy non-portable corpus project indexed read-only; rename the directory and frontmatter before a managed rewrite",
+				"kind", kind, "id", id, "file_path", relPath, "field", "project", "error", err)
+		}
 	}
 }
 
@@ -643,7 +759,11 @@ func (m *Manager) ensurePathFree(ctx context.Context, relPath, id string) error 
 	} else if found && ownerID != id {
 		return fmt.Errorf("%w: %s is held by %s", ErrPathOccupied, relPath, ownerID)
 	}
-	if !m.store.Exists(relPath) {
+	exists, err := m.store.fileExists(relPath)
+	if err != nil {
+		return fmt.Errorf("inspect target path: %w", err)
+	}
+	if !exists {
 		return nil
 	}
 	tree, _, _ := treeAndRel(relPath)

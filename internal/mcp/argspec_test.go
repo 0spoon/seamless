@@ -317,6 +317,18 @@ func TestCoerceNumber(t *testing.T) {
 	})
 }
 
+func TestCoerceInteger(t *testing.T) {
+	for _, in := range []any{float64(10), float64(10.0), "10", "10.0"} {
+		got, err := coerceInteger(in, "limit")
+		require.NoError(t, err)
+		require.Equal(t, float64(10), got)
+	}
+	for _, in := range []any{float64(1.9), "1.9", float64(-2.5)} {
+		_, err := coerceInteger(in, "limit")
+		require.ErrorContains(t, err, "expected an integer")
+	}
+}
+
 func TestCoerceStrings(t *testing.T) {
 	_, err := coerceStrings(float64(1), "depends_on")
 	require.EqualError(t, err,
@@ -392,6 +404,19 @@ func TestNormalizeArgs_Range(t *testing.T) {
 	// The bound renders as an agent would write it, not as 1.000000.
 	_, err = normalizeArgs(schema, map[string]any{"limit": "-5"})
 	require.EqualError(t, err, "invalid limit: must be >= 1")
+}
+
+func TestNormalizeArgs_IntegerRejectsFractions(t *testing.T) {
+	schema := schemaOf(mcp.WithInteger("limit", mcp.Min(1), mcp.Max(100)))
+
+	got, err := normalizeArgs(schema, map[string]any{"limit": "10.0"})
+	require.NoError(t, err)
+	require.Equal(t, float64(10), got["limit"])
+
+	for _, value := range []any{float64(1.9), "1.9"} {
+		_, err := normalizeArgs(schema, map[string]any{"limit": value})
+		require.EqualError(t, err, "invalid limit: expected an integer, got 1.9")
+	}
 }
 
 // TestNormalizeArgs_RangeBoundStorageTypes pins the range check against every

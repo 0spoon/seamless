@@ -118,7 +118,7 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
-| `limit` | number | no | max results (default 20) |
+| `limit` | integer | no | max results (default 20, max 200) |
 | `metrics_filter` | object | no | optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted) |
 | `outcome` | string | no | filter by outcome (e.g. fail) |
 

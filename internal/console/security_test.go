@@ -60,6 +60,36 @@ func TestCookieWrite_RejectsCrossSitePOST(t *testing.T) {
 	require.Contains(t, rr.Body.String(), "cross-origin")
 }
 
+func TestLogoutRequiresAuthAndSameOriginForCookie(t *testing.T) {
+	mux := newTestMux(t)
+
+	t.Run("unauthenticated", func(t *testing.T) {
+		rr := do(mux, httptest.NewRequest(http.MethodPost, "/console/logout", nil))
+		require.Equal(t, http.StatusSeeOther, rr.Code)
+		require.Contains(t, rr.Header().Get("Location"), "/console/login")
+		require.Empty(t, rr.Result().Cookies(), "an unauthenticated request cannot clear the owner cookie")
+	})
+
+	t.Run("cross-site cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/console/logout", nil)
+		req.AddCookie(consoleCookie())
+		req.Header.Set("Sec-Fetch-Site", "same-site")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusForbidden, rr.Code)
+		require.Empty(t, rr.Result().Cookies())
+	})
+
+	t.Run("same-origin cookie", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/console/logout", nil)
+		req.AddCookie(consoleCookie())
+		req.Header.Set("Sec-Fetch-Site", "same-origin")
+		rr := do(mux, req)
+		require.Equal(t, http.StatusSeeOther, rr.Code)
+		require.NotEmpty(t, rr.Result().Cookies())
+		require.Negative(t, rr.Result().Cookies()[0].MaxAge)
+	})
+}
+
 func TestCookieWrite_RejectsMismatchedOrigin(t *testing.T) {
 	mux := newTestMux(t)
 

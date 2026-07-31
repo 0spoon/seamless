@@ -173,6 +173,13 @@ func browserHost(addr string) string {
 	return net.JoinHostPort(host, port)
 }
 
+// a2aEndpoint returns the usable discovery URL for the daemon's effective bind
+// address. The caller passes the post-flag-override value, and wildcard binds
+// advertise loopback rather than an unroutable 0.0.0.0/[::] destination.
+func a2aEndpoint(bind string) string {
+	return "http://" + browserHost(bind) + "/api/a2a"
+}
+
 // serverReachable reports whether the console answers /healthz within 2s. Any
 // HTTP response (200 or a 503 degraded) counts; only a transport error is down.
 func serverReachable(host string) bool {

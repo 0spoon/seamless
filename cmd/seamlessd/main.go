@@ -284,7 +284,7 @@ func runServe(args []string) error {
 	// bind address, so a non-default addr: advertises itself correctly.
 	a2aSrv, err := a2a.New(a2a.Config{
 		Retrieve: ret, Events: rec, APIKey: cfg.MCP.APIKey,
-		Version: buildVersion(), Endpoint: "http://" + cfg.Addr + "/api/a2a",
+		Version: buildVersion(), Endpoint: a2aEndpoint(bind),
 		Logger: logger,
 	})
 	if err != nil {

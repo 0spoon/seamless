@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"time"
@@ -80,6 +81,7 @@ func doctor(args []string) error {
 	}
 	checks = append(checks,
 		check{statusOK, "config", "loaded from " + src},
+		configPermissionsCheck(cfg.SourcePath(), runtime.GOOS),
 		check{statusOK, "data_dir", cfg.DataDir},
 		apiKeyCheck(cfg),
 		llmCheck(cfg),
@@ -111,6 +113,69 @@ func doctor(args []string) error {
 	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
+}
+
+// configPermissionsCheck warns when an existing secret-bearing configuration
+// file, or the directory containing it, is accessible to group/other users.
+// Doctor never changes owner-authored permissions; the detail gives explicit
+// repair commands. Windows ACLs are not meaningfully represented by FileMode,
+// so that platform gets a separate informational result rather than a false OK.
+func configPermissionsCheck(path, goos string) check {
+	const name = "config permissions"
+	if path == "" {
+		return check{statusInfo, name, "no config file selected (defaults + environment only)"}
+	}
+	if goos == "windows" {
+		return check{statusInfo, name, fmt.Sprintf(
+			"FileMode cannot verify Windows ACLs for %s; ensure only your account can read the file and its directory", path)}
+	}
+
+	var problems []string
+	info, err := os.Lstat(path)
+	switch {
+	case err != nil:
+		problems = append(problems, fmt.Sprintf("cannot inspect %s: %v", path, err))
+	case info.Mode()&os.ModeSymlink != 0:
+		problems = append(problems, fmt.Sprintf("%s is a symlink; replace it with a regular owner-only file", path))
+	case !info.Mode().IsRegular():
+		problems = append(problems, fmt.Sprintf("%s is not a regular file", path))
+	case info.Mode().Perm()&0o077 != 0:
+		problems = append(problems, fmt.Sprintf(
+			"%s mode %04o grants group/other access; run: %s", path, info.Mode().Perm(), chmodRepairCommand("600", path)))
+	}
+
+	dir := filepath.Dir(path)
+	dirInfo, dirErr := os.Lstat(dir)
+	switch {
+	case dirErr != nil:
+		problems = append(problems, fmt.Sprintf("cannot inspect containing directory %s: %v", dir, dirErr))
+	case dirInfo.Mode()&os.ModeSymlink != 0:
+		problems = append(problems, fmt.Sprintf("containing directory %s is a symlink; use a real owner-only directory", dir))
+	case !dirInfo.IsDir():
+		problems = append(problems, fmt.Sprintf("containing path %s is not a directory", dir))
+	case dirInfo.Mode().Perm()&0o077 != 0:
+		problems = append(problems, fmt.Sprintf(
+			"directory %s mode %04o grants group/other access; run: %s", dir, dirInfo.Mode().Perm(), chmodRepairCommand("700", dir)))
+	}
+
+	if len(problems) > 0 {
+		return check{statusWarn, name, strings.Join(problems, "; ")}
+	}
+	return check{statusOK, name, fmt.Sprintf("%s and %s are owner-only regular paths", path, dir)}
+}
+
+// chmodRepairCommand returns a copy-pasteable Unix command with an absolute,
+// shell-quoted path. Making the path absolute also keeps a leading dash from
+// being interpreted as an option by chmod.
+func chmodRepairCommand(mode, path string) string {
+	target, err := filepath.Abs(path)
+	if err != nil {
+		target = path
+		if !filepath.IsAbs(target) {
+			target = "." + string(filepath.Separator) + target
+		}
+	}
+	return fmt.Sprintf("chmod %s '%s'", mode, strings.ReplaceAll(target, "'", "'\"'\"'"))
 }
 
 // repoMapCheck reports dangling repo_project_map entries -- mapped paths that no

@@ -162,7 +162,7 @@ Search memories and notes by meaning and keyword (fused), scoped to the current 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
-| `limit` | number | no | maximum results (default 10) |
+| `limit` | integer | no | maximum results (default 10, max 100) |
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
 | `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |

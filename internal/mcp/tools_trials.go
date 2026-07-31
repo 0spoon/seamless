@@ -96,7 +96,8 @@ func trialQueryTool() mcp.Tool {
 		mcp.WithString("lab", mcp.Description("lab name; defaults to the lab opened on this connection")),
 		mcp.WithString("outcome", mcp.Description("filter by outcome (e.g. fail)")),
 		mcp.WithObject("metrics_filter", mcp.Description(`optional object; trials whose metrics equal every given key match, e.g. {"hz":497} (a JSON-object string is also accepted)`)),
-		mcp.WithNumber("limit", mcp.Min(1), mcp.Description("max results (default 20)")),
+		mcp.WithInteger("limit", mcp.Min(1), mcp.Max(store.MaxTrialQueryLimit),
+			mcp.Description("max results (default 20, max 200)")),
 	)
 }
 
@@ -108,7 +109,7 @@ func (s *Server) handleTrialQuery(ctx context.Context, req mcp.CallToolRequest) 
 	filter := store.TrialFilter{
 		Lab:           lab,
 		Outcome:       argString(req, "outcome"),
-		Limit:         argInt(req, "limit", 20),
+		Limit:         argInt(req, "limit", store.DefaultTrialQueryLimit),
 		MetricsEquals: argObject(req, "metrics_filter"),
 	}
 	trials, err := store.QueryTrials(ctx, s.cfg.DB, filter)

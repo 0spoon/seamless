@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -13,14 +14,26 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
+const (
+	// DefaultTrialQueryLimit is used when TrialFilter.Limit is left at zero.
+	DefaultTrialQueryLimit = 20
+	// MaxTrialQueryLimit bounds both the result slice and the metrics-filter
+	// over-fetch query. The console's largest reader asks for 200 rows.
+	MaxTrialQueryLimit    = 200
+	trialMetricsOverfetch = 8
+)
+
+// ErrInvalidTrialQueryLimit marks a TrialFilter limit outside the store API.
+var ErrInvalidTrialQueryLimit = errors.New("invalid trial query limit")
+
 // trialCols is the SELECT list for the trials table, matching scanTrial.
 const trialCols = `id, lab, title, changes, expected, actual, outcome, metrics,
 	session_id, project_slug, favorite, created_at`
 
 // TrialFilter parameterizes QueryTrials. Empty string fields are not filtered;
 // MetricsEquals matches trials whose metrics contain each given key with an
-// equal value (compared after JSON normalization). A non-positive Limit defaults
-// to 20.
+// equal value (compared after JSON normalization). A zero Limit uses
+// DefaultTrialQueryLimit; negative or oversized values are rejected.
 type TrialFilter struct {
 	Lab           string
 	Outcome       string
@@ -53,8 +66,12 @@ func CreateTrial(ctx context.Context, db *sql.DB, tr core.Trial) error {
 // and this matches the DB-first metrics design without a JSON1 dependency).
 func QueryTrials(ctx context.Context, db *sql.DB, f TrialFilter) ([]core.Trial, error) {
 	limit := f.Limit
-	if limit <= 0 {
-		limit = 20
+	if limit == 0 {
+		limit = DefaultTrialQueryLimit
+	}
+	if limit < 1 || limit > MaxTrialQueryLimit {
+		return nil, fmt.Errorf("store.QueryTrials: %w: got %d, want 1-%d (or 0 for the default)",
+			ErrInvalidTrialQueryLimit, f.Limit, MaxTrialQueryLimit)
 	}
 	query := `SELECT ` + trialCols + ` FROM trials WHERE 1=1`
 	var args []any
@@ -78,7 +95,7 @@ func QueryTrials(ctx context.Context, db *sql.DB, f TrialFilter) ([]core.Trial, 
 	// matches; the metrics filter runs after the SQL cut.
 	sqlLimit := limit
 	if len(f.MetricsEquals) > 0 {
-		sqlLimit = limit * 8
+		sqlLimit = limit * trialMetricsOverfetch
 	}
 	query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
 	args = append(args, sqlLimit)

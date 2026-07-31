@@ -659,12 +659,14 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">embedding_model</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;text-embedding-3-large&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c"># Native dimensionality of the embedding model. 0 = auto-detect from the</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c"># first embedding response (the store records dims per row regardless).</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c"># Maximum: 65536.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">embedding_dims</span><span class="p">:</span><span class="w"> </span><span class="m">3072</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">ollama</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">base_url</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;http://127.0.0.1:11434&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">chat_model</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;llama3.3:latest&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">embedding_model</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;qwen3-embedding:8b&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="c"># 0 = auto-detect; maximum 65536.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="nt">embedding_dims</span><span class="p">:</span><span class="w"> </span><span class="m">0</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">anthropic</span><span class="p">:</span><span class="w">
@@ -712,7 +714,7 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Minutes of no activity before an active session counts as dead: the reaper</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># expires it and the console stops showing it as live. One knob drives both,</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># so they never drift. Must comfortably exceed a long single agent turn.</span><span class="w">
-</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># 0 = the built-in 45m default.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Must be positive; omit the key to retain the built-in 45m default.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_GARDENER_SESSION_IDLE_MINUTES</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">session_idle_minutes</span><span class="p">:</span><span class="w"> </span><span class="m">45</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">

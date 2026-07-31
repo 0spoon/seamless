@@ -2,6 +2,8 @@ package files
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -83,4 +85,24 @@ func TestWatcherClose_NoHandlerStartsAfterClose(t *testing.T) {
 
 	// Idempotent: a second close neither panics nor double-closes.
 	require.NoError(t, w.close())
+}
+
+func TestWatcherRescanDir_SkipsFinalSymlink(t *testing.T) {
+	dataDir := t.TempDir()
+	dir := filepath.Join(dataDir, memoryTree, "seam")
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	require.NoError(t, os.WriteFile(outside, []byte("outside\n"), 0o600))
+	makeSymlink(t, outside, filepath.Join(dir, "linked.md"))
+
+	var fires atomic.Int64
+	w, err := newWatcher(dataDir, func(context.Context, string) error {
+		fires.Add(1)
+		return nil
+	}, 0, nil)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, w.close()) })
+
+	w.rescanDir(context.Background(), dir)
+	require.Zero(t, fires.Load(), "a rescan must not hand a final symlink to the indexer")
 }

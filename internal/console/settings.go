@@ -326,11 +326,6 @@ func utilityRemaining(row utilityProjectRow, d store.UtilityProjectDemand) strin
 // settingsUtilityForce sets or clears the owner's per-project force: "on" and
 // "off" win over the gardener latch; "auto" clears the force and defers to it.
 func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	if err := r.ParseForm(); err != nil {
-		settingsFlash(w, r, "could not read the form")
-		return
-	}
 	project := strings.TrimSpace(r.PostFormValue("project"))
 	if project != "" {
 		if err := validate.Name(project); err != nil {
@@ -375,11 +370,6 @@ func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
 // layers over file/env values and takes effect on the next session start, so no
 // daemon restart is needed. Redirects back with a flash either way.
 func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	if err := r.ParseForm(); err != nil {
-		settingsFlash(w, r, "could not read the form")
-		return
-	}
 	b := config.Briefing{
 		IncludeParentMemories:  r.PostFormValue("include_parent_memories") != "",
 		IncludeSiblingMemories: r.PostFormValue("include_sibling_memories") != "",
@@ -519,11 +509,6 @@ func humanBytes(n int64) string {
 // is read once at serve start, so the flash says when a restart is what makes
 // the change real.
 func (s *Service) settingsEmbeddingsMode(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	if err := r.ParseForm(); err != nil {
-		settingsEmbeddingsFlash(w, r, "could not read the form")
-		return
-	}
 	mode := r.PostFormValue("mode")
 	switch mode {
 	case store.EmbedderModeAuto, store.EmbedderModeOff:
@@ -577,12 +562,6 @@ func (s *Service) settingsEmbeddingsReembed(w http.ResponseWriter, r *http.Reque
 // arbitrary slug here would let a typo create a plausible but inert family
 // member that never contributes context.
 func (s *Service) settingsFamilySave(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 64<<10)
-	if err := r.ParseForm(); err != nil {
-		settingsRegistryFlash(w, r, "Could not read the family form.")
-		return
-	}
-
 	names, ok := r.PostForm["name"]
 	if !ok || len(names) != 1 {
 		settingsRegistryFlash(w, r, "Enter one family name.")
@@ -667,11 +646,6 @@ func (s *Service) settingsFamilySave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) settingsFamilyDelete(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 8<<10)
-	if err := r.ParseForm(); err != nil {
-		settingsRegistryFlash(w, r, "Could not read the family form.")
-		return
-	}
 	names, ok := r.PostForm["original_name"]
 	if !ok || len(names) != 1 {
 		settingsRegistryFlash(w, r, "Choose one family to delete.")

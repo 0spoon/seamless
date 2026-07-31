@@ -5,13 +5,16 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 func newManager(t *testing.T) (*Manager, *sql.DB) {
@@ -59,6 +62,33 @@ func TestReconcileIndexesDiskFiles(t *testing.T) {
 	require.Equal(t, 2, indexedCount(t, db, "memories_index"))
 	require.Equal(t, 1, indexedCount(t, db, "notes_index"))
 	require.Equal(t, 3, indexedCount(t, db, "fts"))
+}
+
+func TestReconcileGrandfathersLegacyNonPortableNameReadOnly(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows cannot create the legacy colon-containing fixture")
+	}
+	m, db := newManager(t)
+	ctx := context.Background()
+	mem := sampleMemory()
+	mem.Project = "team:alpha"
+	mem.Name = "legacy:name"
+	relPath := MemoryRelPath(mem.Project, mem.Name)
+	content, err := RenderMemory(mem)
+	require.NoError(t, err)
+	abs := filepath.Join(m.store.DataDir(), filepath.FromSlash(relPath))
+	require.NoError(t, os.MkdirAll(filepath.Dir(abs), 0o700))
+	require.NoError(t, os.WriteFile(abs, []byte(content), 0o600))
+
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "memories_index"), "legacy knowledge remains readable")
+	legacy, err := m.store.ReadMemory(relPath)
+	require.NoError(t, err)
+	require.Equal(t, mem.ID, legacy.ID)
+
+	_, err = m.WriteMemory(ctx, legacy)
+	require.ErrorIs(t, err, validate.ErrUnsafeName,
+		"managed rewrites stay blocked until the file/frontmatter are renamed portably")
 }
 
 // legacyInboxNote writes a valid note file straight into the pre-rename
@@ -131,6 +161,43 @@ func TestMigrateNotesInboxToGlobal_MergeWithConflict(t *testing.T) {
 		"a directory that did not fully drain is kept, not silently removed")
 }
 
+func TestMigrateNotesInboxToGlobal_RejectsSymlinkDirectories(t *testing.T) {
+	tests := []struct {
+		name string
+		link string
+	}{
+		{"legacy inbox", notesLegacyGlobalDir},
+		{"global destination", notesGlobalDir},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := newManager(t)
+			notesRoot := filepath.Join(m.store.DataDir(), notesTree)
+			require.NoError(t, os.MkdirAll(notesRoot, 0o700))
+			if tt.link == notesGlobalDir {
+				legacyInboxNote(t, m, "01K0NOTE00000000000000000A", "legacy")
+			}
+			outside := t.TempDir()
+			const sentinel = "outside migration sentinel\n"
+			require.NoError(t, os.WriteFile(filepath.Join(outside, "sentinel.md"), []byte(sentinel), 0o600))
+			makeSymlink(t, outside, filepath.Join(notesRoot, tt.link))
+
+			err := m.migrateNotesInboxToGlobal()
+			require.ErrorIs(t, err, ErrSymlink)
+			got, readErr := os.ReadFile(filepath.Join(outside, "sentinel.md"))
+			require.NoError(t, readErr)
+			require.Equal(t, sentinel, string(got))
+		})
+	}
+}
+
+func TestStartRejectsSymlinkedCorpusTree(t *testing.T) {
+	m, _ := newManager(t)
+	makeSymlink(t, t.TempDir(), filepath.Join(m.store.DataDir(), memoryTree))
+	err := m.Start(t.Context())
+	require.ErrorIs(t, err, ErrSymlink)
+}
+
 // A second Reconcile with no disk changes must be a no-op (content-hash skip).
 func TestReconcileIsIdempotent(t *testing.T) {
 	m, db := newManager(t)
@@ -157,6 +224,50 @@ func TestReconcileRemovesOrphans(t *testing.T) {
 
 	require.NoError(t, m.store.Remove(written.FilePath))
 	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 0, indexedCount(t, db, "memories_index"))
+	require.Equal(t, 0, indexedCount(t, db, "fts"))
+}
+
+func TestReconcileSkipsFinalSymlinkAndDropsIndex(t *testing.T) {
+	m, db := newManager(t)
+	ctx := context.Background()
+	written, err := m.store.WriteMemory(sampleMemory())
+	require.NoError(t, err)
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "memories_index"))
+
+	abs := filepath.Join(m.store.DataDir(), filepath.FromSlash(written.FilePath))
+	require.NoError(t, os.Remove(abs))
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	content, err := RenderMemory(sampleMemory())
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(outside, []byte(content), 0o600))
+	makeSymlink(t, outside, abs)
+
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 0, indexedCount(t, db, "memories_index"))
+	require.Equal(t, 0, indexedCount(t, db, "fts"))
+}
+
+func TestWatcherFinalSymlinkEventDropsExistingIndex(t *testing.T) {
+	m, db := newManager(t)
+	ctx := context.Background()
+	written, err := m.store.WriteMemory(sampleMemory())
+	require.NoError(t, err)
+	require.NoError(t, m.Reconcile(ctx))
+	require.Equal(t, 1, indexedCount(t, db, "memories_index"))
+
+	abs := filepath.Join(m.store.DataDir(), filepath.FromSlash(written.FilePath))
+	require.NoError(t, os.Remove(abs))
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	content, err := RenderMemory(sampleMemory())
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(outside, []byte(content), 0o600))
+	makeSymlink(t, outside, abs)
+
+	// Drive the live watcher path directly so the test does not depend on a
+	// platform's fsnotify event coalescing.
+	m.watcher.handleEvent(ctx, fsnotify.Event{Name: abs, Op: fsnotify.Create})
 	require.Equal(t, 0, indexedCount(t, db, "memories_index"))
 	require.Equal(t, 0, indexedCount(t, db, "fts"))
 }

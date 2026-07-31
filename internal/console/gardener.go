@@ -1156,11 +1156,6 @@ func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, errNoGardener)
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "could not read the request")
-		return
-	}
 	text := strings.TrimSpace(r.PostFormValue("request"))
 	if text == "" {
 		redirectFlash(w, r, "enter a request")
@@ -1217,11 +1212,6 @@ func (s *Service) gardenerRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Service) gardenerSplit(w http.ResponseWriter, r *http.Request) {
 	if s.cfg.Gardener == nil {
 		s.serverError(w, r, errNoGardener)
-		return
-	}
-	r.Body = http.MaxBytesReader(w, r.Body, 16<<10)
-	if err := r.ParseForm(); err != nil {
-		redirectFlash(w, r, "could not read the request")
 		return
 	}
 	source := strings.TrimSpace(r.PostFormValue("source"))

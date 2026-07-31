@@ -17,6 +17,19 @@ import (
 // and damps the influence of any single source's top rank.
 const rrfK = 60
 
+const (
+	// DefaultRecallLimit is used when a Go caller leaves RecallInput.Limit at
+	// its zero value.
+	DefaultRecallLimit = 10
+	// MaxRecallLimit is the service-level ceiling shared by MCP and A2A. Recall
+	// has a fixed candidate depth and token budget; accepting more only enlarged
+	// a caller-controlled preallocation without producing more useful results.
+	MaxRecallLimit = 100
+)
+
+// ErrInvalidRecallLimit marks a RecallInput limit outside the service contract.
+var ErrInvalidRecallLimit = errors.New("invalid recall limit")
+
 // recallSourceDepth is how many candidates to pull from each source before
 // fusing; a few multiples of the requested limit gives RRF room to reorder.
 const recallSourceDepth = 24
@@ -233,8 +246,12 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		kinds = []string{"memory"}
 	}
 	limit := in.Limit
-	if limit <= 0 {
-		limit = 10
+	if limit == 0 {
+		limit = DefaultRecallLimit
+	}
+	if limit < 1 || limit > MaxRecallLimit {
+		return nil, fmt.Errorf("retrieve.Recall: %w: got %d, want 1-%d (or 0 for the default)",
+			ErrInvalidRecallLimit, in.Limit, MaxRecallLimit)
 	}
 
 	// A kind with no query is the browse mode: a premade filter ("list the
@@ -303,7 +320,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		budget = 1000
 	}
 
-	out := make([]Hit, 0, limit)
+	out := make([]Hit, 0, min(limit, len(ordered)))
 	used := 0
 	for _, id := range ordered {
 		f := acc[id]
@@ -372,7 +389,7 @@ func (s *Service) browseKind(ctx context.Context, kind, project string, limit in
 	if budget <= 0 {
 		budget = 1000
 	}
-	out := make([]Hit, 0, limit)
+	out := make([]Hit, 0, min(limit, len(mems)))
 	used := 0
 	for _, m := range mems {
 		if string(m.Kind) != kind {

@@ -28,6 +28,14 @@ var (
 	ErrUnsafeName = errors.New("name contains unsafe characters")
 )
 
+const (
+	// GlobalProject is the human-facing token for the project-less scope.
+	GlobalProject = "global"
+	// AllProjects is reserved for operations that deliberately widen across
+	// every project; it can never be an ordinary project slug.
+	AllProjects = "all"
+)
+
 // Path rejects file paths that could escape a base directory. It checks for
 // ".." components, absolute paths, and null bytes.
 func Path(path string) error {
@@ -85,8 +93,9 @@ func Title(title string) error {
 }
 
 // Name rejects names used to build filenames (memory names, project/note slugs)
-// that contain filesystem-unsafe characters: null bytes, forward/back slashes,
-// or ".." sequences. It also enforces a maximum length of 255 characters.
+// that are unsafe on any supported platform. The corpus is routinely synced or
+// restored across operating systems, so accepting a name only Unix can create
+// would turn a later Windows checkout into a partial, misleading corpus.
 func Name(name string) error {
 	if name == "" {
 		return fmt.Errorf("validate.Name: name is empty")
@@ -103,6 +112,14 @@ func Name(name string) error {
 	if strings.Contains(name, "\\") {
 		return fmt.Errorf("validate.Name: %w: backslash", ErrUnsafeName)
 	}
+	if strings.ContainsAny(name, `<>:"|?*`) {
+		return fmt.Errorf("validate.Name: %w: Windows-forbidden punctuation", ErrUnsafeName)
+	}
+	for _, r := range name {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("validate.Name: %w: ASCII control character U+%04X", ErrUnsafeName, r)
+		}
+	}
 	if strings.Contains(name, "..") {
 		return fmt.Errorf("validate.Name: %w: dot-dot sequence", ErrUnsafeName)
 	}
@@ -113,10 +130,35 @@ func Name(name string) error {
 	if strings.HasPrefix(name, ".") {
 		return fmt.Errorf("validate.Name: %w: leading dot", ErrUnsafeName)
 	}
+	if strings.HasSuffix(name, ".") {
+		return fmt.Errorf("validate.Name: %w: trailing dot", ErrUnsafeName)
+	}
+	if strings.HasSuffix(name, " ") {
+		return fmt.Errorf("validate.Name: %w: trailing space", ErrUnsafeName)
+	}
 	if reservedDeviceName(name) {
 		return fmt.Errorf("validate.Name: %w: %q is a reserved device name on Windows", ErrUnsafeName, name)
 	}
 	return nil
+}
+
+// Project normalizes the two global-scope spellings and validates an ordinary
+// project slug with Name. The cross-project widening token is reserved rather
+// than accepted as a project that other surfaces could never address.
+func Project(explicit string) (string, error) {
+	explicit = strings.TrimSpace(explicit)
+	switch explicit {
+	case GlobalProject, "_global":
+		return "", nil
+	case "":
+		return "", nil
+	case AllProjects:
+		return "", fmt.Errorf("project %q is reserved for operations over every project", explicit)
+	}
+	if err := Name(explicit); err != nil {
+		return "", fmt.Errorf("invalid project %q: %w", explicit, err)
+	}
+	return explicit, nil
 }
 
 // windowsReservedNames are the legacy DOS device names. Windows resolves them

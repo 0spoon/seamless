@@ -287,6 +287,94 @@ func TestStoreTreeContainment(t *testing.T) {
 	require.Equal(t, "memory/seam/chroma-boot-race.md", written.FilePath)
 }
 
+func makeSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+}
+
+func TestStoreRejectsFinalFileSymlink(t *testing.T) {
+	dataDir := t.TempDir()
+	s := NewStore(dataDir)
+	m := sampleMemory()
+	relPath := MemoryRelPath(m.Project, m.Name)
+	linkPath := filepath.Join(dataDir, filepath.FromSlash(relPath))
+	require.NoError(t, os.MkdirAll(filepath.Dir(linkPath), 0o700))
+
+	outsidePath := filepath.Join(t.TempDir(), "outside.md")
+	const outside = "outside sentinel\n"
+	require.NoError(t, os.WriteFile(outsidePath, []byte(outside), 0o600))
+	makeSymlink(t, outsidePath, linkPath)
+
+	require.False(t, s.Exists(relPath), "a symlink is not a corpus file")
+	_, err := s.ReadMemory(relPath)
+	require.ErrorIs(t, err, ErrSymlink)
+	_, err = s.WriteMemory(m)
+	require.ErrorIs(t, err, ErrSymlink)
+	require.ErrorIs(t, s.Remove(relPath), ErrSymlink)
+
+	got, err := os.ReadFile(outsidePath)
+	require.NoError(t, err)
+	require.Equal(t, outside, string(got), "no operation may read through, overwrite, or remove the target")
+	info, err := os.Lstat(linkPath)
+	require.NoError(t, err)
+	require.NotZero(t, info.Mode()&os.ModeSymlink, "the rejected link itself remains for owner repair")
+}
+
+func TestStoreRejectsSymlinkedParentDirectory(t *testing.T) {
+	dataDir := t.TempDir()
+	s := NewStore(dataDir)
+	m := sampleMemory()
+	require.NoError(t, os.MkdirAll(filepath.Join(dataDir, memoryTree), 0o700))
+
+	outsideDir := t.TempDir()
+	outsidePath := filepath.Join(outsideDir, m.Name+".md")
+	const outside = "outside project sentinel\n"
+	require.NoError(t, os.WriteFile(outsidePath, []byte(outside), 0o600))
+	makeSymlink(t, outsideDir, filepath.Join(dataDir, memoryTree, m.Project))
+
+	relPath := MemoryRelPath(m.Project, m.Name)
+	require.False(t, s.Exists(relPath))
+	_, err := s.ReadMemory(relPath)
+	require.ErrorIs(t, err, ErrSymlink)
+	_, err = s.WriteMemory(m)
+	require.ErrorIs(t, err, ErrSymlink)
+	require.ErrorIs(t, s.Remove(relPath), ErrSymlink)
+
+	got, err := os.ReadFile(outsidePath)
+	require.NoError(t, err)
+	require.Equal(t, outside, string(got))
+}
+
+// The rooted parent handle is the race backstop behind the explicit Lstat
+// checks: if a checked directory is renamed and replaced by an outside symlink,
+// the already-open handle keeps the write in the original real directory.
+func TestAtomicWriteRoot_ParentSwapCannotEscape(t *testing.T) {
+	dataDir := t.TempDir()
+	realParent := filepath.Join(dataDir, memoryTree, "seam")
+	require.NoError(t, os.MkdirAll(realParent, 0o700))
+	root, err := os.OpenRoot(dataDir)
+	require.NoError(t, err)
+	parentRoot, err := root.OpenRoot(filepath.Join(memoryTree, "seam"))
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		require.NoError(t, parentRoot.Close())
+		require.NoError(t, root.Close())
+	})
+
+	movedParent := filepath.Join(dataDir, memoryTree, "seam-real")
+	require.NoError(t, os.Rename(realParent, movedParent))
+	outsideDir := t.TempDir()
+	makeSymlink(t, outsideDir, realParent)
+
+	require.NoError(t, atomicWriteRoot(parentRoot, "race.md", []byte("inside\n"), 0o600))
+	require.NoFileExists(t, filepath.Join(outsideDir, "race.md"))
+	got, err := os.ReadFile(filepath.Join(movedParent, "race.md"))
+	require.NoError(t, err)
+	require.Equal(t, "inside\n", string(got))
+}
+
 func TestAtomicWrite(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "sub", "f.md")

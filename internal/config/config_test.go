@@ -1,6 +1,7 @@
 package config
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,126 @@ func TestLoadFrom_BadEnvInt(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestLoadFrom_StrictYAML(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "unknown top-level key",
+			body: "adress: 127.0.0.1:8081\n",
+			want: "field adress not found",
+		},
+		{
+			name: "unknown nested key",
+			body: "llm:\n  provder: openai\n",
+			want: "field provder not found",
+		},
+		{
+			name: "trailing document",
+			body: "addr: 127.0.0.1:8081\n---\naddr: 127.0.0.1:9090\n",
+			want: "multiple YAML documents",
+		},
+		{
+			name: "duplicate key",
+			body: "addr: 127.0.0.1:8081\naddr: 127.0.0.1:9090\n",
+			want: "mapping key \"addr\" already defined",
+		},
+		{
+			name: "wrong scalar type",
+			body: "gardener:\n  interval_minutes: soon\n",
+			want: "cannot unmarshal",
+		},
+		{
+			name: "explicit null",
+			body: "llm:\n  provider: null\n",
+			want: "config.llm.provider must not be null",
+		},
+		{
+			name: "implicit null",
+			body: "gardener:\n  interval_minutes:\n",
+			want: "config.gardener.interval_minutes must not be null",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadFrom(writeConfig(t, tt.body))
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+}
+
+func TestLoadFrom_ExplicitInvalidNumericDoesNotDefault(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"zero gardener interval", "gardener:\n  interval_minutes: 0\n", "gardener.interval_minutes"},
+		{"zero gardener dedup threshold", "gardener:\n  dedup_threshold: 0\n", "gardener.dedup_threshold"},
+		{"zero gardener staleness", "gardener:\n  staleness_days: 0\n", "gardener.staleness_days"},
+		{"zero gardener digest window", "gardener:\n  digest_days: 0\n", "gardener.digest_days"},
+		{"zero session idle", "gardener:\n  session_idle_minutes: 0\n", "gardener.session_idle_minutes"},
+		{"NaN gardener dedup threshold", "gardener:\n  dedup_threshold: .nan\n", "gardener.dedup_threshold"},
+		{"infinite semantic floor", "search:\n  semantic_floor: .inf\n", "search.semantic_floor"},
+		{"NaN briefing utility", "briefing:\n  utility_weight: .nan\n", "briefing.utility_weight"},
+		{"negative OpenAI dimensions", "llm:\n  openai:\n    embedding_dims: -1\n", "llm.openai.embedding_dims"},
+		{"oversized Ollama dimensions", "llm:\n  ollama:\n    embedding_dims: 65537\n", "llm.ollama.embedding_dims"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := LoadFrom(writeConfig(t, tt.body))
+			require.ErrorContains(t, err, tt.want)
+		})
+	}
+
+	t.Run("absent values retain defaults", func(t *testing.T) {
+		cfg, err := LoadFrom(writeConfig(t, "gardener:\n  enabled: false\n"))
+		require.NoError(t, err)
+		require.Equal(t, 60, cfg.Gardener.IntervalMinutes)
+		require.Equal(t, 0.88, cfg.Gardener.DedupThreshold)
+		require.Equal(t, 90, cfg.Gardener.StalenessDays)
+		require.Equal(t, 30, cfg.Gardener.DigestDays)
+		require.Equal(t, 45, cfg.Gardener.SessionIdleMinutes)
+	})
+
+	t.Run("zero dimensions retain auto-detect meaning", func(t *testing.T) {
+		cfg, err := LoadFrom(writeConfig(t, "llm:\n  openai:\n    embedding_dims: 0\n  ollama:\n    embedding_dims: 0\n"))
+		require.NoError(t, err)
+		require.Zero(t, cfg.LLM.OpenAI.EmbeddingDims)
+		require.Zero(t, cfg.LLM.Ollama.EmbeddingDims)
+	})
+
+	t.Run("zero disabling windows remain valid", func(t *testing.T) {
+		cfg, err := LoadFrom(writeConfig(t, "gardener:\n  tool_event_retention_days: 0\n  stale_plan_days: 0\n  stale_stage_days: 0\n"))
+		require.NoError(t, err)
+		require.Zero(t, cfg.Gardener.ToolEventRetentionDays)
+		require.Zero(t, cfg.Gardener.StalePlanDays)
+		require.Zero(t, cfg.Gardener.StaleStageDays)
+	})
+}
+
+func TestLoadFrom_NonFiniteEnvRejected(t *testing.T) {
+	for _, key := range []string{
+		"SEAMLESS_GARDENER_DEDUP_THRESHOLD",
+		"SEAMLESS_SEARCH_SEMANTIC_FLOOR",
+		"SEAMLESS_BRIEFING_UTILITY_WEIGHT",
+	} {
+		t.Run(key, func(t *testing.T) {
+			for _, value := range []string{"NaN", "+Inf", "-Inf"} {
+				t.Run(value, func(t *testing.T) {
+					t.Setenv(key, value)
+					_, err := LoadFrom("")
+					require.Error(t, err)
+				})
+			}
+		})
+	}
+}
+
 func TestLoadFrom_BriefingFileAndEnv(t *testing.T) {
 	path := writeConfig(t, `
 briefing:
@@ -308,8 +429,18 @@ func TestValidate(t *testing.T) {
 		{"negative-stale-plan-days", func(c *Config) { c.Gardener.StalePlanDays = -1 }, true},
 		{"zero-stale-stage-days-ok", func(c *Config) { c.Gardener.StaleStageDays = 0 }, false},
 		{"negative-stale-stage-days", func(c *Config) { c.Gardener.StaleStageDays = -1 }, true},
-		{"zero-session-idle-ok", func(c *Config) { c.Gardener.SessionIdleMinutes = 0 }, false},
+		{"zero-gardener-interval", func(c *Config) { c.Gardener.IntervalMinutes = 0 }, true},
+		{"negative-gardener-interval", func(c *Config) { c.Gardener.IntervalMinutes = -1 }, true},
+		{"zero-gardener-dedup", func(c *Config) { c.Gardener.DedupThreshold = 0 }, true},
+		{"NaN-gardener-dedup", func(c *Config) { c.Gardener.DedupThreshold = math.NaN() }, true},
+		{"zero-gardener-staleness", func(c *Config) { c.Gardener.StalenessDays = 0 }, true},
+		{"zero-gardener-digest", func(c *Config) { c.Gardener.DigestDays = 0 }, true},
+		{"zero-session-idle", func(c *Config) { c.Gardener.SessionIdleMinutes = 0 }, true},
 		{"negative-session-idle", func(c *Config) { c.Gardener.SessionIdleMinutes = -1 }, true},
+		{"zero-openai-dims-auto-ok", func(c *Config) { c.LLM.OpenAI.EmbeddingDims = 0 }, false},
+		{"negative-openai-dims", func(c *Config) { c.LLM.OpenAI.EmbeddingDims = -1 }, true},
+		{"max-ollama-dims-ok", func(c *Config) { c.LLM.Ollama.EmbeddingDims = MaxEmbeddingDimensions }, false},
+		{"oversized-ollama-dims", func(c *Config) { c.LLM.Ollama.EmbeddingDims = MaxEmbeddingDimensions + 1 }, true},
 		{"zero-briefing-knobs-ok", func(c *Config) { c.Briefing = Briefing{} }, false},
 		{"negative-briefing-findings", func(c *Config) { c.Briefing.FindingsCount = -1 }, true},
 		{"zero-constraint-max-full-ok", func(c *Config) { c.Briefing.ConstraintMaxFull = 0 }, false},
@@ -322,12 +453,16 @@ func TestValidate(t *testing.T) {
 		{"utility-weight-one-ok", func(c *Config) { c.Briefing.UtilityWeight = 1 }, false},
 		{"negative-utility-weight", func(c *Config) { c.Briefing.UtilityWeight = -0.1 }, true},
 		{"utility-weight-above-one", func(c *Config) { c.Briefing.UtilityWeight = 1.1 }, true},
+		{"NaN-utility-weight", func(c *Config) { c.Briefing.UtilityWeight = math.NaN() }, true},
+		{"infinite-utility-weight", func(c *Config) { c.Briefing.UtilityWeight = math.Inf(1) }, true},
 		{"empty-utility-mode-ok", func(c *Config) { c.Briefing.UtilityMode = "" }, false},
 		{"unknown-utility-mode", func(c *Config) { c.Briefing.UtilityMode = "sideways" }, true},
 		{"zero-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 0 }, false},
 		{"one-semantic-floor-ok", func(c *Config) { c.Search.SemanticFloor = 1 }, false},
 		{"negative-semantic-floor", func(c *Config) { c.Search.SemanticFloor = -0.1 }, true},
 		{"semantic-floor-above-one", func(c *Config) { c.Search.SemanticFloor = 1.1 }, true},
+		{"NaN-semantic-floor", func(c *Config) { c.Search.SemanticFloor = math.NaN() }, true},
+		{"infinite-semantic-floor", func(c *Config) { c.Search.SemanticFloor = math.Inf(-1) }, true},
 		{"custom-capture-ports-ok", func(c *Config) { c.Capture.AllowedPorts = []int{8080, 65535} }, false},
 		{"zero-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{0} }, true},
 		{"negative-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{-1} }, true},
