@@ -19,7 +19,8 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// Plans & tasks tab tuning. A run shorter than doneRunFold is not worth hiding;
+// Plans & tasks tab tuning. A closed block shorter than doneRunFold is not
+// worth hiding;
 // donePlansCap bounds the completed-plans fold; the ledger scans
 // planLedgerScan recent transitions and keeps planLedgerRows per plan;
 // planChainDepth caps the blocker walk.
@@ -79,10 +80,13 @@ type planStepGroup struct {
 	Steps      []planStepVM
 }
 
-// planLedgerVM is one transition in a plan's recent-activity ledger.
+// planLedgerVM is one step's latest transition in a plan's recent-activity
+// ledger. Tone is the verb's colour class (ok/brand/warn/muted), so the row
+// scans by colour before it is read.
 type planLedgerVM struct {
 	Verb      string
 	Icon      string
+	Tone      string
 	StepID    string
 	StepTitle string
 	Session   string // session name, when the transition had an actor
@@ -112,6 +116,7 @@ type planStepVM struct {
 	Status    string
 	State     string
 	Claimable bool      // open and unblocked: an agent could take it right now
+	Created   time.Time // the plan's own step order, oldest first
 	Closed    time.Time // when it reached a terminal status (the done-run label)
 
 	ClaimedBy   string // session name
@@ -305,7 +310,7 @@ func (s *Service) fillTasksTab(ctx context.Context, data *projectWorkspaceData, 
 func (s *Service) planStep(ctx context.Context, t core.Task, pc planStepCtx) planStepVM {
 	step := planStepVM{
 		ID: t.ID, Title: t.Title, Project: t.ProjectSlug, Status: string(t.Status),
-		State: taskState(t.Status),
+		State: taskState(t.Status), Created: t.CreatedAt,
 	}
 	if t.Status == core.TaskDone || t.Status == core.TaskDropped {
 		step.Closed = closedAt(t)
@@ -423,43 +428,55 @@ func reverseEdges(steps map[string]core.Task) map[string][]depChipVM {
 	return out
 }
 
-// groupSteps folds runs of consecutive closed steps into a collapsed group and
-// leaves every live step its own. A run shorter than doneRunFold is not worth
-// hiding, so it stays expanded. Pure: its only ordering input is the slice it
-// is given, which is the order the timeline renders.
+// groupSteps orders a plan frontier-first: every unfinished step, in the plan's
+// own step order (oldest created first, the order it was written, so a blocker
+// reads above what it blocks), then ONE group holding every closed step, most
+// recently closed first. Source order is creation-time descending, which
+// scattered finished work above and below the frontier -- history belongs in one
+// place, at the bottom. A closed block shorter than doneRunFold is not worth
+// hiding, so it stays expanded. Pure, and totally ordered: a morph must not
+// shuffle rows between two renders of the same data.
 func groupSteps(steps []planStepVM) []planStepGroup {
-	var out []planStepGroup
-	single := func(st planStepVM) { out = append(out, planStepGroup{Steps: []planStepVM{st}}) }
-	for i := 0; i < len(steps); {
-		if steps[i].State != "done" {
-			single(steps[i])
-			i++
+	live, closed := make([]planStepVM, 0, len(steps)), make([]planStepVM, 0, len(steps))
+	for _, st := range steps {
+		if st.State == "done" {
+			closed = append(closed, st)
 			continue
 		}
-		j := i
-		for j < len(steps) && steps[j].State == "done" {
-			j++
-		}
-		run := steps[i:j]
-		i = j
-		if len(run) < doneRunFold {
-			for _, st := range run {
-				single(st)
-			}
-			continue
-		}
-		g := planStepGroup{DoneRun: true, Steps: run}
-		for _, st := range run {
-			if st.Closed.After(g.LastClosed) {
-				g.LastClosed, g.LastTitle = st.Closed, st.Title
-			}
-		}
-		if g.LastTitle == "" && len(run) > 0 {
-			g.LastTitle = run[0].Title // no closed stamps at all: still label the fold
-		}
-		out = append(out, g)
+		live = append(live, st)
 	}
-	return out
+	sort.Slice(live, func(i, j int) bool {
+		if !live[i].Created.Equal(live[j].Created) {
+			return live[i].Created.Before(live[j].Created)
+		}
+		return live[i].ID < live[j].ID
+	})
+	sort.Slice(closed, func(i, j int) bool {
+		if !closed[i].Closed.Equal(closed[j].Closed) {
+			return closed[i].Closed.After(closed[j].Closed)
+		}
+		return closed[i].ID > closed[j].ID
+	})
+
+	out := make([]planStepGroup, 0, len(live)+1)
+	single := func(st planStepVM) { out = append(out, planStepGroup{Steps: []planStepVM{st}}) }
+	for _, st := range live {
+		single(st)
+	}
+	switch {
+	case len(closed) == 0:
+		return out
+	case len(closed) < doneRunFold:
+		for _, st := range closed {
+			single(st)
+		}
+		return out
+	}
+	// closed[0] is the most recently closed step: the fold's label.
+	return append(out, planStepGroup{
+		DoneRun: true, Steps: closed,
+		LastTitle: closed[0].Title, LastClosed: closed[0].Closed,
+	})
 }
 
 // planNoteMeta resolves each plan slug's narrative note in one query. The note
@@ -512,19 +529,25 @@ func (s *Service) planLedger(ctx context.Context, project string, steps map[stri
 		return nil
 	}
 	out := map[string][]planLedgerVM{}
+	// One entry per STEP, not per event: a step that was created, claimed and
+	// finished inside the window is one thing that happened, and spending all
+	// three ledger slots on its title repeated verbatim says nothing. Events
+	// arrive newest first, so the first sighting of a step is its latest state.
+	seen := map[string]bool{}
 	for _, e := range evs {
-		if e.ProjectSlug != project {
+		if e.ProjectSlug != project || seen[e.ItemID] {
 			continue
 		}
 		step, ok := steps[e.ItemID]
 		if !ok || step.PlanSlug == "" || len(out[step.PlanSlug]) >= planLedgerRows {
 			continue
 		}
+		seen[e.ItemID] = true
 		row := planLedgerVM{
 			StepID: step.ID, StepTitle: step.Title, When: e.TS,
 			Owner: payloadStr(e.Payload, "by") == "console",
 		}
-		row.Verb, row.Icon = transitionVerb(e.Payload)
+		row.Verb, row.Icon, row.Tone = transitionVerb(e.Payload)
 		// A claim stamps its holder in the payload; every other transition
 		// carries the acting session on the event itself.
 		actor := e.SessionID
@@ -542,26 +565,26 @@ func (s *Service) planLedger(ctx context.Context, project string, steps map[stri
 // transitionVerb reads a task.transition payload as the verb the ledger shows,
 // covering the shapes tasks_add / tasks_claim / tasks_release / tasks_update
 // and the console's own force-release write emit.
-func transitionVerb(payload map[string]any) (verb, iconName string) {
+func transitionVerb(payload map[string]any) (verb, iconName, tone string) {
 	switch {
 	case payloadBool(payload, "created"):
-		return "created", "circle"
+		return "created", "circle", "muted"
 	case payloadBool(payload, "reclaimed"):
-		return "reclaimed", "lock"
+		return "reclaimed", "lock", "warn"
 	case payloadStr(payload, "claimed_by") != "":
-		return "claimed", "lock"
+		return "claimed", "lock", "brand"
 	case payloadBool(payload, "released"):
-		return "released", "arrow-up-down"
+		return "released", "arrow-up-down", "muted"
 	}
 	switch payloadStr(payload, "to") {
 	case string(core.TaskDone):
-		return "done", "check"
+		return "done", "check", "ok"
 	case string(core.TaskDropped):
-		return "dropped", "archive"
+		return "dropped", "archive", "muted"
 	case string(core.TaskInProgress):
-		return "started", "loader"
+		return "started", "loader", "brand"
 	default:
-		return "reopened", "circle"
+		return "reopened", "circle", "warn"
 	}
 }
 

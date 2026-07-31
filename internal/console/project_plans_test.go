@@ -30,46 +30,75 @@ func insertPlanNote(t *testing.T, db *sql.DB, id, project, slug, title, tagsJSON
 	require.NoError(t, err)
 }
 
-func TestGroupSteps_FoldsLongDoneRuns(t *testing.T) {
+func TestGroupSteps_FrontierFirst(t *testing.T) {
 	at := func(min int) time.Time {
 		return time.Date(2026, 7, 20, 10, 0, 0, 0, time.UTC).Add(time.Duration(min) * time.Minute)
 	}
-	done := func(title string, closed time.Time) planStepVM {
-		return planStepVM{ID: title, Title: title, State: "done", Closed: closed}
+	done := func(title string, created, closed time.Time) planStepVM {
+		return planStepVM{ID: title, Title: title, State: "done", Created: created, Closed: closed}
 	}
-	live := func(title, state string) planStepVM {
-		return planStepVM{ID: title, Title: title, State: state}
+	live := func(title, state string, created time.Time) planStepVM {
+		return planStepVM{ID: title, Title: title, State: state, Created: created}
+	}
+	titles := func(groups []planStepGroup) []string {
+		var out []string
+		for _, g := range groups {
+			for _, st := range g.Steps {
+				out = append(out, st.Title)
+			}
+		}
+		return out
 	}
 
-	t.Run("a run at the threshold folds", func(t *testing.T) {
+	// Source order is creation-time descending, and finished work is interleaved
+	// with the frontier -- exactly the shape the tab receives.
+	t.Run("live steps rise in plan order, closed steps fold at the bottom", func(t *testing.T) {
 		groups := groupSteps([]planStepVM{
-			live("W1", "doing"),
-			done("W2", at(1)), done("W3", at(9)), done("W4", at(4)),
-			live("W5", "open"),
+			done("W5", at(5), at(50)),
+			live("W4", "open", at(4)),
+			done("W3", at(3), at(90)),
+			done("W2", at(2), at(70)),
+			live("W1", "doing", at(1)),
 		})
 		require.Len(t, groups, 3)
 		require.False(t, groups[0].DoneRun)
-		require.True(t, groups[1].DoneRun)
-		require.Len(t, groups[1].Steps, 3)
-		require.Equal(t, "W3", groups[1].LastTitle, "the run is labeled by its most recently closed step")
-		require.Equal(t, at(9), groups[1].LastClosed)
-		require.False(t, groups[2].DoneRun)
+		require.False(t, groups[1].DoneRun)
+		require.Equal(t, []string{"W1", "W4"}, titles(groups[:2]), "unfinished steps read oldest-created first")
+		require.True(t, groups[2].DoneRun, "every closed step lands in one fold at the end")
+		require.Equal(t, []string{"W3", "W2", "W5"}, titles(groups[2:]), "history reads most recently closed first")
+		require.Equal(t, "W3", groups[2].LastTitle, "the fold is labeled by its most recently closed step")
+		require.Equal(t, at(90), groups[2].LastClosed)
 	})
 
-	t.Run("a short run stays expanded", func(t *testing.T) {
-		groups := groupSteps([]planStepVM{done("W1", at(1)), done("W2", at(2)), live("W3", "open")})
+	t.Run("a short closed block stays expanded, still below the frontier", func(t *testing.T) {
+		groups := groupSteps([]planStepVM{done("W3", at(3), at(30)), done("W2", at(2), at(20)), live("W1", "open", at(1))})
 		require.Len(t, groups, 3)
 		for _, g := range groups {
 			require.False(t, g.DoneRun)
 			require.Len(t, g.Steps, 1)
 		}
+		require.Equal(t, []string{"W1", "W3", "W2"}, titles(groups))
 	})
 
 	t.Run("every step closed folds into one group", func(t *testing.T) {
-		groups := groupSteps([]planStepVM{done("W1", at(1)), done("W2", at(2)), done("W3", at(3)), done("W4", at(4))})
+		groups := groupSteps([]planStepVM{
+			done("W1", at(1), at(10)), done("W2", at(2), at(20)),
+			done("W3", at(3), at(30)), done("W4", at(4), at(40)),
+		})
 		require.Len(t, groups, 1)
 		require.True(t, groups[0].DoneRun)
 		require.Len(t, groups[0].Steps, 4)
+		require.Equal(t, "W4", groups[0].LastTitle)
+	})
+
+	t.Run("unstamped closed steps still label the fold", func(t *testing.T) {
+		groups := groupSteps([]planStepVM{
+			done("W1", at(1), time.Time{}), done("W2", at(2), time.Time{}), done("W3", at(3), time.Time{}),
+		})
+		require.Len(t, groups, 1)
+		require.True(t, groups[0].DoneRun)
+		require.NotEmpty(t, groups[0].LastTitle)
+		require.True(t, groups[0].LastClosed.IsZero(), "no stamp to show: the template drops the time")
 	})
 
 	t.Run("no steps", func(t *testing.T) {
@@ -190,6 +219,49 @@ func TestProjectWorkspace_PlanCardIsLiveTriage(t *testing.T) {
 	require.Contains(t, body, "claimed", "the ledger verb")
 }
 
+// TestProjectWorkspace_LedgerIsOneEntryPerStep pins the ledger's grammar: a
+// step created, claimed and finished inside the window is ONE thing that
+// happened, so it spends one slot (its latest state) and leaves the rest for
+// other steps -- the alternative repeats one truncated title across the strip.
+func TestProjectWorkspace_LedgerIsOneEntryPerStep(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{
+		ID: mustID(t), Slug: "seamless", Name: "Seamless", CreatedAt: now, UpdatedAt: now,
+	}))
+
+	step := func(title string, status core.TaskStatus) string {
+		id := mustID(t)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: id, ProjectSlug: "seamless", Title: title, Status: status,
+			PlanSlug: "ios-demo", CreatedAt: now, UpdatedAt: now,
+		}))
+		return id
+	}
+	transition := func(id, payload string, at time.Time) {
+		_, err := db.ExecContext(ctx, `INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+			VALUES (?, ?, ?, '', 'seamless', ?, ?)`,
+			mustID(t), core.FormatTime(at), string(core.EventTaskTransition), id, payload)
+		require.NoError(t, err)
+	}
+	churned := step("recap survey choice", core.TaskDone)
+	quiet := step("calibration length", core.TaskOpen)
+	transition(churned, `{"to":"open","created":true}`, now.Add(-30*time.Minute))
+	transition(churned, `{"to":"in_progress","claimed_by":"x"}`, now.Add(-20*time.Minute))
+	transition(churned, `{"to":"done"}`, now.Add(-10*time.Minute))
+	transition(quiet, `{"to":"open","created":true}`, now.Add(-5*time.Minute))
+
+	body := getHTMLBody(t, mux, "/console/projects/seamless?tab=tasks")
+	ledger := body[strings.Index(body, `<div class="plan-ledger">`):]
+	ledger = ledger[:strings.Index(ledger, "</div>")]
+	require.Equal(t, 1, strings.Count(ledger, "recap survey choice</a>"),
+		"three transitions of one step collapse to its latest state")
+	require.Contains(t, ledger, `<span class="vb ok">`, "the latest state is done, and the verb carries its tone")
+	require.Equal(t, 2, strings.Count(ledger, `<span class="led">`), "two steps moved, so the strip holds two cells")
+	require.Contains(t, ledger, "calibration length</a>", "the freed slot goes to another step")
+}
+
 // TestProjectWorkspace_LapsedClaimOffersIntervention covers the row an owner
 // actually has to act on: in_progress, still naming a holder, lease expired.
 // core.Task.ClaimLive reports false there, so the cue has to come off the raw
@@ -240,8 +312,8 @@ func TestProjectWorkspace_FoldsDoneRunsAndCompletedPlans(t *testing.T) {
 		ID: mustID(t), Slug: "seamless", Name: "Seamless", CreatedAt: now, UpdatedAt: now,
 	}))
 
-	// Distinct creation stamps: the timeline renders newest-created first, so
-	// the three closed steps land as one consecutive run below the open one.
+	// Distinct creation stamps. The seeded plan interleaves finished and open
+	// work; the timeline must still lift the open step above one closed fold.
 	seq := 0
 	seed := func(plan, title string, status core.TaskStatus) string {
 		seq++
@@ -259,14 +331,16 @@ func TestProjectWorkspace_FoldsDoneRunsAndCompletedPlans(t *testing.T) {
 	}
 	first := seed("live", "one", core.TaskDone)
 	seed("live", "two", core.TaskDone)
-	seed("live", "three", core.TaskDone)
-	seed("live", "four", core.TaskOpen)
+	open := seed("live", "three", core.TaskOpen)
+	seed("live", "four", core.TaskDone)
 	seed("older", "wrapped up", core.TaskDone)
 
 	body := getHTMLBody(t, mux, "/console/projects/seamless?tab=tasks")
-	require.Contains(t, body, `<details class="step-run" id="run-`, "three closed steps in a row fold away")
+	require.Contains(t, body, `<details class="step-run" id="run-`, "three closed steps fold away")
 	require.Contains(t, body, "3 completed steps")
 	require.Contains(t, body, first, "the folded rows are still rendered inside")
+	require.Less(t, strings.Index(body, open), strings.Index(body, `<details class="step-run"`),
+		"the frontier renders above the fold, never between two folds")
 	require.Contains(t, body, `id="plans-completed"`, "the finished plan gets a rollup group")
 	require.Contains(t, body, "1 completed plan")
 	require.Contains(t, body, `href="/console/plans/older"`)

@@ -1644,14 +1644,24 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .plan-bar .doing { background: var(--brand); }
 
 /* Recent-transition ledger: the last few things that moved on this plan. */
-.plan-ledger { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 8px 14px; background: color-mix(in oklab, var(--surface-2) 55%, transparent); border-bottom: 1px solid var(--border); font-size: var(--text-2xs); color: var(--muted); }
-.plan-ledger .led { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-.plan-ledger .led .ico { width: 11px; height: 11px; flex: none; }
-.plan-ledger .led a { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.plan-ledger .led .v { font-weight: 600; color: var(--ink-2); }
-.plan-ledger .led .who { font-family: var(--font-mono); }
-.plan-ledger .led .who.owner { color: var(--pop-strong); font-weight: 600; }
-.plan-ledger .led .when { font-variant-numeric: tabular-nums; }
+/* The ledger is a scan line, not a sentence. Each cell reads verb-first in the
+   verb's own tone, the step title takes the slack and truncates, and the actor
+   and age trail behind it quietly -- the session name is long, repeats between
+   cells, and must never out-shout what happened. */
+.plan-ledger { display: flex; flex-wrap: wrap; align-items: stretch; padding: 0 14px; background: color-mix(in oklab, var(--surface-2) 55%, transparent); border-bottom: 1px solid var(--border); font-size: var(--text-2xs); color: var(--muted); }
+.plan-ledger .lbl { display: inline-flex; align-items: center; padding-right: 12px; text-transform: uppercase; letter-spacing: var(--tracking-wide); font-weight: 600; color: var(--faint); flex: none; }
+.plan-ledger .led { display: inline-flex; align-items: center; gap: 8px; min-width: 0; flex: 1 1 26ch; max-width: 44ch; padding: 7px 12px; border-left: 1px solid var(--border); }
+.plan-ledger .vb { display: inline-flex; align-items: center; gap: 4px; flex: none; font-weight: 600; }
+.plan-ledger .vb .ico { width: 11px; height: 11px; flex: none; }
+.plan-ledger .vb.ok { color: var(--ok); }
+.plan-ledger .vb.brand { color: var(--brand-strong); }
+.plan-ledger .vb.warn { color: var(--warn); }
+.plan-ledger .vb.muted { color: var(--muted); }
+.plan-ledger .st { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.plan-ledger .st:hover { color: var(--brand-strong); }
+.plan-ledger .who { flex: none; max-width: 12ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--faint); }
+.plan-ledger .who.owner { color: var(--pop-strong); font-weight: 600; }
+.plan-ledger .when { flex: none; color: var(--faint); font-variant-numeric: tabular-nums; }
 
 /* A step row is a <details>: the summary carries the grid the flat row used to
    be, and the state dot stands in for the disclosure triangle. */

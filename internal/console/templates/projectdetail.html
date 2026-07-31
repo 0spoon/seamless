@@ -92,8 +92,14 @@
     <div class="plan-bar"><span class="done" style="width:{{.DonePct}}%"></span><span class="doing" style="width:{{.DoingPct}}%"></span></div>
     {{if .Recent}}
     <div class="plan-ledger">
+      <span class="lbl">recent</span>
       {{range .Recent}}
-      <span class="led">{{icon .Icon}}<a href="#{{.StepID}}" data-jump>{{.StepTitle}}</a><span class="v">{{.Verb}}</span>{{if .Owner}}<span class="who owner">you</span>{{else if .SessionID}}<a class="who" href="/console/sessions/{{.SessionID}}">{{.Session}}</a>{{end}}<span class="when">{{ago .When}}</span></span>
+      <span class="led">
+        <span class="vb {{.Tone}}">{{icon .Icon}}{{.Verb}}</span>
+        <a class="st" href="#{{.StepID}}" data-jump title="{{.StepTitle}}">{{.StepTitle}}</a>
+        {{if .Owner}}<span class="who owner" title="an owner action from this console">you</span>{{else if .SessionID}}<a class="who" href="/console/sessions/{{.SessionID}}" title="{{.Session}}">{{.Session}}</a>{{end}}
+        <span class="when">{{ago .When}}</span>
+      </span>
       {{end}}
     </div>
     {{end}}
