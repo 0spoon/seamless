@@ -12,7 +12,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/sigstore/sigstore-go v1.2.2
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.8.4
+	github.com/yuin/goldmark v1.8.5
 	github.com/yuin/goldmark-highlighting/v2 v2.0.0-20230729083705-37449abec8cc
 	golang.org/x/net v0.57.0
 	golang.org/x/term v0.45.0
