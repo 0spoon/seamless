@@ -35,10 +35,17 @@
       <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
     </nav>
     <div class="side-foot">
-      <button class="btn small theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme"><span class="tt-ico ico-light">{{icon "sun"}}</span><span class="tt-ico ico-dark">{{icon "moon"}}</span><span class="tt-label">Light theme</span></button>
-      <form method="post" action="/console/logout">
-        <button class="btn small" type="submit">{{icon "log-out"}}<span>Sign out</span></button>
-      </form>
+      <div class="account">
+        <span class="account-dot" aria-hidden="true"></span>
+        <span class="account-copy"><strong>Owner</strong><small title="{{.Host}}">{{.Host}}</small></span>
+        {{/* Icon-only, fixed width: the old buttons carried their state as text
+             ("Light theme" / "Dark theme"), so every theme flip resized the
+             sidebar footer under the cursor that had just clicked it. */}}
+        <button class="account-act theme-toggle" type="button" id="theme-toggle" aria-label="Toggle theme" title="Toggle theme"><span class="tt-ico ico-light">{{icon "sun"}}</span><span class="tt-ico ico-dark">{{icon "moon"}}</span></button>
+        <form method="post" action="/console/logout">
+          <button class="account-act" type="submit" aria-label="Sign out" title="Sign out">{{icon "log-out"}}</button>
+        </form>
+      </div>
     </div>
   </aside>
   <main class="main">
@@ -304,8 +311,13 @@
   var btn = document.getElementById('theme-toggle');
   if (!btn) return;
   var root = document.documentElement;
-  var lbl = btn.querySelector('.tt-label');
-  function label() { if (lbl) lbl.textContent = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme'; }
+  // The affordance is a fixed-size icon button, so its state lives in the label
+  // rather than in visible text -- nothing reflows when the theme flips.
+  function label() {
+    var next = root.getAttribute('data-theme') === 'dark' ? 'Light theme' : 'Dark theme';
+    btn.setAttribute('aria-label', next);
+    btn.setAttribute('title', next);
+  }
   label();
   btn.onclick = function () {
     var next = root.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';

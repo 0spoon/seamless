@@ -78,8 +78,7 @@ func TestGardenerScreen_QueueChrome(t *testing.T) {
 
 	body := getPeek(t, mux, "/console/gardener").Body.String()
 	require.Contains(t, body, `class="lib-page gardener-page" data-library="gardener"`)
-	require.Contains(t, body, `class="lib-hero"`)
-	require.Contains(t, body, `class="lib-controlbar"`)
+	require.Contains(t, body, `class="mv2-bar"`)
 	require.Contains(t, body, `class="lib-layout"`)
 	require.Contains(t, body, `data-base="/console/gardener"`)
 	require.Contains(t, body, "Propose-only by design.")

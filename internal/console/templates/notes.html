@@ -3,39 +3,32 @@
 {{$sel := .Selected}}
 {{$qs := .QS}}
 <div class="lib-page" data-library="notes">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "file-text"}} Working knowledge</div>
-    <h1>Notes</h1>
-    <div class="sub">Research, meeting context, plans, and long-form artifacts kept for later work.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
-  </div>
-  <div class="lib-total" aria-label="{{.Count}} notes">
-    <strong>{{.Count}}</strong><span>note{{if ne .Count 1}}s{{end}}</span>
-    {{if .Groups}}<small>{{len .Groups}} scope{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
-  </div>
-</header>
-
-{{if or .Groups .Query}}
-<section class="lib-controlbar" aria-label="Note filters and sorting">
+{{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
+<header class="mv2-bar">
+  <h1 title="Research, meeting context, plans, and long-form artifacts kept for later work.">{{icon "file-text"}}Notes</h1>
+  <span class="mv2-count" aria-label="{{.Count}} notes">
+    <strong>{{.Count}}</strong>note{{if ne .Count 1}}s{{end}}{{if .Groups}}<small>across {{len .Groups}} scope{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
+  </span>
   <form class="search lib-query" method="get" action="/console/notes" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter notes by title, description, or tag" placeholder="Filter titles, descriptions, and tags&hellip;" value="{{.Query}}">
     {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
   </form>
-  {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
-  <div class="lib-control">
-    <span class="lib-control-label">Sort within project</span>
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Sort</span>
     <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
   </div>
-  <div class="lib-control-note"><strong>Browse structure</strong><span>Scope &rarr; note</span></div>
-</section>
+</header>
+
+{{if or .Groups .Query}}
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/notes/{{.Selected.ID}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Notes">
-    <div class="rail-overview"><span>Note map</span><span>{{.Count}} shown</span></div>
+    <div class="rail-overview"><span>Note map</span><span>Scope &rarr; note</span></div>
     <div class="rail-scroll">
     {{if .Groups}}
     <div class="rail-groups">

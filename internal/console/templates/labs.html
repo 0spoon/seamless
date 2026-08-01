@@ -2,26 +2,19 @@
 {{with .Data}}
 {{$sel := .Selected}}
 <div class="lib-page" data-library="labs">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "flask-conical"}} Research library</div>
-    <h1>Labs</h1>
-    <div class="sub">Stable lines of investigation, with outcomes and experiment history gathered in one place.</div>
-  </div>
-  <div class="lib-total" aria-label="{{.Count}} labs">
-    <strong>{{.Count}}</strong><span>lab{{if ne .Count 1}}s{{end}}</span>
-    <small>{{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}}</small>
-  </div>
+<header class="mv2-bar">
+  <h1 title="Stable lines of investigation, with outcomes and experiment history gathered in one place. A lab appears when its first trial is recorded.">{{icon "flask-conical"}}Labs</h1>
+  <span class="mv2-count" aria-label="{{.Count}} labs">
+    <strong>{{.Count}}</strong>lab{{if ne .Count 1}}s{{end}}<small>{{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}} recorded</small>
+  </span>
+  <span class="mv2-spacer"></span>
+  <a class="btn small" href="/console/trials">{{icon "test-tube"}} Browse every trial</a>
 </header>
 
 {{if .Rows}}
-<section class="lib-controlbar lib-statusbar" aria-label="Lab organization">
-  <div class="lib-control-note lib-control-lead"><strong>Most recently active first</strong><span>A lab appears when its first trial is recorded.</span></div>
-  <a class="btn small lib-open-related" href="/console/trials">{{icon "test-tube"}} Browse every trial</a>
-</section>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="{{labPath .Selected.Row.Lab}}"{{end}}>
   <nav class="lib-rail" aria-label="Labs">
-    <div class="rail-overview"><span>Research map</span><span>{{.Count}} labs</span></div>
+    <div class="rail-overview"><span>Research map</span><span>Most recently active first</span></div>
     <div class="rail-scroll">
     <div class="rail-groups">
       <section class="rail-group" id="rg-labs">

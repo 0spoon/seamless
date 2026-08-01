@@ -1,12 +1,9 @@
 {{define "content"}}
 {{with .Data}}
 <div class="settings-page" data-settings>
-  <header class="lib-hero settings-hero">
-    <div class="lib-hero-copy">
-      <div class="lib-eyebrow">{{icon "settings"}} System control plane</div>
-      <h1>Settings</h1>
-      <div class="sub">Understand the running profile, shape what every new agent session receives, and inspect how workspaces are connected.</div>
-    </div>
+  <header class="mv2-bar">
+    <h1 title="Understand the running profile, shape what every new agent session receives, and inspect how workspaces are connected.">{{icon "settings"}}Settings</h1>
+    <span class="mv2-spacer"></span>
     <div class="settings-mode{{if .BriefingOverridden}} override{{end}}" aria-label="Active briefing configuration source">
       <span>Briefing source</span>
       <strong>{{if .BriefingOverridden}}Console override{{else}}File + env{{end}}</strong>

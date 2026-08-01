@@ -34,8 +34,8 @@
     <div class="m"><div class="k">Active memories</div><div class="v">{{.Metrics.Memories}}</div></div>
     <div class="m"><div class="k">Sessions</div><div class="v">{{.Metrics.Sessions}}{{if .Metrics.Live}} <small>&middot; {{.Metrics.Live}} live</small>{{end}}</div></div>
     <div class="m"><div class="k">Open tasks</div><div class="v">{{.Metrics.OpenTasks}}{{if .Metrics.Blocked}} <small>&middot; {{.Metrics.Blocked}} blk</small>{{end}}</div></div>
-    <div class="m"><div class="k">Reach</div><div class="v brand">{{if .Metrics.HasReach}}{{.Metrics.ReachRate}}%{{else}}&mdash;{{end}}</div></div>
-    <div class="m"><div class="k">Coverage</div><div class="v ok">{{if .Metrics.HasCoverage}}{{.Metrics.Coverage}}%{{else}}&mdash;{{end}}</div></div>
+    <div class="m"><div class="k">Reach</div><div class="v brand judged-row">{{if .Metrics.HasReach}}{{.Metrics.ReachRate}}%{{else}}&mdash;{{end}}{{deltaChip .Metrics.ReachDelta}}</div><div class="judged-band" title="{{.Metrics.PriorLabel}}">{{bandLine .Metrics.ReachBand}}</div></div>
+    <div class="m"><div class="k">Coverage</div><div class="v ok judged-row">{{if .Metrics.HasCoverage}}{{.Metrics.Coverage}}%{{else}}&mdash;{{end}}{{deltaChip .Metrics.CoverageDelta}}</div><div class="judged-band" title="{{.Metrics.PriorLabel}}">{{bandLine .Metrics.CoverageBand}}</div></div>
   </div>
   <div class="two">
     <div class="card">
@@ -210,7 +210,7 @@
   {{end}}
   <div class="ix-feed" id="ix-pfeed">
     {{range .Interactions}}
-    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
+    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-sev="{{rowSev .Kind .IsError}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
       <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{agentPill .Harness .Model}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
         {{if or .SessionName .DurationMS .Items .IsError .Ambient}}

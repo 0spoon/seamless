@@ -14,62 +14,62 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-func TestOverviewFrontDoor_RendersProductNarrativeAndSystemLayers(t *testing.T) {
+func TestOverview_IsAStatusPageNotAPitch(t *testing.T) {
 	_, mux := newConsole(t)
 	page := getPeek(t, mux, "/console/?w=7d")
 	require.Equal(t, http.StatusOK, page.Code)
 	body := page.Body.String()
 
 	require.Contains(t, body, `class="overview-page" data-overview`)
-	require.Contains(t, body, `class="overview-hero topbar"`, "the hero remains inside the live-refresh status contract")
-	require.Contains(t, body, "Shared context,")
-	require.Contains(t, body, "alive between agents.")
-	require.Contains(t, body, `class="live overview-live"`)
+	// The SSE refresher toggles `.topbar .live`; the titlebar carries both.
+	require.Contains(t, body, `class="ov2-titlebar topbar"`)
+	require.Contains(t, body, `class="live ov2-title-live"`)
 	require.Contains(t, body, `class="active" aria-current="page" href="?w=7d"`)
+	require.Contains(t, body, "sessions observed")
 
-	require.Contains(t, body, "est. tokens injected",
-		"the reach vital pairs the reach rate with its injected-token cost")
+	// The landing-page furniture is gone: no pitch, no calls to action.
+	require.NotContains(t, body, "Shared context,")
+	require.NotContains(t, body, "alive between agents")
+	require.NotContains(t, body, `class="btn primary"`)
+	require.NotContains(t, body, "overview-stage-index")
 
-	for _, id := range []string{
-		"overview-circulation-title",
-		"overview-atlas-title",
-		"overview-workspaces-title",
-		"overview-activity-title",
-	} {
-		require.Contains(t, body, `aria-labelledby="`+id+`"`)
-		require.Contains(t, body, `id="`+id+`"`)
-	}
-
+	// Every screen the page summarizes stays one click away.
 	for _, href := range []string{
-		`href="/console/retrieval"`,
 		`href="/console/projects"`,
-		`href="/console/memories"`,
-		`href="/console/notes"`,
-		`href="/console/sessions"`,
-		`href="/console/tasks"`,
-		`href="/console/gardener"`,
 		`href="/console/interactions"`,
 	} {
 		require.Contains(t, body, href)
 	}
+
+	// The four vitals are labeled and judged.
+	for _, label := range []string{"Memory reach", "Knowledge continuity", "Context injections", "Sessions reached"} {
+		require.Contains(t, body, label)
+	}
 }
 
-func TestOverviewFrontDoor_MishapRailAttributesAgentReports(t *testing.T) {
-	db, mux := newConsole(t)
-	ctx := context.Background()
-
-	// Before any report the rail is present as a positive all-clear.
+func TestOverview_EmptyDatabaseRendersNoHollowPanels(t *testing.T) {
+	_, mux := newConsole(t)
 	page := getPeek(t, mux, "/console/")
 	require.Equal(t, http.StatusOK, page.Code)
 	body := page.Body.String()
-	require.Contains(t, body, "Agent-reported mishaps")
-	require.Contains(t, body, "No mishaps reported")
-	require.NotContains(t, body, "has-mishaps")
 
-	// A report attributes to its session's harness + model and links back to it.
+	require.NotContains(t, body, `class="ov2-attn"`, "nothing needs attention, so the strip does not render")
+	require.NotContains(t, body, `class="ov2-live"`, "no session is live, so the strip does not render")
+	require.NotContains(t, body, `class="delta"`, "no prior window and no data means no comparison chip")
+	require.NotContains(t, body, `class="ov2-spark"`, "a metric with no series draws no sparkline")
+	// The vitals themselves stay, showing an em dash rather than a confident 0.
+	require.Contains(t, body, `class="ov2-vitals"`)
+	require.Contains(t, body, "&mdash;")
+	require.Contains(t, body, "no active memories to reach yet")
+}
+
+func TestOverview_AttentionStripOrdersBySeverityAndLinksOut(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
 	sessID, err := core.NewID()
 	require.NoError(t, err)
-	now := time.Now().UTC()
 	require.NoError(t, store.CreateSession(ctx, db, core.Session{
 		ID: sessID, Name: "cc/mishapsess", ProjectSlug: "seamless",
 		Status: core.SessionActive, Ambient: true, Model: "claude-fable-5",
@@ -80,31 +80,94 @@ func TestOverviewFrontDoor_MishapRailAttributesAgentReports(t *testing.T) {
 		Payload: map[string]any{"description": "ran gofmt -w . across other agents' worktrees"},
 	})
 	require.NoError(t, err)
+	_, err = store.CreateProposal(ctx, db, store.ProposalArchive, map[string]any{"key": "k1"})
+	require.NoError(t, err)
 
-	page = getPeek(t, mux, "/console/")
+	page := getPeek(t, mux, "/console/")
 	require.Equal(t, http.StatusOK, page.Code)
-	body = page.Body.String()
-	require.Contains(t, body, "has-mishaps", "the rail header warms once a report exists")
-	require.Contains(t, body, "ran gofmt -w . across other agents&#39; worktrees")
-	require.Contains(t, body, `data-href="/console/events/`+evID+`"`, "a row opens its event detail")
-	require.Contains(t, body, `cc · fable-5`, "the agent pill names the reporting harness and model")
-	require.Contains(t, body, `href="/console/sessions/`+sessID+`"`, "the report links to the exact session")
-	require.NotContains(t, body, "No mishaps reported")
+	body := page.Body.String()
+
+	require.Contains(t, body, `class="ov2-attn"`)
+	require.Contains(t, body, "1 agent-reported mishap")
+	require.Contains(t, body, `href="/console/events/`+evID+`"`)
+	require.Contains(t, body, "1 gardener proposal waiting")
+	require.Contains(t, body, `href="/console/gardener"`)
+
+	// Severity order: danger before warn, always.
+	dangerAt := strings.Index(body, `data-sev="danger"`)
+	warnAt := strings.Index(body, `data-sev="warn"`)
+	require.NotEqual(t, -1, dangerAt)
+	require.NotEqual(t, -1, warnAt)
+	require.Less(t, dangerAt, warnAt)
 }
 
-func TestOverviewFrontDoor_StylesStayScopedAndStackResponsively(t *testing.T) {
-	css := string(consoleCSS)
-	overviewAt := strings.Index(css, "OVERVIEW FRONT DOOR")
-	require.NotEqual(t, -1, overviewAt)
-	overviewCSS := css[overviewAt:]
-	require.Contains(t, overviewCSS, ".overview-hero.topbar {")
-	require.Contains(t, overviewCSS, ".overview-vitals-grid {")
-	require.Contains(t, overviewCSS, ".overview-workspace-grid {")
-	require.Contains(t, overviewCSS, ".overview-activity-row {")
-	require.Contains(t, overviewCSS, ".overview-mishap-row {")
+func TestOverview_LiveStripListsHeartbeatingSessions(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
 
-	stackAt := strings.Index(overviewCSS, "@media (max-width: 960px)")
+	live, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: live, Name: "cc/working-now", ProjectSlug: "seamless",
+		Status: core.SessionActive, CreatedAt: now, UpdatedAt: now,
+	}))
+	// Active on paper but long past the idle threshold: awaiting the reaper, not live.
+	idle, err := core.NewID()
+	require.NoError(t, err)
+	stale := now.Add(-6 * time.Hour)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: idle, Name: "cc/gone-quiet", ProjectSlug: "seamless",
+		Status: core.SessionActive, CreatedAt: stale, UpdatedAt: stale,
+	}))
+
+	page := getPeek(t, mux, "/console/")
+	require.Equal(t, http.StatusOK, page.Code)
+	body := page.Body.String()
+
+	require.Contains(t, body, `class="ov2-live"`)
+	require.Contains(t, body, "cc/working-now")
+	require.NotContains(t, body, "cc/gone-quiet", "an idle session is not live")
+}
+
+func TestOverview_LedgerRowsCarryTheSharedSeverityCode(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	_, err := rec.Record(ctx, core.Event{Kind: core.EventMemoryWritten, ProjectSlug: "seamless",
+		Payload: map[string]any{"name": "outbox-writes-same-tx"}})
+	require.NoError(t, err)
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventGardenerAction, ProjectSlug: "seamless",
+		Payload: map[string]any{"action": "proposed", "kind": "merge"}})
+	require.NoError(t, err)
+
+	page := getPeek(t, mux, "/console/")
+	require.Equal(t, http.StatusOK, page.Code)
+	body := page.Body.String()
+
+	require.Contains(t, body, `class="ov2-evt" data-sev="write"`)
+	require.Contains(t, body, `class="ov2-evt" data-sev="system"`)
+	require.Contains(t, body, "wrote memory outbox-writes-same-tx")
+}
+
+func TestOverview_StylesStayScopedAndStackResponsively(t *testing.T) {
+	css := string(consoleCSS)
+	at := strings.Index(css, "OVERVIEW -- STATUS PAGE")
+	require.NotEqual(t, -1, at)
+	block := css[at:]
+	for _, rule := range []string{
+		".ov2-titlebar {", ".ov2-attn {", ".ov2-vitals {", ".ov2-live {",
+		".ov2-grid {", ".ov2-panel {", ".ov2-ledger {",
+	} {
+		require.Contains(t, block, rule)
+	}
+	stackAt := strings.Index(block, "@media (max-width: 1100px)")
 	require.NotEqual(t, -1, stackAt)
-	require.Contains(t, overviewCSS[stackAt:], ".overview-hero.topbar { grid-template-columns: 1fr; }")
-	require.Contains(t, overviewCSS[stackAt:], ".overview-vitals-grid { grid-template-columns: 1fr; }")
+	require.Contains(t, block[stackAt:], ".ov2-grid { grid-template-columns: 1fr; }")
+
+	// The marketing block is gone, not merely unused.
+	require.NotContains(t, css, "OVERVIEW FRONT DOOR")
+	require.NotContains(t, css, ".overview-hero.topbar")
+	require.NotContains(t, css, ".overview-atlas-node")
 }

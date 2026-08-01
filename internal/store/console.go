@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -130,12 +131,38 @@ type SessionCoverage struct {
 // each against the event log for durable artifacts. It reads the event log
 // directly rather than retrieval_stats, so it needs no rebuild.
 func GetSessionCoverage(ctx context.Context, db *sql.DB, since time.Time) (SessionCoverage, error) {
+	c, err := sessionCoverage(ctx, db, "", false, since, time.Time{})
+	if err != nil {
+		return c, fmt.Errorf("store.GetSessionCoverage: %w", err)
+	}
+	return c, nil
+}
+
+// sessionCoverage is the one coverage query behind GetSessionCoverage, its
+// per-project sibling, and the bounded prior-window comparison the console's
+// judged metrics draw on. The window is [since, until): a zero bound is open on
+// that side. byProject scopes to project_slug = project; the flag (rather than a
+// non-empty project) is what keeps "" unambiguous, since an empty project_slug
+// marks real global sessions.
+func sessionCoverage(ctx context.Context, db *sql.DB, project string, byProject bool, since, until time.Time) (SessionCoverage, error) {
 	var c SessionCoverage
 	args := []any{string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded)}
-	where := ""
+	var clauses []string
+	if byProject {
+		clauses = append(clauses, "s.project_slug = ?")
+		args = append(args, project)
+	}
 	if !since.IsZero() {
-		where = " WHERE s.created_at >= ?"
+		clauses = append(clauses, "s.created_at >= ?")
 		args = append(args, core.FormatTime(since))
+	}
+	if !until.IsZero() {
+		clauses = append(clauses, "s.created_at < ?")
+		args = append(args, core.FormatTime(until))
+	}
+	where := ""
+	if len(clauses) > 0 {
+		where = " WHERE " + strings.Join(clauses, " AND ")
 	}
 	err := db.QueryRowContext(ctx, `
 		SELECT
@@ -156,7 +183,7 @@ func GetSessionCoverage(ctx context.Context, db *sql.DB, since time.Time) (Sessi
 		args...,
 	).Scan(&c.Total, &c.Covered, &c.Findings, &c.Memories, &c.Notes, &c.Trials)
 	if err != nil {
-		return c, fmt.Errorf("store.GetSessionCoverage: %w", err)
+		return c, err
 	}
 	return c, nil
 }

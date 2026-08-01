@@ -2,30 +2,50 @@
 {{with .Data}}
 {{$group := .Group}}{{$sort := .Sort}}{{$query := .Query}}
 <div class="ops-page" data-ops="projects">
-<header class="lib-hero ops-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "folder-tree"}} Workspace atlas</div>
-    <h1>Projects</h1>
-    <div class="sub">Your shared-context map: where agents are working, what each scope knows, what needs attention, and how often that knowledge comes back.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
-    <div class="project-hero-tags" aria-label="Portfolio status">
-      {{if .Working}}<span class="project-hero-tag live"><span class="live-dot"></span>{{.Working}} agent{{if ne .Working 1}}s{{end}} working across {{.LiveScopes}} scope{{if ne .LiveScopes 1}}s{{end}}</span>{{else}}<span class="project-hero-tag quiet">No agents working now</span>{{end}}
-      {{if .Families}}<span class="project-hero-tag">{{icon "git-branch"}}{{.Families}} shared-context famil{{if eq .Families 1}}y{{else}}ies{{end}}</span>{{end}}
-      {{if .Attention}}<span class="project-hero-tag warn">{{icon "triangle-alert"}}{{.Attention}} scope{{if ne .Attention 1}}s{{end}} need attention</span>{{end}}
+<header class="mv2-bar">
+  <h1 title="Your shared-context map: where agents are working, what each scope knows, what needs attention, and how often that knowledge comes back.">{{icon "table-2"}}Projects</h1>
+  <span class="mv2-count" aria-label="{{.Projects}} workspaces">
+    <strong>{{.Projects}}</strong>workspace{{if ne .Projects 1}}s{{end}}<small>{{if .Working}}{{.Working}} agent{{if ne .Working 1}}s{{end}} working across {{.LiveScopes}} scope{{if ne .LiveScopes 1}}s{{end}}{{else}}no agents working now{{end}}{{if .Retired}} &middot; {{.Retired}} retired{{end}}</small>
+  </span>
+  {{if .Attention}}<a class="lib-active-filter" href="#projects-attention">{{icon "triangle-alert"}}<span>{{.Attention}} scope{{if ne .Attention 1}}s{{end}} need{{if eq .Attention 1}}s{{end}} attention</span></a>{{end}}
+  <form class="search lib-query" method="get" action="/console/projects" data-seam-query>
+    {{icon "search"}}
+    <input name="q" aria-label="Filter projects by slug, name, or description" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
+    <input type="hidden" name="group" value="{{.Group}}">
+    <input type="hidden" name="sort" value="{{.Sort}}">
+    <input type="hidden" name="w" value="{{.Window}}">
+  </form>
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">View</span>
+    <div class="seg" data-seam-query>
+      <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
+      <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
     </div>
   </div>
-  <div class="project-hero-reach" aria-label="{{if .HasReach}}{{.ReachRate}} percent portfolio knowledge reach{{else}}No active memories to measure{{end}}">
-    <div class="project-reach-ring" style="--ring-val:{{.ReachRate}}">
-      <div class="project-reach-ring-core"><strong>{{if .HasReach}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><span>reach</span></div>
-    </div>
-    <div class="project-hero-reach-copy">
-      <span>Knowledge circulation</span>
-      {{if .HasReach}}<strong>{{.Surfaced}} of {{.Active}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
-      <small>{{.WindowLabel}} observation window</small>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Sort</span>
+    <div class="seg" data-seam-query>
+      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
+      <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
+      <a class="{{if eq .Sort "favorites"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=favorites&amp;q={{.Query}}&amp;w={{.Window}}">Starred</a>
     </div>
   </div>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Reach window</span>
+    <div class="seg" data-seam-query>
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/projects?group={{$group}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;w={{.Key}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+  <a class="btn small" href="/console/context" title="Global, parent, family, and split-lineage context flow">{{icon "share-2"}}<span>Context</span></a>
 </header>
 
-<section class="project-summary-grid" aria-label="Project portfolio summary">
+<section class="project-summary-grid" id="projects-attention" aria-label="Project portfolio summary">
+  <article class="project-summary-card">
+    <span class="project-summary-icon">{{icon "gauge"}}</span>
+    <div class="project-summary-copy"><span>Knowledge reach</span><strong>{{if .HasReach}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><small>{{if .HasReach}}{{.Surfaced}} of {{.Active}} surfaced &middot; {{.WindowLabel}}{{else}}no active memories yet{{end}}</small></div>
+  </article>
   <article class="project-summary-card">
     <span class="project-summary-icon">{{icon "layout-dashboard"}}</span>
     <div class="project-summary-copy"><span>Workspaces</span><strong>{{.Projects}}</strong><small>{{if .Families}}{{.Families}} connected famil{{if eq .Families 1}}y{{else}}ies{{end}}{{else}}independent scopes{{end}}{{if .Retired}} &middot; {{.Retired}} retired{{end}}</small></div>
@@ -42,39 +62,6 @@
     <span class="project-summary-icon">{{icon "list-checks"}}</span>
     <div class="project-summary-copy"><span>Task flow</span><strong>{{.OpenTasks}}</strong><small>open{{if .Blocked}} &middot; {{.Blocked}} blocked{{else}} &middot; no blockers{{end}}</small></div>
   </article>
-</section>
-
-<section class="lib-controlbar ops-controlbar" aria-label="Project filters and sorting">
-  <form class="search lib-query" method="get" action="/console/projects" data-seam-query>
-    {{icon "search"}}
-    <input name="q" aria-label="Filter projects by slug, name, or description" placeholder="Filter by slug, name, or description&hellip;" value="{{.Query}}">
-    <input type="hidden" name="group" value="{{.Group}}">
-    <input type="hidden" name="sort" value="{{.Sort}}">
-    <input type="hidden" name="w" value="{{.Window}}">
-  </form>
-  <div class="lib-control">
-    <span class="lib-control-label">View</span>
-    <div class="seg" data-seam-query>
-      <a class="{{if eq .Group "family"}}on{{end}}" href="/console/projects?group=family&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Family</a>
-      <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
-    </div>
-  </div>
-  <div class="lib-control">
-    <span class="lib-control-label">Order</span>
-    <div class="seg" data-seam-query>
-      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
-      <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
-      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
-      <a class="{{if eq .Sort "favorites"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=favorites&amp;q={{.Query}}&amp;w={{.Window}}">Starred</a>
-    </div>
-  </div>
-  <div class="lib-control ops-window-control">
-    <span class="lib-control-label">Reach window</span>
-    <div class="seg" data-seam-query>
-      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/projects?group={{$group}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;w={{.Key}}">{{.Label}}</a>{{end}}
-    </div>
-  </div>
-  <a class="btn small ops-related" href="/console/context" title="Global, parent, family, and split-lineage context flow">{{icon "share-2"}}<span>Context</span></a>
 </section>
 
 <section class="ops-stage projects-stage" aria-label="Project map">

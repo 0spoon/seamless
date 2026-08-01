@@ -36,8 +36,12 @@ func TestLibraryScreens_ShareOrientationChrome(t *testing.T) {
 			require.Equal(t, http.StatusOK, html.Code)
 			body := html.Body.String()
 			require.Contains(t, body, `class="lib-page" data-library="`+tc.kind+`"`)
-			require.Contains(t, body, `class="lib-hero"`)
-			require.Contains(t, body, `class="lib-total"`)
+			// One compact title row per screen, and its count is labeled --
+			// never a bare total the reader has to reconcile with the rail.
+			require.Contains(t, body, `class="mv2-bar"`)
+			require.Contains(t, body, `class="mv2-count"`)
+			require.NotContains(t, body, `class="lib-hero"`)
+			require.NotContains(t, body, `class="lib-controlbar"`)
 		})
 	}
 }
@@ -135,7 +139,7 @@ func TestMemoriesLibrary_DetailAndReaderFragment(t *testing.T) {
 	require.Contains(t, body, `class="rail-subgroup-hd"`, "memory kind boundaries are explicit")
 	require.Contains(t, body, `data-context="seamless / gotcha"`)
 	require.Contains(t, body, `class="reader-sheet" data-memory-kind="gotcha"`)
-	require.Contains(t, body, "Sort within kind", "the control names the sort boundary")
+	require.Contains(t, body, `class="mv2-sort-label">Sort<`, "the compact bar still names its sort control")
 
 	frag := getPeek(t, mux, "/console/memories/"+m.ID+"?reader=1")
 	require.Equal(t, http.StatusOK, frag.Code)

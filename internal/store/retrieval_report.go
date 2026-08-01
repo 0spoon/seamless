@@ -95,6 +95,13 @@ type RetrievalReport struct {
 	Trend            []TrendBucket   `json:"trend"`
 	Hourly           bool            `json:"hourly"` // trend granularity: hourly (24h window) vs daily
 
+	// Distinct-count series over the same axis as Trend. Volume and reach move
+	// independently -- one memory injected a thousand times is a tall Trend and a
+	// flat SurfacedTrend -- so a reach sparkline has to plot its own numerator
+	// rather than borrow the volume curve.
+	SurfacedTrend []TrendBucket `json:"surfacedTrend"` // distinct memories surfaced per bucket
+	SessionTrend  []TrendBucket `json:"sessionTrend"`  // distinct sessions reached per bucket
+
 	// Loop health: whether what briefings push is what agents actually pull.
 	// Demand = query-gated signals only (recall hits, prompt matches, explicit
 	// reads); passive briefing injections are exposure, not demand.
@@ -400,7 +407,17 @@ func BuildRetrievalReport(ctx context.Context, db *sql.DB, w RetrievalWindow, to
 		rep.DeadWeight = rep.DeadWeight[:8]
 	}
 
-	rep.Trend = buildTrend(injections, w, rep.Hourly, earliest, time.Now())
+	now := time.Now()
+	rep.Trend = buildTrend(injections, w, rep.Hourly, earliest, now)
+	// Only active memories count toward reach, so the surfaced series drops the
+	// injected ids that no longer resolve -- exactly like MemoriesSurfaced.
+	rep.SurfacedTrend = buildDistinctTrend(injections, w, rep.Hourly, earliest, now, func(in injection) string {
+		if _, active := meta[in.item]; !active {
+			return ""
+		}
+		return in.item
+	})
+	rep.SessionTrend = buildDistinctTrend(injections, w, rep.Hourly, earliest, now, func(in injection) string { return in.session })
 	return rep, nil
 }
 
@@ -547,6 +564,41 @@ func buildTrend(injections []injection, w RetrievalWindow, hourly bool, earliest
 	out := make([]TrendBucket, 0, len(axis))
 	for _, t := range axis {
 		out = append(out, TrendBucket{Label: t.label, Count: counts[t.key]})
+	}
+	return out
+}
+
+// buildDistinctTrend is buildTrend over a DISTINCT key per bucket: how many
+// different things a bucket touched rather than how many injections it recorded.
+// key returns "" for an injection that does not belong in the series (an
+// unattributed session, an injected id that is no longer active), which is
+// skipped rather than counted as one anonymous member.
+func buildDistinctTrend(injections []injection, w RetrievalWindow, hourly bool, earliest, now time.Time, key func(injection) string) []TrendBucket {
+	var start time.Time
+	switch {
+	case !w.Since.IsZero():
+		start = w.Since
+	case !earliest.IsZero():
+		start = earliest
+	default:
+		return nil
+	}
+	seen := map[string]map[string]struct{}{}
+	for _, in := range injections {
+		k := key(in)
+		if k == "" {
+			continue
+		}
+		b := bucketKey(in.at, hourly)
+		if seen[b] == nil {
+			seen[b] = map[string]struct{}{}
+		}
+		seen[b][k] = struct{}{}
+	}
+	axis := localBucketAxis(start, now, hourly)
+	out := make([]TrendBucket, 0, len(axis))
+	for _, t := range axis {
+		out = append(out, TrendBucket{Label: t.label, Count: len(seen[t.key])})
 	}
 	return out
 }

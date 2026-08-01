@@ -16,11 +16,14 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"html/template"
 	"log/slog"
 	"mime"
 	"net/http"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -81,6 +84,10 @@ type Service struct {
 	logger    *slog.Logger
 	pages     map[string]*template.Template
 	fragments map[string]*template.Template // peek-body fragments, keyed by entity
+	// host names the machine this daemon runs on, for the sidebar account row.
+	// Resolved once at construction: it cannot change for the process, and a
+	// failed lookup degrades to the bind address rather than an empty row.
+	host string
 }
 
 // New builds a console Service, parsing its templates once.
@@ -93,7 +100,11 @@ func New(cfg Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments}, nil
+	host, herr := os.Hostname()
+	if herr != nil || strings.TrimSpace(host) == "" {
+		host = "this machine"
+	}
+	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments, host: host}, nil
 }
 
 // Register mounts the console routes on mux under /console. Public routes are the
@@ -416,6 +427,42 @@ type kindCount struct {
 	N    int
 }
 
+// attnCard is one entry in the Overview's attention strip: something waiting on
+// the owner, with a severity that orders the strip and a screen that answers it.
+// A bucket with nothing in it produces no card at all -- an empty "0 mishaps"
+// panel would spend the most valuable strip on the page saying nothing.
+type attnCard struct {
+	Sev   string // "danger" | "warn" | "info"
+	Icon  string
+	Title string
+	Sub   string
+	Href  string
+}
+
+// liveSessionRow is one chip in the "live now" strip: a session heartbeating
+// inside the configured idle window.
+type liveSessionRow struct {
+	ID      string
+	Name    string
+	Project string
+	Age     string
+}
+
+// vital is one of the four Overview cards: a headline number with its
+// comparison, the denominator that makes it readable, the threshold it is judged
+// against, and the shape behind it. Value is pre-rendered ("61%", "1,620") and
+// empty means "not measurable yet" -- which renders an em dash and drops the
+// chip, band, and sparkline rather than showing a confident zero.
+type vital struct {
+	Label string
+	Icon  string
+	Value string
+	Delta delta
+	Sub   string
+	Band  band
+	Spark spark
+}
+
 // overviewData is the pre-computed payload for the overview page.
 type overviewData struct {
 	Memories         int
@@ -446,6 +493,15 @@ type overviewData struct {
 	CoverageTrend    []store.CoverageBucket // windowed coverage-rate trend (nil = no in-window sessions)
 	Projects         []projectGlanceRow     // top projects by recent activity ("projects at a glance")
 	Mishaps          []mishapRow            // latest agent-reported mishaps (recurrence review rail)
+
+	// Status-page surfaces: what needs attention, what is happening right now,
+	// and the four judged vitals. Each list is empty rather than zero-filled when
+	// its bucket is empty, so the template can drop the whole strip.
+	Attention   []attnCard
+	Live        []liveSessionRow
+	Vitals      []vital
+	StaleDays   int // the "going stale" horizon, in days, stated in the card
+	StaleUnseen int // active memories that have not surfaced within it
 }
 
 // mishapRow is one entry in the overview's recurrence-review rail: an
@@ -530,7 +586,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	recent, err := s.recentEvents(ctx, 12)
+	recent, err := s.recentEvents(ctx, 6)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -591,6 +647,15 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		glance = glance[:8]
 	}
 
+	prior, hasPrior := s.priorVitals(ctx, win, now)
+	staleUnseen, err := store.CountMemoriesUnsurfacedSince(ctx, s.cfg.DB, now.UTC().AddDate(0, 0, -staleSurfacedDays))
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	pending := sumValues(sum.GardenerPending)
+	live := s.liveSessions(ctx, now, 6)
+
 	data := overviewData{
 		Trend:            report.Trend,
 		CoverageTrend:    covTrend,
@@ -612,7 +677,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		WindowLabel:      win.Label,
 		Windows:          windowOptions(win.Key),
 		TopInjected:      sum.Retrieval.TopInjected,
-		Pending:          sumValues(sum.GardenerPending),
+		Pending:          pending,
 		Recent:           recent,
 		Coverage:         percent(cov.Covered, cov.Total),
 		Covered:          cov.Covered,
@@ -620,8 +685,155 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		CoverageRows:     coverageRows(cov),
 		Projects:         glance,
 		Mishaps:          mishaps,
+		Live:             live,
+		StaleDays:        staleSurfacedDays,
+		StaleUnseen:      staleUnseen,
 	}
+	data.Attention = s.attentionCards(ctx, data)
+	data.Vitals = overviewVitals(data, report, covTrend, prior, hasPrior, win)
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
+}
+
+// attentionCards builds the Overview's attention strip in severity order:
+// mishaps first (something went wrong), then the gardener queue (something is
+// waiting on a decision), then knowledge going quiet (something is drifting).
+// A bucket with nothing in it contributes no card.
+func (s *Service) attentionCards(ctx context.Context, d overviewData) []attnCard {
+	var out []attnCard
+	if n := len(d.Mishaps); n > 0 {
+		latest := d.Mishaps[0]
+		where := "global scope"
+		if latest.Project != "" {
+			where = latest.Project
+		}
+		out = append(out, attnCard{
+			Sev: "danger", Icon: "triangle-alert",
+			Title: plural(n, "agent-reported mishap", "agent-reported mishaps"),
+			Sub:   "latest " + ago(latest.When) + " in " + where + " · review recurrence",
+			Href:  "/console/events/" + latest.ID,
+		})
+	}
+	if d.Pending > 0 {
+		sub := "waiting for review"
+		// The oldest pending proposal is what makes the queue feel stale, and
+		// PendingProposals is newest-first, so it is the last row. A failure here
+		// costs the age line, not the card.
+		if props, err := store.PendingProposals(ctx, s.cfg.DB, ""); err != nil {
+			s.logger.Warn("console: pending proposals for attention strip", "error", err)
+		} else if len(props) > 0 {
+			sub = "oldest " + ago(props[len(props)-1].CreatedAt) + " · merges, retirements, and digests"
+		}
+		out = append(out, attnCard{
+			Sev: "warn", Icon: "sprout",
+			Title: plural(d.Pending, "gardener proposal waiting", "gardener proposals waiting"),
+			Sub:   sub,
+			Href:  "/console/gardener",
+		})
+	}
+	if d.StaleUnseen > 0 {
+		out = append(out, attnCard{
+			Sev: "info", Icon: "timer",
+			Title: plural(d.StaleUnseen, "memory going stale", "memories going stale"),
+			Sub:   fmt.Sprintf("not surfaced in %dd · consider retiring", d.StaleDays),
+			Href:  "/console/retrieval",
+		})
+	}
+	return out
+}
+
+// overviewVitals assembles the four judged cards. Each one answers a different
+// question -- is knowledge reaching the work, is the work leaving knowledge
+// behind, how much context is moving, and how far it spreads -- and each renders
+// an em dash with no chip, band, or sparkline when its denominator is still
+// empty, because a fresh install has no reach to report rather than 0% reach.
+func overviewVitals(d overviewData, report store.RetrievalReport, covTrend []store.CoverageBucket,
+	prior store.WindowVitals, hasPrior bool, win store.RetrievalWindow,
+) []vital {
+	note := noteBand(priorLabel(win, hasPrior))
+
+	reach := vital{Label: "Memory reach", Icon: "gauge", Sub: "no active memories to reach yet"}
+	if d.ActiveMemories > 0 {
+		reach.Value = strconv.Itoa(d.ReachRate) + "%"
+		reach.Delta = pointDelta(d.ReachRate, prior.ReachRate, hasPrior, riseGood)
+		reach.Sub = fmt.Sprintf("%d of %d active memories surfaced", d.MemoriesSurfaced, d.ActiveMemories)
+		reach.Band = floorBand(d.ReachRate, reachTargetPct, true)
+		reach.Spark = spark{Points: report.SurfacedTrend, Label: "Distinct memories surfaced per period"}
+	}
+
+	continuity := vital{Label: "Knowledge continuity", Icon: "brain", Sub: "no sessions observed in this window"}
+	if d.CovTotal > 0 {
+		continuity.Value = strconv.Itoa(d.Coverage) + "%"
+		continuity.Delta = pointDelta(d.Coverage, prior.Coverage, hasPrior && prior.CovTotal > 0, riseGood)
+		continuity.Sub = fmt.Sprintf("%d of %d sessions retained knowledge", d.Covered, d.CovTotal)
+		continuity.Band = floorBand(d.Coverage, continuityTargetPct, true)
+		// A rate plots against 100, never against its own peak.
+		continuity.Spark = spark{Points: coverageRateSeries(covTrend), Tone: "ok", Max: 100, Label: "Share of sessions retaining knowledge per period"}
+	}
+
+	injections := vital{Label: "Context injections", Icon: "arrow-down-to-line", Sub: "no context injected in this window"}
+	if d.Injections > 0 {
+		injections.Value = compactNum(d.Injections)
+		injections.Delta = volumeDelta(d.Injections, prior.Injections, hasPrior, noJudgment)
+		injections.Sub = "~" + compactNum(d.InjectedTokens) + " est. tokens injected"
+		injections.Band = note
+		injections.Spark = spark{Points: report.Trend, Label: "Injections per period"}
+	}
+
+	reached := vital{Label: "Sessions reached", Icon: "terminal", Sub: "no session received shared context yet"}
+	if d.SessionsReached > 0 {
+		reached.Value = compactNum(d.SessionsReached)
+		reached.Delta = volumeDelta(d.SessionsReached, prior.SessionsReached, hasPrior, noJudgment)
+		reached.Sub = fmt.Sprintf("received shared context, of %d recorded", d.SessTotal)
+		reached.Band = note
+		reached.Spark = spark{Points: report.SessionTrend, Label: "Distinct sessions reached per period"}
+	}
+
+	return []vital{reach, continuity, injections, reached}
+}
+
+// coverageRateSeries projects the coverage buckets onto a 0-100 rate series. A
+// bucket with no sessions has no rate, and is carried at 0 for the same reason
+// coverageTrend does: a quiet stretch is a dip in retention, not a ceiling.
+func coverageRateSeries(buckets []store.CoverageBucket) []store.TrendBucket {
+	out := make([]store.TrendBucket, 0, len(buckets))
+	for _, b := range buckets {
+		out = append(out, store.TrendBucket{Label: b.Label, Count: percent(b.Covered, b.Total)})
+	}
+	return out
+}
+
+// liveSessions lists the sessions heartbeating right now, newest first, for the
+// Overview's live strip. Best-effort: the strip is a pulse, not a record, so a
+// query failure drops it rather than failing the page.
+func (s *Service) liveSessions(ctx context.Context, now time.Time, limit int) []liveSessionRow {
+	ttl := s.cfg.SessionIdleTTL
+	if ttl <= 0 {
+		ttl = core.SessionIdleTTL
+	}
+	sessions, err := store.ListSessions(ctx, s.cfg.DB, core.SessionActive, now.Add(-ttl), limit*2)
+	if err != nil {
+		s.logger.Warn("console: live sessions", "error", err)
+		return nil
+	}
+	out := make([]liveSessionRow, 0, limit)
+	for _, sess := range sessions {
+		if !sess.LiveAsOf(now, ttl) {
+			continue
+		}
+		name := sess.Name
+		if name == "" {
+			name = shortID(sess.ID)
+		}
+		project := sess.ProjectSlug
+		if project == "" {
+			project = "global"
+		}
+		out = append(out, liveSessionRow{ID: sess.ID, Name: name, Project: project, Age: ago(sess.UpdatedAt)})
+		if len(out) == limit {
+			break
+		}
+	}
+	return out
 }
 
 // orderKinds lists memory kinds in canonical order, dropping absent ones.

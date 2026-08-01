@@ -1,20 +1,13 @@
 {{define "content"}}
 <div class="ops-page" data-ops="interactions">
-<header class="lib-hero ops-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "activity"}} Live transport</div>
-    <h1>Interactions</h1>
-    <div class="sub">Watch new prompts, tool calls, injections, session changes, and plan activity arrive at the top of a clean live stream.</div>
-  </div>
-  <div class="lib-total ix-total" aria-live="polite">
-    <strong id="ix-count">0</strong><span>events in view</span>
-    <small class="live" id="ix-live"><span class="live-dot"></span>streaming now</small>
-  </div>
-</header>
-
-<section class="lib-controlbar ops-controlbar ix-controls" aria-label="Interaction filters">
-  <div class="lib-control ix-kind-control">
-    <span class="lib-control-label">Event type</span>
+<header class="mv2-bar">
+  <h1 title="Watch new prompts, tool calls, injections, session changes, and plan activity arrive at the top of a clean live stream.">{{icon "activity"}}Interactions</h1>
+  <span class="mv2-count ix-total" aria-live="polite">
+    <strong id="ix-count">0</strong>events in view<small class="live" id="ix-live"><span class="live-dot"></span>streaming now</small>
+  </span>
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort ix-kind-control">
+    <span class="mv2-sort-label">Type</span>
     <div class="ix-filters" id="ix-kinds">
       <button class="ix-seg active" type="button" data-cat="all">All</button>
       <button class="ix-seg err" type="button" data-cat="__err__"><span class="dot err"></span>Errors</button>
@@ -25,6 +18,9 @@
       <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
     </div>
   </div>
+</header>
+
+<section class="ix-controls" aria-label="Interaction history and stream controls">
   <div class="ix-actions">
     <div class="lib-control ix-history-control">
       <label class="lib-control-label" for="ix-history-window">History</label>

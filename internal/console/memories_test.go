@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -134,4 +135,91 @@ func TestMemoriesPage_DefaultSortIsRecentWithinKind(t *testing.T) {
 		byName.Groups[0].Kinds[0].Memories[0].Name,
 		byName.Groups[0].Kinds[0].Memories[1].Name,
 	})
+}
+
+func TestSurfacedStaleness_ThresholdsMatchTheOverviewBucket(t *testing.T) {
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	old := now.AddDate(0, 0, -200)
+	at := func(d time.Duration) *time.Time { v := now.Add(d); return &v }
+
+	tests := []struct {
+		name          string
+		last          *time.Time
+		created       time.Time
+		wantAge, tone string
+	}{
+		{name: "surfaced minutes ago", last: at(-4 * time.Minute), created: old, wantAge: "4m", tone: "ok"},
+		{name: "surfaced inside the fresh window", last: at(-6 * 24 * time.Hour), created: old, wantAge: "6d", tone: "ok"},
+		{name: "surfaced in the middle band", last: at(-20 * 24 * time.Hour), created: old, wantAge: "20d", tone: ""},
+		{name: "surfaced past the stale horizon", last: at(-47 * 24 * time.Hour), created: old, wantAge: "47d", tone: "warn"},
+		{name: "never surfaced, long-lived", created: old, wantAge: "never", tone: "warn"},
+		// Written this morning: it has not gone quiet, it has not had its turn.
+		{name: "never surfaced, brand new", created: now.Add(-2 * time.Hour), wantAge: "never", tone: ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			age, tone := surfacedStaleness(tc.last, tc.created, now)
+			require.Equal(t, tc.tone, tone)
+			if tc.last == nil {
+				require.Equal(t, tc.wantAge, age)
+			}
+		})
+	}
+}
+
+func TestBodyEchoesDescription(t *testing.T) {
+	desc := "Outbox rows are written in the SAME transaction as the domain change."
+	require.True(t, bodyEchoesDescription("", desc), "an absent body adds nothing")
+	require.True(t, bodyEchoesDescription("   \n\n  ", desc))
+	require.True(t, bodyEchoesDescription(desc, desc))
+	require.True(t, bodyEchoesDescription("Outbox rows are written in the **SAME** transaction as the domain change",
+		desc), "markdown emphasis and trailing punctuation are not a difference")
+	require.False(t, bodyEchoesDescription(desc+"\n\nUse an advisory lock per account.", desc))
+	require.False(t, bodyEchoesDescription("Something else entirely.", desc))
+	// With no description to echo, a real body is still a real body.
+	require.False(t, bodyEchoesDescription("a genuine body", ""))
+	require.True(t, bodyEchoesDescription("", ""))
+}
+
+func TestMemoryReader_RanksFactsAndRefusesToEchoTheDescription(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+
+	// A memory whose body says something the description does not.
+	full := writeMemory(t, mgr, core.KindGotcha, "seamless", "has-body", "a real description")
+	page := getPeek(t, mux, "/console/memories/"+full.ID)
+	require.Equal(t, http.StatusOK, page.Code)
+	body := page.Body.String()
+	require.Contains(t, body, `class="mv2-facts"`)
+	require.Contains(t, body, "<span>utility</span>")
+	require.Contains(t, body, "<span>since surfaced</span>")
+	require.Contains(t, body, `class="mv2-facts-rest"`)
+	require.NotContains(t, body, `class="reader-facts"`, "the memory reader no longer uses the flat fact row")
+	require.Contains(t, body, "body of has-body")
+	require.NotContains(t, body, "mv2-nobody")
+	// Never surfaced and brand new: the chip states the fact without a verdict.
+	require.Contains(t, body, `<span class="mv2-fact-hi" title="Has never entered an agent context">never`)
+
+	// A memory whose body is only the description again.
+	id, err := core.NewID()
+	require.NoError(t, err)
+	now := time.Now().UTC()
+	echo, err := mgr.WriteMemory(context.Background(), core.Memory{
+		ID: id, Kind: core.KindRunbook, Name: "echo-mem", Project: "seamless",
+		Description: "Backfill the dedupe store from the outbox after an outage.",
+		Body:        "Backfill the dedupe store from the outbox after an outage",
+		Created:     now, Updated: now, ValidFrom: now,
+	})
+	require.NoError(t, err)
+
+	page = getPeek(t, mux, "/console/memories/"+echo.ID)
+	require.Equal(t, http.StatusOK, page.Code)
+	body = page.Body.String()
+	require.Contains(t, body, `class="mv2-nobody"`)
+	require.Contains(t, body, "No body beyond the description yet")
+	require.Contains(t, body, "edit in editor")
+	// Inside the reader sheet the sentence appears once -- as the description,
+	// not again below it wearing a body's clothes. (The rail row shows it too;
+	// that is a different pane answering a different question.)
+	sheet := body[strings.Index(body, `<article class="reader-sheet"`):]
+	require.Equal(t, 1, strings.Count(sheet, "Backfill the dedupe store from the outbox after an outage"))
 }

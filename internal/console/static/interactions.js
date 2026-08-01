@@ -302,6 +302,17 @@
     return meta;
   }
 
+  // Stream severity -- mirrors evtSev/rowSev in internal/console/atoms.go, so a
+  // live row is coded exactly like the same event on the session trace and the
+  // Overview ledger. Four classes only: the left edge is scanned, not read.
+  function rowSev(kind, isError) {
+    if (isError) return 'danger';
+    if (kind === 'agent.mishap' || kind === 'hook.error') return 'danger';
+    if (kind === 'retrieval.injected') return 'inject';
+    if (kind === 'memory.written' || kind === 'note.written' || kind === 'trial.recorded') return 'write';
+    return 'system';
+  }
+
   // ---- buildRow (live feed) --------------------------------------------------
   function buildRow(d) {
     var expandable = !!(d.request || d.response);
@@ -312,6 +323,7 @@
     row.setAttribute('data-session', d.sessionId || '');
     row.setAttribute('data-ts', d.ts || '');
     row.setAttribute('data-kind', d.kind || '');
+    row.setAttribute('data-sev', rowSev(d.kind || '', !!d.isError));
     if (d.isError) row.setAttribute('data-err', '1');
 
     var sum = el(expandable ? 'summary' : 'div', 'ix-row-head');

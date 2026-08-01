@@ -73,7 +73,19 @@
           <span class="session-card-count">{{len .Interactions}} interaction{{if ne (len .Interactions) 1}}s{{end}}</span>
         </header>
         {{if .Interactions}}
-        <div class="ix-volume empty" id="ix-svol" data-vol="{{.IxVolumeJSON}}" aria-hidden="true"></div>
+        {{if .Strip.Show}}
+        <div class="ptl" aria-label="Session wall clock: each block is as wide as the time it took">
+          {{ptlTrack .Strip}}
+          <div class="ptl-scale">{{range .Strip.Scale}}<span>{{.}}</span>{{end}}</div>
+          <div class="ptl-legend">
+            <span><i data-class="inject"></i>injection</span>
+            <span><i data-class="tool"></i>calls &amp; activity</span>
+            <span><i data-class="error"></i>error</span>
+            <span><i data-class="write"></i>knowledge write</span>
+            <span><i data-class="idle"></i>idle / thinking</span>
+          </div>
+        </div>
+        {{end}}
         <div class="ix-controls session-timeline-controls">
           <div class="ix-filters" id="ix-skinds">
             <button class="ix-seg active" type="button" data-cat="all">All <span class="n">{{len .Interactions}}</span></button>
@@ -86,7 +98,7 @@
         </div>
         <div class="ix-feed" id="ix-sfeed">
           {{range .Interactions}}
-          <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
+          <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-sev="{{rowSev .Kind .IsError}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}>
             <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when" title="{{ts .TS}}">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{if .Ambient}}<span class="badge">ambient</span>{{end}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .DurationMS}}<span class="ix-meta">{{.DurationMS}}ms</span>{{else if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
             <div class="ix-body">
               {{if or .DurationMS .Items .IsError}}
@@ -180,13 +192,46 @@
 <script>
 (function () {
   /* The shared IX module auto-formats the server-rendered request/response bodies
-     (enhance) on load; here we draw the session's volume histogram and wire the
-     kind filter, reusing the shared IX helpers so it matches the live feed. */
+     (enhance) on load; here we wire the kind filter, reusing the shared IX
+     helpers so it matches the live feed. */
   if (!window.IX) return;
   var feed = document.getElementById('ix-sfeed');
   var kinds = document.getElementById('ix-skinds');
-  window.IX.mountVolume(document.getElementById('ix-svol'), feed, kinds);
   window.IX.wireKindFilter(kinds, feed);
+})();
+(function () {
+  /* Proportional timeline -> trace. Clicking a block takes the reader to the
+     first event under it. Deliberately NOT scrollIntoView: this page nests the
+     trace inside a two-column workspace, and scrollIntoView walks every
+     scrollable ancestor, yanking the whole layout sideways to satisfy the
+     horizontal axis nobody asked about. Setting scrollTop on the one container
+     that actually scrolls moves only what should move. */
+  var track = document.querySelector('.ptl-track');
+  if (!track) return;
+  function scroller(el) {
+    for (var n = el.parentElement; n; n = n.parentElement) {
+      var s = getComputedStyle(n).overflowY;
+      if ((s === 'auto' || s === 'scroll') && n.scrollHeight > n.clientHeight + 1) return n;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+  function go(id) {
+    var row = document.getElementById(id) || document.querySelector('[data-id="' + id + '"]');
+    if (!row) return;
+    var box = scroller(row);
+    var top = box === (document.scrollingElement || document.documentElement)
+      ? row.getBoundingClientRect().top + box.scrollTop
+      : row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    box.scrollTop = Math.max(0, top - 24);
+    row.classList.add('ix-located');
+    setTimeout(function () { row.classList.remove('ix-located'); }, 3400);
+  }
+  track.addEventListener('click', function (e) {
+    var a = e.target.closest ? e.target.closest('a[data-ptl-anchor]') : null;
+    if (!a) return;
+    e.preventDefault();
+    go(a.getAttribute('data-ptl-anchor'));
+  });
 })();
 </script>
 {{end}}

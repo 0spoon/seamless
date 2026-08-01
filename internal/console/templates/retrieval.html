@@ -20,11 +20,12 @@
       <div class="retrieval-instrument-copy">
         <span>Window reach</span>
         {{if .ActiveMemories}}<strong>{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
-        <small>{{.WindowLabel}} observation window{{if .CreatedInWindow}} &middot; +{{.CreatedInWindow}} new{{end}}{{if .RetiredInWindow}} &middot; &minus;{{.RetiredInWindow}} retired{{end}}</small>
+        <div class="judged-row">{{deltaChip .ReachDelta}}{{bandLine .ReachBand}}</div>
+        <small>{{.WindowLabel}} observation window{{if .PriorLabel}} &middot; {{.PriorLabel}}{{end}}{{if .CreatedInWindow}} &middot; +{{.CreatedInWindow}} new{{end}}{{if .RetiredInWindow}} &middot; &minus;{{.RetiredInWindow}} retired{{end}}</small>
       </div>
       <div class="retrieval-hero-metrics" aria-label="Retrieval volume and cost">
-        <div><strong>{{.Injections}}</strong><span>memory injections</span></div>
-        <div><strong>{{.SessionsReached}}</strong><span>sessions reached</span></div>
+        <div><div class="judged-row"><strong>{{.Injections}}</strong>{{deltaChip .InjectionsDelta}}</div><span>memory injections</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
+        <div><div class="judged-row"><strong>{{.SessionsReached}}</strong>{{deltaChip .SessionsDelta}}</div><span>sessions reached</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
         <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
       </div>
     </div>
@@ -62,7 +63,7 @@
         </li>
         <li class="memories">
           <div class="retrieval-flow-top"><span class="retrieval-flow-icon">{{icon "brain"}}</span><small>02</small></div>
-          <strong>{{.MemoriesSurfaced}}</strong>
+          <div class="judged-row"><strong>{{.MemoriesSurfaced}}</strong>{{deltaChip .SurfacedOf}}</div>
           <h3>Distinct memories</h3>
           <p>Active memories that surfaced at least once.</p>
         </li>
@@ -219,7 +220,7 @@
           <span class="retrieval-panel-icon brand">{{icon "trending-up"}}</span>
           <div><span>{{.WindowLabel}}</span><h3>Demand rate</h3></div>
         </header>
-        <div class="retrieval-loop-value"><strong>{{if .BriefingSurfaced}}{{.DemandRate}}%{{else}}&mdash;{{end}}</strong></div>
+        <div class="retrieval-loop-value"><strong>{{if .BriefingSurfaced}}{{.DemandRate}}%{{else}}&mdash;{{end}}</strong><div class="judged-band">{{bandLine .DemandBand}}</div></div>
         <p>{{if .BriefingSurfaced}}{{.DemandedOfSurfaced}} of {{.BriefingSurfaced}} briefed memories were also pulled by a query. Rising = briefings carry what agents want.{{else}}No briefing injections in this window yet.{{end}}</p>
       </article>
 
@@ -228,7 +229,7 @@
           <span class="retrieval-panel-icon pop">{{icon "gauge"}}</span>
           <div><span>vs 30d demand</span><h3>Waste share</h3></div>
         </header>
-        <div class="retrieval-loop-value"><strong>{{if .InjectedTokens}}{{.WasteShare}}%{{else}}&mdash;{{end}}</strong></div>
+        <div class="retrieval-loop-value"><strong>{{if .InjectedTokens}}{{.WasteShare}}%{{else}}&mdash;{{end}}</strong><div class="judged-band">{{bandLine .WasteBand}}</div></div>
         <p>{{if .InjectedTokens}}Share of injected tokens spent on memories with no query-gated demand in 30 days. Falling = less irrelevant context.{{else}}No injected tokens in this window yet.{{end}}</p>
       </article>
 
@@ -237,7 +238,7 @@
           <span class="retrieval-panel-icon warn">{{icon "triangle-alert"}}</span>
           <div><span>{{.WindowLabel}}</span><h3>Recall-miss rate</h3></div>
         </header>
-        <div class="retrieval-loop-value"><strong>{{if or .RecallMisses .PromptMatches}}{{.MissRate}}%{{else}}&mdash;{{end}}</strong></div>
+        <div class="retrieval-loop-value"><strong>{{if or .RecallMisses .PromptMatches}}{{.MissRate}}%{{else}}&mdash;{{end}}</strong><div class="judged-band">{{bandLine .MissBand}}</div></div>
         <p>{{if or .RecallMisses .PromptMatches}}{{.RecallMisses}} prompts matched nothing vs {{.PromptMatches}} that matched. Falling = the knowledge base covers what gets asked.{{else}}No prompt-recall activity in this window yet.{{end}}</p>
       </article>
 

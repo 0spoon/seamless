@@ -26,8 +26,12 @@ func TestOperationalExplorerScreens_ShareOrientationChrome(t *testing.T) {
 			require.Equal(t, http.StatusOK, page.Code)
 			body := page.Body.String()
 			require.Contains(t, body, `class="ops-page" data-ops="`+tc.kind+`"`)
-			require.Contains(t, body, `class="lib-hero ops-hero"`)
-			require.Contains(t, body, `class="lib-controlbar ops-controlbar`)
+			// The compact title row replaced the hero + control bar; the stage
+			// below it is unchanged.
+			require.Contains(t, body, `class="mv2-bar"`)
+			require.Contains(t, body, `class="mv2-count`)
+			require.NotContains(t, body, `class="lib-hero ops-hero"`)
+			require.NotContains(t, body, `class="lib-controlbar ops-controlbar`)
 			require.Contains(t, body, `class="ops-stage`)
 		})
 	}
@@ -43,12 +47,11 @@ func TestProjectsExplorer_ExposesReachWindow(t *testing.T) {
 	require.Contains(t, body, `href="/console/projects?group=family&amp;sort=recent&amp;q=&amp;w=all"`)
 	require.Contains(t, body, "Reach = active memories surfaced")
 	require.Contains(t, body, `class="project-summary-grid"`)
-	require.Contains(t, body, `class="project-hero-reach"`)
+	require.Contains(t, body, "Knowledge reach", "portfolio reach moved into the summary grid")
 }
 
 func TestProjectsExplorer_AtlasIsResponsive(t *testing.T) {
 	css := string(consoleCSS)
-	require.Contains(t, css, `.ops-page[data-ops="projects"] .ops-hero`)
 	require.Contains(t, css, `grid-template-areas: "main reach knowledge work activity"`)
 	require.Contains(t, css, `grid-template-areas: "main reach activity" "main knowledge work"`)
 	require.Contains(t, css, `grid-template-areas: "main main" "reach activity" "knowledge work"`)

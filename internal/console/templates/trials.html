@@ -3,36 +3,29 @@
 {{$sel := .Selected}}
 {{$qs := .QS}}
 <div class="lib-page" data-library="trials">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "test-tube"}} Experiment log</div>
-    <h1>Trials</h1>
-    <div class="sub">Expected-versus-actual records, outcomes, and structured metrics.{{if .Lab}} Filtered to lab <span class="mono">{{.Lab}}</span>.{{end}}{{if .Outcome}} Showing {{.Outcome}} outcomes.{{end}}</div>
-  </div>
-  <div class="lib-total" aria-label="{{.Count}} trials">
-    <strong>{{.Count}}</strong><span>trial{{if ne .Count 1}}s{{end}}</span>
-    {{if .Groups}}<small>{{len .Groups}} lab{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
-  </div>
-</header>
-
-{{if or .Groups .Lab .Outcome}}
-<section class="lib-controlbar" aria-label="Trial filters">
-  {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
-  <div class="lib-control">
-    <span class="lib-control-label">Outcome</span>
+{{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
+<header class="mv2-bar">
+  <h1 title="Expected-versus-actual records, outcomes, and structured metrics. Newest first, grouped by lab.">{{icon "test-tube"}}Trials</h1>
+  <span class="mv2-count" aria-label="{{.Count}} trials">
+    <strong>{{.Count}}</strong>trial{{if ne .Count 1}}s{{end}}{{if .Groups}}<small>across {{len .Groups}} lab{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
+  </span>
+  {{if .Lab}}
+  <span class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}" data-seam-query>Clear</a></span>
+  {{end}}
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Outcome</span>
     <div class="seg" data-seam-query>
       {{$lab := .Lab}}
       {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
     </div>
   </div>
-  {{if .Lab}}
-  <div class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}" data-seam-query>Clear</a></div>
-  {{end}}
-  <div class="lib-control-note"><strong>Order</strong><span>Newest first, grouped by lab</span></div>
-</section>
+</header>
+
+{{if or .Groups .Lab .Outcome}}
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/trials/{{.Selected.ID}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Trials">
-    <div class="rail-overview"><span>Trial map</span><span>{{.Count}} shown</span></div>
+    <div class="rail-overview"><span>Trial map</span><span>Lab &rarr; trial</span></div>
     <div class="rail-scroll">
     {{if .Groups}}
     <div class="rail-groups">

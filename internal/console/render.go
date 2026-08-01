@@ -64,6 +64,7 @@ type pageData struct {
 	Title    string
 	Active   string // nav key to highlight
 	Nav      navCounts
+	Host     string // machine this console runs on, for the sidebar account row
 	Notice   string // positive flash banner (from ?notice=)
 	FlashErr string // error flash banner (from ?error=)
 	Data     any
@@ -92,6 +93,10 @@ var funcs = template.FuncMap{
 	"agentPill":     agentPill,
 	"evtTone":       evtTone,
 	"evtIcon":       evtIcon,
+	"evtSev":        evtSev,
+	"rowSev":        rowSev,
+	"deltaChip":     deltaChip,
+	"bandLine":      bandLine,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
 	"outcomeTone":   outcomeTone,
@@ -102,6 +107,9 @@ var funcs = template.FuncMap{
 	"compactNum":    compactNum,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
+	"kindBar":       kindBar,
+	"sparkLine":     sparkLine,
+	"ptlTrack":      ptlTrack,
 	"areaChart":     areaChart,
 	"stackedBar":    stackedBar,
 	"coverageTrend": coverageTrend,
@@ -268,6 +276,7 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 		return
 	}
 	pd.Nav = s.navCounts(r.Context())
+	pd.Host = s.host
 	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
 	if !ok {
@@ -344,6 +353,7 @@ func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status
 	pd := pageData{
 		Title: heading,
 		Nav:   s.navCounts(r.Context()),
+		Host:  s.host,
 		Data:  errorData{Status: status, Heading: heading, Message: msg},
 	}
 	var buf bytes.Buffer

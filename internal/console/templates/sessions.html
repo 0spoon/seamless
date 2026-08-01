@@ -2,19 +2,11 @@
 {{with .Data}}
 {{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}
 <div class="ops-page" data-ops="sessions">
-<header class="lib-hero ops-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "terminal"}} Agent workspaces</div>
-    <h1>Sessions</h1>
-    <div class="sub">Follow active runs, reopen completed findings, and inspect the work each agent left behind.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
-  </div>
-  <div class="lib-total" aria-label="{{.Total}} sessions total">
-    <strong>{{.Total}}</strong><span>sessions total</span>
-    <small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{.WindowLabel}} view</small>
-  </div>
-</header>
-
-<section class="lib-controlbar ops-controlbar" aria-label="Session filters and sorting">
+<header class="mv2-bar">
+  <h1 title="Follow active runs, reopen completed findings, and inspect the work each agent left behind.">{{icon "terminal"}}Sessions</h1>
+  <span class="mv2-count" aria-label="{{.Total}} sessions, {{.Active}} live">
+    <strong>{{.Total}}</strong>recorded<small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{.WindowLabel}} view</small>
+  </span>
   <form class="search lib-query" method="get" action="/console/sessions" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Search sessions by name, project, or findings" placeholder="Search name, project, findings&hellip;" value="{{.Query}}">
@@ -22,8 +14,9 @@
     <input type="hidden" name="w" value="{{.Window}}">
     <input type="hidden" name="sort" value="{{.Sort}}">
   </form>
-  <div class="lib-control">
-    <span class="lib-control-label">Status</span>
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Status</span>
     <div class="seg" data-seam-query>
       <a class="{{if eq .Filter ""}}on{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
       <a class="{{if eq .Filter "active"}}on{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
@@ -31,21 +24,20 @@
       <a class="{{if eq .Filter "expired"}}on{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Expired</a>
     </div>
   </div>
-  <div class="lib-control">
-    <span class="lib-control-label">Order</span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Sort</span>
     <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
     </div>
   </div>
-  <div class="lib-control ops-window-control">
-    <span class="lib-control-label">Updated</span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Updated</span>
     <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
     </div>
   </div>
-  <div class="lib-control-note"><strong>Browse structure</strong><span>Status &rarr; session &rarr; findings</span></div>
-</section>
+</header>
 
 <section class="ops-stage sessions-stage" aria-label="Session map">
   <header class="ops-stage-head">

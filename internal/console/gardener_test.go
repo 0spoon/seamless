@@ -97,8 +97,8 @@ func TestGardenerPage_PolishContracts(t *testing.T) {
 		"the Gardener accent selector must outrank the later shared library default")
 	require.Contains(t, css, "grid-template-columns: minmax(0, min(100%, var(--content-max)));",
 		"the centered content track must shrink inside the usable viewport")
-	require.Contains(t, css, ".gardener-page .lib-controlbar .seg { max-width: 100%; overflow-x: auto; }",
-		"the proposal filters must not force the page wider than the viewport")
+	require.Contains(t, css, ".mv2-sort .seg { max-width: 100%; overflow-x: auto; }",
+		"the compact bar's filters must not force the page wider than the viewport")
 }
 
 func TestGardenerPage_CardsDismissApply(t *testing.T) {

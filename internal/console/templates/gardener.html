@@ -3,23 +3,41 @@
 {{$sel := .Selected}}
 {{$qs := .QS}}
 <div class="lib-page gardener-page" data-library="gardener">
-  <header class="lib-hero">
-    <div class="lib-hero-copy">
-      <div class="lib-eyebrow">{{icon "sprout"}} Knowledge stewardship</div>
-      <h1 id="gardener-review-title">Gardener</h1>
-      <div class="sub">
-        <span class="gardener-contract-badge">{{icon "lock"}} Propose-only by design.</span>
-        <span class="gardener-contract-copy">The gardener can prepare a change, but only you can let it alter the knowledge your agents receive.</span>
+  <header class="mv2-bar">
+    <h1 id="gardener-review-title" title="Knowledge stewardship: the gardener prepares changes, you decide which ones reach your agents.">{{icon "sprout"}}Gardener</h1>
+    <span class="mv2-count" aria-label="{{.PendingCount}} proposals awaiting your decision">
+      <strong>{{.PendingCount}}</strong>pending<small>{{.RequestedCount}} asked by you &middot; {{.BackgroundCount}} background</small>
+    </span>
+    <span class="mv2-spacer"></span>
+    {{if .TotalPending}}
+    <div class="mv2-sort">
+      <span class="mv2-sort-label">Type</span>
+      <div class="seg" data-seam-query>
+        <a class="{{if eq .TypeFilter "all"}}on{{end}}" href="/console/gardener?src={{.SrcFilter}}">All</a>
+        <a class="{{if eq .TypeFilter "split"}}on{{end}}" href="/console/gardener?group=split&amp;src={{.SrcFilter}}">Split plans</a>
+        <a class="{{if eq .TypeFilter "errors"}}on{{end}}" href="/console/gardener?group=errors&amp;src={{.SrcFilter}}">Errors &amp; gaps</a>
+        <a class="{{if eq .TypeFilter "cleanup"}}on{{end}}" href="/console/gardener?group=cleanup&amp;src={{.SrcFilter}}">Memory cleanup</a>
+        <a class="{{if eq .TypeFilter "plans"}}on{{end}}" href="/console/gardener?group=plans&amp;src={{.SrcFilter}}">Plan settlements</a>
+        <a class="{{if eq .TypeFilter "digests"}}on{{end}}" href="/console/gardener?group=digests&amp;src={{.SrcFilter}}">Digests</a>
       </div>
     </div>
-    <div class="lib-total" aria-label="{{.PendingCount}} proposals awaiting your decision">
-      <strong>{{.PendingCount}}</strong><span>pending</span>
-      <small>{{.RequestedCount}} asked by you &middot; {{.BackgroundCount}} background</small>
+    <div class="mv2-sort">
+      <span class="mv2-sort-label">Source</span>
+      <div class="seg" data-seam-query>
+        <a class="{{if eq .SrcFilter "all"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}">All</a>
+        <a class="{{if eq .SrcFilter "you"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=you">Asked by you</a>
+        <a class="{{if eq .SrcFilter "auto"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=auto">Background</a>
+      </div>
     </div>
+    {{end}}
   </header>
 
   <section class="gardener-composer" aria-labelledby="gardener-ask-title">
     <h2 class="gardener-composer-title" id="gardener-ask-title">Ask for a cleanup</h2>
+    <p class="gardener-contract">
+      <span class="gardener-contract-badge">{{icon "lock"}} Propose-only by design.</span>
+      <span class="gardener-contract-copy">The gardener can prepare a change, but only you can let it alter the knowledge your agents receive.</span>
+    </p>
     {{if .CanRequest}}
     <form class="gardener-request-card" method="post" action="/console/gardener/request" id="req-form">
       <label class="gardener-request-label" for="req-text">
@@ -78,34 +96,10 @@
   </section>
 
   {{if or .TotalPending .Recent}}
-  {{if .TotalPending}}
-  <section class="lib-controlbar" aria-label="Proposal filters">
-    <div class="lib-control">
-      <span class="lib-control-label">Type</span>
-      <div class="seg" data-seam-query>
-        <a class="{{if eq .TypeFilter "all"}}on{{end}}" href="/console/gardener?src={{.SrcFilter}}">All</a>
-        <a class="{{if eq .TypeFilter "split"}}on{{end}}" href="/console/gardener?group=split&amp;src={{.SrcFilter}}">Split plans</a>
-        <a class="{{if eq .TypeFilter "errors"}}on{{end}}" href="/console/gardener?group=errors&amp;src={{.SrcFilter}}">Errors &amp; gaps</a>
-        <a class="{{if eq .TypeFilter "cleanup"}}on{{end}}" href="/console/gardener?group=cleanup&amp;src={{.SrcFilter}}">Memory cleanup</a>
-        <a class="{{if eq .TypeFilter "plans"}}on{{end}}" href="/console/gardener?group=plans&amp;src={{.SrcFilter}}">Plan settlements</a>
-        <a class="{{if eq .TypeFilter "digests"}}on{{end}}" href="/console/gardener?group=digests&amp;src={{.SrcFilter}}">Digests</a>
-      </div>
-    </div>
-    <div class="lib-control">
-      <span class="lib-control-label">Source</span>
-      <div class="seg" data-seam-query>
-        <a class="{{if eq .SrcFilter "all"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}">All</a>
-        <a class="{{if eq .SrcFilter "you"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=you">Asked by you</a>
-        <a class="{{if eq .SrcFilter "auto"}}on{{end}}" href="/console/gardener?group={{.TypeFilter}}&amp;src=auto">Background</a>
-      </div>
-    </div>
-    <div class="lib-control-note"><strong>Review gate</strong><span>Read the evidence, then apply or dismiss</span></div>
-  </section>
-  {{end}}
 
   <div class="lib-layout"{{if and $sel .SelectedAuto}} data-auto-url="/console/gardener/{{$sel.ID}}{{$qs}}"{{end}}>
     <nav class="lib-rail" aria-label="Proposals">
-      <div class="rail-overview"><span>Review queue</span><span>{{.PendingCount}} pending</span></div>
+      <div class="rail-overview"><span>Review queue</span><span>Read the evidence, then decide</span></div>
       <div class="rail-scroll">
         <div class="rail-groups">
 

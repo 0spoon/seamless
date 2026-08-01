@@ -1,7 +1,6 @@
 package console
 
 import (
-	"encoding/json"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -11,7 +10,6 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -193,7 +191,7 @@ type sessionDetail struct {
 	FindingsHTML template.HTML    `json:"-"`
 	Timeline     []eventRow       `json:"timeline"`
 	Interactions []interactionRow `json:"interactions"` // the timeline as shared IX feed rows
-	IxVolumeJSON string           `json:"-"`            // session-scoped volume buckets for IX.mountVolume
+	Strip        sessionTimeline  `json:"-"`            // proportional wall-clock strip over the session's interactions
 	ToolCalls    int              `json:"toolCalls"`
 	Reads        int              `json:"memoryReads"`
 	Writes       int              `json:"memoryWrites"`
@@ -246,7 +244,6 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 
 	var timeline []eventRow
 	var interactions []interactionRow
-	var ixVolume string
 	byKind := map[string]int{}
 	toolCalls, reads, writes := 0, 0, 0
 	injected := map[string]struct{}{}
@@ -278,31 +275,18 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Interactions surface: the session's events projected into the shared IX
-		// feed rows (newest first) plus a session-scoped volume histogram, built
-		// in-Go from the same fetch (no extra query). Scoped to the feed's
-		// interaction kinds so the rows, histogram, and kind filter all agree; the
+		// feed rows (newest first). Scoped to the feed's interaction kinds so the
+		// rows, the wall-clock strip, and the kind filter all describe one set; the
 		// right-rail cards cover the non-interaction detail (reads/writes, produced
 		// memories, claimed tasks). BySession returns oldest-first, so we walk it in
-		// reverse to build both newest-first.
+		// reverse to build newest-first.
 		namer := func(string) core.Session { return sess }
-		var ticks []events.KindTick
 		for i := len(evs) - 1; i >= 0; i-- {
 			e := evs[i]
 			if !isInteraction(e) || skipInteraction(e) {
 				continue
 			}
 			interactions = append(interactions, toInteractionRow(e, namer))
-			ticks = append(ticks, events.KindTick{ID: e.ID, TS: e.TS, Kind: string(e.Kind)})
-		}
-		if len(ticks) > 0 {
-			// Span the session's own activity (first -> last event), not up to now,
-			// so a short historical session isn't crushed into a single bucket.
-			newest, oldest := ticks[0].TS, ticks[len(ticks)-1].TS
-			if vol := buildVolume(ticks, newest.Sub(oldest), newest); len(vol) > 0 {
-				if b, jerr := json.Marshal(vol); jerr == nil {
-					ixVolume = string(b)
-				}
-			}
 		}
 	}
 	readBack := 0
@@ -316,8 +300,9 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	data := sessionDetail{
 		Session: sess, Harness: harnessOf(sess), Live: sess.LiveAsOf(now, s.cfg.SessionIdleTTL),
 		Duration: sessionDuration(sess, now), Findings: sess.Findings, Timeline: timeline,
-		Interactions: interactions, IxVolumeJSON: ixVolume,
-		ToolCalls: toolCalls, Reads: reads, Writes: writes,
+		Interactions: interactions,
+		Strip:        buildSessionTimeline(interactions),
+		ToolCalls:    toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
 	}
 	data.FindingsHTML = s.renderBody(ctx, sess.Findings, sess.ProjectSlug)

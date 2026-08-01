@@ -455,3 +455,100 @@ func stackedBar(ready, inProgress, blocked, closed int) template.HTML {
 	}
 	return template.HTML(`<div class="stackbar-wrap"><div class="stackbar">` + bar.String() + `</div><div class="stackbar-legend">` + legend.String() + `</div></div>`)
 }
+
+// ---------------------------------------------------------------------------
+// Sparkline -- the shape behind a vital's headline number
+// ---------------------------------------------------------------------------
+
+// spark is a vital card's trailing series. Max pins the y-axis: a RATE always
+// plots against 100, so a healthy-but-flat 88% reads flat instead of being
+// stretched to fill the box, while a volume (Max 0) normalizes to its own peak
+// because its ceiling is not a known quantity.
+type spark struct {
+	Points []store.TrendBucket
+	Tone   string // "" = brand; "ok" = the retention green
+	Max    int    // 0 = normalize to the series peak
+	Label  string // aria-label; empty renders it decorative
+}
+
+// sparkLine renders a spark as a bare 96x26 polyline. Fewer than two points
+// renders nothing: a single datum has no shape, and a flat line drawn from it
+// would imply a trend that was never measured.
+func sparkLine(s spark) template.HTML {
+	n := len(s.Points)
+	if n < 2 {
+		return ""
+	}
+	const w, h, pad = 96.0, 26.0, 4.0
+	maxV := s.Max
+	if maxV <= 0 {
+		for _, p := range s.Points {
+			if p.Count > maxV {
+				maxV = p.Count
+			}
+		}
+	}
+	if maxV <= 0 {
+		maxV = 1
+	}
+	var pts strings.Builder
+	for i, p := range s.Points {
+		x := 2 + (float64(i)/float64(n-1))*(w-4)
+		v := float64(p.Count)
+		if v > float64(maxV) {
+			v = float64(maxV)
+		}
+		y := h - pad - (v/float64(maxV))*(h-2*pad)
+		if i > 0 {
+			pts.WriteByte(' ')
+		}
+		fmt.Fprintf(&pts, "%.1f,%.1f", x, y)
+	}
+	cls := "ov2-spark"
+	if s.Tone != "" {
+		cls += " " + s.Tone
+	}
+	attrs := ` aria-hidden="true"`
+	if s.Label != "" {
+		attrs = ` role="img" aria-label="` + template.HTMLEscapeString(s.Label) + `"`
+	}
+	return template.HTML(`<svg class="` + cls + `" viewBox="0 0 96 26"` + attrs +
+		`><polyline points="` + pts.String() + `"></polyline></svg>`)
+}
+
+// ---------------------------------------------------------------------------
+// Memory fabric -- composition as one proportional bar
+// ---------------------------------------------------------------------------
+
+// kindBar renders the memory-kind composition as a single proportional bar plus
+// a counted legend, for the Overview rail. It is the compact sibling of
+// kindLegend (which gives each kind its own row): here the question is what the
+// knowledge base is made of, so the shares have to be readable against each
+// other in one glance rather than against the largest kind.
+func kindBar(items []kindCount) template.HTML {
+	total := 0
+	for _, it := range items {
+		total += it.N
+	}
+	if total == 0 {
+		return ""
+	}
+	sorted := make([]kindCount, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].N != sorted[j].N {
+			return sorted[i].N > sorted[j].N
+		}
+		return sorted[i].Kind < sorted[j].Kind
+	})
+	var bar, legend strings.Builder
+	for _, it := range sorted {
+		c := kindColorVar(it.Kind)
+		fmt.Fprintf(&bar, `<i style="width:%.2f%%;background:%s" title="%s %d"></i>`,
+			float64(it.N)/float64(total)*100, c, template.HTMLEscapeString(it.Kind), it.N)
+		fmt.Fprintf(&legend, `<span><i style="background:%s"></i>%s %d</span>`,
+			c, template.HTMLEscapeString(it.Kind), it.N)
+	}
+	return template.HTML(`<div class="ov2-kind"><div class="ov2-kind-bar">` + bar.String() +
+		`</div><div class="ov2-kind-legend">` + legend.String() + `</div></div>`)
+}

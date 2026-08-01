@@ -88,6 +88,14 @@ type projectMetrics struct {
 	ReachRate   int
 	HasCoverage bool
 	Coverage    int
+
+	// Judgment for the two rates, against this project's own prior equal-length
+	// window and the console-wide targets.
+	PriorLabel    string
+	ReachDelta    delta
+	ReachBand     band
+	CoverageDelta delta
+	CoverageBand  band
 }
 
 // projectDetail dispatches the /console/projects/{slug} route: the peek fragment
@@ -193,6 +201,12 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		data.Metrics.HasCoverage = true
 		data.Metrics.Coverage = percent(cov.Covered, cov.Total)
 	}
+	prior, hasPrior := s.priorProjectVitals(ctx, slug, win, now)
+	data.Metrics.PriorLabel = priorLabel(win, hasPrior)
+	data.Metrics.ReachDelta = pointDelta(data.Metrics.ReachRate, prior.ReachRate, hasPrior && data.Metrics.HasReach, riseGood)
+	data.Metrics.ReachBand = floorBand(data.Metrics.ReachRate, reachTargetPct, data.Metrics.HasReach)
+	data.Metrics.CoverageDelta = pointDelta(data.Metrics.Coverage, prior.Coverage, hasPrior && data.Metrics.HasCoverage && prior.CovTotal > 0, riseGood)
+	data.Metrics.CoverageBand = floorBand(data.Metrics.Coverage, continuityTargetPct, data.Metrics.HasCoverage)
 
 	if err := s.fillOverviewTab(ctx, &data, slug, win); err != nil {
 		s.serverError(w, r, err)

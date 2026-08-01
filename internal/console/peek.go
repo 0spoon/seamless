@@ -55,18 +55,28 @@ type memoryDetail struct {
 	// UtilityParts is its per-signal breakdown so the number is inspectable.
 	Utility      float64                  `json:"utility,omitempty"`
 	UtilityParts *store.UtilityComponents `json:"utilityParts,omitempty"`
-	Source       string                   `json:"sourceSession,omitempty"`   // session name
-	SourceID     string                   `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
-	Model        string                   `json:"model,omitempty"`           // producing model, as the provider names it
-	Harness      string                   `json:"harness,omitempty"`         // producing client, resolved from the source session
-	Favorite     bool                     `json:"favorite,omitempty"`
-	ReplacedBy   string                   `json:"replacedBy,omitempty"` // name of the superseder
-	ReplacedByID string                   `json:"replacedById,omitempty"`
-	Supersedes   []memoryRef              `json:"supersedes,omitempty"` // reverse: memories this replaced
-	FilePath     string                   `json:"filePath"`
-	AbsPath      string                   `json:"absPath"`
-	EditURL      template.URL             `json:"-"`
-	CanArchive   bool                     `json:"-"`
+	// SurfacedAge is how long ago this memory last entered an agent context
+	// ("4m", "47d", or "never"), and SurfacedTone the staleness verdict behind
+	// its chip. These two -- utility and staleness -- are the decision signals
+	// a reader needs first, so the reader leads with them and demotes the rest.
+	SurfacedAge  string `json:"-"`
+	SurfacedTone string `json:"-"` // "ok" (<=7d) | "" (7-45d) | "warn" (>45d or long-unseen)
+	// BodyIsEcho reports that the stored body adds nothing to the description:
+	// absent, or the same sentence again. The reader says so instead of
+	// printing one sentence twice and calling the second one the body.
+	BodyIsEcho   bool         `json:"-"`
+	Source       string       `json:"sourceSession,omitempty"`   // session name
+	SourceID     string       `json:"sourceSessionId,omitempty"` // resolved ULID, for a link
+	Model        string       `json:"model,omitempty"`           // producing model, as the provider names it
+	Harness      string       `json:"harness,omitempty"`         // producing client, resolved from the source session
+	Favorite     bool         `json:"favorite,omitempty"`
+	ReplacedBy   string       `json:"replacedBy,omitempty"` // name of the superseder
+	ReplacedByID string       `json:"replacedById,omitempty"`
+	Supersedes   []memoryRef  `json:"supersedes,omitempty"` // reverse: memories this replaced
+	FilePath     string       `json:"filePath"`
+	AbsPath      string       `json:"absPath"`
+	EditURL      template.URL `json:"-"`
+	CanArchive   bool         `json:"-"`
 }
 
 // memoryDetailData projects an index row into the full detail payload: body
@@ -113,6 +123,8 @@ func (s *Service) memoryDetailData(ctx context.Context, m core.Memory) (memoryDe
 			d.UtilityParts = &c
 		}
 	}
+	d.SurfacedAge, d.SurfacedTone = surfacedStaleness(d.LastInjected, m.Created, time.Now())
+	d.BodyIsEcho = bodyEchoesDescription(d.BodyText, m.Description)
 
 	// Provenance: SourceSession holds a session name (ambient stamps) or a
 	// session ULID (bound stamps); resolve either to the row for the link and
