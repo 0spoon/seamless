@@ -2,11 +2,13 @@ package mcp_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -158,4 +160,181 @@ func TestGardenerSplit_NoChatIsToolError(t *testing.T) {
 	}})
 	require.NoError(t, err, "transport succeeds")
 	require.True(t, res.IsError, "a gardener with no chat client returns a tool error")
+}
+
+// seedProposal files a proposal row directly, standing in for a pass that ran
+// before the fence question is asked.
+func seedProposal(t *testing.T, ctx context.Context, db *sql.DB, kind string, payload map[string]any) string {
+	t.Helper()
+	payload["key"] = kind + ":" + t.Name() + ":" + payloadKeySuffix(payload)
+	p, err := store.CreateProposal(ctx, db, kind, payload)
+	require.NoError(t, err)
+	return p.ID
+}
+
+// payloadKeySuffix keeps two seeded proposals in one test from colliding on the
+// dedup key.
+func payloadKeySuffix(payload map[string]any) string {
+	if id, ok := payload["id"].(string); ok {
+		return id
+	}
+	return "x"
+}
+
+// pendingIDs lists the still-pending proposal ids, for asserting that a refused
+// resolve left the queue exactly as it found it.
+func pendingIDs(t *testing.T, ctx context.Context, db *sql.DB) []string {
+	t.Helper()
+	ps, err := store.PendingProposals(ctx, db, "")
+	require.NoError(t, err)
+	out := make([]string, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, p.ID)
+	}
+	return out
+}
+
+// proposalIDs pulls the ids out of a gardener_proposals result.
+func proposalIDs(t *testing.T, out map[string]any) []string {
+	t.Helper()
+	rows, ok := out["proposals"].([]any)
+	require.True(t, ok, "proposals is a list")
+	ids := make([]string, 0, len(rows))
+	for _, row := range rows {
+		obj, ok := row.(map[string]any)
+		require.True(t, ok, "each proposal is an object")
+		id, _ := obj["id"].(string)
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// TestGardenerProposalsOmitsWhatTheCallerMayNotRead is the listing half of the
+// gardener fence. A proposal row carries no project column, so before this the
+// whole pending queue -- payloads included, with every memory name, description
+// and similarity score in them -- went to any caller that asked.
+//
+// The drop is silent by design: no "1 withheld" count, since that is itself a
+// report of how much a fenced project has going on.
+func TestGardenerProposalsOmitsWhatTheCallerMayNotRead(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	isolate(t, ctx, db, "vault", core.IsolationSealed)
+
+	vault := bindClient(t, ctx, db, url, "vault")
+	vaultMem := callJSON(t, ctx, vault, "memory_write", map[string]any{
+		"name": "vault-thing", "kind": "gotcha", "description": "fenced", "body": "b\n",
+	})["id"].(string)
+
+	outside := bindClient(t, ctx, db, url, "demo")
+	openMem := callJSON(t, ctx, outside, "memory_write", map[string]any{
+		"name": "open-thing", "kind": "gotcha", "description": "open", "body": "b\n",
+	})["id"].(string)
+
+	fenced := seedProposal(t, ctx, db, store.ProposalArchive,
+		map[string]any{"id": vaultMem, "name": "vault-thing", "project": "vault"})
+	open := seedProposal(t, ctx, db, store.ProposalArchive,
+		map[string]any{"id": openMem, "name": "open-thing", "project": "demo"})
+	require.Len(t, pendingIDs(t, ctx, db), 2, "both rows exist in the store")
+
+	seen := callJSON(t, ctx, outside, "gardener_proposals", nil)
+	require.Equal(t, float64(1), seen["count"])
+	require.Equal(t, []string{open}, proposalIDs(t, seen), "the sealed project's row is not listed")
+
+	// The kind filter does not become a way around it.
+	filtered := callJSON(t, ctx, outside, "gardener_proposals", map[string]any{"kind": "archive"})
+	require.Equal(t, []string{open}, proposalIDs(t, filtered))
+
+	// The fenced project's own session still sees its own row -- and, being
+	// sealed, nothing else.
+	mine := callJSON(t, ctx, vault, "gardener_proposals", nil)
+	require.Equal(t, []string{fenced}, proposalIDs(t, mine))
+}
+
+// TestGardenerApplyRefusesAcrossTheFence is the resolve half. Apply AND dismiss
+// are both refused: dismissing settles a fenced project's review queue, and the
+// call's own outcome would report that the proposal exists.
+func TestGardenerApplyRefusesAcrossTheFence(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	isolate(t, ctx, db, "vault", core.IsolationSealed)
+
+	vault := bindClient(t, ctx, db, url, "vault")
+	vaultMem := callJSON(t, ctx, vault, "memory_write", map[string]any{
+		"name": "vault-thing", "kind": "gotcha", "description": "fenced", "body": "b\n",
+	})["id"].(string)
+	fenced := seedProposal(t, ctx, db, store.ProposalArchive,
+		map[string]any{"id": vaultMem, "name": "vault-thing", "project": "vault"})
+
+	outside := bindClient(t, ctx, db, url, "demo")
+	for _, action := range []string{"apply", "dismiss"} {
+		isErr, txt := callErr(t, ctx, outside, "gardener_apply", map[string]any{"id": fenced, "action": action})
+		require.True(t, isErr, "%s across the fence must be refused", action)
+		require.Contains(t, txt, "vault", "the refusal names the project, which it never hides")
+		require.Contains(t, txt, string(core.IsolationSealed), "and the rule that refused")
+		require.NotContains(t, txt, "fenced", "no proposal content is echoed")
+	}
+	require.Equal(t, []string{fenced}, pendingIDs(t, ctx, db), "a refused resolve leaves the queue untouched")
+
+	// The project's own session resolves it normally: the fence is about who is
+	// outside, not about disabling the proposal.
+	applied := callJSON(t, ctx, vault, "gardener_apply", map[string]any{"id": fenced})
+	require.Equal(t, "applied", applied["status"])
+}
+
+// TestGardenerApplyRechecksIsolationAtApplyTime is the stale-proposal case: a
+// reproject raised while its source project was open, applied after the project
+// was tightened. The proposal's evidence predates the fence, so the check that
+// matters is the one made NOW -- otherwise a pre-tighten row is a standing
+// instruction to carry a memory out of a project that has since closed.
+func TestGardenerApplyRechecksIsolationAtApplyTime(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	_, err := store.EnsureProject(ctx, db, "client-work", "Client work")
+	require.NoError(t, err)
+
+	work := bindClient(t, ctx, db, url, "client-work")
+	memID := callJSON(t, ctx, work, "memory_write", map[string]any{
+		"name": "deploy-topology", "kind": "reference", "description": "how it deploys", "body": "b\n",
+	})["id"].(string)
+	stale := seedProposal(t, ctx, db, store.ProposalReproject, map[string]any{
+		"id": memID, "name": "deploy-topology", "from": "client-work", "to": "demo",
+	})
+
+	// Before the tighten the outside caller sees it and could resolve it: without
+	// this the test would pass on a proposal that was never visible at all.
+	outside := bindClient(t, ctx, db, url, "demo")
+	require.Equal(t, []string{stale}, proposalIDs(t, callJSON(t, ctx, outside, "gardener_proposals", nil)))
+
+	require.NoError(t, store.SetProjectIsolation(ctx, db, "client-work", core.IsolationConfidential))
+
+	require.Empty(t, proposalIDs(t, callJSON(t, ctx, outside, "gardener_proposals", nil)),
+		"the tighten retroactively withdraws the proposal from outside callers")
+	isErr, txt := callErr(t, ctx, outside, "gardener_apply", map[string]any{"id": stale})
+	require.True(t, isErr, "a pre-tighten proposal must not still move a memory out of the fence")
+	require.Contains(t, txt, "client-work")
+	require.Contains(t, txt, string(core.IsolationConfidential))
+	require.Equal(t, []string{stale}, pendingIDs(t, ctx, db))
+}
+
+// TestGardenerFailsClosedOnAnUnattributableProposal pins the direction an
+// undecidable payload fails in. A digest with no project key is not "probably
+// global" -- "" is a real scope, so an absent key leaves nothing to check a fence
+// against, and the row leaves the agent surface entirely. The console is exempt
+// and still shows it to the owner.
+func TestGardenerFailsClosedOnAnUnattributableProposal(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	unattributable := seedProposal(t, ctx, db, store.ProposalDigest,
+		map[string]any{"month": "2026-07", "title": "Session digest", "body": "- did work"})
+
+	require.Empty(t, proposalIDs(t, callJSON(t, ctx, cli, "gardener_proposals", nil)),
+		"an unattributable proposal is listed to nobody, the global scope included")
+	isErr, txt := callErr(t, ctx, cli, "gardener_apply", map[string]any{"id": unattributable})
+	require.True(t, isErr)
+	require.Contains(t, txt, "names no project")
+	require.Contains(t, txt, "console", "the refusal names the remedy")
+	require.Equal(t, []string{unattributable}, pendingIDs(t, ctx, db))
 }

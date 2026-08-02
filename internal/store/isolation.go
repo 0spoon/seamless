@@ -31,6 +31,17 @@ var ErrIsolationHasChildren = errors.New("project has child projects")
 // while the fence was up -- so it goes through SetProjectIsolation instead.
 var ErrNotATighten = errors.New("not a tighten")
 
+// ErrIsolationStandalone is returned by SetProjectParent when either side of a
+// parent link is isolated. It is the same topology rule ErrIsolationHasChildren
+// enforces from the tighten side, judged from the link side: isolation requires
+// a standalone project, so a fenced project may neither take a parent nor be
+// one.
+//
+// It is deliberately NOT an alias of gardener.ErrIsolatedProject: that sentinel
+// answers a different question (whether a fenced project may be SPLIT), and one
+// name for two refusals would make errors.Is agree where the two do not.
+var ErrIsolationStandalone = errors.New("isolation requires a standalone project")
+
 // SetProjectIsolation sets a project's isolation state without bumping
 // updated_at. Unlike the favorite setters it does NOT treat an unknown slug as
 // a no-op: a fence the owner believes is up but never applied fails open, so
@@ -58,17 +69,36 @@ func SetProjectIsolation(ctx context.Context, db *sql.DB, slug string, state cor
 // never isolated, and an unregistered slug is open by construction -- a
 // project must have a projects-table row before it can be fenced.
 func IsolationOf(ctx context.Context, db *sql.DB, slug string) (core.Isolation, error) {
+	state, err := isolationOfTx(ctx, db, slug)
+	if err != nil {
+		return "", fmt.Errorf("store.IsolationOf: %w", err)
+	}
+	return state, nil
+}
+
+// isolationOfTx is IsolationOf over any read executor, so a topology mutator can
+// judge the fence inside the transaction it is about to write under rather than
+// on the pool, where a tighten could land between the check and the UPDATE.
+// rowQuerier carries no QueryRowContext, hence the rows dance for one column.
+func isolationOfTx(ctx context.Context, q rowQuerier, slug string) (core.Isolation, error) {
 	if slug == "" {
 		return core.IsolationOpen, nil
 	}
-	var state string
-	err := db.QueryRowContext(ctx,
-		`SELECT isolation FROM projects WHERE slug = ?`, slug).Scan(&state)
-	if errors.Is(err, sql.ErrNoRows) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT isolation FROM projects WHERE slug = ? LIMIT 1`, slug)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = rows.Close() }()
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return "", err
+		}
 		return core.IsolationOpen, nil
 	}
-	if err != nil {
-		return "", fmt.Errorf("store.IsolationOf: %w", err)
+	var state string
+	if err := rows.Scan(&state); err != nil {
+		return "", err
 	}
 	return core.Isolation(state), nil
 }
@@ -107,21 +137,43 @@ type ProjectIsolation struct {
 // may not join a family or take a parent. Blank and unregistered slugs are open
 // by construction and never appear.
 func IsolatedSlugs(ctx context.Context, db *sql.DB, slugs []string) ([]ProjectIsolation, error) {
+	out, err := isolatedSlugsTx(ctx, db, slugs)
+	if err != nil {
+		return nil, fmt.Errorf("store.IsolatedSlugs: %w", err)
+	}
+	return out, nil
+}
+
+// isolatedSlugsTx is IsolatedSlugs over any read executor, for a topology writer
+// that guards inside its own transaction (see SetProjectParent).
+func isolatedSlugsTx(ctx context.Context, q rowQuerier, slugs []string) ([]ProjectIsolation, error) {
 	var out []ProjectIsolation
 	for _, slug := range slugs {
 		slug = strings.TrimSpace(slug)
 		if slug == "" {
 			continue
 		}
-		state, err := IsolationOf(ctx, db, slug)
+		state, err := isolationOfTx(ctx, q, slug)
 		if err != nil {
-			return nil, fmt.Errorf("store.IsolatedSlugs: %w", err)
+			return nil, err
 		}
 		if state.FencesOutbound() {
 			out = append(out, ProjectIsolation{Slug: slug, State: state})
 		}
 	}
 	return out, nil
+}
+
+// isolatedLabels renders "<slug> is <state>" for each fenced project, joined for
+// a refusal's copy. It names the slug and the state and NOTHING else: a topology
+// refusal must not hide that the project exists (the owner needs to know which
+// side to unfence) and must not echo a byte of what it holds.
+func isolatedLabels(blocked []ProjectIsolation) string {
+	parts := make([]string, len(blocked))
+	for i, b := range blocked {
+		parts[i] = fmt.Sprintf("%s is %s", b.Slug, b.State)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // IsolationTightenEffects reports what tightening one project's isolation would

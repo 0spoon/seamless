@@ -52,10 +52,24 @@ func TestBriefing_SealedDropsGlobalAndFamily(t *testing.T) {
 	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/work/vault":"vault"}`))
 	require.NoError(t, store.SetSetting(ctx, db, store.SettingProjectFamilies, `{"clients":["vault","atlas"]}`))
 
-	setIsolation(t, db, "vault", core.IsolationSealed)
+	// The link predates the fence on purpose: SetProjectParent refuses to build
+	// one for an isolated project, so this is exactly the stale row a tighten
+	// would have detached -- the case these exclusions defend against. vault
+	// needs its projects-table row first, because SetProjectParent on an
+	// unregistered slug affects 0 rows and would silently void the premise.
 	_, err := store.EnsureProject(ctx, db, "shared", "Shared")
 	require.NoError(t, err)
+	_, err = store.EnsureProject(ctx, db, "vault", "vault")
+	require.NoError(t, err)
 	require.NoError(t, store.SetProjectParent(ctx, db, "vault", "shared", time.Now().UTC()))
+	setIsolation(t, db, "vault", core.IsolationSealed)
+
+	// Assert the premise. Every family check below is an absence check, so a
+	// link that failed to land would make this test pass for the wrong reason.
+	vault, ok, err := store.ProjectBySlug(ctx, db, "vault")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "shared", vault.ParentSlug, "the stale parent link must survive the fence")
 
 	insMem(t, db, "01V", "gotcha", "vault-thing", "the sealed project's own memory", "vault")
 	insMem(t, db, "01G", "reference", "global-fact", "applies everywhere", "")

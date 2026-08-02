@@ -5394,7 +5394,7 @@ Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; 
 
 ## usage_summary {#usage_summary}
 
-Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.
+Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Every count is machine-wide and identical for every caller; only the named memory lists (topInjected, topUtility) are fenced, so memories this session may not read under project isolation are dropped from them and those lists can come back shorter than the counts imply. Read-only.
 
 Takes no parameters.
 

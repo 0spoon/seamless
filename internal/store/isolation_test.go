@@ -323,6 +323,115 @@ func TestIsolatedSlugs(t *testing.T) {
 	require.Empty(t, got)
 }
 
+// TestSetProjectParent_IsolationRequiresStandalone pins the link-side half of
+// the topology rule: an isolated project may neither take a parent nor be one,
+// while a DETACH stays open to it so a project that acquired a fence and a
+// parent by some other route can still comply. The refused cases also pin the
+// copy contract -- the refusal names the fenced slug and its state, states the
+// remedy, and echoes nothing the fence exists to keep in.
+func TestSetProjectParent_IsolationRequiresStandalone(t *testing.T) {
+	const secret = "the acquisition roadmap"
+
+	tests := []struct {
+		name        string
+		preAttach   bool // wire kid -> root while both are still open
+		child       core.Isolation
+		parent      core.Isolation
+		arg         string // the parent argument under test
+		wantRefused bool
+		wantParent  string
+		wantCopy    []string
+	}{
+		{name: "open child takes an open parent", child: core.IsolationOpen, parent: core.IsolationOpen,
+			arg: "root", wantParent: "root"},
+		{name: "confidential child may not take a parent", child: core.IsolationConfidential, parent: core.IsolationOpen,
+			arg: "root", wantRefused: true, wantCopy: []string{"kid is confidential"}},
+		{name: "sealed child may not take a parent", child: core.IsolationSealed, parent: core.IsolationOpen,
+			arg: "root", wantRefused: true, wantCopy: []string{"kid is sealed"}},
+		{name: "confidential project may not be a parent", child: core.IsolationOpen, parent: core.IsolationConfidential,
+			arg: "root", wantRefused: true, wantCopy: []string{"root is confidential"}},
+		{name: "sealed project may not be a parent", child: core.IsolationOpen, parent: core.IsolationSealed,
+			arg: "root", wantRefused: true, wantCopy: []string{"root is sealed"}},
+		{name: "both fenced names both sides", child: core.IsolationSealed, parent: core.IsolationConfidential,
+			arg: "root", wantRefused: true, wantCopy: []string{"kid is sealed", "root is confidential"}},
+		{name: "a fenced child may still detach", preAttach: true, child: core.IsolationSealed, parent: core.IsolationOpen,
+			arg: "", wantParent: ""},
+		{name: "a fenced child may detach from a fenced parent", preAttach: true, child: core.IsolationConfidential,
+			parent: core.IsolationSealed, arg: "", wantParent: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := openTestDB(t)
+			ctx := context.Background()
+			seeded := time.Date(2026, 8, 1, 10, 0, 0, 0, time.UTC)
+			now := seeded.Add(time.Hour)
+
+			for _, slug := range []string{"kid", "root"} {
+				require.NoError(t, CreateProject(ctx, db, core.Project{
+					ID: "01" + slug, Slug: slug, Name: slug, Description: secret,
+					CreatedAt: seeded, UpdatedAt: seeded,
+				}))
+			}
+			if tt.preAttach {
+				require.NoError(t, SetProjectParent(ctx, db, "kid", "root", seeded))
+			}
+			require.NoError(t, SetProjectIsolation(ctx, db, "kid", tt.child))
+			require.NoError(t, SetProjectIsolation(ctx, db, "root", tt.parent))
+
+			err := SetProjectParent(ctx, db, "kid", tt.arg, now)
+			p, ok, perr := ProjectBySlug(ctx, db, "kid")
+			require.NoError(t, perr)
+			require.True(t, ok)
+
+			if !tt.wantRefused {
+				require.NoError(t, err)
+				require.Equal(t, tt.wantParent, p.ParentSlug)
+				require.Equal(t, now, p.UpdatedAt.UTC(), "a topology change bumps updated_at")
+				return
+			}
+
+			require.ErrorIs(t, err, ErrIsolationStandalone)
+			for _, want := range tt.wantCopy {
+				require.Contains(t, err.Error(), want, "the refusal names the fenced side and its state")
+			}
+			require.Contains(t, err.Error(), "set isolation back to open",
+				"the refusal states the remedy, not just the rule")
+			require.NotContains(t, err.Error(), secret,
+				"a refusal never echoes what the fence keeps in")
+
+			require.Empty(t, p.ParentSlug, "a refused link writes nothing")
+			require.Equal(t, seeded, p.UpdatedAt.UTC(), "a refused link does not bump updated_at")
+		})
+	}
+}
+
+// TestSetProjectParent_ReattachAfterDetachNeedsTheFenceDown walks the round trip
+// the guard is really about: a fenced project detaches, cannot re-attach while
+// the fence stands, and can once it is back to open.
+func TestSetProjectParent_ReattachAfterDetachNeedsTheFenceDown(t *testing.T) {
+	db := openTestDB(t)
+	ctx, now := seedTopology(t, db)
+	require.NoError(t, SetProjectIsolation(ctx, db, "app", core.IsolationSealed))
+
+	// The detach is how a fenced project reaches the standalone state.
+	require.NoError(t, SetProjectParent(ctx, db, "app", "", now))
+	p, ok, err := ProjectBySlug(ctx, db, "app")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Empty(t, p.ParentSlug)
+
+	err = SetProjectParent(ctx, db, "app", "platform", now)
+	require.ErrorIs(t, err, ErrIsolationStandalone)
+
+	require.NoError(t, SetProjectIsolation(ctx, db, "app", core.IsolationOpen))
+	require.NoError(t, SetProjectParent(ctx, db, "app", "platform", now))
+	p, ok, err = ProjectBySlug(ctx, db, "app")
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, "platform", p.ParentSlug)
+}
+
 // insertStampedMemory inserts a memories_index row carrying a source_session
 // provenance stamp. invalidAt "" means active.
 func insertStampedMemory(t *testing.T, db *sql.DB, id, name, project, stamp, updated, invalidAt string) {

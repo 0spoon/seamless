@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -107,6 +108,49 @@ func (s *Server) fenceWrite(ctx context.Context, target string) error {
 	}
 	return fmt.Errorf("project %s is %s: writes into it require a session bound to it",
 		target, core.IsolationSealed)
+}
+
+// fenceProposal refuses a gardener_apply that would resolve a proposal across an
+// isolation fence -- in either direction, and for a dismissal as much as an
+// apply: dismissing settles a fenced project's review queue, and the call's own
+// success or refusal already reports whether the proposal exists.
+//
+// It asks BOTH halves of the matrix about every project the proposal spans. The
+// read half covers the disclosure: the apply result echoes what it touched, so a
+// permitted apply would be a read across the fence. The write half covers the
+// mutation, and is what stops a session bound to a confidential project from
+// reaching out and reorganizing an open one -- an agent-initiated write OUT of a
+// fenced project is a leak in its own right. Neither restates the policy; both go
+// through fenceRead/fenceWrite, so a refusal here is the same sentence, rule and
+// remedy the rest of the surface uses, with no proposal content echoed.
+//
+// This is the MCP-side apply-time re-check for a proposal raised BEFORE its
+// project was tightened: the scope is resolved and the fence consulted now, so a
+// stale reproject can no longer carry a memory out of a project that has since
+// become confidential. The owner's console path is deliberately NOT gated this
+// way (see gardener.FencedProjects) -- the threat model is agent-to-agent
+// leakage, not hiding from the owner.
+//
+// A proposal whose project cannot be resolved is refused too. Fail closed: an
+// unattributable row cannot be checked against any fence, and the console is
+// where it gets settled.
+func (s *Server) fenceProposal(ctx context.Context, p store.Proposal) error {
+	scope, err := gardener.ResolveProposalScope(ctx, s.cfg.DB, p)
+	if err != nil {
+		return err
+	}
+	if !scope.Resolved {
+		return fmt.Errorf("proposal %s names no project to check an isolation fence against: resolve it from the console", p.ID)
+	}
+	for _, project := range scope.Projects {
+		if err := s.fenceRead(ctx, project); err != nil {
+			return err
+		}
+		if err := s.fenceWrite(ctx, project); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // withheldKey is the field a trimmed success payload carries. Its presence is

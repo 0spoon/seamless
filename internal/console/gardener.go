@@ -162,6 +162,14 @@ type proposalCard struct {
 	// also renders standalone as a ?reader=1 fragment with no page around it.
 	CanUndoApply bool `json:"-"`
 	CanAct       bool `json:"-"`
+	// Fenced is the projects this proposal touches that are isolated NOW,
+	// whether or not they were when it was proposed. The console is exempt from
+	// the isolation fence by design -- the owner sees everything -- so this
+	// never hides or blocks anything; it marks a proposal whose evidence
+	// predates a tighten, so applying it is an informed choice rather than a
+	// silent move across a fence raised after the fact. Agent callers are
+	// refused outright at the MCP surface (mcp.fenceProposal).
+	Fenced []store.ProjectIsolation `json:"-"`
 }
 
 // queueSection is one taxonomy group in the review rail: the pending proposals
@@ -952,7 +960,32 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 	c.RowTitle, c.RowDetail = rowSummary(p.Kind, c)
 	c.CanUndoApply = gardener.CanUndoApply(p.Kind)
 	c.CanAct = s.cfg.Gardener != nil
+	c.Fenced = s.fencedTargets(ctx, p)
 	return c
+}
+
+// fencedTargets reports which of a proposal's projects are isolated now. A
+// resolution failure is not an error the owner should see: the console renders
+// the proposal either way, so a card that cannot be attributed simply carries no
+// mark. That is the opposite of the tool surface, where an unattributable
+// payload fails closed -- there, silence would leak; here, it would only nag.
+//
+// Relocate is exempt, and it is the one kind that must be. A relocate is the
+// tighten's OWN repair -- it pulls a leaked global memory back inside the fence
+// -- so it is created by the tighten and its evidence can never predate it,
+// which is the only thing this mark exists to warn about. Marking it would also
+// be the majority of the queue right after a tighten (one row per leaked
+// memory), and a warning on every row is a warning on none.
+func (s *Service) fencedTargets(ctx context.Context, p store.Proposal) []store.ProjectIsolation {
+	if p.Kind == store.ProposalRelocate {
+		return nil
+	}
+	fenced, err := gardener.FencedProjects(ctx, s.cfg.DB, p)
+	if err != nil {
+		s.logger.Warn("console: resolve proposal isolation", "proposal", p.ID, "kind", p.Kind, "error", err)
+		return nil
+	}
+	return fenced
 }
 
 // proposalPresentation turns store-facing proposal kinds into the outcome-first

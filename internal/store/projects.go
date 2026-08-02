@@ -154,12 +154,56 @@ func scanProject(rows *sql.Rows) (core.Project, error) {
 // child's briefing (see retrieve.Briefing). It is idempotent -- re-setting the
 // same parent is a harmless no-op write -- so a split apply is retry-safe. An
 // unknown slug affects no rows and returns nil (the caller ensures the row first).
+//
+// ATTACHING refuses when EITHER side is isolated (ErrIsolationStandalone).
+// Isolation requires a standalone project, and a parent link is a briefing
+// cross-over surface, so a fenced project may neither take a parent nor be one.
+// This is the link-side half of the rule TightenProjectIsolation enforces from
+// the tighten side (it detaches the parent, and refuses outright while children
+// remain, ErrIsolationHasChildren).
+//
+// The guard lives at the store call rather than at each caller -- unlike the
+// family writers, which are guarded in the console and the CLI so a split apply
+// cannot fail inside the store -- because SetProjectParent's only non-test
+// caller is that split apply, and gardener.Split already refuses a fenced source
+// with its own ErrIsolatedProject. The refusal is therefore unreachable on that
+// path and cannot regress it; if a future proposal ever did name a fenced slug,
+// gardener.Apply surfaces the error as a console flash, not a 500.
+//
+// DETACHING (a blank parent) is always allowed, an isolated child included:
+// clearing a parent moves TOWARD the standalone rule, and refusing it would
+// strand a project that acquired a fence and a parent by some other route (a
+// legacy row, an import) with no way to comply. TightenProjectIsolation does not
+// route through here -- it detaches inline in its own transaction -- so nothing
+// about the tighten depends on this decision either way.
+//
+// The check and the UPDATE share one transaction so a concurrent tighten cannot
+// land between them and leave a freshly fenced project holding a parent link.
 func SetProjectParent(ctx context.Context, db *sql.DB, slug, parent string, now time.Time) error {
-	_, err := db.ExecContext(ctx,
-		`UPDATE projects SET parent_slug = ?, updated_at = ? WHERE slug = ?`,
-		parent, core.FormatTime(now.UTC()), slug)
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
+		return fmt.Errorf("store.SetProjectParent: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }() // no-op after Commit
+
+	if strings.TrimSpace(parent) != "" {
+		blocked, err := isolatedSlugsTx(ctx, tx, []string{slug, parent})
+		if err != nil {
+			return fmt.Errorf("store.SetProjectParent: %w", err)
+		}
+		if len(blocked) > 0 {
+			return fmt.Errorf("store.SetProjectParent: %w: %s -- an isolated project may neither take a parent nor be one; set isolation back to open first",
+				ErrIsolationStandalone, isolatedLabels(blocked))
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE projects SET parent_slug = ?, updated_at = ? WHERE slug = ?`,
+		parent, core.FormatTime(now.UTC()), slug); err != nil {
 		return fmt.Errorf("store.SetProjectParent: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("store.SetProjectParent: commit: %w", err)
 	}
 	return nil
 }

@@ -1153,6 +1153,16 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .proposal-assurance { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: var(--text-xs); }
 .proposal-assurance .ico { width: 13px; height: 13px; flex: none; color: var(--ok); }
 .proposal-signal { padding: 9px 11px; border-radius: var(--radius-sm); color: var(--muted); background: var(--surface-2); font-size: var(--text-sm); }
+/* The isolation mark: a proposal whose evidence may predate a tighten. It warns
+   rather than blocks -- the console is exempt from the fence by design. */
+.gardener-fenced-chip { display: inline-flex; align-items: center; color: var(--warn); }
+.gardener-fenced-chip .ico { width: 12px; height: 12px; }
+.gardener-fenced-note { display: flex; gap: 10px; padding: 11px 12px; border-left: 2px solid var(--warn); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; background: var(--warn-soft); }
+.gardener-fenced-note .gfn-icon { display: flex; flex: none; color: var(--warn); }
+.gardener-fenced-note .gfn-icon .ico { width: 14px; height: 14px; }
+.gardener-fenced-note > div > span { color: var(--warn); font-size: var(--text-2xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; }
+.gardener-fenced-note a { color: inherit; }
+.gardener-fenced-note p { margin: 3px 0 0; color: var(--ink-2); font-size: var(--text-sm); }
 .proposal-compare { display: grid; grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr); align-items: stretch; gap: 10px; }
 .proposal-memory { display: flex; flex-direction: column; min-width: 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .proposal-memory > span { color: var(--muted); font-size: var(--text-2xs); font-weight: 750; letter-spacing: var(--tracking-wide); text-transform: uppercase; }

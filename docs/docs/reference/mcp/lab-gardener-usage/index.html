@@ -571,7 +571,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 </table>
 </div>
 <h2 id="usage_summary">usage_summary</h2>
-<p>Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.</p>
+<p>Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Every count is machine-wide and identical for every caller; only the named memory lists (topInjected, topUtility) are fenced, so memories this session may not read under project isolation are dropped from them and those lists can come back shorter than the counts imply. Read-only.</p>
 <p>Takes no parameters.</p>
 <h2 id="favorite_set">favorite_set</h2>
 <p>Star or unstar an item. Favorites sort first in the console, are pinned into session briefings (memories), and get a mild recall rank boost. For memories and notes the flag is stored in the file's frontmatter; starring never bumps an item's updated time.</p>

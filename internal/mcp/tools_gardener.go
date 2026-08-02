@@ -24,7 +24,15 @@ func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRe
 	if err != nil {
 		return errResult("gardener_proposals", err)
 	}
-	return jsonResult(map[string]any{"proposals": proposals, "count": len(proposals)})
+	// The listing is the leak surface: a proposal row has no project column, but
+	// its payload carries names, descriptions and similarity scores out of every
+	// project it touches. Drop what this caller may not read -- silently, since a
+	// withheld count would itself report how much a fenced project has going on.
+	visible, err := gardener.NewProposalFence(s.cfg.DB, s.callerScope(ctx)).Filter(ctx, proposals)
+	if err != nil {
+		return errResult("gardener_proposals", err)
+	}
+	return jsonResult(map[string]any{"proposals": visible, "count": len(visible)})
 }
 
 func gardenerRequestTool() mcp.Tool {
@@ -135,6 +143,18 @@ func (s *Server) handleGardenerApply(ctx context.Context, req mcp.CallToolReques
 	}
 	if s.cfg.Gardener == nil {
 		return errResult("gardener_apply", errors.New("gardener is not configured on this server"))
+	}
+	// The proposal is loaded here rather than left to Apply/Dismiss because the
+	// fence needs the payload to know which projects the row is about at all.
+	p, ok, err := store.ProposalByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		return errResult("gardener_apply", err)
+	}
+	if !ok {
+		return errResult("gardener_apply", fmt.Errorf("no proposal with id %q", id))
+	}
+	if err := s.fenceProposal(ctx, p); err != nil {
+		return errResult("gardener_apply", err)
 	}
 	action := argString(req, "action")
 	if action == "" {

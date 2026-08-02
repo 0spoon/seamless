@@ -207,11 +207,16 @@
     {{if .RowDetail}}<span class="gr-detail">{{.RowDetail}}</span>{{end}}
   </span>
   <span class="gr-meta">
+    {{if .Fenced}}<span class="gardener-fenced-chip" title="{{template "fencedTitle" .}}">{{icon "lock"}}</span>{{end}}
     <span class="gardener-src-chip{{if eq .Source "request"}} you{{end}}">{{if eq .Source "request"}}you{{else}}auto{{end}}</span>
     <time title="{{ts .CreatedAt}}">{{ago .CreatedAt}}</time>
   </span>
 </a>
 {{end}}
+
+{{/* fencedTitle names the isolated projects a proposal touches, for the rail
+     chip's tooltip. Slugs render verbatim -- they are identifiers, not prose. */}}
+{{define "fencedTitle"}}Touches {{range $i, $p := .Fenced}}{{if $i}}, {{end}}{{$p.Slug}} ({{$p.State}}){{end}}{{end}}
 
 {{/* gardener-reader is the review gate for one proposal: provenance, the
      concrete before/after evidence, then the Apply/Dismiss decision. It also
@@ -249,6 +254,18 @@
     </select>
     <button class="btn small" type="submit">Retarget</button>
   </form>
+  {{end}}
+
+  {{if .Fenced}}
+  {{/* The evidence below may predate the fence. The owner is exempt and can
+       still apply -- this states what applying now means, it does not block. */}}
+  <div class="gardener-fenced-note">
+    <span class="gfn-icon">{{icon "lock"}}</span>
+    <div>
+      <span>This proposal touches {{range $i, $p := .Fenced}}{{if $i}}, {{end}}<a href="/console/projects/{{$p.Slug}}" data-peek>{{$p.Slug}}</a> ({{$p.State}}){{end}}</span>
+      <p>Isolation may have been raised after this was proposed, so the evidence can predate the fence. Agents are refused this proposal; you are not &mdash; read what it changes before applying.</p>
+    </div>
+  </div>
   {{end}}
 
   {{if .CanAct}}

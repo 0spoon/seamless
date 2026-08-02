@@ -485,3 +485,79 @@ func TestSettingsFamilySave_RefusesIsolatedMembers(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string][]string{"product": {"sibling"}}, families)
 }
+
+// A proposal whose target was fenced AFTER it was proposed is the stale-evidence
+// case: the gardener's proposal-time fences (step 5) stop new ones from spanning
+// an isolated project, but a proposal already in the queue when the owner
+// tightened still names it. The MCP surface refuses such a proposal outright.
+// The console must NOT -- the owner is exempt by design -- so it marks it
+// instead, which is what makes applying it an informed choice rather than a
+// silent move across a fence raised after the evidence was gathered.
+func TestGardenerInbox_MarksProposalsWhoseTargetIsNowFenced(t *testing.T) {
+	ctx, db, _, mux := newConsoleWithGardener(t)
+	seedIsolationProject(t, db, "vault")
+	seedIsolationProject(t, db, "acme")
+
+	fenced, err := store.CreateProposal(ctx, db, store.ProposalDigest, map[string]any{
+		"key": "digest:vault:2026-07", "project": "vault", "month": "2026-07",
+		"session_count": 3.0, "title": "vault digest 2026-07", "body": "## Findings\n- shipped it",
+	})
+	require.NoError(t, err)
+	open, err := store.CreateProposal(ctx, db, store.ProposalDigest, map[string]any{
+		"key": "digest:acme:2026-07", "project": "acme", "month": "2026-07",
+		"session_count": 2.0, "title": "acme digest 2026-07", "body": "## Findings\n- shipped it too",
+	})
+	require.NoError(t, err)
+
+	// The fence goes up after both proposals exist -- that ordering is the point.
+	require.NoError(t, store.SetProjectIsolation(ctx, db, "vault", core.IsolationSealed))
+
+	// The owner still sees BOTH: the console is exempt, so the fence marks and
+	// never hides. A regression that filtered here would be worse than the leak
+	// this whole plan closes.
+	queue := getHTMLBody(t, mux, "/console/gardener")
+	require.Contains(t, queue, "vault digest 2026-07")
+	require.Contains(t, queue, "acme digest 2026-07")
+	require.Contains(t, queue, `class="gardener-fenced-chip"`)
+	require.Contains(t, queue, "Touches vault (sealed)")
+
+	// The mark lands on the fenced card only.
+	fencedReader := getHTMLBody(t, mux, "/console/gardener/"+fenced.ID+"?reader=1")
+	require.Contains(t, fencedReader, `class="gardener-fenced-note"`)
+	require.Contains(t, fencedReader, "read what it changes before applying")
+	require.Contains(t, fencedReader, `href="/console/projects/vault"`)
+	require.Contains(t, fencedReader, "(sealed)")
+
+	openReader := getHTMLBody(t, mux, "/console/gardener/"+open.ID+"?reader=1")
+	require.NotContains(t, openReader, `class="gardener-fenced-note"`)
+
+	// Loosening clears the mark: nothing leaked while the fence was up, so the
+	// proposal goes back to being ordinary.
+	require.NoError(t, store.SetProjectIsolation(ctx, db, "vault", core.IsolationOpen))
+	require.NotContains(t, getHTMLBody(t, mux, "/console/gardener/"+fenced.ID+"?reader=1"),
+		`class="gardener-fenced-note"`)
+}
+
+// A relocate proposal is the tighten's own repair -- it pulls a leaked global
+// memory back INSIDE the fence -- so it is created by the tighten and its
+// evidence can never predate it. Marking it would be both wrong-directional and
+// the majority of the queue right after a tighten (one row per leaked memory),
+// and a warning on every row is a warning on none.
+func TestGardenerInbox_RelocateProposalsAreNotMarkedFenced(t *testing.T) {
+	ctx, db, _, mux := newConsoleWithGardener(t)
+	seedIsolationProject(t, db, "vault")
+	require.NoError(t, store.SetProjectIsolation(ctx, db, "vault", core.IsolationConfidential))
+
+	rel, err := store.CreateProposal(ctx, db, store.ProposalRelocate, map[string]any{
+		"key": "relocate:LEAKED", "id": "LEAKEDMEM", "name": "leaked-fact",
+		"kind": "reference", "description": "written by a vault session while global",
+		"from": "", "to": "vault",
+	})
+	require.NoError(t, err)
+
+	reader := getHTMLBody(t, mux, "/console/gardener/"+rel.ID+"?reader=1")
+	require.NotContains(t, reader, `class="gardener-fenced-note"`)
+	// The card still explains the fence relationship in its own assurance line --
+	// that is where a relocate's isolation context belongs.
+	require.Contains(t, reader, "moving it puts it behind the fence")
+}
