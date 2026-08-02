@@ -91,6 +91,7 @@ var funcs = template.FuncMap{
 	"hasPrefix":     strings.HasPrefix,
 	"copyBtn":       copyBtn,
 	"agentPill":     agentPill,
+	"isoPill":       isolationPill,
 	"evtTone":       evtTone,
 	"evtIcon":       evtIcon,
 	"evtSev":        evtSev,
@@ -126,6 +127,8 @@ func evtTone(kind string) string {
 		return "pop"
 	case kind == "memory.superseded" || kind == "memory.archived":
 		return "warn"
+	case kind == "project.isolation.changed":
+		return "accent"
 	case kind == "plan.approved":
 		return "ok"
 	case strings.HasPrefix(kind, "plan."), kind == "subagent.captured":
@@ -152,6 +155,8 @@ func evtIcon(kind string) string {
 		return "circle"
 	case kind == "subagent.captured":
 		return "git-fork"
+	case kind == "project.isolation.changed":
+		return "lock"
 	case strings.HasPrefix(kind, "plan."):
 		return "map"
 	default:

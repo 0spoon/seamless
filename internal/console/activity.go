@@ -98,6 +98,12 @@ func eventSummary(e core.Event) string {
 		return "superseded " + payloadStr(p, "name")
 	case core.EventMemoryArchived:
 		return "archived " + payloadStr(p, "name")
+	case core.EventProjectIsolationChanged:
+		line := "isolation " + payloadStr(p, "from") + " -> " + payloadStr(p, "to")
+		if parent := payloadStr(p, "parent"); parent != "" {
+			line += "; detached from " + parent
+		}
+		return line
 	case core.EventRepoMoved:
 		if path := payloadStr(p, "new_path"); path != "" {
 			return "repo moved to " + path + "; project adopted"

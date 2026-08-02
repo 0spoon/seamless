@@ -314,6 +314,22 @@
   {{if .Rationale}}<div class="proposal-reason"><span>Why this scope fits</span><p>{{.Rationale}}</p></div>{{end}}
   <div class="proposal-assurance">{{icon "folder-tree"}} The memory keeps its identity and history; only its project scope changes.</div>
   {{end}}
+{{else if eq .Kind "relocate"}}
+  {{/* Same move map as a reproject, different question: the "From" side is
+       always the global scope, and the evidence is the provenance stamp that
+       traced this memory back to the newly fenced project. */}}
+  {{with .Relocate}}
+  <div class="proposal-signal">This global memory was written by a session bound to {{.To}}, which is now {{.Isolation}} &mdash; it stayed outside the fence.</div>
+  <div class="proposal-moving-memory">{{icon "brain"}} <a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{if .Kind}} <small>{{.Kind}}</small>{{end}}</div>
+  {{if .Description}}<div class="proposal-reason"><span>What it says</span><p>{{.Description}}</p></div>{{end}}
+  <div class="proposal-move-map">
+    <div><span>From</span><strong>global</strong></div>
+    <span class="proposal-path">{{icon "arrow-right"}}</span>
+    <div class="destination"><span>To</span><strong><a href="/console/projects/{{.To}}" data-peek>{{.To}}</a></strong></div>
+  </div>
+  {{if .Session}}<div class="proposal-query-list"><span>Traced by provenance</span><div><em>{{.Session}}</em></div></div>{{end}}
+  {{end}}
+  <div class="proposal-assurance">{{icon "lock"}} The memory keeps its identity and history; moving it puts it behind the fence. Dismiss to leave it global.</div>
 {{else if eq .Kind "rekind"}}
   {{with .Rekind}}
   <div class="proposal-moving-memory">{{icon "brain"}} <a href="/console/memories/{{.ID}}" data-peek>{{.Name}}</a>{{if .Project}} <small><a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a></small>{{end}}</div>

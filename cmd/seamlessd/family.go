@@ -80,6 +80,9 @@ func familyAdd(ctx context.Context, db *sql.DB, args []string) error {
 	if err := validate.Name(name); err != nil {
 		return fmt.Errorf("seamlessd.family: %w", err)
 	}
+	if err := rejectIsolatedSlugs(ctx, db, slugs); err != nil {
+		return err
+	}
 	if err := warnUnknownSlugs(ctx, db, slugs); err != nil {
 		return err
 	}
@@ -106,6 +109,28 @@ func familyRemove(ctx context.Context, db *sql.DB, args []string) error {
 	}
 	fmt.Printf("family %q -> %s\n", name, strings.Join(members, ", "))
 	return nil
+}
+
+// rejectIsolatedSlugs refuses the whole command when any slug names an isolated
+// project. Isolation requires a standalone project -- no family, no parent, no
+// children -- and a family is a briefing cross-over surface, so admitting a
+// fenced project would be the leak the fence exists to stop. This fails rather
+// than warns (unlike an unregistered slug, which may register later): the state
+// is already known and will not resolve itself.
+func rejectIsolatedSlugs(ctx context.Context, db *sql.DB, slugs []string) error {
+	blocked, err := store.IsolatedSlugs(ctx, db, slugs)
+	if err != nil {
+		return fmt.Errorf("seamlessd.family: %w", err)
+	}
+	if len(blocked) == 0 {
+		return nil
+	}
+	parts := make([]string, len(blocked))
+	for i, b := range blocked {
+		parts[i] = fmt.Sprintf("%s is %s", b.Slug, b.State)
+	}
+	return fmt.Errorf("seamlessd.family: %s: an isolated project must stand alone; set its isolation back to open before adding it to a family",
+		strings.Join(parts, ", "))
 }
 
 // warnUnknownSlugs prints a stderr warning for each slug that is not yet a

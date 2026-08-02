@@ -263,13 +263,21 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		return s.browseKind(ctx, in.Kind, in.Project, limit)
 	}
 
-	// The recall scope is the bound project plus global (project ""). Filtering
-	// happens in the candidate queries themselves: filtering only after fusion
-	// over a fixed depth would let a query dominated by out-of-scope hits starve
-	// in-scope matches that rank deeper than recallSourceDepth.
-	projects := []string{""}
-	if in.Project != "" {
-		projects = append(projects, in.Project)
+	// The recall scope is the bound project plus global (project "") -- except
+	// for a sealed project, which reads nothing outside itself, global included
+	// (globalReadable asks store.CanRead). Filtering happens in the candidate
+	// queries themselves: filtering only after fusion over a fixed depth would
+	// let a query dominated by out-of-scope hits starve in-scope matches that
+	// rank deeper than recallSourceDepth. Narrowing the scope is the whole of
+	// the fence here -- fusion, boosts, budgeting, and the Hit payload are
+	// untouched, so the recall JSON contract stays byte-identical.
+	globalVisible, err := s.globalReadable(ctx, in.Project)
+	if err != nil {
+		return nil, err
+	}
+	projects := []string{in.Project}
+	if in.Project != "" && globalVisible {
+		projects = append(projects, "")
 	}
 
 	acc, err := s.candidates(ctx, in.Query, kinds, projects, in.Kind, time.Time{}, recallSourceDepth, true, "retrieve.Recall")
@@ -290,7 +298,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 	// filter: a [[link]] neighbor of another kind would violate it (see
 	// RecallInput.Kind).
 	if in.Kind == "" {
-		if _, err := s.expandLinks(ctx, ordered, acc, mems, in.Project); err != nil {
+		if _, err := s.expandLinks(ctx, ordered, acc, mems, in.Project, globalVisible); err != nil {
 			return nil, err
 		}
 	}
@@ -352,7 +360,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 		}
 		// The candidate queries already filter to scope; this is a final guard
 		// for link-expanded neighbors and any index/fts project drift.
-		if !scopeVisible(h.Project, in.Project) {
+		if !scopeVisible(h.Project, in.Project, globalVisible) {
 			continue
 		}
 		h.Source = fusedSource(f)
@@ -381,7 +389,7 @@ func (s *Service) Recall(ctx context.Context, in RecallInput) ([]Hit, error) {
 // let browsing reinforce the ranking it reads
 // (closed-loop-utility-signal-contract).
 func (s *Service) browseKind(ctx context.Context, kind, project string, limit int) ([]Hit, error) {
-	mems, err := store.ActiveMemoriesForScope(ctx, s.db, project, nil)
+	mems, err := s.scopedActiveMemories(ctx, project, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -459,11 +467,12 @@ func noteHit(n core.Note) Hit {
 }
 
 // scopeVisible reports whether an item in hitProject is visible to a session
-// bound to scope: global items (project "") are always visible; otherwise the
-// projects must match.
-func scopeVisible(hitProject, scope string) bool {
+// bound to scope: global items (project "") are visible when the scope may
+// read the global scope at all -- a sealed project may not, and its callers
+// pass globalVisible false; otherwise the projects must match.
+func scopeVisible(hitProject, scope string, globalVisible bool) bool {
 	if hitProject == "" {
-		return true
+		return globalVisible
 	}
 	return hitProject == scope
 }

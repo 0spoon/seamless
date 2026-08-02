@@ -124,6 +124,27 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	if patch.Status == nil && patch.Title == nil && patch.Body == nil && patch.ProjectSlug == nil && len(patch.AddDependsOn) == 0 {
 		return errResult("tasks_update", errors.New("nothing to update: pass status, title, body, project, or add_depends_on"))
 	}
+	// A task id is globally unique, so nothing above resolved a write scope. The
+	// row is loaded first purely to learn the project the fence judges against;
+	// UpdateTask still owns the update itself.
+	current, err := store.TaskByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		return errResult("tasks_update", err)
+	}
+	if err := s.fenceWrite(ctx, current.ProjectSlug); err != nil {
+		return errResult("tasks_update", err)
+	}
+	if patch.ProjectSlug != nil && *patch.ProjectSlug != current.ProjectSlug {
+		// Reassignment is a read of the old project plus a write into the new, so
+		// an outside caller may edit a confidential task in place but may not
+		// carry it out of the fence (the notes_update move, same reasoning).
+		if err := s.fenceRead(ctx, current.ProjectSlug); err != nil {
+			return errResult("tasks_update", err)
+		}
+		if err := s.fenceWrite(ctx, *patch.ProjectSlug); err != nil {
+			return errResult("tasks_update", err)
+		}
+	}
 	// Resolve the acting session for the holder-lock. An explicit-but-unknown
 	// identity (or a store error) fails loudly; an AMBIGUOUS actor does not --
 	// actor stays "" (a sentinel that matches no live holder). UpdateTask's
@@ -141,7 +162,10 @@ func (s *Server) handleTasksUpdate(ctx context.Context, req mcp.CallToolRequest)
 	}
 	s.record(ctx, core.EventTaskTransition, actor, updated.ProjectSlug, id,
 		map[string]any{"to": string(updated.Status)})
-	return jsonResult(taskJSON(updated))
+	// The response is judged against the project the task now sits in: a move
+	// INTO a fenced project is sanctioned, but the item it lands on is that
+	// project's content from the moment it arrives.
+	return jsonResult(s.withholdContent(ctx, updated.ProjectSlug, taskJSON(updated), taskContentFields))
 }
 
 func tasksReadyTool() mcp.Tool {
@@ -211,6 +235,11 @@ func (s *Server) handleTasksList(ctx context.Context, req mcp.CallToolRequest) (
 		if err != nil {
 			return errResult("tasks_list", err)
 		}
+		// Needing no scope is precisely why this path needs the fence: the row
+		// itself names the project the isolation check is made against.
+		if err := s.fenceRead(ctx, task.ProjectSlug); err != nil {
+			return errResult("tasks_list", err)
+		}
 		return jsonResult(map[string]any{
 			"project": task.ProjectSlug,
 			"tasks":   []map[string]any{taskJSON(task)},
@@ -262,6 +291,19 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 	if id == "" {
 		return errResult("tasks_claim", errors.New("id is required"))
 	}
+	// The same by-id hole as tasks_update, and a read as well as a write: a claim
+	// locks the task to its holder AND returns the full task body, so an unfenced
+	// claim hands an outside caller a fenced project's work by ULID alone. The
+	// write half is refused here; the read half is trimmed out of the response
+	// below, because a confidential project takes the claim but never answers with
+	// its content.
+	target, err := store.TaskByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		return errResult("tasks_claim", err)
+	}
+	if err := s.fenceWrite(ctx, target.ProjectSlug); err != nil {
+		return errResult("tasks_claim", err)
+	}
 	sessionID, ok, err := s.resolveActor(ctx, req)
 	if err != nil {
 		return errResult("tasks_claim", err)
@@ -291,7 +333,7 @@ func (s *Server) handleTasksClaim(ctx context.Context, req mcp.CallToolRequest) 
 		payload["prior_holder"] = res.PriorHolder
 	}
 	s.record(ctx, core.EventTaskTransition, sessionID, res.Task.ProjectSlug, id, payload)
-	return jsonResult(taskJSON(res.Task))
+	return jsonResult(s.withholdContent(ctx, res.Task.ProjectSlug, taskJSON(res.Task), taskContentFields))
 }
 
 func tasksReleaseTool() mcp.Tool {
@@ -308,6 +350,17 @@ func (s *Server) handleTasksRelease(ctx context.Context, req mcp.CallToolRequest
 	if id == "" {
 		return errResult("tasks_release", errors.New("id is required"))
 	}
+	// Fenced for the same reason as the claim: only the holder may release, but a
+	// successful release still returns the task body, so the response is a read
+	// across the fence even when the mutation is benign -- hence the withhold on
+	// the way out as well as the refusal on the way in.
+	target, err := store.TaskByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		return errResult("tasks_release", err)
+	}
+	if err := s.fenceWrite(ctx, target.ProjectSlug); err != nil {
+		return errResult("tasks_release", err)
+	}
 	sessionID, ok, err := s.resolveActor(ctx, req)
 	if err != nil {
 		return errResult("tasks_release", err)
@@ -321,8 +374,18 @@ func (s *Server) handleTasksRelease(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.record(ctx, core.EventTaskTransition, sessionID, released.ProjectSlug, id,
 		map[string]any{"to": string(released.Status), "released": true})
-	return jsonResult(taskJSON(released))
+	return jsonResult(s.withholdContent(ctx, released.ProjectSlug, taskJSON(released), taskContentFields))
 }
+
+// taskContentFields are the taskJSON keys a caller that may WRITE a task's
+// project but not READ it does not get back (withholdContent). What stays is
+// identity (id, project) and the state that call itself produced (status, and
+// for a claim the holder and lease) -- the caller needs those to know what its
+// own write did and to release what it now holds. Everything else describes the
+// fenced project rather than the caller's action: authored text (title, body),
+// and the curation and graph around it (plan, depends_on, created_by, favorite).
+// A permitted write is not a licence to read any of it.
+var taskContentFields = []string{"title", "body", "plan", "depends_on", "created_by", "favorite"}
 
 // taskJSON renders a task for a tool response.
 func taskJSON(t core.Task) map[string]any {

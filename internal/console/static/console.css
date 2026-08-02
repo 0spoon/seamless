@@ -4332,3 +4332,37 @@ button.star.on .ico { fill: currentColor; }
 .ptl-legend i[data-class="error"]  { background: var(--danger-soft); }
 .ptl-legend i[data-class="write"]  { background: var(--ok-soft); }
 .ptl-legend i[data-class="idle"]   { background: var(--surface-3); }
+
+/* ===========================================================================
+   PROJECT ISOLATION
+
+   Honest states: a fenced project gets a lock pill and this one Overview block,
+   and nothing else on its pages changes. Isolation is a promise about what
+   agents can see, not an alarm, so there is no red chrome to teach the owner to
+   ignore. The confirm panel is the exception -- it appears only while a tighten
+   is pending, and it is the one place the consequences are spelled out.
+   =========================================================================== */
+.iso-pill { display: inline-flex; align-items: center; gap: 4px; }
+.iso-pill .ico { width: 11px; height: 11px; flex: none; }
+
+.iso-card .iso-form { margin: 0 0 12px; }
+.iso-seg button[type="submit"] { font-family: var(--font-sans); }
+.iso-promises { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.iso-promises li {
+  font-size: var(--text-xs); line-height: 1.55; color: var(--muted);
+  padding-left: 12px; border-left: 2px solid var(--border);
+}
+.iso-promises li.on { color: var(--text-primary); border-left-color: var(--brand); }
+
+.iso-confirm {
+  margin: 0 0 16px; padding: 14px 16px;
+  border: 1px solid var(--brand); border-radius: var(--radius-md);
+  background: var(--brand-soft);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.iso-confirm.blocked { border-color: var(--warn); background: var(--warn-soft); }
+.iso-confirm-head { display: flex; align-items: center; gap: 7px; font-size: var(--text-sm); }
+.iso-confirm-head .ico { width: 15px; height: 15px; flex: none; }
+.iso-confirm-line { margin: 0; font-size: var(--text-xs); line-height: 1.6; color: var(--text-primary); }
+.iso-confirm-effects { margin: 0; padding-left: 18px; font-size: var(--text-xs); line-height: 1.7; }
+.iso-confirm-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }

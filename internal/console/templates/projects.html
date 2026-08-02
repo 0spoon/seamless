@@ -114,6 +114,7 @@
       </div>
       <div class="project-card-badges">
         {{if .Global}}<span class="project-role global">shared root</span>{{else if .Retired}}<span class="project-role retired">retired</span>{{else if .Unregistered}}<span class="project-role warn">unregistered</span>{{else if .Child}}<span class="project-role child">child scope</span>{{else if .Parent}}<span class="project-role parent">shared parent</span>{{else}}<span class="project-role">standalone</span>{{end}}
+        {{isoPill .Isolation}}
         {{if .Working}}<span class="project-state live"><span class="live-dot"></span>{{.Working}} working</span>{{end}}
         {{if .Blocked}}<span class="project-state warn">{{icon "triangle-alert"}}{{.Blocked}} blocked</span>{{end}}
       </div>

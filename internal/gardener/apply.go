@@ -44,7 +44,10 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applyDigest(ctx, p, now)
 	case store.ProposalConsolidate:
 		result, err = s.applyConsolidate(ctx, p, now)
-	case store.ProposalReproject:
+	case store.ProposalReproject, store.ProposalRelocate:
+		// One effect, two decisions: a relocate is a reproject out of the global
+		// scope, so it shares the move, the name-clash guard, the idempotence, and
+		// the inverse. Only the evidence the owner reviewed differs.
 		result, err = s.applyReproject(ctx, p, now)
 	case store.ProposalSplit:
 		result, err = s.applySplit(ctx, p, now)
@@ -240,10 +243,13 @@ func (s *Service) applyConsolidate(ctx context.Context, p store.Proposal, now ti
 // memory already at the target is a success, so a retry after a partial apply
 // converges. A name already taken by a different active memory in the target is a
 // hard error (the proposal stays pending) so the owner resolves the clash.
+//
+// It also carries the relocate kind (the isolation provenance audit), whose
+// payload names the same "id" and "to".
 func (s *Service) applyReproject(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {
 	to := payloadString(p.Payload, "to")
 	if to == "" {
-		return nil, errors.New("reproject proposal missing target project")
+		return nil, fmt.Errorf("%s proposal missing target project", p.Kind)
 	}
 	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
 	if err != nil {

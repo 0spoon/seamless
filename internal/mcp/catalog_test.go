@@ -169,6 +169,7 @@ func TestArgsEnumsDeriveFromCanonicalSets(t *testing.T) {
 		want  []string
 	}{
 		{"memory_write.kind", memoryWriteTool, "kind", asStrings(core.MemoryKinds)},
+		{"project_create.isolation", projectCreateTool, "isolation", asStrings(core.Isolations)},
 		{"tasks_update.status", tasksUpdateTool, "status", asStrings(core.TaskStatuses)},
 		{"tasks_list.status", tasksListTool, "status", asStrings(core.TaskStatuses)},
 		{"gardener_proposals.kind", gardenerProposalsTool, "kind", store.ProposalKinds},

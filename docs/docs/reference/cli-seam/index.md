@@ -307,6 +307,29 @@ Favorites sort first in the console, can be filtered there, and starred
 memories are pinned into every session briefing and rank-boosted in recall. A
 plan's star lives on its primary note, so a task-only plan cannot be starred.
 
+### seam project isolation {#seam_project_isolation}
+
+```bash
+seam project isolation [--yes] <slug> [<state>]
+```
+
+Shows or sets a project's [isolation](https://thereisnospoon.org/docs/concepts/project-isolation/) state.
+`state` is one of `open`, `confidential`, or `sealed`; omit it to print the
+current state and its promise line. Unlike most subcommands this one talks to
+the console's JSON endpoint rather than an MCP tool - there is deliberately no
+tool to change isolation, because tightening detaches family and parent links
+and is an owner decision.
+
+**Tightening requires `--yes`.** Without it, the command prints exactly the
+consequences the console's confirm panel shows - the family and parent it would
+detach from - applies nothing, and exits non-zero, so a script cannot mistake an
+unconfirmed tighten for a fence that went up. **Loosening is immediate** and
+ignores `--yes`.
+
+A project with children refuses to tighten until they are re-parented; the
+refusal names them. Promise text is echoed from the server rather than
+transcribed here, so the console and the CLI cannot drift apart.
+
 ### seam usage {#seam_usage}
 
 ```bash

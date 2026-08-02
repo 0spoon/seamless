@@ -120,6 +120,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../../concepts/projects/">Projects &amp; scope</a></li>
         
+        <li><a href="../../../concepts/project-isolation/">Project isolation</a></li>
+        
         <li><a href="../../../concepts/gardener/">The gardener</a></li>
         
         <li><a href="../../../concepts/memory-supersession/">Memory supersession</a></li>
@@ -346,7 +348,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project.</td>
 </tr>
 <tr>
 <td><code>source_url</code></td>
@@ -500,7 +502,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 </table>
 </div>
 <h2 id="project_list">project_list</h2>
-<p>List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall.</p>
+<p>List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.</p>
 <p>Takes no parameters.</p>
 <h2 id="project_create">project_create</h2>
 <p>Register a project up front, with a human-readable name and an optional description. You rarely need this: any durable write naming an unknown project slug (memory_write, notes_create, tasks_add, capture_url, trial_record) already registers that project, and a git repo maps itself to one on its first session. Reach for this only to give a project a proper name and description BEFORE anything is written into it, or to create one you will not write to yet -- an auto-registered project is named after its own slug until someone fixes it. Call project_list first: coining a near-duplicate of an existing slug is the failure mode here. To divide an existing project into children, use gardener_split rather than creating them by hand. The slug defaults to a slugified name; &quot;global&quot; and &quot;all&quot; are reserved, and an existing slug is an error, not an update -- this never renames or edits a project.</p>
@@ -526,6 +528,12 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 <td>string</td>
 <td>no</td>
 <td>optional one-line description</td>
+</tr>
+<tr>
+<td><code>isolation</code></td>
+<td>string</td>
+<td>no</td>
+<td>optional isolation state (open|confidential|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: <code>open</code>, <code>confidential</code>, <code>sealed</code>.</td>
 </tr>
 <tr>
 <td><code>slug</code></td>
@@ -559,7 +567,7 @@ disallowed ports. Size is bounded by truncation rather than rejection: at most
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project.</td>
 </tr>
 </tbody>
 </table>

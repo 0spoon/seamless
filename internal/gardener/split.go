@@ -24,6 +24,12 @@ import (
 // ErrNoSource is returned by Split when no source project is given.
 var ErrNoSource = errors.New("gardener: split needs a source project")
 
+// ErrIsolatedProject is returned by Split when the source project is isolated.
+// A split relocates the source's memories into new projects and leaves it with
+// children, and isolation requires a standalone project -- so the fence has to
+// come down before the split, not after.
+var ErrIsolatedProject = errors.New("gardener: project is isolated")
+
 // splitTimeout bounds one split interpretation. Classifying a whole project's
 // memories is a larger prompt than a single request, so it gets the full chat
 // budget rather than the tighter request timeout.
@@ -45,6 +51,18 @@ func (s *Service) Split(ctx context.Context, source, instruction string) (Reques
 		return RequestResult{}, ErrNoSource
 	}
 	instruction = strings.TrimSpace(instruction)
+
+	// An isolated source is excluded from the scan entirely: every assignment
+	// this pass could produce moves one of its memories out of the fence, and the
+	// setup proposal would hand it a family and children.
+	iso, err := store.IsolationOf(ctx, s.db, source)
+	if err != nil {
+		return RequestResult{}, fmt.Errorf("gardener.Split: %w", err)
+	}
+	if iso.FencesOutbound() {
+		return RequestResult{}, fmt.Errorf("gardener.Split: %w: %s is %s -- set it back to open to split it",
+			ErrIsolatedProject, source, iso)
+	}
 
 	candidates, err := s.splitCandidates(ctx, source)
 	if err != nil {

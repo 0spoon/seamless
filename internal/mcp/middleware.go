@@ -200,7 +200,7 @@ func (s *Server) attribution(ctx context.Context) (sessionID, project string) {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID, b.project
 	}
-	if sess, ok, _ := s.ambientFallback(ctx); ok {
+	if sess, ok, _, _ := s.ambientFallback(ctx); ok { //nolint:errcheck // provenance is best-effort: a fenced refusal leaves the call unattributed rather than misattributed, which is the outcome this branch already falls through to
 		return sess.ID, sess.ProjectSlug
 	}
 	return "", ""

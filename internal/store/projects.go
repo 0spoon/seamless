@@ -15,7 +15,7 @@ import (
 var ErrSlugExists = errors.New("store: project slug already exists")
 
 // projectCols is the SELECT list for the projects table, matching scanProject.
-const projectCols = `id, slug, name, description, parent_slug, retired_at, favorite, created_at, updated_at`
+const projectCols = `id, slug, name, description, parent_slug, retired_at, favorite, isolation, created_at, updated_at`
 
 // EnsureProject returns the project registered under slug, creating a minimal
 // row when none exists yet. It is the idempotent upsert used by the importer and
@@ -75,10 +75,20 @@ func ListProjects(ctx context.Context, db *sql.DB) ([]core.Project, error) {
 // ProjectBySlug returns the project with the given slug. found is false when
 // absent.
 func ProjectBySlug(ctx context.Context, db *sql.DB, slug string) (core.Project, bool, error) {
-	rows, err := db.QueryContext(ctx,
-		`SELECT `+projectCols+` FROM projects WHERE slug = ? LIMIT 1`, slug)
+	p, ok, err := projectBySlugTx(ctx, db, slug)
 	if err != nil {
 		return core.Project{}, false, fmt.Errorf("store.ProjectBySlug: %w", err)
+	}
+	return p, ok, nil
+}
+
+// projectBySlugTx loads one project row via any read executor, so a mutator can
+// re-read the row inside the transaction it is about to write under.
+func projectBySlugTx(ctx context.Context, q rowQuerier, slug string) (core.Project, bool, error) {
+	rows, err := q.QueryContext(ctx,
+		`SELECT `+projectCols+` FROM projects WHERE slug = ? LIMIT 1`, slug)
+	if err != nil {
+		return core.Project{}, false, err
 	}
 	defer func() { _ = rows.Close() }()
 	if !rows.Next() {
@@ -86,17 +96,26 @@ func ProjectBySlug(ctx context.Context, db *sql.DB, slug string) (core.Project, 
 	}
 	p, err := scanProject(rows)
 	if err != nil {
-		return core.Project{}, false, fmt.Errorf("store.ProjectBySlug: %w", err)
+		return core.Project{}, false, err
 	}
 	return p, true, nil
 }
 
 // CreateProject inserts a project. It returns ErrSlugExists if the slug is taken.
+// A zero Isolation is stored as open (the default); a present-but-unrecognized
+// state is an error, never silently defaulted.
 func CreateProject(ctx context.Context, db *sql.DB, p core.Project) error {
+	iso := p.Isolation
+	if iso == "" {
+		iso = core.IsolationOpen
+	}
+	if !iso.Valid() {
+		return fmt.Errorf("store.CreateProject: invalid isolation %q", p.Isolation)
+	}
 	_, err := db.ExecContext(ctx,
-		`INSERT INTO projects (id, slug, name, description, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?)`,
-		p.ID, p.Slug, p.Name, p.Description,
+		`INSERT INTO projects (id, slug, name, description, isolation, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		p.ID, p.Slug, p.Name, p.Description, string(iso),
 		core.FormatTime(p.CreatedAt), core.FormatTime(p.UpdatedAt))
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -109,13 +128,14 @@ func CreateProject(ctx context.Context, db *sql.DB, p core.Project) error {
 
 func scanProject(rows *sql.Rows) (core.Project, error) {
 	var (
-		p                core.Project
-		created, updated string
-		retired          sql.NullString
+		p                           core.Project
+		created, updated, isolation string
+		retired                     sql.NullString
 	)
-	if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.ParentSlug, &retired, &p.Favorite, &created, &updated); err != nil {
+	if err := rows.Scan(&p.ID, &p.Slug, &p.Name, &p.Description, &p.ParentSlug, &retired, &p.Favorite, &isolation, &created, &updated); err != nil {
 		return core.Project{}, err
 	}
+	p.Isolation = core.Isolation(isolation)
 	var err error
 	if p.RetiredAt, err = nullTimePtr(retired); err != nil {
 		return core.Project{}, fmt.Errorf("retired_at: %w", err)

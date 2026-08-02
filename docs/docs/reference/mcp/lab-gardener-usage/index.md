@@ -109,7 +109,7 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
 | `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## trial_query {#trial_query}
 
@@ -128,7 +128,7 @@ List pending gardener proposals (merge/consolidate duplicate memories, archive s
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`. |
 
 ## gardener_request {#gardener_request}
 

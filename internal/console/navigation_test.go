@@ -72,6 +72,25 @@ func TestMutationForms_UseInPlaceNavigation(t *testing.T) {
 	}
 }
 
+// The isolation control and its confirm step are pure server-rendered markup:
+// the POST forms ride the shared mutation path (they live inside .main), the
+// confirm step is a page state rather than a JS dialog, and the way out of it is
+// a data-seam-query link that patches the view instead of navigating.
+func TestIsolationControl_StaysOnTheSharedNoReloadPath(t *testing.T) {
+	source, err := templateFS.ReadFile("templates/projectdetail.html")
+	require.NoError(t, err)
+	page := string(source)
+
+	require.Contains(t, page, `<form class="iso-form" method="post" action="/console/projects/{{.Slug}}/isolation">`)
+	require.Contains(t, page, `{{define "isolation-confirm"}}`)
+	require.Contains(t, page, `<a class="btn small" href="{{.Cancel}}" data-seam-query>Cancel</a>`)
+	require.Contains(t, page, `<a class="btn small" href="{{.Cancel}}" data-seam-query>Back</a>`)
+	for _, banned := range []string{"confirm(", "alert(", "<dialog"} {
+		require.NotContains(t, page, banned,
+			"the tighten confirmation is server-rendered, not a JS dialog")
+	}
+}
+
 func TestDataRefreshClients_NeverReloadDocument(t *testing.T) {
 	layout, err := templateFS.ReadFile("templates/layout.html")
 	require.NoError(t, err)

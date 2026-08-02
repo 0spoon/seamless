@@ -13,7 +13,13 @@ import (
 // modest RRF-style score by discovery order, so a linked neighbor competes as if
 // it were another source's low-ranked hit -- surfaced, but below genuine matches.
 // It is a no-op without a body reader (index rows carry no body to scan).
-func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[string]*fusedItem, mems map[string]core.Memory, project string) ([]string, error) {
+//
+// globalVisible carries the caller's isolation fence: a sealed project may not
+// read the global scope, so neither its already-fused hits nor a [[name]] that
+// resolves only globally may enter through here. Link expansion is the one
+// path that resolves a name the candidate queries never saw, so it has to
+// carry the fence itself rather than inherit it.
+func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[string]*fusedItem, mems map[string]core.Memory, project string, globalVisible bool) ([]string, error) {
 	if s.bodyReader == nil {
 		return nil, nil
 	}
@@ -28,7 +34,7 @@ func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[str
 			continue
 		}
 		m, ok := mems[id]
-		if !ok || !m.Active() || !scopeVisible(m.Project, project) {
+		if !ok || !m.Active() || !scopeVisible(m.Project, project, globalVisible) {
 			continue
 		}
 		examined++
@@ -39,7 +45,7 @@ func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[str
 			continue
 		}
 		for _, name := range core.WikiLinks(full.Body) {
-			nb, ok, err := s.resolveLinkedMemory(ctx, project, name)
+			nb, ok, err := s.resolveLinkedMemory(ctx, project, name, globalVisible)
 			if err != nil {
 				// Link expansion is a bonus over results already fused from FTS
 				// and cosine, and a failed neighbor lookup does not make those
@@ -67,14 +73,15 @@ func (s *Service) expandLinks(ctx context.Context, ordered []string, acc map[str
 }
 
 // resolveLinkedMemory resolves a [[name]] reference to an active memory in the
-// project scope, falling back to a global memory of the same name. found is false
-// when nothing matches (a dangling link is simply ignored).
-func (s *Service) resolveLinkedMemory(ctx context.Context, project, name string) (core.Memory, bool, error) {
+// project scope, falling back to a global memory of the same name when the
+// scope may read global at all (globalVisible; a sealed project may not).
+// found is false when nothing matches (a dangling link is simply ignored).
+func (s *Service) resolveLinkedMemory(ctx context.Context, project, name string, globalVisible bool) (core.Memory, bool, error) {
 	m, ok, err := store.MemoryByName(ctx, s.db, project, name)
 	if err != nil || ok {
 		return m, ok, err
 	}
-	if project != "" {
+	if project != "" && globalVisible {
 		return store.MemoryByName(ctx, s.db, "", name)
 	}
 	return core.Memory{}, false, nil

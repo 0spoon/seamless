@@ -28,7 +28,9 @@ func (s *Server) handleLabOpen(ctx context.Context, req mcp.CallToolRequest) (*m
 		return errResult("lab_open", errors.New("lab is required"))
 	}
 	s.setBindingLab(ctx, lab)
-	trials, err := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{Lab: lab, Limit: trialContextLimit})
+	// A lab's history crosses projects by design, so it carries the same leak
+	// trial_query does and takes the same fence.
+	trials, err := s.trialsForCaller(ctx, store.TrialFilter{Lab: lab, Limit: trialContextLimit})
 	if err != nil {
 		return errResult("lab_open", err)
 	}
@@ -106,13 +108,14 @@ func (s *Server) handleTrialQuery(ctx context.Context, req mcp.CallToolRequest) 
 	if lab == "" {
 		lab = s.boundLab(ctx)
 	}
-	filter := store.TrialFilter{
+	// Trials were the one read that never saw a project at all: the query is by
+	// lab, so an isolated project's trials answered any agent's question.
+	trials, err := s.trialsForCaller(ctx, store.TrialFilter{
 		Lab:           lab,
 		Outcome:       argString(req, "outcome"),
 		Limit:         argInt(req, "limit", store.DefaultTrialQueryLimit),
 		MetricsEquals: argObject(req, "metrics_filter"),
-	}
-	trials, err := store.QueryTrials(ctx, s.cfg.DB, filter)
+	})
 	if err != nil {
 		return errResult("trial_query", err)
 	}

@@ -39,6 +39,21 @@ type reprojectView struct {
 	Rationale string `json:"rationale,omitempty"`
 }
 
+// relocateView is the relocate-specific projection: a GLOBAL memory pulled back
+// inside the project whose sessions wrote it, after that project tightened its
+// isolation. The move is a reproject's; the evidence is provenance, which is why
+// it renders on its own terms -- Session names the stamp that traced it, and
+// Isolation the fence it escaped.
+type relocateView struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind,omitempty"`
+	Description string `json:"description,omitempty"`
+	To          string `json:"to"`
+	Session     string `json:"session,omitempty"`
+	Isolation   string `json:"isolation,omitempty"`
+}
+
 // rekindView is the rekind-specific projection of a proposal card: a memory
 // reclassified from one kind to another, in place.
 type rekindView struct {
@@ -102,6 +117,9 @@ type proposalCard struct {
 	// Reproject (move a memory across projects) and Split (set up a project split).
 	Reproject *reprojectView `json:"reproject,omitempty"`
 	Split     *splitView     `json:"split,omitempty"`
+
+	// Relocate (pull a leaked global memory back inside a newly fenced project).
+	Relocate *relocateView `json:"relocate,omitempty"`
 
 	// Rekind (reclassify a memory's kind in place).
 	Rekind *rekindView `json:"rekind,omitempty"`
@@ -175,6 +193,7 @@ var sectionOfKind = map[string]string{
 	store.ProposalArchive:      "cleanup",
 	store.ProposalRekind:       "cleanup",
 	store.ProposalReproject:    "cleanup",
+	store.ProposalRelocate:     "cleanup",
 	store.ProposalAbandonPlan:  "plans",
 	store.ProposalShipPlan:     "plans",
 	store.ProposalDigest:       "digests",
@@ -710,6 +729,11 @@ func rowSummary(kind string, c proposalCard) (title, detail string) {
 				c.Reproject.Name, projectLabel(c.Reproject.From), projectLabel(c.Reproject.To))
 		}
 		return "Move memory", ""
+	case store.ProposalRelocate:
+		if c.Relocate != nil {
+			return "Relocate leaked memory", fmt.Sprintf("%s: global → %s", c.Relocate.Name, c.Relocate.To)
+		}
+		return "Relocate leaked memory", ""
 	case store.ProposalRekind:
 		if c.Rekind != nil {
 			return "Reclassify memory", fmt.Sprintf("%s: %s → %s", c.Rekind.Name, c.Rekind.From, c.Rekind.To)
@@ -853,6 +877,14 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			From: payloadStr(p.Payload, "from"), To: payloadStr(p.Payload, "to"),
 			Rationale: payloadStr(p.Payload, "rationale"),
 		}
+	case store.ProposalRelocate:
+		c.Relocate = &relocateView{
+			ID: payloadStr(p.Payload, "id"), Name: payloadStr(p.Payload, "name"),
+			Kind: payloadStr(p.Payload, "kind"), Description: payloadStr(p.Payload, "description"),
+			To:      payloadStr(p.Payload, "to"),
+			Session: payloadStr(p.Payload, "session"), Isolation: payloadStr(p.Payload, "isolation"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalRekind:
 		c.Rekind = &rekindView{
 			ID: payloadStr(p.Payload, "id"), Name: payloadStr(p.Payload, "name"),
@@ -938,6 +970,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Consolidate into one memory", "Synthesis", "database", "brand"
 	case store.ProposalReproject:
 		return "Move a memory", "Scope correction", "folder-tree", "pop"
+	case store.ProposalRelocate:
+		return "Relocate a memory behind the fence", "Isolation repair", "lock", "warn"
 	case store.ProposalRekind:
 		return "Reclassify a memory", "Kind correction", "arrow-up-down", "pop"
 	case store.ProposalSplit:

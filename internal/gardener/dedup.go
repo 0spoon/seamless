@@ -11,6 +11,9 @@ import (
 // dedup threshold. The newer memory (by updated_at) is suggested as the one to
 // keep; the older as the one to drop. It is a no-op without an embedder (no
 // vectors to compare). O(n^2) is fine at this corpus scale (hundreds of items).
+//
+// The pass runs unbound, so it pairs as the global scope: a pair spanning an
+// isolated project is skipped and never becomes a proposal (scopeGate).
 func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (int, error) {
 	if s.embedder == nil {
 		return 0, nil
@@ -19,6 +22,7 @@ func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (
 	if err != nil {
 		return 0, err
 	}
+	gate := newScopeGate(s.db, "")
 	created := 0
 	for i := range vecs {
 		for j := i + 1; j < len(vecs); j++ {
@@ -29,6 +33,13 @@ func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (
 			score := store.Cosine(a.Vec, b.Vec)
 			if score < s.cfg.DedupThreshold {
 				continue
+			}
+			ok, err := gate.pairable(ctx, a.Project, b.Project)
+			if err != nil {
+				return created, err
+			}
+			if !ok {
+				continue // the pair spans an isolated project's fence
 			}
 			key := mergeKey(a.ID, b.ID)
 			if _, dup := seen[key]; dup {

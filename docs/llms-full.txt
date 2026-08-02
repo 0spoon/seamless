@@ -2544,6 +2544,167 @@ The symptom is almost always "the agent wrote it somewhere I can't find it" or
 
 ---
 
+# Project isolation
+
+URL: https://thereisnospoon.org/docs/concepts/project-isolation/
+
+
+By default, projects are cooperative rather than isolated. Any agent can read or
+write any project by passing `project`, global memories reach every briefing, and
+family surfaces deliberately carry knowledge between related projects. That is
+the right default for one person's interlocking work.
+
+It is the wrong default for a client project, private research, or anything you
+need to keep out of the agents serving your other work. **Isolation** is the
+per-project setting that draws a real boundary.
+
+## The three states
+
+Isolation is **directional**. The two fenced states solve different problems and
+should not be conflated.
+
+| State | Nothing leaves | Nothing enters |
+|---|---|---|
+| `open` (default) | no | no |
+| `confidential` | **yes** | no |
+| `sealed` | **yes** | **yes** |
+
+**`open`** shares normally. Global knowledge flows in; family surfaces may
+include it.
+
+**`confidential` - nothing leaves.** Sessions bound elsewhere can never read this
+project: not by explicit `project=`, not by ULID, not through trials, not through
+recall. It is excluded from family surfaces and from the gardener's cross-project
+passes. Critically, sessions bound *to* it cannot write *outside* it - not to
+another slug, and not to `project: global`, because an agent-initiated global
+write is a leak too.
+
+Inbound is deliberately unchanged: its agents still receive your global memories
+and can still read open projects. This is the common case - sensitive work that
+still wants your conventions available inside it.
+
+**`sealed` - nothing in or out.** Confidential plus the inbound fence. Briefing,
+recall, and the prompt matcher scope to the project alone; global memories are
+dropped, there is no family, and there are no cross-project reads in either
+direction. A clean room.
+
+Because a sealed project's world is genuinely smaller, its agents are told so.
+The briefing carries a line stating the mode, on both the main and subagent
+surfaces, so an agent inside understands why a write outside will be refused
+rather than discovering it as an unexplained error.
+
+## The console is exempt
+
+The threat model is **agent-to-agent leakage, not hiding from you.** Console
+search and views still see everything; isolated projects are simply badged with a
+lock pill. Nothing about an isolated project's pages turns scary or
+half-rendered - the pill and the Overview control are the whole story.
+
+## Isolation requires a standalone project
+
+A project cannot be isolated while it is entangled in a family: no family
+membership, no parent, no children.
+
+Tightening therefore **detaches** family membership and the parent link, and the
+confirmation step shows you exactly which. A project **with children refuses to
+tighten** until they are re-parented - Seamless will not silently orphan a scope
+that inherits from it.
+
+This keeps the fence surface small. Rather than threading isolation checks
+through every topology path, the rule guarantees there is no topology to thread.
+The briefing-side exclusions remain anyway, as defense in depth against stale
+data.
+
+## Tightening and loosening
+
+**Tightening is the ceremonious direction**, because it changes what other agents
+can see. It is two-step in the console: choosing confidential or sealed returns a
+confirmation panel stating exactly what will change - the family and parent it
+will detach from, or the children blocking it, plus the promise of the state you
+picked - and applies only when you confirm.
+
+**Loosening is immediate.** It is fully reversible and nothing leaked while the
+fence was up, so there is nothing to confirm.
+
+## Knowledge that already got out
+
+Raising a fence does nothing about what escaped before it existed. The most
+likely leak is **global memories written by this project's own sessions** - they
+were the right call at the time and are now injected into every other project's
+briefing, forever.
+
+So tightening runs a provenance audit: it traces global memories back through
+`source_session` to the sessions that wrote them, and for each one that belonged
+to this project it files a **relocate** proposal in the
+[Gardener inbox](/concepts/gardener/) offering to move it behind the fence.
+
+Two things this deliberately is not. It does not move anything on its own -
+the gardener only ever proposes, and dismissing the proposal is how you say the
+memory really is general knowledge. And it does not run on a timer: once the
+fence is up, the write funnel refuses this project's sessions any write outside
+it, so the leak set is closed at the moment of tightening and never grows.
+
+The confirmation step tells you the count before you commit, and distinguishes a
+proven zero from an unanswered question - if the audit could not run, it says
+nothing rather than reporting "none".
+
+### In the console
+
+The control lives on the project's **Overview** tab: a three-option segmented
+control with each state's promise written under it. The isolation change is
+recorded as an event, so it appears in Recent activity like any other change.
+
+### From the CLI
+
+```bash
+seam project isolation <slug>                    # print the current state and its promise
+seam project isolation <slug> confidential       # print consequences, apply nothing
+seam project isolation <slug> confidential --yes # apply
+seam project isolation <slug> open               # loosen, immediate
+```
+
+Tightening requires `--yes`, which stands in for the console's confirmation step:
+without it the command prints the same consequences and exits having changed
+nothing.
+
+## What agents see
+
+- **`project_list`** reports each project's isolation state, so an agent can
+  discover the boundary rather than guess at it.
+- **`project_create`** accepts `isolation`. There is no tool to change it
+  afterwards: tightening detaches topology and is an owner decision, not an agent
+  one.
+- **Refusals state the rule and the remedy** and never echo the content they are
+  withholding - an error that quoted the memory it was protecting would leak the
+  very thing the fence exists to keep in. They do not hide that the project
+  *exists*, because every scope error already lists the machine's projects.
+
+## Honest limits
+
+This matters more than the feature list, so it is stated plainly.
+
+**What this is.** A policy fence at every Seamless surface - briefings, recall,
+tool reads and writes, the gardener. That is where accidental cross-contamination
+actually happens, and it is now closed.
+
+**What this is not.** It is **not** a defense against a local agent reading
+`~/.seamless/memory/<project>/*.md` directly. Every MCP caller shares one static
+bearer key, and the fence keys off the **self-reported session binding**. An
+agent that does not bind a session is judged as the global scope - which fails
+closed against reading an isolated project, but also means the fence cannot
+recognize it as belonging to one.
+
+**What would make it stronger.** Per-project bearer keys: a confidential project
+gets its own key, the repo's hooks use it, and the shared key cannot touch it.
+That upgrades the fence from policy to an auth boundary at the daemon. It is not
+built.
+
+**The hard boundary today** is a separate Seamless instance - its own data dir,
+port, and key. If your threat model is adversarial rather than accidental, that
+is the honest answer.
+
+---
+
 # The gardener
 
 URL: https://thereisnospoon.org/docs/concepts/gardener/
@@ -2602,7 +2763,7 @@ reach an agent - recurrence here is the one place they surface. Applying its
 proposal opens a repair task rather than pretending the gardener can fix code
 or configuration itself.
 
-Three more proposal types come from requests rather than the timer:
+Four more proposal types come from an action rather than the timer:
 
 - **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
@@ -2614,6 +2775,12 @@ Three more proposal types come from requests rather than the timer:
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
+- **relocate** - filed when a project is tightened to confidential or sealed
+  (see [Project isolation](/concepts/project-isolation/)). Raising a fence does
+  nothing about knowledge that already escaped, so the tighten audits the global
+  scope for memories whose source session belonged to the project and proposes
+  moving each one behind the fence. Dismiss to leave it global. This is the only
+  proposal kind an owner action files rather than a request or the timer.
 
 ## Constraints and stages are exempt from staleness
 
@@ -4742,7 +4909,7 @@ Complete the current session, persisting its findings for future briefings. Uses
 
 ## memory_write {#memory_write}
 
-Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
+Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. The hint is withheld when the target project's content is fenced from you (see the withheld marker on the response) -- the write lands either way. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -4750,7 +4917,7 @@ Create or update a durable memory -- the compact knowledge a future session must
 | `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 | `supersedes` | string | no | name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear |
 
@@ -4871,7 +5038,7 @@ Create a work note -- a research finding, decision record, meeting summary, or a
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `description` | string | no | optional one-line summary |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=&lt;slug&gt; steps. Use it whenever this note is a plan's narrative or supporting context. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 | `source_url` | string | no | optional source URL |
 | `tags` | array | no | tags (a comma-separated string is also accepted) |
 
@@ -4917,7 +5084,7 @@ Delete a note by id: the markdown file leaves the disk and its index row goes wi
 
 ## project_list {#project_list}
 
-List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall.
+List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.
 
 Takes no parameters.
 
@@ -4929,6 +5096,7 @@ Register a project up front, with a human-readable name and an optional descript
 |---|---|---|---|
 | `name` | string | **yes** | human-readable project name |
 | `description` | string | no | optional one-line description |
+| `isolation` | string | no | optional isolation state (open\|confidential\|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: `open`, `confidential`, `sealed`. |
 | `slug` | string | no | optional explicit slug |
 
 ## capture_url {#capture_url}
@@ -4938,7 +5106,7 @@ Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and sav
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `url` | string | **yes** | http(s) URL to capture |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ---
 
@@ -5004,7 +5172,7 @@ Add a task to the dependency-aware ready queue. depends_on lists task ids that m
 | `body` | string | no | optional details / acceptance criteria (aliases: content, text) |
 | `depends_on` | array | no | task ids this task is blocked by (a comma-separated string is also accepted) |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## tasks_update {#tasks_update}
 
@@ -5176,7 +5344,7 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
 | `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## trial_query {#trial_query}
 
@@ -5195,7 +5363,7 @@ List pending gardener proposals (merge/consolidate duplicate memories, archive s
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`. |
 
 ## gardener_request {#gardener_request}
 
@@ -5552,6 +5720,29 @@ and note-slug resolution when the ambient scope is not the right one.
 Favorites sort first in the console, can be filtered there, and starred
 memories are pinned into every session briefing and rank-boosted in recall. A
 plan's star lives on its primary note, so a task-only plan cannot be starred.
+
+### seam project isolation {#seam_project_isolation}
+
+```bash
+seam project isolation [--yes] <slug> [<state>]
+```
+
+Shows or sets a project's [isolation](/concepts/project-isolation/) state.
+`state` is one of `open`, `confidential`, or `sealed`; omit it to print the
+current state and its promise line. Unlike most subcommands this one talks to
+the console's JSON endpoint rather than an MCP tool - there is deliberately no
+tool to change isolation, because tightening detaches family and parent links
+and is an owner decision.
+
+**Tightening requires `--yes`.** Without it, the command prints exactly the
+consequences the console's confirm panel shows - the family and parent it would
+detach from - applies nothing, and exits non-zero, so a script cannot mistake an
+unconfirmed tighten for a fence that went up. **Loosening is immediate** and
+ignores `--yes`.
+
+A project with children refuses to tighten until they are re-parented; the
+refusal names them. Promise text is echoed from the server rather than
+transcribed here, so the console and the CLI cannot drift apart.
 
 ### seam usage {#seam_usage}
 

@@ -445,6 +445,10 @@ type projectDetail struct {
 	Notes       int       `json:"notes"`
 	Created     time.Time `json:"created"`
 	Updated     time.Time `json:"updated"`
+	// The agent-facing fence, so the CLI's read path (`seam project isolation
+	// <slug>` with no state) can print the state and its promise without a POST.
+	Isolation        core.Isolation `json:"isolation"`
+	IsolationPromise string         `json:"isolationPromise"`
 }
 
 // The project detail handler (dispatcher + tabbed workspace) lives in

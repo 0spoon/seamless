@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 func TestPath(t *testing.T) {
@@ -167,5 +169,24 @@ func TestProject(t *testing.T) {
 	for _, bad := range []string{"all", "../notes", "a/b", "team:alpha", "team-alpha."} {
 		_, err := Project(bad)
 		require.Error(t, err)
+	}
+}
+
+func TestIsolation(t *testing.T) {
+	for _, state := range core.Isolations {
+		got, err := Isolation(string(state))
+		require.NoError(t, err)
+		require.Equal(t, state, got)
+	}
+	got, err := Isolation("  sealed  ")
+	require.NoError(t, err)
+	require.Equal(t, core.IsolationSealed, got)
+
+	// Present-but-uninterpretable is an error, never a default -- and the
+	// message names the accepted values.
+	for _, bad := range []string{"", "Open", "hidden", "confidental"} {
+		_, err := Isolation(bad)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "valid values are open, confidential, sealed")
 	}
 }

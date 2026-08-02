@@ -89,7 +89,12 @@ func (s *Service) invertApply(ctx context.Context, p store.Proposal, now time.Ti
 		return s.undoMerge(ctx, p, now)
 	case store.ProposalDigest:
 		return s.undoDigest(ctx, p)
-	case store.ProposalReproject:
+	case store.ProposalReproject, store.ProposalRelocate:
+		// A relocate is a move like any other, so its inverse is the same move
+		// back. It deliberately does NOT join consolidate/split in the
+		// never-undoable set: the apply created nothing, it only changed one
+		// memory's project, and an owner who tightened a fence must be able to
+		// take back a repair they no longer want.
 		return s.undoReproject(ctx, p, now)
 	case store.ProposalRekind:
 		return s.undoRekind(ctx, p, now)

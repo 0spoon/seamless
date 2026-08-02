@@ -59,7 +59,7 @@ Add a task to the dependency-aware ready queue. depends_on lists task ids that m
 | `body` | string | no | optional details / acceptance criteria (aliases: content, text) |
 | `depends_on` | array | no | task ids this task is blocked by (a comma-separated string is also accepted) |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## tasks_update {#tasks_update}
 

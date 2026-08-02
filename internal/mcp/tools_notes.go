@@ -95,6 +95,12 @@ func (s *Server) handleNotesRead(ctx context.Context, req mcp.CallToolRequest) (
 			return errResult("notes_read", errors.New("id or slug is required (notes_read reads one note by ULID or exact slug; to search text use recall)"))
 		}
 		note, err = s.loadNote(ctx, id)
+		if err == nil {
+			// The by-id path resolves no scope -- a note id is globally unique --
+			// so the fence is applied after the load, on the project the loaded
+			// note names. Nothing of it reaches the caller before that answer.
+			err = s.fenceRead(ctx, note.Project)
+		}
 	}
 	if err != nil {
 		return errResult("notes_read", err)
@@ -127,6 +133,12 @@ func notesUpdateTool() mcp.Tool {
 func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	note, err := s.loadNote(ctx, argString(req, "id"))
 	if err != nil {
+		return errResult("notes_update", err)
+	}
+	// A note id is globally unique, so nothing here resolved a write scope: the
+	// fence is applied post-load, on the project the loaded note names. Without
+	// it any caller holding a ULID edits a sealed project's note.
+	if err := s.fenceWrite(ctx, note.Project); err != nil {
 		return errResult("notes_update", err)
 	}
 	oldProject := note.Project
@@ -174,6 +186,18 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 	// Refuse when a different note already owns the target path (the UNIQUE
 	// file_path index would reject it after the file was already clobbered).
 	if note.Project != oldProject {
+		// A move is a read of the old project plus a write into the new one, so it
+		// needs both answers rather than the edit fence alone. That is what keeps
+		// the inbound asymmetry from becoming an exit: an outside caller may edit a
+		// confidential note in place (inbound is deliberately open), but carrying
+		// it out of the fence is precisely the outbound leak confidential exists to
+		// stop.
+		if err := s.fenceRead(ctx, oldProject); err != nil {
+			return errResult("notes_update", err)
+		}
+		if err := s.fenceWrite(ctx, note.Project); err != nil {
+			return errResult("notes_update", err)
+		}
 		if other, ok, oerr := store.NoteBySlug(ctx, s.cfg.DB, note.Project, note.Slug); oerr != nil {
 			return errResult("notes_update", oerr)
 		} else if ok && other.ID != note.ID {
@@ -193,7 +217,13 @@ func (s *Server) handleNotesUpdate(ctx context.Context, req mcp.CallToolRequest)
 			return errResult("notes_update", err)
 		}
 	}
-	return jsonResult(map[string]any{"id": written.ID, "title": written.Title})
+	// A permitted write into a confidential project must not answer with that
+	// project's text. The title leaks less than a task body does, but it is the
+	// same shape: an outside caller holding a ULID reading authored content
+	// through an edit it is entitled to make. Judged against the project the note
+	// now sits in, so a move INTO the fence lands under it immediately.
+	return jsonResult(s.withholdContent(ctx,
+		note.Project, map[string]any{"id": written.ID, "title": written.Title}, noteContentFields))
 }
 
 func notesAppendTool() mcp.Tool {
@@ -213,6 +243,12 @@ func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return errResult("notes_append", err)
 	}
+	// loadNote is shared with the read path, so the fence lives here rather than
+	// inside it: reads and writes cross the fence on different terms, and one
+	// check in the loader could only encode one of them.
+	if err := s.fenceWrite(ctx, note.Project); err != nil {
+		return errResult("notes_append", err)
+	}
 	stamp := time.Now().UTC().Format("2006-01-02 15:04")
 	note.Body = strings.TrimRight(note.Body, "\n") + "\n\n" + stamp + " -- " + text + "\n"
 	note.Updated = time.Now().UTC()
@@ -220,7 +256,10 @@ func (s *Server) handleNotesAppend(ctx context.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return errResult("notes_append", err)
 	}
-	return jsonResult(map[string]any{"id": written.ID, "title": written.Title})
+	// The title is the note's, not the caller's: an append that echoed it back
+	// would be notes_read by another name for anyone outside the fence.
+	return jsonResult(s.withholdContent(ctx,
+		note.Project, map[string]any{"id": written.ID, "title": written.Title}, noteContentFields))
 }
 
 func notesDeleteTool() mcp.Tool {
@@ -242,11 +281,22 @@ func (s *Server) handleNotesDelete(ctx context.Context, req mcp.CallToolRequest)
 	if !ok {
 		return errResult("notes_delete", fmt.Errorf("no note with id %q", id))
 	}
+	// The most consequential of the three: a delete leaves no pointer behind, so
+	// an unfenced by-id path let an outside caller destroy a sealed project's note.
+	if err := s.fenceWrite(ctx, idx.Project); err != nil {
+		return errResult("notes_delete", err)
+	}
 	if err := s.cfg.Files.Remove(ctx, idx.FilePath); err != nil {
 		return errResult("notes_delete", err)
 	}
 	return jsonResult(map[string]any{"status": "deleted", "id": id})
 }
+
+// noteContentFields is the authored text notes_update and notes_append answer
+// with, and therefore what withholdContent removes for a caller that may write
+// the note's project but not read it. Only the id survives -- it is the caller's
+// own handle, and without it the caller could not act on what it just wrote.
+var noteContentFields = []string{"title"}
 
 // loadNote resolves a note id to its full on-disk content.
 func (s *Server) loadNote(ctx context.Context, id string) (core.Note, error) {
@@ -278,13 +328,28 @@ func (s *Server) loadNoteBySlug(ctx context.Context, req mcp.CallToolRequest, sl
 		return core.Note{}, err
 	}
 	if !ok && project != "" {
-		idx, ok, err = store.NoteBySlug(ctx, s.cfg.DB, "", slug)
-		if err != nil {
-			return core.Note{}, err
+		// The fallback resolves no scope of its own, so a sealed session would
+		// otherwise read a global note its fence had removed from its world.
+		global, gerr := s.canReadGlobal(ctx)
+		if gerr != nil {
+			return core.Note{}, gerr
+		}
+		if global {
+			idx, ok, err = store.NoteBySlug(ctx, s.cfg.DB, "", slug)
+			if err != nil {
+				return core.Note{}, err
+			}
 		}
 	}
 	if !ok {
-		return core.Note{}, fmt.Errorf("%w; check the slug, pass project=<slug> or project=global, read by id=<ULID>, or use recall to search by text", scopedNotFound("note", project, slug))
+		return core.Note{}, s.scopedNotFound(ctx, "note", project, slug, noteReadMissHelp, noteReadMissHelpSealed)
 	}
 	return s.cfg.Files.Store().ReadNote(idx.FilePath)
 }
+
+// The by-name miss tails for notes_read, paired like the memory ones: the plain
+// form, and the same advice minus the global scope a sealed session cannot reach.
+const (
+	noteReadMissHelp       = "; check the slug, pass project=<slug> or project=global, read by id=<ULID>, or use recall to search by text"
+	noteReadMissHelpSealed = "; check the slug, read by id=<ULID>, or use recall to search by text"
+)

@@ -626,6 +626,29 @@ func (s *Service) settingsFamilySave(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Isolation requires a standalone project, so a fenced slug may not join a
+	// family. The guard lives here rather than inside SaveProjectFamily on
+	// purpose: gardener.Apply calls AddFamilyMembers during a split, and a new
+	// error out of the store would land in serverError's 500 branch instead of
+	// this flash. The owner's other route into a family -- tightening a project
+	// that is already in one -- is handled by TightenProjectIsolation, which
+	// detaches it as part of the tighten.
+	fenced, err := store.IsolatedSlugs(r.Context(), s.cfg.DB, members)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if len(fenced) > 0 {
+		labels := make([]string, len(fenced))
+		for i, f := range fenced {
+			labels[i] = fmt.Sprintf("%s (%s)", f.Slug, f.State)
+		}
+		settingsRegistryFlash(w, r, fmt.Sprintf(
+			"Isolated projects cannot join a family: %s. Set them back to open first.",
+			strings.Join(labels, ", ")))
+		return
+	}
+
 	_, err = store.SaveProjectFamily(r.Context(), s.cfg.DB, previousName, name, members)
 	switch {
 	case errors.Is(err, store.ErrFamilyExists):

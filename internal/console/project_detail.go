@@ -18,6 +18,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 // projectTabKeys are the workspace tabs in bar order. A ?tab= deep-link outside
@@ -40,6 +41,12 @@ type projectWorkspaceData struct {
 	Favorite    bool
 	ActiveTab   string
 	Tabs        []projectTabVM
+
+	// The agent-facing fence: the title-row pill, the Overview control, and the
+	// pending confirm panel a ?isolate= tighten renders (nil the rest of the time).
+	Isolation        core.Isolation
+	IsolationOptions []isolationOptionVM
+	IsolationConfirm *isolationConfirmVM
 
 	Metrics   projectMetrics
 	Trend     []store.TrendBucket // this project's injection trend (its own memories)
@@ -135,6 +142,7 @@ func (s *Service) projectSummary(w http.ResponseWriter, r *http.Request, p core.
 		Memories: counts.Memories, Sessions: counts.Sessions,
 		OpenTasks: counts.OpenTasks, Notes: counts.Notes,
 		Created: p.CreatedAt, Updated: p.UpdatedAt,
+		Isolation: isolationOf(p), IsolationPromise: isolationPromise(isolationOf(p)),
 	}
 	s.renderDetail(w, r, "project", pageData{Title: "Project " + p.Slug, Active: "projects", Data: d})
 }
@@ -163,6 +171,21 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 			tab, strings.Join(projectTabKeys, ", ")))
 		return
 	}
+	// The pending-tighten page state. Strict like ?tab=: a value outside the
+	// isolation enum is a 400, never a silently dropped panel.
+	var pending core.Isolation
+	if values, ok := query["isolate"]; ok {
+		if len(values) != 1 {
+			s.badRequest(w, r, "parameter \"isolate\" must be provided exactly once")
+			return
+		}
+		state, err := validate.Isolation(values[0])
+		if err != nil {
+			s.badRequest(w, r, err.Error())
+			return
+		}
+		pending = state
+	}
 	now := time.Now().UTC()
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 
@@ -170,6 +193,15 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		Slug: slug, Name: p.Name, Description: p.Description,
 		Parent: p.ParentSlug, Retired: p.Retired(), Favorite: p.Favorite, ActiveTab: tab,
 		IsRoot: p.ParentSlug == "", TrendWin: win.Label,
+		Isolation: isolationOf(p), IsolationOptions: isolationOptions(isolationOf(p)),
+	}
+	if pending != "" {
+		confirm, err := s.isolationPendingConfirm(ctx, slug, pending)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		data.IsolationConfirm = confirm
 	}
 	if data.Name == "" {
 		data.Name = slug

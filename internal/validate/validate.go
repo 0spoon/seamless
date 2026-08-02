@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 var (
@@ -159,6 +161,22 @@ func Project(explicit string) (string, error) {
 		return "", fmt.Errorf("invalid project %q: %w", explicit, err)
 	}
 	return explicit, nil
+}
+
+// Isolation validates a project isolation state at an input boundary. The
+// accepted values derive from core.Isolations (never hand-transcribed). The
+// empty string is rejected: absence is the caller's decision (default open); a
+// present-but-empty value is not interpretable.
+func Isolation(s string) (core.Isolation, error) {
+	iso := core.Isolation(strings.TrimSpace(s))
+	if !iso.Valid() {
+		names := make([]string, len(core.Isolations))
+		for i, v := range core.Isolations {
+			names[i] = string(v)
+		}
+		return "", fmt.Errorf("invalid isolation %q: valid values are %s", s, strings.Join(names, ", "))
+	}
+	return iso, nil
 }
 
 // windowsReservedNames are the legacy DOS device names. Windows resolves them

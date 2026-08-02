@@ -36,6 +36,7 @@ type projectRowVM struct {
 	Retired      bool
 	Favorite     bool
 	Unregistered bool
+	Isolation    core.Isolation // agent-facing fence; drives the row's lock pill
 	TileClass    string
 	TileIcon     string
 	Working      int // live (active) sessions
@@ -324,6 +325,7 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		Retired:      p.Retired(),
 		Favorite:     p.Favorite,
 		Unregistered: b.Unregistered,
+		Isolation:    isolationOf(p),
 		Working:      b.LiveSessions,
 		Sessions:     b.Sessions,
 		OpenTasks:    b.OpenTasks,

@@ -88,6 +88,16 @@ type RequestScope struct {
 	AllProjects bool
 }
 
+// callerScope is the project scope an interpretation reads and writes as, for
+// the isolation fences. A whole-machine pass is unbound, so it runs as the
+// global scope: it sees everything except what a fenced project keeps to itself.
+func (sc RequestScope) callerScope() string {
+	if sc.AllProjects {
+		return ""
+	}
+	return sc.Project
+}
+
 // Request interprets a single natural-language maintenance request against the
 // active memories in scope and creates PENDING proposals for review. It never
 // mutates a memory.
@@ -116,11 +126,22 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
 	}
-	known := knownProjects(projects, candidates)
+	// Isolation fence on the move destinations: the prompt's project list and the
+	// reproject targets are what this pass may write INTO, so they go through the
+	// write side of the matrix -- a sealed project admits nothing from outside,
+	// and a pass running as a fenced project writes nowhere but itself.
+	// routeSplit below keeps the unfiltered set on purpose: a fenced slug is
+	// still a real project, and Split refuses it by name rather than pretending
+	// it does not exist.
+	targets, err := s.writableProjects(ctx, scope, projects)
+	if err != nil {
+		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
+	}
+	known := knownProjects(targets, candidates)
 
 	cctx, cancel := context.WithTimeout(ctx, requestTimeout)
 	defer cancel()
-	out, err := s.chat.Complete(cctx, requestSystemPrompt, requestUserPrompt(text, candidates, projects))
+	out, err := s.chat.Complete(cctx, requestSystemPrompt, requestUserPrompt(text, candidates, targets))
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
 	}
@@ -134,7 +155,7 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 	// whole-project classification and a known source, so the general request
 	// never plans it inline. It recognizes the intent and routes to gardener_split.
 	if plan.Split != nil {
-		return s.routeSplit(ctx, text, plan.Split, known), nil
+		return s.routeSplit(ctx, text, plan.Split, knownProjects(projects, candidates)), nil
 	}
 
 	// Seed the dedup set from every existing proposal key (any status) so a
@@ -237,10 +258,44 @@ func (s *Service) requestCandidates(ctx context.Context, scope RequestScope) ([]
 	if err != nil {
 		return nil, err
 	}
-	if len(mems) > maxRequestCandidates {
-		mems = mems[:maxRequestCandidates]
+	// Isolation fence on the scan: keep only what this pass's scope may read. A
+	// whole-machine pass runs unbound, so every fenced project drops out of it;
+	// a pass scoped to a sealed project drops the globals ActiveMemories folds
+	// in. Filtering before the cap stops fenced memories from eating the
+	// candidate budget.
+	gate := newScopeGate(s.db, scope.callerScope())
+	kept := make([]core.Memory, 0, len(mems))
+	for _, m := range mems {
+		ok, err := gate.readable(ctx, m.Project)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			kept = append(kept, m)
+		}
 	}
-	return mems, nil
+	if len(kept) > maxRequestCandidates {
+		kept = kept[:maxRequestCandidates]
+	}
+	return kept, nil
+}
+
+// writableProjects narrows the registered projects to the ones this request may
+// propose moving a memory into. It is the destination half of the isolation
+// fence (requestCandidates is the source half).
+func (s *Service) writableProjects(ctx context.Context, scope RequestScope, projects []core.Project) ([]core.Project, error) {
+	gate := newScopeGate(s.db, scope.callerScope())
+	out := make([]core.Project, 0, len(projects))
+	for _, p := range projects {
+		ok, err := gate.writable(ctx, p.Slug)
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			out = append(out, p)
+		}
+	}
+	return out, nil
 }
 
 // requestKindList renders core.MemoryKinds for the interpreter prompt, so the

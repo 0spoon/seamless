@@ -55,6 +55,9 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 			perr = fmt.Errorf("no project with slug %q", id)
 		}
 		if perr == nil {
+			perr = s.fenceWrite(ctx, id)
+		}
+		if perr == nil {
 			perr = store.SetProjectFavorite(ctx, s.cfg.DB, id, fav)
 		}
 		project, itemID, err = id, id, perr
@@ -62,6 +65,9 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 		// No claim-lock check: a star is metadata, not a content mutation, so
 		// starring a task another session holds is safe and allowed.
 		t, terr := store.TaskByID(ctx, s.cfg.DB, id)
+		if terr == nil {
+			terr = s.fenceWrite(ctx, t.ProjectSlug)
+		}
 		if terr == nil {
 			terr = store.SetTaskFavorite(ctx, s.cfg.DB, id, fav)
 		}
@@ -75,6 +81,9 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 			serr = fmt.Errorf("no session with id or name %q", id)
 		}
 		if serr == nil {
+			serr = s.fenceWrite(ctx, sess.ProjectSlug)
+		}
+		if serr == nil {
 			serr = store.SetSessionFavorite(ctx, s.cfg.DB, sess.ID, fav)
 		}
 		project, itemID, err = sess.ProjectSlug, sess.ID, serr
@@ -82,6 +91,9 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 		tr, found, terr := store.TrialByID(ctx, s.cfg.DB, id)
 		if terr == nil && !found {
 			terr = fmt.Errorf("no trial with id %q", id)
+		}
+		if terr == nil {
+			terr = s.fenceWrite(ctx, tr.ProjectSlug)
 		}
 		if terr == nil {
 			terr = store.SetTrialFavorite(ctx, s.cfg.DB, id, fav)
@@ -103,6 +115,11 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 // like memory_read) and rewrites its file with the flag flipped. The full file
 // is read first -- index rows carry no body, so writing from one would truncate
 // the memory. Updated is deliberately not bumped: a star is not authorship.
+//
+// A star is still a durable write, and one with reach: a starred memory pins
+// into its project's briefings and boosts in recall. So the resolved memory's
+// own project goes through the write fence, and the global fallback goes through
+// the read fence inside resolveMemory.
 func (s *Server) setMemoryFavorite(ctx context.Context, req mcp.CallToolRequest, id string, fav bool) (project, itemID string, err error) {
 	name, err := memoryName(id)
 	if err != nil {
@@ -117,7 +134,10 @@ func (s *Server) setMemoryFavorite(ctx context.Context, req mcp.CallToolRequest,
 		return "", "", err
 	}
 	if !found {
-		return "", "", scopedNotFound("memory", scope, name)
+		return "", "", s.scopedNotFound(ctx, "memory", scope, name, "", "")
+	}
+	if err := s.fenceWrite(ctx, idx.Project); err != nil {
+		return "", "", err
 	}
 	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
 	if err != nil {
@@ -159,15 +179,23 @@ func (s *Server) setNoteFavorite(ctx context.Context, req mcp.CallToolRequest, k
 			}
 			idx, found, err = store.NoteBySlug(ctx, s.cfg.DB, scope, id)
 			if err == nil && !found && scope != "" {
-				idx, found, err = store.NoteBySlug(ctx, s.cfg.DB, "", id)
+				// Fenced like every other by-name global fallback: a sealed session
+				// must not reach a global note it cannot otherwise read.
+				var global bool
+				if global, err = s.canReadGlobal(ctx); err == nil && global {
+					idx, found, err = store.NoteBySlug(ctx, s.cfg.DB, "", id)
+				}
 			}
 			if err != nil {
 				return "", "", err
 			}
 			if !found {
-				return "", "", scopedNotFound("note", scope, id)
+				return "", "", s.scopedNotFound(ctx, "note", scope, id, "", "")
 			}
 		}
+	}
+	if err := s.fenceWrite(ctx, idx.Project); err != nil {
+		return "", "", err
 	}
 	note, err := s.cfg.Files.Store().ReadNote(idx.FilePath)
 	if err != nil {

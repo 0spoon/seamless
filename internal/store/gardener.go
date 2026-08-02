@@ -30,6 +30,12 @@ const (
 	ProposalToolError    = "tool_error"    // agents keep hitting the same tool-call or hook-stage error
 	ProposalRekind       = "rekind"        // change one memory's kind classification in place
 	ProposalShipPlan     = "ship_plan"     // retag an implemented-but-unapproved captured plan plan-status:shipped
+	// ProposalRelocate moves a GLOBAL memory back inside the project whose
+	// sessions wrote it, after that project tightened its isolation. Its effect
+	// is a reproject's, but the decision is not: the evidence is provenance (a
+	// leak that predates the fence), not scope tidying, so the inbox groups and
+	// explains it on its own terms.
+	ProposalRelocate = "relocate"
 )
 
 // ProposalKinds lists every valid proposal kind. This is the canonical set:
@@ -38,7 +44,7 @@ const (
 var ProposalKinds = []string{
 	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
 	ProposalReproject, ProposalSplit, ProposalAbandonPlan, ProposalMemoryWanted,
-	ProposalToolError, ProposalRekind, ProposalShipPlan,
+	ProposalToolError, ProposalRekind, ProposalShipPlan, ProposalRelocate,
 }
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

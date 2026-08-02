@@ -224,6 +224,21 @@ func (s *Server) handleSessionUpdate(ctx context.Context, req mcp.CallToolReques
 	if !ok {
 		return errResult("session_update", errNoSession)
 	}
+	// Findings are project knowledge, not just caller identity: they persist into
+	// the session's project and its future briefings. So writing them into a
+	// session resolved by an explicit session_id/session -- or inherited from an
+	// ambient the connection never bound to -- is a write into THAT project, and
+	// takes the same fence a note or a task does. Both directions bite: an outside
+	// agent must not inject text into a sealed project's briefings, and an agent
+	// inside a confidential project must not park its findings in another
+	// project's session, which is the project=global leak wearing a session id.
+	// favorite_set kind=session already fences on this same project, and
+	// overwriting a session's findings is strictly more consequential than
+	// starring it. resolveSession's precedence is untouched: the fence judges what
+	// it resolved, it does not resolve anything itself.
+	if err := s.fenceWrite(ctx, sess.ProjectSlug); err != nil {
+		return errResult("session_update", err)
+	}
 	// The resolved session -- possibly an explicit session_id/session naming a
 	// session this connection is not bound to -- is what this call operates on;
 	// attribute its tool.call there, not to the binding/ambient guess.
@@ -257,6 +272,14 @@ func (s *Server) handleSessionEnd(ctx context.Context, req mcp.CallToolRequest) 
 	}
 	if !ok {
 		return errResult("session_end", errNoSession)
+	}
+	// Fenced exactly like session_update, and for more: an end also completes the
+	// session and releases every task claim it holds, so an unfenced one lets a
+	// caller outside a sealed project reach into it and drop another agent's work
+	// back on the queue. The fence runs before the attribution stash so a refused
+	// call is attributed to the caller, not to the session it was refused.
+	if err := s.fenceWrite(ctx, sess.ProjectSlug); err != nil {
+		return errResult("session_end", err)
 	}
 	// Stash before completing: once the session flips to completed and its
 	// bindings are evicted, neither the binding nor the active-only ambient

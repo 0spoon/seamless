@@ -120,6 +120,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../../concepts/projects/">Projects &amp; scope</a></li>
         
+        <li><a href="../../../concepts/project-isolation/">Project isolation</a></li>
+        
         <li><a href="../../../concepts/gardener/">The gardener</a></li>
         
         <li><a href="../../../concepts/memory-supersession/">Memory supersession</a></li>
@@ -417,7 +419,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 <td><code>project</code></td>
 <td>string</td>
 <td>no</td>
-<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous.</td>
+<td>project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project.</td>
 </tr>
 </tbody>
 </table>
@@ -479,7 +481,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 <td><code>kind</code></td>
 <td>string</td>
 <td>no</td>
-<td>filter by proposal kind (default: all pending). One of: <code>merge</code>, <code>archive</code>, <code>digest</code>, <code>consolidate</code>, <code>reproject</code>, <code>split</code>, <code>abandon_plan</code>, <code>memory_wanted</code>, <code>tool_error</code>, <code>rekind</code>, <code>ship_plan</code>.</td>
+<td>filter by proposal kind (default: all pending). One of: <code>merge</code>, <code>archive</code>, <code>digest</code>, <code>consolidate</code>, <code>reproject</code>, <code>split</code>, <code>abandon_plan</code>, <code>memory_wanted</code>, <code>tool_error</code>, <code>rekind</code>, <code>ship_plan</code>, <code>relocate</code>.</td>
 </tr>
 </tbody>
 </table>

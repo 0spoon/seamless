@@ -56,7 +56,7 @@ reach an agent - recurrence here is the one place they surface. Applying its
 proposal opens a repair task rather than pretending the gardener can fix code
 or configuration itself.
 
-Three more proposal types come from requests rather than the timer:
+Four more proposal types come from an action rather than the timer:
 
 - **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
@@ -68,6 +68,12 @@ Three more proposal types come from requests rather than the timer:
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
+- **relocate** - filed when a project is tightened to confidential or sealed
+  (see [Project isolation](/concepts/project-isolation/)). Raising a fence does
+  nothing about knowledge that already escaped, so the tighten audits the global
+  scope for memories whose source session belonged to the project and proposes
+  moving each one behind the fence. Dismiss to leave it global. This is the only
+  proposal kind an owner action files rather than a request or the timer.
 
 ## Constraints and stages are exempt from staleness
 

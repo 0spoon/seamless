@@ -46,6 +46,14 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
+	// Isolation is resolved once per briefing, for the header line that tells the
+	// agent which world it is in. The narrowing itself is not decided here: the
+	// scope query (scopedActiveMemories) and every family surface (familyPeers)
+	// each ask store.CanRead for themselves.
+	iso, err := store.IsolationOf(ctx, s.db, project)
+	if err != nil {
+		return "", nil, err
+	}
 	// A child project (one with a parent) sees its shared parent's active memories
 	// in-briefing too, so cross-platform knowledge kept in the parent surfaces in
 	// each child without being duplicated (see the arctop-app split).
@@ -53,7 +61,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 	if err != nil {
 		return "", nil, err
 	}
-	mems, err := store.ActiveMemoriesForScope(ctx, s.db, project, extra)
+	mems, err := s.scopedActiveMemories(ctx, project, extra)
 	if err != nil {
 		return "", nil, err
 	}
@@ -101,7 +109,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		if len(constraints) > 0 {
 			relevant = s.subagentRelevant(ctx, project, in.Prompt, constraints)
 		}
-		text, ids := s.assembleSubagent(project, constraints, relevant, cfg)
+		text, ids := s.assembleSubagent(project, iso, constraints, relevant, cfg)
 		return text, ids, nil
 	}
 
@@ -173,7 +181,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		index: index, indexOmitted: omitted,
 		findings: findings, ready: ready, siblings: siblings,
 		siblingMems: siblingMems, stages: stages, plans: rollups,
-		pendingPlans: pending,
+		pendingPlans: pending, isolation: iso,
 	}, cfg)
 	return text, ids, nil
 }
@@ -498,18 +506,26 @@ func (s *Service) familyMemoryScope(ctx context.Context, project string, include
 	if err != nil || !ok || p.ParentSlug == "" {
 		return nil, err
 	}
-	return []string{p.ParentSlug}, nil
+	// The isolation fence applies to the parent link like every other family
+	// surface: an isolated project neither folds a parent's memories into its
+	// own scope nor lends its own to one.
+	return s.familyPeers(ctx, project, []string{p.ParentSlug})
 }
 
 // siblingFindings gathers up to limit recent findings from a project's family
 // members (see store.SiblingProjects/SiblingFindings), for the briefing's
 // "Sibling projects" section. It is a no-op for the global scope, a project
-// with no configured family, or limit 0 (the section disabled).
+// with no configured family, limit 0 (the section disabled), or a family the
+// isolation fence empties (familyPeers).
 func (s *Service) siblingFindings(ctx context.Context, project string, limit int) ([]core.Session, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	siblings, err := store.SiblingProjects(ctx, s.db, project)
+	if err != nil || len(siblings) == 0 {
+		return nil, err
+	}
+	siblings, err = s.familyPeers(ctx, project, siblings)
 	if err != nil || len(siblings) == 0 {
 		return nil, err
 	}
@@ -519,8 +535,9 @@ func (s *Service) siblingFindings(ctx context.Context, project string, limit int
 // siblingMemories gathers family members' active memories for the opt-in
 // "Sibling memories" cross-over (IncludeSiblingMemories, default off).
 // Constraints and stages are excluded -- a sibling's gates bind its own
-// sessions, not this one -- and slugs already folded into the main scope (the
-// shared parent) are skipped so nothing renders twice. The memory recency
+// sessions, not this one -- slugs already folded into the main scope (the
+// shared parent) are skipped so nothing renders twice, and the isolation fence
+// drops family members in either direction (familyPeers). The memory recency
 // filter applies here too; the item cap does not (the section already packs
 // after the own-project index, so budget drops it first).
 func (s *Service) siblingMemories(ctx context.Context, project string, already []string, cfg config.Briefing) ([]core.Memory, error) {
@@ -528,6 +545,10 @@ func (s *Service) siblingMemories(ctx context.Context, project string, already [
 		return nil, nil
 	}
 	siblings, err := store.SiblingProjects(ctx, s.db, project)
+	if err != nil || len(siblings) == 0 {
+		return nil, err
+	}
+	siblings, err = s.familyPeers(ctx, project, siblings)
 	if err != nil || len(siblings) == 0 {
 		return nil, err
 	}
@@ -585,23 +606,24 @@ type briefingSections struct {
 	stages       []stageLine        // non-done stage memories, pinned after constraints
 	plans        []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
+	isolation    core.Isolation     // the project's fence state; open renders no line
 }
 
 // assembleBriefing packs the grouped sections against the token budget. The
-// pinned content -- the header line, the Constraints section (both tiers), the
-// Stages section, the active-plan rollups with their trailer, and the footer
-// -- is counted first and never dropped. Budget-competing rows then pack in
-// render order -- situation before library: pending plan lines > conventions >
-// recent findings > ready tasks > memory index > sibling findings > sibling
-// memories -- so budget priority and render priority agree: a fat memory index
-// can no longer evict the findings that render above it, and the sibling
-// sections, last, are dropped first. Starred rows carry the favorite pin into
-// their sections: starred conventions and the starred head of the Memories
-// list render exempt from the budget check. The header counts the findings
-// actually rendered (headLine defers for that), and findings cut by budget
-// leave a "+N more" trailer, mirroring the memory index. The whole is
-// hard-capped. The second return value is the ids of the memories actually
-// rendered (constraints, pinned stages, starred rows, and the
+// pinned content -- the header line, the isolation line, the Constraints
+// section (both tiers), the Stages section, the active-plan rollups with their
+// trailer, and the footer -- is counted first and never dropped.
+// Budget-competing rows then pack in render order -- situation before library:
+// pending plan lines > conventions > recent findings > ready tasks > memory
+// index > sibling findings > sibling memories -- so budget priority and render
+// priority agree: a fat memory index can no longer evict the findings that
+// render above it, and the sibling sections, last, are dropped first. Starred
+// rows carry the favorite pin into their sections: starred conventions and the
+// starred head of the Memories list render exempt from the budget check. The
+// header counts the findings actually rendered (headLine defers for that), and
+// findings cut by budget leave a "+N more" trailer, mirroring the memory index.
+// The whole is hard-capped. The second return value is the ids of the memories
+// actually rendered (constraints, pinned stages, starred rows, and the
 // convention/index/sibling lines that survived budgeting) -- for retrieval
 // instrumentation. Findings, siblings, and ready tasks are sessions/tasks, not
 // memory_read-able memories, so they are omitted from the funnel.
@@ -687,10 +709,16 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	if len(sec.plans) > 0 {
 		pinnedPlans = plansHeader + rollups.String() + plansTrailer
 	}
-	used := estTokens(headLine(len(findings))) + estTokens(constraintsSec.String()) +
+	// The isolation line is pinned directly under the header: an agent that
+	// cannot see WHY its briefing carries no global memories or no family would
+	// go looking for both. Open projects render nothing and pay nothing.
+	isoLine := isolationLine(sec.isolation)
+	used := estTokens(headLine(len(findings))) + estTokens(isoLine) +
+		estTokens(constraintsSec.String()) +
 		estTokens(stagesSec) + estTokens(pinnedPlans) + estTokens(tail.String())
 
 	var body strings.Builder
+	body.WriteString(isoLine)
 	body.WriteString(constraintsSec.String())
 	body.WriteString(stagesSec)
 
@@ -987,11 +1015,16 @@ func (s *Service) briefingHardCap(cfg config.Briefing) int {
 // all-full wall just the same. The prompt-matched "Relevant to this task"
 // section sits between the Constraints section and the footer; whenever the
 // briefing renders it closes with subagentFooter, independent of the tier
-// split, and the whole is hard-capped like the main briefing. The second
-// return value is the ids of the rendered memories (both constraint tiers plus
-// the relevant hits) for retrieval instrumentation; like assembleBriefing's,
-// it is a superset when the hard cap truncates lines.
-func (s *Service) assembleSubagent(project string, constraints []core.Memory, relevant []promptHit, cfg config.Briefing) (string, []string) {
+// split, and the whole is hard-capped like the main briefing. The isolation
+// line sits directly under the header, exactly as in assembleBriefing: a child
+// is an agent inside the fence too, and its scope is already narrowed by the
+// time it gets here (Briefing resolves the scope before the subagent branch),
+// so without the line its world is silently smaller than it can explain. Being
+// the first line after the header also pins it: hardTruncate cuts the tail.
+// The second return value is the ids of the rendered memories (both constraint
+// tiers plus the relevant hits) for retrieval instrumentation; like
+// assembleBriefing's, it is a superset when the hard cap truncates lines.
+func (s *Service) assembleSubagent(project string, iso core.Isolation, constraints []core.Memory, relevant []promptHit, cfg config.Briefing) (string, []string) {
 	if len(constraints) == 0 {
 		return "", nil
 	}
@@ -1001,6 +1034,7 @@ func (s *Service) assembleSubagent(project string, constraints []core.Memory, re
 	b.WriteString("<seam-briefing>\n")
 	fmt.Fprintf(&b, "Seam project: %s -- %s (subagent scope).\n", sanitizeName(label, 80),
 		countNoun(len(constraints), "constraint", "constraints"))
+	b.WriteString(isolationLine(iso))
 	b.WriteString("\nConstraints (binding for every session):\n")
 	full, compact := constraintTiers(constraints, cfg.ConstraintMaxFull)
 	for _, c := range full {

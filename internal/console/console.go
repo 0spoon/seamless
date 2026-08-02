@@ -154,6 +154,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/trials/{id}", s.auth(s.trialDetail))
 	handle("GET /console/projects", s.auth(s.projectsList))
 	handle("GET /console/projects/{slug}", s.auth(s.projectDetail))
+	post("POST /console/projects/{slug}/isolation", formBodySmall, s.projectIsolationSet)
 	handle("GET /console/context", s.auth(s.contextView))
 	handle("GET /console/relations", s.auth(s.relationsRedirect))
 	handle("GET /console/gardener", s.auth(s.gardenerPage))

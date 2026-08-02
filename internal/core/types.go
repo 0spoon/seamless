@@ -23,13 +23,45 @@ type Project struct {
 	Description string     `json:"description"`
 	ParentSlug  string     `json:"parentSlug,omitempty"`
 	RetiredAt   *time.Time `json:"retiredAt,omitempty"`
-	Favorite    bool       `json:"favorite,omitempty"` // owner/agent star; never bumps UpdatedAt
+	Favorite    bool       `json:"favorite,omitempty"`  // owner/agent star; never bumps UpdatedAt
+	Isolation   Isolation  `json:"isolation,omitempty"` // agent-facing fence; "" reads as open, never bumps UpdatedAt
 	CreatedAt   time.Time  `json:"createdAt"`
 	UpdatedAt   time.Time  `json:"updatedAt"`
 }
 
 // Retired reports whether the project has been retired (emptied by a split).
 func (p Project) Retired() bool { return p.RetiredAt != nil }
+
+// Isolation is a project's agent-facing isolation state. The fence is
+// directional: confidential stops knowledge leaving the project, sealed
+// additionally stops outside knowledge entering it. The global scope ("") is
+// never isolated, and the console is exempt -- isolation fences agent-to-agent
+// leakage, not the owner.
+type Isolation string
+
+const (
+	IsolationOpen         Isolation = "open"         // shares normally (the default)
+	IsolationConfidential Isolation = "confidential" // nothing leaves
+	IsolationSealed       Isolation = "sealed"       // nothing in or out
+)
+
+// Isolations lists every valid isolation state, loosest first.
+var Isolations = []Isolation{IsolationOpen, IsolationConfidential, IsolationSealed}
+
+// Valid reports whether i is a recognized isolation state.
+func (i Isolation) Valid() bool { return slices.Contains(Isolations, i) }
+
+// FencesOutbound reports whether nothing may leave the project: sessions bound
+// elsewhere never read it, and sessions bound to it never write outside it --
+// an agent-initiated write to another scope (global included) is a leak too.
+func (i Isolation) FencesOutbound() bool {
+	return i == IsolationConfidential || i == IsolationSealed
+}
+
+// FencesInbound reports whether nothing may enter the project: its sessions
+// see only its own scope (no global memories, no family, no cross-project
+// reads) and no outside session writes into it.
+func (i Isolation) FencesInbound() bool { return i == IsolationSealed }
 
 // ---------------------------------------------------------------------------
 // Memory
@@ -366,6 +398,9 @@ const (
 	EventPlanPresented    EventKind = "plan.presented"    // the user was prompted to review the plan
 	EventPlanApproved     EventKind = "plan.approved"     // the user approved the plan (ExitPlanMode)
 	EventSubagentCaptured EventKind = "subagent.captured" // a planning subagent's prompt+report landed as a cc-agent note
+
+	// Project isolation: the owner moved a project's agent-facing fence.
+	EventProjectIsolationChanged EventKind = "project.isolation.changed" // (payload: slug, from, to, families + parent detached by a tighten, by)
 )
 
 // Event is one entry in the append-only log. Payload carries kind-specific

@@ -71,7 +71,7 @@ Create a work note -- a research finding, decision record, meeting summary, or a
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `description` | string | no | optional one-line summary |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=&lt;slug&gt; steps. Use it whenever this note is a plan's narrative or supporting context. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 | `source_url` | string | no | optional source URL |
 | `tags` | array | no | tags (a comma-separated string is also accepted) |
 
@@ -117,7 +117,7 @@ Delete a note by id: the markdown file leaves the disk and its index row goes wi
 
 ## project_list {#project_list}
 
-List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall.
+List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.
 
 Takes no parameters.
 
@@ -129,6 +129,7 @@ Register a project up front, with a human-readable name and an optional descript
 |---|---|---|---|
 | `name` | string | **yes** | human-readable project name |
 | `description` | string | no | optional one-line description |
+| `isolation` | string | no | optional isolation state (open\|confidential\|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: `open`, `confidential`, `sealed`. |
 | `slug` | string | no | optional explicit slug |
 
 ## capture_url {#capture_url}
@@ -138,4 +139,4 @@ Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and sav
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `url` | string | **yes** | http(s) URL to capture |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
