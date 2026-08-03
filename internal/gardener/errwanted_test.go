@@ -78,7 +78,7 @@ func TestProposeToolError_FloorsAndPayload(t *testing.T) {
 	recordToolErr(t, rec, now.Add(-2*time.Hour), "S2", "proj", "notes_read", "notes_read: id is required")
 
 	ctx := context.Background()
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
@@ -115,7 +115,7 @@ func TestProposeToolError_HookWaivesSessionFloor(t *testing.T) {
 	recordHookErr(t, rec, now.Add(-2*time.Hour), "proj", "prompt-recall", "context deadline exceeded")
 
 	ctx := context.Background()
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
@@ -136,7 +136,7 @@ func TestProposeToolError_LivenessTail(t *testing.T) {
 	recordToolErr(t, rec, now.Add(-4*24*time.Hour), "S1", "proj", "tasks_add", "tasks_add: title is required")
 
 	ctx := context.Background()
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Zero(t, n)
 }
@@ -163,33 +163,96 @@ func TestProposeToolError_BenignSuppressed(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Zero(t, n)
 }
 
-func TestProposeToolError_DismissedKeyHolds(t *testing.T) {
-	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	g, _, rec := newWantedFixture(t, now)
+// seedToolErrPattern records the three occurrences that clear both floors for
+// one masked template, and returns the proposal they produce.
+func seedToolErrPattern(t *testing.T, g *Service, rec *events.Recorder, now time.Time) store.Proposal {
+	t.Helper()
 	ctx := context.Background()
-
 	recordToolErr(t, rec, now.Add(-48*time.Hour), "S1", "proj", "tasks_add", `tasks_add: unknown parameter "plam"`)
 	recordToolErr(t, rec, now.Add(-24*time.Hour), "S2", "proj", "tasks_add", `tasks_add: unknown parameter "titel"`)
 	recordToolErr(t, rec, now.Add(-2*time.Hour), "S1", "proj", "tasks_add", `tasks_add: unknown parameter "boddy"`)
 
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 	props := pendingToolErrors(t, g)
 	require.Len(t, props, 1)
-	require.NoError(t, g.Dismiss(ctx, props[0].ID))
+	return props[0]
+}
 
-	// New literals of the same template pile on; the masked key must hold.
+// A regular dismissal answers the evidence it was shown, not the pattern for
+// all time. Errors that had already happened stay settled; the same error
+// happening AGAIN after the decision is a recurrence, and gets asked about
+// again -- under the very same masked key, since the key is the pattern's
+// identity and never moves.
+func TestProposeToolError_DismissLapsesOnRecurrence(t *testing.T) {
+	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	g, _, rec := newWantedFixture(t, now)
+	ctx := context.Background()
+
+	first := seedToolErrPattern(t, g, rec, now)
+	require.NoError(t, g.Dismiss(ctx, first.ID))
+
+	// Another literal of the same template, but from before the decision: the
+	// dismissal already covered it, so nothing is raised.
 	recordToolErr(t, rec, now.Add(-time.Hour), "S3", "proj", "tasks_add", `tasks_add: unknown parameter "urgncy"`)
-	n, err = g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Zero(t, n)
 	require.Empty(t, pendingToolErrors(t, g))
+
+	// The same error, still happening a day later. That is new evidence the
+	// owner has not answered.
+	later := now.Add(24 * time.Hour)
+	g.now = func() time.Time { return later }
+	recordToolErr(t, rec, later.Add(-time.Hour), "S3", "proj", "tasks_add", `tasks_add: unknown parameter "ttle"`)
+	n, err = g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+
+	again := pendingToolErrors(t, g)
+	require.Len(t, again, 1)
+	require.Equal(t, first.Payload["key"], again[0].Payload["key"],
+		"the same pattern, re-raised under its stable key")
+}
+
+// Hiding is the tier that does mean forever: no recurrence gets past it.
+// Unhiding lifts the block without returning the proposal to the queue -- the
+// next recurrence is what brings the pattern back.
+func TestProposeToolError_HideHoldsThroughRecurrence(t *testing.T) {
+	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	g, _, rec := newWantedFixture(t, now)
+	ctx := context.Background()
+
+	first := seedToolErrPattern(t, g, rec, now)
+	require.NoError(t, g.Hide(ctx, first.ID))
+
+	later := now.Add(24 * time.Hour)
+	g.now = func() time.Time { return later }
+	recordToolErr(t, rec, later.Add(-time.Hour), "S3", "proj", "tasks_add", `tasks_add: unknown parameter "ttle"`)
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
+	require.NoError(t, err)
+	require.Zero(t, n, "a hidden pattern is not re-raised by recurrence")
+	require.Empty(t, pendingToolErrors(t, g))
+
+	// Unhide does not itself propose anything...
+	require.NoError(t, g.Unhide(ctx, first.ID))
+	require.Empty(t, pendingToolErrors(t, g))
+	hidden, err := g.Hidden(ctx)
+	require.NoError(t, err)
+	require.Empty(t, hidden, "the block is gone from the hidden list")
+
+	// ...but the evidence that accrued while it was hidden now counts as the
+	// recurrence a regular dismissal lapses on.
+	n, err = g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
+	require.NoError(t, err)
+	require.Equal(t, 1, n)
+	require.Len(t, pendingToolErrors(t, g), 1)
 }
 
 func TestProposeToolError_PerRunCap(t *testing.T) {
@@ -203,7 +266,7 @@ func TestProposeToolError_PerRunCap(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	n, err := g.proposeToolError(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeToolError(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, toolErrorMaxPerRun, n)
 	require.Len(t, pendingToolErrors(t, g), toolErrorMaxPerRun)

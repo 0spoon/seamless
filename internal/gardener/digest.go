@@ -15,7 +15,7 @@ const digestSystemPrompt = "You are a concise technical writer. Summarize an AI 
 // monthly digest proposal per project, summarized by the chat client. It is a
 // no-op without a chat client. Each digest is keyed by project + calendar month,
 // so a month's digest is proposed at most once (and re-proposed only next month).
-func (s *Service) proposeDigests(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeDigests(ctx context.Context, seen seenKeys) (int, error) {
 	if s.chat == nil {
 		return 0, nil
 	}
@@ -36,7 +36,7 @@ func (s *Service) proposeDigests(ctx context.Context, seen map[string]struct{}) 
 			continue
 		}
 		key := "digest:" + project + ":" + month
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
 		body, err := s.chat.Complete(ctx, digestSystemPrompt, digestUserPrompt(group))

@@ -21,7 +21,7 @@ import (
 // proposeStaleStages proposes archiving stage memories with no live gate and no
 // update in StaleStageDays. 0 disables the pass. A stage named by a [[link]] in
 // another memory's body is protected, same as staleness archiving.
-func (s *Service) proposeStaleStages(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeStaleStages(ctx context.Context, seen seenKeys) (int, error) {
 	if s.cfg.StaleStageDays <= 0 {
 		return 0, nil
 	}
@@ -61,7 +61,7 @@ func (s *Service) proposeStaleStages(ctx context.Context, seen map[string]struct
 			continue // a live gate holds its pin at any age
 		}
 		key := "archive:" + m.ID
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
 		gate := "status " + status

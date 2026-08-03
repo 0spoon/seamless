@@ -228,7 +228,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li>
+      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li><li class="lvl-2"><a href="#saying-no-twice">Saying no, twice</a></li>
     </ul>
   </details>
   <p>The Seamless gardener is the background pass that keeps an agent-written memory
@@ -360,7 +360,7 @@ bypass the review step - what comes back is still a proposal.</p>
 <h2 id="where-you-review">Where you review</h2>
 <ul>
 <li><strong>The console</strong> - <code>/console/gardener</code> is an inbox: one line per proposal in
-the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+the rail, the full evidence and the decision gate in the reader. A whole
 group can be dismissed at once, and anything you decide lands in <strong>Recently
 decided</strong>, where Undo puts it back in the queue and reverses what applying it
 did. Applying a consolidation or a project split is the exception - both
@@ -368,6 +368,32 @@ create things that immediately accrue content, so they ask for a confirm
 instead and cannot be undone from the console.</li>
 <li><strong><code>gardener_proposals</code></strong> - the same, for an agent.</li>
 </ul>
+<h2 id="saying-no-twice">Saying no, twice</h2>
+<p>Rejecting has two strengths, because &quot;not this one&quot; and &quot;not ever&quot; are
+different answers:</p>
+<ul>
+<li><strong>Dismiss</strong> settles the proposal and the evidence behind it. It is not a
+verdict on the pattern: if the same thing happens <em>again</em> after you decided -
+agents keep hitting that error, keep searching for that missing memory - the
+gardener raises it once more, under the same key, with the new evidence. This
+is the one to reach for by default.</li>
+<li><strong>Hide forever</strong> blocks the pattern outright. No recurrence gets past it.</li>
+</ul>
+<p>For the passes with no recurrence clock (merge, archive, digest, and the
+request-driven kinds), a dismissal already lasts until the underlying content
+changes - their key encodes what they propose, so a changed world asks a new
+question rather than repeating the old one. The distinction bites on the error
+and knowledge-gap passes, whose key is the <em>pattern's</em> identity and stays put
+while evidence piles up under it.</p>
+<p>Both are reversible, and the two exits are not the same:</p>
+<ul>
+<li><strong>Undo</strong>, from Recently decided, puts that proposal back in the queue.</li>
+<li><strong>Unhide</strong>, from <strong>Hidden forever</strong> in the rail, lifts the block and leaves
+the proposal resolved. Nothing returns on the spot - the next recurrence is
+what brings the pattern back, and if it has stopped recurring, nothing does.</li>
+</ul>
+<p><code>gardener_apply</code> carries the same two tiers for agents: <code>action=dismiss</code> and
+<code>action=hide</code>.</p>
 <p>The gardener runs every <code>gardener.interval_minutes</code> (60) when
 <code>gardener.enabled</code> is on. Everything in this page is tunable - see
 <a href="../../reference/configuration/">Configuration</a>.</p>
@@ -388,7 +414,7 @@ instead and cannot be undone from the console.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li>
+      <li class="lvl-2"><a href="#propose-only-is-the-whole-contract">Propose-only is the whole contract</a></li><li class="lvl-2"><a href="#what-it-looks-for">What it looks for</a></li><li class="lvl-2"><a href="#constraints-and-stages-are-exempt-from-staleness">Constraints and stages are exempt from staleness</a></li><li class="lvl-2"><a href="#asking-for-it-in-words">Asking for it in words</a></li><li class="lvl-2"><a href="#where-you-review">Where you review</a></li><li class="lvl-2"><a href="#saying-no-twice">Saying no, twice</a></li>
     </ul>
   </aside>
   

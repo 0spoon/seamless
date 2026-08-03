@@ -42,7 +42,7 @@ const maxShipCommits = 8
 // proposeStalePlans proposes settling captured plans still unapproved after
 // StalePlanDays -- shipped when the repo evidences the work landed, abandoned
 // otherwise. 0 disables the pass.
-func (s *Service) proposeStalePlans(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeStalePlans(ctx context.Context, seen seenKeys) (int, error) {
 	if s.cfg.StalePlanDays <= 0 {
 		return 0, nil
 	}
@@ -75,7 +75,7 @@ func (s *Service) proposeStalePlans(ctx context.Context, seen map[string]struct{
 		if ev.shipped() {
 			kind, key = store.ProposalShipPlan, "ship_plan:"+n.ID
 		}
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
 		payload := map[string]any{

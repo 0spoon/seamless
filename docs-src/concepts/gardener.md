@@ -108,13 +108,42 @@ bypass the review step - what comes back is still a proposal.
 ## Where you review
 
 - **The console** - `/console/gardener` is an inbox: one line per proposal in
-  the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+  the rail, the full evidence and the decision gate in the reader. A whole
   group can be dismissed at once, and anything you decide lands in **Recently
   decided**, where Undo puts it back in the queue and reverses what applying it
   did. Applying a consolidation or a project split is the exception - both
   create things that immediately accrue content, so they ask for a confirm
   instead and cannot be undone from the console.
 - **`gardener_proposals`** - the same, for an agent.
+
+## Saying no, twice
+
+Rejecting has two strengths, because "not this one" and "not ever" are
+different answers:
+
+- **Dismiss** settles the proposal and the evidence behind it. It is not a
+  verdict on the pattern: if the same thing happens *again* after you decided -
+  agents keep hitting that error, keep searching for that missing memory - the
+  gardener raises it once more, under the same key, with the new evidence. This
+  is the one to reach for by default.
+- **Hide forever** blocks the pattern outright. No recurrence gets past it.
+
+For the passes with no recurrence clock (merge, archive, digest, and the
+request-driven kinds), a dismissal already lasts until the underlying content
+changes - their key encodes what they propose, so a changed world asks a new
+question rather than repeating the old one. The distinction bites on the error
+and knowledge-gap passes, whose key is the *pattern's* identity and stays put
+while evidence piles up under it.
+
+Both are reversible, and the two exits are not the same:
+
+- **Undo**, from Recently decided, puts that proposal back in the queue.
+- **Unhide**, from **Hidden forever** in the rail, lifts the block and leaves
+  the proposal resolved. Nothing returns on the spot - the next recurrence is
+  what brings the pattern back, and if it has stopped recurring, nothing does.
+
+`gardener_apply` carries the same two tiers for agents: `action=dismiss` and
+`action=hide`.
 
 The gardener runs every `gardener.interval_minutes` (60) when
 `gardener.enabled` is on. Everything in this page is tunable - see

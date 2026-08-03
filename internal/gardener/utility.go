@@ -72,7 +72,7 @@ func (s *Service) evaluateUtilityActivation(ctx context.Context) {
 // twice, and the owner's existing apply/dismiss flow just works. Kind and
 // reference protections mirror proposeArchives: some memories legitimately
 // steer silently, which is exactly why this only ever proposes.
-func (s *Service) proposeDeadWeight(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeDeadWeight(ctx context.Context, seen seenKeys) (int, error) {
 	now := s.now().UTC()
 	since := now.Add(-deadWeightWindow)
 	exposure, err := store.BriefingExposureSince(ctx, s.db, since)
@@ -114,7 +114,7 @@ func (s *Service) proposeDeadWeight(ctx context.Context, seen map[string]struct{
 			continue
 		}
 		key := "archive:" + m.ID
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
 		payload := map[string]any{

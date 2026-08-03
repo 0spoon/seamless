@@ -1236,6 +1236,9 @@ tr:hover .copy-btn, tr:focus-within .copy-btn,
 .grr-final { color: var(--faint); font-size: var(--text-2xs); font-style: italic; white-space: nowrap; }
 .gardener-recent-row form { margin: 0; }
 .gardener-recent-row .btn .ico { width: 12px; height: 12px; }
+/* Hidden forever reuses the Recently decided row, with one line of framing:
+   these rows are a standing block, not a decision log. */
+.gardener-hidden-note { margin: 0 0 6px; padding: 0 8px; color: var(--faint); font-size: var(--text-2xs); line-height: 1.45; }
 
 @media (max-width: 1080px) {
   .gardener-reader-actions { align-items: flex-start; flex-direction: column; }

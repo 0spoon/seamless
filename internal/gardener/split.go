@@ -88,7 +88,7 @@ func (s *Service) Split(ctx context.Context, source, instruction string) (Reques
 		return RequestResult{}, err
 	}
 
-	seen, err := store.AllProposalKeys(ctx, s.db)
+	seen, err := loadSeen(ctx, s.db)
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Split: %w", err)
 	}
@@ -98,7 +98,7 @@ func (s *Service) Split(ctx context.Context, source, instruction string) (Reques
 	// The setup proposal comes first so the plan group can apply it before the
 	// per-memory reprojects (though apply order is not enforced -- each is idempotent).
 	setupKey := "split:" + source
-	if _, dup := seen[setupKey]; !dup {
+	if !seen.blocked(setupKey) {
 		sharedObj := map[string]any{}
 		if shared.slug != "" {
 			sharedObj = map[string]any{"slug": shared.slug, "label": shared.label}
@@ -139,7 +139,7 @@ func (s *Service) Split(ctx context.Context, source, instruction string) (Reques
 			continue
 		}
 		key := "reproject:" + mem.ID
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			res.Skipped = append(res.Skipped, mem.Name+" is already proposed for a move")
 			continue
 		}

@@ -22,7 +22,9 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Ask the gardener for proposals | `POST /console/gardener/request` | Interprets a natural-language maintenance request into **pending proposals**. It never mutates a memory. |
 | Plan a project split | `POST /console/gardener/split` | Interprets a split request into a plan batch of **pending proposals** (one split setup plus one reproject per memory). Also never mutates a memory. |
 | Apply one proposal | `POST /console/gardener/{id}/apply` | Carries out that proposal's effect. |
-| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. |
+| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. The pattern is raised again if new evidence for it arrives after the decision. |
+| Hide a proposal forever | `POST /console/gardener/{id}/hide` | Drops it without acting and blocks the pattern permanently - no recurrence re-raises it. Listed under **Hidden forever**. |
+| Unhide a pattern | `POST /console/gardener/{id}/unhide` | Lifts a forever block. The proposal stays resolved; the gardener may propose the pattern again the next time it recurs. |
 | Retarget a reproject proposal | `POST /console/gardener/{id}/retarget` | Rewrites a **pending** reproject's destination project before it is applied. Reproject proposals only. |
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
@@ -414,8 +416,13 @@ opens a task; nothing is written until someone writes the memory.
 Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.
 
-The actions are **apply**, **dismiss**, **retarget** (reproject cards only), and
-**apply plan**. Above them sits a single ask-in-words box, and it only ever
+The actions are **apply**, **dismiss**, **hide forever**, **retarget**
+(reproject cards only), and **apply plan**. Dismissing answers the evidence in
+front of you - the pattern comes back if it recurs; hiding answers the pattern
+itself. Everything you decide lands in **Recently decided** with an Undo, and a
+hide is additionally listed under **Hidden forever**, where **Unhide** lifts the
+block without returning the proposal to the queue. Above them sits a single
+ask-in-words box, and it only ever
 produces more proposals for this same queue. A request recognized as a project
 split is planned as a split directly - the plan batch appears below like any
 other. When the split's source project cannot be matched, an inline follow-up

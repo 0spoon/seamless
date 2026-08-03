@@ -46,7 +46,7 @@ func TestProposeStaleStages(t *testing.T) {
 
 	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{StaleStageDays: 14}, slog.Default())
 
-	created, err := g.proposeStaleStages(ctx, map[string]struct{}{})
+	created, err := g.proposeStaleStages(ctx, seenKeys{})
 	require.NoError(t, err)
 	require.Equal(t, 2, created)
 
@@ -65,7 +65,7 @@ func TestProposeStaleStages(t *testing.T) {
 	require.Contains(t, reasons["finished-gate"], "status done")
 
 	// A key already proposed (by this pass or staleness) is not raised again.
-	again, err := g.proposeStaleStages(ctx, seenKeys(t, ctx, db))
+	again, err := g.proposeStaleStages(ctx, loadSeenKeys(t, ctx, db))
 	require.NoError(t, err)
 	require.Equal(t, 0, again)
 }
@@ -85,14 +85,14 @@ func TestProposeStaleStages_Disabled(t *testing.T) {
 		time.Now().UTC().Add(-300*24*time.Hour), "no header, ancient")
 
 	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{}, slog.Default())
-	created, err := g.proposeStaleStages(ctx, map[string]struct{}{})
+	created, err := g.proposeStaleStages(ctx, seenKeys{})
 	require.NoError(t, err)
 	require.Equal(t, 0, created, "StaleStageDays 0 disables the pass")
 }
 
-func seenKeys(t *testing.T, ctx context.Context, db *sql.DB) map[string]struct{} {
+func loadSeenKeys(t *testing.T, ctx context.Context, db *sql.DB) seenKeys {
 	t.Helper()
-	keys, err := store.AllProposalKeys(ctx, db)
+	seen, err := loadSeen(ctx, db)
 	require.NoError(t, err)
-	return keys
+	return seen
 }

@@ -13,6 +13,21 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
+// Decision names one way to resolve a pending proposal. This is the canonical
+// set: derive the MCP action enum from it rather than transcribing, so a tier
+// cannot exist in the service while staying invisible at the boundary. Undo and
+// unhide are deliberately absent -- both act on an already-resolved proposal,
+// and both are owner surfaces rather than agent decisions.
+const (
+	DecisionApply   = "apply"
+	DecisionDismiss = "dismiss"
+	DecisionHide    = "hide"
+)
+
+// Decisions lists every way to resolve a pending proposal, weakest commitment
+// first.
+var Decisions = []string{DecisionApply, DecisionDismiss, DecisionHide}
+
 // Apply carries out a pending proposal and marks it applied. The effect depends
 // on the kind: an archive retires the memory (invalid, but still readable), a
 // merge supersedes the "drop" memory by the "keep" memory, a digest writes the
@@ -83,14 +98,50 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 	return result, nil
 }
 
-// Dismiss marks a pending proposal dismissed without any side effect. Its key
-// stays known, so the gardener will not raise the same suggestion again.
+// Dismiss is the regular rejection: it marks a pending proposal dismissed
+// without any side effect. The suggestion stops being raised, but only for the
+// evidence behind it -- a pattern whose evidence recurs after the dismissal is
+// proposed again, because the owner answered what they were shown and not
+// everything the pattern might do next. Hide is the tier that answers forever.
 func (s *Service) Dismiss(ctx context.Context, id string) error {
-	if err := store.ResolveProposal(ctx, s.db, id, store.ProposalDismissed, s.now().UTC()); err != nil {
+	return s.reject(ctx, id, store.ProposalDismissed, "dismiss")
+}
+
+// Hide is the strong rejection: the proposal is resolved like a dismissal and
+// its key is blocked permanently, so no recurrence re-raises it. It is
+// reversible twice over -- Undo returns this very proposal to the queue, and
+// Unhide lifts the block without doing so.
+func (s *Service) Hide(ctx context.Context, id string) error {
+	return s.reject(ctx, id, store.ProposalHidden, "hide")
+}
+
+// reject resolves a pending proposal into one of the two rejection tiers and
+// records the decision.
+func (s *Service) reject(ctx context.Context, id, status, action string) error {
+	if err := store.ResolveProposal(ctx, s.db, id, status, s.now().UTC()); err != nil {
 		return err
 	}
-	s.record(ctx, id, map[string]any{"action": "dismiss"})
+	s.record(ctx, id, map[string]any{"action": action})
 	return nil
+}
+
+// Unhide lifts a forever block. The proposal stays resolved -- this is not an
+// undo and nothing returns to the queue -- but its key drops to a regular
+// dismissal, so the next pass may raise the pattern again once evidence for it
+// recurs. For a pattern that has stopped occurring, that is nothing at all,
+// which is the honest outcome: unhiding does not manufacture a proposal.
+func (s *Service) Unhide(ctx context.Context, id string) error {
+	if err := store.UnhideProposal(ctx, s.db, id); err != nil {
+		return err
+	}
+	s.record(ctx, id, map[string]any{"action": "unhide"})
+	return nil
+}
+
+// Hidden lists the proposals blocked forever, newest decision first. It backs
+// the console's hidden list, the only surface that names a standing block.
+func (s *Service) Hidden(ctx context.Context) ([]store.Proposal, error) {
+	return store.HiddenProposals(ctx, s.db)
 }
 
 func (s *Service) applyArchive(ctx context.Context, p store.Proposal, now time.Time) (map[string]any, error) {

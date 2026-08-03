@@ -334,6 +334,65 @@ func TestGardenerUndo_RefusedForAppliedSplit(t *testing.T) {
 	require.Contains(t, body, "final")
 }
 
+// Hiding is the second rejection tier. It resolves the proposal like a
+// dismissal, keeps it undoable from Recently decided, and additionally lists it
+// under Hidden forever -- the only durable surface naming a standing block --
+// where unhiding lifts it without returning the proposal to the queue.
+func TestGardenerHide_ListsAndUnhides(t *testing.T) {
+	ctx, db, _, mux := newConsoleWithGardener(t)
+	seeded := seedQueue(t, ctx, db)
+	toolErr := seeded[store.ProposalToolError]
+
+	// The reader offers both strengths, neither behind a confirm.
+	reader := getPeek(t, mux, "/console/gardener/"+toolErr.ID+"?reader=1").Body.String()
+	require.Contains(t, reader, "/console/gardener/"+toolErr.ID+"/dismiss")
+	require.Contains(t, reader, "/console/gardener/"+toolErr.ID+"/hide")
+	require.Contains(t, reader, "Hide forever")
+	require.NotContains(t, reader, "confirm(", "both rejections are reversible, so neither interstitial")
+
+	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+toolErr.ID+"/hide").Code)
+	got, _, err := store.ProposalByID(ctx, db, toolErr.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalHidden, got.Status)
+
+	body := getPeek(t, mux, "/console/gardener").Body.String()
+	require.Contains(t, body, `id="rg-hidden"`)
+	require.Contains(t, body, "Hidden forever")
+	require.Contains(t, body, "/console/gardener/"+toolErr.ID+"/unhide")
+	require.Contains(t, body, "/console/gardener/"+toolErr.ID+"/undo",
+		"a hide stays undoable from Recently decided too")
+
+	// Unhide lifts the block without reopening the proposal.
+	rr := post(mux, "/console/gardener/"+toolErr.ID+"/unhide")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+
+	got, _, err = store.ProposalByID(ctx, db, toolErr.ID)
+	require.NoError(t, err)
+	require.Equal(t, store.ProposalDismissed, got.Status, "unhide demotes, it does not reopen")
+
+	body = getPeek(t, mux, "/console/gardener").Body.String()
+	require.NotContains(t, body, `id="rg-hidden"`, "nothing is blocked any more")
+}
+
+// The hidden list has to survive an empty queue: it is the only place a
+// standing block can be found, and a tidy garden is exactly when the owner
+// wonders why a proposal stopped coming back.
+func TestGardenerHidden_RendersWithAnEmptyQueue(t *testing.T) {
+	ctx, db, _, mux := newConsoleWithGardener(t)
+	p, err := store.CreateProposal(ctx, db, store.ProposalToolError, map[string]any{
+		"key": "tool_error:seamless:abcd", "project": "seamless", "surface": "tool",
+		"name": "tasks_add", "error_count": 3.0, "suggested_title": "tasks_add: unknown parameter <v>",
+	})
+	require.NoError(t, err)
+	require.Equal(t, http.StatusSeeOther, post(mux, "/console/gardener/"+p.ID+"/hide").Code)
+
+	body := getPeek(t, mux, "/console/gardener").Body.String()
+	require.Contains(t, body, `id="rg-hidden"`)
+	require.Contains(t, body, "/console/gardener/"+p.ID+"/unhide")
+	require.Contains(t, body, "The garden is tidy.", "the queue is still honestly empty")
+}
+
 // The confirm policy is a projection, not a per-template judgement call: only
 // the two kinds that cannot be undone gate Apply behind a confirm.
 func TestGardenerReader_ConfirmsOnlyIrreversibleApplies(t *testing.T) {
@@ -370,7 +429,7 @@ func TestGardenerJSON_ShapeIsUnchanged(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	raw := do(mux, req).Body.String()
 
-	for _, leaked := range []string{"rowTitle", "RowTitle", "rowDetail", "groupKey", "nextID", "NextID", "canUndoApply", "sections", "Sections", "recent", "Recent"} {
+	for _, leaked := range []string{"rowTitle", "RowTitle", "rowDetail", "groupKey", "nextID", "NextID", "canUndoApply", "sections", "Sections", "recent", "Recent", "hidden", "Hidden"} {
 		require.NotContains(t, raw, leaked, "%s must not reach the CLI payload", leaked)
 	}
 	require.Contains(t, raw, `"pendingCount"`)

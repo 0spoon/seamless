@@ -56,8 +56,11 @@ var (
 // together, so the granularity that recurs is the tool + error template. The
 // masked literals stay available to the reader as raw examples in the proposal
 // evidence. The template is the stable identity of an error pattern; the
-// proposal key derives from it and nothing else, which is what lets a
-// dismissal hold forever.
+// proposal key derives from it and nothing else, so a decision about the
+// pattern outlives the individual errors that evidenced it. That is also why
+// this pass compares a dismissal against the group's newest occurrence: with a
+// key this stable, a dismissal that ignored recurrence would be permanent by
+// accident, and hiding forever is the tier that means it on purpose.
 func normalizeErrorSignature(tool, msg string) string {
 	msg = strings.TrimSpace(msg)
 	if rest, ok := strings.CutPrefix(msg, tool+":"); ok {
@@ -104,10 +107,12 @@ type errGroup struct {
 	first, last time.Time
 }
 
-// errProposalKey derives the dismissal-stable key for a group. The identity
+// errProposalKey derives the decision-stable key for a group. The identity
 // hashes to keep the key compact and free of separator collisions; it depends
-// only on the group identity, never on membership or counts, so a dismissed
-// pattern stays dismissed as evidence accumulates.
+// only on the group identity, never on membership or counts, so a decision
+// about the pattern is not undone by evidence accumulating under it. Whether
+// the decision then holds against a recurrence is the tier's job, not the
+// key's: hidden holds, dismissed lapses.
 func errProposalKey(g *errGroup) string {
 	sum := sha256.Sum256([]byte(g.surface + "\x00" + g.key + "\x00" + g.template))
 	return "tool_error:" + g.project + ":" + hex.EncodeToString(sum[:8])
@@ -120,7 +125,7 @@ func errProposalKey(g *errGroup) string {
 // it matches the benign-control-flow list. Hook groups waive the session floor:
 // a recurring hook failure is a real defect regardless of session spread,
 // and hook errors are usually unattributed anyway.
-func (s *Service) proposeToolError(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeToolError(ctx context.Context, seen seenKeys) (int, error) {
 	now := s.now().UTC()
 	since := now.Add(-toolErrorWindow)
 	toolErrs, err := store.ToolErrorsSince(ctx, s.db, since)
@@ -202,7 +207,10 @@ func (s *Service) proposeToolError(ctx context.Context, seen map[string]struct{}
 			continue
 		}
 		key := errProposalKey(g)
-		if _, dup := seen[key]; dup {
+		// g.last is the pattern's newest occurrence. A regular dismissal of this
+		// key covers only the evidence that existed when it was made, so an error
+		// that kept happening afterwards is raised again; a hide-forever is not.
+		if seen.blockedSince(key, g.last) {
 			continue
 		}
 		var title, signature, reason string

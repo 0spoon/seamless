@@ -67,6 +67,51 @@ func TestGardenerProposalsAndApply(t *testing.T) {
 	require.True(t, res.IsError)
 }
 
+// The agent surface carries both rejection tiers, and they resolve to different
+// statuses. It also has to refuse an action it does not know rather than
+// falling through to the apply default -- resolving a proposal is not something
+// to guess at.
+func TestGardenerApply_RejectionTiers(t *testing.T) {
+	ctx := context.Background()
+	url, db := newServer(t)
+	cli := dialClient(t, ctx, url, testKey)
+
+	mk := func(key string) string {
+		t.Helper()
+		p, err := store.CreateProposal(ctx, db, store.ProposalToolError, map[string]any{
+			"key": key, "project": "", "surface": "tool", "name": "tasks_add",
+			"suggested_title": "tasks_add: " + key,
+		})
+		require.NoError(t, err)
+		return p.ID
+	}
+
+	dismissed := callJSON(t, ctx, cli, "gardener_apply", map[string]any{"id": mk("err:a"), "action": "dismiss"})
+	require.Equal(t, store.ProposalDismissed, dismissed["status"])
+
+	hideID := mk("err:b")
+	hidden := callJSON(t, ctx, cli, "gardener_apply", map[string]any{"id": hideID, "action": "hide"})
+	require.Equal(t, store.ProposalHidden, hidden["status"])
+
+	got, ok, err := store.ProposalByID(ctx, db, hideID)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, store.ProposalHidden, got.Status)
+
+	// An unknown action names the ones that exist instead of silently applying.
+	isErr, txt := callErr(t, ctx, cli, "gardener_apply", map[string]any{"id": mk("err:c"), "action": "ignore"})
+	require.True(t, isErr)
+	require.Contains(t, txt, "hide")
+	require.Equal(t, 1, len(mustPendingProposals(t, ctx, db)), "the refused proposal is untouched")
+}
+
+func mustPendingProposals(t *testing.T, ctx context.Context, db *sql.DB) []store.Proposal {
+	t.Helper()
+	ps, err := store.PendingProposals(ctx, db, "")
+	require.NoError(t, err)
+	return ps
+}
+
 // TestGardenerRequest_NoChatIsToolError exercises the natural-language request
 // tool on a server whose gardener has no chat client: it must surface a tool
 // error rather than fabricate proposals. (A success-path test needs a

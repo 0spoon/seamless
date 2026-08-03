@@ -92,8 +92,13 @@ updated time - it is metadata, not authorship.
 
 ## Applying is an explicit boundary
 
-`gardener_apply` accepts only `apply` or `dismiss`. Dismissal closes the proposal
-without changing its target. Apply performs the proposal's typed action and
+`gardener_apply` accepts `apply`, `dismiss`, or `hide`. Both rejections close
+the proposal without changing its target; they differ in how long the answer
+holds. `dismiss` settles the evidence in front of you, so a pattern that keeps
+recurring is raised again later - reach for it by default. `hide` blocks the
+pattern permanently, for a suggestion that is wrong in principle rather than
+wrong for now; the owner can lift it from the console's **Hidden forever** list.
+Apply performs the proposal's typed action and
 returns that real outcome; it never substitutes a plausible dummy when the
 target disappeared or a file/store mutation failed. Memory-changing actions
 route through the lifecycle/files services, so supersession, atomic Markdown

@@ -160,7 +160,7 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 
 	// Seed the dedup set from every existing proposal key (any status) so a
 	// request never re-raises something already proposed, applied, or dismissed.
-	seen, err := store.AllProposalKeys(ctx, s.db)
+	seen, err := loadSeen(ctx, s.db)
 	if err != nil {
 		return RequestResult{}, fmt.Errorf("gardener.Request: %w", err)
 	}
@@ -177,7 +177,7 @@ func (s *Service) Request(ctx context.Context, text string, scope RequestScope) 
 			// producer at generation time for the apply step to stamp.
 			payload["model"] = s.chat.Model()
 		}
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			res.Skipped = append(res.Skipped, kind+" is already proposed")
 			continue
 		}

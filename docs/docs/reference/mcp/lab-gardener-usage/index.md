@@ -80,8 +80,13 @@ updated time - it is metadata, not authorship.
 
 ## Applying is an explicit boundary
 
-`gardener_apply` accepts only `apply` or `dismiss`. Dismissal closes the proposal
-without changing its target. Apply performs the proposal's typed action and
+`gardener_apply` accepts `apply`, `dismiss`, or `hide`. Both rejections close
+the proposal without changing its target; they differ in how long the answer
+holds. `dismiss` settles the evidence in front of you, so a pattern that keeps
+recurring is raised again later - reach for it by default. `hide` blocks the
+pattern permanently, for a suggestion that is wrong in principle rather than
+wrong for now; the owner can lift it from the console's **Hidden forever** list.
+Apply performs the proposal's typed action and
 returns that real outcome; it never substitutes a plausible dummy when the
 target disappeared or a file/store mutation failed. Memory-changing actions
 route through the lifecycle/files services, so supersession, atomic Markdown
@@ -124,7 +129,7 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 
 ## gardener_proposals {#gardener_proposals}
 
-List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only.
+List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply, dismiss or hide each with gardener_apply. Read-only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -150,12 +155,12 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 
 ## gardener_apply {#gardener_apply}
 
-Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised.
+Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error). Rejecting has two strengths: action=dismiss discards this proposal and the evidence behind it, so a pattern that keeps recurring is raised again later; action=hide blocks the pattern permanently, so no recurrence re-raises it. Prefer dismiss unless the suggestion is wrong in principle rather than wrong for now. Both are reversible by the owner from the console.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | proposal id (ULID) |
-| `action` | string | no | apply (default) or dismiss. One of: `apply`, `dismiss`. |
+| `action` | string | no | apply (default), dismiss (until it recurs), or hide (forever). One of: `apply`, `dismiss`, `hide`. |
 
 ## usage_summary {#usage_summary}
 

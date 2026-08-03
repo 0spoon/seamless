@@ -165,6 +165,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/gardener/plan/{slug}/apply", formBodySmall, s.gardenerApplyPlan)
 	post("POST /console/gardener/{id}/apply", formBodySmall, s.gardenerApply)
 	post("POST /console/gardener/{id}/dismiss", formBodySmall, s.gardenerDismiss)
+	post("POST /console/gardener/{id}/hide", formBodySmall, s.gardenerHide)
+	post("POST /console/gardener/{id}/unhide", formBodySmall, s.gardenerUnhide)
 	post("POST /console/gardener/{id}/retarget", formBodySmall, s.gardenerRetarget)
 	post("POST /console/gardener/{id}/undo", formBodySmall, s.gardenerUndo)
 	post("POST /console/favorites/{kind}/{id}", formBodySmall, s.favoriteToggle)

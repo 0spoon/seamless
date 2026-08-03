@@ -10,6 +10,7 @@ import (
 	"github.com/0spoon/seamless/internal/agentguide"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -173,6 +174,7 @@ func TestArgsEnumsDeriveFromCanonicalSets(t *testing.T) {
 		{"tasks_update.status", tasksUpdateTool, "status", asStrings(core.TaskStatuses)},
 		{"tasks_list.status", tasksListTool, "status", asStrings(core.TaskStatuses)},
 		{"gardener_proposals.kind", gardenerProposalsTool, "kind", store.ProposalKinds},
+		{"gardener_apply.action", gardenerApplyTool, "action", gardener.Decisions},
 		{"recall.scope", recallTool, "scope", retrieve.RecallScopes},
 		{"session_start.source", sessionStartTool, "source", core.SessionSources},
 	} {

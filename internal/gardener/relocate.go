@@ -67,7 +67,7 @@ func (s *Service) ProposeIsolationRelocations(ctx context.Context, project strin
 	if len(leaked) == 0 {
 		return 0, nil
 	}
-	seen, err := store.AllProposalKeys(ctx, s.db)
+	seen, err := loadSeen(ctx, s.db)
 	if err != nil {
 		return 0, fmt.Errorf("gardener.ProposeIsolationRelocations: %w", err)
 	}
@@ -75,7 +75,7 @@ func (s *Service) ProposeIsolationRelocations(ctx context.Context, project strin
 	created := 0
 	for _, mem := range leaked {
 		key := relocateKey(project, mem.ID)
-		if _, done := seen[key]; done {
+		if seen.blocked(key) {
 			continue
 		}
 		if _, err := s.createProposal(ctx, store.ProposalRelocate, key,

@@ -95,7 +95,7 @@
     {{end}}
   </section>
 
-  {{if or .TotalPending .Recent}}
+  {{if or .TotalPending .Recent .Hidden}}
 
   <div class="lib-layout"{{if and $sel .SelectedAuto}} data-auto-url="/console/gardener/{{$sel.ID}}{{$qs}}"{{end}}>
     <nav class="lib-rail" aria-label="Proposals">
@@ -169,6 +169,33 @@
               </form>
               {{else}}
               <span class="grr-final" title="Applying this created projects or folded memories together, so it cannot be reversed from here">final</span>
+              {{end}}
+            </div>
+            {{end}}
+          </div>
+        </details>
+        {{end}}
+
+        {{/* Hidden forever is the standing-block list, not a history: a hide
+             scrolls off Recently decided within a handful of decisions while
+             staying in force, so this is the only surface that says what is
+             still being suppressed -- and the only place to lift it. */}}
+        {{if .Hidden}}
+        <details class="rail-group rail-collapse gardener-recent gardener-hidden" id="rg-hidden">
+          <summary class="rail-group-hd"><span class="hd-label">{{icon "eye-off"}}Hidden forever</span> <span class="n">{{len .Hidden}}</span></summary>
+          <div class="gardener-recent-rows">
+            <p class="gardener-hidden-note">These patterns are never proposed again, however often they recur. Unhide to let the gardener raise one the next time it does.</p>
+            {{range .Hidden}}
+            <div class="gardener-recent-row tone-{{.Tone}}">
+              <span class="grr-icon">{{icon .Icon}}</span>
+              <span class="grr-copy">
+                <span class="grr-title">{{.RowTitle}}{{if .RowDetail}} &middot; {{.RowDetail}}{{end}}</span>
+                <span class="grr-meta">hidden <time title="{{ts .HiddenAt}}">{{ago .HiddenAt}}</time></span>
+              </span>
+              {{if $.Data.CanAct}}
+              <form method="post" action="/console/gardener/{{.ID}}/unhide">
+                <button class="btn small" type="submit" title="Stop blocking this pattern. It is not returned to the queue -- the gardener may propose it again if it recurs.">{{icon "eye"}} Unhide</button>
+              </form>
               {{end}}
             </div>
             {{end}}
@@ -272,9 +299,17 @@
   <footer class="gardener-reader-actions">
     <span>{{icon "lock"}} Knowledge changes only if applied{{if .CanUndoApply}} &mdash; and undoable from Recently decided{{end}}</span>
     <div class="btn-row">
+      {{/* Two rejection strengths. Dismiss answers the evidence so far, so the
+           pattern comes back if it keeps happening; Hide answers the pattern
+           itself. Neither confirms: both are undoable from Recently decided,
+           and a hide is additionally liftable from Hidden forever. */}}
       <form method="post" action="/console/gardener/{{.ID}}/dismiss">
         <input type="hidden" name="next" value="{{.NextID}}">
-        <button class="btn" type="submit">Dismiss suggestion</button>
+        <button class="btn" type="submit" title="Drop this suggestion. If the pattern behind it happens again, the gardener will raise it again.">Dismiss suggestion</button>
+      </form>
+      <form method="post" action="/console/gardener/{{.ID}}/hide">
+        <input type="hidden" name="next" value="{{.NextID}}">
+        <button class="btn" type="submit" title="Never suggest this again, however often it recurs. Listed under Hidden forever, where you can lift it.">Hide forever</button>
       </form>
       <form method="post" action="/console/gardener/{{.ID}}/apply"
         {{if not .CanUndoApply}}onsubmit="return confirm('Apply this {{.Kind}} proposal? This cannot be undone from the console.');"{{end}}>

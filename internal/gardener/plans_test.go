@@ -56,7 +56,7 @@ func TestStalePlanProposeAndApply(t *testing.T) {
 	g := New(db, mgr, nil, nil, rec, Config{StalePlanDays: 14}, slog.Default())
 	g.now = func() time.Time { return now }
 
-	seen, err := store.AllProposalKeys(ctx, db)
+	seen, err := loadSeen(ctx, db)
 	require.NoError(t, err)
 	n, err := g.proposeStalePlans(ctx, seen)
 	require.NoError(t, err)
@@ -82,7 +82,7 @@ func TestStalePlanProposeAndApply(t *testing.T) {
 
 	// A second pass proposes nothing new: the abandoned plan is settled and the
 	// applied key stays known.
-	seen, err = store.AllProposalKeys(ctx, db)
+	seen, err = loadSeen(ctx, db)
 	require.NoError(t, err)
 	n, err = g.proposeStalePlans(ctx, seen)
 	require.NoError(t, err)
@@ -91,7 +91,7 @@ func TestStalePlanProposeAndApply(t *testing.T) {
 	// StalePlanDays 0 disables the pass.
 	g0 := New(db, mgr, nil, nil, rec, Config{}, slog.Default())
 	g0.now = func() time.Time { return now }
-	n, err = g0.proposeStalePlans(ctx, map[string]struct{}{})
+	n, err = g0.proposeStalePlans(ctx, seenKeys{})
 	require.NoError(t, err)
 	require.Zero(t, n)
 }
@@ -139,7 +139,7 @@ func TestStalePlanShipEvidence(t *testing.T) {
 	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{StalePlanDays: 14}, slog.Default())
 	g.now = func() time.Time { return now }
 
-	seen, err := store.AllProposalKeys(ctx, db)
+	seen, err := loadSeen(ctx, db)
 	require.NoError(t, err)
 	n, err := g.proposeStalePlans(ctx, seen)
 	require.NoError(t, err)
@@ -181,7 +181,7 @@ func TestStalePlanShipEvidence(t *testing.T) {
 
 	// A second pass proposes nothing new: shipped is settled, and the abandon
 	// keys stay known.
-	seen, err = store.AllProposalKeys(ctx, db)
+	seen, err = loadSeen(ctx, db)
 	require.NoError(t, err)
 	n, err = g.proposeStalePlans(ctx, seen)
 	require.NoError(t, err)
@@ -204,7 +204,7 @@ func TestShipPlanApplyGuardsApprovedPlans(t *testing.T) {
 	g := New(db, mgr, nil, nil, nil, Config{StalePlanDays: 14}, slog.Default())
 	g.now = func() time.Time { return now }
 	id, err := g.createProposal(ctx, store.ProposalShipPlan, "ship_plan:"+note.ID,
-		map[string]any{"id": note.ID}, map[string]struct{}{})
+		map[string]any{"id": note.ID}, seenKeys{})
 	require.NoError(t, err)
 
 	// The plan gets approved after the proposal was raised: apply refuses.
@@ -230,7 +230,7 @@ func TestAbandonPlanApplyGuardsApprovedPlans(t *testing.T) {
 
 	g := New(db, mgr, nil, nil, nil, Config{StalePlanDays: 14}, slog.Default())
 	g.now = func() time.Time { return now }
-	seen := map[string]struct{}{}
+	seen := seenKeys{}
 	n, err := g.proposeStalePlans(ctx, seen)
 	require.NoError(t, err)
 	require.Equal(t, 1, n)

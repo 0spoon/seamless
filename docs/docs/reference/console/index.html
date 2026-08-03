@@ -289,7 +289,17 @@ is not how Seamless is driven; it is how you watch it.</p>
 <tr>
 <td>Dismiss a proposal</td>
 <td><code>POST /console/gardener/{id}/dismiss</code></td>
-<td>Drops it without acting.</td>
+<td>Drops it without acting. The pattern is raised again if new evidence for it arrives after the decision.</td>
+</tr>
+<tr>
+<td>Hide a proposal forever</td>
+<td><code>POST /console/gardener/{id}/hide</code></td>
+<td>Drops it without acting and blocks the pattern permanently - no recurrence re-raises it. Listed under <strong>Hidden forever</strong>.</td>
+</tr>
+<tr>
+<td>Unhide a pattern</td>
+<td><code>POST /console/gardener/{id}/unhide</code></td>
+<td>Lifts a forever block. The proposal stays resolved; the gardener may propose the pattern again the next time it recurs.</td>
 </tr>
 <tr>
 <td>Retarget a reproject proposal</td>
@@ -667,8 +677,13 @@ card with the queries agents kept searching for in vain - applying that one
 opens a task; nothing is written until someone writes the memory.</p>
 <p>Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.</p>
-<p>The actions are <strong>apply</strong>, <strong>dismiss</strong>, <strong>retarget</strong> (reproject cards only), and
-<strong>apply plan</strong>. Above them sits a single ask-in-words box, and it only ever
+<p>The actions are <strong>apply</strong>, <strong>dismiss</strong>, <strong>hide forever</strong>, <strong>retarget</strong>
+(reproject cards only), and <strong>apply plan</strong>. Dismissing answers the evidence in
+front of you - the pattern comes back if it recurs; hiding answers the pattern
+itself. Everything you decide lands in <strong>Recently decided</strong> with an Undo, and a
+hide is additionally listed under <strong>Hidden forever</strong>, where <strong>Unhide</strong> lifts the
+block without returning the proposal to the queue. Above them sits a single
+ask-in-words box, and it only ever
 produces more proposals for this same queue. A request recognized as a project
 split is planned as a split directly - the plan batch appears below like any
 other. When the split's source project cannot be matched, an inline follow-up

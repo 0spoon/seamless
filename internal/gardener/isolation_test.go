@@ -69,7 +69,7 @@ func TestProposeMerges_SkipsPairsSpanningAnIsolatedProject(t *testing.T) {
 	g := New(db, mgr, fakeEmbedder{}, nil, events.NewRecorder(db),
 		Config{DedupThreshold: 0.88}, slog.Default())
 
-	created, err := g.proposeMerges(ctx, map[string]struct{}{})
+	created, err := g.proposeMerges(ctx, seenKeys{})
 	require.NoError(t, err)
 	require.Equal(t, 2, created, "the two open projects pair, and conf pairs within itself")
 

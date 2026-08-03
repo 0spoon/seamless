@@ -219,9 +219,24 @@ type recentRow struct {
 	Icon       string
 	Tone       string
 	RowTitle   string
-	Status     string // applied | dismissed
+	Status     string // applied | dismissed | hidden
 	ResolvedAt *time.Time
 	CanUndo    bool
+}
+
+// hiddenRow is one entry in the rail's "Hidden forever" section: a pattern the
+// owner blocked permanently, and the handle to lift it. It is deliberately not
+// a recentRow -- these two lists answer different questions ("what did I just
+// do" vs "what am I still blocking") and a hide falls off the first within a
+// handful of decisions while staying in force indefinitely.
+type hiddenRow struct {
+	ID        string
+	Kind      string
+	Icon      string
+	Tone      string
+	RowTitle  string
+	RowDetail string
+	HiddenAt  *time.Time
 }
 
 // memoryWantedView is the memory_wanted projection: the recurring zero-hit
@@ -310,6 +325,7 @@ type gardenerData struct {
 	// Groups/Cards/counts and that shape is fixed.
 	Sections []queueSection `json:"-"`
 	Recent   []recentRow    `json:"-"`
+	Hidden   []hiddenRow    `json:"-"`
 	// Selected is the proposal open in the reader: the requested one on a
 	// /console/gardener/{id} page, or the first row of the queue on the list URL
 	// (SelectedAuto, which the client pins into the URL).
@@ -362,6 +378,7 @@ func (s *Service) gardenerPageData(w http.ResponseWriter, r *http.Request) (data
 		Cards:           ungroupedRows(sections),
 		Sections:        sections,
 		Recent:          s.recentDecisions(ctx),
+		Hidden:          s.hiddenPatterns(ctx),
 		PendingCount:    len(visible),
 		RequestedCount:  requested,
 		BackgroundCount: len(visible) - requested,
@@ -657,7 +674,7 @@ func (s *Service) recentDecisions(ctx context.Context) []recentRow {
 		out = append(out, recentRow{
 			ID: p.ID, Kind: p.Kind, Icon: iconName, Tone: tone, RowTitle: title,
 			Status: p.Status, ResolvedAt: p.ResolvedAt,
-			CanUndo: p.Status == store.ProposalDismissed || gardener.CanUndoApply(p.Kind),
+			CanUndo: gardener.CanUndoResolution(p.Status, p.Kind),
 		})
 	}
 	return out
@@ -667,6 +684,32 @@ func (s *Service) recentDecisions(ctx context.Context) []recentRow {
 // second-thought affordance, not a history browser: the events feed keeps the
 // full record.
 const recentDecisionLimit = 10
+
+// hiddenPatterns projects the forever-blocked proposals into the rail's unhide
+// list. It is uncapped on purpose: a hide is an explicit owner decision, so the
+// list is short by construction, and truncating the one surface that says what
+// is being suppressed would leave a block nobody can find to lift. Best-effort:
+// a query error costs the section, not the page.
+func (s *Service) hiddenPatterns(ctx context.Context) []hiddenRow {
+	if s.cfg.Gardener == nil {
+		return nil
+	}
+	ps, err := s.cfg.Gardener.Hidden(ctx)
+	if err != nil {
+		s.logger.Warn("console: hidden gardener proposals", "error", err)
+		return nil
+	}
+	out := make([]hiddenRow, 0, len(ps))
+	for _, p := range ps {
+		_, _, iconName, tone := proposalPresentation(p.Kind)
+		title, detail := rowSummary(p.Kind, s.toProposalCard(ctx, p))
+		out = append(out, hiddenRow{
+			ID: p.ID, Kind: p.Kind, Icon: iconName, Tone: tone,
+			RowTitle: title, RowDetail: detail, HiddenAt: p.ResolvedAt,
+		})
+	}
+	return out
+}
 
 // groupByPlan partitions cards into plan groups (those carrying a plan slug) and
 // the ungrouped remainder. Within a group the split setup card sorts first, then
@@ -1096,6 +1139,43 @@ func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gardenerRedirect(w, r, next, "notice", "Dismissed the proposal. Undo it from Recently decided.")
+}
+
+// gardenerHide is the strong rejection: the proposal is resolved like a
+// dismissal and its pattern is blocked permanently, so no recurrence brings it
+// back. Both exits stay open, and the flash names them: Undo returns this
+// proposal to the queue, Unhide lifts the block without doing so.
+func (s *Service) gardenerHide(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	id := r.PathValue("id")
+	next := s.nextSelection(r)
+	if err := s.cfg.Gardener.Hide(r.Context(), id); err != nil {
+		s.logger.Warn("console: gardener hide", "id", id, "error", err)
+		gardenerRedirect(w, r, id, "error", err.Error())
+		return
+	}
+	gardenerRedirect(w, r, next, "notice", "Hidden for good. Lift it from Hidden forever, or undo it from Recently decided.")
+}
+
+// gardenerUnhide lifts a forever block without returning its proposal to the
+// queue. The next gardener pass may raise the pattern again once evidence for
+// it recurs -- and if it has stopped recurring, nothing comes back, which the
+// flash says rather than promising a proposal that will not arrive.
+func (s *Service) gardenerUnhide(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	id := r.PathValue("id")
+	if err := s.cfg.Gardener.Unhide(r.Context(), id); err != nil {
+		s.logger.Warn("console: gardener unhide", "id", id, "error", err)
+		gardenerRedirect(w, r, "", "error", err.Error())
+		return
+	}
+	gardenerRedirect(w, r, "", "notice", "Unhidden. The gardener may propose this again if the pattern recurs.")
 }
 
 // gardenerUndo returns a resolved proposal to the queue, inverting whatever its

@@ -14,7 +14,7 @@ import (
 //
 // The pass runs unbound, so it pairs as the global scope: a pair spanning an
 // isolated project is skipped and never becomes a proposal (scopeGate).
-func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeMerges(ctx context.Context, seen seenKeys) (int, error) {
 	if s.embedder == nil {
 		return 0, nil
 	}
@@ -42,7 +42,7 @@ func (s *Service) proposeMerges(ctx context.Context, seen map[string]struct{}) (
 				continue // the pair spans an isolated project's fence
 			}
 			key := mergeKey(a.ID, b.ID)
-			if _, dup := seen[key]; dup {
+			if seen.blocked(key) {
 				continue
 			}
 			keep, drop := a, b

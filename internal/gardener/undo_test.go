@@ -1,6 +1,7 @@
 package gardener
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -18,23 +19,45 @@ func TestCanUndoApply_ExemptsOnlyTheIrreversibleKinds(t *testing.T) {
 	}
 }
 
-// Undoing a dismissal is pure bookkeeping: the proposal comes back pending and
-// nothing in the world was touched either way.
-func TestUndo_ReopensDismissal(t *testing.T) {
-	g, _, cx := newApplyFixture(t)
-	ctx := cx()
+// Undoing a rejection is pure bookkeeping: the proposal comes back pending and
+// nothing in the world was touched either way. Both tiers reopen the same way
+// -- a hide that could not be taken back would be a trap, not a decision.
+func TestUndo_ReopensEitherRejectionTier(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		reject func(*Service, context.Context, string) error
+	}{
+		{"dismiss", func(g *Service, ctx context.Context, id string) error { return g.Dismiss(ctx, id) }},
+		{"hide", func(g *Service, ctx context.Context, id string) error { return g.Hide(ctx, id) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g, _, cx := newApplyFixture(t)
+			ctx := cx()
 
-	p, err := store.CreateProposal(ctx, g.db, store.ProposalArchive, map[string]any{"key": "archive:x", "id": "GONE"})
-	require.NoError(t, err)
-	require.NoError(t, g.Dismiss(ctx, p.ID))
+			p, err := store.CreateProposal(ctx, g.db, store.ProposalArchive, map[string]any{"key": "archive:x", "id": "GONE"})
+			require.NoError(t, err)
+			require.NoError(t, tc.reject(g, ctx, p.ID))
 
-	require.NoError(t, g.Undo(ctx, p.ID))
-	got, _, err := store.ProposalByID(ctx, g.db, p.ID)
-	require.NoError(t, err)
-	require.Equal(t, store.ProposalPending, got.Status)
+			require.NoError(t, g.Undo(ctx, p.ID))
+			got, _, err := store.ProposalByID(ctx, g.db, p.ID)
+			require.NoError(t, err)
+			require.Equal(t, store.ProposalPending, got.Status)
 
-	// A pending proposal has nothing to undo, so a double undo is refused.
-	require.ErrorContains(t, g.Undo(ctx, p.ID), "still pending")
+			// A pending proposal has nothing to undo, so a double undo is refused.
+			require.ErrorContains(t, g.Undo(ctx, p.ID), "still pending")
+		})
+	}
+}
+
+// The console reads undo availability off CanUndoResolution, so it has to hold
+// for every (status, kind) pair: only an APPLIED consolidate or split is final.
+func TestCanUndoResolution_OnlyAnAppliedKindCanBeFinal(t *testing.T) {
+	for _, kind := range store.ProposalKinds {
+		for _, status := range []string{store.ProposalDismissed, store.ProposalHidden} {
+			require.True(t, CanUndoResolution(status, kind), "%s %s", status, kind)
+		}
+		require.Equal(t, CanUndoApply(kind), CanUndoResolution(store.ProposalApplied, kind), "applied %s", kind)
+	}
 }
 
 func TestUndo_Archive_RestoresTheMemory(t *testing.T) {

@@ -39,8 +39,22 @@ func CanUndoApply(kind string) bool {
 	}
 }
 
+// CanUndoResolution reports whether a resolved proposal can be taken back,
+// whatever it was resolved into. Both rejection tiers always can -- neither a
+// dismissal nor a hide has an effect to invert, and hiding forever would be a
+// trap if the forever started before the owner could change their mind. Only an
+// apply consults CanUndoApply, which stays the single source for that judgement
+// and for the console's confirm policy.
+func CanUndoResolution(status, kind string) bool {
+	if status == store.ProposalApplied {
+		return CanUndoApply(kind)
+	}
+	return true
+}
+
 // Undo returns a resolved proposal to the pending queue, inverting whatever its
-// apply did. A dismissal simply reopens. An apply first runs the per-kind
+// apply did. A rejection -- dismissed or hidden -- simply reopens, which is
+// also how a hide-forever stops being forever. An apply first runs the per-kind
 // inverse, and every inverse is guarded by a precondition describing the world
 // the apply left behind: if the world has moved on since (the memory was
 // re-archived by hand, the task was completed, the plan was approved), the undo
@@ -59,11 +73,13 @@ func (s *Service) Undo(ctx context.Context, id string) error {
 	switch p.Status {
 	case store.ProposalPending:
 		return fmt.Errorf("proposal %q is still pending -- there is nothing to undo", id)
-	case store.ProposalDismissed:
+	case store.ProposalDismissed, store.ProposalHidden:
+		// Both rejection tiers reopen the same way: neither had an effect, and
+		// reopening clears whichever block the tier had put on the key.
 		if err := store.ReopenProposal(ctx, s.db, id); err != nil {
 			return err
 		}
-		s.record(ctx, id, map[string]any{"action": "undo_dismiss", "kind": p.Kind})
+		s.record(ctx, id, map[string]any{"action": "undo_reject", "resolution": p.Status, "kind": p.Kind})
 		return nil
 	}
 

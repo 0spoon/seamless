@@ -10,11 +10,14 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
-// Proposal statuses.
+// Proposal statuses. A rejection has two strengths: ProposalDismissed is the
+// regular one, suppressing the pattern only until new evidence for it arrives,
+// while ProposalHidden is the forever block the owner asks for explicitly.
 const (
 	ProposalPending   = "pending"
 	ProposalApplied   = "applied"
 	ProposalDismissed = "dismissed"
+	ProposalHidden    = "hidden"
 )
 
 // Proposal kinds (mirrors the gardener_proposals.kind CHECK constraint).
@@ -126,10 +129,11 @@ func ProposalByID(ctx context.Context, db *sql.DB, id string) (Proposal, bool, e
 	return ps[0], true, nil
 }
 
-// ResolveProposal marks a proposal applied or dismissed and stamps resolved_at.
-// It errors if the proposal is missing or already resolved (not pending).
+// ResolveProposal marks a proposal applied, dismissed or hidden and stamps
+// resolved_at. It errors if the proposal is missing or already resolved (not
+// pending).
 func ResolveProposal(ctx context.Context, db *sql.DB, id, status string, at time.Time) error {
-	if status != ProposalApplied && status != ProposalDismissed {
+	if status != ProposalApplied && status != ProposalDismissed && status != ProposalHidden {
 		return fmt.Errorf("store.ResolveProposal: invalid status %q", status)
 	}
 	res, err := db.ExecContext(ctx, `
@@ -191,18 +195,18 @@ func RecordProposalResult(ctx context.Context, db *sql.DB, id string, result map
 
 // ReopenProposal returns a resolved proposal to the pending queue, clearing the
 // resolution stamp and the apply result. It is the store half of undo: the
-// caller has already inverted the effect (or is undoing a dismissal, which had
+// caller has already inverted the effect (or is undoing a rejection, which had
 // none). It errors if the proposal is missing or still pending, so a double
 // undo cannot resurrect an already-restored proposal.
 //
-// The payload key is deliberately left in place: AllProposalKeys reads every
+// The payload key is deliberately left in place: ProposalKeyBlocks reads every
 // status, so dedup behaves the same whether the proposal is pending, resolved,
-// or reopened.
+// or reopened -- and a pending row blocks just as hard as an applied one.
 func ReopenProposal(ctx context.Context, db *sql.DB, id string) error {
 	res, err := db.ExecContext(ctx, `
 		UPDATE gardener_proposals SET status = ?, resolved_at = NULL, result = NULL
-		WHERE id = ? AND status IN (?, ?)`,
-		ProposalPending, id, ProposalApplied, ProposalDismissed)
+		WHERE id = ? AND status IN (?, ?, ?)`,
+		ProposalPending, id, ProposalApplied, ProposalDismissed, ProposalHidden)
 	if err != nil {
 		return fmt.Errorf("store.ReopenProposal: %w", err)
 	}
@@ -214,6 +218,48 @@ func ReopenProposal(ctx context.Context, db *sql.DB, id string) error {
 		return fmt.Errorf("store.ReopenProposal: no resolved proposal with id %q", id)
 	}
 	return nil
+}
+
+// UnhideProposal demotes a forever-hidden proposal to a regular dismissal. It
+// is NOT an undo: the proposal stays resolved and out of the queue, and nothing
+// is re-raised on the spot. What changes is the suppression rule -- a hard
+// block becomes one that lapses the moment evidence for the pattern recurs, so
+// the next gardener pass MAY propose it again.
+//
+// resolved_at is deliberately left at the moment of the hide rather than
+// restamped: it is when the owner decided, and it is the instant the recurrence
+// comparison measures from, so a pattern that is still occurring re-raises on
+// the next pass instead of waiting for evidence newer than the unhide.
+func UnhideProposal(ctx context.Context, db *sql.DB, id string) error {
+	res, err := db.ExecContext(ctx, `
+		UPDATE gardener_proposals SET status = ? WHERE id = ? AND status = ?`,
+		ProposalDismissed, id, ProposalHidden)
+	if err != nil {
+		return fmt.Errorf("store.UnhideProposal: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("store.UnhideProposal: rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("store.UnhideProposal: no hidden proposal with id %q", id)
+	}
+	return nil
+}
+
+// HiddenProposals returns every forever-hidden proposal, newest decision first.
+// It backs the console's hidden list, which is the only durable surface naming
+// what the owner has blocked -- "Recently decided" scrolls a hide off within a
+// handful of decisions, and a block nobody can see is a block nobody can lift.
+func HiddenProposals(ctx context.Context, db *sql.DB) ([]Proposal, error) {
+	rows, err := db.QueryContext(ctx, `SELECT `+proposalCols+`
+		FROM gardener_proposals WHERE status = ?
+		ORDER BY resolved_at DESC, id DESC`, ProposalHidden)
+	if err != nil {
+		return nil, fmt.Errorf("store.HiddenProposals: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	return scanProposals(rows)
 }
 
 // RecentResolvedProposals returns the most recently applied or dismissed
@@ -233,32 +279,70 @@ func RecentResolvedProposals(ctx context.Context, db *sql.DB, limit int) ([]Prop
 	return scanProposals(rows)
 }
 
-// AllProposalKeys returns the set of payload "key" values across proposals of
-// EVERY status. The gardener consults it before proposing, so a suggestion the
-// owner already applied or dismissed is never raised again.
-func AllProposalKeys(ctx context.Context, db *sql.DB) (map[string]struct{}, error) {
-	rows, err := db.QueryContext(ctx, `SELECT payload FROM gardener_proposals`)
+// ProposalBlock is why one payload key is suppressed. Hard is the permanent
+// block: the key belongs to a proposal that is pending, was applied, or was
+// hidden forever, and no amount of new evidence should raise it again. When
+// Hard is false the key was only ever regularly dismissed, and DismissedAt is
+// the newest such decision -- evidence that postdates it is a recurrence the
+// owner has not yet answered, so the pattern may be proposed again.
+type ProposalBlock struct {
+	Hard        bool
+	DismissedAt time.Time
+}
+
+// ProposalKeyBlocks returns the suppression rule for every payload "key" across
+// proposals of EVERY status. The gardener consults it before proposing, so a
+// suggestion the owner already saw is not raised again -- forever for an
+// applied, pending or hidden one, and until the evidence recurs for a regular
+// dismissal.
+//
+// A key can carry several rows (a dismissal, then the recurrence that re-raised
+// it). The strongest rule wins: any hard row makes the key hard, otherwise the
+// latest dismissal is the one to beat.
+func ProposalKeyBlocks(ctx context.Context, db *sql.DB) (map[string]ProposalBlock, error) {
+	rows, err := db.QueryContext(ctx, `SELECT payload, status, resolved_at FROM gardener_proposals`)
 	if err != nil {
-		return nil, fmt.Errorf("store.AllProposalKeys: %w", err)
+		return nil, fmt.Errorf("store.ProposalKeyBlocks: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	keys := make(map[string]struct{})
+	blocks := make(map[string]ProposalBlock)
 	for rows.Next() {
-		var raw string
-		if err := rows.Scan(&raw); err != nil {
-			return nil, fmt.Errorf("store.AllProposalKeys: scan: %w", err)
+		var (
+			raw, status string
+			resolved    sql.NullString
+		)
+		if err := rows.Scan(&raw, &status, &resolved); err != nil {
+			return nil, fmt.Errorf("store.ProposalKeyBlocks: scan: %w", err)
 		}
 		var p struct {
 			Key string `json:"key"`
 		}
-		if err := json.Unmarshal([]byte(raw), &p); err == nil && p.Key != "" {
-			keys[p.Key] = struct{}{}
+		if err := json.Unmarshal([]byte(raw), &p); err != nil || p.Key == "" {
+			continue
 		}
+		prev := blocks[p.Key]
+		if prev.Hard {
+			continue
+		}
+		if status != ProposalDismissed {
+			blocks[p.Key] = ProposalBlock{Hard: true}
+			continue
+		}
+		at, err := nullTimePtr(resolved)
+		if err != nil {
+			return nil, fmt.Errorf("store.ProposalKeyBlocks: resolved_at: %w", err)
+		}
+		// A dismissal with no stamp cannot be compared against evidence, so it
+		// keeps the zero time and any evidence at all counts as a recurrence.
+		if at != nil && at.After(prev.DismissedAt) {
+			prev.DismissedAt = *at
+		}
+		blocks[p.Key] = prev
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("store.AllProposalKeys: rows: %w", err)
+		return nil, fmt.Errorf("store.ProposalKeyBlocks: rows: %w", err)
 	}
-	return keys, nil
+	return blocks, nil
 }
 
 func scanProposals(rows *sql.Rows) ([]Proposal, error) {

@@ -88,7 +88,7 @@ func TestProposeMemoryWanted_SessionFloor(t *testing.T) {
 	recordMiss(t, rec, now.Add(-16*24*time.Hour), "S2", "proj", "ancient lore topic")
 
 	ctx := context.Background()
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 
@@ -104,27 +104,65 @@ func TestProposeMemoryWanted_SessionFloor(t *testing.T) {
 	require.Equal(t, []string{"handshake zeta protocol", "zeta protocol handshake"}, queries, "recent first")
 }
 
-func TestProposeMemoryWanted_DismissedKeyHolds(t *testing.T) {
-	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
-	g, _, rec := newWantedFixture(t, now)
-	ctx := context.Background()
+// The gap tiers behave like the error tiers: a dismissal settles the misses it
+// was shown, a later miss re-opens the question, and a hide answers it for good.
+func TestProposeMemoryWanted_RejectionTiers(t *testing.T) {
+	seed := func(t *testing.T, g *Service, rec *events.Recorder, now time.Time) store.Proposal {
+		t.Helper()
+		ctx := context.Background()
+		recordMiss(t, rec, now.Add(-48*time.Hour), "S1", "proj", "zeta protocol handshake")
+		recordMiss(t, rec, now.Add(-24*time.Hour), "S2", "proj", "zeta protocol handshake")
+		n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+		props := pendingWanted(t, g)
+		require.Len(t, props, 1)
+		return props[0]
+	}
 
-	recordMiss(t, rec, now.Add(-48*time.Hour), "S1", "proj", "zeta protocol handshake")
-	recordMiss(t, rec, now.Add(-24*time.Hour), "S2", "proj", "zeta protocol handshake")
+	t.Run("dismiss lapses on a later miss", func(t *testing.T) {
+		now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+		g, _, rec := newWantedFixture(t, now)
+		ctx := context.Background()
 
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
-	require.NoError(t, err)
-	require.Equal(t, 1, n)
-	props := pendingWanted(t, g)
-	require.Len(t, props, 1)
-	require.NoError(t, g.Dismiss(ctx, props[0].ID))
+		first := seed(t, g, rec, now)
+		require.NoError(t, g.Dismiss(ctx, first.ID))
 
-	// More sessions pile on after the dismissal; the key must hold anyway.
-	recordMiss(t, rec, now.Add(-2*time.Hour), "S3", "proj", "handshake zeta protocol")
-	n, err = g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
-	require.NoError(t, err)
-	require.Zero(t, n)
-	require.Empty(t, pendingWanted(t, g))
+		// A rephrasing from before the dismissal is evidence it already covered.
+		recordMiss(t, rec, now.Add(-2*time.Hour), "S3", "proj", "handshake zeta protocol")
+		n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
+		require.NoError(t, err)
+		require.Zero(t, n)
+
+		// Agents still looking for it a day later is not.
+		later := now.Add(24 * time.Hour)
+		g.now = func() time.Time { return later }
+		recordMiss(t, rec, later.Add(-time.Hour), "S4", "proj", "zeta handshake protocol")
+		n, err = g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
+		require.NoError(t, err)
+		require.Equal(t, 1, n)
+
+		again := pendingWanted(t, g)
+		require.Len(t, again, 1)
+		require.Equal(t, first.Payload["key"], again[0].Payload["key"])
+	})
+
+	t.Run("hide holds through later misses", func(t *testing.T) {
+		now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+		g, _, rec := newWantedFixture(t, now)
+		ctx := context.Background()
+
+		first := seed(t, g, rec, now)
+		require.NoError(t, g.Hide(ctx, first.ID))
+
+		later := now.Add(24 * time.Hour)
+		g.now = func() time.Time { return later }
+		recordMiss(t, rec, later.Add(-time.Hour), "S4", "proj", "zeta handshake protocol")
+		n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
+		require.NoError(t, err)
+		require.Zero(t, n)
+		require.Empty(t, pendingWanted(t, g))
+	})
 }
 
 func TestProposeMemoryWanted_HitSignatureSuppression(t *testing.T) {
@@ -141,7 +179,7 @@ func TestProposeMemoryWanted_HitSignatureSuppression(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Zero(t, n)
 }
@@ -157,7 +195,7 @@ func TestProposeMemoryWanted_LivenessGuard(t *testing.T) {
 		"the zeta protocol handshake sequence and its retry rules")
 
 	ctx := context.Background()
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Zero(t, n)
 }
@@ -177,7 +215,7 @@ func TestProposeMemoryWanted_PerRunCap(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, memoryWantedMaxPerRun, n)
 	require.Len(t, pendingWanted(t, g), memoryWantedMaxPerRun)
@@ -255,7 +293,7 @@ func TestProposeMemoryWanted_PartialTermOverlapDoesNotSuppress(t *testing.T) {
 	writeMem(t, mgr, "unrelated-protocol", "proj", "1", core.KindGotcha, now.Add(-time.Hour),
 		"notes about the http protocol upgrade path")
 
-	n, err := g.proposeMemoryWanted(ctx, seenKeys(t, ctx, g.db))
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 }
