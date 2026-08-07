@@ -136,6 +136,11 @@ func eventSummary(e core.Event) string {
 			line = "a memory"
 		}
 		return line + " just paid off for the first time"
+	case core.EventProjectStage:
+		if stage := payloadStr(p, "stage"); stage != "" {
+			return "matured to " + stage
+		}
+		return "maturity stage reached"
 	case eventFeaturesChanged:
 		if reset, _ := p["reset"].(bool); reset {
 			return "optional features reset to the file configuration"

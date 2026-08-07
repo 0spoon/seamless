@@ -8,6 +8,7 @@
       <div class="title-row">
         <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
         <h1>{{.Name}}</h1>
+        {{.Stage}}
         {{if .Live}}<span class="badge ok"><span class="live-dot"></span>{{.Live}} agent{{if ne .Live 1}}s{{end}} working</span>{{end}}
         {{if .Retired}}<span class="kind warn">retired</span>{{end}}
         {{isoPill .Isolation}}

@@ -4461,3 +4461,18 @@ button.star.on .ico { fill: currentColor; }
 .mom-spot-name { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
 .mom-spot-meta { font-size: var(--text-xs); color: var(--text-muted); }
 .mom-spot-line { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* --- Momentum: project maturity stage pill --------------------------------- */
+/* The latched growth arc, board rows and the detail header alike. Every tone
+   is calm -- a seedling is a fact, not a deficiency. */
+.mom-stage {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 8px; border-radius: 999px;
+  font-size: var(--text-xs); color: var(--text-muted);
+  border: 1px solid var(--border); background: var(--bg-page);
+  white-space: nowrap;
+}
+.mom-stage .ico { width: 11px; height: 11px; }
+.mom-stage[data-stage="sprouting"]   { color: var(--brand); border-color: var(--brand-soft); background: var(--brand-soft); }
+.mom-stage[data-stage="established"] { color: var(--ok); border-color: var(--ok-soft); background: var(--ok-soft); }
+.mom-stage[data-stage="deep-rooted"] { color: var(--ok); border-color: var(--ok); background: var(--ok-soft); font-weight: 600; }

@@ -11,6 +11,7 @@ package console
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"slices"
 	"strings"
@@ -41,6 +42,9 @@ type projectWorkspaceData struct {
 	Favorite    bool
 	ActiveTab   string
 	Tabs        []projectTabVM
+	// Stage is the momentum maturity glyph, pre-rendered ("" while the
+	// feature is off); the same glyph the board row shows, by construction.
+	Stage template.HTML
 
 	// The agent-facing fence: the title-row pill, the Overview control, and the
 	// pending confirm panel a ?isolate= tighten renders (nil the rest of the time).
@@ -221,6 +225,9 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 			row = b
 			break
 		}
+	}
+	if info, ok := s.projectStages(ctx, board, now)[slug]; ok {
+		data.Stage = stageGlyph(info, now)
 	}
 	data.Live = row.LiveSessions
 	data.Metrics = projectMetrics{

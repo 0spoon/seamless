@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -261,6 +262,60 @@ func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
 	seed("midway", "second of many", core.TaskDone, 21)
 	page = getPeek(t, mux, "/console/").Body.String()
 	require.NotContains(t, page, "midway")
+}
+
+// The maturity-stage pills are a momentum surface on the project board and
+// the detail header: off (the shipped default), no computation, no latch, no
+// markup; on, both surfaces show the same latched stage and the crossing is
+// minted as an event exactly once.
+func TestProjectStages_FollowTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	projID := mustID(t)
+	require.NoError(t, store.CreateProject(ctx, db, core.Project{ID: projID, Slug: "demo", Name: "demo"}))
+	_, err := db.ExecContext(ctx, `UPDATE projects SET created_at = ? WHERE slug = 'demo'`,
+		core.FormatTime(now.AddDate(0, 0, -10)))
+	require.NoError(t, err)
+	for range 30 {
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+			VALUES (?, ?, 'tool.call', '', 'demo', '', '{}')`,
+			mustID(t), core.FormatTime(now.Add(-time.Hour)))
+		require.NoError(t, err)
+	}
+	for i := range 5 {
+		stamp := core.FormatTime(now)
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO memories_index
+			    (id, kind, name, description, project, file_path, tags, valid_from,
+			     invalid_at, superseded_by, source_session, content_hash, created_at, updated_at)
+			VALUES (?, 'gotcha', ?, 'd', 'demo', ?, '[]', ?, NULL, NULL, '', 'h', ?, ?)`,
+			mustID(t), fmt.Sprintf("mem-%d", i), fmt.Sprintf("memory/demo/mem-%d.md", i),
+			stamp, stamp, stamp)
+		require.NoError(t, err)
+	}
+	stageEvents := func() int {
+		var n int
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM events WHERE kind = ?`,
+			string(core.EventProjectStage)).Scan(&n))
+		return n
+	}
+
+	require.NotContains(t, getPeek(t, mux, "/console/projects").Body.String(), "mom-stage")
+	require.Zero(t, stageEvents(), "off means no computation and no latch")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	board := getPeek(t, mux, "/console/projects").Body.String()
+	require.Contains(t, board, `data-stage="sprouting"`)
+	require.Contains(t, board, "sprouting -- established at 30d, 15 memories, 250 events",
+		"the pill's tooltip names the next stage's bars beside where the project stands")
+	require.Equal(t, 1, stageEvents(), "the crossing is minted exactly once")
+
+	detail := getPeek(t, mux, "/console/projects/demo").Body.String()
+	require.Contains(t, detail, `data-stage="sprouting"`, "the detail header shows the board's pill")
+	require.Equal(t, 1, stageEvents(), "re-rendering mints nothing new")
 }
 
 // The first-reuse ledger line is the ideation copy, composed from the event

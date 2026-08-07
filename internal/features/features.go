@@ -125,6 +125,7 @@ var registry = []Feature{
 			"the capture calendar and streak on Sessions",
 			"the first-reuse payoff marks in the activity ledger",
 			"the memory-of-the-month spotlight on Overview",
+			"the maturity-stage pills on the project board and detail header",
 		},
 		Default: false,
 		get:     func(c config.Features) bool { return c.Momentum },
