@@ -263,6 +263,44 @@ func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
 	require.NotContains(t, page, "midway")
 }
 
+// The capture calendar is a momentum surface on the Sessions page: off (the
+// shipped default), the page carries no trace of it in HTML or JSON; on, the
+// grid renders with the streak numbers, live from the stored override.
+func TestSessionsCaptureCalendar_FollowsTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	sessID := mustID(t)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: sessID, Name: "cc/covered", ProjectSlug: "demo", Status: core.SessionCompleted,
+		Findings: "left something durable", CreatedAt: now, UpdatedAt: now,
+	}))
+
+	page := getPeek(t, mux, "/console/sessions").Body.String()
+	require.NotContains(t, page, "mom-cal")
+	require.NotContains(t, page, "Capture calendar")
+	require.NotContains(t, getJSON2(t, mux, "/console/sessions?format=json"), "captureStreak")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page = getPeek(t, mux, "/console/sessions").Body.String()
+	require.Contains(t, page, "Capture calendar")
+	require.Contains(t, page, `class="mom-cal-grid"`)
+	require.Contains(t, page, "mom-cal-dot", "the covered day carries its mark")
+	require.Contains(t, page, "day capture streak")
+	require.Contains(t, getJSON2(t, mux, "/console/sessions?format=json"), `"captureStreak"`)
+}
+
+// getJSON2 fetches a path and returns the raw JSON body as a string.
+func getJSON2(t *testing.T, mux *http.ServeMux, path string) string {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	return rr.Body.String()
+}
+
 func TestSessionDetail_TrialsSectionFollowsTheFeature(t *testing.T) {
 	db, mux, _ := newGatedConsole(t)
 	ctx := context.Background()

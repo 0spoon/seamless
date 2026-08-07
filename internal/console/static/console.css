@@ -4426,3 +4426,31 @@ button.star.on .ico { fill: currentColor; }
 .iso-confirm-line { margin: 0; font-size: var(--text-xs); line-height: 1.6; color: var(--text-primary); }
 .iso-confirm-effects { margin: 0; padding-left: 18px; font-size: var(--text-xs); line-height: 1.7; }
 .iso-confirm-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* --- Momentum: capture calendar (Sessions) --------------------------------- */
+/* The contribution grid and its two quiet streak numbers. Empty days rest in
+   the border tone -- a pause is never a warning -- and covered days carry the
+   retention-green dot the coverage surfaces already use. */
+.mom-cal {
+  margin: 0 0 14px; padding: 12px 16px 10px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
+}
+.mom-cal-head { display: flex; align-items: baseline; gap: 18px; margin-bottom: 8px; }
+.mom-cal-head .ops-stage-eyebrow { display: inline-flex; align-items: center; gap: 6px; }
+.mom-cal-head .ops-stage-eyebrow .ico { width: 13px; height: 13px; }
+.mom-cal-streak { display: inline-flex; align-items: baseline; gap: 6px; }
+.mom-cal-streak strong { font-size: var(--text-md); font-weight: 650; color: var(--text-primary); font-variant-numeric: tabular-nums; }
+.mom-cal-streak small { font-size: var(--text-xs); color: var(--text-muted); }
+.mom-cal-key { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
+.mom-cal-key-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.mom-cal-scroll { overflow-x: auto; }
+.mom-cal-grid { display: block; }
+.mom-cal-grid text { font-size: 9px; fill: var(--text-muted); font-family: var(--font-sans); }
+.mom-cal-cell { fill: var(--border); }
+.mom-cal-cell.l0 { fill: var(--bg-page); stroke: var(--border); stroke-width: 1; }
+.mom-cal-cell.l1 { fill: var(--brand); fill-opacity: .3; }
+.mom-cal-cell.l2 { fill: var(--brand); fill-opacity: .55; }
+.mom-cal-cell.l3 { fill: var(--brand); fill-opacity: .8; }
+.mom-cal-cell.l4 { fill: var(--brand); }
+.mom-cal-dot { fill: var(--ok); pointer-events: none; }

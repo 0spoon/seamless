@@ -1,6 +1,7 @@
 package console
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -68,6 +69,18 @@ type sessionsData struct {
 	WindowLabel string         `json:"windowLabel"`
 	Windows     []windowOption `json:"-"`
 	Sessions    []sessionRow   `json:"sessions"`
+	// Calendar and Streak are the momentum capture calendar (a year of daily
+	// activity with covered-day marks) and its two quiet numbers. Both are nil
+	// while the momentum feature is off -- zero trace, including in the JSON.
+	Calendar template.HTML  `json:"-"`
+	Streak   *captureStreak `json:"captureStreak,omitempty"`
+}
+
+// captureStreak carries the calendar's two quiet numbers: the current run of
+// covered days and the longest ever (store.CaptureStreak).
+type captureStreak struct {
+	Current int `json:"current"`
+	Longest int `json:"longest"`
 }
 
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
@@ -145,6 +158,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			return sessionSortName(rows[i]) < sessionSortName(rows[j])
 		})
 	}
+	calendar, streak := s.captureCalendar(ctx, now)
 	s.render(w, r, "sessions", pageData{
 		Title:  "Sessions",
 		Active: "sessions",
@@ -154,8 +168,43 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			Total:  counts.Sessions,
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
 			Sessions: rows,
+			Calendar: calendar, Streak: streak,
 		},
 	})
+}
+
+// captureCalendar assembles the momentum capture calendar for the Sessions
+// page: a full year of daily session activity with covered-day marks, plus the
+// streak numbers. Sessions is the screen about daily rhythm, so the full-year
+// grid lives here rather than as a compact strip on Overview (the placement
+// call the plan left to the implementer). Gated on the momentum feature --
+// off, neither query runs and the page is byte-identical to before -- and
+// failure-soft: a store error costs the calendar, never the page.
+func (s *Service) captureCalendar(ctx context.Context, now time.Time) (template.HTML, *captureStreak) {
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		return "", nil
+	}
+	// A year back from today's local midnight, extended to the previous Sunday
+	// so the grid's first column is a full week (AddDate day arithmetic, per
+	// the localBucketAxis conventions -- never 24h multiples across DST).
+	l := now.Local()
+	start := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, l.Location()).AddDate(0, 0, -364)
+	start = start.AddDate(0, 0, -int(start.Weekday()))
+	buckets, err := store.SessionCoverageBuckets(ctx, s.cfg.DB,
+		store.RetrievalWindow{Key: "calendar", Since: start}, now)
+	if err != nil {
+		s.logger.Warn("console: capture calendar buckets", "error", err)
+		return "", nil
+	}
+	if len(buckets) == 0 {
+		return "", nil // no sessions in the year: absence is the empty state
+	}
+	current, longest, err := store.CaptureStreak(ctx, s.cfg.DB, now)
+	if err != nil {
+		s.logger.Warn("console: capture streak", "error", err)
+		return calendarGrid(buckets, start), nil
+	}
+	return calendarGrid(buckets, start), &captureStreak{Current: current, Longest: longest}
 }
 
 // sessionMatches reports whether a session row satisfies the ?q text filter

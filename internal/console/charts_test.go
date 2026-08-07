@@ -6,6 +6,7 @@ import (
 	"html"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -133,4 +134,36 @@ func svgTag(t *testing.T, markup, prefix string) string {
 	end := strings.Index(rest[len(prefix):], ">")
 	require.GreaterOrEqual(t, end, 0, "unterminated tag at %s", prefix)
 	return rest[:len(prefix)+end+1]
+}
+
+// The capture calendar encodes two things per day cell: session volume as
+// intensity and covered-ness as a distinct dot. A day with no sessions is an
+// empty resting cell, never a warning tone (that is CSS, but the class
+// contract starts here).
+func TestCalendarGrid(t *testing.T) {
+	// A Sunday start, one full week: quiet, busy, covered, quiet...
+	start := time.Date(2026, 8, 2, 0, 0, 0, 0, time.Local) // a Sunday
+	days := []store.CoverageBucket{
+		{Label: "Aug 02"},                       // no sessions
+		{Label: "Aug 03", Total: 1},             // active, nothing captured
+		{Label: "Aug 04", Total: 4, Covered: 2}, // busy, captured
+		{Label: "Aug 05"},
+		{Label: "Aug 06", Total: 2, Covered: 1},
+		{Label: "Aug 07"},
+		{Label: "Aug 08"},
+	}
+	svg := string(calendarGrid(days, start))
+
+	require.Contains(t, svg, `class="mom-cal-grid"`)
+	require.Contains(t, svg, `role="img"`)
+	require.Equal(t, 7, strings.Count(svg, "mom-cal-cell"), "one cell per day")
+	require.Equal(t, 2, strings.Count(svg, "mom-cal-dot"), "one dot per covered day, none elsewhere")
+	require.Contains(t, svg, `class="mom-cal-cell l0"`, "a quiet day rests at level zero")
+	require.Contains(t, svg, `class="mom-cal-cell l4"`, "the busiest day carries full intensity")
+	require.Contains(t, svg, "Aug 04 -- 4 sessions, 2 captured")
+	require.Contains(t, svg, "Aug 02 -- no sessions")
+	require.Contains(t, svg, `>Aug</text>`, "the month labels its first column")
+	require.Contains(t, svg, ">Mon</text>")
+
+	require.Empty(t, calendarGrid(nil, start), "no days renders nothing")
 }

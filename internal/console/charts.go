@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -79,6 +80,7 @@ var lucidePaths = map[string]string{
 	"eye-off":               `<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>`,
 	"toggle-right":          `<rect width="20" height="12" x="2" y="6" rx="6" ry="6"/><circle cx="16" cy="12" r="2"/>`,
 	"flag":                  `<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>`,
+	"calendar-days":         `<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>`,
 	"power":                 `<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>`,
 }
 
@@ -519,6 +521,82 @@ func sparkLine(s spark) template.HTML {
 	}
 	return template.HTML(`<svg class="` + cls + `" viewBox="0 0 96 26"` + attrs +
 		`><polyline points="` + pts.String() + `"></polyline></svg>`)
+}
+
+// ---------------------------------------------------------------------------
+// Capture calendar -- the momentum contribution grid
+// ---------------------------------------------------------------------------
+
+// calendarGrid renders the momentum capture calendar: one cell per local day,
+// weeks as Sunday-first columns, cell intensity from sessions per day, and a
+// distinct dot on covered days (a session left a durable artifact). days must
+// be contiguous daily buckets beginning at start -- a local midnight, ideally
+// week-aligned so the first column is full -- as SessionCoverageBuckets
+// produces over a synthetic window. A day with no sessions is an empty cell in
+// the resting tone: a pause, never a warning.
+func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
+	if len(days) == 0 {
+		return ""
+	}
+	const cell, pitch = 11.0, 14.0 // cell size and grid pitch (cell + 3 gap)
+	const left, top = 30.0, 16.0   // gutters: weekday labels, month labels
+
+	lead := int(start.Local().Weekday()) // empty rows above the first day, Sunday-first
+	weeks := (lead + len(days) + 6) / 7
+	maxN := 0
+	for _, d := range days {
+		maxN = max(maxN, d.Total)
+	}
+
+	var cells, months strings.Builder
+	lastMonth := time.Month(0)
+	day := start.Local()
+	for i, d := range days {
+		row := (lead + i) % 7
+		col := (lead + i) / 7
+		x := left + float64(col)*pitch
+		y := top + float64(row)*pitch
+
+		// Month labels ride the first cell of each new month's week column.
+		if row == 0 || i == 0 {
+			if m := day.Month(); m != lastMonth {
+				fmt.Fprintf(&months, `<text x="%.0f" y="11">%s</text>`, x, m.String()[:3])
+				lastMonth = m
+			}
+		}
+
+		lvl := 0
+		if d.Total > 0 && maxN > 0 {
+			lvl = min(4, 1+(d.Total*4-1)/maxN)
+		}
+		title := day.Format("Jan 02") + " -- no sessions"
+		if d.Total > 0 {
+			title = fmt.Sprintf("%s -- %s, %d captured", day.Format("Jan 02"),
+				plural(d.Total, "session", "sessions"), d.Covered)
+		}
+		fmt.Fprintf(&cells, `<rect class="mom-cal-cell l%d" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2"><title>%s</title></rect>`,
+			lvl, x, y, cell, cell, template.HTMLEscapeString(title))
+		if d.Covered > 0 {
+			fmt.Fprintf(&cells, `<circle class="mom-cal-dot" cx="%.1f" cy="%.1f" r="1.8"></circle>`,
+				x+cell/2, y+cell/2)
+		}
+		day = day.AddDate(0, 0, 1)
+	}
+
+	var wdays strings.Builder
+	for row, label := range []string{"", "Mon", "", "Wed", "", "Fri", ""} {
+		if label == "" {
+			continue
+		}
+		fmt.Fprintf(&wdays, `<text x="0" y="%.0f">%s</text>`, top+float64(row)*pitch+cell-2, label)
+	}
+
+	w := left + float64(weeks)*pitch
+	h := top + 7*pitch
+	return template.HTML(fmt.Sprintf(
+		`<svg class="mom-cal-grid" viewBox="0 0 %.0f %.0f" width="%.0f" height="%.0f" role="img" aria-label="Sessions per day over the last year; a dot marks days that captured knowledge">`+
+			`<g class="mom-cal-months">%s</g><g class="mom-cal-wdays">%s</g>%s</svg>`,
+		w, h, w, h, months.String(), wdays.String(), cells.String()))
 }
 
 // ---------------------------------------------------------------------------

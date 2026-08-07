@@ -39,6 +39,20 @@
   </div>
 </header>
 
+{{if .Calendar}}
+<section class="mom-cal" aria-label="Capture calendar">
+  <header class="mom-cal-head">
+    <span class="ops-stage-eyebrow">{{icon "calendar-days"}}Capture calendar</span>
+    {{with .Streak}}
+    <span class="mom-cal-streak"><strong>{{.Current}}</strong><small>day capture streak</small></span>
+    <span class="mom-cal-streak"><strong>{{.Longest}}</strong><small>longest ever</small></span>
+    {{end}}
+    <span class="mom-cal-key"><i class="mom-cal-key-dot"></i>day that captured knowledge</span>
+  </header>
+  <div class="mom-cal-scroll">{{.Calendar}}</div>
+</section>
+{{end}}
+
 <section class="ops-stage sessions-stage" aria-label="Session map">
   <header class="ops-stage-head">
     <div class="ops-stage-title">
