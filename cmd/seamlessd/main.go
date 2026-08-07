@@ -278,6 +278,11 @@ func runServe(args []string) error {
 		APIKey: cfg.MCP.APIKey, Version: buildVersion(),
 		ToolEventMaxChars:   cfg.Budgets.ToolEventMaxChars,
 		CaptureAllowedPorts: cfg.Capture.AllowedPorts, Logger: logger,
+		// The file/env optional-features base. The server layers the console's
+		// stored override on top of it per request, so a toggle needs no restart
+		// -- but without this line the file and SEAMLESS_FEATURES_* env would be
+		// invisible to the tool gate, leaving the DB row as the only way in.
+		Features: cfg.Features,
 	})
 	// A2A: the agent-to-agent surface, one recall skill over the same retrieve
 	// service and bearer key as MCP. The endpoint URL in the card is the real
@@ -300,6 +305,9 @@ func runServe(args []string) error {
 		APIKey: cfg.MCP.APIKey, DataDir: cfg.DataDir, ConfigPath: absConfigPath(cfg.SourcePath()),
 		DBPath:  cfg.DBPath(),
 		Budgets: cfg.Budgets, GardenerCfg: cfg.Gardener, BriefingCfg: cfg.Briefing,
+		// The file/env optional-features base; the console layers its own stored
+		// override on top per request (same precedence as BriefingCfg).
+		Features:       cfg.Features,
 		Embedding:      embedRT,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
 		Logger:         logger,

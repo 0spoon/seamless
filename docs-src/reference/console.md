@@ -30,6 +30,8 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
+| Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -39,8 +41,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, project families) that shapes future
-briefings without touching any memory's content.
+configuration knob (briefing overrides, feature switches, project families) that
+shapes future briefings, or what is exposed, without touching any memory's
+content.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -310,9 +313,13 @@ captures only.
 `/console/labs`, `/console/labs/{name}`
 
 The research-lab surface (the console twin of `lab_open` / `trial_record` /
-`trial_query`). A lab is not a stored entity - it is the label its trials carry,
-a stable name for one line of investigation - so this screen is an aggregation
-over the trials table and there is nothing to write.
+`trial_query`). Labs and Trials are one [optional feature](#optional-features)
+and ship off; while it is off both screens answer with a short "switched off"
+page and neither appears in the nav.
+
+A lab is not a stored entity - it is the label its trials carry, a stable name
+for one line of investigation - so this screen is an aggregation over the trials
+table and there is nothing to write.
 
 The same library shape: a rail of labs, most recently active first, each with
 its trial count and pass/fail tallies. The reader shows one lab's whole
@@ -327,8 +334,10 @@ uncapped, filterable view.
 `/console/trials`, `/console/trials/{id}`
 
 The flat, filterable view over every recorded trial - the console twin of the
-`trial_query` MCP tool. The rail groups trials by lab (a group sits where its
-newest trial does) and filters by `?lab=` and `?outcome=`. Outcomes are
+`trial_query` MCP tool, and part of the same
+[optional feature](#optional-features) as [Labs](#labs). The rail groups trials
+by lab (a group sits where its newest trial does) and filters by `?lab=` and
+`?outcome=`. Outcomes are
 free-form by design, so `?outcome=` is an exact-match filter rather than a
 validated enum; the seg offers the conventional values (`pass`, `fail`,
 `partial`, `inconclusive`).
@@ -436,14 +445,58 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 `/console/settings`
 
 A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for the
-semantic index, briefing injection (including utility ranking), and project
-families.
+registered projects, and the repo→project map - with editable blocks for
+optional features, the semantic index, briefing injection (including utility
+ranking), and project families.
 
-**Semantic index & storage**: the embedding pipeline and the SQLite database,
-side by side. The embedder card shows the active provider and model - and when
-embeddings are off, the exact cause, with distinct copy for the owner off
-switch, the no-key lexical fallback, and a config error. The off/auto switch is
+### Optional features
+
+`/console/settings#features`
+
+Optional features are the parts of Seamless you can switch on and off, and they
+ship **off**: a fresh install exposes none of them until you turn one on. The
+zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+feature is, a generated line naming exactly what switching it off hides, and a
+live count of the data it holds either way ("Data kept: 12 trials across 3
+labs").
+
+There is one today: **Research labs & trials**, which owns the [Labs](#labs) and
+[Trials](#trials) screens, the trials search scope, and the `lab_open`,
+`trial_record`, and `trial_query` MCP tools. Screens and tools move together on
+purpose, so an agent never sees a tool for a screen you switched off.
+
+**Nothing is ever deleted.** Switching a feature off gates exposure and nothing
+else: the trials stay in the database, its screens answer with a short "switched
+off" page that links back here (a JSON caller gets a 403), and switching it back
+on restores every surface exactly as it was. That is what the data-kept line on
+each card is for - it reports the feature's own rows whether it is on or off.
+
+**When the change lands** has four different answers:
+
+| Surface | When |
+|---|---|
+| The console | Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render. |
+| A tool call | Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it already has. |
+| The client-side skill | The next `seamlessd install-hooks` run. The daemon does not reach into `~/.claude/skills` on a toggle, so `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still sitting in a client's skill home. |
+
+Saving writes a **stored override** row in the database - the same layer the
+briefing form uses. It wins over file and env, never touches your config file,
+and holds until **Reset to file + env** clears it; reset means back to the
+file/env configuration, which unless you set `features:` there is off.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds the override with research on,
+so a feature that now ships off does not disappear from under data you were
+already using. That is why the zone states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.
+
+### Semantic index & storage
+
+The embedding pipeline and the SQLite database, side by side. The embedder card
+shows the active provider and model - and when embeddings are off, the exact
+cause, with distinct copy for the owner off switch, the no-key lexical fallback,
+and a config error. The off/auto switch is
 a settings row read once at serve start, so the page flags a pending restart
 whenever the stored switch disagrees with the running process. Below it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
@@ -452,9 +505,11 @@ table that badges models the running embedder no longer writes as stale -
 background. The database card shows the file path, size on disk including the
 WAL, and schema version.
 
-**Briefing injection**: saving writes a runtime override row in the DB. It
-layers over the file/env values and wins until reset, and it applies from the
-next session start - no daemon restart. It never touches your config file, so
+### Briefing injection
+
+Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so
 `seamless.yaml` stays the thing you wrote. **Reset** clears the override and
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
@@ -473,7 +528,9 @@ overrides the latch in either direction; when the global mode is `on` or
 [Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
-**Project families**: create, rename, edit, or delete the named groupings that
+### Project families
+
+Create, rename, edit, or delete the named groupings that
 [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
 the CLI - the same `project_families` setting, so a change on either surface
 shows up on the other. Members are chosen from a closed picker of registered

@@ -14,6 +14,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/store"
 	"github.com/0spoon/seamless/internal/validate"
@@ -154,11 +155,20 @@ type databasePanel struct {
 // FamilyEditors supplies the other intentionally editable control surface.
 // Runtime configuration and project routing remain read-only here.
 type settingsData struct {
-	DataDir            string                `json:"dataDir"`
-	Budgets            config.Budgets        `json:"budgets"`
-	Gardener           config.Gardener       `json:"gardener"`
-	Briefing           config.Briefing       `json:"briefing"`
-	BriefingOverridden bool                  `json:"briefingOverridden"`
+	DataDir            string          `json:"dataDir"`
+	Budgets            config.Budgets  `json:"budgets"`
+	Gardener           config.Gardener `json:"gardener"`
+	Briefing           config.Briefing `json:"briefing"`
+	BriefingOverridden bool            `json:"briefingOverridden"`
+	// Features is the effective optional-feature state, one card per registry
+	// entry in registry order. FeaturesConfig is the same state as the raw
+	// config struct, and FeaturesOverridden reports whether a stored override
+	// row is in force (the console save or the grandfather migration wrote it).
+	// This trio is the contract `seam doctor` reads to compute how many MCP
+	// tools a daemon should be exposing.
+	Features           []featureCard         `json:"features"`
+	FeaturesConfig     config.Features       `json:"featuresConfig"`
+	FeaturesOverridden bool                  `json:"featuresOverridden"`
 	Embeddings         embeddingsPanel       `json:"embeddings"`
 	Database           databasePanel         `json:"database"`
 	UtilityRows        []utilityProjectRow   `json:"utilityRows"`
@@ -207,6 +217,16 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// The features zone resolves the same way the gates do, and its data line
+	// needs the RAW counts: a feature that is off still holds its rows, and
+	// saying so is the point of the line. s.navCounts zeroes them by design.
+	featuresCfg, featuresOverridden := s.featuresConfig(ctx)
+	rawCounts, cerr := store.GetNavCounts(ctx, s.cfg.DB)
+	if cerr != nil {
+		// Best-effort, like the sidebar badges: a counts failure costs the
+		// reassurance line, not the page.
+		s.logger.Warn("console: settings feature counts", "error", cerr)
+	}
 
 	s.render(w, r, "settings", pageData{
 		Title:  "Settings",
@@ -219,6 +239,9 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			Gardener:           s.cfg.GardenerCfg,
 			Briefing:           briefing,
 			BriefingOverridden: overridden,
+			Features:           featureCards(featuresCfg, navCounts{Labs: rawCounts.Labs, Trials: rawCounts.Trials}),
+			FeaturesConfig:     featuresCfg,
+			FeaturesOverridden: featuresOverridden,
 			UtilityRows:        utilityRows,
 			UtilityReady:       [3]int{store.UtilityReadyMinEvents, store.UtilityReadyMinMemories, store.UtilityReadyMinAgeDays},
 			Projects:           projects,
@@ -418,6 +441,90 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	settingsNotice(w, r, "Briefing settings saved -- they apply from the next session start.")
+}
+
+// eventFeaturesChanged records an optional-feature toggle in the event log, so
+// a change of what agents can reach shows up in Activity with the same
+// attribution as every other owner action.
+const eventFeaturesChanged core.EventKind = "settings.features_changed"
+
+// settingsFeaturesSave persists the optional-features form as the stored
+// override row. Like the briefing form it rebuilds the WHOLE struct from
+// checkbox presence -- an unchecked box submits nothing, so reading only the
+// fields that arrived would make "turn it off" indistinguishable from "leave it
+// alone". It never rewrites the config file, and it applies immediately in the
+// console (agents pick the change up when they next list tools).
+func (s *Service) settingsFeaturesSave(w http.ResponseWriter, r *http.Request) {
+	// Boundary check before anything is stored: a field that is present but not
+	// the checkbox's own value, or a feature_* field naming nothing in the
+	// registry, is a caller mistake and must not quietly become "off".
+	known := make(map[string]bool, len(features.Registry()))
+	for _, f := range features.Registry() {
+		known[featureField(f.Key)] = true
+	}
+	for name, values := range r.PostForm {
+		if !strings.HasPrefix(name, featureFieldPrefix) {
+			continue
+		}
+		if !known[name] {
+			settingsFeaturesFlash(w, r, fmt.Sprintf("unknown feature field %q", name))
+			return
+		}
+		if len(values) != 1 || values[0] != "1" {
+			settingsFeaturesFlash(w, r, fmt.Sprintf("%s must be omitted (off) or set exactly once to 1 (on)", name))
+			return
+		}
+	}
+
+	var cfg config.Features
+	changed := make(map[string]any, len(features.Registry()))
+	var on []string
+	for _, f := range features.Registry() {
+		enabled := r.PostFormValue(featureField(f.Key)) != ""
+		f.Set(&cfg, enabled)
+		changed[string(f.Key)] = enabled
+		if enabled {
+			on = append(on, f.Label)
+		}
+	}
+	if err := store.SetFeaturesConfig(r.Context(), s.cfg.DB, cfg); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if s.cfg.Events != nil {
+		if _, err := s.cfg.Events.Record(r.Context(), core.Event{
+			Kind:    eventFeaturesChanged,
+			Payload: map[string]any{"features": changed, "by": "console"},
+		}); err != nil {
+			s.logger.Warn("console: record features event", "error", err)
+		}
+	}
+	msg := "Optional features saved -- all of them are off."
+	if len(on) > 0 {
+		msg = "Optional features saved -- " + strings.Join(on, ", ") +
+			" on. Agents pick the change up on their next session."
+	}
+	settingsFeaturesNotice(w, r, msg)
+}
+
+// settingsFeaturesReset clears the stored override row, so the effective state
+// falls back to the file/env configuration -- which, unless the owner set the
+// keys there, means every optional feature is off again. Nothing is deleted:
+// the feature's data is untouched either way.
+func (s *Service) settingsFeaturesReset(w http.ResponseWriter, r *http.Request) {
+	if err := store.ClearFeaturesConfig(r.Context(), s.cfg.DB); err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	if s.cfg.Events != nil {
+		if _, err := s.cfg.Events.Record(r.Context(), core.Event{
+			Kind:    eventFeaturesChanged,
+			Payload: map[string]any{"reset": true, "by": "console"},
+		}); err != nil {
+			s.logger.Warn("console: record features event", "error", err)
+		}
+	}
+	settingsFeaturesNotice(w, r, "Feature override cleared -- back to the file/env configuration.")
 }
 
 // settingsBriefingReset clears the runtime override row, reverting the
@@ -705,6 +812,14 @@ func settingsEmbeddingsFlash(w http.ResponseWriter, r *http.Request, msg string)
 
 func settingsEmbeddingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
 	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#semantic-index", http.StatusSeeOther)
+}
+
+func settingsFeaturesFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#features", http.StatusSeeOther)
+}
+
+func settingsFeaturesNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#features", http.StatusSeeOther)
 }
 
 func settingsRegistryFlash(w http.ResponseWriter, r *http.Request, msg string) {

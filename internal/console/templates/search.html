@@ -14,7 +14,7 @@
 
 <form class="search search-query" method="get" action="/console/search" data-seam-query>
   {{icon "search"}}
-  <input name="q" aria-label="Search memories, notes, tasks, plans, trials, projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
+  <input name="q" aria-label="Search memories, notes, tasks, plans,{{if .TrialsScope}} trials,{{end}} projects, and sessions" placeholder="Search memories, notes, tasks, plans&hellip;" value="{{.Query}}" autofocus>
   <input type="hidden" name="scope" value="{{.Scope}}">
   <input type="hidden" name="w" value="{{.Window}}">
   <input type="hidden" name="sort" value="{{.Sort}}">
@@ -109,7 +109,7 @@
 {{if .Query}}
     <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Nothing matches &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}.</div><a href="/console/search?scope={{.Scope}}&amp;w=all&amp;sort={{.Sort}}&amp;q={{.Query}}" data-seam-query>Search all time</a></div>
 {{else}}
-    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans, trials, projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
+    <div class="empty dotgrid search-empty"><span class="empty-ico">{{icon "search"}}</span><div>Search memories, notes, tasks, plans,{{if .TrialsScope}} trials,{{end}} projects, and sessions &mdash; or press <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Cmd</kbd>+<kbd>K</kbd> anywhere in the console.</div></div>
 {{end}}
 {{end}}
   </div><!-- .list-pane -->

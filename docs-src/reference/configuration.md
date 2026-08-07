@@ -22,14 +22,28 @@ Four layers resolve each key. Later layers win:
 1. **Defaults** - the built-in values in the table below.
 2. **File** - whatever the YAML sets.
 3. **Environment** - `SEAMLESS_*` overrides the file.
-4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
-   in the database. They win over file *and* env, apply from the next session
-   start without a daemon restart, and stay until reset.
+4. **Runtime override (DB)** - the console's Settings forms store some blocks in
+   the database. They win over file *and* env, take effect without a daemon
+   restart, and stay until reset.
 
-That fourth layer only covers the `briefing:` block. It exists so you can tune
-what agents get injected while they are running, and it is the one place where
-the config file is not the last word - check the console before concluding a
-briefing setting is being ignored.
+That fourth layer covers two blocks, and only those two:
+
+| Block | Written by | When it takes effect |
+|---|---|---|
+| `briefing:` | Settings → Briefing injection | From the next session start. |
+| `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it the next time its client lists tools, in practice its next session. |
+
+It exists so you can change what agents get injected - and what they can reach -
+while they are running, and it is the one place where the config file is not the
+last word: check the console before concluding a `briefing:` or `features:`
+setting is being ignored. Neither form ever writes your config file, and
+**Reset** on either clears the stored row and hands that block back to file/env.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds a stored `features:` override
+with research on, so a feature that now ships off does not disappear from under
+data you were already using. The console labels it a stored override, not your
+choice; **Reset** clears it like any other.
 
 ## Generating a key
 

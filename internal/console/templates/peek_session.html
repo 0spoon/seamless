@@ -64,7 +64,7 @@
   <footer class="session-peek-footer">
     <span>{{len .ClaimedTasks}} claimed task{{if ne (len .ClaimedTasks) 1}}s{{end}}</span>
     <span>{{len .Memories}} memor{{if eq (len .Memories) 1}}y{{else}}ies{{end}}</span>
-    <span>{{len .Trials}} trial{{if ne (len .Trials) 1}}s{{end}}</span>
+    {{if .ShowTrials}}<span>{{len .Trials}} trial{{if ne (len .Trials) 1}}s{{end}}</span>{{end}}
     <span class="session-peek-id">{{shortID .Session.ID}}</span>
   </footer>
 </article>

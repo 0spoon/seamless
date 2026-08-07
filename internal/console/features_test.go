@@ -1,0 +1,551 @@
+package console
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/features"
+	"github.com/0spoon/seamless/internal/store"
+)
+
+// newGatedConsole builds a console with every optional feature at its shipped
+// default (off) and seeds one trial, so every assertion below is about the gate
+// rather than about an empty database.
+func newGatedConsole(t *testing.T) (*sql.DB, *http.ServeMux, string) {
+	t.Helper()
+	db, mux := newConsoleFeatures(t, config.Features{})
+	id := seedTrial(t, db, "cold-lab", "boot loop trial", core.OutcomeFail, "demo", "", nil, 1)
+	return db, mux, id
+}
+
+// gatedPaths are the four routes the research feature owns.
+func gatedPaths(trialID string) []string {
+	return []string{"/console/labs", "/console/labs/cold-lab", "/console/trials", "/console/trials/" + trialID}
+}
+
+func TestGatedRoutes_RenderTheDisabledPageForBrowsers(t *testing.T) {
+	_, mux, trialID := newGatedConsole(t)
+
+	for _, path := range gatedPaths(trialID) {
+		rr := getPeek(t, mux, path)
+		require.Equal(t, http.StatusOK, rr.Code, "%s: a switched-off feature is an explanation, not an error", path)
+		body := rr.Body.String()
+		require.Contains(t, body, `data-feature-off="research"`, path)
+		require.Contains(t, body, "Research labs &amp; trials is switched off", path)
+		require.Contains(t, body, "Nothing was deleted", path)
+		require.Contains(t, body, `href="/console/settings#features"`, path)
+		// The gated screen's own content must not leak through.
+		require.NotContains(t, body, "boot loop trial", path)
+		require.NotContains(t, body, `id="lib-reader"`, path)
+	}
+}
+
+func TestGatedRoutes_JSONCallersGet403(t *testing.T) {
+	_, mux, trialID := newGatedConsole(t)
+
+	for _, path := range gatedPaths(trialID) {
+		req := httptest.NewRequest(http.MethodGet, path+"?format=json", nil)
+		req.Header.Set("Authorization", "Bearer "+testKey)
+		rr := do(mux, req)
+		require.Equal(t, http.StatusForbidden, rr.Code, path)
+
+		var payload map[string]string
+		require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &payload), path)
+		require.Equal(t, "the research feature is disabled", payload["error"], path)
+	}
+}
+
+// A stale detail-pane fetch must get a fragment, not a whole console nested
+// inside the pane.
+func TestGatedRoutes_PeekFetchGetsAFragment(t *testing.T) {
+	_, mux, trialID := newGatedConsole(t)
+
+	rr := getPeek(t, mux, "/console/trials/"+trialID+"?peek=1")
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.Contains(t, body, `class="peek-entity"`)
+	require.Contains(t, body, "switched off")
+	require.NotContains(t, body, "<html")
+}
+
+// Gating is unauthenticated-safe: auth still decides first, so a disabled route
+// never becomes a way to probe the console without the key.
+func TestGatedRoutes_StillRequireAuth(t *testing.T) {
+	_, mux, trialID := newGatedConsole(t)
+
+	rr := do(mux, httptest.NewRequest(http.MethodGet, "/console/trials/"+trialID, nil))
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "/console/login")
+}
+
+func TestGatedRoutes_ServeNormallyWhenEnabled(t *testing.T) {
+	db, mux := newConsoleFeatures(t, config.Features{Research: true})
+	id := seedTrial(t, db, "cold-lab", "boot loop trial", core.OutcomeFail, "demo", "", nil, 1)
+
+	for _, path := range gatedPaths(id) {
+		rr := getPeek(t, mux, path)
+		require.Equal(t, http.StatusOK, rr.Code, path)
+		require.NotContains(t, rr.Body.String(), `data-feature-off`, path)
+	}
+}
+
+// The stored override is what flips the gate at runtime -- no restart, no
+// rebuild of the service.
+func TestGatedRoutes_StoredOverrideFlipsTheGateLive(t *testing.T) {
+	db, mux, trialID := newGatedConsole(t)
+	ctx := context.Background()
+
+	require.Equal(t, http.StatusOK, getPeek(t, mux, "/console/trials").Code)
+	require.Contains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Research: true}))
+	require.NotContains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off",
+		"the override applies to the very next render")
+	require.Contains(t, getPeek(t, mux, "/console/trials/"+trialID).Body.String(), "boot loop trial")
+
+	require.NoError(t, store.ClearFeaturesConfig(ctx, db))
+	require.Contains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off",
+		"clearing the override falls back to the file/env base, which is off")
+}
+
+func TestNavEntries_HideWhileTheFeatureIsOff(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, page, `href="/console/labs"`)
+	require.NotContains(t, page, `href="/console/trials"`)
+
+	require.NoError(t, store.SetFeaturesConfig(context.Background(), db, config.Features{Research: true}))
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, `href="/console/labs"`)
+	require.Contains(t, page, `href="/console/trials"`)
+	require.Contains(t, page, `<span class="nav-label">Trials</span><span class="count">1</span>`,
+		"the badge count returns with the entry")
+}
+
+// The badge counts are zeroed as well as hidden, so a stale or partially morphed
+// template cannot leak a count for a screen that is switched off.
+func TestNavCounts_ZeroWhileTheFeatureIsOff(t *testing.T) {
+	db, _, _ := newGatedConsole(t)
+	svc, err := New(Config{DB: db, APIKey: testKey})
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	off := svc.navCounts(ctx, config.Features{})
+	require.Equal(t, 0, off.Labs)
+	require.Equal(t, 0, off.Trials)
+
+	on := svc.navCounts(ctx, config.Features{Research: true})
+	require.Equal(t, 1, on.Labs)
+	require.Equal(t, 1, on.Trials)
+}
+
+func TestSearch_TrialsScopeLeavesTheEnumWhileTheFeatureIsOff(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	// The scope is not offered, not mentioned, and not silently searched.
+	page := getPeek(t, mux, "/console/search?q=boot").Body.String()
+	require.NotContains(t, page, `href="/console/search?scope=trials`)
+	require.NotContains(t, page, "boot loop trial")
+	require.NotContains(t, page, "tasks, plans, trials, projects")
+
+	var data searchData
+	getJSON(t, mux, "/console/search?q=boot&format=json", &data)
+	for _, g := range data.Groups {
+		require.NotEqual(t, "trials", g.Kind, "scope=all must not reach past the gate")
+	}
+
+	// An explicit ?scope=trials is a named 400, never a quiet "search everything".
+	req := httptest.NewRequest(http.MethodGet, "/console/search?q=boot&scope=trials&format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Contains(t, rr.Body.String(),
+		`invalid scope \"trials\": valid values are all, memories, notes, tasks, plans, projects, sessions`,
+		"the named-values list must not advertise the gated scope")
+
+	// Enabled: the scope, the copy, and the rows all come back.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Research: true}))
+	page = getPeek(t, mux, "/console/search?q=boot").Body.String()
+	require.Contains(t, page, `href="/console/search?scope=trials`)
+	require.Contains(t, page, "boot loop trial")
+
+	getJSON(t, mux, "/console/search?q=boot&scope=trials&format=json", &data)
+	require.Equal(t, 1, data.Total)
+	require.Equal(t, "trials", data.Groups[0].Kind)
+}
+
+// The favorites view is the ?fav=1 search filter: a starred trial disappears
+// with the feature and returns with it, rather than leaving a dead link.
+func TestSearchFavorites_TrialRowsFollowTheFeature(t *testing.T) {
+	db, mux, trialID := newGatedConsole(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetTrialFavorite(ctx, db, trialID, true))
+
+	var data searchData
+	getJSON(t, mux, "/console/search?q=boot&fav=1&format=json", &data)
+	require.Equal(t, 0, data.Total, "a starred trial stays hidden while the feature is off")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Research: true}))
+	getJSON(t, mux, "/console/search?q=boot&fav=1&format=json", &data)
+	require.Equal(t, 1, data.Total)
+	require.Equal(t, "trials", data.Groups[0].Kind)
+}
+
+func TestOverviewCoverage_DropsTheTrialsChannelWhileOff(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+
+	var data overviewData
+	getJSON(t, mux, "/console/?format=json", &data)
+	for _, row := range data.CoverageRows {
+		require.NotEqual(t, "Trials", row.Label, "a switched-off channel must not read as 0% retention")
+	}
+
+	require.NoError(t, store.SetFeaturesConfig(context.Background(), db, config.Features{Research: true}))
+	getJSON(t, mux, "/console/?format=json", &data)
+	labels := make([]string, 0, len(data.CoverageRows))
+	for _, row := range data.CoverageRows {
+		labels = append(labels, row.Label)
+	}
+	require.Equal(t, []string{"Findings", "Memories", "Notes", "Trials"}, labels)
+}
+
+func TestSessionDetail_TrialsSectionFollowsTheFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	sessID := mustID(t)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: sessID, Name: "cc/lab", ProjectSlug: "demo", Status: core.SessionActive,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+	seedTrial(t, db, "cold-lab", "session trial", core.OutcomePass, "demo", sessID, nil, 2)
+
+	var detail sessionDetail
+	getJSON(t, mux, "/console/sessions/"+sessID+"?format=json", &detail)
+	require.Empty(t, detail.Trials, "the query is skipped entirely while the feature is off")
+
+	page := getPeek(t, mux, "/console/sessions/"+sessID).Body.String()
+	require.NotContains(t, page, "Trials recorded")
+	require.NotContains(t, page, "session trial")
+	peek := getPeek(t, mux, "/console/sessions/"+sessID+"?peek=1").Body.String()
+	require.NotContains(t, peek, "trial")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Research: true}))
+	getJSON(t, mux, "/console/sessions/"+sessID+"?format=json", &detail)
+	require.Len(t, detail.Trials, 1)
+	require.Contains(t, getPeek(t, mux, "/console/sessions/"+sessID).Body.String(), "Trials recorded")
+	require.Contains(t, getPeek(t, mux, "/console/sessions/"+sessID+"?peek=1").Body.String(), "1 trial")
+}
+
+// The event log is an audit record, not a feature surface: a historical
+// "recorded trial ..." line stays visible whether or not the feature is on. A
+// straggler that links into a gated route lands on the disabled page, which is
+// exactly why that page exists.
+func TestEventLog_KeepsHistoricalTrialLinesWhileOff(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	id, err := events.NewRecorder(db).Record(ctx, core.Event{
+		Kind: core.EventTrialRecorded, ProjectSlug: "demo",
+		Payload: map[string]any{"title": "boot loop trial", "lab": "cold-lab"},
+	})
+	require.NoError(t, err)
+
+	var overview overviewData
+	getJSON(t, mux, "/console/?format=json", &overview)
+	var summaries []string
+	for _, row := range overview.Recent {
+		summaries = append(summaries, row.Summary)
+	}
+	require.Contains(t, summaries, "recorded trial boot loop trial",
+		"the event log is an audit record, not a feature surface")
+
+	// The entry is still readable, and its link into a gated screen lands on the
+	// disabled page rather than a dead end -- which is why that page exists.
+	require.Equal(t, http.StatusOK, getPeek(t, mux, "/console/events/"+id).Code)
+}
+
+func TestFeatureWhenOff_GeneratedFromTheRegistry(t *testing.T) {
+	f, ok := features.Get(features.Research)
+	require.True(t, ok)
+
+	line := featureWhenOff(f)
+	require.Equal(t,
+		"Hides the Labs & Trials screens, the trials search scope, and 3 agent tools (lab_open, trial_record, trial_query).",
+		line)
+
+	// Every tool the registry claims is named, so the line cannot drift from
+	// what the MCP filter actually hides.
+	for _, tool := range f.Tools {
+		require.Contains(t, line, tool)
+	}
+}
+
+func TestFeatureCards_RenderOnePerRegistryEntry(t *testing.T) {
+	cards := featureCards(config.Features{}, navCounts{Labs: 3, Trials: 12})
+	require.Len(t, cards, len(features.Registry()))
+
+	research := cards[0]
+	require.Equal(t, string(features.Research), research.Key)
+	require.Equal(t, "feature_research", research.Field)
+	require.False(t, research.Enabled)
+	require.False(t, research.Default, "optional features ship off")
+	require.Equal(t, "Data kept: 12 trials across 3 labs.", research.DataKept)
+
+	// No data yet reads as "no data yet", not as a confident zero-count line.
+	empty := featureCards(config.Features{}, navCounts{})
+	require.Equal(t, "No trial data yet.", empty[0].DataKept)
+
+	on := featureCards(config.Features{Research: true}, navCounts{Labs: 1, Trials: 1})
+	require.True(t, on[0].Enabled)
+	require.Equal(t, "Data kept: 1 trial across 1 lab.", on[0].DataKept)
+}
+
+func TestSettingsFeaturesZone_MarkupContract(t *testing.T) {
+	_, mux, _ := newGatedConsole(t)
+
+	page := getPeek(t, mux, "/console/settings")
+	require.Equal(t, http.StatusOK, page.Code)
+	body := page.Body.String()
+
+	require.Contains(t, body, `<section class="settings-zone" id="features">`)
+	require.Contains(t, body, `href="#features"`, "the jumpbar carries the new zone")
+	require.Contains(t, body, "Optional features are off until you turn them on.")
+	require.Contains(t, body, "nothing is ever deleted")
+	require.Contains(t, body, "agents pick the change up on their next session")
+	require.Contains(t, body, `data-feature="research"`)
+	require.Contains(t, body, `action="/console/settings/features"`)
+	require.Contains(t, body, `data-features-form`)
+	require.Contains(t, body, `name="feature_research"`)
+	require.Contains(t, body, `class="brief-switch"`, "the toggle uses the shared switch markup")
+	require.Contains(t, body, "Disabled", "the state pill says which way the switch is")
+	require.Contains(t, body, "3 agent tools (lab_open, trial_record, trial_query)")
+	require.Contains(t, body, "Data kept: 1 trial across 1 lab.",
+		"the reassurance line reports the data of a feature that is currently off")
+	require.NotContains(t, body, `action="/console/settings/features/reset"`,
+		"reset is offered only while a stored override exists")
+
+	// Zone renumbering: features is 02 and the later zones moved down.
+	for _, marker := range []string{
+		`<div class="settings-zone-index">02</div>`,
+		`<div class="settings-zone-index">03</div>`,
+		`<div class="settings-zone-index">04</div>`,
+		`<div class="settings-zone-index">05</div>`,
+	} {
+		require.Contains(t, body, marker)
+	}
+	require.Contains(t, body, `<b>05</b><strong>Registry</strong>`)
+}
+
+func TestSettingsFeaturesZone_ShowsLiveDataAndOverrideState(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	require.NoError(t, store.SetFeaturesConfig(context.Background(), db, config.Features{Research: true}))
+
+	body := getPeek(t, mux, "/console/settings").Body.String()
+	require.Contains(t, body, "Data kept: 1 trial across 1 lab.")
+	require.Contains(t, body, "Enabled")
+	require.Contains(t, body, `action="/console/settings/features/reset"`)
+	require.Contains(t, body, "Stored override",
+		"the breadcrumb says stored override -- the grandfather migration can be the writer")
+	require.Contains(t, body, "A stored override is in force for these switches.")
+}
+
+func TestSettingsFeaturesSaveAndReset(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	// Save: the checkbox is present -> the feature is on, stored as an override.
+	rr := postForm(mux, "/console/settings/features", url.Values{"feature_research": {"1"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+	require.Contains(t, rr.Header().Get("Location"), "#features")
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.True(t, data.FeaturesOverridden)
+	require.True(t, data.FeaturesConfig.Research)
+	require.True(t, data.Features[0].Enabled)
+
+	cfg, overridden, err := store.FeaturesConfig(ctx, db, config.Features{})
+	require.NoError(t, err)
+	require.True(t, overridden)
+	require.True(t, cfg.Research)
+
+	// The gated route follows immediately.
+	require.NotContains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off")
+
+	// Save with the box absent = off. This is the full-struct rebuild: an
+	// unchecked box submits nothing, so "leave it alone" must not be the answer.
+	rr = postForm(mux, "/console/settings/features", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.True(t, data.FeaturesOverridden, "an all-off save is still a stored override")
+	require.False(t, data.FeaturesConfig.Research)
+	require.Contains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off")
+
+	// Reset deletes the row: back to the file/env base, which is off.
+	rr = postForm(mux, "/console/settings/features/reset", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.Contains(t, rr.Header().Get("Location"), "notice=")
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.False(t, data.FeaturesOverridden)
+	require.False(t, data.FeaturesConfig.Research)
+
+	_, found, err := store.GetSetting(ctx, db, store.SettingFeaturesConfig)
+	require.NoError(t, err)
+	require.False(t, found, "reset is a row deletion, not a stored all-off")
+}
+
+// Reset restores whatever the file/env layer says, which is not necessarily off.
+func TestSettingsFeaturesReset_FallsBackToTheFileBase(t *testing.T) {
+	db, mux := newConsoleFeatures(t, config.Features{Research: true})
+	ctx := context.Background()
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{}))
+	require.Contains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off")
+
+	rr := postForm(mux, "/console/settings/features/reset", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	require.NotContains(t, getPeek(t, mux, "/console/trials").Body.String(), "data-feature-off")
+}
+
+func TestSettingsFeaturesSave_RejectsUninterpretableFields(t *testing.T) {
+	_, mux, _ := newGatedConsole(t)
+
+	for _, body := range []string{
+		"feature_research=maybe",                // present but not the checkbox value
+		"feature_reserach=1",                    // typo'd feature name
+		"feature_research=1&feature_research=1", // submitted twice
+	} {
+		rr := postForm(mux, "/console/settings/features", body)
+		require.Equal(t, http.StatusSeeOther, rr.Code, body)
+		require.Contains(t, rr.Header().Get("Location"), "error=", body)
+	}
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.False(t, data.FeaturesOverridden, "a rejected form stores nothing")
+}
+
+// A features save is an owner action on what agents can reach, so it lands in
+// the event log with attribution like every other one.
+func TestSettingsFeaturesSave_RecordsAnEvent(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+
+	rr := postForm(mux, "/console/settings/features", url.Values{"feature_research": {"1"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+
+	evs, err := events.NewRecorder(db).RecentExcluding(context.Background(), 10)
+	require.NoError(t, err)
+	var found *core.Event
+	for i := range evs {
+		if evs[i].Kind == eventFeaturesChanged {
+			found = &evs[i]
+			break
+		}
+	}
+	require.NotNil(t, found, "the toggle must be visible in Activity")
+	require.Equal(t, "console", found.Payload["by"])
+	require.Equal(t, "optional features changed (research on)", eventSummary(*found))
+
+	rr = postForm(mux, "/console/settings/features/reset", "")
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	evs, err = events.NewRecorder(db).RecentExcluding(context.Background(), 10)
+	require.NoError(t, err)
+	require.Equal(t, "optional features reset to the file configuration", eventSummary(evs[0]))
+}
+
+// The settings JSON is the contract `seam doctor` reads to decide how many MCP
+// tools a daemon should expose, so its field names are pinned here.
+func TestSettingsJSON_ExposesTheFeatureContract(t *testing.T) {
+	_, mux, _ := newGatedConsole(t)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+
+	var raw map[string]json.RawMessage
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &raw))
+	require.Contains(t, raw, "features")
+	require.Contains(t, raw, "featuresConfig")
+	require.Contains(t, raw, "featuresOverridden")
+
+	var cards []struct {
+		Key     string   `json:"key"`
+		Label   string   `json:"label"`
+		Enabled bool     `json:"enabled"`
+		Default bool     `json:"default"`
+		Tools   []string `json:"tools"`
+		Field   string   `json:"field"`
+		WhenOff string   `json:"whenOff"`
+	}
+	require.NoError(t, json.Unmarshal(raw["features"], &cards))
+	require.Len(t, cards, len(features.Registry()))
+	require.Equal(t, "research", cards[0].Key)
+	require.Equal(t, "Research labs & trials", cards[0].Label)
+	require.False(t, cards[0].Enabled)
+	require.Equal(t, []string{"lab_open", "trial_record", "trial_query"}, cards[0].Tools)
+	require.Equal(t, "feature_research", cards[0].Field)
+	require.NotEmpty(t, cards[0].WhenOff)
+
+	require.JSONEq(t, `{"research": false}`, string(raw["featuresConfig"]))
+	require.Equal(t, "false", string(raw["featuresOverridden"]))
+}
+
+func TestFeatureStyles_ZoneAndDisabledPage(t *testing.T) {
+	css := string(consoleCSS)
+
+	require.Contains(t, css, ".features-workbench")
+	require.Contains(t, css, ".features-grid")
+	require.Contains(t, css, ".feature-card")
+	require.Contains(t, css, ".feature-off")
+	require.Contains(t, css, ".settings-jumpbar > a:nth-child(5) .settings-jump-icon",
+		"the fifth jumpbar entry needs its own icon color")
+	require.Contains(t, css, "grid-template-columns: repeat(5, minmax(0, 1fr)) auto",
+		"the jumpbar grid must make room for the features entry")
+	require.NotContains(t, css, "grid-template-columns: repeat(4, minmax(0, 1fr)) auto")
+}
+
+// The features form rides the same snapshot-based dirty tracker the briefing
+// form uses, and the page stays opted out of the live SSE morph so a half-filled
+// form is never clobbered.
+func TestSettingsFeaturesForm_DirtyStateAndNoLiveRefresh(t *testing.T) {
+	source, err := templateFS.ReadFile("templates/settings.html")
+	require.NoError(t, err)
+	page := string(source)
+
+	require.Contains(t, page, "window.SEAM_NO_LIVE_REFRESH = true")
+	require.Contains(t, page, "enhanceDirtyForm('[data-features-form]', 'features-state'")
+	require.Contains(t, page, "enhanceDirtyForm('[data-briefing-form]', 'brief-state'")
+	require.Contains(t, page, `id="features-state"`)
+}
+
+// The disabled page is a plain server-rendered page: no GET form, no reload, and
+// the way back is an ordinary link.
+func TestFeatureOffPage_StaysOnTheSharedNoReloadPath(t *testing.T) {
+	source, err := templateFS.ReadFile("templates/feature_off.html")
+	require.NoError(t, err)
+	page := string(source)
+
+	require.NotContains(t, page, "<form")
+	require.NotContains(t, page, "location.")
+	require.Contains(t, page, `href="{{.SettingsHref}}"`)
+	require.Contains(t, strings.Join(pageNames, ","), "feature_off",
+		"the page must be parsed with the layout like every other page")
+}

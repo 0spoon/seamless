@@ -51,9 +51,10 @@ itself. No Go toolchain is involved. In order, it:
 Step 3 detects three install targets - **Claude Code**, the **Claude app chat
 surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
 skills), and **Codex** - and wires the detected set. That one selection
-drives hooks, MCP registrations, and the maintained `seam-onboard` /
-`seam-research` skills together. On a terminal the run confirms the selection
-with a multi-select menu - answers are numbers or names, comma-separated
+drives hooks, MCP registrations, and the maintained skills together -
+`seam-onboard` always, `seam-research` only while its
+[optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) is on. On a terminal
+the run confirms the selection with a multi-select menu - answers are numbers or names, comma-separated
 (`1,3`), defaulting to the detected set; headless, the detected set is wired
 as-is. With nothing detected, a run on a terminal warns and asks whether to
 install at all (defaulting to no), and a headless run aborts - the installer

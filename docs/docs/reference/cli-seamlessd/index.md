@@ -57,9 +57,9 @@ you spot a daemon running older code than your working tree.
 seamlessd doctor
 ```
 
-Server-side self-checks. Each line reports `ok`, `warn`, or `fail`; **only a
-`fail` exits non-zero** - warnings are informational. Checks stop early if
-config or the database cannot be loaded at all.
+Server-side self-checks. Each line reports `ok`, `info`, `warn`, or `fail`;
+**only a `fail` exits non-zero** - warnings and info lines are informational.
+Checks stop early if config or the database cannot be loaded at all.
 
 | Check | What it reports |
 |---|---|
@@ -80,6 +80,7 @@ config or the database cannot be loaded at all.
 | `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
 | `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
+| `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
 
 The definition checks compare current desired state, not mere existence. The
@@ -123,8 +124,12 @@ Wires the selected install target(s) to Seamless: merges the hook entries into
 each hook client's file (Claude Code `settings.json`, Codex `hooks.json`),
 registers the MCP server (via the client's CLI, or for the Claude app chat
 surface by editing `claude_desktop_config.json` directly), and installs the
-embedded `seam-onboard` and `seam-research` skills into each hook client's
-skill home. The `claude-desktop` target is the chat surface's MCP bridge only -
+embedded skills into each hook client's skill home - `seam-onboard` always, and
+`seam-research` only while its
+[optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) is on. A skill whose
+feature is off is not installed, and a copy this installer previously delivered
+is removed, so an agent never reads about tools the server no longer exposes.
+The `claude-desktop` target is the chat surface's MCP bridge only -
 it has no hooks and no skills - so selecting only it together with
 `--mcp=false` is an error rather than a silent no-op.
 

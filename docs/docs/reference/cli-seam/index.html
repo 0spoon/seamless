@@ -469,7 +469,14 @@ memories by decayed demand, and pending gardener proposals.</p>
 <ol>
 <li><strong>server</strong> - <code>/healthz</code> reachable and reporting <code>ok</code>.</li>
 <li><strong>mcp_tools</strong> - <code>tools/list</code> returns the tool count this CLI was built to
-expect. A mismatch means the running daemon is a different build.</li>
+expect, minus the tools of any <a href="../../reference/console/#optional-features">optional
+feature</a> that is switched off (the
+line reads <code>31 registered, 28 exposed (research disabled)</code>). A mismatch that
+feature state does not explain means the running daemon is a different build.
+When the feature state cannot be read - the daemon is older than optional
+features, or its settings endpoint did not answer - the check judges the
+plausible range instead and names the reason rather than failing a healthy
+daemon.</li>
 <li><strong>projects</strong> - <code>project_list</code> answers.</li>
 </ol>
 <p>This is the client-side view. <code>seamlessd doctor</code> checks config, database, and

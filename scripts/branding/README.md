@@ -277,9 +277,14 @@ a throwaway instance seeded with the invented six-week fleet history in
 # 1. seed a throwaway data dir (the console-fleet seed, not -scenes)
 go run ./cmd/demoseed -data /tmp/seamless-demo
 
-# 2. serve it on a port that is NOT your live daemon
+# 2. serve it on a port that is NOT your live daemon. SEAMLESS_FEATURES_RESEARCH
+#    is load-bearing: optional features ship off and this throwaway data dir is a
+#    new installation, so without it the fleet's seeded trials would be hidden --
+#    the Overview loses its Labs/Trials tiles and its Trials coverage row, and
+#    the shots stop matching the seeded history. (This flow does not go through
+#    scripts/fixture/harness.sh, which sets the same thing for its own instances.)
 SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
-  SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
+  SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
 
 # 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
 pnpm add playwright-core     # once, anywhere; or run from a dir that has it

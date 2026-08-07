@@ -1,12 +1,15 @@
 package main
 
 import (
+	"maps"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/0spoon/seamless/internal/features"
 	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
 )
 
@@ -71,6 +74,30 @@ func TestGenerateMCPToolsRendersEnums(t *testing.T) {
 				"a table row must have exactly 4 columns; unescaped pipes add more")
 		}
 	}
+}
+
+// TestGenerateMCPToolsAnnotatesOptionalTools: a tool an optional feature owns
+// must say so on its reference page, and a tool no feature owns must not. The
+// set is read from the registry here exactly as the generator reads it, so a
+// newly optional tool is annotated without anyone editing a docs page.
+func TestGenerateMCPToolsAnnotatesOptionalTools(t *testing.T) {
+	repoRoot(t)
+
+	owners := features.ToolOwners()
+	require.NotEmpty(t, owners, "the registry owns at least one tool")
+	names := slices.Sorted(maps.Keys(owners))
+	// A tool no feature owns, rendered last so the tail check below is exact.
+	names = append(names, "memory_write")
+
+	md, err := generateMCPTools(&Page{Src: "reference/mcp/lab-gardener-usage.md", Tools: names}, "docs-src")
+	require.NoError(t, err)
+
+	for name, key := range owners {
+		require.Contains(t, md, "**Optional** - part of *", "%s: optional tools carry the note", name)
+		require.Contains(t, md, "hidden when the `"+string(key)+"` feature is disabled", "%s names its feature", name)
+	}
+	tail := md[strings.Index(md, "## memory_write"):]
+	require.NotContains(t, tail, "**Optional**", "a tool no feature owns carries no note")
 }
 
 func TestGenerateMCPToolsErrors(t *testing.T) {

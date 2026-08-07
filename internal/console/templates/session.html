@@ -143,7 +143,7 @@
             </div>
           </div>
           {{end}}
-          {{if .Trials}}
+          {{if and .ShowTrials .Trials}}
           <div class="session-work-section">
             <h3>Trials recorded <span>{{len .Trials}}</span></h3>
             <div class="session-entity-list">

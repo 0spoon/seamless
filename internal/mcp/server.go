@@ -22,6 +22,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/agentguide"
 	"github.com/0spoon/seamless/internal/capture"
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
@@ -202,7 +203,12 @@ type Config struct {
 	// (config.Capture.AllowedPorts). Empty means the capture package's 80/443
 	// default, never "any port".
 	CaptureAllowedPorts []int
-	Logger              *slog.Logger
+	// Features is the file/env optional-features config (config.Config.Features).
+	// It is only the BASE: the stored override row layers over it per request in
+	// effectiveFeatures, so a console toggle needs no restart. The zero value is
+	// every optional feature off, which is also config.Defaults().
+	Features config.Features
+	Logger   *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
@@ -287,6 +293,11 @@ func New(cfg Config) *Server {
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.logMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.validateMiddleware),
+		// The optional-feature gate. It is a FILTER, not a middleware, because
+		// mcp-go applies filters at both tools/list and tools/call -- so a
+		// disabled feature's tools are neither advertised nor callable, with one
+		// piece of logic. See exposedTools for the semantics and the tradeoff.
+		mcpserver.WithToolFilter(s.exposedTools),
 	)
 	s.registerTools()
 	return s

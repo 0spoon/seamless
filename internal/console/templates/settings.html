@@ -16,17 +16,21 @@
       <span class="settings-jump-icon">{{icon "server"}}</span>
       <span><b>01</b><strong>Runtime</strong><small>loaded profile</small></span>
     </a>
+    <a href="#features">
+      <span class="settings-jump-icon">{{icon "toggle-right"}}</span>
+      <span><b>02</b><strong>Features</strong><small>{{len .Features}} optional</small></span>
+    </a>
     <a href="#semantic-index">
       <span class="settings-jump-icon">{{icon "database"}}</span>
-      <span><b>02</b><strong>Semantic index</strong><small>{{if .Embeddings.Enabled}}{{.Embeddings.Total}} vectors{{else}}embeddings off{{end}}</small></span>
+      <span><b>03</b><strong>Semantic index</strong><small>{{if .Embeddings.Enabled}}{{.Embeddings.Total}} vectors{{else}}embeddings off{{end}}</small></span>
     </a>
     <a href="#briefing-recipe">
       <span class="settings-jump-icon">{{icon "brain"}}</span>
-      <span><b>03</b><strong>Briefing</strong><small>editable recipe</small></span>
+      <span><b>04</b><strong>Briefing</strong><small>editable recipe</small></span>
     </a>
     <a href="#workspace-registry">
       <span class="settings-jump-icon">{{icon "folder-tree"}}</span>
-      <span><b>04</b><strong>Registry</strong><small>{{len .Projects}} project scopes</small></span>
+      <span><b>05</b><strong>Registry</strong><small>{{len .Projects}} project scopes</small></span>
     </a>
     <div class="settings-jump-key"><span><i class="key-dot read"></i>read only</span><span><i class="key-dot edit"></i>editable</span></div>
   </nav>
@@ -95,9 +99,71 @@
     </div>
   </section>
 
-  <section class="settings-zone" id="semantic-index">
+  <section class="settings-zone" id="features">
     <header class="settings-zone-head">
       <div class="settings-zone-index">02</div>
+      <div>
+        <div class="settings-zone-kicker">What is on</div>
+        <h2>Optional features</h2>
+        <p>Optional features are off until you turn them on. Turning one off later hides it &mdash; nothing is ever deleted. Console changes apply immediately; agents pick the change up on their next session.</p>
+      </div>
+      <span class="settings-access editable">{{icon "settings"}} Editable here</span>
+    </header>
+
+    <article class="features-workbench">
+      <header class="features-workbench-head">
+        <div>
+          <div class="briefing-title"><span class="runtime-icon pop">{{icon "toggle-right"}}</span><div><span>Exposure</span><h3>Feature switches</h3></div></div>
+          <p>Each switch controls console screens and the matching agent tools together, so an agent never sees a tool for a screen you switched off.</p>
+        </div>
+        <div class="config-flow" aria-label="Configuration precedence">
+          <span class="config-node{{if not .FeaturesOverridden}} active{{end}}">File + env</span>
+          {{icon "arrow-right"}}
+          <span class="config-node{{if .FeaturesOverridden}} active{{end}}">Stored override</span>
+          {{icon "arrow-right"}}
+          <span class="config-node destination">Console now &middot; agents next session</span>
+        </div>
+      </header>
+
+      <form method="post" action="/console/settings/features" data-features-form>
+        <div class="features-grid">
+          {{range .Features}}
+          <section class="feature-card{{if .Enabled}} is-on{{end}}" data-feature="{{.Key}}">
+            <header class="feature-card-head">
+              <h4>{{.Label}}</h4>
+              <span class="badge {{if .Enabled}}ok{{end}} feature-state-pill">{{if .Enabled}}Enabled{{else}}Disabled{{end}}</span>
+            </header>
+            <p class="feature-blurb">{{.Blurb}}</p>
+            <label class="brief-toggle feature-toggle">
+              <input type="checkbox" name="{{.Field}}" value="1"{{if .Enabled}} checked{{end}}>
+              <span class="brief-switch" aria-hidden="true"></span>
+              <span><strong>Available in the console and to agents</strong><small>{{.WhenOff}}</small></span>
+            </label>
+            {{if .DataKept}}<p class="feature-data">{{icon "database"}}<span>{{.DataKept}}</span></p>{{end}}
+          </section>
+          {{end}}
+        </div>
+
+        <footer class="brief-actions">
+          <div class="brief-state" id="features-state" role="status" aria-live="polite">
+            <span class="state-dot"></span>
+            <span>{{if .FeaturesOverridden}}A stored override is in force for these switches.{{else}}Currently following the file and environment baseline.{{end}}</span>
+          </div>
+          <div class="btn-row">
+            {{if .FeaturesOverridden}}
+            <button class="btn" type="submit" form="features-reset" onclick="return confirm('Clear the stored override and go back to the file/env configuration? No data is deleted.');">Reset to file + env</button>
+            {{end}}
+            <button class="btn primary" type="submit">{{icon "check"}} Save features</button>
+          </div>
+        </footer>
+      </form>
+      {{if .FeaturesOverridden}}<form id="features-reset" method="post" action="/console/settings/features/reset"></form>{{end}}
+    </article>
+  </section>
+
+  <section class="settings-zone" id="semantic-index">
+    <header class="settings-zone-head">
+      <div class="settings-zone-index">03</div>
       <div>
         <div class="settings-zone-kicker">Vector recall</div>
         <h2>Semantic index &amp; storage</h2>
@@ -201,7 +267,7 @@
 
   <section class="settings-zone" id="briefing-recipe">
     <header class="settings-zone-head">
-      <div class="settings-zone-index">03</div>
+      <div class="settings-zone-index">04</div>
       <div>
         <div class="settings-zone-kicker">Agent handoff</div>
         <h2>Briefing recipe</h2>
@@ -407,7 +473,7 @@
 
   <section class="settings-zone" id="workspace-registry">
     <header class="settings-zone-head registry-zone-head">
-      <div class="settings-zone-index">04</div>
+      <div class="settings-zone-index">05</div>
       <div>
         <div class="settings-zone-kicker">Scope topology</div>
         <h2>Workspace registry</h2>
@@ -566,26 +632,28 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
   function snapshot(form) {
     return Array.from(new FormData(form).entries()).map(function (pair) { return pair[0] + '=' + pair[1]; }).sort().join('&');
   }
-  function reflectBriefing(form) {
-    var state = document.getElementById('brief-state');
+  function reflectDirty(form) {
+    var state = document.getElementById(form._seamStateId);
     if (!state) return;
     var dirty = snapshot(form) !== form._seamBaseline;
     form.classList.toggle('is-dirty', dirty);
-    if (dirty) state.querySelector('span:last-child').textContent = 'Unsaved changes — save to use them for new sessions.';
-    else state.querySelector('span:last-child').textContent = form._seamCleanText;
+    state.querySelector('span:last-child').textContent = dirty ? form._seamDirtyText : form._seamCleanText;
   }
-  function enhanceBriefing() {
-    var form = document.querySelector('[data-briefing-form]');
-    var state = document.getElementById('brief-state');
+  // One snapshot-vs-now dirty tracker, shared by every editable Settings form.
+  function enhanceDirtyForm(selector, stateId, dirtyText) {
+    var form = document.querySelector(selector);
+    var state = document.getElementById(stateId);
     if (!form || !state || !window.FormData) return;
+    form._seamStateId = stateId;
+    form._seamDirtyText = dirtyText;
     form._seamBaseline = snapshot(form);
     form._seamCleanText = state.querySelector('span:last-child').textContent;
     if (!form._seamWired) {
       form._seamWired = true;
-      form.addEventListener('input', function () { reflectBriefing(form); });
-      form.addEventListener('change', function () { reflectBriefing(form); });
+      form.addEventListener('input', function () { reflectDirty(form); });
+      form.addEventListener('change', function () { reflectDirty(form); });
     }
-    reflectBriefing(form);
+    reflectDirty(form);
   }
   function updateFamilyCount(form) {
     var options = Array.from(form.querySelectorAll('[data-family-option]'));
@@ -671,7 +739,8 @@ window.SEAM_NO_LIVE_REFRESH = true; // preserve unsaved form state on this contr
     });
   }
   function enhanceSettings() {
-    enhanceBriefing();
+    enhanceDirtyForm('[data-briefing-form]', 'brief-state', 'Unsaved changes — save to use them for new sessions.');
+    enhanceDirtyForm('[data-features-form]', 'features-state', 'Unsaved changes — save to apply them.');
     enhanceFamilies();
   }
   enhanceSettings();

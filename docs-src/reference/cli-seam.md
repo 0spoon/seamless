@@ -352,7 +352,14 @@ Client-side checks, each reported `ok` or `FAIL`, exiting non-zero if any failed
 
 1. **server** - `/healthz` reachable and reporting `ok`.
 2. **mcp_tools** - `tools/list` returns the tool count this CLI was built to
-   expect. A mismatch means the running daemon is a different build.
+   expect, minus the tools of any [optional
+   feature](/reference/console/#optional-features) that is switched off (the
+   line reads `31 registered, 28 exposed (research disabled)`). A mismatch that
+   feature state does not explain means the running daemon is a different build.
+   When the feature state cannot be read - the daemon is older than optional
+   features, or its settings endpoint did not answer - the check judges the
+   plausible range instead and names the reason rather than failing a healthy
+   daemon.
 3. **projects** - `project_list` answers.
 
 This is the client-side view. `seamlessd doctor` checks config, database, and

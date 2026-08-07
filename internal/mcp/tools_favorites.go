@@ -88,6 +88,13 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 		}
 		project, itemID, err = sess.ProjectSlug, sess.ID, serr
 	case "trial":
+		// favorite_set is the one tool that reaches trial data while staying
+		// exposed for its other kinds, so the research gate is in-handler here.
+		// The three research tools are gated by the tool filter instead, which is
+		// why this is the only such check in the tool surface.
+		if !s.researchEnabled(ctx) {
+			return errResult("favorite_set", errResearchDisabled)
+		}
 		tr, found, terr := store.TrialByID(ctx, s.cfg.DB, id)
 		if terr == nil && !found {
 			terr = fmt.Errorf("no trial with id %q", id)

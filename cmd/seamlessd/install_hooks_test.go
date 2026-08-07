@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,8 +11,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/hooks"
 	agentskills "github.com/0spoon/seamless/internal/skills"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // The skills step is an optional convenience layer: an unwritable skill root
@@ -27,6 +30,9 @@ func TestRunInstallHooks_SkillFailureDegradesAndContinues(t *testing.T) {
 	t.Setenv("SEAMLESS_CONFIG", cfgPath)
 	t.Setenv("HOME", home)
 	t.Setenv("CODEX_HOME", codexHome)
+	// This test is about the failure degrading, not about feature gating: with
+	// research on, both skills have work to do for the second client.
+	t.Setenv("SEAMLESS_FEATURES_RESEARCH", "1")
 
 	// An unwritable Claude skill root: ~/.claude/skills is a regular file, so
 	// creating skill directories under it fails for the first client wired.
@@ -166,6 +172,96 @@ func TestInstallClientSkills_ReportsUnchangedOnIdenticalReinstall(t *testing.T) 
 	require.Contains(t, second, "onboard  unchanged")
 	require.Contains(t, second, "research  unchanged")
 	require.NotContains(t, second, "updated")
+}
+
+// install-hooks is the one moment Seamless can bring a client's skill directory
+// in line with the optional features the owner actually has switched on: skills
+// live in ~/.claude/skills and $CODEX_HOME/skills, which the daemon cannot touch
+// when a toggle flips in the console. The effective feature is the file/env base
+// layered with the stored override, so the console toggle wins here too.
+func TestRunInstallHooks_ResearchSkillFollowsTheEffectiveFeature(t *testing.T) {
+	home := t.TempDir()
+	codexHome := t.TempDir()
+	tmp := t.TempDir()
+	dataDir := filepath.Join(tmp, "data")
+	cfgPath := filepath.Join(tmp, "seamless.yaml")
+	require.NoError(t, os.WriteFile(cfgPath,
+		[]byte("data_dir: "+dataDir+"\nmcp:\n  api_key: \"test-key\"\n"), 0o600))
+	t.Setenv("SEAMLESS_CONFIG", cfgPath)
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", codexHome)
+
+	onboard := filepath.Join(codexHome, "skills", agentskills.OnboardName, "SKILL.md")
+	research := filepath.Join(codexHome, "skills", agentskills.ResearchName, "SKILL.md")
+	install := func(t *testing.T) string {
+		t.Helper()
+		return captureStdout(t, func() error {
+			return runInstallHooks([]string{
+				"--client", "codex", "--codex-hooks", filepath.Join(tmp, "hooks.json"),
+				"--mcp=false", "--seam", "/opt/seam", "--url", "http://127.0.0.1:8081",
+			})
+		})
+	}
+
+	// Optional features ship off, so a fresh install wires the client without
+	// the skill that documents the research tools.
+	out := install(t)
+	require.Contains(t, out, "research  not installed")
+	require.FileExists(t, onboard)
+	require.NoFileExists(t, research)
+	require.NoDirExists(t, dataDir, "reading the toggles must not create a database")
+
+	// The stored override -- what the console Settings form writes -- wins over
+	// the file/env base, and install-hooks reads it live.
+	setStoredResearch(t, dataDir, true)
+	out = install(t)
+	require.Contains(t, out, "research  installed")
+	require.FileExists(t, research)
+
+	// The explicit opt-out still forces a skip while the feature is on, and
+	// leaves the installed package alone.
+	t.Setenv("SEAMLESS_NO_RESEARCH_SKILL", "1")
+	out = install(t)
+	require.Contains(t, out, "research  skipped (SEAMLESS_NO_RESEARCH_SKILL)")
+	require.FileExists(t, research)
+	t.Setenv("SEAMLESS_NO_RESEARCH_SKILL", "")
+
+	// Switching the feature back off removes what the enabled run installed, so
+	// the doctor INFO line clears on the rerun it recommends.
+	setStoredResearch(t, dataDir, false)
+	out = install(t)
+	require.Contains(t, out, "research  removed")
+	require.NoFileExists(t, research)
+	require.NoDirExists(t, filepath.Join(codexHome, "skills", agentskills.ResearchName))
+	require.FileExists(t, onboard, "only the disabled feature's package is removed")
+}
+
+// The skill names come from the feature registry, never from a second literal in
+// the installer, so a future optional feature gates its skill by being
+// registered -- and every skill a feature claims must be one install-hooks
+// actually maintains, or the toggle would silently gate nothing.
+func TestDisabledFeatureSkills_DerivesFromTheRegistry(t *testing.T) {
+	require.Contains(t, disabledFeatureSkills(config.Features{}), agentskills.ResearchName)
+	require.NotContains(t, disabledFeatureSkills(config.Features{Research: true}), agentskills.ResearchName)
+
+	published := agentskills.Published()
+	for _, feature := range features.Registry() {
+		if feature.Skill == "" {
+			continue
+		}
+		require.Contains(t, published, feature.Skill,
+			"feature %s names a skill install-hooks does not maintain", feature.Key)
+		require.Contains(t, disabledFeatureSkills(features.Defaults()), feature.Skill,
+			"optional features ship off, so %s must be gated by default", feature.Skill)
+	}
+}
+
+func setStoredResearch(t *testing.T, dataDir string, on bool) {
+	t.Helper()
+	db, err := store.Open(filepath.Join(dataDir, "seam.db"))
+	require.NoError(t, err)
+	defer func() { require.NoError(t, db.Close()) }()
+	require.NoError(t, store.SetFeaturesConfig(context.Background(), db, config.Features{Research: on}))
 }
 
 func captureStdout(t *testing.T, fn func() error) string {

@@ -530,8 +530,17 @@ would collide on the page anchor.</p>
 <ul>
 <li><strong><code>cmd/seam/doctor.go</code></strong> has an <code>expectedTools</code> constant that mirrors
 <code>ToolCount</code> without importing the mcp package (which would pull its whole
-dependency tree into the CLI). <code>seam doctor</code> asserts the running server exposes
-that many tools via <code>tools/list</code>.</li>
+dependency tree into the CLI). It is the <strong>registered</strong> count, and <code>seam doctor</code> reports registered against exposed: it reads the effective feature
+state from <code>GET /console/settings?format=json</code> and subtracts the tools of the
+features that are off, derived from the registry rather than from a second
+number to keep current (<code>31 registered, 28 exposed (research disabled)</code>; <code>31 tools (expected 31)</code> when everything is on). With that state unreadable - an
+unreachable endpoint, or a pre-features daemon whose settings JSON carries no
+<code>featuresConfig</code> - it judges a <strong>range</strong> instead of a number and says why,
+rather than failing a healthy daemon over a fact it could not read.
+<code>seamlessd doctor</code>'s <code>mcp_tools</code> check stays a bare equality against
+registration: the two doctors measure different things, and making the
+server-side one feature-aware would lose the &quot;written but never wired in&quot;
+signal it exists for.</li>
 <li><strong>A docs page's <code>tools:</code> frontmatter list</strong> (under <code>docs-src/reference/mcp/</code>)
 decides where the generated reference for the tool appears. A page listing a
 name that is not in <code>Catalog()</code> is a docsgen error.</li>

@@ -246,14 +246,44 @@ override.</p>
 <li><strong>Defaults</strong> - the built-in values in the table below.</li>
 <li><strong>File</strong> - whatever the YAML sets.</li>
 <li><strong>Environment</strong> - <code>SEAMLESS_*</code> overrides the file.</li>
-<li><strong>Runtime override (DB)</strong> - the console's Settings form stores briefing knobs
-in the database. They win over file <em>and</em> env, apply from the next session
-start without a daemon restart, and stay until reset.</li>
+<li><strong>Runtime override (DB)</strong> - the console's Settings forms store some blocks in
+the database. They win over file <em>and</em> env, take effect without a daemon
+restart, and stay until reset.</li>
 </ol>
-<p>That fourth layer only covers the <code>briefing:</code> block. It exists so you can tune
-what agents get injected while they are running, and it is the one place where
-the config file is not the last word - check the console before concluding a
-briefing setting is being ignored.</p>
+<p>That fourth layer covers two blocks, and only those two:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Block</th>
+<th>Written by</th>
+<th>When it takes effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>briefing:</code></td>
+<td>Settings → Briefing injection</td>
+<td>From the next session start.</td>
+</tr>
+<tr>
+<td><code>features:</code></td>
+<td>Settings → <a href="../../reference/console/#optional-features">Features</a></td>
+<td>Immediately in the console; an agent sees it the next time its client lists tools, in practice its next session.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>It exists so you can change what agents get injected - and what they can reach -
+while they are running, and it is the one place where the config file is not the
+last word: check the console before concluding a <code>briefing:</code> or <code>features:</code>
+setting is being ignored. Neither form ever writes your config file, and
+<strong>Reset</strong> on either clears the stored row and hands that block back to file/env.</p>
+<p>One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds a stored <code>features:</code> override
+with research on, so a feature that now ships off does not disappear from under
+data you were already using. The console labels it a stored override, not your
+choice; <strong>Reset</strong> clears it like any other.</p>
 <h2 id="generating-a-key">Generating a key</h2>
 <p><code>mcp.api_key</code> guards <code>/api/mcp</code> and the console. On a true first run - no
 config file anywhere in the search order and no <code>SEAMLESS_MCP_API_KEY</code> in the
@@ -380,6 +410,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td><code>briefing.utility_mode</code></td>
 <td>string</td>
 <td><code>auto</code></td>
+</tr>
+<tr>
+<td><code>features.research</code></td>
+<td>bool</td>
+<td>-</td>
 </tr>
 <tr>
 <td><code>search.semantic_floor</code></td>
@@ -634,6 +669,19 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># bounded recall/prompt-recall utility boosts are always on.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_BRIEFING_UTILITY_MODE</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">utility_mode</span><span class="p">:</span><span class="w"> </span><span class="l">auto</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Optional features. These ship OFF: a fresh installation exposes none of them</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># until you turn one on -- here, via env, or live in the console (Settings -&gt;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Features), which stores a runtime override in the database that WINS over this</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># file and env until reset. Turning a feature off hides its console screens, its</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># MCP tools, and its agent-facing mentions; it never deletes stored data, and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># re-enabling restores every surface. An installation that already holds research</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># data keeps the feature on across the upgrade (a one-time seeded override).</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">features</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Research labs and trials: the Labs and Trials console screens, the trials</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># search scope, and the lab_open, trial_record, trial_query MCP tools.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_FEATURES_RESEARCH</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">research</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># Console search (the full page&#39;s fused semantic+lexical retrieval). Agent</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># recall is not affected by these knobs.</span><span class="w">

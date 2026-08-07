@@ -96,6 +96,8 @@ writes, and occupied-path protections remain the same as direct tools.
 
 Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.
 
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](https://thereisnospoon.org/docs/reference/console/#optional-features).
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `lab` | string | **yes** | lab name (a stable label for a line of investigation) |
@@ -104,6 +106,8 @@ Open a research lab and get its recent trial history for context -- including tr
 ## trial_record {#trial_record}
 
 Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](https://thereisnospoon.org/docs/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -119,6 +123,8 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 ## trial_query {#trial_query}
 
 Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](https://thereisnospoon.org/docs/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

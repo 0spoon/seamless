@@ -74,5 +74,15 @@ Seamless registers **31 tools**. They are documented in groups:
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
 | Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
 
+That is the count the server **registers**; what a client is offered can be
+smaller. Tools belonging to an
+[optional feature](/reference/console/#optional-features) are hidden from
+`tools/list` while that feature is off, and a call to one is refused as an
+unknown tool. Optional features ship off, so a fresh install advertises fewer
+than 31 until you turn one on - each affected tool says so on its own reference
+page. Nothing about registration changes: the catalog these pages are generated
+from, and the registered-tool count `seamlessd doctor` asserts, stay the full
+set either way.
+
 Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.

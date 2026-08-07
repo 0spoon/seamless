@@ -228,7 +228,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#record-the-expectation-not-just-the-result">Record the expectation, not just the result</a></li><li class="lvl-2"><a href="#parallel-agents-in-one-lab">Parallel agents in one lab</a></li><li class="lvl-2"><a href="#watching-a-lab">Watching a lab</a></li><li class="lvl-2"><a href="#distil-then-stop">Distil, then stop</a></li><li class="lvl-2"><a href="#the-skill">The skill</a></li><li class="lvl-2"><a href="#the-tools">The tools</a></li>
+      <li class="lvl-2"><a href="#turn-it-on-first">Turn it on first</a></li><li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#record-the-expectation-not-just-the-result">Record the expectation, not just the result</a></li><li class="lvl-2"><a href="#parallel-agents-in-one-lab">Parallel agents in one lab</a></li><li class="lvl-2"><a href="#watching-a-lab">Watching a lab</a></li><li class="lvl-2"><a href="#distil-then-stop">Distil, then stop</a></li><li class="lvl-2"><a href="#the-skill">The skill</a></li><li class="lvl-2"><a href="#the-tools">The tools</a></li>
     </ul>
   </details>
   <p>Some problems are not solved by thinking harder; they are solved by trying twelve
@@ -236,6 +236,24 @@ things and keeping track. Firmware that boots sometimes. A race that reproduces
 one time in thirty. A config that works on one machine.</p>
 <p>Agents are bad at this in a specific way: each one starts fresh, re-derives the
 same first three hypotheses, and tries them again. A <strong>lab</strong> is where that stops.</p>
+<h2 id="turn-it-on-first">Turn it on first</h2>
+<p>Labs and trials are an
+<a href="../../reference/console/#optional-features">optional feature</a>, and optional features
+ship <strong>off</strong>. On a fresh install the screens and the three tools below are not
+there until you enable research, in any one of three places:</p>
+<ul>
+<li><strong>The console</strong> - Settings → Features, the fastest route. It applies to the
+console immediately; agents pick it up on their next session.</li>
+<li><strong>The config file</strong> - <code>features: research: true</code> in <code>seamless.yaml</code>.</li>
+<li><strong>The environment</strong> - <code>SEAMLESS_FEATURES_RESEARCH=1</code>.</li>
+</ul>
+<p>A console toggle stores an override that wins over the file and the environment
+until you reset it, so if the YAML says one thing and the tools disagree, check
+the console first. An installation that was already recording trials before this
+became optional keeps it on across the upgrade - the feature is never switched
+off underneath existing data, and switching it off later hides the screens and
+the tools without deleting a single trial. See
+<a href="../../reference/configuration/#precedence">Configuration</a>.</p>
 <h2 id="the-loop">The loop</h2>
 <figure class="doc-figure" data-tone="ok" aria-labelledby="research-loop-caption">
   <span class="figure-kicker">Evidence loop</span>
@@ -289,8 +307,12 @@ memory carries the conclusion. A briefing has a token budget, and twelve trials
 of a solved problem are not what an agent needs injected before it starts work.
 See <a href="../../guides/write-good-memories/">Write memories that get recalled</a>.</p>
 <h2 id="the-skill">The skill</h2>
-<p>The installer drops the portable <code>seam-research</code> package into the selected
-client's skill home. From a clone, use <code>make install-research-skill CLIENT=claude</code> for Claude Code or <code>make install-research-skill CLIENT=codex</code> for
+<p>While the feature is on, the installer drops the portable <code>seam-research</code>
+package into the selected client's skill home - and while it is off, <code>seamlessd install-hooks</code> skips it and removes a copy it previously delivered, so no agent
+reads about tools its server will refuse. A toggle in the console cannot reach a
+client's skill home on its own, so <code>seamlessd doctor</code> raises an info line until
+the next install run reconciles the two. From a clone, use
+<code>make install-research-skill CLIENT=claude</code> for Claude Code or <code>make install-research-skill CLIENT=codex</code> for
 Codex (<code>CLIENT=detect</code> is the default). It wraps this loop</p>
 <ul>
 <li>open the lab, query before trying, predict before running, record once with
@@ -319,7 +341,7 @@ investigation becomes repeated experiments. Start or resume one explicitly with
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#record-the-expectation-not-just-the-result">Record the expectation, not just the result</a></li><li class="lvl-2"><a href="#parallel-agents-in-one-lab">Parallel agents in one lab</a></li><li class="lvl-2"><a href="#watching-a-lab">Watching a lab</a></li><li class="lvl-2"><a href="#distil-then-stop">Distil, then stop</a></li><li class="lvl-2"><a href="#the-skill">The skill</a></li><li class="lvl-2"><a href="#the-tools">The tools</a></li>
+      <li class="lvl-2"><a href="#turn-it-on-first">Turn it on first</a></li><li class="lvl-2"><a href="#the-loop">The loop</a></li><li class="lvl-2"><a href="#record-the-expectation-not-just-the-result">Record the expectation, not just the result</a></li><li class="lvl-2"><a href="#parallel-agents-in-one-lab">Parallel agents in one lab</a></li><li class="lvl-2"><a href="#watching-a-lab">Watching a lab</a></li><li class="lvl-2"><a href="#distil-then-stop">Distil, then stop</a></li><li class="lvl-2"><a href="#the-skill">The skill</a></li><li class="lvl-2"><a href="#the-tools">The tools</a></li>
     </ul>
   </aside>
   

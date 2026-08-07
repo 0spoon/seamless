@@ -25,13 +25,35 @@ import (
 	"strings"
 	"time"
 
+	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
 
 // searchScopes are the accepted ?scope values: "all", the two knowledge kinds
-// retrieve.Search understands, and one per structured entity.
+// retrieve.Search understands, and one per structured entity. It is the full
+// set; searchScopesFor narrows it to what the enabled optional features expose.
 var searchScopes = []string{"all", "memories", "notes", "tasks", "plans", "trials", "projects", "sessions"}
+
+// searchScopesFor returns the scopes available under cfg. A scope belonging to a
+// disabled optional feature leaves the accepted enum entirely, so ?scope=trials
+// gets the same named-values 400 as any other misspelling rather than silently
+// searching everything -- and the selector cannot offer a scope that would
+// always come back empty.
+func searchScopesFor(cfg config.Features) []string {
+	if features.Enabled(cfg, features.Research) {
+		return searchScopes
+	}
+	out := make([]string, 0, len(searchScopes))
+	for _, scope := range searchScopes {
+		if scope == "trials" {
+			continue
+		}
+		out = append(out, scope)
+	}
+	return out
+}
 
 // searchWindowKeys / searchSortKeys are the strict URL enums for the search
 // controls. Search defaults to all time so adding the window control does not
@@ -95,17 +117,20 @@ type searchGroup struct {
 
 // searchData is the page/JSON payload.
 type searchData struct {
-	Query       string               `json:"query"`
-	Scope       string               `json:"scope"`
-	Sort        string               `json:"sort"`
-	Window      string               `json:"window"`
-	WindowLabel string               `json:"windowLabel"`
-	Fast        bool                 `json:"fast"`
-	Fav         bool                 `json:"favoritesOnly"`
-	Groups      []searchGroup        `json:"groups"`
-	Total       int                  `json:"total"`
-	Rows        []searchRow          `json:"-"` // unified, globally sorted page projection
-	Since       time.Time            `json:"-"`
+	Query       string        `json:"query"`
+	Scope       string        `json:"scope"`
+	Sort        string        `json:"sort"`
+	Window      string        `json:"window"`
+	WindowLabel string        `json:"windowLabel"`
+	Fast        bool          `json:"fast"`
+	Fav         bool          `json:"favoritesOnly"`
+	Groups      []searchGroup `json:"groups"`
+	Total       int           `json:"total"`
+	Rows        []searchRow   `json:"-"` // unified, globally sorted page projection
+	Since       time.Time     `json:"-"`
+	// TrialsScope reports whether the research feature exposes the trials
+	// scope; the page copy names it only when it is actually searchable.
+	TrialsScope bool                 `json:"-"`
 	Scopes      []searchScope        `json:"-"`
 	Windows     []searchWindowOption `json:"-"`
 	Sorts       []searchSortOption   `json:"-"`
@@ -179,7 +204,9 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	if n := []rune(q); len(n) > searchQueryMax {
 		q = strings.TrimSpace(string(n[:searchQueryMax]))
 	}
-	scope, err := searchEnumParam(values, "scope", "all", searchScopes)
+	feats := s.effectiveFeatures(ctx)
+	scopes := searchScopesFor(feats)
+	scope, err := searchEnumParam(values, "scope", "all", scopes)
 	if err != nil {
 		s.badRequest(w, r, err.Error())
 		return
@@ -211,8 +238,9 @@ func (s *Service) searchPage(w http.ResponseWriter, r *http.Request) {
 	data := searchData{
 		Query: q, Scope: scope, Sort: sortKey,
 		Window: window.Key, WindowLabel: window.Label, Since: window.Since,
-		Fast: fast, Fav: fav, Scopes: searchScopeOptions(scope),
-		Windows: searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
+		Fast: fast, Fav: fav, Scopes: searchScopeOptions(scope, scopes),
+		TrialsScope: slices.Contains(scopes, "trials"),
+		Windows:     searchWindowOptions(window.Key), Sorts: searchSortOptions(sortKey),
 	}
 	if len([]rune(q)) < searchQueryMin {
 		// Too short to match anything: render the empty state rather than a
@@ -322,7 +350,9 @@ func (s *Service) searchGroups(ctx context.Context, data searchData, limit int) 
 		add("plans", "Plans", rows)
 	}
 
-	if data.wants("trials") {
+	// Trials belong to the research feature: while it is off the scope is not
+	// even in the accepted enum, and ?scope=all must not reach past it either.
+	if data.TrialsScope && data.wants("trials") {
 		trials, err := store.SearchTrialsSince(ctx, s.cfg.DB, data.Query, data.Since, limit)
 		if err != nil {
 			return nil, err
@@ -581,15 +611,16 @@ type searchScope struct {
 	Active bool
 }
 
-// searchScopeOptions builds the ordered selector entries, flagging the active
-// one. Labels are title-cased scope keys, except "all".
-func searchScopeOptions(active string) []searchScope {
+// searchScopeOptions builds the ordered selector entries from the scopes
+// currently available (searchScopesFor), flagging the active one. Labels are
+// title-cased scope keys, except "all".
+func searchScopeOptions(active string, scopes []string) []searchScope {
 	labels := map[string]string{
 		"all": "All", "memories": "Memories", "notes": "Notes", "tasks": "Tasks",
 		"plans": "Plans", "trials": "Trials", "projects": "Projects", "sessions": "Sessions",
 	}
-	out := make([]searchScope, 0, len(searchScopes))
-	for _, k := range searchScopes {
+	out := make([]searchScope, 0, len(scopes))
+	for _, k := range scopes {
 		out = append(out, searchScope{Key: k, Label: labels[k], Active: k == active})
 	}
 	return out

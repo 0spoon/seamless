@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 //go:embed templates
@@ -42,6 +44,7 @@ var faviconSVG []byte
 var pageNames = []string{
 	"login", "overview", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
 	"memories", "notes", "retrieval", "tasks", "plans", "labs", "trials", "gardener", "settings", "event", "error",
+	"feature_off",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -67,7 +70,13 @@ type pageData struct {
 	Host     string // machine this console runs on, for the sidebar account row
 	Notice   string // positive flash banner (from ?notice=)
 	FlashErr string // error flash banner (from ?error=)
-	Data     any
+	// Features is the effective optional-feature state for this request; page
+	// templates reach it as $.Features to hide a feature's copy.
+	Features config.Features
+	// NavOff marks the sidebar nav ids belonging to a disabled optional feature
+	// (registry-derived, see navOff). The layout guards each entry with it.
+	NavOff map[string]bool
+	Data   any
 }
 
 // withFlash populates the banner fields from the ?notice= / ?error= query params
@@ -280,7 +289,9 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 		writeJSON(w, http.StatusOK, pd.Data)
 		return
 	}
-	pd.Nav = s.navCounts(r.Context())
+	pd.Features = s.effectiveFeatures(r.Context())
+	pd.NavOff = navOff(pd.Features)
+	pd.Nav = s.navCounts(r.Context(), pd.Features)
 	pd.Host = s.host
 	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
@@ -355,11 +366,14 @@ func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status
 		http.Error(w, msg, status)
 		return
 	}
+	feats := s.effectiveFeatures(r.Context())
 	pd := pageData{
-		Title: heading,
-		Nav:   s.navCounts(r.Context()),
-		Host:  s.host,
-		Data:  errorData{Status: status, Heading: heading, Message: msg},
+		Title:    heading,
+		Nav:      s.navCounts(r.Context(), feats),
+		Features: feats,
+		NavOff:   navOff(feats),
+		Host:     s.host,
+		Data:     errorData{Status: status, Heading: heading, Message: msg},
 	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", pd); err != nil {

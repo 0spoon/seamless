@@ -339,9 +339,12 @@ shows the marked Seamless-awareness block it can add to global or project
 `CLAUDE.md`. It edits only after you choose a scope and approve the change, then
 removes its own one-shot skill directory.
 
-The installer drops a second skill alongside it: `/seam-research`, the
-research-lab workflow for systematic debugging (see [Run research
-trials](/guides/research-trials/)). Unlike `/seam-onboard` it is a recurring
+The installer drops a second skill alongside it *if research is enabled*:
+`/seam-research`, the research-lab workflow for systematic debugging (see
+[Run research trials](/guides/research-trials/)). Research is an
+[optional feature](/reference/console/#optional-features) and ships off, so a
+fresh install has no research skill until you turn it on and re-run
+`seamlessd install-hooks`. Unlike `/seam-onboard` it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
 structured trials. From a clone, `make install-research-skill CLIENT=claude`
@@ -621,9 +624,11 @@ detect` - the clients actually present, Codex included. The Codex profile:
    a disabled or stale Seamless bridge, and verifies the written state before it
    reports success. A direct-HTTP or otherwise foreign entry under the reserved
    `seamless` name is never overwritten implicitly.
-3. **Installs two Codex skills** under
-   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
-   the recurring `$seam-research` lab workflow. Claude's copies remain in
+3. **Installs the Codex skills** under
+   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow,
+   plus the recurring `$seam-research` lab workflow while its
+   [optional feature](/reference/console/#optional-features) is on (it ships
+   off). Claude's copies remain in
    `~/.claude/skills/`; their one-shot delivery markers are independent.
 
 The `codex` executable is the supported management surface for automated MCP
@@ -694,8 +699,9 @@ make install-onboard-skill CLIENT=codex
 ```
 
 `$seam-research <lab-name> <problem>` opens or resumes the same structured,
-multi-agent research-lab workflow as Claude Code. It remains installed and is
-refreshed on upgrades.
+multi-agent research-lab workflow as Claude Code. While the research feature is
+on it remains installed and is refreshed on upgrades; switch the feature off and
+the next install run takes it back out.
 
 ## The five hooks, and what they inject
 
@@ -923,9 +929,10 @@ itself. No Go toolchain is involved. In order, it:
 Step 3 detects three install targets - **Claude Code**, the **Claude app chat
 surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
 skills), and **Codex** - and wires the detected set. That one selection
-drives hooks, MCP registrations, and the maintained `seam-onboard` /
-`seam-research` skills together. On a terminal the run confirms the selection
-with a multi-select menu - answers are numbers or names, comma-separated
+drives hooks, MCP registrations, and the maintained skills together -
+`seam-onboard` always, `seam-research` only while its
+[optional feature](/reference/console/#optional-features) is on. On a terminal
+the run confirms the selection with a multi-select menu - answers are numbers or names, comma-separated
 (`1,3`), defaulting to the detected set; headless, the detected set is wired
 as-is. With nothing detected, a run on a terminal warns and asks whether to
 install at all (defaulting to no), and a headless run aborts - the installer
@@ -4186,6 +4193,26 @@ one time in thirty. A config that works on one machine.
 Agents are bad at this in a specific way: each one starts fresh, re-derives the
 same first three hypotheses, and tries them again. A **lab** is where that stops.
 
+## Turn it on first
+
+Labs and trials are an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. On a fresh install the screens and the three tools below are not
+there until you enable research, in any one of three places:
+
+- **The console** - Settings → Features, the fastest route. It applies to the
+  console immediately; agents pick it up on their next session.
+- **The config file** - `features: research: true` in `seamless.yaml`.
+- **The environment** - `SEAMLESS_FEATURES_RESEARCH=1`.
+
+A console toggle stores an override that wins over the file and the environment
+until you reset it, so if the YAML says one thing and the tools disagree, check
+the console first. An installation that was already recording trials before this
+became optional keeps it on across the upgrade - the feature is never switched
+off underneath existing data, and switching it off later hides the screens and
+the tools without deleting a single trial. See
+[Configuration](/reference/configuration/#precedence).
+
 ## The loop
 
 ```text
@@ -4252,8 +4279,13 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 
 ## The skill
 
-The installer drops the portable `seam-research` package into the selected
-client's skill home. From a clone, use `make install-research-skill
+While the feature is on, the installer drops the portable `seam-research`
+package into the selected client's skill home - and while it is off, `seamlessd
+install-hooks` skips it and removes a copy it previously delivered, so no agent
+reads about tools its server will refuse. A toggle in the console cannot reach a
+client's skill home on its own, so `seamlessd doctor` raises an info line until
+the next install run reconciles the two. From a clone, use
+`make install-research-skill
 CLIENT=claude` for Claude Code or `make install-research-skill CLIENT=codex` for
 Codex (`CLIENT=detect` is the default). It wraps this loop
 - open the lab, query before trying, predict before running, record once with
@@ -4644,6 +4676,34 @@ config file is not the last word, and it exists so you can tune what agents get
 injected while they are running. See
 [Configuration](/reference/configuration/).
 
+## A tool is missing, or a console screen says it is switched off
+
+**What is happening.** It belongs to an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. Nothing is broken and nothing was deleted - the feature's data is
+untouched, and every surface returns the moment it is switched back on. Today
+the one optional feature is research: the Labs and Trials screens, the trials
+search scope, and `lab_open`, `trial_record`, `trial_query`.
+
+**Fix.** Turn it on in the console under Settings → Features (or set
+`features: research: true`, or `SEAMLESS_FEATURES_RESEARCH=1`). The console
+toggle stores an override that beats both the file and the environment, so check
+it before you edit YAML.
+
+**If you already turned it on and the agent still cannot call the tool**, you
+are looking at the propagation seam, not a failure:
+
+| Surface | When the change lands |
+|---|---|
+| The console | Immediately. |
+| A tool call | Immediately - and while a feature is off its tools are refused as *unknown*, which is what a client holding a stale list should see. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it was given. Start a new session rather than hunting for a refresh button. |
+| The `seam-research` skill in a client's skill home | The next `seamlessd install-hooks` run. `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still installed - it never deletes in a client's directory behind your back. |
+
+One thing that is *not* a symptom of this: a gated tool call leaves no row in
+the Interactions feed. The filter rejects it before the middleware that records
+tool calls, so silence there is expected.
+
 ## Two daemons, the wrong port, or code changes that never land
 
 **What is happening.** Seamless is **one instance per machine**: one port (8081),
@@ -4815,6 +4875,16 @@ Seamless registers **31 tools**. They are documented in groups:
 | Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
 | Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
+
+That is the count the server **registers**; what a client is offered can be
+smaller. Tools belonging to an
+[optional feature](/reference/console/#optional-features) are hidden from
+`tools/list` while that feature is off, and a call to one is refused as an
+unknown tool. Optional features ship off, so a fresh install advertises fewer
+than 31 until you turn one on - each affected tool says so on its own reference
+page. Nothing about registration changes: the catalog these pages are generated
+from, and the registered-tool count `seamlessd doctor` asserts, stay the full
+set either way.
 
 Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.
@@ -5360,6 +5430,8 @@ writes, and occupied-path protections remain the same as direct tools.
 
 Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.
 
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `lab` | string | **yes** | lab name (a stable label for a line of investigation) |
@@ -5368,6 +5440,8 @@ Open a research lab and get its recent trial history for context -- including tr
 ## trial_record {#trial_record}
 
 Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5383,6 +5457,8 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 ## trial_query {#trial_query}
 
 Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5799,7 +5875,14 @@ Client-side checks, each reported `ok` or `FAIL`, exiting non-zero if any failed
 
 1. **server** - `/healthz` reachable and reporting `ok`.
 2. **mcp_tools** - `tools/list` returns the tool count this CLI was built to
-   expect. A mismatch means the running daemon is a different build.
+   expect, minus the tools of any [optional
+   feature](/reference/console/#optional-features) that is switched off (the
+   line reads `31 registered, 28 exposed (research disabled)`). A mismatch that
+   feature state does not explain means the running daemon is a different build.
+   When the feature state cannot be read - the daemon is older than optional
+   features, or its settings endpoint did not answer - the check judges the
+   plausible range instead and names the reason rather than failing a healthy
+   daemon.
 3. **projects** - `project_list` answers.
 
 This is the client-side view. `seamlessd doctor` checks config, database, and
@@ -5943,9 +6026,9 @@ you spot a daemon running older code than your working tree.
 seamlessd doctor
 ```
 
-Server-side self-checks. Each line reports `ok`, `warn`, or `fail`; **only a
-`fail` exits non-zero** - warnings are informational. Checks stop early if
-config or the database cannot be loaded at all.
+Server-side self-checks. Each line reports `ok`, `info`, `warn`, or `fail`;
+**only a `fail` exits non-zero** - warnings and info lines are informational.
+Checks stop early if config or the database cannot be loaded at all.
 
 | Check | What it reports |
 |---|---|
@@ -5966,6 +6049,7 @@ config or the database cannot be loaded at all.
 | `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
 | `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
+| `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
 
 The definition checks compare current desired state, not mere existence. The
@@ -6009,8 +6093,12 @@ Wires the selected install target(s) to Seamless: merges the hook entries into
 each hook client's file (Claude Code `settings.json`, Codex `hooks.json`),
 registers the MCP server (via the client's CLI, or for the Claude app chat
 surface by editing `claude_desktop_config.json` directly), and installs the
-embedded `seam-onboard` and `seam-research` skills into each hook client's
-skill home. The `claude-desktop` target is the chat surface's MCP bridge only -
+embedded skills into each hook client's skill home - `seam-onboard` always, and
+`seam-research` only while its
+[optional feature](/reference/console/#optional-features) is on. A skill whose
+feature is off is not installed, and a copy this installer previously delivered
+is removed, so an agent never reads about tools the server no longer exposes.
+The `claude-desktop` target is the chat surface's MCP bridge only -
 it has no hooks and no skills - so selecting only it together with
 `--mcp=false` is an error rather than a silent no-op.
 
@@ -6256,14 +6344,28 @@ Four layers resolve each key. Later layers win:
 1. **Defaults** - the built-in values in the table below.
 2. **File** - whatever the YAML sets.
 3. **Environment** - `SEAMLESS_*` overrides the file.
-4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
-   in the database. They win over file *and* env, apply from the next session
-   start without a daemon restart, and stay until reset.
+4. **Runtime override (DB)** - the console's Settings forms store some blocks in
+   the database. They win over file *and* env, take effect without a daemon
+   restart, and stay until reset.
 
-That fourth layer only covers the `briefing:` block. It exists so you can tune
-what agents get injected while they are running, and it is the one place where
-the config file is not the last word - check the console before concluding a
-briefing setting is being ignored.
+That fourth layer covers two blocks, and only those two:
+
+| Block | Written by | When it takes effect |
+|---|---|---|
+| `briefing:` | Settings → Briefing injection | From the next session start. |
+| `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it the next time its client lists tools, in practice its next session. |
+
+It exists so you can change what agents get injected - and what they can reach -
+while they are running, and it is the one place where the config file is not the
+last word: check the console before concluding a `briefing:` or `features:`
+setting is being ignored. Neither form ever writes your config file, and
+**Reset** on either clears the stored row and hands that block back to file/env.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds a stored `features:` override
+with research on, so a feature that now ships off does not disappear from under
+data you were already using. The console labels it a stored override, not your
+choice; **Reset** clears it like any other.
 
 ## Generating a key
 
@@ -6306,6 +6408,7 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.include_sibling_memories` | bool | - |
 | `briefing.utility_weight` | float64 | `0.4` |
 | `briefing.utility_mode` | string | `auto` |
+| `features.research` | bool | - |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -6452,6 +6555,19 @@ briefing:
   # bounded recall/prompt-recall utility boosts are always on.
   # env: SEAMLESS_BRIEFING_UTILITY_MODE
   utility_mode: auto
+
+# Optional features. These ship OFF: a fresh installation exposes none of them
+# until you turn one on -- here, via env, or live in the console (Settings ->
+# Features), which stores a runtime override in the database that WINS over this
+# file and env until reset. Turning a feature off hides its console screens, its
+# MCP tools, and its agent-facing mentions; it never deletes stored data, and
+# re-enabling restores every surface. An installation that already holds research
+# data keeps the feature on across the upgrade (a one-time seeded override).
+features:
+  # Research labs and trials: the Labs and Trials console screens, the trials
+  # search scope, and the lab_open, trial_record, trial_query MCP tools.
+  # env: SEAMLESS_FEATURES_RESEARCH
+  research: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.
@@ -7026,7 +7142,7 @@ the same relative locations on every OS.
 | Daemon log | `~/.seamless/seamlessd.log` (macOS, Windows); journald (Linux) | `make logs` from a clone, `journalctl --user -u seamless -f` on Linux |
 | Claude Code hooks | `~/.claude/settings.json` | exactly what is written: [Hooks](/reference/hooks/) |
 | Codex hooks | `${CODEX_HOME:-~/.codex}/hooks.json` | same reference, [shell-string forms](/reference/hooks/#the-codex-profile-is-shell-strings) |
-| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` + `seam-research`, delivered per client |
+| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` always; `seam-research` while its [optional feature](/reference/console/#optional-features) is on. Delivered per client |
 | Claude app chat MCP | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS); `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | the chat surface's only artifact - [Claude app chat setup](/claude-app/) |
 
 ## Removing the service by hand {#removing-the-service-by-hand}
@@ -7255,6 +7371,8 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
+| Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -7264,8 +7382,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, project families) that shapes future
-briefings without touching any memory's content.
+configuration knob (briefing overrides, feature switches, project families) that
+shapes future briefings, or what is exposed, without touching any memory's
+content.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -7535,9 +7654,13 @@ captures only.
 `/console/labs`, `/console/labs/{name}`
 
 The research-lab surface (the console twin of `lab_open` / `trial_record` /
-`trial_query`). A lab is not a stored entity - it is the label its trials carry,
-a stable name for one line of investigation - so this screen is an aggregation
-over the trials table and there is nothing to write.
+`trial_query`). Labs and Trials are one [optional feature](#optional-features)
+and ship off; while it is off both screens answer with a short "switched off"
+page and neither appears in the nav.
+
+A lab is not a stored entity - it is the label its trials carry, a stable name
+for one line of investigation - so this screen is an aggregation over the trials
+table and there is nothing to write.
 
 The same library shape: a rail of labs, most recently active first, each with
 its trial count and pass/fail tallies. The reader shows one lab's whole
@@ -7552,8 +7675,10 @@ uncapped, filterable view.
 `/console/trials`, `/console/trials/{id}`
 
 The flat, filterable view over every recorded trial - the console twin of the
-`trial_query` MCP tool. The rail groups trials by lab (a group sits where its
-newest trial does) and filters by `?lab=` and `?outcome=`. Outcomes are
+`trial_query` MCP tool, and part of the same
+[optional feature](#optional-features) as [Labs](#labs). The rail groups trials
+by lab (a group sits where its newest trial does) and filters by `?lab=` and
+`?outcome=`. Outcomes are
 free-form by design, so `?outcome=` is an exact-match filter rather than a
 validated enum; the seg offers the conventional values (`pass`, `fail`,
 `partial`, `inconclusive`).
@@ -7661,14 +7786,58 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 `/console/settings`
 
 A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for the
-semantic index, briefing injection (including utility ranking), and project
-families.
+registered projects, and the repo→project map - with editable blocks for
+optional features, the semantic index, briefing injection (including utility
+ranking), and project families.
 
-**Semantic index & storage**: the embedding pipeline and the SQLite database,
-side by side. The embedder card shows the active provider and model - and when
-embeddings are off, the exact cause, with distinct copy for the owner off
-switch, the no-key lexical fallback, and a config error. The off/auto switch is
+### Optional features
+
+`/console/settings#features`
+
+Optional features are the parts of Seamless you can switch on and off, and they
+ship **off**: a fresh install exposes none of them until you turn one on. The
+zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+feature is, a generated line naming exactly what switching it off hides, and a
+live count of the data it holds either way ("Data kept: 12 trials across 3
+labs").
+
+There is one today: **Research labs & trials**, which owns the [Labs](#labs) and
+[Trials](#trials) screens, the trials search scope, and the `lab_open`,
+`trial_record`, and `trial_query` MCP tools. Screens and tools move together on
+purpose, so an agent never sees a tool for a screen you switched off.
+
+**Nothing is ever deleted.** Switching a feature off gates exposure and nothing
+else: the trials stay in the database, its screens answer with a short "switched
+off" page that links back here (a JSON caller gets a 403), and switching it back
+on restores every surface exactly as it was. That is what the data-kept line on
+each card is for - it reports the feature's own rows whether it is on or off.
+
+**When the change lands** has four different answers:
+
+| Surface | When |
+|---|---|
+| The console | Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render. |
+| A tool call | Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it already has. |
+| The client-side skill | The next `seamlessd install-hooks` run. The daemon does not reach into `~/.claude/skills` on a toggle, so `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still sitting in a client's skill home. |
+
+Saving writes a **stored override** row in the database - the same layer the
+briefing form uses. It wins over file and env, never touches your config file,
+and holds until **Reset to file + env** clears it; reset means back to the
+file/env configuration, which unless you set `features:` there is off.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds the override with research on,
+so a feature that now ships off does not disappear from under data you were
+already using. That is why the zone states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.
+
+### Semantic index & storage
+
+The embedding pipeline and the SQLite database, side by side. The embedder card
+shows the active provider and model - and when embeddings are off, the exact
+cause, with distinct copy for the owner off switch, the no-key lexical fallback,
+and a config error. The off/auto switch is
 a settings row read once at serve start, so the page flags a pending restart
 whenever the stored switch disagrees with the running process. Below it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
@@ -7677,9 +7846,11 @@ table that badges models the running embedder no longer writes as stale -
 background. The database card shows the file path, size on disk including the
 WAL, and schema version.
 
-**Briefing injection**: saving writes a runtime override row in the DB. It
-layers over the file/env values and wins until reset, and it applies from the
-next session start - no daemon restart. It never touches your config file, so
+### Briefing injection
+
+Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so
 `seamless.yaml` stays the thing you wrote. **Reset** clears the override and
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
@@ -7698,7 +7869,9 @@ overrides the latch in either direction; when the global mode is `on` or
 [Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
-**Project families**: create, rename, edit, or delete the named groupings that
+### Project families
+
+Create, rename, edit, or delete the named groupings that
 [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
 the CLI - the same `project_families` setting, so a change on either surface
 shows up on the other. Members are chosen from a closed picker of registered
@@ -8573,8 +8746,19 @@ Two places outside `internal/mcp` also track the surface:
 
 - **`cmd/seam/doctor.go`** has an `expectedTools` constant that mirrors
   `ToolCount` without importing the mcp package (which would pull its whole
-  dependency tree into the CLI). `seam doctor` asserts the running server exposes
-  that many tools via `tools/list`.
+  dependency tree into the CLI). It is the **registered** count, and `seam
+  doctor` reports registered against exposed: it reads the effective feature
+  state from `GET /console/settings?format=json` and subtracts the tools of the
+  features that are off, derived from the registry rather than from a second
+  number to keep current (`31 registered, 28 exposed (research disabled)`; `31
+  tools (expected 31)` when everything is on). With that state unreadable - an
+  unreachable endpoint, or a pre-features daemon whose settings JSON carries no
+  `featuresConfig` - it judges a **range** instead of a number and says why,
+  rather than failing a healthy daemon over a fact it could not read.
+  `seamlessd doctor`'s `mcp_tools` check stays a bare equality against
+  registration: the two doctors measure different things, and making the
+  server-side one feature-aware would lose the "written but never wired in"
+  signal it exists for.
 - **A docs page's `tools:` frontmatter list** (under `docs-src/reference/mcp/`)
   decides where the generated reference for the tool appears. A page listing a
   name that is not in `Catalog()` is a docsgen error.

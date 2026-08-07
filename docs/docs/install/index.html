@@ -291,9 +291,10 @@ Windows - and polls <code>/healthz</code> until the daemon actually answers.</li
 <p>Step 3 detects three install targets - <strong>Claude Code</strong>, the <strong>Claude app chat
 surface</strong> (<code>claude-desktop</code>, the app's <code>mcpServers</code> bridge; it has no hooks or
 skills), and <strong>Codex</strong> - and wires the detected set. That one selection
-drives hooks, MCP registrations, and the maintained <code>seam-onboard</code> /
-<code>seam-research</code> skills together. On a terminal the run confirms the selection
-with a multi-select menu - answers are numbers or names, comma-separated
+drives hooks, MCP registrations, and the maintained skills together -
+<code>seam-onboard</code> always, <code>seam-research</code> only while its
+<a href="../reference/console/#optional-features">optional feature</a> is on. On a terminal
+the run confirms the selection with a multi-select menu - answers are numbers or names, comma-separated
 (<code>1,3</code>), defaulting to the detected set; headless, the detected set is wired
 as-is. With nothing detected, a run on a terminal warns and asks whether to
 install at all (defaulting to no), and a headless run aborts - the installer

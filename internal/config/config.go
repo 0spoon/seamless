@@ -47,6 +47,7 @@ type Config struct {
 	MCP         MCP         `yaml:"mcp"`
 	Budgets     Budgets     `yaml:"budgets"`
 	Briefing    Briefing    `yaml:"briefing"`
+	Features    Features    `yaml:"features"`
 	Search      Search      `yaml:"search"`
 	LLM         LLM         `yaml:"llm"`
 	Gardener    Gardener    `yaml:"gardener"`
@@ -181,6 +182,24 @@ func (b Briefing) Validate() error {
 			b.UtilityMode, strings.Join(UtilityModes, ", "))
 	}
 	return nil
+}
+
+// Features toggles the OPTIONAL features -- the parts of Seamless the owner can
+// switch on and off. Optional features ship OFF: a fresh installation exposes
+// none of them until the owner enables one in the console (Settings -> Features)
+// or in this file. Disabling hides a feature's console screens, its MCP tools,
+// and any agent-facing mention of it; it never deletes stored data, and
+// re-enabling restores every surface.
+//
+// The JSON tags back the console's runtime override row (see
+// store.FeaturesConfig), which layers over this file/env base. The surfaces each
+// feature owns live in internal/features, not here -- this struct is only the
+// on/off state.
+type Features struct {
+	// Research enables research labs and trials: the Labs and Trials console
+	// screens, the trials search scope, and the lab_open, trial_record, and
+	// trial_query MCP tools.
+	Research bool `yaml:"research" json:"research"`
 }
 
 // Search tunes the human-facing console search (retrieve.Search). Agent-facing
@@ -331,7 +350,11 @@ func Defaults() Config {
 			UtilityWeight:          0.4,
 			UtilityMode:            "auto",
 		},
-		Search: Search{SemanticFloor: 0.3},
+		// Optional features ship off: a fresh installation exposes none until the
+		// owner enables it. Existing installations holding research data are
+		// grandfathered on by a one-time store migration, not by this default.
+		Features: Features{Research: false},
+		Search:   Search{SemanticFloor: 0.3},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
 			OpenAI: OpenAI{
@@ -619,6 +642,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	envStr("SEAMLESS_BRIEFING_UTILITY_MODE", &c.Briefing.UtilityMode)
+	if err := envBool("SEAMLESS_FEATURES_RESEARCH", &c.Features.Research); err != nil {
+		return err
+	}
 	if err := envFloat("SEAMLESS_SEARCH_SEMANTIC_FLOOR", &c.Search.SemanticFloor); err != nil {
 		return err
 	}

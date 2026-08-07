@@ -247,6 +247,34 @@ config file is not the last word, and it exists so you can tune what agents get
 injected while they are running. See
 [Configuration](/reference/configuration/).
 
+## A tool is missing, or a console screen says it is switched off
+
+**What is happening.** It belongs to an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. Nothing is broken and nothing was deleted - the feature's data is
+untouched, and every surface returns the moment it is switched back on. Today
+the one optional feature is research: the Labs and Trials screens, the trials
+search scope, and `lab_open`, `trial_record`, `trial_query`.
+
+**Fix.** Turn it on in the console under Settings → Features (or set
+`features: research: true`, or `SEAMLESS_FEATURES_RESEARCH=1`). The console
+toggle stores an override that beats both the file and the environment, so check
+it before you edit YAML.
+
+**If you already turned it on and the agent still cannot call the tool**, you
+are looking at the propagation seam, not a failure:
+
+| Surface | When the change lands |
+|---|---|
+| The console | Immediately. |
+| A tool call | Immediately - and while a feature is off its tools are refused as *unknown*, which is what a client holding a stale list should see. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it was given. Start a new session rather than hunting for a refresh button. |
+| The `seam-research` skill in a client's skill home | The next `seamlessd install-hooks` run. `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still installed - it never deletes in a client's directory behind your back. |
+
+One thing that is *not* a symptom of this: a gated tool call leaves no row in
+the Interactions feed. The filter rejects it before the middleware that records
+tool calls, so silence there is expected.
+
 ## Two daemons, the wrong port, or code changes that never land
 
 **What is happening.** Seamless is **one instance per machine**: one port (8081),

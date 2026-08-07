@@ -311,6 +311,15 @@ transport failures.</li>
 </tbody>
 </table>
 </div>
+<p>That is the count the server <strong>registers</strong>; what a client is offered can be
+smaller. Tools belonging to an
+<a href="../../reference/console/#optional-features">optional feature</a> are hidden from
+<code>tools/list</code> while that feature is off, and a call to one is refused as an
+unknown tool. Optional features ship off, so a fresh install advertises fewer
+than 31 until you turn one on - each affected tool says so on its own reference
+page. Nothing about registration changes: the catalog these pages are generated
+from, and the registered-tool count <code>seamlessd doctor</code> asserts, stay the full
+set either way.</p>
 <p>Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.</p>
 

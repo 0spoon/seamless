@@ -339,6 +339,7 @@ route through the lifecycle/files services, so supersession, atomic Markdown
 writes, and occupied-path protections remain the same as direct tools.</p>
 <h2 id="lab_open">lab_open</h2>
 <p>Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.</p>
+<p><strong>Optional</strong> - part of <em>Research labs &amp; trials</em>, hidden when the <code>research</code> feature is disabled: the tool leaves <code>tools/list</code> and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See <a href="../../../reference/console/#optional-features">Optional features</a>.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -367,6 +368,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 </div>
 <h2 id="trial_record">trial_record</h2>
 <p>Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one.</p>
+<p><strong>Optional</strong> - part of <em>Research labs &amp; trials</em>, hidden when the <code>research</code> feature is disabled: the tool leaves <code>tools/list</code> and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See <a href="../../../reference/console/#optional-features">Optional features</a>.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -431,6 +433,7 @@ writes, and occupied-path protections remain the same as direct tools.</p>
 </div>
 <h2 id="trial_query">trial_query</h2>
 <p>Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.</p>
+<p><strong>Optional</strong> - part of <em>Research labs &amp; trials</em>, hidden when the <code>research</code> feature is disabled: the tool leaves <code>tools/list</code> and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See <a href="../../../reference/console/#optional-features">Optional features</a>.</p>
 <div class="table-wrap">
 <table>
 <thead>

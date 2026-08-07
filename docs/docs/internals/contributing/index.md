@@ -232,8 +232,19 @@ Two places outside `internal/mcp` also track the surface:
 
 - **`cmd/seam/doctor.go`** has an `expectedTools` constant that mirrors
   `ToolCount` without importing the mcp package (which would pull its whole
-  dependency tree into the CLI). `seam doctor` asserts the running server exposes
-  that many tools via `tools/list`.
+  dependency tree into the CLI). It is the **registered** count, and `seam
+  doctor` reports registered against exposed: it reads the effective feature
+  state from `GET /console/settings?format=json` and subtracts the tools of the
+  features that are off, derived from the registry rather than from a second
+  number to keep current (`31 registered, 28 exposed (research disabled)`; `31
+  tools (expected 31)` when everything is on). With that state unreadable - an
+  unreachable endpoint, or a pre-features daemon whose settings JSON carries no
+  `featuresConfig` - it judges a **range** instead of a number and says why,
+  rather than failing a healthy daemon over a fact it could not read.
+  `seamlessd doctor`'s `mcp_tools` check stays a bare equality against
+  registration: the two doctors measure different things, and making the
+  server-side one feature-aware would lose the "written but never wired in"
+  signal it exists for.
 - **A docs page's `tools:` frontmatter list** (under `docs-src/reference/mcp/`)
   decides where the generated reference for the tool appears. A page listing a
   name that is not in `Catalog()` is a docsgen error.

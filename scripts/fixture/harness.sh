@@ -45,6 +45,28 @@
 # never model drift.
 set -euo pipefail
 
+# Optional features ship OFF, and a fixture instance is a NEW installation -- no
+# trials yet, so the grandfather migration seeds nothing. Both halves of the
+# fixture depend on research labs and trials being exposed: seambench grades on
+# trial_query being called and trial.recorded being emitted, and the branding
+# scenes/screenshots assert a seeded failed trial and show the Labs/Trials
+# screens. So every fixture instance turns the feature on explicitly, in BOTH
+# modes, two ways:
+#
+#   1. write_config writes `features: research: true` into each throwaway
+#      seamless.yaml. This is the load-bearing one: cmd/seambench's arm runner
+#      scrubs the whole SEAMLESS_* space from the daemon environment (arm.go
+#      scrubEnv) and sets back only SEAMLESS_CONFIG, and the record recipe has
+#      the operator start `seamlessd serve` by hand in another terminal. An
+#      exported variable reaches neither.
+#   2. The export below, which covers this script's own children (install-hooks,
+#      the demoseed seeder, the briefing self-check daemon) regardless of which
+#      config each resolves.
+#
+# The env var lives on the daemon side only -- never in the myapp working tree
+# (memory scene-demo-repo-must-be-seamless-free).
+export SEAMLESS_FEATURES_RESEARCH=1
+
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 mode=""
 base=""
@@ -113,6 +135,11 @@ fi
 # write_config <cfg> <data> <port> <keyfile> -- throwaway config + key for one
 # seeded instance. The key persists across re-seeds of the same dir so an open
 # claude session's MCP registration stays valid. Echoes the key.
+#
+# The features block is not optional here: see the SEAMLESS_FEATURES_RESEARCH
+# note at the top of this file. Any daemon started against this config -- by the
+# seambench runner, by the operator, or by the self-check -- gets the research
+# tools and screens the fixture's graders and scenes assume.
 write_config() {
   local cfg="$1" data="$2" p="$3" keyfile="$4" key
   if [[ -f "$keyfile" ]]; then key=$(cat "$keyfile"); else key=$(openssl rand -hex 32); echo "$key" >"$keyfile"; fi
@@ -122,6 +149,10 @@ addr: "127.0.0.1:$p"
 data_dir: "$data"
 mcp:
   api_key: "$key"
+features:
+  # A fixture instance is a new installation, so the optional research feature
+  # would default off; seambench's graders and the branding scenes both need it.
+  research: true
 EOF
   printf '%s' "$key"
 }

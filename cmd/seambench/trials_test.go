@@ -51,6 +51,11 @@ func throwawayInstance(t *testing.T) (string, *sql.DB) {
 		Events:   rec,
 		Gardener: gardener.New(db, mgr, nil, nil, rec, gardener.Config{}, nil),
 		APIKey:   throwawayKey,
+		// seambench records its results as a trial, so this throwaway instance
+		// must expose the research tools: they are an optional feature and ship
+		// off, and a fresh test database is never grandfathered on. The real
+		// fixture does the same thing through scripts/fixture/harness.sh.
+		Features: config.Features{Research: true},
 	})
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)

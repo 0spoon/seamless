@@ -264,9 +264,11 @@ secret-handling policy, not because Codex requires stdio. The installer reads
 a disabled or stale Seamless bridge, and verifies the written state before it
 reports success. A direct-HTTP or otherwise foreign entry under the reserved
 <code>seamless</code> name is never overwritten implicitly.</li>
-<li><strong>Installs two Codex skills</strong> under
-<code>${CODEX_HOME:-$HOME/.codex}/skills/</code>: the one-shot <code>$seam-onboard</code> workflow and
-the recurring <code>$seam-research</code> lab workflow. Claude's copies remain in
+<li><strong>Installs the Codex skills</strong> under
+<code>${CODEX_HOME:-$HOME/.codex}/skills/</code>: the one-shot <code>$seam-onboard</code> workflow,
+plus the recurring <code>$seam-research</code> lab workflow while its
+<a href="../reference/console/#optional-features">optional feature</a> is on (it ships
+off). Claude's copies remain in
 <code>~/.claude/skills/</code>; their one-shot delivery markers are independent.</li>
 </ol>
 <p>The <code>codex</code> executable is the supported management surface for automated MCP
@@ -326,8 +328,9 @@ only its own skill directory after success. Reinstall it from a clone with:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">make install-onboard-skill <span class="nv">CLIENT</span><span class="o">=</span>codex
 </span></span></code></pre></div>
 <p><code>$seam-research &lt;lab-name&gt; &lt;problem&gt;</code> opens or resumes the same structured,
-multi-agent research-lab workflow as Claude Code. It remains installed and is
-refreshed on upgrades.</p>
+multi-agent research-lab workflow as Claude Code. While the research feature is
+on it remains installed and is refreshed on upgrades; switch the feature off and
+the next install run takes it back out.</p>
 <h2 id="the-five-hooks-and-what-they-inject">The five hooks, and what they inject</h2>
 <p>Codex installs five hooks against seven for Claude Code: <code>SessionStart</code>
 injects the <code>&lt;seam-briefing&gt;</code> and creates or resumes the opaque <code>cx/...</code>

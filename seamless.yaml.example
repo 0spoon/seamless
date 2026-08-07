@@ -112,6 +112,19 @@ briefing:
   # env: SEAMLESS_BRIEFING_UTILITY_MODE
   utility_mode: auto
 
+# Optional features. These ship OFF: a fresh installation exposes none of them
+# until you turn one on -- here, via env, or live in the console (Settings ->
+# Features), which stores a runtime override in the database that WINS over this
+# file and env until reset. Turning a feature off hides its console screens, its
+# MCP tools, and its agent-facing mentions; it never deletes stored data, and
+# re-enabling restores every surface. An installation that already holds research
+# data keeps the feature on across the upgrade (a one-time seeded override).
+features:
+  # Research labs and trials: the Labs and Trials console screens, the trials
+  # search scope, and the lab_open, trial_record, trial_query MCP tools.
+  # env: SEAMLESS_FEATURES_RESEARCH
+  research: false
+
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.
 search:

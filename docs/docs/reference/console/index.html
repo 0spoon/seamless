@@ -228,7 +228,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </details>
   <p>The console is the owner's window onto a system whose actual clients are agents.
@@ -322,6 +322,16 @@ is not how Seamless is driven; it is how you watch it.</p>
 <td>Clears the override row, reverting to the file/env configuration.</td>
 </tr>
 <tr>
+<td>Save optional features</td>
+<td><code>POST /console/settings/features</code></td>
+<td>Writes the feature switches as a stored <strong>override row</strong> in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing.</td>
+</tr>
+<tr>
+<td>Reset optional features</td>
+<td><code>POST /console/settings/features/reset</code></td>
+<td>Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing.</td>
+</tr>
+<tr>
 <td>Save a project family</td>
 <td><code>POST /console/settings/families/save</code></td>
 <td>Creates a family or replaces one family's name and member set - the same <code>project_families</code> setting <code>seamlessd family</code> manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member.</td>
@@ -344,8 +354,9 @@ is not how Seamless is driven; it is how you watch it.</p>
 state are <strong>archive a memory</strong>, <strong>approve a captured plan</strong>, and the <strong>star</strong>
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, project families) that shapes future
-briefings without touching any memory's content.</p>
+configuration knob (briefing overrides, feature switches, project families) that
+shapes future briefings, or what is exposed, without touching any memory's
+content.</p>
 <p>This is deliberate, and it is the same principle as
 <a href="../../concepts/gardener/">the gardener's</a> propose-only contract. The store is written
 by agents doing work, with provenance attached. A console that could quietly edit
@@ -589,9 +600,12 @@ captures only.</p>
 <h2 id="labs">Labs</h2>
 <p><code>/console/labs</code>, <code>/console/labs/{name}</code></p>
 <p>The research-lab surface (the console twin of <code>lab_open</code> / <code>trial_record</code> /
-<code>trial_query</code>). A lab is not a stored entity - it is the label its trials carry,
-a stable name for one line of investigation - so this screen is an aggregation
-over the trials table and there is nothing to write.</p>
+<code>trial_query</code>). Labs and Trials are one <a href="#optional-features">optional feature</a>
+and ship off; while it is off both screens answer with a short &quot;switched off&quot;
+page and neither appears in the nav.</p>
+<p>A lab is not a stored entity - it is the label its trials carry, a stable name
+for one line of investigation - so this screen is an aggregation over the trials
+table and there is nothing to write.</p>
 <p>The same library shape: a rail of labs, most recently active first, each with
 its trial count and pass/fail tallies. The reader shows one lab's whole
 identity - outcome tallies (pass, fail, partial, inconclusive, and <em>other</em> for
@@ -602,8 +616,10 @@ uncapped, filterable view.</p>
 <h2 id="trials">Trials</h2>
 <p><code>/console/trials</code>, <code>/console/trials/{id}</code></p>
 <p>The flat, filterable view over every recorded trial - the console twin of the
-<code>trial_query</code> MCP tool. The rail groups trials by lab (a group sits where its
-newest trial does) and filters by <code>?lab=</code> and <code>?outcome=</code>. Outcomes are
+<code>trial_query</code> MCP tool, and part of the same
+<a href="#optional-features">optional feature</a> as <a href="#labs">Labs</a>. The rail groups trials
+by lab (a group sits where its newest trial does) and filters by <code>?lab=</code> and
+<code>?outcome=</code>. Outcomes are
 free-form by design, so <code>?outcome=</code> is an exact-match filter rather than a
 validated enum; the seg offers the conventional values (<code>pass</code>, <code>fail</code>,
 <code>partial</code>, <code>inconclusive</code>).</p>
@@ -692,13 +708,69 @@ asks you to pick the project and plans the split from there; nothing is retyped.
 <h2 id="settings">Settings</h2>
 <p><code>/console/settings</code></p>
 <p>A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for the
-semantic index, briefing injection (including utility ranking), and project
-families.</p>
-<p><strong>Semantic index &amp; storage</strong>: the embedding pipeline and the SQLite database,
-side by side. The embedder card shows the active provider and model - and when
-embeddings are off, the exact cause, with distinct copy for the owner off
-switch, the no-key lexical fallback, and a config error. The off/auto switch is
+registered projects, and the repo→project map - with editable blocks for
+optional features, the semantic index, briefing injection (including utility
+ranking), and project families.</p>
+<h3 id="optional-features">Optional features</h3>
+<p><code>/console/settings#features</code></p>
+<p>Optional features are the parts of Seamless you can switch on and off, and they
+ship <strong>off</strong>: a fresh install exposes none of them until you turn one on. The
+zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+feature is, a generated line naming exactly what switching it off hides, and a
+live count of the data it holds either way (&quot;Data kept: 12 trials across 3
+labs&quot;).</p>
+<p>There is one today: <strong>Research labs &amp; trials</strong>, which owns the <a href="#labs">Labs</a> and
+<a href="#trials">Trials</a> screens, the trials search scope, and the <code>lab_open</code>,
+<code>trial_record</code>, and <code>trial_query</code> MCP tools. Screens and tools move together on
+purpose, so an agent never sees a tool for a screen you switched off.</p>
+<p><strong>Nothing is ever deleted.</strong> Switching a feature off gates exposure and nothing
+else: the trials stay in the database, its screens answer with a short &quot;switched
+off&quot; page that links back here (a JSON caller gets a 403), and switching it back
+on restores every surface exactly as it was. That is what the data-kept line on
+each card is for - it reports the feature's own rows whether it is on or off.</p>
+<p><strong>When the change lands</strong> has four different answers:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Surface</th>
+<th>When</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>The console</td>
+<td>Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render.</td>
+</tr>
+<tr>
+<td>A tool call</td>
+<td>Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding.</td>
+</tr>
+<tr>
+<td>A client's tool list</td>
+<td>The next time it lists tools, in practice its next session. Seamless declares <code>listChanged: false</code> and sends no tool-list notification, so a connected client keeps the list it already has.</td>
+</tr>
+<tr>
+<td>The client-side skill</td>
+<td>The next <code>seamlessd install-hooks</code> run. The daemon does not reach into <code>~/.claude/skills</code> on a toggle, so <code>seamlessd doctor</code> raises an <strong>info</strong> line while a skill for a disabled feature is still sitting in a client's skill home.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Saving writes a <strong>stored override</strong> row in the database - the same layer the
+briefing form uses. It wins over file and env, never touches your config file,
+and holds until <strong>Reset to file + env</strong> clears it; reset means back to the
+file/env configuration, which unless you set <code>features:</code> there is off.</p>
+<p>One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds the override with research on,
+so a feature that now ships off does not disappear from under data you were
+already using. That is why the zone states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.</p>
+<h3 id="semantic-index--storage">Semantic index &amp; storage</h3>
+<p>The embedding pipeline and the SQLite database, side by side. The embedder card
+shows the active provider and model - and when embeddings are off, the exact
+cause, with distinct copy for the owner off switch, the no-key lexical fallback,
+and a config error. The off/auto switch is
 a settings row read once at serve start, so the page flags a pending restart
 whenever the stored switch disagrees with the running process. Below it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
@@ -706,9 +778,10 @@ table that badges models the running embedder no longer writes as stale -
 <strong>re-embed everything</strong> rewrites the corpus with the active model in the
 background. The database card shows the file path, size on disk including the
 WAL, and schema version.</p>
-<p><strong>Briefing injection</strong>: saving writes a runtime override row in the DB. It
-layers over the file/env values and wins until reset, and it applies from the
-next session start - no daemon restart. It never touches your config file, so
+<h3 id="briefing-injection">Briefing injection</h3>
+<p>Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so
 <code>seamless.yaml</code> stays the thing you wrote. <strong>Reset</strong> clears the override and
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails <code>Briefing.Validate()</code> comes back as an error flash, not a
@@ -725,7 +798,8 @@ overrides the latch in either direction; when the global mode is <code>on</code>
 <code>off</code>, the table says the per-scope state is dormant until auto returns. See
 <a href="../../concepts/sessions/#the-budget-and-what-survives-it">Sessions &amp; briefings</a> for
 how the blended order behaves once active.</p>
-<p><strong>Project families</strong>: create, rename, edit, or delete the named groupings that
+<h3 id="project-families">Project families</h3>
+<p>Create, rename, edit, or delete the named groupings that
 <a href="../../reference/cli-seamlessd/#seamlessd_family"><code>seamlessd family</code></a> manages from
 the CLI - the same <code>project_families</code> setting, so a change on either surface
 shows up on the other. Members are chosen from a closed picker of registered
@@ -765,7 +839,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

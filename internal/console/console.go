@@ -30,6 +30,7 @@ import (
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gardener"
 	"github.com/0spoon/seamless/internal/retrieve"
@@ -72,6 +73,10 @@ type Config struct {
 	// form's effective values are this plus the store's override row, and a
 	// save writes the override (never the file).
 	BriefingCfg config.Briefing
+	// Features is the file/env optional-features base. The effective state is
+	// this plus the store's override row, resolved live per request (see
+	// effectiveFeatures) so a Settings save applies without a restart.
+	Features config.Features
 	// SessionIdleTTL is the configured live/idle threshold for session displays
 	// (gardener.session_idle_minutes); <= 0 falls back to core.SessionIdleTTL.
 	SessionIdleTTL time.Duration
@@ -119,6 +124,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post := func(pattern string, maxBytes int64, h http.HandlerFunc) {
 		handle(pattern, s.auth(s.parseForm(maxBytes, h)))
 	}
+	// gated composes into the same helpers, so an optional feature's routes
+	// inherit security headers and auth exactly like every other route and can
+	// only ever add the feature check on top.
+	gated := func(key features.Key, h http.HandlerFunc) http.HandlerFunc { return s.gate(key, h) }
 
 	handle("GET /console/static/console.css", s.serveCSS)
 	handle("GET /console/static/interactions.js", s.serveJS)
@@ -148,10 +157,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/plans", s.auth(s.plansList))
 	handle("GET /console/plans/{slug}", s.auth(s.planDetail))
 	post("POST /console/plans/{slug}/approve", formBodySmall, s.planApprove)
-	handle("GET /console/labs", s.auth(s.labsList))
-	handle("GET /console/labs/{name...}", s.auth(s.labDetail))
-	handle("GET /console/trials", s.auth(s.trialsList))
-	handle("GET /console/trials/{id}", s.auth(s.trialDetail))
+	handle("GET /console/labs", s.auth(gated(features.Research, s.labsList)))
+	handle("GET /console/labs/{name...}", s.auth(gated(features.Research, s.labDetail)))
+	handle("GET /console/trials", s.auth(gated(features.Research, s.trialsList)))
+	handle("GET /console/trials/{id}", s.auth(gated(features.Research, s.trialDetail)))
 	handle("GET /console/projects", s.auth(s.projectsList))
 	handle("GET /console/projects/{slug}", s.auth(s.projectDetail))
 	post("POST /console/projects/{slug}/isolation", formBodySmall, s.projectIsolationSet)
@@ -178,6 +187,8 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/settings/embeddings/reembed", formBodySmall, s.settingsEmbeddingsReembed)
 	post("POST /console/settings/families/save", formBodyFamily, s.settingsFamilySave)
 	post("POST /console/settings/families/delete", formBodySmall, s.settingsFamilyDelete)
+	post("POST /console/settings/features", formBodySmall, s.settingsFeaturesSave)
+	post("POST /console/settings/features/reset", formBodySmall, s.settingsFeaturesReset)
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
 }
@@ -568,14 +579,20 @@ type coverageRow struct {
 }
 
 // coverageRows projects a SessionCoverage roll-up into the ordered channel rows
-// the overview renders, each bar sized as its share of all sessions.
-func coverageRows(c store.SessionCoverage) []coverageRow {
-	return []coverageRow{
+// the overview renders, each bar sized as its share of all sessions. The Trials
+// channel is a research surface: it is dropped while that feature is off rather
+// than reported as a flat 0%, which would read as a retention failure instead of
+// a channel the owner switched off.
+func coverageRows(c store.SessionCoverage, research bool) []coverageRow {
+	rows := []coverageRow{
 		{"Findings", c.Findings, percent(c.Findings, c.Total), "var(--brand)"},
 		{"Memories", c.Memories, percent(c.Memories, c.Total), "var(--ok)"},
 		{"Notes", c.Notes, percent(c.Notes, c.Total), "var(--pop)"},
-		{"Trials", c.Trials, percent(c.Trials, c.Total), "var(--warn)"},
 	}
+	if research {
+		rows = append(rows, coverageRow{"Trials", c.Trials, percent(c.Trials, c.Total), "var(--warn)"})
+	}
+	return rows
 }
 
 func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
@@ -685,7 +702,7 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 		Coverage:         percent(cov.Covered, cov.Total),
 		Covered:          cov.Covered,
 		CovTotal:         cov.Total,
-		CoverageRows:     coverageRows(cov),
+		CoverageRows:     coverageRows(cov, features.Enabled(s.effectiveFeatures(ctx), features.Research)),
 		Projects:         glance,
 		Mishaps:          mishaps,
 		Live:             live,
@@ -859,14 +876,16 @@ func sumValues(m map[string]int) int {
 }
 
 // navCounts fills the sidebar badges. Best-effort: a query error yields zeros
-// rather than failing the page.
-func (s *Service) navCounts(ctx context.Context) navCounts {
+// rather than failing the page. Badges belonging to a disabled optional feature
+// are zeroed here as well as hidden in the layout, so a stale template can never
+// leak a count for a screen the owner switched off.
+func (s *Service) navCounts(ctx context.Context, feats config.Features) navCounts {
 	n, err := store.GetNavCounts(ctx, s.cfg.DB)
 	if err != nil {
 		s.logger.Warn("console: nav counts", "error", err)
 		return navCounts{}
 	}
-	return navCounts{
+	counts := navCounts{
 		Sessions:  n.Sessions,
 		Memories:  n.Memories,
 		Notes:     n.Notes,
@@ -877,6 +896,10 @@ func (s *Service) navCounts(ctx context.Context) navCounts {
 		Labs:      n.Labs,
 		Trials:    n.Trials,
 	}
+	if !features.Enabled(feats, features.Research) {
+		counts.Labs, counts.Trials = 0, 0
+	}
+	return counts
 }
 
 // navCounts are the sidebar badge numbers.

@@ -298,9 +298,12 @@ into <code>~/.claude/skills/</code>; from a clone, <code>make install-onboard-sk
 shows the marked Seamless-awareness block it can add to global or project
 <code>CLAUDE.md</code>. It edits only after you choose a scope and approve the change, then
 removes its own one-shot skill directory.</p>
-<p>The installer drops a second skill alongside it: <code>/seam-research</code>, the
-research-lab workflow for systematic debugging (see <a href="../guides/research-trials/">Run research
-trials</a>). Unlike <code>/seam-onboard</code> it is a recurring
+<p>The installer drops a second skill alongside it <em>if research is enabled</em>:
+<code>/seam-research</code>, the research-lab workflow for systematic debugging (see
+<a href="../guides/research-trials/">Run research trials</a>). Research is an
+<a href="../reference/console/#optional-features">optional feature</a> and ships off, so a
+fresh install has no research skill until you turn it on and re-run
+<code>seamlessd install-hooks</code>. Unlike <code>/seam-onboard</code> it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
 structured trials. From a clone, <code>make install-research-skill CLIENT=claude</code>

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -201,6 +202,10 @@ type sessionDetail struct {
 	ClaimedTasks []claimedTaskVM  `json:"claimedTasks"`
 	Memories     []sessMemVM      `json:"memoriesWritten"`
 	Trials       []sessTrialVM    `json:"trialsRecorded"`
+	// ShowTrials gates the trials surfaces (the "Trials recorded" section and
+	// the peek footer's trial count) on the research feature. When it is false
+	// Trials is not even queried, so the section cannot half-render.
+	ShowTrials bool `json:"-"`
 }
 
 // claimedTaskVM is a task the session currently holds (a live claim), shown on
@@ -332,14 +337,20 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.logger.Warn("console: session memories written", "session", sess.ID, "error", merr)
 	}
-	if trials, terr := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{SessionID: sess.ID, Limit: 50}); terr == nil {
-		for _, tr := range trials {
-			data.Trials = append(data.Trials, sessTrialVM{
-				ID: tr.ID, Title: tr.Title, Lab: tr.Lab, Outcome: string(tr.Outcome),
-			})
+	// Trials recorded: a research surface. While that feature is off the query
+	// is skipped entirely -- the rows are still there, the console just does not
+	// offer a way into a gated screen.
+	data.ShowTrials = features.Enabled(s.effectiveFeatures(ctx), features.Research)
+	if data.ShowTrials {
+		if trials, terr := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{SessionID: sess.ID, Limit: 50}); terr == nil {
+			for _, tr := range trials {
+				data.Trials = append(data.Trials, sessTrialVM{
+					ID: tr.ID, Title: tr.Title, Lab: tr.Lab, Outcome: string(tr.Outcome),
+				})
+			}
+		} else {
+			s.logger.Warn("console: session trials recorded", "session", sess.ID, "error", terr)
 		}
-	} else {
-		s.logger.Warn("console: session trials recorded", "session", sess.ID, "error", terr)
 	}
 
 	s.renderDetail(w, r, "session", pageData{

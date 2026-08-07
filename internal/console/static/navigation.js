@@ -117,20 +117,26 @@
     }, 600);
   }
 
-  function patchPage(doc, source) {
-    var freshMain = doc.querySelector('.main');
-    var currentMain = document.querySelector('.main');
-    var freshNav = doc.querySelector('nav.nav');
-    var currentNav = document.querySelector('nav.nav');
-    if (!freshMain || !currentMain || !freshNav || !currentNav) return false;
+  // navShape is the sidebar's link set. It is stable across ordinary navigation
+  // and changes only when an optional feature is toggled in Settings and its
+  // entries appear or disappear.
+  function navShape(nav) {
+    return Array.prototype.map.call(nav.querySelectorAll('a'), function (link) {
+      return link.getAttribute('href');
+    }).join('\n');
+  }
 
-    try {
-      morphNode(currentMain, freshMain);
-    } catch (error) {
-      // A morph edge case still stays inside this document. Replace only the
-      // view contents with the fully rendered response; never reload the page.
-      var children = Array.prototype.slice.call(freshMain.childNodes).map(function (node) { return imported(node); });
-      currentMain.replaceChildren.apply(currentMain, children);
+  // syncNav keeps the sidebar in step with the fetched document. Counts and the
+  // active marker are patched in place, because that is what preserves the count
+  // bump animation. A changed link set is a structural change the in-place patch
+  // cannot express -- the two node lists no longer line up index by index -- so
+  // the whole nav is morphed instead. Without that branch, switching an optional
+  // feature off in Settings would leave the sidebar offering its screens until
+  // the next full page load, and switching one on would hide them just as long.
+  function syncNav(currentNav, freshNav) {
+    if (navShape(currentNav) !== navShape(freshNav)) {
+      morphNode(currentNav, freshNav);
+      return;
     }
     var freshCounts = freshNav.querySelectorAll('.count');
     var currentCounts = currentNav.querySelectorAll('.count');
@@ -150,6 +156,24 @@
         currentLinks[j].classList.toggle('active', freshLinks[j].classList.contains('active'));
       }
     }
+  }
+
+  function patchPage(doc, source) {
+    var freshMain = doc.querySelector('.main');
+    var currentMain = document.querySelector('.main');
+    var freshNav = doc.querySelector('nav.nav');
+    var currentNav = document.querySelector('nav.nav');
+    if (!freshMain || !currentMain || !freshNav || !currentNav) return false;
+
+    try {
+      morphNode(currentMain, freshMain);
+    } catch (error) {
+      // A morph edge case still stays inside this document. Replace only the
+      // view contents with the fully rendered response; never reload the page.
+      var children = Array.prototype.slice.call(freshMain.childNodes).map(function (node) { return imported(node); });
+      currentMain.replaceChildren.apply(currentMain, children);
+    }
+    syncNav(currentNav, freshNav);
     if (doc.title) document.title = doc.title;
     try {
       if (window.IX && window.IX.enhance) window.IX.enhance(currentMain);

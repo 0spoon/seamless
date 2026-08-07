@@ -351,6 +351,45 @@ gardener:
 	require.Equal(t, 20, cfg.Gardener.SessionIdleMinutes)
 }
 
+func TestLoadFrom_FeaturesFileAndEnv(t *testing.T) {
+	// Optional features ship off: no file, no env, nothing enabled.
+	cfg, err := LoadFrom("")
+	require.NoError(t, err)
+	require.False(t, cfg.Features.Research, "optional features default to off")
+
+	path := writeConfig(t, `
+features:
+  research: true
+`)
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.True(t, cfg.Features.Research)
+
+	t.Setenv("SEAMLESS_FEATURES_RESEARCH", "false")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.False(t, cfg.Features.Research, "env wins over file")
+
+	t.Setenv("SEAMLESS_FEATURES_RESEARCH", "1")
+	cfg, err = LoadFrom("")
+	require.NoError(t, err)
+	require.True(t, cfg.Features.Research, "env alone enables the feature")
+
+	// Present but uninterpretable is an error, never a silent default.
+	t.Setenv("SEAMLESS_FEATURES_RESEARCH", "yes-please")
+	_, err = LoadFrom("")
+	require.Error(t, err)
+}
+
+func TestLoadFrom_FeaturesStrictYAML(t *testing.T) {
+	path := writeConfig(t, `
+features:
+  reserach: true
+`)
+	_, err := LoadFrom(path)
+	require.Error(t, err, "a typo'd feature key must fail loudly, not ship silently off")
+}
+
 func TestLoadFrom_CaptureAllowedPorts(t *testing.T) {
 	path := writeConfig(t, `
 capture:

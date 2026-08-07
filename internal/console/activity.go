@@ -3,9 +3,11 @@ package console
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 )
 
 // eventRow is a display-ready projection of one event-log entry.
@@ -119,6 +121,11 @@ func eventSummary(e core.Event) string {
 		return verb + " " + payloadStr(p, "kind") + " " + payloadStr(p, "id")
 	case core.EventTrialRecorded:
 		return "recorded trial " + payloadStr(p, "title")
+	case eventFeaturesChanged:
+		if reset, _ := p["reset"].(bool); reset {
+			return "optional features reset to the file configuration"
+		}
+		return "optional features changed" + featureStateSuffix(p)
 	case core.EventTaskTransition:
 		if to := payloadStr(p, "to"); to != "" {
 			return "task -> " + to
@@ -173,6 +180,33 @@ func payloadStr(p map[string]any, key string) string {
 		return v
 	}
 	return ""
+}
+
+// featureStateSuffix renders a features_changed payload's per-feature state as
+// " (research on, ... off)", in registry order so the line reads the same way
+// every time. An empty or unreadable map contributes nothing rather than an
+// invented state.
+func featureStateSuffix(p map[string]any) string {
+	state := payloadMap(p, "features")
+	if len(state) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, f := range features.Registry() {
+		on, ok := state[string(f.Key)].(bool)
+		if !ok {
+			continue
+		}
+		word := "off"
+		if on {
+			word = "on"
+		}
+		parts = append(parts, string(f.Key)+" "+word)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // payloadMap reads a nested object field from a payload map (nil if absent).
