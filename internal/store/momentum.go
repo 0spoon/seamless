@@ -22,6 +22,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -179,6 +180,152 @@ func coveredDays(ctx context.Context, db *sql.DB, since time.Time) (map[string]b
 		return nil, time.Time{}, fmt.Errorf("store.coveredDays: %w", err)
 	}
 	return out, earliest, nil
+}
+
+// SpotlightMemory is the momentum "memory of the month": the active memory
+// with the highest utility gain inside the spotlight window, with the counts
+// that back the claim up.
+type SpotlightMemory struct {
+	ItemID  string  `json:"itemId"`
+	Name    string  `json:"name"`
+	Kind    string  `json:"kind"`
+	Project string  `json:"project"`
+	Utility float64 `json:"utility"` // windowed utility gain (house weights, per-session dedup, decay)
+	Reads   int     `json:"reads"`   // memory.read events in the window
+	Readers int     `json:"readers"` // distinct sessions that read or pulled it
+	Injects int     `json:"injects"` // query-gated injections in the window
+}
+
+// MemorySpotlight returns the active memory that gained the most utility since
+// the given instant -- the same signal classes, weights, per-session dedup,
+// and decay as RebuildRetrievalStats, restricted to the window -- with its
+// windowed read and reader counts. found is false when no active memory earned
+// any query-gated utility in the window: the honest empty state. A
+// momentum-only surface: callers gate on the feature before asking.
+func MemorySpotlight(ctx context.Context, db *sql.DB, since, now time.Time) (SpotlightMemory, bool, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT ts, kind, session_id, item_id, payload FROM events
+		WHERE kind IN (?, ?) AND ts >= ?
+		ORDER BY ts ASC, id ASC`,
+		string(core.EventInjected), string(core.EventMemoryRead), core.FormatTime(since))
+	if err != nil {
+		return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: query events: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+
+	type gain struct {
+		utility float64
+		reads   int
+		injects int
+		readers map[string]struct{}
+	}
+	gains := map[string]*gain{}
+	get := func(id string) *gain {
+		g := gains[id]
+		if g == nil {
+			g = &gain{readers: map[string]struct{}{}}
+			gains[id] = g
+		}
+		return g
+	}
+	seen := map[string]struct{}{}
+	credit := func(g *gain, id, class, session string, weight float64, ts time.Time) {
+		if weight == 0 {
+			return
+		}
+		if session != "" {
+			g.readers[session] = struct{}{}
+			key := class + "\x00" + session + "\x00" + id
+			if _, dup := seen[key]; dup {
+				return
+			}
+			seen[key] = struct{}{}
+		}
+		g.utility += weight * utilityDecay(now.Sub(ts))
+	}
+	for rows.Next() {
+		var tsStr, kind, sessionID, itemID, payload string
+		if err := rows.Scan(&tsStr, &kind, &sessionID, &itemID, &payload); err != nil {
+			return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: scan: %w", err)
+		}
+		ts, err := core.ParseTime(tsStr)
+		if err != nil {
+			return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: parse ts: %w", err)
+		}
+		switch core.EventKind(kind) {
+		case core.EventInjected:
+			var p injectedPayload
+			if payload != "" && payload != "{}" {
+				if err := json.Unmarshal([]byte(payload), &p); err != nil {
+					p = injectedPayload{}
+				}
+			}
+			weight, class := injectedUtilityWeight(p)
+			if weight == 0 {
+				continue
+			}
+			session := injectedSessionKey(sessionID, payload)
+			for _, id := range injectedItemIDs(itemID, payload) {
+				g := get(id)
+				g.injects++
+				credit(g, id, class, session, weight, ts)
+			}
+		case core.EventMemoryRead:
+			if itemID == "" {
+				continue
+			}
+			g := get(itemID)
+			g.reads++
+			credit(g, itemID, "read", sessionID, utilityWeightRead, ts)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: rows: %w", err)
+	}
+	if len(gains) == 0 {
+		return SpotlightMemory{}, false, nil
+	}
+
+	// Resolve winners against the ACTIVE memory index: a superseded or archived
+	// memory is history, not a spotlight, and note ids fall away here too.
+	ids := make([]string, 0, len(gains))
+	args := make([]any, 0, len(gains))
+	for id := range gains {
+		ids = append(ids, "?")
+		args = append(args, id)
+	}
+	mrows, err := db.QueryContext(ctx, `
+		SELECT id, name, kind, project FROM memories_index
+		WHERE invalid_at IS NULL AND id IN (`+strings.Join(ids, ",")+`)`, args...)
+	if err != nil {
+		return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: resolve: %w", err)
+	}
+	defer func() { _ = mrows.Close() }()
+	best := SpotlightMemory{}
+	found := false
+	for mrows.Next() {
+		var id, name, kind, project string
+		if err := mrows.Scan(&id, &name, &kind, &project); err != nil {
+			return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: scan memory: %w", err)
+		}
+		g := gains[id]
+		if g == nil || g.utility <= 0 {
+			continue
+		}
+		cand := SpotlightMemory{
+			ItemID: id, Name: name, Kind: kind, Project: project,
+			Utility: g.utility, Reads: g.reads, Readers: len(g.readers), Injects: g.injects,
+		}
+		if !found || cand.Utility > best.Utility ||
+			(cand.Utility == best.Utility && (cand.Reads > best.Reads ||
+				(cand.Reads == best.Reads && cand.Name < best.Name))) {
+			best, found = cand, true
+		}
+	}
+	if err := mrows.Err(); err != nil {
+		return SpotlightMemory{}, false, fmt.Errorf("store.MemorySpotlight: rows: %w", err)
+	}
+	return best, found, nil
 }
 
 // localDay floors t to its local midnight, the day-boundary convention every

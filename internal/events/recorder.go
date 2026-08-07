@@ -147,6 +147,59 @@ func (r *Recorder) Record(ctx context.Context, e core.Event) (string, error) {
 	return e.ID, nil
 }
 
+// RecordOnce appends an event only if no event of its kind exists for its item
+// -- the once-per-item latch behind moments like the momentum first-reuse
+// mark. The guard and the insert are a single statement, so two concurrent
+// recorders cannot both mint the moment; recorded is false when the latch had
+// already been set, and subscribers see the event only when it actually
+// landed.
+func (r *Recorder) RecordOnce(ctx context.Context, e core.Event) (id string, recorded bool, err error) {
+	if e.Kind == "" {
+		return "", false, fmt.Errorf("events.RecordOnce: empty kind")
+	}
+	if e.ItemID == "" {
+		return "", false, fmt.Errorf("events.RecordOnce: empty item id (the latch is per item)")
+	}
+	if e.ID == "" {
+		nid, err := core.NewID()
+		if err != nil {
+			return "", false, fmt.Errorf("events.RecordOnce: %w", err)
+		}
+		e.ID = nid
+	}
+	if e.TS.IsZero() {
+		e.TS = time.Now().UTC()
+	}
+	payload := "{}"
+	if len(e.Payload) > 0 {
+		b, err := json.Marshal(e.Payload)
+		if err != nil {
+			return "", false, fmt.Errorf("events.RecordOnce: marshal payload: %w", err)
+		}
+		payload = string(b)
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		 SELECT ?, ?, ?, ?, ?, ?, ?
+		 WHERE NOT EXISTS (SELECT 1 FROM events WHERE kind = ? AND item_id = ?)`,
+		e.ID, core.FormatTime(e.TS), string(e.Kind),
+		e.SessionID, e.ProjectSlug, e.ItemID, payload,
+		string(e.Kind), e.ItemID,
+	)
+	if err != nil {
+		return "", false, fmt.Errorf("events.RecordOnce: insert: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return "", false, fmt.Errorf("events.RecordOnce: rows affected: %w", err)
+	}
+	if n == 0 {
+		return "", false, nil
+	}
+	r.publish(e)
+	return e.ID, true, nil
+}
+
 // ByID returns a single event by its id. ok is false (with a nil error) when no
 // event has that id.
 func (r *Recorder) ByID(ctx context.Context, id string) (core.Event, bool, error) {

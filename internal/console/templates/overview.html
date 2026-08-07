@@ -86,6 +86,18 @@
         </ol>
         {{else}}<div class="ov2-panel-empty">{{icon "brain"}}<span>No memory has been surfaced yet.</span></div>{{end}}
       </section>
+      {{with .Spotlight}}
+      <section class="ov2-panel mom-spot" aria-label="Memory of the month">
+        <header class="ov2-panel-head"><h2>Memory of the month</h2></header>
+        {{if .Found}}
+        <a class="mom-spot-body" href="/console/memories/{{.Memory.ItemID}}">
+          <span class="mom-spot-name mono">{{.Memory.Name}}</span>
+          <span class="mom-spot-meta">{{.Memory.Kind}}{{if .Memory.Project}} &middot; {{.Memory.Project}}{{end}}</span>
+          <span class="mom-spot-line">{{.Line}}</span>
+        </a>
+        {{else}}<div class="ov2-panel-empty">{{icon "brain"}}<span>No memory earned reuse in the last 30 days yet.</span></div>{{end}}
+      </section>
+      {{end}}
       <section class="ov2-panel" aria-label="Memory fabric">
         <header class="ov2-panel-head"><h2>Memory fabric</h2>{{if .Memories}}<span class="ov2-panel-total">{{.Memories}} active</span>{{end}}</header>
         {{if .MemByKind}}{{kindBar .MemByKind}}{{else}}<div class="ov2-panel-empty">{{icon "database"}}<span>No memories yet &mdash; agents write them with memory_write.</span></div>{{end}}

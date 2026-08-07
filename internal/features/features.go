@@ -123,6 +123,8 @@ var registry = []Feature{
 		Surfaces: []string{
 			"the plan finish-line cards on Overview (and their agent-briefing emphasis)",
 			"the capture calendar and streak on Sessions",
+			"the first-reuse payoff marks in the activity ledger",
+			"the memory-of-the-month spotlight on Overview",
 		},
 		Default: false,
 		get:     func(c config.Features) bool { return c.Momentum },

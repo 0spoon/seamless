@@ -4454,3 +4454,10 @@ button.star.on .ico { fill: currentColor; }
 .mom-cal-cell.l3 { fill: var(--brand); fill-opacity: .8; }
 .mom-cal-cell.l4 { fill: var(--brand); }
 .mom-cal-dot { fill: var(--ok); pointer-events: none; }
+
+/* --- Momentum: memory-of-the-month spotlight (Overview rail) ---------------- */
+.mom-spot-body { display: flex; flex-direction: column; gap: 3px; color: inherit; text-decoration: none; }
+.mom-spot-body:hover .mom-spot-name { text-decoration: underline; }
+.mom-spot-name { font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); overflow-wrap: anywhere; }
+.mom-spot-meta { font-size: var(--text-xs); color: var(--text-muted); }
+.mom-spot-line { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }

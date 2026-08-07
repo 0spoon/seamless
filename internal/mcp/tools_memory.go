@@ -464,6 +464,7 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 	// Carry index-only lifecycle fields onto the file-parsed memory for the response.
 	mem.InvalidAt, mem.SupersededBy = idx.InvalidAt, idx.SupersededBy
 	s.record(ctx, core.EventMemoryRead, s.boundSession(ctx), mem.Project, mem.ID, map[string]any{"name": mem.Name})
+	s.markFirstReuse(ctx, mem)
 
 	// content_hash is the ETag half of the expect_hash precondition: without it
 	// there is no way for an agent to say "write only if nothing moved since I

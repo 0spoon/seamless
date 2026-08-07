@@ -132,3 +132,61 @@ func TestCaptureStreak_CorruptCacheRebuilds(t *testing.T) {
 	require.Equal(t, 3, current)
 	require.Equal(t, 3, longest)
 }
+
+// insertReadEvent writes a memory.read event carrying a session id, which the
+// spotlight needs for per-session dedup and its readers count.
+func insertReadEvent(t *testing.T, db *sql.DB, itemID, sessionID string, ts time.Time) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		VALUES (?, ?, ?, ?, '', ?, '{}')`,
+		id, core.FormatTime(ts), string(core.EventMemoryRead), sessionID, itemID)
+	require.NoError(t, err)
+}
+
+func TestMemorySpotlight(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
+	since := now.AddDate(0, 0, -30)
+
+	seedMemoryRow(t, db, "A", "chroma-boot-race", now)
+	seedMemoryRow(t, db, "B", "quiet-memory", now)
+	seedMemoryRow(t, db, "C", "retired-star", now)
+	_, err := db.ExecContext(ctx, `UPDATE memories_index SET invalid_at = ? WHERE id = 'C'`,
+		core.FormatTime(now))
+	require.NoError(t, err)
+
+	// A: read by three sessions in the window, one of them twice -- the repeat
+	// bumps the read count but not the deduped utility.
+	insertReadEvent(t, db, "A", "s1", now.Add(-time.Hour))
+	insertReadEvent(t, db, "A", "s1", now.Add(-2*time.Hour))
+	insertReadEvent(t, db, "A", "s2", now.Add(-24*time.Hour))
+	insertReadEvent(t, db, "A", "s3", now.Add(-48*time.Hour))
+	// B: one read in the window.
+	insertReadEvent(t, db, "B", "s1", now.Add(-time.Hour))
+	// C (retired) out-reads them all but cannot be spotlighted.
+	for i, sess := range []string{"s1", "s2", "s3", "s4", "s5"} {
+		insertReadEvent(t, db, "C", sess, now.Add(-time.Duration(i+1)*time.Hour))
+	}
+	// A read far outside the window earns nothing.
+	insertReadEvent(t, db, "B", "s9", now.AddDate(0, 0, -40))
+
+	got, found, err := MemorySpotlight(ctx, db, since, now)
+	require.NoError(t, err)
+	require.True(t, found)
+	require.Equal(t, "A", got.ItemID)
+	require.Equal(t, "chroma-boot-race", got.Name)
+	require.Equal(t, "gotcha", got.Kind)
+	require.Equal(t, 4, got.Reads)
+	require.Equal(t, 3, got.Readers)
+	require.Positive(t, got.Utility)
+
+	// The honest empty state: a window with no qualifying activity.
+	empty, found, err := MemorySpotlight(ctx, db, now.AddDate(0, 0, 1), now.AddDate(0, 0, 2))
+	require.NoError(t, err)
+	require.False(t, found)
+	require.Zero(t, empty.ItemID)
+}

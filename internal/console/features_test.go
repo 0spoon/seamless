@@ -263,6 +263,68 @@ func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
 	require.NotContains(t, page, "midway")
 }
 
+// The first-reuse ledger line is the ideation copy, composed from the event
+// payload -- and it doubles as the SSE toast text, so the shape is pinned.
+func TestEventSummary_FirstReuse(t *testing.T) {
+	line := eventSummary(core.Event{
+		Kind:    core.EventMemoryFirstReuse,
+		Payload: map[string]any{"name": "chroma-boot-race", "kind": "gotcha"},
+	})
+	require.Equal(t, "gotcha chroma-boot-race just paid off for the first time", line)
+
+	require.Equal(t, "a memory just paid off for the first time",
+		eventSummary(core.Event{Kind: core.EventMemoryFirstReuse}),
+		"a payload-less mark still reads as a sentence")
+}
+
+// The memory-of-the-month spotlight is a momentum surface on the Overview
+// rail: off (the shipped default), no trace in HTML or JSON; on, the window's
+// top-utility memory renders with its counts, or the honest empty state when
+// nothing qualifies.
+func TestOverviewSpotlight_FollowsTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	memID := mustID(t)
+	stamp := core.FormatTime(now)
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO memories_index
+		    (id, kind, name, description, project, file_path, tags, valid_from,
+		     invalid_at, superseded_by, source_session, content_hash, created_at, updated_at)
+		VALUES (?, 'gotcha', 'star-memory', 'd', 'demo',
+		        'memory/demo/star-memory.md', '[]', ?, NULL, NULL, '', 'h', ?, ?)`,
+		memID, stamp, stamp, stamp)
+	require.NoError(t, err)
+	for i, sess := range []string{"s1", "s2"} {
+		evID := mustID(t)
+		_, err = db.ExecContext(ctx, `
+			INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+			VALUES (?, ?, ?, ?, 'demo', ?, '{}')`,
+			evID, core.FormatTime(now.Add(-time.Duration(i+1)*time.Hour)),
+			string(core.EventMemoryRead), sess, memID)
+		require.NoError(t, err)
+	}
+
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, page, "Memory of the month")
+	require.NotContains(t, getJSON2(t, mux, "/console/?format=json"), "spotlight")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, "Memory of the month")
+	require.Contains(t, page, "star-memory")
+	require.Contains(t, page, "2 reads · 2 sessions · last 30 days")
+	require.Contains(t, page, `href="/console/memories/`+memID+`"`)
+
+	// The honest empty state: the feature on with nothing qualifying.
+	_, err = db.ExecContext(ctx, `DELETE FROM events WHERE kind = ?`, string(core.EventMemoryRead))
+	require.NoError(t, err)
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, "Memory of the month")
+	require.Contains(t, page, "No memory earned reuse in the last 30 days yet.")
+}
+
 // The capture calendar is a momentum surface on the Sessions page: off (the
 // shipped default), the page carries no trace of it in HTML or JSON; on, the
 // grid renders with the streak numbers, live from the stored override.

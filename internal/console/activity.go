@@ -129,6 +129,13 @@ func eventSummary(e core.Event) string {
 		return verb + " " + payloadStr(p, "kind") + " " + payloadStr(p, "id")
 	case core.EventTrialRecorded:
 		return "recorded trial " + payloadStr(p, "title")
+	case core.EventMemoryFirstReuse:
+		// The momentum payoff line: the ideation copy, verbatim shape.
+		line := strings.TrimSpace(payloadStr(p, "kind") + " " + payloadStr(p, "name"))
+		if line == "" {
+			line = "a memory"
+		}
+		return line + " just paid off for the first time"
 	case eventFeaturesChanged:
 		if reset, _ := p["reset"].(bool); reset {
 			return "optional features reset to the file configuration"

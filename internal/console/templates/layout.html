@@ -152,7 +152,13 @@
   es.onmessage = function (ev) {
     // Ignore transport-level rows (tool.call / hook.prompt): those live on the
     // Interactions screen and would fire a refresh on every tool call.
-    try { var k = JSON.parse(ev.data).kind; if (k === 'tool.call' || k === 'hook.prompt') return; } catch (e) {}
+    try {
+      var d = JSON.parse(ev.data), k = d.kind;
+      if (k === 'tool.call' || k === 'hook.prompt') return;
+      // Momentum payoff moment: one quiet toast line, only while the console
+      // happens to be open. The event's summary already carries the copy.
+      if (k === 'memory.first_reuse' && d.summary) flashToast(d.summary);
+    } catch (e) {}
     // Pages that own their liveness (live feeds, forms, JS-built islands) opt out
     // via window.SEAM_NO_LIVE_REFRESH. Checked lazily so per-page scripts (which
     // run after this one) have set the flag by the time the first event lands.

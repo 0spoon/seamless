@@ -516,7 +516,25 @@ type overviewData struct {
 	Vitals      []vital
 	StaleDays   int // the "going stale" horizon, in days, stated in the card
 	StaleUnseen int // active memories that have not surfaced within it
+
+	// Spotlight is the momentum memory-of-the-month rail panel: nil while the
+	// feature is off (no panel, no JSON key), non-nil with Found false as the
+	// honest empty state.
+	Spotlight *spotlightData `json:"spotlight,omitempty"`
 }
+
+// spotlightData is the memory-of-the-month panel payload: the winner (when
+// one qualifies) and a pre-composed counts line backing the claim up.
+type spotlightData struct {
+	Found  bool                  `json:"found"`
+	Memory store.SpotlightMemory `json:"memory"`
+	Line   string                `json:"line,omitempty"` // "7 reads · 3 sessions · last 30 days"
+}
+
+// spotlightWindowDays is the fixed memory-of-the-month window. It deliberately
+// ignores the Overview's ?w= selector: "of the month" is a claim about one
+// stated window, not whichever the owner happens to be viewing.
+const spotlightWindowDays = 30
 
 // mishapRow is one entry in the overview's recurrence-review rail: an
 // agent.mishap event reduced to what triage needs -- what happened, where, and
@@ -711,7 +729,30 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	}
 	data.Attention = s.attentionCards(ctx, data)
 	data.Vitals = overviewVitals(data, report, covTrend, prior, hasPrior, win)
+	data.Spotlight = s.memorySpotlight(ctx, now)
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
+}
+
+// memorySpotlight assembles the momentum memory-of-the-month panel: nil while
+// the feature is off (the query never runs), the honest empty state when no
+// active memory earned query-gated utility in the window, and failure-soft --
+// a store error costs the panel, never the page.
+func (s *Service) memorySpotlight(ctx context.Context, now time.Time) *spotlightData {
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		return nil
+	}
+	mem, found, err := store.MemorySpotlight(ctx, s.cfg.DB, now.AddDate(0, 0, -spotlightWindowDays), now)
+	if err != nil {
+		s.logger.Warn("console: memory spotlight", "error", err)
+		return nil
+	}
+	sp := &spotlightData{Found: found, Memory: mem}
+	if found {
+		sp.Line = fmt.Sprintf("%s · %s · last %d days",
+			plural(mem.Reads, "read", "reads"),
+			plural(mem.Readers, "session", "sessions"), spotlightWindowDays)
+	}
+	return sp
 }
 
 // attentionCards builds the Overview's attention strip in severity order:
