@@ -719,10 +719,40 @@ zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
 feature is, a generated line naming exactly what switching it off hides, and a
 live count of the data it holds either way (&quot;Data kept: 12 trials across 3
 labs&quot;).</p>
-<p>There is one today: <strong>Research labs &amp; trials</strong>, which owns the <a href="#labs">Labs</a> and
-<a href="#trials">Trials</a> screens, the trials search scope, and the <code>lab_open</code>,
-<code>trial_record</code>, and <code>trial_query</code> MCP tools. Screens and tools move together on
-purpose, so an agent never sees a tool for a screen you switched off.</p>
+<p>There are two today:</p>
+<p><strong>Research labs &amp; trials</strong> owns the <a href="#labs">Labs</a> and <a href="#trials">Trials</a>
+screens, the trials search scope, and the <code>lab_open</code>, <code>trial_record</code>, and
+<code>trial_query</code> MCP tools. Screens and tools move together on purpose, so an
+agent never sees a tool for a screen you switched off.</p>
+<p><strong>Momentum</strong> is gentle progress cues woven into existing screens -- plan finish
+lines, capture streaks, knowledge payoffs, and project growth -- judged from
+real activity, never invented. It owns no screens or tools of its own; turning
+it on adds four surfaces where you already look:</p>
+<ul>
+<li><strong>Plan finish-line cards</strong> on the Overview attention strip: any plan at least
+80% done gets one positive card naming the exact remaining steps (&quot;seambench
+-- one step from shipped&quot;), linking to the plan. The agent briefing's plan
+line carries the same emphasis, so agents are nudged to close it too.</li>
+<li><strong>The capture calendar</strong> on Sessions: a year of daily activity, cell
+intensity from sessions per day, a distinct dot on days that captured
+knowledge (a session left findings, a memory, a note, or a trial), and two
+quiet numbers -- the current capture streak and the longest ever. The streak
+counts covered days, so it rewards capture, not raw usage.</li>
+<li><strong>Knowledge payoff moments</strong>: the first time a memory is read by a session
+other than the one that wrote it, the moment lands in the activity ledger
+(&quot;gotcha chroma-boot-race just paid off for the first time&quot;) -- once per
+memory, ever -- and the Overview rail gains a <strong>Memory of the month</strong> panel
+naming the last 30 days' top-utility memory with the counts behind the claim.</li>
+<li><strong>Maturity stages</strong> on the project board and detail header: each project
+earns a latched stage -- seedling, sprouting, established, deep-rooted --
+from real thresholds over age, memories, event volume, and reach. Stages
+never regress, and the pill's tooltip states exactly what the next stage
+asks for.</li>
+</ul>
+<p>Momentum keeps the console's judged-numbers ethos: every number is real and
+verifiable, empty states say so honestly, and there are no punishment mechanics
+-- an inactive day is an empty cell, never a warning, and nothing nags or
+expires. Off (the default), none of it renders and none of it is computed.</p>
 <p><strong>Nothing is ever deleted.</strong> Switching a feature off gates exposure and nothing
 else: the trials stay in the database, its screens answer with a short &quot;switched
 off&quot; page that links back here (a JSON caller gets a 403), and switching it back
@@ -745,6 +775,10 @@ each card is for - it reports the feature's own rows whether it is on or off.</p
 <tr>
 <td>A tool call</td>
 <td>Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding.</td>
+</tr>
+<tr>
+<td>The agent briefing</td>
+<td>The next session start - momentum's finish-line emphasis reads the same stored override the console gates on.</td>
 </tr>
 <tr>
 <td>A client's tool list</td>

@@ -460,10 +460,42 @@ feature is, a generated line naming exactly what switching it off hides, and a
 live count of the data it holds either way ("Data kept: 12 trials across 3
 labs").
 
-There is one today: **Research labs & trials**, which owns the [Labs](#labs) and
-[Trials](#trials) screens, the trials search scope, and the `lab_open`,
-`trial_record`, and `trial_query` MCP tools. Screens and tools move together on
-purpose, so an agent never sees a tool for a screen you switched off.
+There are two today:
+
+**Research labs & trials** owns the [Labs](#labs) and [Trials](#trials)
+screens, the trials search scope, and the `lab_open`, `trial_record`, and
+`trial_query` MCP tools. Screens and tools move together on purpose, so an
+agent never sees a tool for a screen you switched off.
+
+**Momentum** is gentle progress cues woven into existing screens -- plan finish
+lines, capture streaks, knowledge payoffs, and project growth -- judged from
+real activity, never invented. It owns no screens or tools of its own; turning
+it on adds four surfaces where you already look:
+
+- **Plan finish-line cards** on the Overview attention strip: any plan at least
+  80% done gets one positive card naming the exact remaining steps ("seambench
+  -- one step from shipped"), linking to the plan. The agent briefing's plan
+  line carries the same emphasis, so agents are nudged to close it too.
+- **The capture calendar** on Sessions: a year of daily activity, cell
+  intensity from sessions per day, a distinct dot on days that captured
+  knowledge (a session left findings, a memory, a note, or a trial), and two
+  quiet numbers -- the current capture streak and the longest ever. The streak
+  counts covered days, so it rewards capture, not raw usage.
+- **Knowledge payoff moments**: the first time a memory is read by a session
+  other than the one that wrote it, the moment lands in the activity ledger
+  ("gotcha chroma-boot-race just paid off for the first time") -- once per
+  memory, ever -- and the Overview rail gains a **Memory of the month** panel
+  naming the last 30 days' top-utility memory with the counts behind the claim.
+- **Maturity stages** on the project board and detail header: each project
+  earns a latched stage -- seedling, sprouting, established, deep-rooted --
+  from real thresholds over age, memories, event volume, and reach. Stages
+  never regress, and the pill's tooltip states exactly what the next stage
+  asks for.
+
+Momentum keeps the console's judged-numbers ethos: every number is real and
+verifiable, empty states say so honestly, and there are no punishment mechanics
+-- an inactive day is an empty cell, never a warning, and nothing nags or
+expires. Off (the default), none of it renders and none of it is computed.
 
 **Nothing is ever deleted.** Switching a feature off gates exposure and nothing
 else: the trials stay in the database, its screens answer with a short "switched
@@ -477,6 +509,7 @@ each card is for - it reports the feature's own rows whether it is on or off.
 |---|---|
 | The console | Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render. |
 | A tool call | Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding. |
+| The agent briefing | The next session start - momentum's finish-line emphasis reads the same stored override the console gates on. |
 | A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it already has. |
 | The client-side skill | The next `seamlessd install-hooks` run. The daemon does not reach into `~/.claude/skills` on a toggle, so `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still sitting in a client's skill home. |
 

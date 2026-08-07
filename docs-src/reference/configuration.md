@@ -31,7 +31,7 @@ That fourth layer covers two blocks, and only those two:
 | Block | Written by | When it takes effect |
 |---|---|---|
 | `briefing:` | Settings → Briefing injection | From the next session start. |
-| `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it the next time its client lists tools, in practice its next session. |
+| `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
 
 It exists so you can change what agents get injected - and what they can reach -
 while they are running, and it is the one place where the config file is not the

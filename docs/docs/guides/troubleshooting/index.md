@@ -251,14 +251,16 @@ injected while they are running. See
 **What is happening.** It belongs to an
 [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features), and optional features
 ship **off**. Nothing is broken and nothing was deleted - the feature's data is
-untouched, and every surface returns the moment it is switched back on. Today
-the one optional feature is research: the Labs and Trials screens, the trials
-search scope, and `lab_open`, `trial_record`, `trial_query`.
+untouched, and every surface returns the moment it is switched back on. Tools
+and whole screens belong to research (the Labs and Trials screens, the trials
+search scope, and `lab_open`, `trial_record`, `trial_query`); the in-page
+momentum surfaces (finish-line cards, the capture calendar, payoff moments,
+maturity stages) belong to momentum.
 
-**Fix.** Turn it on in the console under Settings → Features (or set
-`features: research: true`, or `SEAMLESS_FEATURES_RESEARCH=1`). The console
-toggle stores an override that beats both the file and the environment, so check
-it before you edit YAML.
+**Fix.** Turn the feature on in the console under Settings → Features (or set
+its `features:` key in YAML, or `SEAMLESS_FEATURES_RESEARCH=1` /
+`SEAMLESS_FEATURES_MOMENTUM=1`). The console toggle stores an override that
+beats both the file and the environment, so check it before you edit YAML.
 
 **If you already turned it on and the agent still cannot call the tool**, you
 are looking at the propagation seam, not a failure:

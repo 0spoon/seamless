@@ -468,13 +468,15 @@ injected while they are running. See
 <p><strong>What is happening.</strong> It belongs to an
 <a href="../../reference/console/#optional-features">optional feature</a>, and optional features
 ship <strong>off</strong>. Nothing is broken and nothing was deleted - the feature's data is
-untouched, and every surface returns the moment it is switched back on. Today
-the one optional feature is research: the Labs and Trials screens, the trials
-search scope, and <code>lab_open</code>, <code>trial_record</code>, <code>trial_query</code>.</p>
-<p><strong>Fix.</strong> Turn it on in the console under Settings → Features (or set
-<code>features: research: true</code>, or <code>SEAMLESS_FEATURES_RESEARCH=1</code>). The console
-toggle stores an override that beats both the file and the environment, so check
-it before you edit YAML.</p>
+untouched, and every surface returns the moment it is switched back on. Tools
+and whole screens belong to research (the Labs and Trials screens, the trials
+search scope, and <code>lab_open</code>, <code>trial_record</code>, <code>trial_query</code>); the in-page
+momentum surfaces (finish-line cards, the capture calendar, payoff moments,
+maturity stages) belong to momentum.</p>
+<p><strong>Fix.</strong> Turn the feature on in the console under Settings → Features (or set
+its <code>features:</code> key in YAML, or <code>SEAMLESS_FEATURES_RESEARCH=1</code> /
+<code>SEAMLESS_FEATURES_MOMENTUM=1</code>). The console toggle stores an override that
+beats both the file and the environment, so check it before you edit YAML.</p>
 <p><strong>If you already turned it on and the agent still cannot call the tool</strong>, you
 are looking at the propagation seam, not a failure:</p>
 <div class="table-wrap">
