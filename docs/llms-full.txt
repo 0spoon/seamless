@@ -6515,6 +6515,7 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.utility_weight` | float64 | `0.4` |
 | `briefing.utility_mode` | string | `auto` |
 | `features.research` | bool | - |
+| `features.momentum` | bool | - |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -6674,6 +6675,11 @@ features:
   # search scope, and the lab_open, trial_record, trial_query MCP tools.
   # env: SEAMLESS_FEATURES_RESEARCH
   research: false
+  # Momentum surfaces woven into existing screens: the plan finish-line card
+  # (and its agent-briefing emphasis), the activity calendar with capture
+  # streaks, knowledge payoff moments, and project maturity stages.
+  # env: SEAMLESS_FEATURES_MOMENTUM
+  momentum: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

@@ -35,6 +35,15 @@ type Key string
 // a fully usable feature or an empty screen.
 const Research Key = "research"
 
+// Momentum covers the gentle motivation surfaces woven into EXISTING screens
+// rather than screens of their own: the plan finish-line card (and its agent
+// briefing emphasis), the activity calendar with capture streaks, knowledge
+// payoff moments, and project maturity stages. They are one feature because
+// they answer one question -- "is this knowledge practice building on
+// itself?" -- and an owner who finds that framing noisy switches all of it
+// off with one toggle.
+const Momentum Key = "momentum"
+
 // Feature describes one optional feature and every surface it owns.
 type Feature struct {
 	// Key is the stable identifier (also the settings anchor and form field).
@@ -51,6 +60,13 @@ type Feature struct {
 	NavIDs []string
 	// RoutePrefixes are the console route prefixes to gate.
 	RoutePrefixes []string
+	// Surfaces are owner-facing phrases for the feature's IN-PAGE surfaces --
+	// elements woven into existing screens (an Overview card, a board glyph)
+	// rather than whole screens, gated where they render via the console's
+	// per-request features state rather than by a route prefix. Each phrase
+	// joins the Settings card's "what disappears" line verbatim, so register a
+	// surface's phrase in the same change that adds the surface.
+	Surfaces []string
 	// Skill is the client-side skill that documents the feature's tools, or ""
 	// when it has none. install-hooks skips installing it while the feature is
 	// off, so agents never read about tools they cannot call.
@@ -99,6 +115,14 @@ var registry = []Feature{
 		Default:       false,
 		get:           func(c config.Features) bool { return c.Research },
 		set:           func(c *config.Features, on bool) { c.Research = on },
+	},
+	{
+		Key:     Momentum,
+		Label:   "Momentum",
+		Blurb:   "Gentle progress cues on existing screens -- plan finish lines, capture streaks, knowledge payoffs, and project growth -- judged from real activity, never invented.",
+		Default: false,
+		get:     func(c config.Features) bool { return c.Momentum },
+		set:     func(c *config.Features, on bool) { c.Momentum = on },
 	},
 }
 

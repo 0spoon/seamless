@@ -314,6 +314,22 @@ func TestFeatureCards_RenderOnePerRegistryEntry(t *testing.T) {
 	on := featureCards(config.Features{Research: true}, navCounts{Labs: 1, Trials: 1})
 	require.True(t, on[0].Enabled)
 	require.Equal(t, "Data kept: 1 trial across 1 lab.", on[0].DataKept)
+
+	momentum := cards[1]
+	require.Equal(t, string(features.Momentum), momentum.Key)
+	require.Equal(t, "feature_momentum", momentum.Field)
+	require.False(t, momentum.Enabled)
+	require.False(t, momentum.Default, "optional features ship off")
+	require.Empty(t, momentum.DataKept, "no reassurance line until the feature owns stored data")
+}
+
+// The surfaces mechanism: a feature whose surfaces live inside existing pages
+// describes them verbatim on its card, ahead of any screens or tools.
+func TestFeatureWhenOff_NamesInPageSurfaces(t *testing.T) {
+	line := featureWhenOff(features.Feature{
+		Surfaces: []string{"the finish-line card on Overview", "the activity calendar"},
+	})
+	require.Equal(t, "Hides the finish-line card on Overview and the activity calendar.", line)
 }
 
 func TestSettingsFeaturesZone_MarkupContract(t *testing.T) {
@@ -329,9 +345,11 @@ func TestSettingsFeaturesZone_MarkupContract(t *testing.T) {
 	require.Contains(t, body, "nothing is ever deleted")
 	require.Contains(t, body, "agents pick the change up on their next session")
 	require.Contains(t, body, `data-feature="research"`)
+	require.Contains(t, body, `data-feature="momentum"`)
 	require.Contains(t, body, `action="/console/settings/features"`)
 	require.Contains(t, body, `data-features-form`)
 	require.Contains(t, body, `name="feature_research"`)
+	require.Contains(t, body, `name="feature_momentum"`)
 	require.Contains(t, body, `class="brief-switch"`, "the toggle uses the shared switch markup")
 	require.Contains(t, body, "Disabled", "the state pill says which way the switch is")
 	require.Contains(t, body, "3 agent tools (lab_open, trial_record, trial_query)")
@@ -411,6 +429,28 @@ func TestSettingsFeaturesSaveAndReset(t *testing.T) {
 	require.False(t, found, "reset is a row deletion, not a stored all-off")
 }
 
+// The momentum toggle stores independently of research, and the resolved state
+// reaches the render context (pageData.Features) on the very next request --
+// which is the mechanism every in-page momentum surface gates on.
+func TestSettingsFeaturesSave_MomentumTogglesIndependently(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	rr := postForm(mux, "/console/settings/features", url.Values{"feature_momentum": {"1"}}.Encode())
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.True(t, data.FeaturesConfig.Momentum)
+	require.False(t, data.FeaturesConfig.Research, "the momentum box alone leaves research off")
+	require.True(t, data.Features[1].Enabled)
+
+	svc, err := New(Config{DB: db, APIKey: testKey})
+	require.NoError(t, err)
+	require.True(t, svc.effectiveFeatures(ctx).Momentum,
+		"a fresh resolve sees the stored override without any restart")
+}
+
 // Reset restores whatever the file/env layer says, which is not necessarily off.
 func TestSettingsFeaturesReset_FallsBackToTheFileBase(t *testing.T) {
 	db, mux := newConsoleFeatures(t, config.Features{Research: true})
@@ -461,7 +501,7 @@ func TestSettingsFeaturesSave_RecordsAnEvent(t *testing.T) {
 	}
 	require.NotNil(t, found, "the toggle must be visible in Activity")
 	require.Equal(t, "console", found.Payload["by"])
-	require.Equal(t, "optional features changed (research on)", eventSummary(*found))
+	require.Equal(t, "optional features changed (research on, momentum off)", eventSummary(*found))
 
 	rr = postForm(mux, "/console/settings/features/reset", "")
 	require.Equal(t, http.StatusSeeOther, rr.Code)
@@ -504,7 +544,7 @@ func TestSettingsJSON_ExposesTheFeatureContract(t *testing.T) {
 	require.Equal(t, "feature_research", cards[0].Field)
 	require.NotEmpty(t, cards[0].WhenOff)
 
-	require.JSONEq(t, `{"research": false}`, string(raw["featuresConfig"]))
+	require.JSONEq(t, `{"research": false, "momentum": false}`, string(raw["featuresConfig"]))
 	require.Equal(t, "false", string(raw["featuresOverridden"]))
 }
 

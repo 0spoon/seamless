@@ -124,6 +124,11 @@ features:
   # search scope, and the lab_open, trial_record, trial_query MCP tools.
   # env: SEAMLESS_FEATURES_RESEARCH
   research: false
+  # Momentum surfaces woven into existing screens: the plan finish-line card
+  # (and its agent-briefing emphasis), the activity calendar with capture
+  # streaks, knowledge payoff moments, and project maturity stages.
+  # env: SEAMLESS_FEATURES_MOMENTUM
+  momentum: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

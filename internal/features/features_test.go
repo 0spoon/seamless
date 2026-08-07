@@ -21,6 +21,26 @@ func TestRegistry_ResearchEntry(t *testing.T) {
 	require.False(t, f.Default, "optional features ship off")
 }
 
+func TestRegistry_MomentumEntry(t *testing.T) {
+	f, ok := Get(Momentum)
+	require.True(t, ok)
+	require.Equal(t, Key("momentum"), f.Key)
+	require.Equal(t, "Momentum", f.Label)
+	require.NotEmpty(t, f.Blurb)
+	require.Empty(t, f.Tools, "momentum owns no MCP tools -- its surfaces live inside existing pages")
+	require.Empty(t, f.NavIDs, "momentum owns no screens of its own")
+	require.Empty(t, f.RoutePrefixes)
+	require.Empty(t, f.Skill)
+	require.False(t, f.Default, "optional features ship off")
+}
+
+func TestRegistry_OrderIsResearchThenMomentum(t *testing.T) {
+	reg := Registry()
+	require.Len(t, reg, 2)
+	require.Equal(t, Research, reg[0].Key, "registry order is the Settings card order")
+	require.Equal(t, Momentum, reg[1].Key)
+}
+
 func TestRegistry_WellFormed(t *testing.T) {
 	seenKey := map[Key]bool{}
 	seenTool := map[string]Key{}

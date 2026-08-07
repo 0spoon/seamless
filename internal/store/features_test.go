@@ -72,7 +72,8 @@ func TestFeaturesConfigStoredShapeMatchesMigration(t *testing.T) {
 	raw, found, err := GetSetting(ctx, db, SettingFeaturesConfig)
 	require.NoError(t, err)
 	require.True(t, found)
-	require.Equal(t, `{"research":true}`, raw)
+	require.Equal(t, `{"research":true,"momentum":false}`, raw,
+		"the migration's seeded {\"research\":true} decodes over this shape: absent keys stay at the base value")
 }
 
 // TestMigration022_GrandfathersExistingResearchData upgrades a database that

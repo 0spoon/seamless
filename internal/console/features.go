@@ -180,11 +180,12 @@ const featureFieldPrefix = "feature_"
 func featureField(key features.Key) string { return featureFieldPrefix + string(key) }
 
 // featureWhenOff generates the "what disappears" line from registry metadata:
-// the screens (NavIDs), the search scope (a NavID that is also a search scope),
-// and the agent tools by name. Everything it names is something a gate in this
-// package or in internal/mcp actually enforces.
+// the in-page surfaces (Surfaces, verbatim), the screens (NavIDs), the search
+// scope (a NavID that is also a search scope), and the agent tools by name.
+// Everything it names is something a gate in this package or in internal/mcp
+// actually enforces.
 func featureWhenOff(f features.Feature) string {
-	var parts []string
+	parts := slices.Clone(f.Surfaces)
 	if len(f.NavIDs) > 0 {
 		screens := make([]string, 0, len(f.NavIDs))
 		for _, id := range f.NavIDs {

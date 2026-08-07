@@ -356,14 +356,26 @@ func TestLoadFrom_FeaturesFileAndEnv(t *testing.T) {
 	cfg, err := LoadFrom("")
 	require.NoError(t, err)
 	require.False(t, cfg.Features.Research, "optional features default to off")
+	require.False(t, cfg.Features.Momentum, "optional features default to off")
 
 	path := writeConfig(t, `
 features:
   research: true
+  momentum: true
 `)
 	cfg, err = LoadFrom(path)
 	require.NoError(t, err)
 	require.True(t, cfg.Features.Research)
+	require.True(t, cfg.Features.Momentum)
+
+	t.Setenv("SEAMLESS_FEATURES_MOMENTUM", "false")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.False(t, cfg.Features.Momentum, "env wins over file")
+	require.True(t, cfg.Features.Research, "the momentum env override leaves research alone")
+	// t.Setenv above registered the restore-to-unset cleanup; drop the override
+	// so the research assertions below run without it.
+	require.NoError(t, os.Unsetenv("SEAMLESS_FEATURES_MOMENTUM"))
 
 	t.Setenv("SEAMLESS_FEATURES_RESEARCH", "false")
 	cfg, err = LoadFrom(path)
