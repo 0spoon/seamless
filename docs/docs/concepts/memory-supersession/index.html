@@ -228,7 +228,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#versus-forgetting-curves-and-decay-scores">Versus forgetting curves and decay scores</a></li><li class="lvl-2"><a href="#versus-append-only-logs">Versus append-only logs</a></li><li class="lvl-2"><a href="#the-honest-limit">The honest limit</a></li>
+      <li class="lvl-2"><a href="#versus-forgetting-curves-and-decay-scores">Versus forgetting curves and decay scores</a></li><li class="lvl-2"><a href="#versus-append-only-logs">Versus append-only logs</a></li><li class="lvl-2"><a href="#the-line-an-in-place-edit-must-not-cross">The line an in-place edit must not cross</a></li><li class="lvl-2"><a href="#the-honest-limit">The honest limit</a></li>
     </ul>
   </details>
   <p>Memory supersession is the lifecycle rule that keeps an AI agent's long-term
@@ -263,6 +263,17 @@ answer and the new one match every future search, and each retrieval - every
 session, forever - has to re-adjudicate which is current. Supersession
 adjudicates once, at write time, when the contradiction is actually in front of
 the writer, and every later reader inherits the verdict.</p>
+<h2 id="the-line-an-in-place-edit-must-not-cross">The line an in-place edit must not cross</h2>
+<p><code>memory_edit</code> changes part of a memory without resending it, which makes it the
+cheapest way to touch the store - and therefore the one most likely to be reached
+for when superseding is what is actually called for.</p>
+<p>The boundary is whether the change carries a new <strong>claim</strong>. A typo, a broken
+code fence, a stale path or command, a <code>Status:</code> flip on a stage, a description,
+a tag: none of those change what the memory asserts, and editing them in place
+loses nothing. But if the conclusion is now different - the advice reversed, the
+finding overturned - an edit silently rewrites the record so that nothing in the
+store ever shows it believed otherwise. That is exactly the history superseding
+exists to keep, so that change goes through <code>memory_write</code> with <code>supersedes</code>.</p>
 <h2 id="the-honest-limit">The honest limit</h2>
 <p>Supersession requires the writer to <em>notice</em> the contradiction - an agent that
 writes a new memory without realizing an old one disagrees leaves both live.
@@ -291,7 +302,7 @@ versus supersede versus delete - is in
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#versus-forgetting-curves-and-decay-scores">Versus forgetting curves and decay scores</a></li><li class="lvl-2"><a href="#versus-append-only-logs">Versus append-only logs</a></li><li class="lvl-2"><a href="#the-honest-limit">The honest limit</a></li>
+      <li class="lvl-2"><a href="#versus-forgetting-curves-and-decay-scores">Versus forgetting curves and decay scores</a></li><li class="lvl-2"><a href="#versus-append-only-logs">Versus append-only logs</a></li><li class="lvl-2"><a href="#the-line-an-in-place-edit-must-not-cross">The line an in-place edit must not cross</a></li><li class="lvl-2"><a href="#the-honest-limit">The honest limit</a></li>
     </ul>
   </aside>
   

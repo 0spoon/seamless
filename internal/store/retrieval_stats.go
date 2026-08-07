@@ -22,7 +22,7 @@ import (
 const (
 	utilityHalfLifeDays = 14.0 // decay half-life for every signal class
 	utilitySaturation   = 4.0  // raw score at which utility reaches 0.5
-	utilityWeightRead   = 3.0  // explicit memory_read: deliberate full-body pull
+	utilityWeightRead   = 3.0  // explicit memory_read/notes_read: deliberate full-body pull
 	utilityWeightRecall = 1.5  // recall-tool hit: agent-initiated query match
 	utilityWeightPrompt = 1.0  // prompt-recall match: query-gated but automated
 )
@@ -95,8 +95,8 @@ func utilityDecay(age time.Duration) float64 {
 // event log. It is the canonical maintenance path (the gardener calls it at the
 // top of each pass, and it is safe to call after an import): retrieval.injected
 // events contribute inject_count + last_injected_at (per item id, whether the id
-// is in the item_id column or the payload's item_ids array), and memory.read
-// events contribute read_count + last_read_at. Events are read oldest-first so
+// is in the item_id column or the payload's item_ids array), and memory.read /
+// note.read events contribute read_count + last_read_at. Events are read oldest-first so
 // the last-seen timestamp wins. The same walk accumulates the utility score:
 // each query-gated signal adds its class weight decayed by the event's age.
 func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
@@ -108,9 +108,9 @@ func RebuildRetrievalStats(ctx context.Context, db *sql.DB) error {
 func rebuildRetrievalStats(ctx context.Context, db *sql.DB, now time.Time) error {
 	rows, err := db.QueryContext(ctx, `
 		SELECT ts, kind, session_id, item_id, payload FROM events
-		WHERE kind IN (?, ?)
+		WHERE kind IN (?, ?, ?)
 		ORDER BY ts ASC, id ASC`,
-		string(core.EventInjected), string(core.EventMemoryRead))
+		string(core.EventInjected), string(core.EventMemoryRead), string(core.EventNoteRead))
 	if err != nil {
 		return fmt.Errorf("store.RebuildRetrievalStats: query events: %w", err)
 	}
@@ -179,7 +179,13 @@ func rebuildRetrievalStats(ctx context.Context, db *sql.DB, now time.Time) error
 				s.LastInjectedAt = &t
 				credit(s, class, session, weight, ts)
 			}
-		case core.EventMemoryRead:
+		// Notes are first-class recall results, so opening one is the same
+		// deliberate query-gated pull as a memory read and earns the same class
+		// and weight -- a note an agent keeps coming back to would otherwise
+		// earn no demand credit at all. retrieval_stats is keyed by item id
+		// alone (no kind column), so the note's row simply sits beside the
+		// memories' with nothing to migrate.
+		case core.EventMemoryRead, core.EventNoteRead:
 			if itemID == "" {
 				continue
 			}

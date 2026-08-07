@@ -22,6 +22,7 @@ func Catalog() []mcp.Tool {
 
 		memoryWriteTool(),
 		memoryAppendTool(),
+		memoryEditTool(),
 		memoryReadTool(),
 		memoryDeleteTool(),
 
@@ -30,6 +31,7 @@ func Catalog() []mcp.Tool {
 		notesCreateTool(),
 		notesReadTool(),
 		notesUpdateTool(),
+		notesEditTool(),
 		notesAppendTool(),
 		notesDeleteTool(),
 

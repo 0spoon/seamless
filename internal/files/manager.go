@@ -65,6 +65,11 @@ type Manager struct {
 	// (the daemon's serve path), never concurrently.
 	runDone chan struct{}
 
+	// locks serializes read-modify-write mutations per corpus file; see Mutate.
+	// Zero value is ready, so a Manager built any way (including in tests) is
+	// safe to mutate through without an extra construction step.
+	locks pathLocks
+
 	// reembedMu guards the re-embed pass state below. The pass runs in its own
 	// goroutine (started by the console handler), so unlike the embedder field
 	// its lifecycle is not fixed at startup.

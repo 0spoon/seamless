@@ -383,6 +383,7 @@ const (
 	EventRepoMoved        EventKind = "repo.moved"       // a moved repo's new path adopted its existing project (payload: slug, new_path, old_paths)
 	EventFavoriteChanged  EventKind = "favorite.changed" // an item was starred/unstarred (payload: kind, id, name, favorite, by)
 	EventNoteWritten      EventKind = "note.written"
+	EventNoteRead         EventKind = "note.read" // an agent read a note by id or slug (payload: slug); the note-side twin of memory.read
 	EventTrialRecorded    EventKind = "trial.recorded"
 	EventTaskTransition   EventKind = "task.transition"
 	EventInjected         EventKind = "retrieval.injected"

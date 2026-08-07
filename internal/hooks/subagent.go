@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -28,6 +29,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
@@ -107,6 +109,12 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 	writeHookAck(w)
 }
 
+// errAgentCaptureDropped is the fail-open signal out of the locked upsert, the
+// twin of errPlanCaptureDropped: this capture cannot be recorded (no id, the
+// write failed), so the hook stays silent rather than failing the agent's tool
+// call. It never leaves captureSubagent.
+var errAgentCaptureDropped = errors.New("agent capture dropped")
+
 // captureSubagent caches a completed Claude Code subagent's prompt and report as
 // a note.
 // Gate: only while the session has an unapproved plan capture or is in plan
@@ -130,29 +138,44 @@ func (h *Handler) captureSubagent(ctx context.Context, p subagentPayload) {
 	noteSlug := plans.AgentNotePrefix + core.Slugify(p.AgentID)
 	now := time.Now().UTC()
 
-	note, found := h.loadNoteBySlug(ctx, project, noteSlug)
-	if !found {
-		id, err := core.NewID()
-		if err != nil {
-			h.logger.Warn("hooks: agent note id", "error", err)
-			return
+	// Create-or-update under the note's lock, the same shape upsertPlanNote uses:
+	// the slug is deterministic, so the path can be locked before it is known
+	// whether the note exists. The read has to be inside because it decides
+	// identity -- an existing note keeps its id and created time -- and because
+	// the write renders the whole file: two subagents of one session finishing at
+	// once, or an adoption retagging the note between the read and the write,
+	// used to lose one of the two with no error anywhere.
+	var written core.Note
+	err := h.files.Mutate(ctx, files.NoteRelPath(project, noteSlug), func(ctx context.Context) error {
+		note, found := h.loadNoteBySlug(ctx, project, noteSlug)
+		if !found {
+			id, err := core.NewID()
+			if err != nil {
+				h.logger.Warn("hooks: agent note id", "error", err)
+				return errAgentCaptureDropped
+			}
+			note = core.Note{ID: id, Slug: noteSlug, Project: project, Created: now}
 		}
-		note = core.Note{ID: id, Slug: noteSlug, Project: project, Created: now}
-	}
-	note.Title = agentNoteTitle(p.AgentType, prompt)
-	note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
-	note.Body = agentStamp(
-		h.ambientDisplayName(ctx, ClientClaudeCode, p.ParentSessionID),
-		p.AgentID, gitread.Head(p.CWD), now,
-	) +
-		"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
-	note.Tags = agentNoteTags(meta.PlanSlug, p.AgentType)
-	note.Updated = now
+		note.Title = agentNoteTitle(p.AgentType, prompt)
+		note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
+		note.Body = agentStamp(
+			h.ambientDisplayName(ctx, ClientClaudeCode, p.ParentSessionID),
+			p.AgentID, gitread.Head(p.CWD), now,
+		) +
+			"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
+		note.Tags = agentNoteTags(meta.PlanSlug, p.AgentType)
+		note.Updated = now
 
-	written, err := h.files.WriteNote(ctx, note)
+		w, werr := h.files.WriteNote(ctx, note)
+		if werr != nil {
+			h.logger.Warn("hooks: agent note write", "slug", noteSlug, "error", werr)
+			return errAgentCaptureDropped
+		}
+		written = w
+		return nil
+	})
 	if err != nil {
-		h.logger.Warn("hooks: agent note write", "slug", noteSlug, "error", err)
-		return
+		return // already logged inside; the hook stays silent rather than failing the tool call
 	}
 	// No plan slug yet (the explore-first pattern: subagents finish before the
 	// first plan-file write): park the note slug on the session so the first

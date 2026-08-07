@@ -64,80 +64,124 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 	// -- the only text shown in every index and briefing -- never ends mid-word.
 	desc = core.TruncateWords(desc, maxDescriptionRunes)
 
-	now := time.Now().UTC()
-	existing, found, err := s.resolveMemory(ctx, project, name, false)
-	if err != nil {
-		return errResult("memory_write", err)
-	}
-
-	mem := core.Memory{
-		Kind: kind, Name: name, Description: desc, Project: project, Body: body,
-		Updated: now, ValidFrom: now, SourceSession: s.boundSession(ctx),
-		Model: s.boundSessionModel(ctx),
-	}
+	// The dedup hint stays OUTSIDE the mutation below, in both directions. It
+	// costs an embedding round trip to a provider, so running it under the file's
+	// lock would park every other writer of this memory behind a network call for
+	// an advisory nicety; and it must describe the corpus as it stood BEFORE this
+	// write, because files.WriteMemory embeds synchronously -- asked afterwards it
+	// would happily offer the memory we just wrote as its own duplicate. That
+	// leaves a lock-free probe as the only way to decide whether to spend it. The
+	// probe may disagree with what the lock finds a moment later (a concurrent
+	// create), which is why the hint is only reported when the authoritative
+	// answer from inside the lock agrees the name was new.
 	var similar *map[string]any
-	if found {
-		// Update in place: the ULID and creation provenance are identity and
-		// must not change just because the content did.
-		mem.ID = existing.ID
-		mem.Created = existing.Created
-		if !existing.ValidFrom.IsZero() {
-			mem.ValidFrom = existing.ValidFrom
-		}
-		if existing.SourceSession != "" {
-			mem.SourceSession = existing.SourceSession
-		}
-		// Model attribution follows the CONTENT, not creation: a rewrite is new
-		// knowledge produced by the current model. Only an unknown current model
-		// keeps the prior attribution -- never erase a known producer with "".
-		if mem.Model == "" {
-			mem.Model = existing.Model
-		}
-		// Curation the caller did not necessarily send. files.WriteMemory renders
-		// the struct as-is and never merges with the file on disk, so every field
-		// not carried forward here is erased from the frontmatter: a correction to
-		// the body would silently untag a memory, unstar it out of its briefing
-		// pin, and drop the unknown keys Extra exists to round-trip. Favorite and
-		// Extra have no argument at all; tags carried forward here are what an
-		// explicit tags argument overrides further down.
-		mem.Tags = existing.Tags
-		mem.Favorite = existing.Favorite
-		// The index row carries tags and favorite but NOT Extra (core.Memory.Extra
-		// is deliberately unmirrored), and frontmatter is the authority for stars
-		// anyway, so the file is the real source for all three. Degrade to the
-		// index values if it cannot be read -- losing unknown keys is bad, losing
-		// the write is worse.
-		if existing.FilePath != "" {
-			onDisk, rerr := s.cfg.Files.Store().ReadMemory(existing.FilePath)
-			if rerr != nil {
-				s.logger.Warn("mcp: memory_write frontmatter preservation",
-					"name", name, "project", project, "error", rerr)
-			} else {
-				mem.Tags, mem.Favorite, mem.Extra = onDisk.Tags, onDisk.Favorite, onDisk.Extra
-			}
-		}
-	} else {
-		id, err := core.NewID()
-		if err != nil {
-			return errResult("memory_write", err)
-		}
-		mem.ID = id
-		mem.Created = now
+	if _, probed, perr := s.resolveMemory(ctx, project, name, false); perr != nil {
+		return errResult("memory_write", perr)
+	} else if !probed {
 		if hint, herr := s.cfg.Retrieve.DedupHint(ctx, project, name, desc); herr == nil && hint != nil {
 			similar = &map[string]any{"name": hint.Name, "description": hint.Description, "score": hint.Score}
 		}
 	}
-	// Deliberate re-tagging, replacing the whole set. The argPresent guard is the
-	// entire contract: a bare `mem.Tags = argStrings(...)` would clear the tags of
-	// every caller that omits the argument, which is precisely the silent erasure
-	// the preservation above exists to prevent. validateMiddleware drops an empty
-	// array as "absent", so clearing tags is deliberately not expressible here --
-	// same as notes_update, and the parameter description says so.
-	if argPresent(req, "tags") {
-		mem.Tags = argStrings(req, "tags")
-	}
 
-	written, err := s.cfg.Files.WriteMemory(ctx, mem)
+	now := time.Now().UTC()
+	var written core.Memory
+	var found bool
+	// Resolve, read, build and write as one serialized step. Split apart, two
+	// concurrent writers of the same name both saw the same starting file and the
+	// second rename won: the first write's body, tags and star were gone with no
+	// error anywhere, because the index upsert is keyed by id and the file is
+	// replaced wholesale rather than merged. Mutate is not reentrant, but
+	// WriteMemory takes no lock of its own, so calling it here is the intended
+	// shape rather than a deadlock.
+	err = s.cfg.Files.Mutate(ctx, files.MemoryRelPath(project, name), func(ctx context.Context) error {
+		existing, ok, err := s.resolveMemory(ctx, project, name, false)
+		if err != nil {
+			return err
+		}
+		found = ok
+
+		mem := core.Memory{
+			Kind: kind, Name: name, Description: desc, Project: project, Body: body,
+			Updated: now, ValidFrom: now, SourceSession: s.boundSession(ctx),
+			Model: s.boundSessionModel(ctx),
+		}
+		if found {
+			// Update in place: the ULID and creation provenance are identity and
+			// must not change just because the content did.
+			mem.ID = existing.ID
+			mem.Created = existing.Created
+			if !existing.ValidFrom.IsZero() {
+				mem.ValidFrom = existing.ValidFrom
+			}
+			if existing.SourceSession != "" {
+				mem.SourceSession = existing.SourceSession
+			}
+			// Model attribution follows the CONTENT, not creation: a rewrite is new
+			// knowledge produced by the current model. Only an unknown current model
+			// keeps the prior attribution -- never erase a known producer with "".
+			if mem.Model == "" {
+				mem.Model = existing.Model
+			}
+			// Curation the caller did not necessarily send. files.WriteMemory renders
+			// the struct as-is and never merges with the file on disk, so every field
+			// not carried forward here is erased from the frontmatter: a correction to
+			// the body would silently untag a memory, unstar it out of its briefing
+			// pin, and drop the unknown keys Extra exists to round-trip. Favorite and
+			// Extra have no argument at all; tags carried forward here are what an
+			// explicit tags argument overrides further down.
+			mem.Tags = existing.Tags
+			mem.Favorite = existing.Favorite
+			// The index row carries tags and favorite but NOT Extra (core.Memory.Extra
+			// is deliberately unmirrored), and frontmatter is the authority for stars
+			// anyway, so the file is the real source for all three. This read is inside
+			// the lock, which is what makes it the content the write is about to
+			// replace rather than a snapshot something else has since moved on from.
+			if existing.FilePath != "" {
+				onDisk, rerr := s.cfg.Files.Store().ReadMemory(existing.FilePath)
+				if rerr != nil {
+					// A failed re-read REFUSES the write; it used to degrade to the index
+					// values and carry on. Extra is the one field with no second copy
+					// anywhere, so degrading rendered the file without the owner's unknown
+					// frontmatter keys and destroyed them for good -- while reporting
+					// success, which is the shape meta-rule 3 forbids. Serialized, this is
+					// no longer a lost race but a real filesystem fault (the file moved,
+					// vanished, or became unreadable out of band), so retrying once it
+					// clears is the honest instruction. The warn is not a duplicate of the
+					// returned error: the error reaches only the calling agent, and a
+					// corpus file the daemon cannot read is the owner's to see.
+					s.logger.Warn("mcp: memory_write frontmatter preservation",
+						"name", name, "project", project, "error", rerr)
+					return fmt.Errorf(
+						"re-reading %s to preserve its frontmatter failed: %w -- refusing the write rather than dropping the unknown frontmatter keys only the file carries; retry once the file is readable",
+						existing.FilePath, rerr)
+				}
+				mem.Tags, mem.Favorite, mem.Extra = onDisk.Tags, onDisk.Favorite, onDisk.Extra
+			}
+		} else {
+			id, err := core.NewID()
+			if err != nil {
+				return err
+			}
+			mem.ID = id
+			mem.Created = now
+		}
+		// Deliberate re-tagging, replacing the whole set. The argPresent guard is the
+		// entire contract: a bare `mem.Tags = argStrings(...)` would clear the tags of
+		// every caller that omits the argument, which is precisely the silent erasure
+		// the preservation above exists to prevent. validateMiddleware drops an empty
+		// array as "absent", so clearing tags is deliberately not expressible here --
+		// same as notes_update, and the parameter description says so.
+		if argPresent(req, "tags") {
+			mem.Tags = argStrings(req, "tags")
+		}
+
+		w, werr := s.cfg.Files.WriteMemory(ctx, mem)
+		if werr != nil {
+			return werr
+		}
+		written = w
+		return nil
+	})
 	if err != nil {
 		if errors.Is(err, files.ErrPathOccupied) {
 			return errResult("memory_write", fmt.Errorf(
@@ -149,7 +193,10 @@ func (s *Server) handleMemoryWrite(ctx context.Context, req mcp.CallToolRequest)
 		map[string]any{"name": name, "kind": kindStr, "updated": found})
 
 	resp := map[string]any{"id": written.ID, "name": name, "project": project, "updated": found}
-	if similar != nil {
+	// The probe that earned the hint ran before the lock; report it only if the
+	// serialized answer still says this was a create, so a write that raced a
+	// concurrent create of the same name does not present a stale "similar".
+	if similar != nil && !found {
 		resp["similar"] = *similar
 	}
 	if hint := stageHeaderHint(kind, body); hint != "" {
@@ -228,13 +275,25 @@ func (s *Server) supersedeMemory(ctx context.Context, project, target string, re
 		return "", err
 	}
 	// Index rows carry no body; read the file so the tombstone appends to the
-	// real content rather than truncating it.
-	full, err := s.cfg.Files.Store().ReadMemory(old.FilePath)
-	if err != nil {
-		return "", err
-	}
-	updated, err := lifecycle.Supersede(ctx, s.cfg.Files, full, replacement, now)
-	if err != nil {
+	// real content rather than truncating it. Read and rewrite are one serialized
+	// step because Supersede renders the WHOLE file from what this read returned:
+	// a memory_append landing between the two would be silently undone by the
+	// tombstone write, and losing content while marking a memory invalid is
+	// exactly the case where the record must stay complete. Mutate is generic
+	// rather than MutateMemory because Supersede owns the write itself.
+	var updated core.Memory
+	if err := s.cfg.Files.Mutate(ctx, old.FilePath, func(ctx context.Context) error {
+		full, rerr := s.cfg.Files.Store().ReadMemory(old.FilePath)
+		if rerr != nil {
+			return rerr
+		}
+		u, serr := lifecycle.Supersede(ctx, s.cfg.Files, full, replacement, now)
+		if serr != nil {
+			return serr
+		}
+		updated = u
+		return nil
+	}); err != nil {
 		return "", err
 	}
 	s.record(ctx, core.EventMemorySuperseded, s.boundSession(ctx), updated.Project, updated.ID,
@@ -281,14 +340,26 @@ func (s *Server) handleMemoryAppend(ctx context.Context, req mcp.CallToolRequest
 	if err := s.fenceWrite(ctx, idx.Project); err != nil {
 		return errResult("memory_append", err)
 	}
-	// Read the full memory (index rows have no body) and append.
-	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
+	// Read the full memory (index rows have no body) and append, both under the
+	// file's lock. An append is the read-modify-write most likely to be raced --
+	// two agents adding findings to the same memory is the normal case, not the
+	// pathological one -- and unserialized both read the same starting body and
+	// the second rename kept only its own addition.
+	mem, err := s.cfg.Files.MutateMemory(ctx, idx.FilePath, func(ctx context.Context, cur core.Memory) (core.Memory, error) {
+		cur.Body = strings.TrimRight(cur.Body, "\n") + "\n" + content + "\n"
+		cur.Updated = time.Now().UTC()
+		// Any body change re-stamps the model, the same rule memory_write follows on
+		// a rewrite: the appended prose was produced by the model appending it, and
+		// leaving the old value credits a model that never wrote those lines. An
+		// unknown current model keeps the prior attribution -- never erase a known
+		// producer with "". SourceSession is deliberately untouched: it records who
+		// created the memory, and a create happens once.
+		if model := s.boundSessionModel(ctx); model != "" {
+			cur.Model = model
+		}
+		return cur, nil
+	})
 	if err != nil {
-		return errResult("memory_append", err)
-	}
-	mem.Body = strings.TrimRight(mem.Body, "\n") + "\n" + content + "\n"
-	mem.Updated = time.Now().UTC()
-	if _, err := s.cfg.Files.WriteMemory(ctx, mem); err != nil {
 		return errResult("memory_append", err)
 	}
 	s.record(ctx, core.EventMemoryWritten, s.boundSession(ctx), mem.Project, mem.ID,
@@ -394,10 +465,16 @@ func (s *Server) handleMemoryRead(ctx context.Context, req mcp.CallToolRequest) 
 	mem.InvalidAt, mem.SupersededBy = idx.InvalidAt, idx.SupersededBy
 	s.record(ctx, core.EventMemoryRead, s.boundSession(ctx), mem.Project, mem.ID, map[string]any{"name": mem.Name})
 
+	// content_hash is the ETag half of the expect_hash precondition: without it
+	// there is no way for an agent to say "write only if nothing moved since I
+	// read this", so the precondition is inert. It is the caller's own handle on
+	// the item it just read -- a digest of bytes it already holds -- not authored
+	// content, so it is never a candidate for withholding.
 	out := map[string]any{
 		"id": mem.ID, "kind": string(mem.Kind), "name": mem.Name,
 		"description": mem.Description, "project": mem.Project, "body": mem.Body,
 		"tags": mem.Tags, "source_session": mem.SourceSession,
+		"content_hash": mem.ContentHash,
 	}
 	if mem.Model != "" {
 		out["model"] = mem.Model

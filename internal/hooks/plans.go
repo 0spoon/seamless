@@ -176,14 +176,21 @@ func (h *Handler) markPlanPresented(ctx context.Context, p toolPayload) {
 		return
 	}
 	project := h.resolveProject(ctx, p.CWD)
-	note, found := h.loadNoteBySlug(ctx, project, plans.NotePrefix+meta.Basename)
+	path, found := h.noteFileBySlug(ctx, project, plans.NotePrefix+meta.Basename)
 	if !found {
 		return
 	}
-	note.Tags = plans.SetStatusTag(note.Tags, plans.StatusPresented)
-	note.Description = plans.NoteDescription(meta.Basename, plans.NoteIteration(note), plans.StatusPresented)
-	note.Updated = time.Now().UTC()
-	written, err := h.files.WriteNote(ctx, note)
+	// Retag under the file's lock. The status tag and the description are both
+	// derived from what the note currently carries (NoteIteration reads its
+	// tags), and the write renders the WHOLE file from that read -- so a plan
+	// iteration landing between the two used to be erased by this status flip,
+	// silently reverting the plan body to its previous version.
+	written, err := h.files.MutateNote(ctx, path, func(_ context.Context, note core.Note) (core.Note, error) {
+		note.Tags = plans.SetStatusTag(note.Tags, plans.StatusPresented)
+		note.Description = plans.NoteDescription(meta.Basename, plans.NoteIteration(note), plans.StatusPresented)
+		note.Updated = time.Now().UTC()
+		return note, nil
+	})
 	if err != nil {
 		h.logger.Warn("hooks: plan presented write", "error", err)
 		return

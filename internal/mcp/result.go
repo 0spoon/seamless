@@ -74,6 +74,15 @@ func argObject(r mcp.CallToolRequest, key string) map[string]any {
 	return m
 }
 
+// argObjects reads an object-array argument (an array property whose items
+// declare type object), nil when absent. Same contract as argStrings: the
+// validator coerced it -- from an array or a stringified JSON array -- before
+// the handler ran.
+func argObjects(r mcp.CallToolRequest, key string) []map[string]any {
+	list, _ := r.GetArguments()[key].([]map[string]any)
+	return list
+}
+
 // argPresent reports whether a parameter was sent, under its canonical name
 // only: validateMiddleware has already collapsed the aliases onto it and dropped
 // the keys that mean absent (an empty array, and the empty string standing in

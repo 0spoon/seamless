@@ -271,6 +271,15 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 				if e.ItemID != "" {
 					readItems[e.ItemID] = struct{}{}
 				}
+			case core.EventNoteRead:
+				// Read-back evidence: recall surfaces notes as well as
+				// memories, so a note opened after it was injected is context
+				// genuinely used. It stays out of Reads, which the detail page
+				// pairs with Writes under "Memory activity" -- the same reason
+				// note.written is not counted there.
+				if e.ItemID != "" {
+					readItems[e.ItemID] = struct{}{}
+				}
 			case core.EventMemoryWritten:
 				writes++
 			case core.EventInjected:

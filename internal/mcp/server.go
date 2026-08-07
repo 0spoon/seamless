@@ -44,8 +44,9 @@ const (
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
 	// usage_summary = 26; plans-as-composition adds tasks_claim + tasks_release = 28;
-	// gardener_request = 29; gardener_split = 30; favorite_set = 31.
-	ToolCount = 31
+	// gardener_request = 29; gardener_split = 30; favorite_set = 31;
+	// memory_edit + notes_edit = 33.
+	ToolCount = 33
 
 	// maxRequestBodyBytes bounds the streamable-HTTP POST body before mcp-go
 	// buffers it. MCP calls are compact JSON-RPC envelopes; 1 MiB leaves ample
@@ -339,6 +340,7 @@ func (s *Server) registerTools() {
 
 	s.addTool(memoryWriteTool(), s.handleMemoryWrite)
 	s.addTool(memoryAppendTool(), s.handleMemoryAppend)
+	s.addTool(memoryEditTool(), s.handleMemoryEdit)
 	s.addTool(memoryReadTool(), s.handleMemoryRead)
 	s.addTool(memoryDeleteTool(), s.handleMemoryDelete)
 
@@ -347,6 +349,7 @@ func (s *Server) registerTools() {
 	s.addTool(notesCreateTool(), s.handleNotesCreate)
 	s.addTool(notesReadTool(), s.handleNotesRead)
 	s.addTool(notesUpdateTool(), s.handleNotesUpdate)
+	s.addTool(notesEditTool(), s.handleNotesEdit)
 	s.addTool(notesAppendTool(), s.handleNotesAppend)
 	s.addTool(notesDeleteTool(), s.handleNotesDelete)
 

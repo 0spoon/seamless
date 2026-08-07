@@ -113,6 +113,14 @@ func eventSummary(e core.Event) string {
 		return "repo moved; project adopted"
 	case core.EventNoteWritten:
 		return "wrote note " + payloadStr(p, "title")
+	case core.EventNoteRead:
+		// A read names its note by slug rather than the title the write side
+		// records: the tool takes an id or a slug, so the title is not
+		// necessarily in hand when the event is written.
+		if slug := payloadStr(p, "slug"); slug != "" {
+			return "read note " + slug
+		}
+		return "read note"
 	case core.EventFavoriteChanged:
 		verb := "starred"
 		if fav, _ := p["favorite"].(bool); !fav {

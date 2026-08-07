@@ -1,11 +1,12 @@
 ---
 title: Notes, projects & capture
-description: Work artifacts, project scope, and SSRF-safe URL capture - the eight tools around the edges of memory.
+description: Work artifacts, project scope, and SSRF-safe URL capture - the nine tools around the edges of memory.
 generate: mcp-tools
 tools:
   - notes_create
   - notes_read
   - notes_update
+  - notes_edit
   - notes_append
   - notes_delete
   - project_list
@@ -36,6 +37,34 @@ inject, too specific to generalize, and it pushes real constraints out of the
 briefing's budget.
 
 Agent-created notes are automatically tagged `created-by:agent`.
+
+## Four ways to change a note
+
+Notes are long, and the transport caps a request body at 1 MB, so resending a
+whole note to fix one paragraph is both wasteful and the thing most likely to
+fail on the biggest artifacts.
+
+| You want to | Use | What happens |
+|---|---|---|
+| Fix or restructure part of the body | `notes_edit` | Exact search/replace, all-or-nothing, returns a diff |
+| Replace the body, or change title/description/project/tags | `notes_update` | Field-wise patch; omitted fields are untouched |
+| Add to the end | `notes_append` | A UTC-timestamped line joins the body |
+| Remove an artifact that should not exist | `notes_delete` | Gone, with no pointer left behind |
+
+`notes_edit` takes the note's `id` and a list of `{old_string, new_string}`
+edits. Each `old_string` must match the current body exactly and uniquely - or
+pass `replace_all` - and if any edit fails to match, **nothing** is written. That
+refusal is the feature: a partial apply, or a fuzzy match landing somewhere
+plausible, is the silent corruption the exact-match contract exists to prevent.
+
+`notes_update` gains the same staleness guard (`expect_hash`) plus `tags_add` and
+`tags_remove`, which are race-friendlier than replacing the whole tag list and
+are the only way to clear a tag - an empty `tags` array reads as absent. See
+[Concurrency](/reference/mcp/sessions-memory-recall/#concurrency-content_hash-and-expect_hash).
+
+Every note mutation now records a `note.written` event, and `notes_read` records
+`note.read` - the note-side twin of `memory.read`, which is what lets note demand
+count toward [recall's utility nudge](/concepts/recall/#the-utility-nudge).
 
 ## Notes are how plans get their narrative
 

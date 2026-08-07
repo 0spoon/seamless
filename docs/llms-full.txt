@@ -2910,6 +2910,20 @@ session, forever - has to re-adjudicate which is current. Supersession
 adjudicates once, at write time, when the contradiction is actually in front of
 the writer, and every later reader inherits the verdict.
 
+## The line an in-place edit must not cross
+
+`memory_edit` changes part of a memory without resending it, which makes it the
+cheapest way to touch the store - and therefore the one most likely to be reached
+for when superseding is what is actually called for.
+
+The boundary is whether the change carries a new **claim**. A typo, a broken
+code fence, a stale path or command, a `Status:` flip on a stage, a description,
+a tag: none of those change what the memory asserts, and editing them in place
+loses nothing. But if the conclusion is now different - the advice reversed, the
+finding overturned - an edit silently rewrites the record so that nothing in the
+store ever shows it believed otherwise. That is exactly the history superseding
+exists to keep, so that change goes through `memory_write` with `supersedes`.
+
 ## The honest limit
 
 Supersession requires the writer to *notice* the contradiction - an agent that
@@ -4867,12 +4881,12 @@ Pass `project: global` to mean global deliberately.
 
 ## The tool surface
 
-Seamless registers **31 tools**. They are documented in groups:
+Seamless registers **33 tools**. They are documented in groups:
 
 | Group | Tools |
 |---|---|
-| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_read`, `memory_delete`, `recall` |
-| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
+| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_edit`, `memory_read`, `memory_delete`, `recall` |
+| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_edit`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
 | Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
 
@@ -4881,7 +4895,7 @@ smaller. Tools belonging to an
 [optional feature](/reference/console/#optional-features) are hidden from
 `tools/list` while that feature is off, and a call to one is refused as an
 unknown tool. Optional features ship off, so a fresh install advertises fewer
-than 31 until you turn one on - each affected tool says so on its own reference
+than 33 until you turn one on - each affected tool says so on its own reference
 page. Nothing about registration changes: the catalog these pages are generated
 from, and the registered-tool count `seamlessd doctor` asserts, stay the full
 set either way.
@@ -4896,7 +4910,7 @@ own registration, so they cannot drift from what the daemon accepts.
 URL: https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/
 
 
-These eight tools are the agent loop. In a repo mapped to a project, most of them
+These nine tools are the agent loop. In a repo mapped to a project, most of them
 need no `project` argument at all: `session_start` binds the connection, and
 everything after it inherits that scope.
 
@@ -4912,13 +4926,14 @@ If `tasks_update` ever fails claiming a task is held by *your own* session id,
 the connection binding was lost. Re-run `session_start` with the same name to
 rebind.
 
-## Update, append, supersede, or delete?
+## Edit, update, append, supersede, or delete?
 
-Four ways to change memory, and picking the wrong one is how a store rots:
+Five ways to change memory, and picking the wrong one is how a store rots:
 
 | You want to | Use | What happens |
 |---|---|---|
-| Correct or extend what a memory says | `memory_write` with the same `name` | Updated in place; the id is stable |
+| Fix part of a memory without resending it | `memory_edit` | Exact search/replace on the body, plus `description` and tag add/remove; returns a diff |
+| Rewrite what a memory says, whole | `memory_write` with the same `name` | Updated in place; the id is stable |
 | Add to the end without rereading it | `memory_append` | Body grows; nothing else changes |
 | Replace a **different**, now-outdated memory | `memory_write` with `supersedes` | The old one is marked invalid, leaves every index, and stays readable with a pointer to its replacement |
 | Remove something written by mistake | `memory_delete` | Gone |
@@ -4933,11 +4948,46 @@ A `supersedes` that fails is reported rather than swallowed: the new memory is
 still written and kept, and the call returns an error naming it. The target is
 then still active, so re-run the supersede.
 
+### Edit vs. supersede
+
+`memory_edit` is cheap, which is exactly why its boundary has to be explicit.
+Edit is for changes that carry no new claim: a typo, broken formatting, a stale
+path or command, a stage's `Status` flip, a description, a tag. If the **meaning**
+changes - the conclusion is now different, the advice reversed - that is a new
+memory, and it goes through `memory_write` with `supersedes`.
+
+The reason is provenance. A supersession retires the old memory into readable
+history; an in-place edit leaves no trace that the store ever believed something
+else. Using edit to change what a memory claims silently rewrites the record.
+
+`memory_edit` is also the only way to change a memory's `description` or tags
+without rewriting its body, and `tags_remove` is the only way to clear a tag at
+all - an empty `tags` array reads as absent everywhere else.
+
+## Concurrency: content_hash and expect_hash
+
+`memory_read` and `notes_read` return a `content_hash` - the SHA-256 of the whole
+file. Pass it back as `expect_hash` on `memory_edit`, `notes_edit`, or
+`notes_update`, and the write is refused if the stored file has moved on since
+you read it. Omit it and the write is unconditional.
+
+It answers a different question from the daemon's own serialization. Every
+application write already goes through a per-file lock, so two agents can no
+longer interleave a read and a write and lose one of them. What the lock cannot
+see is an agent acting on something it read minutes ago, or the owner editing the
+markdown in an editor - which is why the precondition is checked against the
+**file**, inside the lock, rather than against the index (the watcher re-indexes
+on a debounce, so the index would happily confirm the stale hash).
+
 ## Scope
 
 `memory_write` **fails closed**: with no session and no explicit `project`, it is
 rejected as ambiguous rather than silently landing in the global scope. Pass
 `project: global` to write a deliberately cross-project memory.
+
+`memory_edit` targets a memory that already exists, so it resolves like
+`memory_append`: the session's scope first, then a global fallback. The write is
+judged against the project the memory actually sits in.
 
 ## Recall is the only search tool
 
@@ -4971,6 +5021,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 |---|---|---|
 | `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
 | `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
+| `memory_edit` | `id`, `name`, `project`, the new `content_hash`, a unified `diff`, and a `stage_hint` when a `kind=stage` body still has no parseable `Status` | An `old_string` that matches zero or several places is an error naming the count, and **nothing** is written - the edits apply all-or-nothing. A stale `expect_hash` is refused rather than overwriting |
 | `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
 | `session_end` | Confirmation of the close - `session_id`, `claims_released`, `mishaps_recorded`; findings persist for the next briefing | A missing/ambiguous session is an error rather than a fabricated successful close |
 
@@ -5013,7 +5064,7 @@ Create or update a durable memory -- the compact knowledge a future session must
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | **yes** | kebab-case identifier, unique within the project |
-| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and flip the status with memory_edit (or a full memory_write) -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
@@ -5029,6 +5080,20 @@ Append markdown to an existing memory's body. The memory keeps its id. To create
 | `name` | string | **yes** | memory name |
 | `body` | string | **yes** | markdown to append (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+
+## memory_edit {#memory_edit}
+
+Edit an existing memory in place with exact search/replace, instead of resending its whole body through memory_write. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. It is also the only way to change a memory's description or tags on their own: send description/tags_add/tags_remove with no edits and the body is left untouched (memory_write requires a body, so there was no metadata-only path before this), and tags_remove is the only way to clear a tag at all. Returns a unified diff of what landed plus the new content_hash. Use this for corrections that do not change what the item CLAIMS: typos, broken formatting, a stale path or command, a stage's Status flip, metadata. If the MEANING changes -- the conclusion is now different, the advice reversed -- that is a new memory: use memory_write with supersedes, which retires the old one into readable history instead of erasing what it used to say.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | **yes** | memory name (kebab-case, as memory_read takes it) |
+| `description` | string | no | replace the one-line description (&lt;=150 chars -- the only text shown in indexes); omit to leave it untouched |
+| `edits` | array | no | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `tags_add` | array | no | tags to add, leaving the rest in place (a comma-separated string is also accepted) |
+| `tags_remove` | array | no | tags to remove, leaving the rest in place; this is how a tag gets cleared (a comma-separated string is also accepted) |
 
 ## memory_read {#memory_read}
 
@@ -5092,6 +5157,34 @@ briefing's budget.
 
 Agent-created notes are automatically tagged `created-by:agent`.
 
+## Four ways to change a note
+
+Notes are long, and the transport caps a request body at 1 MB, so resending a
+whole note to fix one paragraph is both wasteful and the thing most likely to
+fail on the biggest artifacts.
+
+| You want to | Use | What happens |
+|---|---|---|
+| Fix or restructure part of the body | `notes_edit` | Exact search/replace, all-or-nothing, returns a diff |
+| Replace the body, or change title/description/project/tags | `notes_update` | Field-wise patch; omitted fields are untouched |
+| Add to the end | `notes_append` | A UTC-timestamped line joins the body |
+| Remove an artifact that should not exist | `notes_delete` | Gone, with no pointer left behind |
+
+`notes_edit` takes the note's `id` and a list of `{old_string, new_string}`
+edits. Each `old_string` must match the current body exactly and uniquely - or
+pass `replace_all` - and if any edit fails to match, **nothing** is written. That
+refusal is the feature: a partial apply, or a fuzzy match landing somewhere
+plausible, is the silent corruption the exact-match contract exists to prevent.
+
+`notes_update` gains the same staleness guard (`expect_hash`) plus `tags_add` and
+`tags_remove`, which are race-friendlier than replacing the whole tag list and
+are the only way to clear a tag - an empty `tags` array reads as absent. See
+[Concurrency](/reference/mcp/sessions-memory-recall/#concurrency-content_hash-and-expect_hash).
+
+Every note mutation now records a `note.written` event, and `notes_read` records
+`note.read` - the note-side twin of `memory.read`, which is what lets note demand
+count toward [recall's utility nudge](/concepts/recall/#the-utility-nudge).
+
 ## Notes are how plans get their narrative
 
 A plan is not a primitive - it is a composition keyed by `plan:<slug>`. Tag a
@@ -5153,16 +5246,29 @@ Read a note by id, or by slug within the current project (falling back to a glob
 
 ## notes_update {#notes_update}
 
-Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; tags replace all. The slug and id stay stable.
+Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; the slug and id stay stable. body replaces the WHOLE body, so pass expect_hash (notes_read returns it) to have the write refused rather than silently overwriting an edit that landed after you read the note -- and use notes_append when you only mean to add to it. Tags come in three flavors: tags replaces the whole set, while tags_add and tags_remove edit it in place; prefer add/remove, since a replace discards whatever another agent tagged in between and tags_remove is the only way to clear a tag at all.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
-| `body` | string | no | new body (aliases: content, text) |
+| `body` | string | no | new body, replacing the whole body (aliases: content, text) |
 | `description` | string | no | new description |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | new project slug ("" or "global" = global scope) |
-| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched |
+| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched -- to drop a tag use tags_remove |
+| `tags_add` | array | no | tags to add, leaving the rest in place; a tag already on the note is not duplicated. Applied after tags. |
+| `tags_remove` | array | no | tags to drop, matched exactly; a tag the note does not carry is ignored. Applied last, so it also removes what tags/tags_add just set. |
 | `title` | string | no | new title |
+
+## notes_edit {#notes_edit}
+
+Edit an existing note in place with exact search/replace, by id, instead of resending its whole body through notes_update. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. This is the tool for correcting or restructuring part of a long note -- notes_append only ever adds, and notes_update replaces the whole body. Returns a unified diff of what landed plus the new content_hash.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | **yes** | note id (ULID), as notes_create returns and briefings and plan compositions carry |
+| `edits` | array | **yes** | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 
 ## notes_append {#notes_append}
 
@@ -8866,6 +8972,45 @@ and the store now serves two contradictory answers to the same question. An
 explicit tool error makes the agent deal with it. The new memory is still kept -
 its content is valid knowledge, and re-writing the same name is a lossless
 in-place update, so fixing the target and retrying is safe.
+
+## Mutating a corpus file
+
+Enforced in `internal/files` (`mutate.go`). Concepts:
+[Memory & notes](/concepts/memory/).
+
+### Every read-modify-write goes through `Mutate`
+
+A handler that reads an item, edits the struct, and writes the whole file back
+is a lost update waiting to happen: two of them racing on one file both read the
+same starting content, both render, and the second atomic rename wins. Nothing
+errors - the index upsert is by id, so even the `UNIQUE file_path` constraint
+stays quiet, and the losing agent is told its write succeeded.
+
+`files.Manager.Mutate(path, fn)` takes a per-path lock for the duration of the
+read *and* the write. `seamlessd` is a single daemon, which is what makes an
+in-process lock a complete answer rather than a partial one: every application
+write to the corpus goes through this one Manager.
+
+The invariant is not "the write is locked" - it is **the read that feeds the
+write happens inside the same lock**. Wrapping only the write fixes nothing, and
+looks exactly like a fix.
+
+`MutatePaths` locks several files in sorted order for a mutation that spans two
+of them (a note moving project writes the new path and removes the old); the
+sorted order is what keeps two opposite moves from deadlocking. The lock is not
+reentrant, which is why `WriteMemory`/`WriteNote`/`Remove` deliberately take no
+lock of their own - calling them from inside `fn` is the point.
+
+### `expect_hash` is checked against the FILE, inside the lock
+
+The mutation lock cannot see an agent acting on something it read minutes ago,
+or the owner editing the markdown in an editor. That is what the optional
+`expect_hash` precondition catches - and it must be compared against the hash of
+the file as just read under the lock, never against the index row.
+
+The watcher re-indexes on a 300 ms debounce. For that window the index still
+reports the hash the stale caller is holding, so an index-based check would pass
+on precisely the edit it exists to refuse.
 
 ## Session binding and scope
 

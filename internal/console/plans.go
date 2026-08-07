@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -375,22 +376,31 @@ func (s *Service) planApprove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "files layer unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	note, err := s.cfg.Files.Store().ReadNote(planNote.FilePath)
+	// Read the note and retag it under the file's lock. The capture hook rewrites
+	// this same file on every plan-file save, and the retag renders the whole file
+	// from what the read returned -- unserialized, an approval racing a save
+	// dropped one of the two writes silently (the index upsert is by id, so
+	// nothing complained). The status check is the read that decides the write, so
+	// it belongs inside; an already-approved plan reports ErrNoChange, which is
+	// also what keeps the event below from firing on a second approval.
+	approved := false
+	note, err := s.cfg.Files.MutateNote(ctx, planNote.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
+			return note, files.ErrNoChange
+		}
+		note.Tags = plans.SetStatusTag(note.Tags, plans.StatusApproved)
+		note.Description = plans.NoteDescription(plans.Basename(note.Slug), plans.NoteIteration(note), plans.StatusApproved)
+		note.Updated = time.Now().UTC()
+		approved = true
+		return note, nil
+	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	basename := plans.Basename(note.Slug)
-	if plans.StatusFromTags(note.Tags) != plans.StatusApproved {
-		note.Tags = plans.SetStatusTag(note.Tags, plans.StatusApproved)
-		note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), plans.StatusApproved)
-		note.Updated = time.Now().UTC()
-		if note, err = s.cfg.Files.WriteNote(ctx, note); err != nil {
-			s.serverError(w, r, err)
-			return
-		}
+	if approved {
 		s.recordPlanAction(ctx, core.EventPlanApproved, note.Project, note.ID, map[string]any{
-			"basename": basename, "plan_slug": slug, "by": "console",
+			"basename": plans.Basename(note.Slug), "plan_slug": slug, "by": "console",
 		})
 	}
 	task, created, err := plans.EnsureTask(ctx, s.cfg.DB, note, slug, "console")

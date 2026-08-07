@@ -129,6 +129,35 @@ the pointer is where to look, not a substitute for reading it.
 - A supersede that fails after the new memory is written is a tool ERROR naming
   the still-active target, never a success payload with an error inside it (F9).
 
+### Mutating a corpus file (`internal/files`)
+
+- Every read-modify-write of a memory or note goes through
+  `files.Manager.Mutate(path, fn)` / `MutateMemory` / `MutateNote`. Reading an
+  item, editing the struct, and writing the whole file back is a lost update:
+  two racers read the same starting content and the second rename wins, with no
+  error anywhere -- the index upserts by id, so even `UNIQUE file_path` stays
+  quiet and the loser is told it succeeded.
+- The invariant is not "the write is locked", it is that **the read feeding the
+  write happens inside the same lock**. Wrapping only the write fixes nothing
+  and looks exactly like a fix.
+- The lock is per path and NOT reentrant. `WriteMemory`/`WriteNote`/`Remove`
+  deliberately take no lock, so calling them from inside `fn` is the point.
+  `MutatePaths` locks several files in sorted order for a mutation spanning two
+  of them (a note changing project); sorted order is the deadlock discipline.
+- A callback returning `files.ErrNoChange` skips the write and reports the
+  loaded item -- that is how an already-correct favorite flip avoids rewriting
+  and re-indexing the file.
+- `expect_hash` is compared against the FILE's hash read inside the lock, never
+  the index row: the watcher re-indexes on a 300ms debounce, so the index
+  confirms the stale hash for exactly the window the precondition exists to
+  refuse.
+- Edit vs supersede is a LIFECYCLE boundary, not a convenience call. `memory_edit`
+  is for changes carrying no new claim (typo, formatting, stale path, stage
+  `Status` flip, metadata); a changed MEANING goes through `memory_write`
+  `supersedes` so the old memory retires into readable history. Both edit tools
+  and `MCPInstructions` render `agentguide.EditVsSupersede` so the rule cannot
+  drift into two versions.
+
 ### Session binding and scope (`internal/mcp`)
 
 - Never read `project` from tool args directly. Route it through

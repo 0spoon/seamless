@@ -31,7 +31,7 @@ import (
 // seamlessd's own doctor asserts the same constant against REGISTRATION
 // (mcp.NumTools with a zero config), which is feature-independent and correctly
 // stays a bare equality -- the two checks measure different things on purpose.
-const expectedTools = 31
+const expectedTools = 33
 
 var doctorCmd = spec("doctor", groupObservability, "reachability + key + tool-count check",
 	noArgs(), bindNoOpts, runDoctor)

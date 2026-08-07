@@ -1,6 +1,6 @@
 # Notes, projects & capture
 
-> Work artifacts, project scope, and SSRF-safe URL capture - the eight tools around the edges of memory.
+> Work artifacts, project scope, and SSRF-safe URL capture - the nine tools around the edges of memory.
 
 ## A note is not a memory
 
@@ -25,6 +25,34 @@ inject, too specific to generalize, and it pushes real constraints out of the
 briefing's budget.
 
 Agent-created notes are automatically tagged `created-by:agent`.
+
+## Four ways to change a note
+
+Notes are long, and the transport caps a request body at 1 MB, so resending a
+whole note to fix one paragraph is both wasteful and the thing most likely to
+fail on the biggest artifacts.
+
+| You want to | Use | What happens |
+|---|---|---|
+| Fix or restructure part of the body | `notes_edit` | Exact search/replace, all-or-nothing, returns a diff |
+| Replace the body, or change title/description/project/tags | `notes_update` | Field-wise patch; omitted fields are untouched |
+| Add to the end | `notes_append` | A UTC-timestamped line joins the body |
+| Remove an artifact that should not exist | `notes_delete` | Gone, with no pointer left behind |
+
+`notes_edit` takes the note's `id` and a list of `{old_string, new_string}`
+edits. Each `old_string` must match the current body exactly and uniquely - or
+pass `replace_all` - and if any edit fails to match, **nothing** is written. That
+refusal is the feature: a partial apply, or a fuzzy match landing somewhere
+plausible, is the silent corruption the exact-match contract exists to prevent.
+
+`notes_update` gains the same staleness guard (`expect_hash`) plus `tags_add` and
+`tags_remove`, which are race-friendlier than replacing the whole tag list and
+are the only way to clear a tag - an empty `tags` array reads as absent. See
+[Concurrency](https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/#concurrency-content_hash-and-expect_hash).
+
+Every note mutation now records a `note.written` event, and `notes_read` records
+`note.read` - the note-side twin of `memory.read`, which is what lets note demand
+count toward [recall's utility nudge](https://thereisnospoon.org/docs/concepts/recall/#the-utility-nudge).
 
 ## Notes are how plans get their narrative
 
@@ -87,16 +115,29 @@ Read a note by id, or by slug within the current project (falling back to a glob
 
 ## notes_update {#notes_update}
 
-Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; tags replace all. The slug and id stay stable.
+Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; the slug and id stay stable. body replaces the WHOLE body, so pass expect_hash (notes_read returns it) to have the write refused rather than silently overwriting an edit that landed after you read the note -- and use notes_append when you only mean to add to it. Tags come in three flavors: tags replaces the whole set, while tags_add and tags_remove edit it in place; prefer add/remove, since a replace discards whatever another agent tagged in between and tags_remove is the only way to clear a tag at all.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
-| `body` | string | no | new body (aliases: content, text) |
+| `body` | string | no | new body, replacing the whole body (aliases: content, text) |
 | `description` | string | no | new description |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | new project slug ("" or "global" = global scope) |
-| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched |
+| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched -- to drop a tag use tags_remove |
+| `tags_add` | array | no | tags to add, leaving the rest in place; a tag already on the note is not duplicated. Applied after tags. |
+| `tags_remove` | array | no | tags to drop, matched exactly; a tag the note does not carry is ignored. Applied last, so it also removes what tags/tags_add just set. |
 | `title` | string | no | new title |
+
+## notes_edit {#notes_edit}
+
+Edit an existing note in place with exact search/replace, by id, instead of resending its whole body through notes_update. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. This is the tool for correcting or restructuring part of a long note -- notes_append only ever adds, and notes_update replaces the whole body. Returns a unified diff of what landed plus the new content_hash.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | **yes** | note id (ULID), as notes_create returns and briefings and plan compositions carry |
+| `edits` | array | **yes** | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 
 ## notes_append {#notes_append}
 

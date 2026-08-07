@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sessions, memory &amp; recall - Seamless docs</title>
-<meta name="description" content="The eight tools an agent uses most - open a session, write and read memory, and search the store.">
+<meta name="description" content="The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/">
 <meta property="og:title" content="Sessions, memory &amp; recall - Seamless docs">
-<meta property="og:description" content="The eight tools an agent uses most - open a session, write and read memory, and search the store.">
+<meta property="og:description" content="The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Sessions, memory \u0026 recall","item":"https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/"}]},{"@type":"TechArticle","headline":"Sessions, memory \u0026 recall - Seamless docs","description":"The eight tools an agent uses most - open a session, write and read memory, and search the store.","url":"https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"Sessions, memory \u0026 recall","item":"https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/"}]},{"@type":"TechArticle","headline":"Sessions, memory \u0026 recall - Seamless docs","description":"The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.","url":"https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../../static/favicon.svg">
@@ -224,14 +224,14 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Sessions, memory &amp; recall</h1>
-  <p class="lede">The eight tools an agent uses most - open a session, write and read memory, and search the store.</p>
+  <p class="lede">The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete?</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
+      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#edit-update-append-supersede-or-delete">Edit, update, append, supersede, or delete?</a></li><li class="lvl-3"><a href="#edit-vs-supersede">Edit vs. supersede</a></li><li class="lvl-2"><a href="#concurrency-content-hash-and-expect-hash">Concurrency: content_hash and expect_hash</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_edit">memory_edit</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
     </ul>
   </details>
-  <p>These eight tools are the agent loop. In a repo mapped to a project, most of them
+  <p>These nine tools are the agent loop. In a repo mapped to a project, most of them
 need no <code>project</code> argument at all: <code>session_start</code> binds the connection, and
 everything after it inherits that scope.</p>
 <h2 id="the-shape-of-a-session">The shape of a session</h2>
@@ -243,8 +243,8 @@ full briefing rather than the short injected one.</p>
 <p>If <code>tasks_update</code> ever fails claiming a task is held by <em>your own</em> session id,
 the connection binding was lost. Re-run <code>session_start</code> with the same name to
 rebind.</p>
-<h2 id="update-append-supersede-or-delete">Update, append, supersede, or delete?</h2>
-<p>Four ways to change memory, and picking the wrong one is how a store rots:</p>
+<h2 id="edit-update-append-supersede-or-delete">Edit, update, append, supersede, or delete?</h2>
+<p>Five ways to change memory, and picking the wrong one is how a store rots:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -256,7 +256,12 @@ rebind.</p>
 </thead>
 <tbody>
 <tr>
-<td>Correct or extend what a memory says</td>
+<td>Fix part of a memory without resending it</td>
+<td><code>memory_edit</code></td>
+<td>Exact search/replace on the body, plus <code>description</code> and tag add/remove; returns a diff</td>
+</tr>
+<tr>
+<td>Rewrite what a memory says, whole</td>
 <td><code>memory_write</code> with the same <code>name</code></td>
 <td>Updated in place; the id is stable</td>
 </tr>
@@ -286,10 +291,37 @@ never true - not for things that stopped being true.</p>
 <p>A <code>supersedes</code> that fails is reported rather than swallowed: the new memory is
 still written and kept, and the call returns an error naming it. The target is
 then still active, so re-run the supersede.</p>
+<h3 id="edit-vs-supersede">Edit vs. supersede</h3>
+<p><code>memory_edit</code> is cheap, which is exactly why its boundary has to be explicit.
+Edit is for changes that carry no new claim: a typo, broken formatting, a stale
+path or command, a stage's <code>Status</code> flip, a description, a tag. If the <strong>meaning</strong>
+changes - the conclusion is now different, the advice reversed - that is a new
+memory, and it goes through <code>memory_write</code> with <code>supersedes</code>.</p>
+<p>The reason is provenance. A supersession retires the old memory into readable
+history; an in-place edit leaves no trace that the store ever believed something
+else. Using edit to change what a memory claims silently rewrites the record.</p>
+<p><code>memory_edit</code> is also the only way to change a memory's <code>description</code> or tags
+without rewriting its body, and <code>tags_remove</code> is the only way to clear a tag at
+all - an empty <code>tags</code> array reads as absent everywhere else.</p>
+<h2 id="concurrency-content-hash-and-expect-hash">Concurrency: content_hash and expect_hash</h2>
+<p><code>memory_read</code> and <code>notes_read</code> return a <code>content_hash</code> - the SHA-256 of the whole
+file. Pass it back as <code>expect_hash</code> on <code>memory_edit</code>, <code>notes_edit</code>, or
+<code>notes_update</code>, and the write is refused if the stored file has moved on since
+you read it. Omit it and the write is unconditional.</p>
+<p>It answers a different question from the daemon's own serialization. Every
+application write already goes through a per-file lock, so two agents can no
+longer interleave a read and a write and lose one of them. What the lock cannot
+see is an agent acting on something it read minutes ago, or the owner editing the
+markdown in an editor - which is why the precondition is checked against the
+<strong>file</strong>, inside the lock, rather than against the index (the watcher re-indexes
+on a debounce, so the index would happily confirm the stale hash).</p>
 <h2 id="scope">Scope</h2>
 <p><code>memory_write</code> <strong>fails closed</strong>: with no session and no explicit <code>project</code>, it is
 rejected as ambiguous rather than silently landing in the global scope. Pass
 <code>project: global</code> to write a deliberately cross-project memory.</p>
+<p><code>memory_edit</code> targets a memory that already exists, so it resolves like
+<code>memory_append</code>: the session's scope first, then a global fallback. The write is
+judged against the project the memory actually sits in.</p>
 <h2 id="recall-is-the-only-search-tool">Recall is the only search tool</h2>
 <p>There is one search entry point. <code>recall</code> fuses FTS5 keyword matching and vector
 similarity with reciprocal rank fusion, nudges the fused order by favorite and
@@ -331,6 +363,11 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>memory_write</code></td>
 <td>Stable <code>id</code>, canonical <code>name</code>, resolved <code>project</code>, <code>updated</code>, optional <code>similar</code>, and optional <code>superseded</code></td>
 <td>An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target</td>
+</tr>
+<tr>
+<td><code>memory_edit</code></td>
+<td><code>id</code>, <code>name</code>, <code>project</code>, the new <code>content_hash</code>, a unified <code>diff</code>, and a <code>stage_hint</code> when a <code>kind=stage</code> body still has no parseable <code>Status</code></td>
+<td>An <code>old_string</code> that matches zero or several places is an error naming the count, and <strong>nothing</strong> is written - the edits apply all-or-nothing. A stale <code>expect_hash</code> is refused rather than overwriting</td>
 </tr>
 <tr>
 <td><code>recall</code></td>
@@ -482,7 +519,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td><code>kind</code></td>
 <td>string</td>
 <td><strong>yes</strong></td>
-<td>memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open|in_progress|blocked|done and optionally Gate: human|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body. One of: <code>constraint</code>, <code>convention</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, <code>stage</code>.</td>
+<td>memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open|in_progress|blocked|done and optionally Gate: human|ai, and flip the status with memory_edit (or a full memory_write) -- append cannot change the header, which is parsed from the top of the body. One of: <code>constraint</code>, <code>convention</code>, <code>runbook</code>, <code>protocol</code>, <code>gotcha</code>, <code>decision</code>, <code>refuted</code>, <code>reference</code>, <code>stage</code>.</td>
 </tr>
 <tr>
 <td><code>description</code></td>
@@ -547,6 +584,64 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 <td>string</td>
 <td>no</td>
 <td>project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<h2 id="memory_edit">memory_edit</h2>
+<p>Edit an existing memory in place with exact search/replace, instead of resending its whole body through memory_write. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. It is also the only way to change a memory's description or tags on their own: send description/tags_add/tags_remove with no edits and the body is left untouched (memory_write requires a body, so there was no metadata-only path before this), and tags_remove is the only way to clear a tag at all. Returns a unified diff of what landed plus the new content_hash. Use this for corrections that do not change what the item CLAIMS: typos, broken formatting, a stale path or command, a stage's Status flip, metadata. If the MEANING changes -- the conclusion is now different, the advice reversed -- that is a new memory: use memory_write with supersedes, which retires the old one into readable history instead of erasing what it used to say.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Type</th>
+<th>Required</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>name</code></td>
+<td>string</td>
+<td><strong>yes</strong></td>
+<td>memory name (kebab-case, as memory_read takes it)</td>
+</tr>
+<tr>
+<td><code>description</code></td>
+<td>string</td>
+<td>no</td>
+<td>replace the one-line description (&lt;=150 chars -- the only text shown in indexes); omit to leave it untouched</td>
+</tr>
+<tr>
+<td><code>edits</code></td>
+<td>array</td>
+<td>no</td>
+<td>ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written.</td>
+</tr>
+<tr>
+<td><code>expect_hash</code></td>
+<td>string</td>
+<td>no</td>
+<td>optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally.</td>
+</tr>
+<tr>
+<td><code>project</code></td>
+<td>string</td>
+<td>no</td>
+<td>project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory.</td>
+</tr>
+<tr>
+<td><code>tags_add</code></td>
+<td>array</td>
+<td>no</td>
+<td>tags to add, leaving the rest in place (a comma-separated string is also accepted)</td>
+</tr>
+<tr>
+<td><code>tags_remove</code></td>
+<td>array</td>
+<td>no</td>
+<td>tags to remove, leaving the rest in place; this is how a tag gets cleared (a comma-separated string is also accepted)</td>
 </tr>
 </tbody>
 </table>
@@ -676,7 +771,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#update-append-supersede-or-delete">Update, append, supersede, or delete?</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
+      <li class="lvl-2"><a href="#the-shape-of-a-session">The shape of a session</a></li><li class="lvl-2"><a href="#edit-update-append-supersede-or-delete">Edit, update, append, supersede, or delete?</a></li><li class="lvl-3"><a href="#edit-vs-supersede">Edit vs. supersede</a></li><li class="lvl-2"><a href="#concurrency-content-hash-and-expect-hash">Concurrency: content_hash and expect_hash</a></li><li class="lvl-2"><a href="#scope">Scope</a></li><li class="lvl-2"><a href="#recall-is-the-only-search-tool">Recall is the only search tool</a></li><li class="lvl-2"><a href="#results-and-failures">Results and failures</a></li><li class="lvl-2"><a href="#session_start">session_start</a></li><li class="lvl-2"><a href="#session_update">session_update</a></li><li class="lvl-2"><a href="#session_end">session_end</a></li><li class="lvl-2"><a href="#memory_write">memory_write</a></li><li class="lvl-2"><a href="#memory_append">memory_append</a></li><li class="lvl-2"><a href="#memory_edit">memory_edit</a></li><li class="lvl-2"><a href="#memory_read">memory_read</a></li><li class="lvl-2"><a href="#memory_delete">memory_delete</a></li><li class="lvl-2"><a href="#recall">recall</a></li>
     </ul>
   </aside>
   

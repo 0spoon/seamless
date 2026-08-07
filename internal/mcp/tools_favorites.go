@@ -8,6 +8,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -121,12 +122,16 @@ func (s *Server) handleFavoriteSet(ctx context.Context, req mcp.CallToolRequest)
 // setMemoryFavorite resolves a memory by name (project scope + global fallback,
 // like memory_read) and rewrites its file with the flag flipped. The full file
 // is read first -- index rows carry no body, so writing from one would truncate
-// the memory. Updated is deliberately not bumped: a star is not authorship.
+// the memory -- and the read is inside the file's mutation lock, because the
+// flip renders the WHOLE file from what that read returned: a memory_append
+// landing between the two used to disappear under the star's rename with no
+// error anywhere. Updated is deliberately not bumped: a star is not authorship.
 //
 // A star is still a durable write, and one with reach: a starred memory pins
 // into its project's briefings and boosts in recall. So the resolved memory's
 // own project goes through the write fence, and the global fallback goes through
-// the read fence inside resolveMemory.
+// the read fence inside resolveMemory. Both fences are resolution, not mutation,
+// and stay outside the lock.
 func (s *Server) setMemoryFavorite(ctx context.Context, req mcp.CallToolRequest, id string, fav bool) (project, itemID string, err error) {
 	name, err := memoryName(id)
 	if err != nil {
@@ -146,22 +151,27 @@ func (s *Server) setMemoryFavorite(ctx context.Context, req mcp.CallToolRequest,
 	if err := s.fenceWrite(ctx, idx.Project); err != nil {
 		return "", "", err
 	}
-	mem, err := s.cfg.Files.Store().ReadMemory(idx.FilePath)
+	// An already-correct flag reports ErrNoChange rather than writing: re-rendering
+	// an unchanged file would re-index and re-embed it, so a repeated star would
+	// cost real work and churn the corpus for nothing.
+	mem, err := s.cfg.Files.MutateMemory(ctx, idx.FilePath, func(_ context.Context, mem core.Memory) (core.Memory, error) {
+		if mem.Favorite == fav {
+			return mem, files.ErrNoChange
+		}
+		mem.Favorite = fav
+		return mem, nil
+	})
 	if err != nil {
 		return "", "", err
-	}
-	if mem.Favorite != fav {
-		mem.Favorite = fav
-		if _, err := s.cfg.Files.WriteMemory(ctx, mem); err != nil {
-			return "", "", err
-		}
 	}
 	return mem.Project, mem.ID, nil
 }
 
 // setNoteFavorite flips the flag on a note (by id, falling back to slug in the
 // session scope then global) or on a plan's primary note. A task-only plan has
-// no note and cannot be starred.
+// no note and cannot be starred. Resolution and the fence stay outside the
+// file's mutation lock; the read that feeds the write is inside it, for the
+// reason setMemoryFavorite spells out.
 func (s *Server) setNoteFavorite(ctx context.Context, req mcp.CallToolRequest, kind, id string, fav bool) (project, itemID string, err error) {
 	var idx core.Note
 	if kind == "plan" {
@@ -204,15 +214,15 @@ func (s *Server) setNoteFavorite(ctx context.Context, req mcp.CallToolRequest, k
 	if err := s.fenceWrite(ctx, idx.Project); err != nil {
 		return "", "", err
 	}
-	note, err := s.cfg.Files.Store().ReadNote(idx.FilePath)
+	note, err := s.cfg.Files.MutateNote(ctx, idx.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if note.Favorite == fav {
+			return note, files.ErrNoChange
+		}
+		note.Favorite = fav
+		return note, nil
+	})
 	if err != nil {
 		return "", "", err
-	}
-	if note.Favorite != fav {
-		note.Favorite = fav
-		if _, err := s.cfg.Files.WriteNote(ctx, note); err != nil {
-			return "", "", err
-		}
 	}
 	return note.Project, note.ID, nil
 }

@@ -64,12 +64,12 @@ Pass `project: global` to mean global deliberately.
 
 ## The tool surface
 
-Seamless registers **31 tools**. They are documented in groups:
+Seamless registers **33 tools**. They are documented in groups:
 
 | Group | Tools |
 |---|---|
-| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_read`, `memory_delete`, `recall` |
-| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
+| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_edit`, `memory_read`, `memory_delete`, `recall` |
+| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_edit`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](https://thereisnospoon.org/docs/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
 | Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
 
@@ -78,7 +78,7 @@ smaller. Tools belonging to an
 [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) are hidden from
 `tools/list` while that feature is off, and a call to one is refused as an
 unknown tool. Optional features ship off, so a fresh install advertises fewer
-than 31 until you turn one on - each affected tool says so on its own reference
+than 33 until you turn one on - each affected tool says so on its own reference
 page. Nothing about registration changes: the catalog these pages are generated
 from, and the registered-tool count `seamlessd doctor` asserts, stay the full
 set either way.

@@ -282,7 +282,7 @@ is not worth an error.</li>
 transport failures.</li>
 </ul>
 <h2 id="the-tool-surface">The tool surface</h2>
-<p>Seamless registers <strong>31 tools</strong>. They are documented in groups:</p>
+<p>Seamless registers <strong>33 tools</strong>. They are documented in groups:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -294,11 +294,11 @@ transport failures.</li>
 <tbody>
 <tr>
 <td>Sessions, memory, and recall</td>
-<td><code>session_start</code>, <code>session_update</code>, <code>session_end</code>, <code>memory_write</code>, <code>memory_append</code>, <code>memory_read</code>, <code>memory_delete</code>, <code>recall</code></td>
+<td><code>session_start</code>, <code>session_update</code>, <code>session_end</code>, <code>memory_write</code>, <code>memory_append</code>, <code>memory_edit</code>, <code>memory_read</code>, <code>memory_delete</code>, <code>recall</code></td>
 </tr>
 <tr>
 <td>Notes, projects, and capture</td>
-<td><code>notes_create</code>, <code>notes_read</code>, <code>notes_update</code>, <code>notes_append</code>, <code>notes_delete</code>, <code>project_list</code>, <code>project_create</code>, <code>capture_url</code></td>
+<td><code>notes_create</code>, <code>notes_read</code>, <code>notes_update</code>, <code>notes_edit</code>, <code>notes_append</code>, <code>notes_delete</code>, <code>project_list</code>, <code>project_create</code>, <code>capture_url</code></td>
 </tr>
 <tr>
 <td><a href="../../reference/mcp/tasks/">Tasks</a></td>
@@ -316,7 +316,7 @@ smaller. Tools belonging to an
 <a href="../../reference/console/#optional-features">optional feature</a> are hidden from
 <code>tools/list</code> while that feature is off, and a call to one is refused as an
 unknown tool. Optional features ship off, so a fresh install advertises fewer
-than 31 until you turn one on - each affected tool says so on its own reference
+than 33 until you turn one on - each affected tool says so on its own reference
 page. Nothing about registration changes: the catalog these pages are generated
 from, and the registered-tool count <code>seamlessd doctor</code> asserts, stay the full
 set either way.</p>

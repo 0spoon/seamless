@@ -112,18 +112,21 @@ func (s *Service) applySettlePlan(ctx context.Context, p store.Proposal, status 
 	if !ok {
 		return nil, fmt.Errorf("plan note %q no longer exists", id)
 	}
-	note, err := s.files.Store().ReadNote(idx.FilePath)
-	if err != nil {
-		return nil, err
-	}
-	if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
-		return nil, fmt.Errorf("plan %q was approved since this was proposed", note.Slug)
-	}
-	basename := plans.Basename(note.Slug)
-	note.Tags = plans.SetStatusTag(note.Tags, status)
-	note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), status)
-	note.Updated = now
-	written, err := s.files.WriteNote(ctx, note)
+	// Retag under the note's lock. The capture hook rewrites this file on every
+	// plan-file save and the console's approve hatch on every approval, so the
+	// settlement reads the tags it is judging inside the lock -- an approval
+	// landing between an unlocked read and the write would be silently retagged
+	// away, which is exactly the state this apply refuses to overwrite.
+	written, err := s.files.MutateNote(ctx, idx.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
+			return core.Note{}, fmt.Errorf("plan %q was approved since this was proposed", note.Slug)
+		}
+		basename := plans.Basename(note.Slug)
+		note.Tags = plans.SetStatusTag(note.Tags, status)
+		note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), status)
+		note.Updated = now
+		return note, nil
+	})
 	if err != nil {
 		return nil, err
 	}
