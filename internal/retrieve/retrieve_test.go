@@ -164,6 +164,52 @@ func TestBriefingPendingPlanLines(t *testing.T) {
 	require.NotContains(t, sb, "awaiting approval")
 }
 
+// TestBriefingPlanFinishLineEmphasis pins the momentum half of the plan rollup
+// line: with the feature on, a near-done plan carries the finish-line phrase;
+// off (the shipped default), the line is byte-identical to the plain rollup.
+func TestBriefingPlanFinishLineEmphasis(t *testing.T) {
+	db := setupDB(t)
+	ctx := context.Background()
+	require.NoError(t, store.SetSetting(ctx, db, store.SettingRepoProjectMap, `{"/work/seam":"seam"}`))
+	insMem(t, db, "01A", "gotcha", "some-memory", "keeps the briefing non-empty", "seam")
+
+	now := time.Now().UTC()
+	seed := func(plan, title string, status core.TaskStatus, at time.Time) {
+		t.Helper()
+		id, err := core.NewID()
+		require.NoError(t, err)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: id, ProjectSlug: "seam", Title: title, Status: status,
+			PlanSlug: plan, CreatedAt: at, UpdatedAt: at,
+		}))
+	}
+	// "nearly" at 4/5: qualifies. "early" at 1/3: does not.
+	for i := range 4 {
+		seed("nearly", "closed step", core.TaskDone, now.Add(time.Duration(i)*time.Minute))
+	}
+	seed("nearly", "write the docs", core.TaskOpen, now.Add(10*time.Minute))
+	seed("early", "done step", core.TaskDone, now)
+	seed("early", "open step", core.TaskOpen, now)
+	seed("early", "another open step", core.TaskOpen, now)
+
+	svc := New(db, nil, budgets(), nil)
+
+	// Shipped default: momentum off, the plain rollup line and nothing else.
+	off, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, off, "- nearly -- 4/5 done, 1 claimable, 0 in flight\n")
+	require.NotContains(t, off, "from shipped")
+
+	// The console's stored override flips the very next briefing -- same
+	// effective config as the console gates, no restart.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	on, _, err := svc.Briefing(ctx, BriefingInput{CWD: "/work/seam", Source: "startup"})
+	require.NoError(t, err)
+	require.Contains(t, on, "- nearly -- 4/5 done, 1 claimable, 0 in flight -- one step from shipped\n")
+	require.Contains(t, on, "- early -- 1/3 done, 2 claimable, 0 in flight\n",
+		"a plan under the line keeps the plain rollup even with the feature on")
+}
+
 func TestBriefingSiblingProjects(t *testing.T) {
 	db := setupDB(t)
 	ctx := context.Background()

@@ -446,7 +446,7 @@ type kindCount struct {
 // A bucket with nothing in it produces no card at all -- an empty "0 mishaps"
 // panel would spend the most valuable strip on the page saying nothing.
 type attnCard struct {
-	Sev   string // "danger" | "warn" | "info"
+	Sev   string // "danger" | "warn" | "info" | "ok" (the finish-line cards, the strip's only positive entries)
 	Icon  string
 	Title string
 	Sub   string
@@ -757,6 +757,25 @@ func (s *Service) attentionCards(ctx context.Context, d overviewData) []attnCard
 			Sub:   fmt.Sprintf("not surfaced in %dd · consider retiring", d.StaleDays),
 			Href:  "/console/retrieval",
 		})
+	}
+	// Momentum's finish-line cards close the strip: the only positive entry, so
+	// the problems keep the lead. Gated in the handler rather than the template
+	// because a disabled install must not even run the query; the briefing's
+	// plan-line emphasis checks the same effective config, so the two surfaces
+	// switch together.
+	if features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		plans, err := store.FinishLinePlans(ctx, s.cfg.DB)
+		if err != nil {
+			s.logger.Warn("console: finish-line plans for attention strip", "error", err)
+		}
+		for _, p := range plans {
+			out = append(out, attnCard{
+				Sev: "ok", Icon: "flag",
+				Title: p.Slug + " -- " + p.FinishLinePhrase(),
+				Sub:   "left: " + strings.Join(p.Remaining, " · "),
+				Href:  "/console/plans/" + p.Slug,
+			})
+		}
 	}
 	return out
 }

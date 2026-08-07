@@ -14,6 +14,7 @@ import (
 	"github.com/0spoon/seamless/internal/agentguide"
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -182,6 +183,7 @@ func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []str
 		findings: findings, ready: ready, siblings: siblings,
 		siblingMems: siblingMems, stages: stages, plans: rollups,
 		pendingPlans: pending, isolation: iso,
+		momentum: features.Enabled(s.effectiveFeatures(ctx), features.Momentum),
 	}, cfg)
 	return text, ids, nil
 }
@@ -196,6 +198,19 @@ func (s *Service) effectiveBriefing(ctx context.Context) config.Briefing {
 	if err != nil {
 		s.logger.Warn("retrieve: briefing override unavailable, using base config", "error", err)
 		return s.briefing
+	}
+	return cfg
+}
+
+// effectiveFeatures resolves the optional-features state for one assembly the
+// same way: file/env base, console override row on top, failure-soft. The
+// briefing checks the same effective config the console gates on, so "momentum
+// off" means off everywhere at once.
+func (s *Service) effectiveFeatures(ctx context.Context) config.Features {
+	cfg, _, err := store.FeaturesConfig(ctx, s.db, s.features)
+	if err != nil {
+		s.logger.Warn("retrieve: features override unavailable, using base config", "error", err)
+		return s.features
 	}
 	return cfg
 }
@@ -607,6 +622,7 @@ type briefingSections struct {
 	plans        []store.PlanRollup // active plans (a plan-tagged task set), pinned after stages
 	pendingPlans []core.Note        // captured, not-yet-approved CC plans (budget-participating)
 	isolation    core.Isolation     // the project's fence state; open renders no line
+	momentum     bool               // momentum feature on: near-done plan lines carry the finish-line emphasis
 }
 
 // assembleBriefing packs the grouped sections against the token budget. The
@@ -692,8 +708,15 @@ func (s *Service) assembleBriefing(project, source string, sec briefingSections,
 	plansTrailer := ""
 	if len(sec.plans) > 0 {
 		for _, p := range sec.plans {
-			fmt.Fprintf(&rollups, "- %s -- %d/%d done, %d claimable, %d in flight\n",
+			fmt.Fprintf(&rollups, "- %s -- %d/%d done, %d claimable, %d in flight",
 				sanitizeName(p.Slug, 80), p.Done, p.Total, p.Claimable, p.InFlight)
+			// Momentum's finish-line emphasis: the same qualification and phrase
+			// the Overview card derives (store.PlanRollup), gated by the same
+			// effective feature state, so an agent and the owner read one story.
+			if sec.momentum && p.AtFinishLine() {
+				rollups.WriteString(" -- " + p.FinishLinePhrase())
+			}
+			rollups.WriteString("\n")
 		}
 		plansTrailer = "(steps: tasks_ready plan=<slug>; claim: tasks_claim id=<task id> session=<your Seam session>; attach work via the plan:<slug> tag)\n"
 	}

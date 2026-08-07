@@ -4145,11 +4145,13 @@ button.star.on .ico { fill: currentColor; }
 .ov2-attn-card[data-sev="danger"] { border-left-color: var(--danger); }
 .ov2-attn-card[data-sev="warn"]   { border-left-color: var(--warn); }
 .ov2-attn-card[data-sev="info"]   { border-left-color: var(--brand); }
+.ov2-attn-card[data-sev="ok"]     { border-left-color: var(--ok); }
 .ov2-attn-ico { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: var(--radius-sm); }
 .ov2-attn-ico .ico { width: 16px; height: 16px; }
 .ov2-attn-card[data-sev="danger"] .ov2-attn-ico { background: var(--danger-soft); color: var(--danger); }
 .ov2-attn-card[data-sev="warn"]   .ov2-attn-ico { background: var(--warn-soft); color: var(--warn); }
 .ov2-attn-card[data-sev="info"]   .ov2-attn-ico { background: var(--brand-soft); color: var(--brand); }
+.ov2-attn-card[data-sev="ok"]     .ov2-attn-ico { background: var(--ok-soft); color: var(--ok); }
 .ov2-attn-copy { flex: 1; min-width: 0; }
 .ov2-attn-copy strong { display: block; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
 .ov2-attn-copy span { font-size: var(--text-xs); color: var(--text-muted); }

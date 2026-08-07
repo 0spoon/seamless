@@ -117,9 +117,12 @@ var registry = []Feature{
 		set:           func(c *config.Features, on bool) { c.Research = on },
 	},
 	{
-		Key:     Momentum,
-		Label:   "Momentum",
-		Blurb:   "Gentle progress cues on existing screens -- plan finish lines, capture streaks, knowledge payoffs, and project growth -- judged from real activity, never invented.",
+		Key:   Momentum,
+		Label: "Momentum",
+		Blurb: "Gentle progress cues on existing screens -- plan finish lines, capture streaks, knowledge payoffs, and project growth -- judged from real activity, never invented.",
+		Surfaces: []string{
+			"the plan finish-line cards on Overview (and their agent-briefing emphasis)",
+		},
 		Default: false,
 		get:     func(c config.Features) bool { return c.Momentum },
 		set:     func(c *config.Features, on bool) { c.Momentum = on },

@@ -223,6 +223,46 @@ func TestOverviewCoverage_DropsTheTrialsChannelWhileOff(t *testing.T) {
 	require.Equal(t, []string{"Findings", "Memories", "Notes", "Trials"}, labels)
 }
 
+// The finish-line card is a momentum surface: off (the shipped default) leaves
+// the Overview without a trace of it; on, a near-done plan earns the strip's
+// one positive card, naming the exact remaining steps and linking to the plan.
+func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	seed := func(plan, title string, status core.TaskStatus, i int) {
+		t.Helper()
+		at := now.Add(time.Duration(i) * time.Minute)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: mustID(t), ProjectSlug: "demo", Title: title, Status: status,
+			PlanSlug: plan, CreatedAt: at, UpdatedAt: at,
+		}))
+	}
+	for i := range 4 {
+		seed("nearly", "closed step", core.TaskDone, i)
+	}
+	seed("nearly", "write the docs", core.TaskOpen, 10)
+
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, page, "from shipped")
+	require.NotContains(t, page, `data-sev="ok"`)
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, "nearly -- one step from shipped")
+	require.Contains(t, page, "left: write the docs")
+	require.Contains(t, page, `href="/console/plans/nearly"`)
+	require.Contains(t, page, `data-sev="ok"`)
+
+	// A plan under the line earns nothing even with the feature on: no card is
+	// the empty state.
+	seed("midway", "first of many", core.TaskOpen, 20)
+	seed("midway", "second of many", core.TaskDone, 21)
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, page, "midway")
+}
+
 func TestSessionDetail_TrialsSectionFollowsTheFeature(t *testing.T) {
 	db, mux, _ := newGatedConsole(t)
 	ctx := context.Background()
