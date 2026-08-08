@@ -4095,6 +4095,13 @@ button.star.on .ico { fill: currentColor; }
    Now arcade. */
 .rail-item.mom-settle.live-in { animation: live-in var(--dur-med) var(--ease-out), ix-locate-wash .5s var(--ease-out) both; }
 
+/* Momentum unlock notice: while the feature is on, the Settings
+   utility-activation table's stored activation timestamp reads as the
+   witnessed "unlocked <date>" note (it stays the operational "armed <ago>"
+   note while off). A static line in the ok tone -- no motion, the date
+   verbatim. */
+.utility-activation-table small.mom-unlocked { color: var(--ok); font-variant-numeric: tabular-nums; }
+
 /* The Plans header's quiet momentum line (rendered only while the feature is
    on): a muted verbatim count, no pill, no motion. */
 .mom-shipped { font-size: var(--text-xs); color: var(--faint); white-space: nowrap; }

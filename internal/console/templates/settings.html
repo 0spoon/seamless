@@ -415,7 +415,7 @@
                     {{range $i, $row := .UtilityRows}}
                     <tr>
                       <td>{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{.Project}}</a>{{else}}<strong>Global context</strong>{{end}}</td>
-                      <td><span class="badge utility-status-{{.Status}}">{{.Status}}{{if .Forced}} (forced){{end}}</span>{{if .ReadyAt}} <small title="{{ts .ReadyAt}}">armed {{ago .ReadyAt}}</small>{{end}}</td>
+                      <td><span class="badge utility-status-{{.Status}}">{{.Status}}{{if .Forced}} (forced){{end}}</span>{{if .ReadyAt}}{{if $.Features.Momentum}} <small class="mom-unlocked" title="{{ts .ReadyAt}}">unlocked {{day .ReadyAt}}</small>{{else}} <small title="{{ts .ReadyAt}}">armed {{ago .ReadyAt}}</small>{{end}}{{end}}</td>
                       <td>
                         <span class="utility-gate{{if .EventsOK}} met{{end}}">{{.RecentEvents}}<i>/{{index $ready 0}}</i> events</span> &middot;
                         <span class="utility-gate{{if .MemoriesOK}} met{{end}}">{{.RecentMemories}}<i>/{{index $ready 1}}</i> memories</span>

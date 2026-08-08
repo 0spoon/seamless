@@ -200,7 +200,7 @@ func (s *Service) fillOverviewTab(ctx context.Context, data *projectWorkspaceDat
 	data.Trend = trend
 
 	if s.cfg.Events != nil {
-		evs, err := s.cfg.Events.RecentExcluding(ctx, 120, core.EventToolCall, core.EventHookPrompt)
+		evs, err := s.cfg.Events.RecentExcluding(ctx, 120, s.ledgerExcludedKinds(ctx)...)
 		if err != nil {
 			return err
 		}

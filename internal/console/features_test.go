@@ -369,6 +369,82 @@ func TestLedgerGlint_MomentumBornKindsCarryTheHook(t *testing.T) {
 	require.Contains(t, page, "just paid off for the first time")
 }
 
+// The milestone rows are a momentum surface in the activity ledger: off (the
+// shipped default) filters even a stale milestone.reached event -- one minted
+// before a later switch-off -- out of the business feeds; on, the row renders
+// the payload's claim verbatim under its own award glyph, wearing the glint
+// hook the live-arrival wash keys on. Milestones accumulate in the ledger
+// only: no screen of their own.
+func TestLedgerMilestones_FollowTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	// A milestone minted while momentum was on, surviving in the log after the
+	// feature went back off (nothing is ever deleted).
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		VALUES (?, ?, ?, '', 'demo', 'memories-100:demo',
+		        '{"claim":"100 memories written in demo","project":"demo","count":103,"threshold":100}')`,
+		mustID(t), core.FormatTime(time.Now().UTC()), string(store.EventMilestoneReached))
+	require.NoError(t, err)
+
+	offPage := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, offPage, "milestone.reached", "off = no milestone rows, even stale ones")
+	require.NotContains(t, offPage, "100 memories written in demo")
+	require.NotContains(t, getJSON2(t, mux, "/console/?format=json"), "milestone.reached")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, "milestone.reached")
+	require.Contains(t, page, "100 memories written in demo",
+		"the row's sentence is the payload's claim, verbatim")
+	require.Contains(t, page, `class="ov2-evt mom-glint"`, "the milestone row wears the glint hook")
+
+	// The distinct glyph, mirrored client-side by interactions.js.
+	require.Equal(t, "award", evtIcon(string(store.EventMilestoneReached)))
+	require.NotEqual(t, evtIcon(string(store.EventMilestoneReached)), evtIcon("session.started"),
+		"the milestone row does not blur into the generic stream glyphs")
+	require.NotEqual(t, evtIcon(string(store.EventMilestoneReached)), evtIcon(string(core.EventPlanShipped)))
+
+	// A payload-less row still reads as a sentence rather than an empty line.
+	require.Equal(t, "milestone reached", eventSummary(core.Event{Kind: store.EventMilestoneReached}))
+
+	// Off again: the ledger is byte-identical to the pre-enable render -- the
+	// stale row leaves no residue.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{}))
+	require.Equal(t, offPage, getPeek(t, mux, "/console/").Body.String(),
+		"off = byte-identical Overview")
+}
+
+// The unlocked-date line on the Settings utility-activation table is a
+// momentum surface: on, a scope's stored activation timestamp reads as the
+// witnessed "unlocked <date>" note; off keeps today's operational
+// "armed <ago>" note -- the same timestamp, no celebration vocabulary, and a
+// page byte-for-byte free of the momentum markup.
+func TestSettingsUtilityUnlocked_FollowsTheMomentumFeature(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	readyAt := time.Date(2026, 7, 12, 9, 30, 0, 0, time.UTC)
+	require.NoError(t, store.SetUtilityActivation(ctx, db, store.UtilityActivation{
+		Projects: map[string]store.UtilityProjectState{"demo": {ReadyAt: &readyAt}},
+	}))
+
+	page := getPeek(t, mux, "/console/settings").Body.String()
+	require.NotContains(t, page, "mom-unlocked", "off leaves no trace of the unlock notice")
+	require.NotContains(t, page, "unlocked 2026-07-12")
+	require.Contains(t, page, ">armed ", "the operational armed note is core metadata and stays")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page = getPeek(t, mux, "/console/settings").Body.String()
+	require.Contains(t, page, `class="mom-unlocked"`)
+	require.Contains(t, page, "unlocked 2026-07-12",
+		"the stored activation date is witnessed on the surface, verbatim")
+	require.Contains(t, page, `title="2026-07-12 09:30 UTC"`, "the full timestamp stays in the tooltip")
+	require.NotContains(t, page, ">armed ",
+		"the note upgrades rather than duplicates -- one timestamp, one line")
+}
+
 // The memory-of-the-month spotlight is a momentum surface on the Overview
 // rail: off (the shipped default), no trace in HTML or JSON; on, the window's
 // top-utility memory renders with its counts, or the honest empty state when

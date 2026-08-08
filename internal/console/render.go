@@ -93,6 +93,7 @@ func withFlash(r *http.Request, pd pageData) pageData {
 var funcs = template.FuncMap{
 	"ago":           ago,
 	"ts":            ts,
+	"day":           day,
 	"shortID":       shortID,
 	"pct":           func(n, d int) int { return percent(n, d) },
 	"add":           func(a, b int) int { return a + b },
@@ -171,6 +172,10 @@ func evtIcon(kind string) string {
 		return "zap"
 	case kind == "project.stage_reached":
 		return "trending-up"
+	case kind == "milestone.reached":
+		// The milestone ledger's own glyph -- a medal, distinct from the
+		// gamification records' trophy.
+		return "award"
 	case kind == "plan.shipped":
 		// The settlement's own glyph, distinct from the plan-capture map.
 		return "flag"
@@ -491,6 +496,28 @@ func ts(v any) string {
 		return ""
 	}
 	return t.UTC().Format("2006-01-02 15:04 MST")
+}
+
+// day formats a timestamp as its calendar date ("2026-08-07"), for lines that
+// witness when something happened rather than how long ago. Accepts time.Time
+// or *time.Time like ts; a nil or zero time renders "".
+func day(v any) string {
+	var t time.Time
+	switch x := v.(type) {
+	case time.Time:
+		t = x
+	case *time.Time:
+		if x == nil {
+			return ""
+		}
+		t = *x
+	default:
+		return ""
+	}
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02")
 }
 
 // copyBtn renders a small quiet copy-to-clipboard button carrying the FULL
