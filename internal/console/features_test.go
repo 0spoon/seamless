@@ -407,7 +407,41 @@ func TestSessionsCaptureCalendar_FollowsTheMomentumFeature(t *testing.T) {
 	require.Contains(t, page, "day capture streak")
 	require.Contains(t, page, `class="mom-cal-col" style="--d:0ms"`, "week columns carry the staggered entry-wave delay")
 	require.Contains(t, page, ` today"`, "the final bucket is today's breathing cell")
+	require.NotContains(t, page, "mom-cal-ember", "one covered day is below the ember floor")
 	require.Contains(t, getJSON2(t, mux, "/console/sessions?format=json"), `"captureStreak"`)
+}
+
+// The streak ember is presentation on the calendar's already-judged current
+// streak: at StreakEmberFloor covered days the number gains the warm pulsing
+// flame (the now-hot.on pattern), below the floor there is no ember at all
+// (the calendar test above pins that), and off the whole calendar -- ember
+// included -- leaves no trace.
+func TestSessionsStreakEmber_LightsAtTheFloor(t *testing.T) {
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// StreakEmberFloor consecutive covered days ending today, seeded before the
+	// first render so the streak cache finalizes them in one pass.
+	for i := range StreakEmberFloor {
+		day := now.AddDate(0, 0, -i)
+		require.NoError(t, store.CreateSession(ctx, db, core.Session{
+			ID: mustID(t), Name: fmt.Sprintf("cc/day-%d", i), ProjectSlug: "demo",
+			Status: core.SessionCompleted, Findings: "left something durable",
+			CreatedAt: day, UpdatedAt: day,
+		}))
+	}
+
+	page := getPeek(t, mux, "/console/sessions").Body.String()
+	require.NotContains(t, page, "mom-cal", "off keeps the whole calendar out, ember included")
+
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	page = getPeek(t, mux, "/console/sessions").Body.String()
+	require.Contains(t, page, "mom-cal-ember", "at the floor the ember lights")
+	require.Contains(t, page, fmt.Sprintf("<strong>%d</strong>", StreakEmberFloor),
+		"the streak number stays verbatim beside the glyph")
+	require.Contains(t, page, fmt.Sprintf("the ember lights at %d", StreakEmberFloor),
+		"the tooltip names the floor the run cleared")
 }
 
 // getJSON2 fetches a path and returns the raw JSON body as a string.

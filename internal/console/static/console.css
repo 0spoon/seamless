@@ -4477,6 +4477,13 @@ button.star.on .ico { fill: currentColor; }
 .mom-cal-streak { display: inline-flex; align-items: baseline; gap: 6px; }
 .mom-cal-streak strong { font-size: var(--text-md); font-weight: 650; color: var(--text-primary); font-variant-numeric: tabular-nums; }
 .mom-cal-streak small { font-size: var(--text-xs); color: var(--text-muted); }
+/* The streak ember: at StreakEmberFloor covered days the current streak's
+   number gains a small warm flame -- the now-hot.on pattern verbatim: pop-soft
+   tones, seam-pulse on the glyph, the judged number untouched beside it. Below
+   the floor nothing renders, not a grey ember. The global reduced-motion rule
+   stills the pulse; the glyph stays. */
+.mom-cal-ember { display: inline-flex; align-items: center; align-self: center; padding: 2px 6px; border-radius: var(--radius-pill); color: var(--pop-strong); border: 1px solid var(--pop-soft); background: var(--pop-soft); }
+.mom-cal-ember .ico { width: 12px; height: 12px; animation: seam-pulse 1.6s ease-in-out infinite; }
 .mom-cal-key { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
 .mom-cal-key-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
 .mom-cal-scroll { overflow-x: auto; }

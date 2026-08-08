@@ -44,7 +44,7 @@
   <header class="mom-cal-head">
     <span class="ops-stage-eyebrow">{{icon "calendar-days"}}Capture calendar</span>
     {{with .Streak}}
-    <span class="mom-cal-streak"><strong>{{.Current}}</strong><small>day capture streak</small></span>
+    <span class="mom-cal-streak"><strong>{{.Current}}</strong>{{if .Ember}}<span class="mom-cal-ember" title="{{.EmberTitle}}">{{icon "flame"}}</span>{{end}}<small>day capture streak</small></span>
     <span class="mom-cal-streak"><strong>{{.Longest}}</strong><small>longest ever</small></span>
     {{end}}
     <span class="mom-cal-key"><i class="mom-cal-key-dot"></i>day that captured knowledge</span>

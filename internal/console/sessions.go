@@ -83,6 +83,22 @@ type captureStreak struct {
 	Longest int `json:"longest"`
 }
 
+// StreakEmberFloor is the current-streak length, in covered days, at which the
+// calendar header lights its ember. A stated judgment threshold like the
+// targets in atoms.go -- which is why it is a named const, not config.
+const StreakEmberFloor = 7
+
+// Ember reports whether the current streak has reached StreakEmberFloor. Pure
+// presentation on the already-judged number: below the floor the template
+// renders nothing, not a grey ember.
+func (c captureStreak) Ember() bool { return c.Current >= StreakEmberFloor }
+
+// EmberTitle is the ember's tooltip: the verbatim run beside the floor it
+// cleared, so the glyph's claim is verifiable on the surface.
+func (c captureStreak) EmberTitle() string {
+	return fmt.Sprintf("%d covered days running -- the ember lights at %d", c.Current, StreakEmberFloor)
+}
+
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	// An ABSENT status is a legitimate default (no filter, list everything). A
