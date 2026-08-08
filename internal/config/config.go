@@ -205,6 +205,10 @@ type Features struct {
 	// emphasis, the activity calendar with capture streaks, knowledge payoff
 	// moments, and project maturity stages.
 	Momentum bool `yaml:"momentum" json:"momentum"`
+	// Gamification enables the arcade layer of the Now screen: the day tape,
+	// the personal-records rail, the hot-streak pulse, and the celebration
+	// moments.
+	Gamification bool `yaml:"gamification" json:"gamification"`
 }
 
 // Search tunes the human-facing console search (retrieve.Search). Agent-facing
@@ -358,7 +362,7 @@ func Defaults() Config {
 		// Optional features ship off: a fresh installation exposes none until the
 		// owner enables it. Existing installations holding research data are
 		// grandfathered on by a one-time store migration, not by this default.
-		Features: Features{Research: false, Momentum: false},
+		Features: Features{Research: false, Momentum: false, Gamification: false},
 		Search:   Search{SemanticFloor: 0.3},
 		LLM: LLM{
 			Provider: ProviderOpenAI,
@@ -651,6 +655,9 @@ func (c *Config) applyEnv() error {
 		return err
 	}
 	if err := envBool("SEAMLESS_FEATURES_MOMENTUM", &c.Features.Momentum); err != nil {
+		return err
+	}
+	if err := envBool("SEAMLESS_FEATURES_GAMIFICATION", &c.Features.Gamification); err != nil {
 		return err
 	}
 	if err := envFloat("SEAMLESS_SEARCH_SEMANTIC_FLOOR", &c.Search.SemanticFloor); err != nil {

@@ -44,6 +44,16 @@ const Research Key = "research"
 // off with one toggle.
 const Momentum Key = "momentum"
 
+// Gamification covers the arcade layer of the Now screen: the day tape, the
+// personal-records rail, the hot-streak pulse, and the celebration moments.
+// It is separate from Momentum because it answers a different question --
+// momentum asks "is this knowledge practice building on itself?", gamification
+// plays back "how hard is the fleet running right now?" -- and an owner who
+// enjoys one framing may find the other noisy. Like every surface here, its
+// numbers are judged from real recorded activity, never invented, and there
+// are no punishment mechanics.
+const Gamification Key = "gamification"
+
 // Feature describes one optional feature and every surface it owns.
 type Feature struct {
 	// Key is the stable identifier (also the settings anchor and form field).
@@ -130,6 +140,20 @@ var registry = []Feature{
 		Default: false,
 		get:     func(c config.Features) bool { return c.Momentum },
 		set:     func(c *config.Features, on bool) { c.Momentum = on },
+	},
+	{
+		Key:   Gamification,
+		Label: "Gamification",
+		Blurb: "An arcade layer on the Now screen -- the day tape, personal records, the hot-streak pulse, and celebration moments -- every number judged from real recorded activity, never invented.",
+		Surfaces: []string{
+			"the day tape on Now",
+			"the personal-records rail on Now",
+			"the hot-streak pulse on Now",
+			"the record and plan-finish celebration moments on Now",
+		},
+		Default: false,
+		get:     func(c config.Features) bool { return c.Gamification },
+		set:     func(c *config.Features, on bool) { c.Gamification = on },
 	},
 }
 

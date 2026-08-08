@@ -42,7 +42,7 @@ var faviconSVG []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
+	"login", "overview", "now", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
 	"memories", "notes", "retrieval", "tasks", "plans", "labs", "trials", "gardener", "settings", "event", "error",
 	"feature_off",
 }

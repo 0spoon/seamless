@@ -141,6 +141,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/logout", formBodySmall, s.logout)
 
 	handle("GET /console/{$}", s.auth(s.overview))
+	handle("GET /console/now", s.auth(s.nowPage))
 	handle("GET /console/search", s.auth(s.searchPage))
 	handle("GET /console/interactions", s.auth(s.interactions))
 	handle("GET /console/sessions", s.auth(s.sessionsList))
@@ -959,11 +960,23 @@ func (s *Service) navCounts(ctx context.Context, feats config.Features) navCount
 	if !features.Enabled(feats, features.Research) {
 		counts.Labs, counts.Trials = 0, 0
 	}
+	// The Now badge is the live agent count -- the one sidebar number that is a
+	// pulse rather than an inventory. Same best-effort rule as the rest.
+	ttl := s.cfg.SessionIdleTTL
+	if ttl <= 0 {
+		ttl = core.SessionIdleTTL
+	}
+	if liveN, lerr := store.LiveSessionCount(ctx, s.cfg.DB, time.Now().UTC().Add(-ttl)); lerr != nil {
+		s.logger.Warn("console: nav live count", "error", lerr)
+	} else {
+		counts.Now = liveN
+	}
 	return counts
 }
 
 // navCounts are the sidebar badge numbers.
 type navCounts struct {
+	Now       int // live agents right now
 	Sessions  int
 	Memories  int
 	Notes     int

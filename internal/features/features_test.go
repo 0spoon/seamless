@@ -34,11 +34,26 @@ func TestRegistry_MomentumEntry(t *testing.T) {
 	require.False(t, f.Default, "optional features ship off")
 }
 
-func TestRegistry_OrderIsResearchThenMomentum(t *testing.T) {
+func TestRegistry_GamificationEntry(t *testing.T) {
+	f, ok := Get(Gamification)
+	require.True(t, ok)
+	require.Equal(t, Key("gamification"), f.Key)
+	require.Equal(t, "Gamification", f.Label)
+	require.NotEmpty(t, f.Blurb)
+	require.Empty(t, f.Tools, "gamification owns no MCP tools -- its surfaces live inside the Now screen")
+	require.Empty(t, f.NavIDs, "gamification owns no screens of its own -- the Now screen itself is core")
+	require.Empty(t, f.RoutePrefixes)
+	require.Empty(t, f.Skill)
+	require.NotEmpty(t, f.Surfaces, "each in-page surface registers its owner-facing phrase")
+	require.False(t, f.Default, "optional features ship off")
+}
+
+func TestRegistry_OrderIsResearchThenMomentumThenGamification(t *testing.T) {
 	reg := Registry()
-	require.Len(t, reg, 2)
+	require.Len(t, reg, 3)
 	require.Equal(t, Research, reg[0].Key, "registry order is the Settings card order")
 	require.Equal(t, Momentum, reg[1].Key)
+	require.Equal(t, Gamification, reg[2].Key)
 }
 
 func TestRegistry_WellFormed(t *testing.T) {

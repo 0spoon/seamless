@@ -385,8 +385,9 @@ const (
 	EventNoteWritten      EventKind = "note.written"
 	EventNoteRead         EventKind = "note.read" // an agent read a note by id or slug (payload: slug); the note-side twin of memory.read
 	EventTrialRecorded    EventKind = "trial.recorded"
-	EventMemoryFirstReuse EventKind = "memory.first_reuse"    // momentum: a memory's first read by a session other than its writer (payload: name, kind, writer, reader); latched once per memory ever
-	EventProjectStage     EventKind = "project.stage_reached" // momentum: a project's latched maturity stage advanced (payload: stage, from); minted once per stage per project
+	EventMemoryFirstReuse EventKind = "memory.first_reuse"         // momentum: a memory's first read by a session other than its writer (payload: name, kind, writer, reader); latched once per memory ever
+	EventProjectStage     EventKind = "project.stage_reached"      // momentum: a project's latched maturity stage advanced (payload: stage, from); minted once per stage per project
+	EventRecordBroken     EventKind = "gamification.record_broken" // gamification: a latched personal record advanced (payload: record, label, n, prev); minted at most once per record per local day
 	EventTaskTransition   EventKind = "task.transition"
 	EventInjected         EventKind = "retrieval.injected"
 	EventGardenerAction   EventKind = "gardener.action"

@@ -86,6 +86,7 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.utility_mode` | string | `auto` |
 | `features.research` | bool | - |
 | `features.momentum` | bool | - |
+| `features.gamification` | bool | - |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -250,6 +251,11 @@ features:
   # streaks, knowledge payoff moments, and project maturity stages.
   # env: SEAMLESS_FEATURES_MOMENTUM
   momentum: false
+  # The arcade layer of the Now screen: the day tape, personal records, the
+  # hot-streak pulse, and celebration moments. Every number is judged from
+  # real recorded activity; off, the Now screen carries no trace of it.
+  # env: SEAMLESS_FEATURES_GAMIFICATION
+  gamification: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

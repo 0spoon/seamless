@@ -1,0 +1,332 @@
+{{define "content"}}
+{{with .Data}}
+<div class="now-page">
+
+  {{/* .topbar carries the live pill the SSE refresher toggles (layout.html
+       queries `.topbar .live`). The pulse is fleet-wide by design. */}}
+  <header class="now-titlebar topbar">
+    <h1>Now</h1>
+    <span class="live now-title-live"><span class="live-dot"></span>{{.AgentsLive}} agent{{if ne .AgentsLive 1}}s{{end}} live</span>
+    <span class="now-title-spacer"></span>
+    {{with .Arcade}}{{if .Hot.Count}}<span class="now-hot{{if .Hot.Hot}} on{{end}}" title="{{.Hot.Count}} events recorded in the last ten minutes">{{icon "flame"}}{{.Hot.Count}} in 10m</span>{{end}}{{end}}
+    <span class="now-pulse" title="Fleet-wide event volume, all kinds, last hour">{{sparkLine .Pulse}}<strong>{{compactNum .EventsHour}}</strong>events/h</span>
+  </header>
+
+  {{with .Arcade}}
+  <section class="now-tape" aria-label="Day tape">
+    <span class="now-tape-label">{{icon "zap"}}Today</span>
+    {{range .Tape}}
+    <span class="now-tape-cell{{if .Tone}} {{.Tone}}{{end}}" id="tape-{{.Key}}" title="trailing week: {{.Avg}} per day">
+      <strong>{{.N}}</strong><span>{{.Label}}</span><small>avg {{.Avg}}/day</small>
+    </span>
+    {{end}}
+  </section>
+  {{end}}
+
+  {{if or .Scopes .Scope}}
+  <nav class="now-scopes" aria-label="Filter by project" data-seam-query>
+    <a class="now-scope{{if not .Scope}} active{{end}}"{{if not .Scope}} aria-current="page"{{end}} href="/console/now">all</a>
+    {{range .Scopes}}
+    <a class="now-scope{{if .Active}} active{{end}}"{{if .Active}} aria-current="page"{{end}} href="/console/now?scope={{.Slug}}">{{.Slug}}{{if .Live}}<span class="n">{{.Live}}</span>{{end}}</a>
+    {{end}}
+  </nav>
+  {{end}}
+
+  <section class="now-zone" aria-label="Agents on duty">
+    <header class="now-zone-head">
+      <h2>On duty<strong>{{.AgentsLive}}</strong></h2>
+      <span class="now-zone-note">{{.InFlight}} task{{if ne .InFlight 1}}s{{end}} in flight &middot; heartbeats within the idle window</span>
+      <a href="/console/sessions">All sessions {{icon "arrow-right"}}</a>
+    </header>
+    {{if .Agents}}
+    <div class="now-agents">
+      {{range .Agents}}
+      <article class="now-agent" data-fresh="{{.Fresh}}" id="ag-{{.ID}}">
+        <header class="now-agent-head">
+          <span class="now-beat" title="last heartbeat {{ts .Beat}}"><span class="live-dot"></span></span>
+          <a class="now-agent-name mono" href="/console/sessions/{{.ID}}" title="open session">{{.Name}}</a>
+          {{copyBtn .Name}}
+          {{agentPill .Harness .Model}}
+          <form class="star-form" method="post" action="/console/favorites/session/{{.ID}}">
+            <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
+            <input type="hidden" name="next" value="/console/now">
+            <button class="star{{if .Favorite}} on{{end}}" type="submit" aria-pressed="{{if .Favorite}}true{{else}}false{{end}}" title="{{if .Favorite}}Unstar{{else}}Star{{end}} this session">{{icon "star"}}</button>
+          </form>
+        </header>
+        <div class="now-agent-meta">
+          <a class="now-proj" href="/console/projects/{{.Project}}">{{icon "folder-open"}}{{.Project}}</a>
+          <span title="last heartbeat {{ts .Beat}}">beat {{ago .Beat}}</span>
+          {{if .Dur}}<span>up {{.Dur}}</span>{{end}}
+          {{if .Tokens}}<span title="cumulative tokens this session">{{compactNum .Tokens}} tok</span>{{end}}
+        </div>
+        {{if .Claims}}
+        <div class="now-claims">
+          {{range .Claims}}
+          <a class="now-claim" id="cl-{{.ID}}" href="/console/tasks/{{.ID}}">
+            {{icon "lock"}}
+            <span class="t">{{.Title}}</span>
+            {{if .PlanSlug}}<span class="now-chip plan">plan:{{.PlanSlug}}</span>{{end}}
+            {{if .LeaseExp}}<span class="lease" data-lease-exp="{{.LeaseExp}}">{{icon "timer"}}<span class="v">{{.LeaseLeft}}</span></span>{{end}}
+          </a>
+          {{end}}
+        </div>
+        {{else}}
+        <div class="now-roam">no claim held &mdash; roaming</div>
+        {{end}}
+        {{if .Trail}}
+        <ul class="now-trail">
+          {{range .Trail}}<li id="tr-{{.ID}}"><time title="{{ts .When}}">{{ago .When}}</time><span>{{.Summary}}</span></li>{{end}}
+        </ul>
+        {{end}}
+        {{with .Contrib}}
+        <div class="now-contrib" title="what this agent shipped today (judged from its events)">
+          <span{{if .Memories}} class="lit"{{end}}>{{.Memories}} mem</span>
+          <span{{if .Notes}} class="lit"{{end}}>{{.Notes}} notes</span>
+          <span{{if .Closed}} class="lit"{{end}}>{{.Closed}} closed</span>
+        </div>
+        {{end}}
+      </article>
+      {{end}}
+    </div>
+    {{else}}
+    <div class="now-empty">{{icon "radar"}}<span>All quiet &mdash; no agent has heartbeat inside the idle window.
+      Sessions appear here the moment one starts working.</span></div>
+    {{end}}
+  </section>
+
+  {{if .Loose}}
+  <section class="now-zone" aria-label="Loose ends">
+    <header class="now-zone-head">
+      <h2>Loose ends<strong>{{len .Loose}}</strong></h2>
+      <span class="now-zone-note">in flight, but no live agent is carrying it</span>
+    </header>
+    <div class="now-loose-list">
+      {{range .Loose}}
+      <div class="now-loose" data-state="{{.State}}" id="lo-{{.ID}}">
+        {{icon "triangle-alert"}}
+        <a class="t" href="/console/tasks/{{.ID}}">{{.Title}}</a>
+        <span class="now-chip proj">{{.Project}}</span>
+        {{if .PlanSlug}}<span class="now-chip plan">plan:{{.PlanSlug}}</span>{{end}}
+        {{if .Holder}}<span class="now-holder" title="holding session">{{icon "lock"}}{{.Holder}}</span>{{end}}
+        <span class="kind warn">{{.State}}</span>
+        {{if .LeaseExp}}<span class="lease{{if .Releasable}} lease-lapsed{{end}}" data-lease-exp="{{.LeaseExp}}">{{icon "timer"}}<span class="v">{{.LeaseLeft}}</span></span>{{end}}
+        <time title="{{ts .Since}}">moved {{ago .Since}}</time>
+        {{/* No confirm, same rule as the workspace strip: the lease is already
+             dead, so there is no live holder to interrupt, only a stale lock. */}}
+        {{if .Releasable}}
+        <form method="post" action="/console/tasks/{{.ID}}/release">
+          <input type="hidden" name="next" value="/console/now">
+          <button class="link-act danger" type="submit">release claim</button>
+        </form>
+        {{end}}
+      </div>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
+  {{if .Plans}}
+  <section class="now-zone" aria-label="Plans in motion">
+    <header class="now-zone-head">
+      <h2>Plans in motion<strong>{{.Moving}}</strong></h2>
+      <span class="now-zone-note">moved within 24h; dimmed cards are resting</span>
+      <span class="now-rail-nav" hidden>
+        <button type="button" class="now-rail-btn" data-now-prev aria-label="Scroll to earlier plans">{{icon "chevron-left"}}</button>
+        <button type="button" class="now-rail-btn" data-now-next aria-label="Scroll to later plans">{{icon "chevron-right"}}</button>
+      </span>
+      <a href="/console/plans">All plans {{icon "arrow-right"}}</a>
+    </header>
+    <div class="now-plans" data-now-rail>
+      {{range .Plans}}
+      <a class="now-plan{{if not .Moving}} resting{{end}}" id="pl-{{.Project}}-{{.Slug}}" href="/console/projects/{{.Project}}?tab=tasks">
+        <span class="now-plan-top"><span class="mono nm">plan:{{.Slug}}</span><span class="now-plan-proj">{{.Project}}</span></span>
+        <span class="now-bar"><i class="done" style="width:{{.DonePct}}%"></i><i class="doing" style="width:{{.DoingPct}}%"></i></span>
+        <span class="now-plan-meta">{{.Done}}/{{.Total}} done{{if .InFlight}} &middot; {{.InFlight}} in flight{{end}}{{if .Claimable}} &middot; <b>{{.Claimable}} ready</b>{{end}} &middot; moved {{ago .Last}}</span>
+      </a>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
+
+  <div class="now-grid">
+    <section class="now-zone" aria-label="Up next">
+      <header class="now-zone-head">
+        <h2>Up next<strong>{{len .UpNext}}</strong></h2>
+        <span class="now-zone-note">claimable this instant, any project</span>
+        <a href="/console/tasks">All tasks {{icon "arrow-right"}}</a>
+      </header>
+      {{if .UpNext}}
+      <div class="now-ready-list">
+        {{range .UpNext}}
+        <div class="now-ready" id="up-{{.ID}}">
+          <span class="dot"></span>
+          <a class="t" href="/console/tasks/{{.ID}}">{{.Title}}</a>
+          <span class="now-chip proj">{{.Project}}</span>
+          {{if .PlanSlug}}<span class="now-chip plan">plan:{{.PlanSlug}}</span>{{end}}
+          {{if .Unblocks}}<span class="edge ok" title="closing this unblocks {{.Unblocks}} task{{if ne .Unblocks 1}}s{{end}}">{{icon "arrow-right"}}unblocks {{.Unblocks}}</span>{{end}}
+          <time title="{{ts .Created}}">{{ago .Created}}</time>
+        </div>
+        {{end}}
+      </div>
+      {{else}}
+      <div class="now-empty">{{icon "list-checks"}}<span>Nothing is claimable right now &mdash; every open task is blocked or already held.</span></div>
+      {{end}}
+    </section>
+
+    <aside class="now-rail-col">
+      {{with .Arcade}}
+      <section class="now-zone now-records" aria-label="Personal records">
+        <header class="now-zone-head"><h2>{{icon "trophy"}}Records</h2></header>
+        <ul class="now-record-list">
+          {{range .Records}}
+          <li class="now-record{{if .Today}} today{{end}}" id="rec-{{.Key}}">
+            <strong>{{.N}}</strong>
+            <span class="l">{{.Label}}</span>
+            {{if .Day}}<small>{{if .Today}}set today{{else}}{{.Day}}{{end}}</small>{{else}}<small>unset &mdash; today could be the day</small>{{end}}
+          </li>
+          {{end}}
+        </ul>
+        {{if .Moments}}
+        <div class="now-moments">
+          {{range .Moments}}<span class="now-moment" id="mo-{{.ID}}" data-moment="{{.ID}}">{{icon "zap"}}{{.Copy}}</span>{{end}}
+        </div>
+        {{end}}
+      </section>
+      {{end}}
+      <section class="now-zone" aria-label="The wire">
+        <header class="now-zone-head"><h2>The wire</h2><a href="/console/interactions">Interactions {{icon "arrow-right"}}</a></header>
+        {{if .Wire}}
+        <div class="now-wire">
+          {{range .Wire}}
+          <a id="{{.ID}}" class="now-evt" href="/console/events/{{.ID}}">
+            <time title="{{ts .When}}">{{ago .When}}</time>
+            <span class="kindchip">{{.Kind}}</span>
+            <p>{{.Summary}}</p>
+            <span class="scope">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
+          </a>
+          {{end}}
+        </div>
+        {{else}}<div class="now-empty">{{icon "activity"}}<span>Nothing on the wire yet.</span></div>{{end}}
+      </section>
+    </aside>
+  </div>
+
+</div><!-- .now-page -->
+{{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+window.SEAM_LIVE_ALL_KINDS = true; // the Now page IS the transport pulse: refresh on every kind
+(function () {
+  'use strict';
+  /* Lease countdowns. One interval, re-querying every tick so a morph that
+     replaced the rows is picked up without any cached node going stale. */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  setInterval(function () {
+    var now = Date.now();
+    document.querySelectorAll('.now-page [data-lease-exp]').forEach(function (el) {
+      var exp = Date.parse(el.getAttribute('data-lease-exp'));
+      var v = el.querySelector('.v');
+      if (isNaN(exp) || !v) return;
+      var left = Math.floor((exp - now) / 1000);
+      if (left <= 0) {
+        v.textContent = 'lapsed';
+        el.classList.add('lease-lapsed');
+        el.classList.remove('lease-warn');
+        return;
+      }
+      if (left >= 3600) v.textContent = Math.floor(left / 3600) + 'h ' + Math.floor((left % 3600) / 60) + 'm';
+      else v.textContent = Math.floor(left / 60) + ':' + pad(left % 60);
+      el.classList.remove('lease-lapsed');
+      el.classList.toggle('lease-warn', left < 300);
+    });
+  }, 1000);
+})();
+(function () {
+  'use strict';
+  /* Plans rail chevrons -- same contract as the Overview attention rail: all
+     state lives in the scroll position or is recomputed by sync(); listeners
+     are delegated because the live morph can replace the rail's nodes. */
+  function parts() {
+    var rail = document.querySelector('[data-now-rail]');
+    if (!rail) return null;
+    var sec = rail.closest('.now-zone');
+    return {
+      rail: rail,
+      nav: sec && sec.querySelector('.now-rail-nav'),
+      prev: sec && sec.querySelector('[data-now-prev]'),
+      next: sec && sec.querySelector('[data-now-next]')
+    };
+  }
+  function sync() {
+    var p = parts();
+    if (!p || !p.nav) return;
+    var overflow = p.rail.scrollWidth - p.rail.clientWidth > 4;
+    p.nav.hidden = !overflow;
+    if (!overflow) return;
+    if (p.prev) p.prev.disabled = p.rail.scrollLeft <= 2;
+    if (p.next) p.next.disabled = p.rail.scrollLeft >= p.rail.scrollWidth - p.rail.clientWidth - 2;
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-now-prev], [data-now-next]');
+    if (!btn) return;
+    var p = parts();
+    if (!p) return;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var dir = btn.hasAttribute('data-now-next') ? 1 : -1;
+    p.rail.scrollBy({ left: dir * Math.max(p.rail.clientWidth * 0.9, 200), behavior: reduce ? 'auto' : 'smooth' });
+  });
+  document.addEventListener('scroll', function (e) {
+    if (e.target && e.target.nodeType === 1 && e.target.hasAttribute('data-now-rail')) sync();
+  }, true);
+  window.addEventListener('resize', sync);
+  window.addEventListener('load', sync);
+  document.addEventListener('seam:content-updated', sync);
+  sync();
+})();
+{{if .Data.Arcade}}
+(function () {
+  'use strict';
+  /* Celebration moments (gamification). Rendered only while the arcade is on,
+     so a disabled install's page carries zero trace of the feature -- script
+     included. A [data-moment] chip already on screen at load is a fact, not
+     news -- prime it silently. A chip that NEWLY appears during a live morph
+     is news: toast it, and burst confetti unless motion is reduced. The
+     seen-set lives in this closure, which survives morphs (scripts are not
+     re-run by patchPage). */
+  var seen = {};
+  function prime() {
+    document.querySelectorAll('[data-moment]').forEach(function (el) { seen[el.getAttribute('data-moment')] = true; });
+  }
+  function burst(x, y) {
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    var box = document.createElement('div');
+    box.className = 'now-confetti';
+    box.setAttribute('aria-hidden', 'true');
+    for (var i = 0; i < 18; i++) {
+      var p = document.createElement('i');
+      p.style.setProperty('--cx', ((i * 137) % 100) + '%');
+      p.style.setProperty('--cd', (0.6 + ((i * 29) % 40) / 100) + 's');
+      p.style.setProperty('--ch', ((i * 47) % 360));
+      box.appendChild(p);
+    }
+    document.body.appendChild(box);
+    setTimeout(function () { box.remove(); }, 1600);
+  }
+  document.addEventListener('seam:content-updated', function () {
+    var fresh = [];
+    document.querySelectorAll('[data-moment]').forEach(function (el) {
+      var id = el.getAttribute('data-moment');
+      if (!seen[id]) { seen[id] = true; fresh.push(el); }
+    });
+    if (!fresh.length) return;
+    fresh.forEach(function (el) { el.classList.add('new'); });
+    if (window.SeamConsole && window.SeamConsole.flash) window.SeamConsole.flash(fresh[0].textContent.trim());
+    burst();
+  });
+  prime();
+})();
+{{end}}
+</script>
+{{end}}

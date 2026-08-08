@@ -145,6 +145,49 @@ Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 `active` count that an idle session inflates until the reaper runs.
 
+## Now
+
+`/console/now`
+
+The exploded live view: what every agent is doing right now, across every
+project and plan at once. Where the project workspace is task-centric, Now is
+agent-centric - the unit is the live session, and everything it holds rides its
+card. The sidebar entry's badge is the live agent count, and the page refreshes
+on **every** event kind (tool calls included - here they are the signal, not
+noise), morphing in place like every other screen.
+
+Top to bottom:
+
+- **The titlebar** - live agent count and the fleet-wide pulse: an events-per-
+  five-minutes sparkline over the last hour, all kinds, deliberately unfiltered
+  by scope.
+- **A scope strip** - one chip per project with a live agent (`?scope=<slug>`;
+  the empty project scope filters as `global`). Filtering narrows every zone
+  except the pulse.
+- **On duty** - one card per live session: harness+model pill, project, last
+  heartbeat (cards are toned hot/warm/quiet by heartbeat age), session wall
+  clock, cumulative tokens, a star toggle, every claim it holds with a live
+  lease countdown, and a short trail of what it just produced. A live agent
+  holding nothing says so: "no claim held - roaming".
+- **Loose ends** - `in_progress` tasks no live agent is carrying: a lapsed
+  lease, a claimless start (`tasks_update status=in_progress` without a
+  claim), or a holder that went quiet mid-lease. A lapsed claim offers
+  **release claim** with no confirmation - the lease is already dead, so there
+  is no live holder to interrupt, only a stale lock to clear.
+- **Plans in motion** - a horizontally scrolling rail of every incomplete plan
+  across every project, done/in-flight progress bars and ready counts, cards
+  dimmed once a plan has rested for 24h. Each links to its project's Plans &
+  tasks tab.
+- **Up next** - the cross-project ready queue: claimable this instant, plan
+  steps included, each naming what closing it would unblock.
+- **The wire** - the freshest business events, scope-filtered.
+
+Everything links onward - sessions, tasks, plans, projects, events - and the
+lease countdowns tick client-side between refreshes. With the
+[gamification](#optional-features) feature on, the page also carries the day
+tape, the personal-records rail, the hot-streak pulse, and celebration moments;
+off (the default), none of that renders.
+
 ## Interactions
 
 `/console/interactions`
@@ -459,7 +502,7 @@ feature is, a generated line naming exactly what switching it off hides, and a
 live count of the data it holds either way ("Data kept: 12 trials across 3
 labs").
 
-There are two today:
+There are three today:
 
 **Research labs & trials** owns the [Labs](#labs) and [Trials](#trials)
 screens, the trials search scope, and the `lab_open`, `trial_record`, and
@@ -495,6 +538,32 @@ Momentum keeps the console's judged-numbers ethos: every number is real and
 verifiable, empty states say so honestly, and there are no punishment mechanics
 -- an inactive day is an empty cell, never a warning, and nothing nags or
 expires. Off (the default), none of it renders and none of it is computed.
+
+**Gamification** is the arcade layer of the [Now](#now) screen. Where momentum
+asks "is this knowledge practice building on itself?", gamification plays back
+"how hard is the fleet running right now?" - and an owner who enjoys one
+framing may find the other noisy, so they toggle separately. It owns no screens
+or tools of its own; turning it on adds four surfaces to Now:
+
+- **The day tape**: today's judged output - tasks closed, memories and notes
+  written, plans touched, sessions started - each cell against its trailing
+  7-day daily average.
+- **The personal-records rail**: latched bests (most tasks closed in a day,
+  most memories written in a day, most agents live at once). Records only ever
+  move forward, like maturity stages; an unset record reads "today could be
+  the day".
+- **The hot-streak pulse**: the last ten minutes' event count beside the
+  titlebar pulse, catching fire past a fixed floor. The count is shown
+  verbatim either way, so the claim stays verifiable.
+- **Celebration moments**: a record falling or a plan shipping its last step
+  today renders a moment chip - and when one lands while you are watching, a
+  toast and a brief confetti burst (skipped under reduced motion). A record
+  crossing is minted into the event ledger at most once per record per day.
+
+The same guardrails as momentum apply: every number is judged from recorded
+activity, never invented, and there are no punishment mechanics - a quiet day
+is an empty tape, never a warning. Off (the default), none of it is computed,
+no record latch is written, and the Now page carries zero trace of it.
 
 **Nothing is ever deleted.** Switching a feature off gates exposure and nothing
 else: the trials stay in the database, its screens answer with a short "switched

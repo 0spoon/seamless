@@ -570,6 +570,21 @@ func ListSessions(ctx context.Context, db *sql.DB, status core.SessionStatus, si
 	return out, rows.Err()
 }
 
+// LiveSessionCount counts the sessions live right now: active and heartbeating
+// on or after the cutoff -- the same predicate as ProjectsWithCounts' live
+// column and Session.LiveAsOf. It backs the console's Now nav badge, so it is
+// one scalar query, safe on every page load.
+func LiveSessionCount(ctx context.Context, db *sql.DB, cutoff time.Time) (int, error) {
+	var n int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sessions WHERE status = 'active' AND updated_at >= ?`,
+		core.FormatTime(cutoff)).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("store.LiveSessionCount: %w", err)
+	}
+	return n, nil
+}
+
 // LatestActiveAmbientSessionForProject returns the most recently updated active
 // ambient (cc/* or cx/*) session in the given project, updated within the window, or
 // found=false when none. It backs the MCP write-scope fallback: an agent that

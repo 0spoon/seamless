@@ -129,6 +129,11 @@ features:
   # streaks, knowledge payoff moments, and project maturity stages.
   # env: SEAMLESS_FEATURES_MOMENTUM
   momentum: false
+  # The arcade layer of the Now screen: the day tape, personal records, the
+  # hot-streak pulse, and celebration moments. Every number is judged from
+  # real recorded activity; off, the Now screen carries no trace of it.
+  # env: SEAMLESS_FEATURES_GAMIFICATION
+  gamification: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

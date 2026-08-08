@@ -91,6 +91,7 @@ func TestQueryForms_UseInPlaceNavigation(t *testing.T) {
 func TestQueryControls_AreWiredAcrossConsole(t *testing.T) {
 	wantMarkers := map[string]int{
 		"overview":  1,
+		"now":       1,
 		"retrieval": 1,
 		"projects":  4,
 		"context":   2,

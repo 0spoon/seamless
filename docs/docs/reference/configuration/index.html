@@ -422,6 +422,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 <td>-</td>
 </tr>
 <tr>
+<td><code>features.gamification</code></td>
+<td>bool</td>
+<td>-</td>
+</tr>
+<tr>
 <td><code>search.semantic_floor</code></td>
 <td>float64</td>
 <td><code>0.3</code></td>
@@ -692,6 +697,11 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># streaks, knowledge payoff moments, and project maturity stages.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_FEATURES_MOMENTUM</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">momentum</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># The arcade layer of the Now screen: the day tape, personal records, the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># hot-streak pulse, and celebration moments. Every number is judged from</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># real recorded activity; off, the Now screen carries no trace of it.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_FEATURES_GAMIFICATION</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">gamification</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># Console search (the full page&#39;s fused semantic+lexical retrieval). Agent</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># recall is not affected by these knobs.</span><span class="w">

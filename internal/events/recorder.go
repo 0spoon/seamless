@@ -241,6 +241,34 @@ func (r *Recorder) BySession(ctx context.Context, sessionID string, limit int) (
 	return scanEvents(rows)
 }
 
+// LatestBySession returns a session's most recent events of the given kinds,
+// newest first, capped at limit (default 50). Unlike BySession -- whose limit
+// truncates from the oldest side, for timelines -- this reads from the newest
+// side, for "what did this agent just do" trails. An empty kinds slice spans
+// all kinds.
+func (r *Recorder) LatestBySession(ctx context.Context, sessionID string, kinds []core.EventKind, limit int) ([]core.Event, error) {
+	if sessionID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload
+	      FROM events WHERE session_id = ?`
+	args := []any{sessionID}
+	if ph, kArgs := kindArgs(kinds); ph != "" {
+		q += ` AND kind IN (` + ph + `)`
+		args = append(args, kArgs...)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.LatestBySession: %w", err)
+	}
+	return scanEvents(rows)
+}
+
 // ByKinds returns events of any of the given kinds, newest first, strictly older
 // than the compound (beforeTS, beforeID) cursor when it is set -- so a caller can
 // page backwards through the Interactions feed without missing or repeating rows
@@ -380,6 +408,40 @@ func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, pro
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("events.KindTimeline: %w", err)
+	}
+	return out, nil
+}
+
+// TimestampsSince returns the timestamps of every event at or after since,
+// oldest first, capped at limit (default 2000) -- the minimal projection behind
+// the Now screen's activity pulse, which buckets them client-blind into a
+// per-interval histogram. All kinds count: the pulse measures how hard the
+// fleet is running, and a tool call is exactly that.
+func (r *Recorder) TimestampsSince(ctx context.Context, since time.Time, limit int) ([]time.Time, error) {
+	if limit <= 0 {
+		limit = 2000
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT ts FROM events WHERE ts >= ? ORDER BY ts ASC, id ASC LIMIT ?`,
+		core.FormatTime(since), limit)
+	if err != nil {
+		return nil, fmt.Errorf("events.TimestampsSince: %w", err)
+	}
+	defer rows.Close()
+	var out []time.Time
+	for rows.Next() {
+		var tsStr string
+		if err := rows.Scan(&tsStr); err != nil {
+			return nil, fmt.Errorf("events.TimestampsSince scan: %w", err)
+		}
+		ts, err := core.ParseTime(tsStr)
+		if err != nil {
+			return nil, fmt.Errorf("events.TimestampsSince time: %w", err)
+		}
+		out = append(out, ts)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("events.TimestampsSince: %w", err)
 	}
 	return out, nil
 }

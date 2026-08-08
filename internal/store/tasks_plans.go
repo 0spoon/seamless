@@ -118,19 +118,24 @@ func planRollups(ctx context.Context, db *sql.DB, project string) ([]PlanRollup,
 	return plans, nil
 }
 
-// FinishLinePlan is one near-done plan for the momentum finish-line card: its
-// rollup, the project it belongs to, and the exact remaining step titles.
-type FinishLinePlan struct {
+// ProjectPlan is a plan rollup paired with the project that owns it, for the
+// cross-project surfaces (a plan is keyed by project+slug, never slug alone).
+type ProjectPlan struct {
 	PlanRollup
-	Project   string   `json:"project"`
-	Remaining []string `json:"remaining"`
+	Project string `json:"project"`
 }
 
-// FinishLinePlans returns every active plan at the finish line (AtFinishLine)
-// across all projects, most recently active first, each carrying the titles of
-// its not-yet-closed steps oldest-first. A momentum-only surface: callers gate
-// on the feature before asking, so a disabled install never runs the query.
-func FinishLinePlans(ctx context.Context, db *sql.DB) ([]FinishLinePlan, error) {
+// AllPlanRollups returns a rollup for every plan across every project, complete
+// or not, most recently active first. It backs the Now screen's moving-plans
+// rail; per-project views use PlanRollupsForProject.
+func AllPlanRollups(ctx context.Context, db *sql.DB) ([]ProjectPlan, error) {
+	return allPlanRollups(ctx, db)
+}
+
+// allPlanRollups is the shared all-projects grouped query: the same aggregate
+// as planRollups with project_slug in the grouping key, so the per-project and
+// cross-project views cannot drift.
+func allPlanRollups(ctx context.Context, db *sql.DB) ([]ProjectPlan, error) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT project_slug, plan_slug,
 		       COUNT(*),
@@ -147,25 +152,49 @@ func FinishLinePlans(ctx context.Context, db *sql.DB) ([]FinishLinePlan, error) 
 		 GROUP BY project_slug, plan_slug
 		 ORDER BY MAX(updated_at) DESC, project_slug ASC, plan_slug ASC`)
 	if err != nil {
-		return nil, fmt.Errorf("store.FinishLinePlans: %w", err)
+		return nil, fmt.Errorf("store.allPlanRollups: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
-	var plans []FinishLinePlan
+	var plans []ProjectPlan
 	for rows.Next() {
-		var p FinishLinePlan
+		var p ProjectPlan
 		var last string
 		if err := rows.Scan(&p.Project, &p.Slug, &p.Total, &p.Done, &p.InFlight, &p.Claimable, &last); err != nil {
-			return nil, fmt.Errorf("store.FinishLinePlans: scan: %w", err)
+			return nil, fmt.Errorf("store.allPlanRollups: scan: %w", err)
 		}
 		if p.LastActivity, err = core.ParseTime(last); err != nil {
-			return nil, fmt.Errorf("store.FinishLinePlans: parse last activity: %w", err)
+			return nil, fmt.Errorf("store.allPlanRollups: parse last activity: %w", err)
 		}
-		if p.AtFinishLine() {
-			plans = append(plans, p)
-		}
+		plans = append(plans, p)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.allPlanRollups: %w", err)
+	}
+	return plans, nil
+}
+
+// FinishLinePlan is one near-done plan for the momentum finish-line card: its
+// rollup, the project it belongs to, and the exact remaining step titles.
+type FinishLinePlan struct {
+	PlanRollup
+	Project   string   `json:"project"`
+	Remaining []string `json:"remaining"`
+}
+
+// FinishLinePlans returns every active plan at the finish line (AtFinishLine)
+// across all projects, most recently active first, each carrying the titles of
+// its not-yet-closed steps oldest-first. A momentum-only surface: callers gate
+// on the feature before asking, so a disabled install never runs the query.
+func FinishLinePlans(ctx context.Context, db *sql.DB) ([]FinishLinePlan, error) {
+	all, err := allPlanRollups(ctx, db)
+	if err != nil {
 		return nil, fmt.Errorf("store.FinishLinePlans: %w", err)
+	}
+	var plans []FinishLinePlan
+	for _, p := range all {
+		if p.AtFinishLine() {
+			plans = append(plans, FinishLinePlan{PlanRollup: p.PlanRollup, Project: p.Project})
+		}
 	}
 	for i := range plans {
 		if plans[i].Remaining, err = planRemainingTitles(ctx, db, plans[i].Project, plans[i].Slug); err != nil {
