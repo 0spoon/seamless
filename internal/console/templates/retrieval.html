@@ -1,46 +1,37 @@
 {{define "content"}}
 {{with .Data}}
 <div class="retrieval-page" data-retrieval>
-  <header class="retrieval-hero">
-    <div class="retrieval-hero-copy">
-      <div class="retrieval-eyebrow">{{icon "brain"}} Context circulation</div>
-      <h1>Retrieval</h1>
-      <div class="sub">See which durable knowledge reached active agent sessions, what that context cost, and where the knowledge base is going quiet.</div>
-      <div class="retrieval-hero-tags" aria-label="Retrieval report status">
-        <span>{{icon "timer"}}{{.WindowLabel}} activity</span>
-        <span>{{icon "folder-tree"}}{{len .ByProject}} knowledge base{{if ne (len .ByProject) 1}}s{{end}} measured</span>
-        {{if .Stale}}<span class="warn">{{icon "triangle-alert"}}{{len .Stale}} stale memor{{if eq (len .Stale) 1}}y{{else}}ies{{end}}</span>{{else}}<span class="ok">{{icon "check"}}No stale knowledge</span>{{end}}
-      </div>
-    </div>
-
-    <div class="retrieval-instrument" aria-label="{{if .ActiveMemories}}{{.ReachRate}} percent knowledge reach in the {{.WindowLabel}} window{{else}}No active memories to measure{{end}}">
-      <div class="retrieval-reach-ring" style="--reach:{{.ReachRate}}">
-        <div class="retrieval-reach-core"><strong>{{if .ActiveMemories}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><span>reach</span></div>
-      </div>
-      <div class="retrieval-instrument-copy">
-        <span>Window reach</span>
-        {{if .ActiveMemories}}<strong>{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
-        <div class="judged-row">{{deltaChip .ReachDelta}}{{bandLine .ReachBand}}</div>
-        <small>{{.WindowLabel}} observation window{{if .PriorLabel}} &middot; {{.PriorLabel}}{{end}}{{if .CreatedInWindow}} &middot; +{{.CreatedInWindow}} new{{end}}{{if .RetiredInWindow}} &middot; &minus;{{.RetiredInWindow}} retired{{end}}</small>
-      </div>
-      <div class="retrieval-hero-metrics" aria-label="Retrieval volume and cost">
-        <div><div class="judged-row"><strong>{{.Injections}}</strong>{{deltaChip .InjectionsDelta}}</div><span>memory injections</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
-        <div><div class="judged-row"><strong>{{.SessionsReached}}</strong>{{deltaChip .SessionsDelta}}</div><span>sessions reached</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
-        <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
+  <header class="mv2-bar">
+    <h1 title="See which durable knowledge reached active agent sessions, what that context cost, and where the knowledge base is going quiet.">{{icon "brain"}}Retrieval</h1>
+    <span class="mv2-count" aria-label="{{.Injections}} memory injections across {{len .ByProject}} knowledge bases in {{.WindowLabel}}">
+      <strong>{{.Injections}}</strong>injection{{if ne .Injections 1}}s{{end}}<small>{{len .ByProject}} knowledge base{{if ne (len .ByProject) 1}}s{{end}} measured &middot; {{.WindowLabel}} view</small>
+    </span>
+    {{if .Stale}}<a class="retrieval-stale-jump" href="#retrieval-pressure-title">{{icon "triangle-alert"}}<span>{{len .Stale}} stale memor{{if eq (len .Stale) 1}}y{{else}}ies{{end}}</span></a>{{end}}
+    <span class="mv2-spacer"></span>
+    <div class="mv2-sort">
+      <span class="mv2-sort-label">Window</span>
+      <div class="seg" data-seam-query>
+        {{range .Windows}}<a class="{{if .Active}}on{{end}}"{{if .Active}} aria-current="page"{{end}} href="/console/retrieval?w={{.Key}}">{{.Label}}</a>{{end}}
       </div>
     </div>
   </header>
 
-  <nav class="retrieval-windowbar" aria-label="Retrieval observation window">
-    <div class="retrieval-window-copy">
-      <span>Observation window</span>
-      <strong>{{.WindowLabel}}</strong>
-      <small>Reach, volume, trend, kinds, projects, and hot memories follow this window.</small>
+  <section class="retrieval-instrument" aria-label="{{if .ActiveMemories}}{{.ReachRate}} percent knowledge reach in the {{.WindowLabel}} window{{else}}No active memories to measure{{end}}">
+    <div class="retrieval-reach-ring" style="--reach:{{.ReachRate}}">
+      <div class="retrieval-reach-core"><strong>{{if .ActiveMemories}}{{.ReachRate}}%{{else}}&mdash;{{end}}</strong><span>reach</span></div>
     </div>
-    <div class="retrieval-window-tabs" data-seam-query>
-      {{range .Windows}}<a class="{{if .Active}}active{{end}}"{{if .Active}} aria-current="page"{{end}} href="/console/retrieval?w={{.Key}}">{{.Label}}</a>{{end}}
+    <div class="retrieval-instrument-copy">
+      <span>Window reach</span>
+      {{if .ActiveMemories}}<strong>{{.MemoriesSurfaced}} of {{.ActiveMemories}} active memories surfaced</strong>{{else}}<strong>No active memories yet</strong>{{end}}
+      <div class="judged-row">{{deltaChip .ReachDelta}}{{bandLine .ReachBand}}</div>
+      <small>{{.WindowLabel}} observation window{{if .PriorLabel}} &middot; {{.PriorLabel}}{{end}}{{if .CreatedInWindow}} &middot; +{{.CreatedInWindow}} new{{end}}{{if .RetiredInWindow}} &middot; &minus;{{.RetiredInWindow}} retired{{end}}</small>
     </div>
-  </nav>
+    <div class="retrieval-instrument-metrics" aria-label="Retrieval volume and cost">
+      <div><div class="judged-row"><strong>{{.Injections}}</strong>{{deltaChip .InjectionsDelta}}</div><span>memory injections</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
+      <div><div class="judged-row"><strong>{{.SessionsReached}}</strong>{{deltaChip .SessionsDelta}}</div><span>sessions reached</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
+      <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
+    </div>
+  </section>
 
   <section class="retrieval-zone" aria-labelledby="retrieval-delivery-title">
     <header class="retrieval-zone-head">

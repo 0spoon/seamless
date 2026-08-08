@@ -33,11 +33,14 @@ func TestTheme_SemanticColorsAreLockedAcrossThemes(t *testing.T) {
 	}
 
 	// Search is the screen that drifted: it wore a coral wash that made the whole
-	// page read warm in the dark theme while every other screen read indigo.
-	heroAt := strings.Index(css, ".search-hero {")
-	require.NotEqual(t, -1, heroAt)
-	hero := css[heroAt : heroAt+strings.Index(css[heroAt:], "}")]
-	require.NotContains(t, hero, "--pop", "the search hero stays on the brand hue in both themes")
+	// page read warm in the dark theme while every other screen read indigo. The
+	// hero that carried the wash is retired -- Search opens with the shared
+	// compact title bar -- and the query chrome that remains stays on brand.
+	require.NotContains(t, css, ".search-hero", "the search hero was retired for the shared compact title bar")
+	queryAt := strings.Index(css, ".search.search-query {")
+	require.NotEqual(t, -1, queryAt)
+	query := css[queryAt : queryAt+strings.Index(css[queryAt:], "}")]
+	require.NotContains(t, query, "--pop", "the search query chrome stays on the brand hue in both themes")
 	require.NotContains(t, css, ".search-time-pills a.active { color: var(--pop-strong)")
 }
 

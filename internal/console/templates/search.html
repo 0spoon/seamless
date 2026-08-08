@@ -1,15 +1,12 @@
 {{define "content"}}
 {{with .Data}}
 {{$query := .Query}}{{$scope := .Scope}}{{$window := .Window}}{{$sort := .Sort}}{{$fav := .Fav}}
-<header class="search-hero">
-  <div class="search-hero-copy">
-    <div class="search-eyebrow">{{icon "brain"}} Knowledge explorer</div>
-    <h1>Search</h1>
-    <div class="sub">
-      {{if .Query}}{{.Total}} result{{if ne .Total 1}}s{{end}} for &ldquo;{{.Query}}&rdquo; in {{.WindowLabel}}{{else}}Everything the console can link to, in one query{{end}}
-    </div>
-  </div>
-  {{if .Query}}<div class="search-total" aria-label="{{.Total}} results"><strong>{{.Total}}</strong><span>matches</span></div>{{end}}
+<header class="mv2-bar">
+  <h1 title="Everything the console can link to, in one query.">{{icon "search"}}Search</h1>
+  {{if .Query}}<span class="mv2-count" aria-label="{{.Total}} results">
+    <strong>{{.Total}}</strong>match{{if ne .Total 1}}es{{end}}<small>for &ldquo;{{.Query}}&rdquo; &middot; {{.WindowLabel}}</small>
+  </span>{{end}}
+  <span class="mv2-spacer"></span>
 </header>
 
 <form class="search search-query" method="get" action="/console/search" data-seam-query>

@@ -15,10 +15,11 @@ func TestRetrievalCirculationReport_RendersNarrativeAndWindowState(t *testing.T)
 	body := page.Body.String()
 
 	require.Contains(t, body, `class="retrieval-page" data-retrieval`)
-	require.Contains(t, body, `class="retrieval-hero"`)
-	require.Contains(t, body, "Context circulation")
+	require.Contains(t, body, `class="mv2-bar"`)
+	require.Contains(t, body, `class="retrieval-instrument"`)
+	require.Contains(t, body, "Window reach")
 	require.Contains(t, body, "est. tokens injected")
-	require.Contains(t, body, `class="active" aria-current="page" href="/console/retrieval?w=7d"`)
+	require.Contains(t, body, `class="on" aria-current="page" href="/console/retrieval?w=7d"`)
 
 	for _, id := range []string{
 		"retrieval-delivery-title",
@@ -48,8 +49,8 @@ func TestRetrievalCirculationReport_StylesStayScopedAndResponsive(t *testing.T) 
 	retrievalCSS := css[retrievalAt:]
 
 	for _, selector := range []string{
-		".retrieval-hero {",
-		".retrieval-windowbar {",
+		".retrieval-instrument {",
+		".retrieval-stale-jump {",
 		".retrieval-flow {",
 		".retrieval-analysis-grid {",
 		".retrieval-scope-row {",
@@ -60,11 +61,11 @@ func TestRetrievalCirculationReport_StylesStayScopedAndResponsive(t *testing.T) 
 
 	stackAt := strings.Index(retrievalCSS, "@media (max-width: 1080px)")
 	require.NotEqual(t, -1, stackAt)
-	require.Contains(t, retrievalCSS[stackAt:], ".retrieval-hero { grid-template-columns: 1fr; }")
+	require.Contains(t, retrievalCSS[stackAt:], ".retrieval-instrument { grid-template-columns: 96px minmax(0, 1fr); }")
 	require.Contains(t, retrievalCSS[stackAt:], ".retrieval-analysis-grid, .retrieval-pressure-grid { grid-template-columns: 1fr; }")
 
 	phoneAt := strings.Index(retrievalCSS, "@media (max-width: 540px)")
 	require.NotEqual(t, -1, phoneAt)
-	require.Contains(t, retrievalCSS[phoneAt:], ".retrieval-window-tabs { width: 100%;")
+	require.Contains(t, retrievalCSS[phoneAt:], ".retrieval-instrument { grid-template-columns: 1fr;")
 	require.Contains(t, retrievalCSS[phoneAt:], ".retrieval-scope-row { grid-template-columns: 1fr;")
 }
