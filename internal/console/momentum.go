@@ -43,6 +43,23 @@ func (s *Service) projectStages(ctx context.Context, rows []store.ProjectBoardRo
 	return stages
 }
 
+// finishBar renders the finish-line card's thin progress bar: the plan's real
+// done/total share drawn in with the area-draw idiom (a pathLength-normalized
+// stroke, the chart draw-in register; reduced motion lands it at its final
+// width via the global rule). The claim stays verifiable on the surface: the
+// SVG title names done, total, and the integer percent -- floor math, the same
+// judgment AtFinishLine applies.
+func finishBar(p store.PlanRollup) template.HTML {
+	if p.Total <= 0 {
+		return ""
+	}
+	pct := p.Done * 100 / p.Total
+	title := template.HTMLEscapeString(fmt.Sprintf("%d of %d steps done -- %d%%", p.Done, p.Total, pct))
+	return template.HTML(fmt.Sprintf(
+		`<svg class="mom-fin-bar" viewBox="0 0 100 4" preserveAspectRatio="none" role="img" aria-label="%s"><title>%s</title><line class="mom-fin-track" x1="0" x2="100" y1="2" y2="2"/><line class="mom-fin-fill" x1="0" x2="%d" y1="2" y2="2" pathLength="1"/></svg>`,
+		title, title, pct))
+}
+
 // glintKind reports whether an event kind is one of the two momentum-born
 // celebration kinds whose Overview ledger row wears the mom-glint class -- the
 // hook the live-arrival wash rides (see console.css). Keyed on the kind, not

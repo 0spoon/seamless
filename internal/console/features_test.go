@@ -248,6 +248,7 @@ func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
 	page := getPeek(t, mux, "/console/").Body.String()
 	require.NotContains(t, page, "from shipped")
 	require.NotContains(t, page, `data-sev="ok"`)
+	require.NotContains(t, page, "mom-fin-bar", "off leaves no trace of the progress draw either")
 
 	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
 	page = getPeek(t, mux, "/console/").Body.String()
@@ -255,6 +256,11 @@ func TestOverviewFinishLineCard_FollowsTheMomentumFeature(t *testing.T) {
 	require.Contains(t, page, "left: write the docs")
 	require.Contains(t, page, `href="/console/plans/nearly"`)
 	require.Contains(t, page, `data-sev="ok"`)
+	require.Contains(t, page, `class="mom-fin-bar"`, "the card carries the progress draw")
+	require.Contains(t, page, `<line class="mom-fin-fill" x1="0" x2="80" y1="2" y2="2" pathLength="1"/>`,
+		"the fill's width is the rollup's real done/total share")
+	require.Contains(t, page, "<title>4 of 5 steps done -- 80%</title>",
+		"the percent is verifiable on the surface, done and total named verbatim")
 
 	// A plan under the line earns nothing even with the feature on: no card is
 	// the empty state.

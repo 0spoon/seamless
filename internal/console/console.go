@@ -452,6 +452,9 @@ type attnCard struct {
 	Title string
 	Sub   string
 	Href  string
+	// Bar is the finish-line card's progress draw (finishBar); empty on every
+	// other card, so the rest of the strip's markup is byte-identical.
+	Bar template.HTML
 }
 
 // liveSessionRow is one chip in the "live now" strip: a session heartbeating
@@ -816,6 +819,7 @@ func (s *Service) attentionCards(ctx context.Context, d overviewData) []attnCard
 				Title: p.Slug + " -- " + p.FinishLinePhrase(),
 				Sub:   "left: " + strings.Join(p.Remaining, " · "),
 				Href:  "/console/plans/" + p.Slug,
+				Bar:   finishBar(p.PlanRollup),
 			})
 		}
 	}

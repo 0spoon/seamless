@@ -32,7 +32,7 @@
       {{range .Attention}}
       <a class="ov2-attn-card" data-sev="{{.Sev}}" href="{{.Href}}">
         <span class="ov2-attn-ico">{{icon .Icon}}</span>
-        <span class="ov2-attn-copy"><strong>{{.Title}}</strong><span title="{{.Sub}}">{{.Sub}}</span></span>
+        <span class="ov2-attn-copy"><strong>{{.Title}}</strong><span title="{{.Sub}}">{{.Sub}}</span>{{.Bar}}</span>
         {{icon "arrow-right"}}
       </a>
       {{end}}

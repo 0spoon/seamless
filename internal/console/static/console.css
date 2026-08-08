@@ -4516,6 +4516,15 @@ button.star.on .ico { fill: currentColor; }
   50% { stroke-opacity: .4; stroke-width: 2.2; }
 }
 
+/* --- Momentum: finish-line progress draw (Overview attention strip) --------- */
+/* The plan's real done/total share on the finish-line card, drawn in with the
+   area-draw register (a pathLength-normalized stroke). The SVG's title carries
+   the verbatim done/total claim; the global reduced-motion rule lands the draw
+   at its final width with no motion. */
+.mom-fin-bar { display: block; width: 100%; height: 4px; margin-top: 6px; }
+.mom-fin-track { stroke: var(--border); stroke-width: 4; }
+.mom-fin-fill { stroke: var(--ok); stroke-width: 4; stroke-dasharray: 1; animation: area-draw 1.1s var(--ease-out) both; }
+
 /* --- Momentum: memory-of-the-month spotlight (Overview rail) ---------------- */
 .mom-spot-body { display: flex; flex-direction: column; gap: 3px; color: inherit; text-decoration: none; }
 .mom-spot-body:hover .mom-spot-name { text-decoration: underline; }
