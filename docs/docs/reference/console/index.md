@@ -512,17 +512,20 @@ agent never sees a tool for a screen you switched off.
 **Momentum** is gentle progress cues woven into existing screens -- plan finish
 lines, capture streaks, knowledge payoffs, and project growth -- judged from
 real activity, never invented. It owns no screens or tools of its own; turning
-it on adds four surfaces where you already look:
+it on adds seven surfaces where you already look:
 
 - **Plan finish-line cards** on the Overview attention strip: any plan at least
   80% done gets one positive card naming the exact remaining steps ("seambench
-  -- one step from shipped"), linking to the plan. The agent briefing's plan
+  -- one step from shipped"), linking to the plan, with a thin progress bar
+  drawn to the plan's exact done/total percent. The agent briefing's plan
   line carries the same emphasis, so agents are nudged to close it too.
 - **The capture calendar** on Sessions: a year of daily activity, cell
   intensity from sessions per day, a distinct dot on days that captured
   knowledge (a session left findings, a memory, a note, or a trial), and two
   quiet numbers -- the current capture streak and the longest ever. The streak
-  counts covered days, so it rewards capture, not raw usage.
+  counts covered days, so it rewards capture, not raw usage; a streak of seven
+  covered days or more earns a small flame beside the number, and the number
+  itself stays verbatim.
 - **Knowledge payoff moments**: the first time a memory is read by a session
   other than the one that wrote it, the moment lands in the activity ledger
   ("gotcha chroma-boot-race just paid off for the first time") -- once per
@@ -533,11 +536,36 @@ it on adds four surfaces where you already look:
   from real thresholds over age, memories, event volume, and reach. Stages
   never regress, and the pill's tooltip states exactly what the next stage
   asks for.
+- **The plan-shipped settle** on Plans: the task transition that closes a
+  plan's last step -- wherever it lands, an agent shipping over MCP included --
+  mints a once-ever plan.shipped moment. The plan's row settles with a single
+  wash when it happens while you are watching, the ledger renders it under its
+  own flag icon, and the Plans header counts the local month: "Plans shipped
+  this month: N".
+- **Milestone moments** in the activity ledger: a short latched set of honest
+  firsts and counts -- a project's 100th/500th/1000th memory, its 1000th
+  answered recall, its first supersession, its first shipped plan, and its
+  birthdays -- each minted once ever and rendered under an award glyph with
+  the exact claim ("100 memories written in seamless"). Milestones accumulate
+  in the ledger only; there is no trophy screen.
+- **Witnessed unlocks** on Settings: the utility-activation table's armed
+  note upgrades to the date each stage unlocked, so a latch that used to flip
+  silently is witnessed.
+
+Motion keeps one register: every animation plays once -- on a live arrival or
+on first render -- and nothing loops except the existing pulse idioms. A moment
+already on screen when the page loads renders plain; only a new arrival over
+the live feed animates. `prefers-reduced-motion` stills all of it, and the
+shipped-plan settle is the ceiling: no confetti and no toasts, which belong to
+gamification's arcade on Now.
 
 Momentum keeps the console's judged-numbers ethos: every number is real and
 verifiable, empty states say so honestly, and there are no punishment mechanics
 -- an inactive day is an empty cell, never a warning, and nothing nags or
-expires. Off (the default), none of it renders and none of it is computed.
+expires. Off (the default), none of it renders and none of it is computed: no
+latch moves and no moment is minted. Moments minted while it was on stay in
+the event history (nothing is ever deleted), though milestone rows leave the
+activity feeds until it returns.
 
 **Gamification** is the arcade layer of the [Now](#now) screen. Where momentum
 asks "is this knowledge practice building on itself?", gamification plays back
