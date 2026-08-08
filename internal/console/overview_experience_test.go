@@ -99,6 +99,16 @@ func TestOverview_AttentionStripOrdersBySeverityAndLinksOut(t *testing.T) {
 	require.NotEqual(t, -1, dangerAt)
 	require.NotEqual(t, -1, warnAt)
 	require.Less(t, dangerAt, warnAt)
+
+	// The strip is one scroll-snap rail with chevron paging, not a wrapping
+	// grid: the finish-line bucket is unbounded, and a second row would push
+	// the vitals below the fold. The chevrons ship hidden -- the page script
+	// reveals them only when the rail overflows.
+	require.Contains(t, body, `class="ov2-attn-rail" data-attn-rail`)
+	require.Contains(t, body, `class="ov2-attn-nav" hidden`)
+	require.Contains(t, body, `data-attn-prev`)
+	require.Contains(t, body, `data-attn-next`)
+	require.Contains(t, body, "Needs attention<strong>2</strong>")
 }
 
 func TestOverview_LiveStripListsHeartbeatingSessions(t *testing.T) {
@@ -157,7 +167,8 @@ func TestOverview_StylesStayScopedAndStackResponsively(t *testing.T) {
 	require.NotEqual(t, -1, at)
 	block := css[at:]
 	for _, rule := range []string{
-		".ov2-titlebar {", ".ov2-attn {", ".ov2-vitals {", ".ov2-live {",
+		".ov2-titlebar {", ".ov2-attn {", ".ov2-attn-rail {", ".ov2-attn-btn {",
+		".ov2-vitals {", ".ov2-live {",
 		".ov2-grid {", ".ov2-panel {", ".ov2-ledger {",
 	} {
 		require.Contains(t, block, rule)

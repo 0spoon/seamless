@@ -14,15 +14,29 @@
     <span class="ov2-observed"><strong>{{.CovTotal}}</strong>session{{if ne .CovTotal 1}}s{{end}} observed</span>
   </header>
 
+  {{/* One scroll-snap rail, never a wrapping grid: the finish-line bucket adds
+       a card per qualifying plan, and a second ragged row would push the vitals
+       below the fold. The chevrons ship hidden; the page script reveals them
+       only while the rail overflows and re-syncs after every live morph, which
+       resets attributes to what is rendered here. */}}
   {{if .Attention}}
   <section class="ov2-attn" aria-label="Needs attention">
-    {{range .Attention}}
-    <a class="ov2-attn-card" data-sev="{{.Sev}}" href="{{.Href}}">
-      <span class="ov2-attn-ico">{{icon .Icon}}</span>
-      <span class="ov2-attn-copy"><strong>{{.Title}}</strong><span>{{.Sub}}</span></span>
-      {{icon "arrow-right"}}
-    </a>
-    {{end}}
+    <header class="ov2-attn-head">
+      <span class="ov2-attn-label">Needs attention<strong>{{len .Attention}}</strong></span>
+      <span class="ov2-attn-nav" hidden>
+        <button type="button" class="ov2-attn-btn" data-attn-prev aria-label="Scroll to earlier cards">{{icon "chevron-left"}}</button>
+        <button type="button" class="ov2-attn-btn" data-attn-next aria-label="Scroll to later cards">{{icon "chevron-right"}}</button>
+      </span>
+    </header>
+    <div class="ov2-attn-rail" data-attn-rail>
+      {{range .Attention}}
+      <a class="ov2-attn-card" data-sev="{{.Sev}}" href="{{.Href}}">
+        <span class="ov2-attn-ico">{{icon .Icon}}</span>
+        <span class="ov2-attn-copy"><strong>{{.Title}}</strong><span title="{{.Sub}}">{{.Sub}}</span></span>
+        {{icon "arrow-right"}}
+      </a>
+      {{end}}
+    </div>
   </section>
   {{end}}
 
@@ -123,4 +137,55 @@
 
 </div><!-- .overview-page -->
 {{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function () {
+  'use strict';
+  /* The attention rail scrolls natively (snap points, touch, focus). This only
+     drives the chevrons and hides them while every card fits. All state lives
+     in the scroll position or is recomputed by sync(): the live morph resets
+     hidden/disabled to their server-rendered defaults, so nothing here may
+     depend on an attribute surviving a refresh. Listeners are delegated to the
+     document because the morph can replace the rail's nodes. */
+  function parts() {
+    var rail = document.querySelector('[data-attn-rail]');
+    if (!rail) return null;
+    var sec = rail.closest('.ov2-attn');
+    return {
+      rail: rail,
+      nav: sec && sec.querySelector('.ov2-attn-nav'),
+      prev: sec && sec.querySelector('[data-attn-prev]'),
+      next: sec && sec.querySelector('[data-attn-next]')
+    };
+  }
+  function sync() {
+    var p = parts();
+    if (!p || !p.nav) return;
+    var overflow = p.rail.scrollWidth - p.rail.clientWidth > 4;
+    p.nav.hidden = !overflow;
+    if (!overflow) return;
+    if (p.prev) p.prev.disabled = p.rail.scrollLeft <= 2;
+    if (p.next) p.next.disabled = p.rail.scrollLeft >= p.rail.scrollWidth - p.rail.clientWidth - 2;
+  }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest && e.target.closest('[data-attn-prev], [data-attn-next]');
+    if (!btn) return;
+    var p = parts();
+    if (!p) return;
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var dir = btn.hasAttribute('data-attn-next') ? 1 : -1;
+    p.rail.scrollBy({ left: dir * Math.max(p.rail.clientWidth * 0.9, 200), behavior: reduce ? 'auto' : 'smooth' });
+  });
+  /* scroll does not bubble; capture catches the rail's own scrolls. */
+  document.addEventListener('scroll', function (e) {
+    if (e.target && e.target.nodeType === 1 && e.target.hasAttribute('data-attn-rail')) sync();
+  }, true);
+  window.addEventListener('resize', sync);
+  window.addEventListener('load', sync);
+  document.addEventListener('seam:content-updated', sync);
+  sync();
+})();
+</script>
 {{end}}

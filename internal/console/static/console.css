@@ -4133,15 +4133,44 @@ button.star.on .ico { fill: currentColor; }
 .ov2-observed { font-size: var(--text-xs); color: var(--faint); white-space: nowrap; }
 .ov2-observed strong { margin-right: 4px; font-family: var(--font-display); font-size: var(--text-md); color: var(--text-primary); }
 
-/* attention strip -- severity-ordered, one card per non-empty bucket */
-.ov2-attn { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; margin-bottom: 18px; }
+/* attention strip -- severity-ordered, one card per non-empty bucket. The rail
+   scroll-snaps horizontally instead of wrapping: the finish-line bucket is
+   unbounded (a card per qualifying plan), and a ragged second row would push
+   the vitals below the fold. Chevrons ship hidden; the overview page script
+   reveals them only while the rail overflows. */
+.ov2-attn { margin-bottom: 18px; }
+.ov2-attn-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.ov2-attn-label {
+  display: inline-flex; align-items: baseline; gap: 7px;
+  font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
+  letter-spacing: var(--tracking-wider); color: var(--text-muted);
+}
+.ov2-attn-label strong { font-family: var(--font-mono); font-size: var(--text-2xs); font-weight: 600; color: var(--faint); }
+.ov2-attn-nav { margin-left: auto; display: inline-flex; gap: 4px; }
+.ov2-attn-nav[hidden] { display: none; } /* display beats the hidden attribute otherwise */
+.ov2-attn-btn {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-muted); cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+.ov2-attn-btn:hover:not(:disabled) { color: var(--text-primary); border-color: var(--border-strong); }
+.ov2-attn-btn:disabled { opacity: .35; cursor: default; }
+.ov2-attn-btn .ico { width: 14px; height: 14px; }
+.ov2-attn-rail {
+  display: flex; align-items: stretch; gap: 10px; overflow-x: auto;
+  scroll-snap-type: x proximity; scrollbar-width: none;
+  padding: 2px; margin: -2px; /* room for the cards' shadow and focus ring */
+}
+.ov2-attn-rail::-webkit-scrollbar { display: none; }
 .ov2-attn-card {
+  flex: 1 0 300px; scroll-snap-align: start;
   display: flex; align-items: center; gap: 12px; padding: 12px 14px;
   background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--border-strong);
   border-radius: var(--radius-md); box-shadow: var(--shadow-xs); color: inherit; text-decoration: none;
-  transition: box-shadow var(--dur-fast) var(--ease-out);
+  transition: box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
-.ov2-attn-card:hover { box-shadow: var(--shadow-md); text-decoration: none; }
+.ov2-attn-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); text-decoration: none; }
 .ov2-attn-card[data-sev="danger"] { border-left-color: var(--danger); }
 .ov2-attn-card[data-sev="warn"]   { border-left-color: var(--warn); }
 .ov2-attn-card[data-sev="info"]   { border-left-color: var(--brand); }
@@ -4154,8 +4183,12 @@ button.star.on .ico { fill: currentColor; }
 .ov2-attn-card[data-sev="ok"]     .ov2-attn-ico { background: var(--ok-soft); color: var(--ok); }
 .ov2-attn-copy { flex: 1; min-width: 0; }
 .ov2-attn-copy strong { display: block; font-size: var(--text-sm); font-weight: 600; color: var(--text-primary); }
-.ov2-attn-copy span { font-size: var(--text-xs); color: var(--text-muted); }
-.ov2-attn-card > .ico-arrow-right { flex: none; width: 14px; height: 14px; color: var(--faint); }
+.ov2-attn-copy span {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: var(--text-xs); color: var(--text-muted);
+}
+.ov2-attn-card > .ico-arrow-right { flex: none; width: 14px; height: 14px; color: var(--faint); transition: transform var(--dur-fast) var(--ease-out); }
+.ov2-attn-card:hover > .ico-arrow-right { transform: translateX(2px); }
 
 /* vitals -- number, comparison, denominator, verdict, shape */
 .ov2-vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
@@ -4267,13 +4300,15 @@ button.star.on .ico { fill: currentColor; }
 .ov2-ledger { display: flex; flex-direction: column; }
 
 @media (max-width: 1100px) {
-  .ov2-vitals, .ov2-attn { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ov2-vitals { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ov2-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 760px) {
   .ov2-titlebar { flex-wrap: wrap; }
   .ov2-window-tabs { order: 9; }
-  .ov2-vitals, .ov2-attn { grid-template-columns: 1fr; }
+  .ov2-vitals { grid-template-columns: 1fr; }
+  /* one card plus a peek of the next: the peek is what says "swipe" */
+  .ov2-attn-card { flex-basis: min(300px, 82vw); }
 }
 
 /* ===========================================================================
