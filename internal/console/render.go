@@ -104,6 +104,7 @@ var funcs = template.FuncMap{
 	"evtTone":       evtTone,
 	"evtIcon":       evtIcon,
 	"evtSev":        evtSev,
+	"glint":         glintKind,
 	"rowSev":        rowSev,
 	"deltaChip":     deltaChip,
 	"bandLine":      bandLine,
@@ -166,6 +167,10 @@ func evtIcon(kind string) string {
 		return "git-fork"
 	case kind == "project.isolation.changed":
 		return "lock"
+	case kind == "memory.first_reuse":
+		return "zap"
+	case kind == "project.stage_reached":
+		return "trending-up"
 	case strings.HasPrefix(kind, "plan."):
 		return "map"
 	default:

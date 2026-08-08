@@ -124,7 +124,7 @@
     {{if .Recent}}
     <div class="ov2-ledger">
       {{range .Recent}}
-      <a id="{{.ID}}" class="ov2-evt" data-sev="{{evtSev .Kind}}" href="/console/events/{{.ID}}">
+      <a id="{{.ID}}" class="ov2-evt{{if glint .Kind}} mom-glint{{end}}" data-sev="{{evtSev .Kind}}" href="/console/events/{{.ID}}">
         <time title="{{ts .When}}">{{ago .When}}</time>
         <span class="kindchip">{{.Kind}}</span>
         <p>{{.Summary}}{{if .SessionID}} <span class="mono-id">{{shortID .SessionID}}</span>{{end}}</p>

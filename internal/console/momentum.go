@@ -43,6 +43,16 @@ func (s *Service) projectStages(ctx context.Context, rows []store.ProjectBoardRo
 	return stages
 }
 
+// glintKind reports whether an event kind is one of the two momentum-born
+// celebration kinds whose Overview ledger row wears the mom-glint class -- the
+// hook the live-arrival wash rides (see console.css). Keyed on the kind, not
+// the feature: both kinds are minted only while momentum is on (projectStages
+// here, the first-reuse latch in store), so the class never appears on a page
+// the feature did not already touch.
+func glintKind(kind string) bool {
+	return kind == string(core.EventMemoryFirstReuse) || kind == string(core.EventProjectStage)
+}
+
 // stageIcons maps each stage to its Lucide glyph.
 var stageIcons = map[store.ProjectStage]string{
 	store.StageSeedling:    "circle",

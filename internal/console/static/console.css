@@ -4077,6 +4077,14 @@ button.star.on .ico { fill: currentColor; }
 }
 .ov2-evt .mono-id { font-family: var(--font-mono); font-size: var(--text-2xs); color: var(--brand); }
 .ov2-evt .ov2-evt-scope { flex: none; font-size: var(--text-2xs); color: var(--faint); }
+/* Momentum ledger glints: a payoff (memory.first_reuse) or stage-crossing
+   (project.stage_reached) row entering over a live morph rides live-in plus a
+   short locate wash -- the ix-locate-wash keyframes at ledger scale, finished
+   before the morph strips the live-in class at 600ms. Only nodes the morph
+   inserts carry .live-in, so a row already on screen at page load renders
+   plain (the Now moments discipline); reduced motion stills both via the
+   global rule. */
+.ov2-evt.mom-glint.live-in { animation: live-in var(--dur-med) var(--ease-out), ix-locate-wash .5s var(--ease-out) both; }
 
 /* The stream rows carry the same edge. data-sev supersedes the older per-domain
    tone-* edge colors on these rows, so the three surfaces agree; tone-* still

@@ -332,6 +332,37 @@ func TestEventSummary_FirstReuse(t *testing.T) {
 		"a payload-less mark still reads as a sentence")
 }
 
+// The ledger glint rides the two momentum-born celebration kinds: each carries
+// its own distinct icon, and the Overview ledger row wears the mom-glint class
+// the live-arrival wash keys on. The wash itself is client-side (only nodes
+// the SSE morph inserts carry .live-in), so what is pinned here is the server
+// side: the class on the row and the icon mapping.
+func TestLedgerGlint_MomentumBornKindsCarryTheHook(t *testing.T) {
+	require.Equal(t, "zap", evtIcon(string(core.EventMemoryFirstReuse)))
+	require.Equal(t, "trending-up", evtIcon(string(core.EventProjectStage)))
+	require.NotEqual(t, evtIcon(string(core.EventMemoryFirstReuse)), evtIcon("session.started"),
+		"the payoff row does not blur into the generic stream glyphs")
+
+	db, mux, _ := newGatedConsole(t)
+	ctx := context.Background()
+
+	page := getPeek(t, mux, "/console/").Body.String()
+	require.NotContains(t, page, "mom-glint", "no celebration event, no glint hook anywhere")
+
+	// The kinds are only minted while momentum is on; the glint is presentation
+	// on those rows, keyed to the kind rather than re-gated on the feature.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	_, err := db.ExecContext(ctx, `
+		INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		VALUES (?, ?, ?, '', 'demo', '', '{"name":"chroma-boot-race","kind":"gotcha"}')`,
+		mustID(t), core.FormatTime(time.Now().UTC()), string(core.EventMemoryFirstReuse))
+	require.NoError(t, err)
+
+	page = getPeek(t, mux, "/console/").Body.String()
+	require.Contains(t, page, `class="ov2-evt mom-glint"`, "the payoff row wears the glint hook")
+	require.Contains(t, page, "just paid off for the first time")
+}
+
 // The memory-of-the-month spotlight is a momentum surface on the Overview
 // rail: off (the shipped default), no trace in HTML or JSON; on, the window's
 // top-utility memory renders with its counts, or the honest empty state when
