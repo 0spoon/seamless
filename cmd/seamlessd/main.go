@@ -255,6 +255,7 @@ func runServe(args []string) error {
 	ret.SetSearchConfig(cfg.Search)
 	ret.SetFeaturesConfig(cfg.Features)
 	rec := events.NewRecorder(db)
+	rec.SetFeatures(cfg.Features) // arms the momentum milestone layer
 
 	// Gardener: propose-only maintenance, exposed to the gardener_apply MCP tool
 	// and run on a ticker. The chat client (for digests) is best-effort; without

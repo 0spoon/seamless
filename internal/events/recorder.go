@@ -9,11 +9,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // truncationMarker is appended to a captured field that Truncate had to trim.
@@ -62,10 +65,51 @@ type Recorder struct {
 	mu     sync.Mutex
 	subs   map[int]chan core.Event
 	nextID int
+
+	// features is the file/env optional-features base the milestone layer
+	// gates on, and featuresArmed whether SetFeatures has supplied it. Until
+	// then the recorder appends events exactly as before -- no gate read, no
+	// milestone checks -- so unwired recorders (tests, benchmarks, one-shot
+	// tools) keep their behavior and cost unchanged.
+	features      config.Features
+	featuresArmed bool
 }
 
 // NewRecorder returns a Recorder backed by db.
 func NewRecorder(db *sql.DB) *Recorder { return &Recorder{db: db} }
+
+// The milestone layer mints through RecordOnce (store.OnceRecorder).
+var _ store.OnceRecorder = (*Recorder)(nil)
+
+// SetFeatures arms the momentum milestone layer with the file/env features
+// base. From then on every successfully recorded event runs
+// store.CheckMilestones, which resolves the effective features live (base
+// overlaid with the console's stored override) and does nothing while
+// momentum is off -- so the console toggle applies immediately, with no
+// daemon restart. Call it once at wiring time, before serving.
+func (r *Recorder) SetFeatures(base config.Features) {
+	r.mu.Lock()
+	r.features = base
+	r.featuresArmed = true
+	r.mu.Unlock()
+}
+
+// mintMilestones runs the store milestone checks against an event that just
+// landed. Best-effort by design: the event is already durably recorded, so a
+// milestone failure is logged and never surfaces to the recording caller. The
+// re-entrant call this makes through RecordOnce terminates immediately:
+// milestone.reached is not a kind CheckMilestones watches.
+func (r *Recorder) mintMilestones(ctx context.Context, e core.Event) {
+	r.mu.Lock()
+	armed, base := r.featuresArmed, r.features
+	r.mu.Unlock()
+	if !armed {
+		return
+	}
+	if err := store.CheckMilestones(ctx, r.db, r, base, e); err != nil {
+		slog.Warn("events: milestone check", "kind", string(e.Kind), "error", err)
+	}
+}
 
 // Subscribe registers a live-event channel and returns it with an unsubscribe
 // func the caller must invoke when done (idempotent). Events are delivered
@@ -144,6 +188,7 @@ func (r *Recorder) Record(ctx context.Context, e core.Event) (string, error) {
 		return "", fmt.Errorf("events.Record: insert: %w", err)
 	}
 	r.publish(e)
+	r.mintMilestones(ctx, e)
 	return e.ID, nil
 }
 
@@ -197,6 +242,7 @@ func (r *Recorder) RecordOnce(ctx context.Context, e core.Event) (id string, rec
 		return "", false, nil
 	}
 	r.publish(e)
+	r.mintMilestones(ctx, e)
 	return e.ID, true, nil
 }
 
