@@ -529,13 +529,14 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 
 // planPhase buckets a plan by the progress of its step tasks. A step in progress
 // wins outright (matching "has an in-progress task"). Otherwise the plan is done
-// when it is terminal -- an abandoned or shipped capture, or every step closed
-// with none open -- and ready when open steps remain or it has not started yet.
+// when it is terminal -- an abandoned, shipped or merged capture, or every step
+// closed with none open -- and ready when open steps remain or it has not
+// started yet.
 func planPhase(r planRow) string {
 	switch {
 	case r.TasksWIP > 0:
 		return planPhaseInProgress
-	case r.Status == plans.StatusAbandoned, r.Status == plans.StatusShipped:
+	case r.Status == plans.StatusAbandoned, r.Status == plans.StatusShipped, r.Status == plans.StatusMerged:
 		return planPhaseDone
 	case r.TasksTotal > 0 && r.TasksOpen == 0:
 		return planPhaseDone
@@ -569,7 +570,9 @@ func (s *Service) recordPlanAction(ctx context.Context, kind core.EventKind, pro
 }
 
 // planTone maps a plan status to a badge tone: approved and shipped green,
-// presented brand-ish accent, draft amber, abandoned neutral.
+// presented brand-ish accent, draft amber, abandoned and merged neutral -- a
+// merged capture reached no verdict of its own, it was filed under another
+// plan, so it reads as settled rather than as an outcome.
 func planTone(status string) string {
 	switch status {
 	case plans.StatusApproved, plans.StatusShipped:
@@ -578,7 +581,7 @@ func planTone(status string) string {
 		return "accent"
 	case plans.StatusDraft:
 		return "warn"
-	default: // abandoned
+	default: // abandoned, merged
 		return ""
 	}
 }

@@ -39,6 +39,12 @@ const (
 	// leak that predates the fence), not scope tidying, so the inbox groups and
 	// explains it on its own terms.
 	ProposalRelocate = "relocate"
+	// ProposalMergePlans folds a never-approved captured plan into an existing
+	// composition that already carries the steps for the same work. It is the
+	// third answer the stale-plan pass can give (beside abandon and ship) and
+	// the only one that moves anything: the capture's notes are retagged onto
+	// the surviving slug instead of being settled where they sit.
+	ProposalMergePlans = "merge_plans"
 )
 
 // ProposalKinds lists every valid proposal kind. This is the canonical set:
@@ -48,6 +54,7 @@ var ProposalKinds = []string{
 	ProposalMerge, ProposalArchive, ProposalDigest, ProposalConsolidate,
 	ProposalReproject, ProposalSplit, ProposalAbandonPlan, ProposalMemoryWanted,
 	ProposalToolError, ProposalRekind, ProposalShipPlan, ProposalRelocate,
+	ProposalMergePlans,
 }
 
 // Proposal is one gardener suggestion awaiting owner review. Payload carries the

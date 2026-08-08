@@ -129,6 +129,8 @@ type proposalCard struct {
 
 	// ShipPlan (retag an implemented-but-unapproved captured plan).
 	ShipPlan *shipPlanView `json:"shipPlan,omitempty"`
+	// MergePlans (fold a stranded capture into the plan holding its steps).
+	MergePlans *mergePlansView `json:"mergePlans,omitempty"`
 
 	// MemoryWanted (open a task to write knowledge agents searched for in vain).
 	MemoryWanted *memoryWantedView `json:"memoryWanted,omitempty"`
@@ -204,6 +206,7 @@ var sectionOfKind = map[string]string{
 	store.ProposalRelocate:     "cleanup",
 	store.ProposalAbandonPlan:  "plans",
 	store.ProposalShipPlan:     "plans",
+	store.ProposalMergePlans:   "plans",
 	store.ProposalDigest:       "digests",
 }
 
@@ -286,6 +289,21 @@ type shipPlanView struct {
 	CommitsSince int      `json:"commitsSince"`
 	MatchedCount int      `json:"matchedCount"`
 	Commits      []string `json:"commits"` // "sha message" lines, capped by the gardener
+}
+
+// mergePlansView is the merge_plans projection: the stranded capture on the
+// left, the composition that holds the steps on the right, and how many
+// significant title words tied them together -- the evidence the owner is
+// judging, since applying moves the whole composition.
+type mergePlansView struct {
+	NoteID       string `json:"noteId"`
+	Slug         string `json:"slug"` // the capture's plan:<slug>, the one being retired
+	Title        string `json:"title"`
+	Project      string `json:"project,omitempty"`
+	Status       string `json:"status"` // draft | presented
+	IntoSlug     string `json:"intoSlug"`
+	IntoTitle    string `json:"intoTitle"`
+	SharedTokens int    `json:"sharedTokens"`
 }
 
 // planGroup collects the pending proposals of one plan (a split batch) so the
@@ -806,6 +824,11 @@ func rowSummary(kind string, c proposalCard) (title, detail string) {
 				plural(c.ShipPlan.MatchedCount, "matching commit", "matching commits")
 		}
 		return "Mark plan shipped", ""
+	case store.ProposalMergePlans:
+		if c.MergePlans != nil {
+			return "Fold plan into another", c.MergePlans.Title + " → " + c.MergePlans.IntoSlug
+		}
+		return "Fold plan into another", ""
 	case store.ProposalMemoryWanted:
 		if c.MemoryWanted != nil {
 			return "Write missing memory", c.MemoryWanted.SuggestedTitle + " · " +
@@ -961,6 +984,17 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			Commits:      payloadStrList(p.Payload, "commits"),
 		}
 		c.Reason = payloadStr(p.Payload, "reason")
+	case store.ProposalMergePlans:
+		c.MergePlans = &mergePlansView{
+			NoteID: payloadStr(p.Payload, "id"), Slug: payloadStr(p.Payload, "slug"),
+			Title: payloadStr(p.Payload, "title"), Project: payloadStr(p.Payload, "project"),
+			Status:    payloadStr(p.Payload, "plan_status"),
+			IntoSlug:  payloadStr(p.Payload, "merge_into"),
+			IntoTitle: payloadStr(p.Payload, "merge_into_title"),
+
+			SharedTokens: int(payloadFloat(p.Payload, "shared_tokens")),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalMemoryWanted:
 		c.MemoryWanted = &memoryWantedView{
 			Project:        payloadStr(p.Payload, "project"),
@@ -1056,6 +1090,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
 	case store.ProposalShipPlan:
 		return "Mark a plan shipped", "Planning hygiene", "git-commit-horizontal", "ok"
+	case store.ProposalMergePlans:
+		return "Fold a plan into another", "Planning hygiene", "git-merge", "pop"
 	case store.ProposalMemoryWanted:
 		return "Write a missing memory", "Knowledge gap", "search", "pop"
 	case store.ProposalToolError:

@@ -33,17 +33,20 @@ const (
 )
 
 // Plan lifecycle statuses, stored as a plan-status:<v> note tag. Draft ->
-// presented -> approved is the capture flow; abandoned and shipped are the
-// gardener's terminal settlements for plans that were never approved --
+// presented -> approved is the capture flow; abandoned, shipped and merged are
+// the gardener's terminal settlements for plans that were never approved --
 // abandoned when nothing came of the plan, shipped when the repo's history
-// shows the work landed without the approval ceremony. Both leave the
-// briefing's awaiting-approval lines; the note stays recallable.
+// shows the work landed without the approval ceremony, merged when the capture
+// was folded into another composition that already held the steps for the same
+// work. All three leave the briefing's awaiting-approval lines; the note stays
+// recallable.
 const (
 	StatusDraft     = "draft"
 	StatusPresented = "presented"
 	StatusApproved  = "approved"
 	StatusAbandoned = "abandoned"
 	StatusShipped   = "shipped"
+	StatusMerged    = "merged"
 )
 
 // statusTagPrefix prefixes the lifecycle tag value.

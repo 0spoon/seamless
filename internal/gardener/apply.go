@@ -71,6 +71,10 @@ func (s *Service) Apply(ctx context.Context, id string) (map[string]any, error) 
 		result, err = s.applySettlePlan(ctx, p, plans.StatusAbandoned, now)
 	case store.ProposalShipPlan:
 		result, err = s.applySettlePlan(ctx, p, plans.StatusShipped, now)
+	case store.ProposalMergePlans:
+		// The one settlement that moves rather than retags in place: the whole
+		// composition follows the capture onto the surviving plan's slug.
+		result, err = s.applyMergePlans(ctx, p, now)
 	case store.ProposalMemoryWanted:
 		result, err = s.applyMemoryWanted(ctx, p, now)
 	case store.ProposalToolError:

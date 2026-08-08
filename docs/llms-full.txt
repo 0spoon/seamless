@@ -2403,7 +2403,7 @@ You do not have to build the composition by hand. Claude Code's plan mode is
 captured:
 
 - Saving a plan file upserts a `cc-plan-<basename>` note, tagged with its status
-  (`plan-status:draft|presented|approved|abandoned|shipped`).
+  (`plan-status:draft|presented|approved|abandoned|shipped|merged`).
 - Planning subagents are cached as `cc-agent-<id>` notes in the same composition.
 - Approving the plan creates the tracking task.
 - Unapproved captures appear in the briefing's Plans section as
@@ -2751,7 +2751,7 @@ found, `gardener_apply` to act on one.
 | **dedup** | Two memories more similar than `gardener.dedup_threshold` (0.88) | **merge**: one is kept as-is, the other superseded and pointed at it |
 | **staleness** | A memory untouched for `gardener.staleness_days` (90) | **archive**: marked invalid, still readable |
 | **digest** | Enough recent activity over `gardener.digest_days` (30) | a **digest** note summarizing it |
-| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
+| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **merge_plans** when the capture owns no steps and another composition in the project holds the steps for the same work (fold it in there), **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
 | **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 | **dead-weight** | A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read | **archive**: exposure without demand means it costs tokens and steers nothing |
 | **memory-wanted** | The same recall query returned zero hits in 2+ sessions inside 14 days | **memory_wanted**: write the knowledge agents keep searching for; applying opens a task in the queue |
@@ -4134,11 +4134,12 @@ Captured-plan lifecycle
 3a · approved Tracking begins Status becomes approved and an implementation task is created.
 3b · abandoned Closed deliberately An unapproved plan can be marked abandoned instead of lingering.
 3c · shipped Landed without ceremony When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.
+3d · merged Folded into another plan When the capture has no steps and another composition holds them for the same work, the gardener proposes moving its notes there.
 A captured plan remains one composition across edits; approval changes its state and opens the execution loop.
 ```
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
-`draft`, `presented`, `approved`, `abandoned`, `shipped`.
+`draft`, `presented`, `approved`, `abandoned`, `shipped`, `merged`.
 
 ## Why unapproved plans show up in the briefing
 
@@ -5577,11 +5578,11 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 
 ## gardener_proposals {#gardener_proposals}
 
-List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply, dismiss or hide each with gardener_apply. Read-only.
+List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, fold a stranded captured plan into the composition that carries its steps, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply, dismiss or hide each with gardener_apply. Read-only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`, `merge_plans`. |
 
 ## gardener_request {#gardener_request}
 
@@ -5603,7 +5604,7 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 
 ## gardener_apply {#gardener_apply}
 
-Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error). Rejecting has two strengths: action=dismiss discards this proposal and the evidence behind it, so a pattern that keeps recurring is raised again later; action=hide blocks the pattern permanently, so no recurrence re-raises it. Prefer dismiss unless the suggestion is wrong in principle rather than wrong for now. Both are reversible by the owner from the console.
+Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error; merge_plans -&gt; retag a stranded captured plan's notes onto the plan that holds the steps and settle the capture as merged). Rejecting has two strengths: action=dismiss discards this proposal and the evidence behind it, so a pattern that keeps recurring is raised again later; action=hide blocks the pattern permanently, so no recurrence re-raises it. Prefer dismiss unless the suggestion is wrong in principle rather than wrong for now. Both are reversible by the owner from the console.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|

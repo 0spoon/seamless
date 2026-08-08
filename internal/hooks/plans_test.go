@@ -410,6 +410,11 @@ func TestFirstPlanCaptureInjectsRelated(t *testing.T) {
 	require.Len(t, eventsOfKind(t, e.rec, core.EventInjected), 1)
 }
 
+// InjectRelated governs the prior-knowledge lookup, not the composition line:
+// the slug is mechanism the agent needs in order to compose steps into this
+// plan rather than minting a second one, so it rides on capture being enabled
+// at all. With no recall hits attached there is nothing retrieved to attribute,
+// so no injection event is recorded either.
 func TestFirstPlanCaptureInjectRelatedDisabled(t *testing.T) {
 	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
 	e.startSession(t)
@@ -418,9 +423,32 @@ func TestFirstPlanCaptureInjectRelatedDisabled(t *testing.T) {
 
 	path := e.writePlanFile(t, "clever-stallman", "# Rework the gardener staleness pass\n\nSteps.\n")
 	out := e.planWriteOut(t, "Write", path)
-	_, has := out["hookSpecificOutput"]
-	require.False(t, has)
+	ac := additionalContext(t, out)
+	require.Contains(t, ac, "plan:rework-the-gardener-staleness-pass", "the composition slug is not gated by InjectRelated")
+	require.NotContains(t, ac, "memory_read name=gardener-pass-order", "but the related-knowledge lookup is")
 	require.Empty(t, eventsOfKind(t, e.rec, core.EventInjected))
+}
+
+// The composition slug is what stops an agent minting a second plan for work it
+// has just planned: without it the slug first appears in the NEXT session's
+// briefing, long after tasks_add has filed the steps somewhere else.
+func TestPlanCaptureNamesItsCompositionSlug(t *testing.T) {
+	e := newCaptureEnv(t, config.PlanCapture{Enabled: true, AutoTask: true})
+	e.startSession(t)
+
+	path := e.writePlanFile(t, "clever-stallman", "# Rework the gardener staleness pass\n\nSteps.\n")
+	ac := additionalContext(t, e.planWriteOut(t, "Write", path))
+	require.Contains(t, ac, "plan:rework-the-gardener-staleness-pass")
+	require.Contains(t, ac, "tasks_add plan=rework-the-gardener-staleness-pass")
+
+	// Approval repeats it: that is the moment the agent stops planning and starts
+	// filing steps, and it is reached even when the first capture was missed.
+	resp, out := post(t, e.ts.URL+"/api/hooks/post-tool-use", testKey, map[string]any{
+		"session_id": testSID, "cwd": "/work/demo", "tool_name": "ExitPlanMode",
+		"tool_input": map[string]any{}, "tool_response": map[string]any{"filePath": path},
+	})
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	require.Contains(t, additionalContext(t, out), "plan:rework-the-gardener-staleness-pass")
 }
 
 // The direct git-reading tests moved with the reader to internal/gitread; the

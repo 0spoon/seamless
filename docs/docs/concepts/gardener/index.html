@@ -280,7 +280,7 @@ found, <code>gardener_apply</code> to act on one.</p>
 <tr>
 <td><strong>stale-plan</strong></td>
 <td>A captured plan still unapproved after <code>gardener.stale_plan_days</code> (14)</td>
-<td>settling it deliberately rather than by neglect: <strong>ship_plan</strong> when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), <strong>abandon_plan</strong> otherwise</td>
+<td>settling it deliberately rather than by neglect: <strong>merge_plans</strong> when the capture owns no steps and another composition in the project holds the steps for the same work (fold it in there), <strong>ship_plan</strong> when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), <strong>abandon_plan</strong> otherwise</td>
 </tr>
 <tr>
 <td><strong>stale-stage</strong></td>

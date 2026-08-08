@@ -119,6 +119,8 @@ func (s *Service) invertApply(ctx context.Context, p store.Proposal, now time.Ti
 		return s.undoSettlePlan(ctx, p, plans.StatusAbandoned, now)
 	case store.ProposalShipPlan:
 		return s.undoSettlePlan(ctx, p, plans.StatusShipped, now)
+	case store.ProposalMergePlans:
+		return s.undoMergePlans(ctx, p, now)
 	case store.ProposalMemoryWanted, store.ProposalToolError:
 		return s.undoOpenedTask(ctx, p, now)
 	default:

@@ -6,8 +6,11 @@ package hooks
 // user approval; PermissionRequest[ExitPlanMode] fires when the user is shown
 // the plan. Each plan becomes one upserted note (slug cc-plan-<basename>) whose
 // lifecycle rides on a plan-status:draft|presented|approved tag, plus verbatim
-// plan.captured/presented/approved events. Everything here is best-effort and
-// fail-open: a capture problem is logged and the hook still acks 200.
+// plan.captured/presented/approved events. The first capture and the approval
+// each tell the agent the composition slug they filed the plan under, so it
+// composes steps into that plan rather than minting a second one for the same
+// work. Everything here is best-effort and fail-open: a capture problem is
+// logged and the hook still acks 200.
 //
 // This file is the hook entry points and the capture flow. The note upsert lives
 // in plans_note.go, session correlation in plans_session.go, and the plan-file
@@ -56,7 +59,7 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 		case "Write", "Edit", "MultiEdit":
 			extra = h.capturePlanIteration(ctx, p)
 		case "ExitPlanMode":
-			h.capturePlanApproval(ctx, p)
+			extra = h.capturePlanApproval(ctx, p)
 		}
 	}
 	if extra.content != "" {
@@ -119,17 +122,22 @@ func (h *Handler) capturePlanIteration(ctx context.Context, p toolPayload) prepa
 		return preparedHookContext{}
 	}
 	up, ok := h.upsertPlanNote(ctx, p, planBasename(path), string(content), false)
-	if !ok || !up.first || !h.planCapture.InjectRelated {
+	if !ok || !up.first {
 		return preparedHookContext{}
 	}
-	return h.relatedPlanContext(ctx, p, up.note)
+	return h.planCaptureContext(ctx, p, up.note, up.planSlug, true)
 }
 
 // capturePlanApproval handles PostToolUse[ExitPlanMode]: the tool_response
 // carries the plan file path (and sometimes the plan text); the file is
 // re-read as the authoritative final text. On success the note flips to
 // approved and, when configured, a tracking task is created for the plan.
-func (h *Handler) capturePlanApproval(ctx context.Context, p toolPayload) {
+// It returns the composition line for injection: approval is the moment the
+// agent stops planning and starts calling tasks_add, so naming the slug here
+// lands one tool call before the step it would otherwise misfile. No related
+// lookup -- that belongs to the first capture, and this is not the agent's
+// first sight of the plan.
+func (h *Handler) capturePlanApproval(ctx context.Context, p toolPayload) preparedHookContext {
 	var resp struct {
 		Plan     string `json:"plan"`
 		FilePath string `json:"filePath"`
@@ -158,15 +166,16 @@ func (h *Handler) capturePlanApproval(ctx context.Context, p toolPayload) {
 	}
 	if basename == "" {
 		h.logger.Warn("hooks: plan approval without correlation", "claude_session_id", p.SessionID)
-		return
+		return preparedHookContext{}
 	}
 	up, ok := h.upsertPlanNote(ctx, p, basename, content, true)
 	if !ok {
-		return
+		return preparedHookContext{}
 	}
 	if h.planCapture.AutoTask {
 		h.ensurePlanTask(ctx, p, up.note, up.planSlug)
 	}
+	return h.planCaptureContext(ctx, p, up.note, up.planSlug, false)
 }
 
 // markPlanPresented flips the session's draft plan note to presented.

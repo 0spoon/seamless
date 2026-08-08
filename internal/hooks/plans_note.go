@@ -247,24 +247,72 @@ func (h *Handler) ensurePlanTask(ctx context.Context, p toolPayload, note core.N
 // relatedPlanHits caps how many recall hits the first-capture injection lists.
 const relatedPlanHits = 5
 
-// relatedPlanContext builds the additionalContext block returned on a
-// session's first captured plan iteration: top recall hits for the plan title
-// (prior plans, constraints, related notes), so the planning agent sees prior
-// art before the plan is finalized. Returns the zero value when recall is
-// unavailable, errors, or finds nothing beyond the plan's own note; a
-// non-empty block is recorded as a retrieval.injected event and returned as
-// the SAME prepared value the caller must emit, so response and telemetry
-// cannot drift apart.
-func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note core.Note) preparedHookContext {
+// planCompositionLine names the composition a captured plan was filed under.
+//
+// Without it the agent never learns the slug upsertPlanNote just minted from
+// its own H1: the `PLAN: <slug>` briefing line appears only in the NEXT
+// session, long after this one has invented a second slug for the same work via
+// tasks_add. Approval used to paper the gap over -- ensurePlanTask wires the
+// tracking task onto the captured slug -- which is exactly why the stranded
+// captures are concentrated in the plans that were presented and never
+// approved: no approval, no wiring, and the capture is left with no steps while
+// the real steps accrue under a slug it has never heard of.
+func planCompositionLine(planSlug string) string {
+	return "Seamless filed this plan as composition plan:" + planSlug +
+		". Attach its steps with tasks_add plan=" + planSlug + " and supporting notes with the" +
+		" tag plan:" + planSlug + " -- do not mint a second slug for this work."
+}
+
+// planCaptureContext builds the additionalContext returned to a capturing
+// agent. The composition line is always present: it is mechanism rather than
+// retrieval, so it is gated only by capture being on at all, not by
+// InjectRelated (which the owner sets to control prior-knowledge lookups).
+// The related-knowledge list is appended when that IS on and recall found
+// something beyond the plan's own note.
+func (h *Handler) planCaptureContext(ctx context.Context, p toolPayload, note core.Note, planSlug string, lookUpRelated bool) preparedHookContext {
+	var b strings.Builder
+	b.WriteString("<seam-plan-context>\n")
+	b.WriteString(planCompositionLine(planSlug))
+
+	var ids []string
+	if lookUpRelated && h.planCapture.InjectRelated {
+		var related string
+		related, ids = h.relatedPlanKnowledge(ctx, note)
+		if related != "" {
+			b.WriteString("\nSeamless has prior knowledge related to this plan; check before finalizing:")
+			b.WriteString(related)
+		}
+	}
+	b.WriteString("\n</seam-plan-context>")
+
+	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
+	prepared := prepareHookContext(ClientClaudeCode, b.String())
+	// Only the recall half is a retrieval. With no hits there are no item ids to
+	// attribute, and recording an injection anyway would add an event to the
+	// injected-then-read funnel that surfaced nothing to read. When there ARE
+	// hits, telemetry and response consume the same prepared value, so the two
+	// cannot drift apart.
+	if len(ids) > 0 {
+		h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", prepared, ids)
+	}
+	return prepared
+}
+
+// relatedPlanKnowledge renders the top recall hits for a plan's title (prior
+// plans, constraints, related notes) so the planning agent sees prior art
+// before the plan is finalized, with the ids for injection telemetry. Both are
+// empty when recall is unavailable, errors, or finds nothing beyond the plan's
+// own note.
+func (h *Handler) relatedPlanKnowledge(ctx context.Context, note core.Note) (string, []string) {
 	if h.retrieve == nil || strings.TrimSpace(note.Title) == "" {
-		return preparedHookContext{}
+		return "", nil
 	}
 	hits, err := h.retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: note.Title, Project: note.Project, Limit: relatedPlanHits + 1,
 	})
 	if err != nil {
 		h.logger.Warn("hooks: related plan recall", "error", err)
-		return preparedHookContext{}
+		return "", nil
 	}
 	var b strings.Builder
 	ids := make([]string, 0, len(hits))
@@ -283,14 +331,9 @@ func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note co
 		ids = append(ids, hit.ID)
 	}
 	if len(ids) == 0 {
-		return preparedHookContext{}
+		return "", nil
 	}
-	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
-		b.String() + "\n</seam-plan-context>"
-	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-	prepared := prepareHookContext(ClientClaudeCode, block)
-	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", prepared, ids)
-	return prepared
+	return b.String(), ids
 }
 
 // recordPlanEvent appends a plan-capture event, attributed to the ambient
