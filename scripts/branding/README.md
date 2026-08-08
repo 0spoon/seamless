@@ -269,7 +269,7 @@ takes were never committed, by design.
 
 ## Flow B: console screenshots
 
-`docs/static/shots/` holds five console pages x dark/light, WebP. They come from
+`docs/static/shots/` holds six console pages x dark/light, WebP. They come from
 a throwaway instance seeded with the invented six-week fleet history in
 `internal/demokit/data.go` -- never from a live data dir.
 
@@ -277,17 +277,22 @@ a throwaway instance seeded with the invented six-week fleet history in
 # 1. seed a throwaway data dir (the console-fleet seed, not -scenes)
 go run ./cmd/demoseed -data /tmp/seamless-demo
 
-# 2. serve it on a port that is NOT your live daemon. SEAMLESS_FEATURES_RESEARCH
-#    is load-bearing: optional features ship off and this throwaway data dir is a
-#    new installation, so without it the fleet's seeded trials would be hidden --
-#    the Overview loses its Labs/Trials tiles and its Trials coverage row, and
-#    the shots stop matching the seeded history. (This flow does not go through
-#    scripts/fixture/harness.sh, which sets the same thing for its own instances.)
+# 2. serve it on a port that is NOT your live daemon. The three SEAMLESS_FEATURES_*
+#    flags are load-bearing: optional features ship off and this throwaway data
+#    dir is a new installation, so without them the seeded history is hidden --
+#    research takes the Overview's Labs/Trials tiles and Trials coverage row,
+#    momentum takes the Overview memory-of-the-month spotlight and the Plans
+#    shipped-this-month count, and gamification takes the Now screen's records
+#    rail and hot-streak pulse. (This flow does not go through
+#    scripts/fixture/harness.sh, which sets research for its own instances.)
 SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
-  SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
+  SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_FEATURES_MOMENTUM=1 \
+  SEAMLESS_FEATURES_GAMIFICATION=1 SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
 
 # 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
-pnpm add playwright-core     # once, anywhere; or run from a dir that has it
+pnpm add playwright-core     # once, anywhere; NODE_PATH must point at its
+                             # node_modules -- node resolves from the script's
+                             # directory, not the cwd
 SEAMLESS_SHOT_BASE=http://127.0.0.1:8090 SEAMLESS_MCP_API_KEY=<same key> \
   node scripts/branding/console-shots.js /tmp/shots
 
@@ -305,8 +310,16 @@ make site-stamp && make site-check
 login step is needed. It waits on `load` rather than `networkidle` because the
 console's SSE stream never goes idle.
 
+A page entry may carry a `prepare(page)` hook, run after load and before the
+shot. Interactions needs one: its feed is client-rendered and starts empty by
+design -- it shows live arrivals only until an owner adds a history window, and
+the server-side `history=` param cannot help because the page ships an empty
+`#ix-feed` div for the JS to fill. The hook drives the control instead.
+
 **Capture within about an hour of seeding.** The fleet's "live" sessions and
 leases are anchored to the seeding time and start reading as stale on screen.
+This binds the momentum and gamification surfaces too: the Now screen's records
+rail reads "set today" off the same anchor.
 
 The `relations` capture deliberately keeps its legacy filename while pointing at
 `/console/context` -- published and cached landing-page URLs reference the old

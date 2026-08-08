@@ -315,7 +315,7 @@ together; the script refuses to run when they disagree.
 
 ## Regenerate the console shots
 
-`static/shots/` holds the console screenshots (5 pages x dark/light, WebP).
+`static/shots/` holds the console screenshots (6 pages x dark/light, WebP).
 They come from a THROWAWAY instance seeded with fictional data by
 `cmd/demoseed` -- never from a live data dir. To re-capture after a console
 change:
@@ -324,9 +324,12 @@ change:
 # 1. seed a throwaway data dir (numbers are tuned; see internal/demokit/data.go)
 go run ./cmd/demoseed -data /tmp/seamless-demo
 
-# 2. serve it on a port that is NOT your live daemon
+# 2. serve it on a port that is NOT your live daemon. The optional features ship
+#    off, and a fresh data dir is a new installation -- without all three the
+#    seeded trials, momentum cues, and the Now screen's arcade never render.
 SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
-  SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
+  SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_FEATURES_MOMENTUM=1 \
+  SEAMLESS_FEATURES_GAMIFICATION=1 SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
 
 # 3. capture both themes at 1440x900 @2x (Playwright driving installed Chrome)
 SEAMLESS_SHOT_BASE=http://127.0.0.1:8090 SEAMLESS_MCP_API_KEY=<same key> \
