@@ -405,6 +405,8 @@ func TestSessionsCaptureCalendar_FollowsTheMomentumFeature(t *testing.T) {
 	require.Contains(t, page, `class="mom-cal-grid"`)
 	require.Contains(t, page, "mom-cal-dot", "the covered day carries its mark")
 	require.Contains(t, page, "day capture streak")
+	require.Contains(t, page, `class="mom-cal-col" style="--d:0ms"`, "week columns carry the staggered entry-wave delay")
+	require.Contains(t, page, ` today"`, "the final bucket is today's breathing cell")
 	require.Contains(t, getJSON2(t, mux, "/console/sessions?format=json"), `"captureStreak"`)
 }
 

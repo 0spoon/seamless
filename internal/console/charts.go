@@ -540,14 +540,19 @@ func sparkLine(s spark) template.HTML {
 // distinct dot on covered days (a session left a durable artifact). days must
 // be contiguous daily buckets beginning at start -- a local midnight, ideally
 // week-aligned so the first column is full -- as SessionCoverageBuckets
-// produces over a synthetic window. A day with no sessions is an empty cell in
-// the resting tone: a pause, never a warning.
+// produces over a synthetic window; the bucket axis ends at now, so the final
+// bucket is today's cell and wears the breathing outline. A day with no
+// sessions is an empty cell in the resting tone: a pause, never a warning.
+// Each week column is a group carrying a staggered --d delay for the entry
+// wave; live morphs preserve these nodes, so the wave plays on a fresh render
+// and never on a data patch.
 func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
 	if len(days) == 0 {
 		return ""
 	}
 	const cell, pitch = 11.0, 14.0 // cell size and grid pitch (cell + 3 gap)
 	const left, top = 30.0, 16.0   // gutters: weekday labels, month labels
+	const wave = 12                // per-column entry-wave delay step, ms
 
 	lead := int(start.Local().Weekday()) // empty rows above the first day, Sunday-first
 	weeks := (lead + len(days) + 6) / 7
@@ -558,12 +563,21 @@ func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
 
 	var cells, months strings.Builder
 	lastMonth := time.Month(0)
+	lastCol := -1
 	day := start.Local()
 	for i, d := range days {
 		row := (lead + i) % 7
 		col := (lead + i) / 7
 		x := left + float64(col)*pitch
 		y := top + float64(row)*pitch
+
+		if col != lastCol {
+			if lastCol >= 0 {
+				cells.WriteString(`</g>`)
+			}
+			fmt.Fprintf(&cells, `<g class="mom-cal-col" style="--d:%dms">`, col*wave)
+			lastCol = col
+		}
 
 		// Month labels ride the first cell of each new month's week column.
 		if row == 0 || i == 0 {
@@ -582,14 +596,19 @@ func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
 			title = fmt.Sprintf("%s -- %s, %d captured", day.Format("Jan 02"),
 				plural(d.Total, "session", "sessions"), d.Covered)
 		}
-		fmt.Fprintf(&cells, `<rect class="mom-cal-cell l%d" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2"><title>%s</title></rect>`,
-			lvl, x, y, cell, cell, template.HTMLEscapeString(title))
+		cls := fmt.Sprintf("mom-cal-cell l%d", lvl)
+		if i == len(days)-1 {
+			cls += " today"
+		}
+		fmt.Fprintf(&cells, `<rect class="%s" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2"><title>%s</title></rect>`,
+			cls, x, y, cell, cell, template.HTMLEscapeString(title))
 		if d.Covered > 0 {
 			fmt.Fprintf(&cells, `<circle class="mom-cal-dot" cx="%.1f" cy="%.1f" r="1.8"></circle>`,
 				x+cell/2, y+cell/2)
 		}
 		day = day.AddDate(0, 0, 1)
 	}
+	cells.WriteString(`</g>`)
 
 	var wdays strings.Builder
 	for row, label := range []string{"", "Mon", "", "Wed", "", "Fri", ""} {

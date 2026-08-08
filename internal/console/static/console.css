@@ -4489,6 +4489,17 @@ button.star.on .ico { fill: currentColor; }
 .mom-cal-cell.l3 { fill: var(--brand); fill-opacity: .8; }
 .mom-cal-cell.l4 { fill: var(--brand); }
 .mom-cal-dot { fill: var(--ok); pointer-events: none; }
+/* The entry wave and today's breath. Week columns fade in left to right on a
+   fresh render (the chart draw-in register); live morphs preserve these nodes,
+   so the wave never replays on a data patch. Today's cell wears a quiet
+   breathing outline -- the step-breathe idiom in stroke form. The global
+   reduced-motion rule stills both: the wave lands finished, the outline holds. */
+.mom-cal-col { animation: seam-fade .5s var(--ease-out) both; animation-delay: var(--d, 0ms); }
+.mom-cal-cell.today { stroke: var(--brand); stroke-width: 1.2; animation: mom-cal-breathe 2.4s ease-in-out infinite; }
+@keyframes mom-cal-breathe {
+  0%, 100% { stroke-opacity: 1; stroke-width: 1.2; }
+  50% { stroke-opacity: .4; stroke-width: 2.2; }
+}
 
 /* --- Momentum: memory-of-the-month spotlight (Overview rail) ---------------- */
 .mom-spot-body { display: flex; flex-direction: column; gap: 3px; color: inherit; text-decoration: none; }

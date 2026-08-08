@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -164,6 +165,16 @@ func TestCalendarGrid(t *testing.T) {
 	require.Contains(t, svg, "Aug 02 -- no sessions")
 	require.Contains(t, svg, `>Aug</text>`, "the month labels its first column")
 	require.Contains(t, svg, ">Mon</text>")
+	require.Equal(t, 1, strings.Count(svg, "mom-cal-col"), "one wave group per week column")
+	require.Contains(t, svg, `class="mom-cal-col" style="--d:0ms"`, "the entry-wave delay staggers by column")
+	require.Equal(t, 1, strings.Count(svg, " today"), "exactly one breathing cell")
+	require.Contains(t, svg, `class="mom-cal-cell l0 today"`, "the final bucket is today's cell")
+
+	// Two weeks: the second column opens its own wave group with a later delay.
+	two := append(slices.Clone(days), days...)
+	svg = string(calendarGrid(two, start))
+	require.Equal(t, 2, strings.Count(svg, "mom-cal-col"))
+	require.Contains(t, svg, `style="--d:12ms"`)
 
 	require.Empty(t, calendarGrid(nil, start), "no days renders nothing")
 }
