@@ -386,13 +386,15 @@ func TestSubagentStart_RelevantInjectsAreWeightZero(t *testing.T) {
 }
 
 func TestParseSubagentTranscript(t *testing.T) {
-	prompt, report := parseSubagentTranscript(filepath.Join("testdata", "agent-transcript.jsonl"))
+	prompt, report, complete := parseSubagentTranscript(filepath.Join("testdata", "agent-transcript.jsonl"))
 	require.Equal(t, "Explore the gardener package and report its structure", prompt,
 		"prompt is the FIRST user message, not later tool feedback")
 	require.Equal(t, "Final report: the gardener has three passes.", report,
 		"report is the LAST assistant text")
+	require.True(t, complete, "the fixture ends on a terminal assistant text line")
 
-	prompt, report = parseSubagentTranscript("")
+	prompt, report, complete = parseSubagentTranscript("")
 	require.Empty(t, prompt)
 	require.Empty(t, report)
+	require.False(t, complete)
 }
