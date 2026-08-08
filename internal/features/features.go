@@ -136,6 +136,7 @@ var registry = []Feature{
 			"the first-reuse payoff marks in the activity ledger",
 			"the memory-of-the-month spotlight on Overview",
 			"the maturity-stage pills on the project board and detail header",
+			"the plan-shipped settle and monthly shipped count on Plans",
 		},
 		Default: false,
 		get:     func(c config.Features) bool { return c.Momentum },

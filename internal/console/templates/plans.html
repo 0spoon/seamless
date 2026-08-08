@@ -14,6 +14,7 @@
     {{if .Ready}}<a class="status-ready" href="#rg-ready">{{.Ready}} ready</a>{{end}}
     {{if .Done}}<a href="#rg-done">{{.Done}} done</a>{{end}}
   </div>
+  {{with .ShippedMonth}}<span class="mom-shipped" title="Counted from plan.shipped settlements in the current local month">Plans shipped this month: <strong>{{.Count}}</strong></span>{{end}}
   <span class="mv2-spacer"></span>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Updated</span>
@@ -61,7 +62,9 @@
         <header class="rail-group-hd">done <span class="n">{{.Done}}</span></header>
         <div class="rail-items">
           {{range phaseRows .Rows "done"}}
-          <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+          {{/* mom-settle: a plan shipped this local month wears the settle hook;
+               the one-time wash plays only on live arrival (.live-in). */}}
+          <a class="rail-item dim{{if .Shipped}} mom-settle{{end}}{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
             <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>

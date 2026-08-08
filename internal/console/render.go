@@ -171,6 +171,9 @@ func evtIcon(kind string) string {
 		return "zap"
 	case kind == "project.stage_reached":
 		return "trending-up"
+	case kind == "plan.shipped":
+		// The settlement's own glyph, distinct from the plan-capture map.
+		return "flag"
 	case strings.HasPrefix(kind, "plan."):
 		return "map"
 	default:

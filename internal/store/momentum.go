@@ -328,6 +328,42 @@ func MemorySpotlight(ctx context.Context, db *sql.DB, since, now time.Time) (Spo
 	return best, found, nil
 }
 
+// PlanShippedRef identifies one shipped plan: the plan.shipped settlement
+// event's project and plan slug (its item_id).
+type PlanShippedRef struct {
+	Project string `json:"project"`
+	Slug    string `json:"slug"`
+}
+
+// PlansShippedSince returns the plan.shipped settlements recorded at or after
+// since, oldest first -- one per plan, because the settlement is latched
+// once-ever per plan slug at mint time. It backs the Plans page's monthly
+// shipped count and settle marks; a momentum-only surface, so callers gate on
+// the feature before asking and a disabled install never runs the query.
+func PlansShippedSince(ctx context.Context, db *sql.DB, since time.Time) ([]PlanShippedRef, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT project_slug, item_id FROM events
+		 WHERE kind = ? AND ts >= ?
+		 ORDER BY ts ASC, id ASC`,
+		string(core.EventPlanShipped), core.FormatTime(since))
+	if err != nil {
+		return nil, fmt.Errorf("store.PlansShippedSince: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []PlanShippedRef
+	for rows.Next() {
+		var ref PlanShippedRef
+		if err := rows.Scan(&ref.Project, &ref.Slug); err != nil {
+			return nil, fmt.Errorf("store.PlansShippedSince: scan: %w", err)
+		}
+		out = append(out, ref)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("store.PlansShippedSince: %w", err)
+	}
+	return out, nil
+}
+
 // localDay floors t to its local midnight, the day-boundary convention every
 // momentum surface shares with localBucketAxis.
 func localDay(t time.Time) time.Time {

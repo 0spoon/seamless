@@ -481,6 +481,91 @@ func TestSessionsStreakEmber_LightsAtTheFloor(t *testing.T) {
 		"the tooltip names the floor the run cleared")
 }
 
+// The plan-shipped settle and the monthly shipped count are momentum surfaces
+// on the Plans page: off (the shipped default), the page and its JSON carry no
+// trace and no settlement is computed or minted -- even with the completing
+// transition recorded; on, the settlement is minted exactly once across
+// repeated rollup recomputes, the header gains the quiet count line, and the
+// shipped plan's done row wears the settle hook the live-arrival wash keys on.
+func TestPlansShipped_FollowsTheMomentumFeature(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	ctx := context.Background()
+	seeded := time.Now().UTC().Add(-2 * time.Hour) // fixed in the past so ago() stays stable across renders
+
+	seedPlanNoteAt(t, mgr, "narrative-ship-it", "ship-it", seeded)
+	step := func(status core.TaskStatus) string {
+		id := mustID(t)
+		require.NoError(t, store.CreateTask(ctx, db, core.Task{
+			ID: id, ProjectSlug: "demo", Title: "step", Status: status,
+			CreatedBy: "test", PlanSlug: "ship-it", CreatedAt: seeded, UpdatedAt: seeded,
+		}))
+		return id
+	}
+	step(core.TaskDone)
+	last := step(core.TaskOpen)
+	_, err := db.ExecContext(ctx, `UPDATE tasks SET status = 'done' WHERE id = ?`, last)
+	require.NoError(t, err)
+
+	// The detection chokepoint is the recorder's post-insert hook, so shipping
+	// via any path that records the transition counts -- this is the exact shape
+	// the MCP tasks_update tool records. Armed on the off base: the stored
+	// override decides live.
+	rec := events.NewRecorder(db)
+	rec.SetFeatures(config.Features{})
+	transition := core.Event{Kind: core.EventTaskTransition, ProjectSlug: "demo",
+		ItemID: last, Payload: map[string]any{"to": "done"}}
+	shippedCount := func() int {
+		var n int
+		require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM events WHERE kind = ?`,
+			string(core.EventPlanShipped)).Scan(&n))
+		return n
+	}
+
+	_, err = rec.Record(ctx, transition)
+	require.NoError(t, err)
+	require.Zero(t, shippedCount(), "off = not computed, no event minted")
+
+	offPage := getPeek(t, mux, "/console/plans?w=all").Body.String()
+	require.NotContains(t, offPage, "Plans shipped this month")
+	require.NotContains(t, offPage, "mom-shipped")
+	require.NotContains(t, offPage, "mom-settle")
+	offJSON := getJSON2(t, mux, "/console/plans?format=json&w=all")
+	require.NotContains(t, offJSON, "shippedThisMonth")
+	require.NotContains(t, offJSON, `"shipped":true`)
+
+	// On via the stored override: the next recompute mints, and only once.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
+	_, err = rec.Record(ctx, transition)
+	require.NoError(t, err)
+	_, err = rec.Record(ctx, transition)
+	require.NoError(t, err)
+	require.Equal(t, 1, shippedCount(), "repeated rollup recomputes mint exactly once")
+
+	page := getPeek(t, mux, "/console/plans?w=all").Body.String()
+	require.Contains(t, page, "Plans shipped this month: <strong>1</strong>")
+	require.Contains(t, page, "mom-settle", "the shipped plan's done row wears the settle hook")
+	var onData plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &onData)
+	require.NotNil(t, onData.ShippedMonth)
+	require.Equal(t, 1, onData.ShippedMonth.Count)
+	require.Len(t, onData.Rows, 1)
+	require.True(t, onData.Rows[0].Shipped)
+
+	// The settlement's ledger line and glyph: its own flag, not the capture map.
+	shipped, err := rec.ByKinds(ctx, []core.EventKind{core.EventPlanShipped}, "", "", 1)
+	require.NoError(t, err)
+	require.Len(t, shipped, 1)
+	require.Equal(t, "shipped plan ship-it (2 steps)", eventSummary(shipped[0]))
+	require.Equal(t, "flag", evtIcon(string(core.EventPlanShipped)))
+	require.NotEqual(t, evtIcon(string(core.EventPlanCaptured)), evtIcon(string(core.EventPlanShipped)))
+
+	// Switching off again leaves the page byte-identical to the pre-enable
+	// render: no computation, no residue, even though the settlement now exists.
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: false}))
+	require.Equal(t, offPage, getPeek(t, mux, "/console/plans?w=all").Body.String(),
+		"off = byte-identical Plans page")
+}
+
 // getJSON2 fetches a path and returns the raw JSON body as a string.
 func getJSON2(t *testing.T, mux *http.ServeMux, path string) string {
 	t.Helper()

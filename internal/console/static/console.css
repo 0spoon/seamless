@@ -4086,6 +4086,20 @@ button.star.on .ico { fill: currentColor; }
    global rule. */
 .ov2-evt.mom-glint.live-in { animation: live-in var(--dur-med) var(--ease-out), ix-locate-wash .5s var(--ease-out) both; }
 
+/* Momentum plan settle: when a plan.shipped settlement arrives over the live
+   morph, the shipped plan's rail row enters the Plans done group as a fresh
+   node and rides the same pairing -- live-in plus the ledger-scale locate
+   wash, done before the morph strips .live-in at 600ms. Rows already on
+   screen at page load render plain, and reduced motion stills it via the
+   global rule. This settle is the ceiling: no confetti, no toast outside the
+   Now arcade. */
+.rail-item.mom-settle.live-in { animation: live-in var(--dur-med) var(--ease-out), ix-locate-wash .5s var(--ease-out) both; }
+
+/* The Plans header's quiet momentum line (rendered only while the feature is
+   on): a muted verbatim count, no pill, no motion. */
+.mom-shipped { font-size: var(--text-xs); color: var(--faint); white-space: nowrap; }
+.mom-shipped strong { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+
 /* The stream rows carry the same edge. data-sev supersedes the older per-domain
    tone-* edge colors on these rows, so the three surfaces agree; tone-* still
    colors the kind chip's domain elsewhere (event detail, project tables). */

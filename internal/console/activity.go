@@ -190,6 +190,12 @@ func eventSummary(e core.Event) string {
 		return "presented plan " + payloadStr(p, "basename")
 	case core.EventPlanApproved:
 		return "approved plan " + payloadStr(p, "basename")
+	case core.EventPlanShipped:
+		line := "shipped plan " + payloadStr(p, "plan")
+		if n := payloadInt(p, "steps"); n > 0 {
+			line += " (" + plural(n, "step", "steps") + ")"
+		}
+		return line
 	case core.EventSubagentCaptured:
 		if at := payloadStr(p, "agent_type"); at != "" {
 			return "cached subagent (" + at + ")"
@@ -208,6 +214,21 @@ func payloadStr(p map[string]any, key string) string {
 		return v
 	}
 	return ""
+}
+
+// payloadInt reads a numeric payload field as an int, 0 when absent: a live
+// SSE event carries the in-process int, a row read back from the DB carries
+// JSON's float64.
+func payloadInt(p map[string]any, key string) int {
+	switch v := p[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
 }
 
 // featureStateSuffix renders a features_changed payload's per-feature state as

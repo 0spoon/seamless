@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
@@ -64,6 +65,10 @@ type planRow struct {
 	// primary would drop an actively-worked plan out of the window (and sort it
 	// low) merely because its narrative note had not been re-saved.
 	Updated time.Time `json:"updated"`
+	// Shipped marks a plan with a plan.shipped settlement in the current local
+	// month -- the mom-settle hook the live-arrival wash keys on. A momentum
+	// surface: never set while the feature is off (zero trace, JSON included).
+	Shipped bool `json:"shipped,omitempty"`
 }
 
 // plansData is the Plans library payload. Rows are one merged, newest-first
@@ -91,6 +96,16 @@ type plansData struct {
 	// QS is the ?w= suffix rail links carry so the active window survives a
 	// selection change ("" at the default).
 	QS string `json:"-"`
+	// ShippedMonth is the header's quiet momentum line: the real count of
+	// plan.shipped settlements in the current LOCAL calendar month. nil while
+	// the momentum feature is off -- zero trace, including in the JSON.
+	ShippedMonth *planShippedMonth `json:"shippedThisMonth,omitempty"`
+}
+
+// planShippedMonth carries the Plans header's monthly shipped count, a
+// verbatim count of plan.shipped events (each latched once-ever per plan).
+type planShippedMonth struct {
+	Count int `json:"count"`
 }
 
 // planKey identifies a plan by the (project, slug) pair rather than the slug
@@ -239,7 +254,34 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 			data.Ready++
 		}
 	}
+	s.planShippedMomentum(ctx, &data)
 	return data, nil
+}
+
+// planShippedMomentum fills the momentum surfaces of the Plans page: the
+// header's monthly shipped count and the per-row settle marks, both judged
+// from the plan.shipped settlements in the current local month. Gated on the
+// feature (off = not computed, zero trace) and failure-soft the momentum way
+// -- an error drops the whole surface rather than rendering a wrong zero.
+func (s *Service) planShippedMomentum(ctx context.Context, data *plansData) {
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		return
+	}
+	now := time.Now().Local()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	refs, err := store.PlansShippedSince(ctx, s.cfg.DB, monthStart)
+	if err != nil {
+		s.logger.Warn("console: plans shipped this month", "error", err)
+		return
+	}
+	data.ShippedMonth = &planShippedMonth{Count: len(refs)}
+	shipped := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		shipped[planKey(ref.Project, ref.Slug)] = true
+	}
+	for i := range data.Rows {
+		data.Rows[i].Shipped = shipped[planKey(data.Rows[i].Project, data.Rows[i].Slug)]
+	}
 }
 
 // composedPrimaries groups plan:<slug> notes by (project, slug) and returns the

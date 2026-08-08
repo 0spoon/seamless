@@ -212,7 +212,7 @@ func TestCheckMilestones_FirstSupersession(t *testing.T) {
 	require.Len(t, rec.minted, 1)
 }
 
-func TestCheckMilestones_FirstPlanShippedOnFinalStepDone(t *testing.T) {
+func TestCheckMilestones_PlanShippedOnFinalStepDone(t *testing.T) {
 	db := openTestDB(t)
 	rec := newFakeOnceRecorder()
 	ctx := context.Background()
@@ -238,45 +238,70 @@ func TestCheckMilestones_FirstPlanShippedOnFinalStepDone(t *testing.T) {
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, transition(loose, "done")))
 	require.Empty(t, rec.minted)
 
-	// The final step closing as done ships the plan, once.
+	// The final step closing as done mints the settlement, once.
 	_, err := db.ExecContext(ctx, `UPDATE tasks SET status = 'done' WHERE id = ?`, last)
 	require.NoError(t, err)
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, transition(last, "done")))
 	require.Len(t, rec.minted, 1)
 	m := rec.minted[0]
-	require.Equal(t, "first-plan-shipped:demo", m.ItemID)
-	require.Equal(t, "first plan shipped in demo: ship-it", m.Payload["claim"])
+	require.Equal(t, core.EventPlanShipped, m.Kind)
+	require.Equal(t, "ship-it", m.ItemID, "the latch key is the plan slug")
+	require.Equal(t, "demo", m.ProjectSlug)
+	require.Equal(t, "sess-3", m.SessionID)
 	require.Equal(t, "ship-it", m.Payload["plan"])
+	require.Equal(t, "demo", m.Payload["project"])
 	require.Equal(t, 3, m.Payload["steps"])
-	require.Equal(t, 1, m.Payload["count"])
 
-	// Re-checks and later plans do not re-mint the first.
+	// Repeated rollup recomputes do not re-mint the settlement.
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, transition(last, "done")))
+	require.Len(t, rec.minted, 1)
+
+	// The recorder feeds the minted settlement back through CheckMilestones,
+	// which latches the first-plan-shipped milestone with the steps verbatim.
+	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, m))
+	require.Len(t, rec.minted, 2)
+	first := rec.minted[1]
+	require.Equal(t, EventMilestoneReached, first.Kind)
+	require.Equal(t, "first-plan-shipped:demo", first.ItemID)
+	require.Equal(t, "first plan shipped in demo: ship-it", first.Payload["claim"])
+	require.Equal(t, "ship-it", first.Payload["plan"])
+	require.Equal(t, 3, first.Payload["steps"])
+	require.Equal(t, 1, first.Payload["count"])
+
+	// A later plan mints its own settlement, but the first-milestone latch holds.
 	encore := seedPlanTask(t, db, "demo", "encore", core.TaskDone)
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, transition(encore, "done")))
-	require.Len(t, rec.minted, 1)
+	require.Len(t, rec.minted, 3)
+	require.Equal(t, core.EventPlanShipped, rec.minted[2].Kind)
+	require.Equal(t, "encore", rec.minted[2].ItemID)
+	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, rec.minted[2]))
+	require.Len(t, rec.minted, 3, "the second shipped plan finds the milestone latch set")
 }
 
-func TestCheckMilestones_PlanShippedEventSharesTheLatch(t *testing.T) {
+func TestCheckMilestones_PlanShippedEventLatchesTheFirstMilestone(t *testing.T) {
 	db := openTestDB(t)
 	rec := newFakeOnceRecorder()
 	ctx := context.Background()
 	ts := time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC)
 
-	// The L2 plan.shipped event (once that layer lands) mints the first.
-	shipped := core.Event{Kind: eventPlanShipped, SessionID: "sess-4", ProjectSlug: "demo",
-		Payload: map[string]any{"slug": "from-l2"}, TS: ts}
+	// A plan.shipped event latches the project's first-plan milestone.
+	shipped := core.Event{Kind: core.EventPlanShipped, SessionID: "sess-4", ProjectSlug: "demo",
+		ItemID: "from-l2", Payload: map[string]any{"slug": "from-l2"}, TS: ts}
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, shipped))
 	require.Len(t, rec.minted, 1)
 	require.Equal(t, "first-plan-shipped:demo", rec.minted[0].ItemID)
 	require.Equal(t, "first plan shipped in demo: from-l2", rec.minted[0].Payload["claim"])
 
-	// Own detection afterwards finds the latch set: no double mint.
+	// A later plan's settlement finds the milestone latch set: no double mint.
 	only := seedPlanTask(t, db, "demo", "by-tasks", core.TaskDone)
 	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn,
 		core.Event{Kind: core.EventTaskTransition, ProjectSlug: "demo", ItemID: only,
 			Payload: map[string]any{"to": "done"}, TS: ts}))
-	require.Len(t, rec.minted, 1)
+	require.Len(t, rec.minted, 2, "the completion still mints its own settlement")
+	require.Equal(t, core.EventPlanShipped, rec.minted[1].Kind)
+	require.Equal(t, "by-tasks", rec.minted[1].ItemID)
+	require.NoError(t, CheckMilestones(ctx, db, rec, momentumOn, rec.minted[1]))
+	require.Len(t, rec.minted, 2, "feeding it back mints no second first-plan milestone")
 }
 
 func TestCheckMilestones_ProjectBirthdayLatchesPerYear(t *testing.T) {

@@ -190,3 +190,29 @@ func TestMemorySpotlight(t *testing.T) {
 	require.False(t, found)
 	require.Zero(t, empty.ItemID)
 }
+
+// PlansShippedSince is the judged source behind the Plans page's monthly
+// count and settle marks: only plan.shipped rows, only at or after since,
+// project and slug verbatim from the settlement event.
+func TestPlansShippedSince_WindowsBySettlementTime(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	monthStart := time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)
+
+	insertProjectEvent(t, db, core.EventPlanShipped, "", "demo", "old-plan", "{}", monthStart.Add(-time.Hour))
+	insertProjectEvent(t, db, core.EventPlanShipped, "", "demo", "fresh-plan", "{}", monthStart.Add(time.Hour))
+	insertProjectEvent(t, db, core.EventPlanShipped, "", "other", "elsewhere", "{}", monthStart.Add(2*time.Hour))
+	insertProjectEvent(t, db, core.EventTaskTransition, "", "demo", "not-a-settlement", "{}", monthStart.Add(time.Hour))
+
+	refs, err := PlansShippedSince(ctx, db, monthStart)
+	require.NoError(t, err)
+	require.Equal(t, []PlanShippedRef{
+		{Project: "demo", Slug: "fresh-plan"},
+		{Project: "other", Slug: "elsewhere"},
+	}, refs)
+
+	// Nothing in the window is nothing, not an error.
+	empty, err := PlansShippedSince(ctx, db, monthStart.AddDate(0, 1, 0))
+	require.NoError(t, err)
+	require.Empty(t, empty)
+}

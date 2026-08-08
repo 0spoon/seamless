@@ -401,6 +401,7 @@ const (
 	EventPlanCaptured     EventKind = "plan.captured"     // a plan-file iteration landed as a cc-plan note
 	EventPlanPresented    EventKind = "plan.presented"    // the user was prompted to review the plan
 	EventPlanApproved     EventKind = "plan.approved"     // the user approved the plan (ExitPlanMode)
+	EventPlanShipped      EventKind = "plan.shipped"      // momentum: a plan's final open step closed as done (payload: plan, project, steps); latched once per plan via RecordOnce
 	EventSubagentCaptured EventKind = "subagent.captured" // a planning subagent's prompt+report landed as a cc-agent note
 
 	// Project isolation: the owner moved a project's agent-facing fence.

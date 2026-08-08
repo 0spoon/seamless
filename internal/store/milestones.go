@@ -3,7 +3,9 @@
 // A short, honest set of once-ever milestones -- counts a project actually
 // crossed and firsts that actually happened -- minted as milestone.reached
 // events via events.RecordOnce, whose kind+item_id guarded insert is the
-// once-ever latch. Every payload states its exact claim verbatim and the real
+// once-ever latch. The plan.shipped settlement (once per plan, on the task
+// transition that closes its last step as done) is minted here too, through
+// the same latch. Every payload states its exact claim verbatim and the real
 // count behind it ("100 memories written in seamless", count 100), never a
 // score-shaped invention. The checks piggyback on the event recorder's write
 // path, where the counts change: there is no polling pass, and while the
@@ -29,13 +31,11 @@ import (
 // the ledger's consumers read them from here.
 const EventMilestoneReached core.EventKind = "milestone.reached"
 
-// eventPlanShipped is the plan-settlement event kind the momentum L2 layer
-// mints when a plan ships. That layer has not landed yet, so CheckMilestones
-// carries its own completion detection (checkPlanShippedByTasks) -- but it
-// already reacts to this kind too, and both paths mint through the same
-// first-plan-shipped latch key, so whichever fires first wins and the other
-// finds the latch set: no double mint in either order.
-const eventPlanShipped core.EventKind = "plan.shipped"
+// The plan-settlement event kind is core.EventPlanShipped: checkPlanShipped
+// below mints it on the task transition that completes a plan, and the
+// recorder's post-insert hook feeds the minted event straight back through
+// CheckMilestones, whose plan.shipped branch latches the first-plan-shipped
+// milestone.
 
 // MilestoneMemoryWrittenThresholds are the per-project memory-written counts
 // that mint a milestone, ascending. Exported maturity-style so the ledger's
@@ -65,13 +65,16 @@ type OnceRecorder interface {
 // with no project slug move no per-project count and are skipped outright, as
 // are all kinds outside the small watched set -- in particular
 // milestone.reached itself, which bounds the recorder's re-entrant call.
+// plan.shipped is watched on purpose: the recorder feeds a settlement this
+// very function just minted back through here to latch the first-plan-shipped
+// milestone, and that second re-entry ends at milestone.reached.
 func CheckMilestones(ctx context.Context, db *sql.DB, rec OnceRecorder, base config.Features, e core.Event) error {
 	if e.ProjectSlug == "" {
 		return nil
 	}
 	switch e.Kind {
 	case core.EventSessionStarted, core.EventMemoryWritten, core.EventMemorySuperseded,
-		core.EventInjected, core.EventTaskTransition, eventPlanShipped:
+		core.EventInjected, core.EventTaskTransition, core.EventPlanShipped:
 	default:
 		return nil
 	}
@@ -92,9 +95,10 @@ func CheckMilestones(ctx context.Context, db *sql.DB, rec OnceRecorder, base con
 	case core.EventMemorySuperseded:
 		errs = errors.Join(errs, mintFirstSupersession(ctx, rec, e))
 	case core.EventTaskTransition:
-		errs = errors.Join(errs, checkPlanShippedByTasks(ctx, db, rec, e))
-	case eventPlanShipped:
-		errs = errors.Join(errs, mintFirstPlanShipped(ctx, rec, e.SessionID, e.ProjectSlug, payloadString(e.Payload, "slug", "plan"), 0))
+		errs = errors.Join(errs, checkPlanShipped(ctx, db, rec, e))
+	case core.EventPlanShipped:
+		errs = errors.Join(errs, mintFirstPlanShipped(ctx, rec, e.SessionID, e.ProjectSlug,
+			payloadString(e.Payload, "slug", "plan"), payloadInt(e.Payload, "steps")))
 	}
 	// The birthday check piggybacks on every watched kind: a project's next
 	// activity after an anniversary mints it, with no polling pass.
@@ -196,14 +200,18 @@ func mintFirstSupersession(ctx context.Context, rec OnceRecorder, e core.Event) 
 	return nil
 }
 
-// checkPlanShippedByTasks is the layer's own plan-shipped detection, pending
-// the L2 plan.shipped event: a plan ships when a step closing as done leaves
-// every step in the plan closed (done or dropped -- the planRollups
-// completeness test, "one step from shipped" reaching zero). Judged from the
-// tasks table, never inferred: the transition's task row names the plan and
-// project, and the grouped count is the claim's evidence. A plan whose final
-// open step is dropped completes without shipping and mints nothing.
-func checkPlanShippedByTasks(ctx context.Context, db *sql.DB, rec OnceRecorder, e core.Event) error {
+// checkPlanShipped mints the plan.shipped settlement on the task transition
+// that completes a plan: a step closing as done leaves every step in the plan
+// closed (done or dropped -- the planRollups completeness test, "one step from
+// shipped" reaching zero). Judged from the tasks table, never inferred: the
+// transition's task row names the plan and project, and the grouped count is
+// the claim's evidence. The RecordOnce latch on (plan.shipped, slug) makes the
+// settlement once-ever per plan, so repeated rollup recomputes cannot re-mint;
+// the recorder's post-insert hook then feeds the minted event back through
+// CheckMilestones, whose plan.shipped branch latches the first-plan-shipped
+// milestone. A plan whose final open step is dropped completes without
+// shipping and mints nothing.
+func checkPlanShipped(ctx context.Context, db *sql.DB, rec OnceRecorder, e core.Event) error {
 	if payloadString(e.Payload, "to") != string(core.TaskDone) {
 		return nil
 	}
@@ -229,13 +237,21 @@ func checkPlanShippedByTasks(ctx context.Context, db *sql.DB, rec OnceRecorder, 
 	if total == 0 || closed < total {
 		return nil // steps remain open or in flight
 	}
-	return mintFirstPlanShipped(ctx, rec, e.SessionID, project, plan, total)
+	_, _, err = rec.RecordOnce(ctx, core.Event{
+		Kind: core.EventPlanShipped, SessionID: e.SessionID,
+		ProjectSlug: project, ItemID: plan,
+		Payload: map[string]any{"plan": plan, "project": project, "steps": total},
+	})
+	if err != nil {
+		return fmt.Errorf("store.CheckMilestones: mint plan.shipped %s: %w", plan, err)
+	}
+	return nil
 }
 
-// mintFirstPlanShipped latches the project's first shipped plan. Both
-// detection paths -- the task-completion judgment above and the L2
-// plan.shipped event once it exists -- land here on the same key, so the
-// kind+item_id latch guarantees a single mint regardless of which fires first.
+// mintFirstPlanShipped latches the project's first shipped plan, from the
+// plan.shipped branch above: the settlement event's own once-ever latch is per
+// plan, while this milestone's first-plan-shipped:<project> key is per
+// project, so a second shipped plan finds the milestone latch set.
 func mintFirstPlanShipped(ctx context.Context, rec OnceRecorder, sessionID, project, plan string, steps int) error {
 	claim := fmt.Sprintf("first plan shipped in %s", project)
 	if plan != "" {
@@ -320,4 +336,19 @@ func payloadString(p map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+// payloadInt returns the named payload field as an int, or 0 when absent. A
+// freshly minted event carries the in-process int; one read back from the DB
+// carries JSON's float64. Both are the same number.
+func payloadInt(p map[string]any, key string) int {
+	switch v := p[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
 }
