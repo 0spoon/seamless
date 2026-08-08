@@ -153,16 +153,20 @@ func TestCalendarGrid(t *testing.T) {
 		{Label: "Aug 07"},
 		{Label: "Aug 08"},
 	}
-	svg := string(calendarGrid(days, start))
+	svg := string(calendarGrid(days, start, ""))
 
 	require.Contains(t, svg, `class="mom-cal-grid"`)
 	require.Contains(t, svg, `role="img"`)
+	require.Contains(t, svg, `tabindex="0"`, "the grid is a keyboard tab stop for the charts.js readout")
 	require.Equal(t, 7, strings.Count(svg, "mom-cal-cell"), "one cell per day")
 	require.Equal(t, 2, strings.Count(svg, "mom-cal-dot"), "one dot per covered day, none elsewhere")
 	require.Contains(t, svg, `class="mom-cal-cell l0"`, "a quiet day rests at level zero")
 	require.Contains(t, svg, `class="mom-cal-cell l4"`, "the busiest day carries full intensity")
-	require.Contains(t, svg, "Aug 04 -- 4 sessions, 2 captured")
-	require.Contains(t, svg, "Aug 02 -- no sessions")
+	require.Contains(t, svg, "Tue, Aug 04 -- 4 sessions, 2 captured")
+	require.Contains(t, svg, "Sun, Aug 02 -- no sessions")
+	require.Equal(t, 7, strings.Count(svg, "data-day="), "every cell carries its date for the day drill-down")
+	require.Contains(t, svg, `data-day="2026-08-04"`)
+	require.NotContains(t, svg, " sel", "no cell is outlined while no day is focused")
 	require.Contains(t, svg, `>Aug</text>`, "the month labels its first column")
 	require.Contains(t, svg, ">Mon</text>")
 	require.Equal(t, 1, strings.Count(svg, "mom-cal-col"), "one wave group per week column")
@@ -170,11 +174,16 @@ func TestCalendarGrid(t *testing.T) {
 	require.Equal(t, 1, strings.Count(svg, " today"), "exactly one breathing cell")
 	require.Contains(t, svg, `class="mom-cal-cell l0 today"`, "the final bucket is today's cell")
 
+	// The ?day drill-down's focused cell wears the sel outline -- exactly one.
+	svg = string(calendarGrid(days, start, "2026-08-04"))
+	require.Equal(t, 1, strings.Count(svg, " sel"), "exactly one focused cell")
+	require.Contains(t, svg, `class="mom-cal-cell l4 sel"`, "the focused day keeps its intensity tone")
+
 	// Two weeks: the second column opens its own wave group with a later delay.
 	two := append(slices.Clone(days), days...)
-	svg = string(calendarGrid(two, start))
+	svg = string(calendarGrid(two, start, ""))
 	require.Equal(t, 2, strings.Count(svg, "mom-cal-col"))
 	require.Contains(t, svg, `style="--d:12ms"`)
 
-	require.Empty(t, calendarGrid(nil, start), "no days renders nothing")
+	require.Empty(t, calendarGrid(nil, start, ""), "no days renders nothing")
 }

@@ -520,8 +520,19 @@ func TestSessionsCaptureCalendar_FollowsTheMomentumFeature(t *testing.T) {
 	require.Contains(t, page, "day capture streak")
 	require.Contains(t, page, `class="mom-cal-col" style="--d:0ms"`, "week columns carry the staggered entry-wave delay")
 	require.Contains(t, page, ` today"`, "the final bucket is today's breathing cell")
+	require.Contains(t, page, "data-day=", "cells carry their dates for the ?day drill-down")
+	require.Contains(t, page, "mom-cal-ramp", "the header key restates the intensity ramp")
 	require.NotContains(t, page, "mom-cal-ember", "one covered day is below the ember floor")
+	require.NotContains(t, page, "mom-cal-day", "no day chip while no day is focused")
 	require.Contains(t, getJSON2(t, mux, "/console/sessions?format=json"), `"captureStreak"`)
+
+	// Focusing a day (a calendar cell click) outlines its cell and raises the
+	// clearable chip; today's session was created today, so its cell is both.
+	day := time.Now().Local().Format("2006-01-02")
+	page = getPeek(t, mux, "/console/sessions?day="+day).Body.String()
+	require.Contains(t, page, ` sel`, "the focused day's cell wears the outline")
+	require.Contains(t, page, `class="mom-cal-day"`, "the chip names the focused day")
+	require.Contains(t, page, "Clear the day focus", "the chip carries the way back out")
 }
 
 // The streak ember is presentation on the calendar's already-judged current

@@ -4219,18 +4219,28 @@ button.star.on .ico { fill: currentColor; }
 .ov2-attn-card > .ico-arrow-right { flex: none; width: 14px; height: 14px; color: var(--faint); transition: transform var(--dur-fast) var(--ease-out); }
 .ov2-attn-card:hover > .ico-arrow-right { transform: translateX(2px); }
 
-/* vitals -- number, comparison, denominator, verdict, shape */
+/* vitals -- number, comparison, denominator, verdict, shape. Each card is a
+   drill-down link (same affordance as the attention cards); the label's arrow
+   is the quiet cue, and it slides on hover like theirs. */
 .ov2-vitals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 18px; }
 .ov2-vital {
   display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 12px;
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-xs);
+  color: inherit; text-decoration: none;
+  transition: box-shadow var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out);
 }
+.ov2-vital:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); text-decoration: none; }
 .ov2-vital-label {
   display: flex; align-items: center; gap: 6px;
   font-size: var(--text-2xs); font-weight: 600; text-transform: uppercase;
   letter-spacing: var(--tracking-wider); color: var(--text-muted);
 }
 .ov2-vital-label .ico { width: 13px; height: 13px; flex: none; }
+.ov2-vital-label .ico-arrow-right {
+  margin-left: auto; color: var(--faint);
+  transition: transform var(--dur-fast) var(--ease-out);
+}
+.ov2-vital:hover .ov2-vital-label .ico-arrow-right { transform: translateX(2px); color: var(--text-muted); }
 .ov2-vital-num { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .ov2-vital-num strong {
   font-family: var(--font-display); font-size: var(--text-3xl); font-weight: 600;
@@ -4494,8 +4504,12 @@ button.star.on .ico { fill: currentColor; }
 /* --- Momentum: capture calendar (Sessions) --------------------------------- */
 /* The contribution grid and its two quiet streak numbers. Empty days rest in
    the border tone -- a pause is never a warning -- and covered days carry the
-   retention-green dot the coverage surfaces already use. */
+   retention-green dot the coverage surfaces already use. The grid is an
+   instrument: charts.js gives each cell the .hov-tip readout (position:
+   relative here is what the tooltip anchors to, outside the scroll clip) and a
+   click that focuses the session map on that day. */
 .mom-cal {
+  position: relative;
   margin: 0 0 14px; padding: 12px 16px 10px;
   background: var(--surface); border: 1px solid var(--border);
   border-radius: var(--radius-md); box-shadow: var(--shadow-xs);
@@ -4513,12 +4527,28 @@ button.star.on .ico { fill: currentColor; }
    stills the pulse; the glyph stays. */
 .mom-cal-ember { display: inline-flex; align-items: center; align-self: center; padding: 2px 6px; border-radius: var(--radius-pill); color: var(--pop-strong); border: 1px solid var(--pop-soft); background: var(--pop-soft); }
 .mom-cal-ember .ico { width: 12px; height: 12px; animation: seam-pulse 1.6s ease-in-out infinite; }
+/* The focused-day chip: the ?day drill-down made visible where it was minted,
+   in the pop tones the .sel cell outline shares, with the x back to the window
+   view riding the shared no-reload path. */
+.mom-cal-day { display: inline-flex; align-items: center; align-self: center; gap: 7px; padding: 2px 8px; border-radius: var(--radius-pill); font-size: var(--text-xs); color: var(--pop-strong); border: 1px solid var(--pop-soft); background: var(--pop-soft); }
+.mom-cal-day-x { color: inherit; text-decoration: none; font-weight: 700; line-height: 1; }
+.mom-cal-day-x:hover { color: var(--text-primary); }
 .mom-cal-key { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); color: var(--text-muted); }
 .mom-cal-key-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+/* The intensity ramp: the l0-l4 cell tones restated as a less..more key, so
+   the encoding is readable without hovering a single cell. */
+.mom-cal-ramp { display: inline-flex; align-items: center; gap: 3px; margin-right: 12px; }
+.mom-cal-ramp i { width: 9px; height: 9px; border-radius: 2px; background: var(--brand); }
+.mom-cal-ramp i.l0 { background: var(--bg-page); border: 1px solid var(--border); }
+.mom-cal-ramp i.l1 { opacity: .3; }
+.mom-cal-ramp i.l2 { opacity: .55; }
+.mom-cal-ramp i.l3 { opacity: .8; }
 .mom-cal-scroll { overflow-x: auto; }
 .mom-cal-grid { display: block; }
+.mom-cal-grid:focus { outline: none; }
+.mom-cal-grid:focus-visible { outline: 2px solid var(--brand); outline-offset: 4px; border-radius: var(--radius-xs); }
 .mom-cal-grid text { font-size: 9px; fill: var(--text-muted); font-family: var(--font-sans); }
-.mom-cal-cell { fill: var(--border); }
+.mom-cal-cell { fill: var(--border); cursor: pointer; }
 .mom-cal-cell.l0 { fill: var(--bg-page); stroke: var(--border); stroke-width: 1; }
 .mom-cal-cell.l1 { fill: var(--brand); fill-opacity: .3; }
 .mom-cal-cell.l2 { fill: var(--brand); fill-opacity: .55; }
@@ -4536,6 +4566,12 @@ button.star.on .ico { fill: currentColor; }
   0%, 100% { stroke-opacity: 1; stroke-width: 1.2; }
   50% { stroke-opacity: .4; stroke-width: 2.2; }
 }
+/* After the tone and today rules so they win the cascade: hover and the
+   keyboard cursor share one steady highlight (today's breath holds still under
+   the pointer, so the readout is legible), and .sel marks the day the session
+   map is focused on, in the pop tone the day chip repeats. */
+.mom-cal-cell:hover, .mom-cal-cell.kb { stroke: var(--text-primary); stroke-width: 1.2; stroke-opacity: 1; animation: none; }
+.mom-cal-cell.sel { stroke: var(--pop-strong); stroke-width: 1.6; stroke-opacity: 1; animation: none; }
 
 /* --- Momentum: finish-line progress draw (Overview attention strip) --------- */
 /* The plan's real done/total share on the finish-line card, drawn in with the

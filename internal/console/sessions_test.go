@@ -207,6 +207,107 @@ func TestSessionsPage_WindowFilter(t *testing.T) {
 	require.Equal(t, 2, day.Total, "Total is the all-time count, not the windowed one")
 }
 
+// The ?day drill-down (a capture-calendar cell click) focuses the list on the
+// sessions CREATED that local day and bypasses the ?w window -- the calendar
+// spans a year while the default window is 24h, so a lit cell far outside the
+// window must still answer with its sessions. A day that is present but
+// uninterpretable is a loud 400 like a bad sort, never a silent
+// list-everything.
+func TestSessionsPage_DayFilter(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now()
+	old := now.AddDate(0, 0, -30)
+
+	mk := func(id string, at time.Time) core.Session {
+		return core.Session{
+			ID: id, Name: "cc/" + id, Status: core.SessionCompleted,
+			CreatedAt: at.UTC(), UpdatedAt: at.UTC(),
+		}
+	}
+	require.NoError(t, store.CreateSession(ctx, db, mk("oldday", old)))
+	require.NoError(t, store.CreateSession(ctx, db, mk("today", now)))
+
+	day := old.Local().Format("2006-01-02")
+	var focused sessionsData
+	getJSON(t, mux, "/console/sessions?day="+day+"&format=json", &focused)
+	require.Equal(t, day, focused.Day, "the focused day rides the payload")
+	require.Len(t, focused.Sessions, 1, "only the focused day's session, despite the 24h default window")
+	require.Equal(t, "cc/oldday", focused.Sessions[0].Name)
+
+	// The day composes with the other list filters like any of them.
+	var none sessionsData
+	getJSON(t, mux, "/console/sessions?day="+day+"&status=active&format=json", &none)
+	require.Empty(t, none.Sessions)
+
+	// An absent day stays the default window view; a present-but-uninterpretable
+	// day is rejected.
+	req := httptest.NewRequest(http.MethodGet, "/console/sessions?day=bogus&format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set("Accept", "application/json")
+	rr := do(mux, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	var e struct {
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &e))
+	require.Equal(t, `invalid day "bogus": expected YYYY-MM-DD`, e.Error)
+}
+
+// The ?retained filter (the Overview's Knowledge continuity vital links here
+// with retained=no) applies GetSessionCoverage's covered-ness test row by row:
+// a session retained knowledge when it has non-empty findings or wrote a
+// memory, note, or trial. A present-but-uninterpretable value is a loud 400.
+func TestSessionsPage_RetainedFilter(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+	now := time.Now().UTC()
+
+	mk := func(id, findings string) core.Session {
+		return core.Session{
+			ID: id, Name: "cc/" + id, Status: core.SessionCompleted,
+			Findings: findings, CreatedAt: now, UpdatedAt: now,
+		}
+	}
+	// Covered by findings alone; covered by a written memory alone; uncovered
+	// (a read is not a durable artifact).
+	require.NoError(t, store.CreateSession(ctx, db, mk("kept-findings", "learned a thing")))
+	require.NoError(t, store.CreateSession(ctx, db, mk("kept-memory", "")))
+	_, err := rec.Record(ctx, core.Event{Kind: core.EventMemoryWritten, SessionID: "kept-memory"})
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, mk("dropped", "")))
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventMemoryRead, SessionID: "dropped"})
+	require.NoError(t, err)
+
+	var none sessionsData
+	getJSON(t, mux, "/console/sessions?w=all&retained=no&format=json", &none)
+	require.Equal(t, "no", none.Retained, "the active filter rides the payload")
+	require.Len(t, none.Sessions, 1)
+	require.Equal(t, "cc/dropped", none.Sessions[0].Name)
+
+	var kept sessionsData
+	getJSON(t, mux, "/console/sessions?w=all&retained=yes&format=json", &kept)
+	require.Len(t, kept.Sessions, 2)
+
+	// Composes with the other list filters like any of them.
+	var active sessionsData
+	getJSON(t, mux, "/console/sessions?w=all&retained=yes&status=active&format=json", &active)
+	require.Empty(t, active.Sessions)
+
+	// Absent stays the unfiltered default; present-but-uninterpretable is loud.
+	req := httptest.NewRequest(http.MethodGet, "/console/sessions?retained=sometimes&format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	req.Header.Set("Accept", "application/json")
+	rr := do(mux, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	var e2 struct {
+		Error string `json:"error"`
+	}
+	require.NoError(t, json.Unmarshal(rr.Body.Bytes(), &e2))
+	require.Equal(t, `invalid retained "sometimes": valid values are yes, no`, e2.Error)
+}
+
 func TestSessionDetail_NotFound(t *testing.T) {
 	_, mux := newConsole(t)
 	req := httptest.NewRequest(http.MethodGet, "/console/sessions/NOSUCHID", nil)

@@ -470,15 +470,21 @@ type liveSessionRow struct {
 // comparison, the denominator that makes it readable, the threshold it is judged
 // against, and the shape behind it. Value is pre-rendered ("61%", "1,620") and
 // empty means "not measurable yet" -- which renders an em dash and drops the
-// chip, band, and sparkline rather than showing a confident zero.
+// chip, band, and sparkline rather than showing a confident zero. Href is the
+// screen that explains the number, carrying the active window so the click is a
+// drill-down into the same observation, not a navigation away from it; an
+// empty-state card keeps its link because the destination states WHY there is
+// nothing, which a dead card cannot.
 type vital struct {
-	Label string
-	Icon  string
-	Value string
-	Delta delta
-	Sub   string
-	Band  band
-	Spark spark
+	Label     string
+	Icon      string
+	Value     string
+	Delta     delta
+	Sub       string
+	Band      band
+	Spark     spark
+	Href      string
+	HrefTitle string // tooltip naming what the click answers
 }
 
 // overviewData is the pre-computed payload for the overview page.
@@ -836,7 +842,13 @@ func overviewVitals(d overviewData, report store.RetrievalReport, covTrend []sto
 ) []vital {
 	note := noteBand(priorLabel(win, hasPrior))
 
-	reach := vital{Label: "Memory reach", Icon: "gauge", Sub: "no active memories to reach yet"}
+	// Each card links to the screen that explains its number, carrying the
+	// active window: three into Retrieval (whose hero and delivery funnel ARE
+	// these numbers over the same report), and continuity into the Sessions
+	// list filtered to the sessions that retained nothing -- the write-side
+	// question Retrieval deliberately does not answer.
+	reach := vital{Label: "Memory reach", Icon: "gauge", Sub: "no active memories to reach yet",
+		Href: "/console/retrieval?w=" + win.Key, HrefTitle: "Reach detail in Retrieval"}
 	if d.ActiveMemories > 0 {
 		reach.Value = strconv.Itoa(d.ReachRate) + "%"
 		reach.Delta = pointDelta(d.ReachRate, prior.ReachRate, hasPrior, riseGood)
@@ -845,7 +857,8 @@ func overviewVitals(d overviewData, report store.RetrievalReport, covTrend []sto
 		reach.Spark = spark{Points: report.SurfacedTrend, Label: "Distinct memories surfaced per period"}
 	}
 
-	continuity := vital{Label: "Knowledge continuity", Icon: "brain", Sub: "no sessions observed in this window"}
+	continuity := vital{Label: "Knowledge continuity", Icon: "brain", Sub: "no sessions observed in this window",
+		Href: "/console/sessions?w=" + win.Key + "&retained=no", HrefTitle: "Sessions that retained nothing"}
 	if d.CovTotal > 0 {
 		continuity.Value = strconv.Itoa(d.Coverage) + "%"
 		continuity.Delta = pointDelta(d.Coverage, prior.Coverage, hasPrior && prior.CovTotal > 0, riseGood)
@@ -855,7 +868,8 @@ func overviewVitals(d overviewData, report store.RetrievalReport, covTrend []sto
 		continuity.Spark = spark{Points: coverageRateSeries(covTrend), Tone: "ok", Max: 100, Label: "Share of sessions retaining knowledge per period"}
 	}
 
-	injections := vital{Label: "Context injections", Icon: "arrow-down-to-line", Sub: "no context injected in this window"}
+	injections := vital{Label: "Context injections", Icon: "arrow-down-to-line", Sub: "no context injected in this window",
+		Href: "/console/retrieval?w=" + win.Key + "#retrieval-delivery-title", HrefTitle: "Delivery path in Retrieval"}
 	if d.Injections > 0 {
 		injections.Value = compactNum(d.Injections)
 		injections.Delta = volumeDelta(d.Injections, prior.Injections, hasPrior, noJudgment)
@@ -864,7 +878,8 @@ func overviewVitals(d overviewData, report store.RetrievalReport, covTrend []sto
 		injections.Spark = spark{Points: report.Trend, Label: "Injections per period"}
 	}
 
-	reached := vital{Label: "Sessions reached", Icon: "terminal", Sub: "no session received shared context yet"}
+	reached := vital{Label: "Sessions reached", Icon: "terminal", Sub: "no session received shared context yet",
+		Href: "/console/retrieval?w=" + win.Key, HrefTitle: "Sessions reached in Retrieval"}
 	if d.SessionsReached > 0 {
 		reached.Value = compactNum(d.SessionsReached)
 		reached.Delta = volumeDelta(d.SessionsReached, prior.SessionsReached, hasPrior, noJudgment)

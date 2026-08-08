@@ -1,11 +1,11 @@
 {{define "content"}}
 {{with .Data}}
-{{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}
+{{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}{{$day := .Day}}{{$retained := .Retained}}
 <div class="ops-page" data-ops="sessions">
 <header class="mv2-bar">
   <h1 title="Follow active runs, reopen completed findings, and inspect the work each agent left behind.">{{icon "terminal"}}Sessions</h1>
   <span class="mv2-count" aria-label="{{.Total}} sessions, {{.Active}} live">
-    <strong>{{.Total}}</strong>recorded<small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{.WindowLabel}} view</small>
+    <strong>{{.Total}}</strong>recorded<small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{if .Day}}{{.DayLabel}}{{else}}{{.WindowLabel}}{{end}} view</small>
   </span>
   <form class="search lib-query" method="get" action="/console/sessions" data-seam-query>
     {{icon "search"}}
@@ -13,28 +13,38 @@
     <input type="hidden" name="status" value="{{.Filter}}">
     <input type="hidden" name="w" value="{{.Window}}">
     <input type="hidden" name="sort" value="{{.Sort}}">
+    <input type="hidden" name="day" value="{{.Day}}">
+    <input type="hidden" name="retained" value="{{.Retained}}">
   </form>
   <span class="mv2-spacer"></span>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Status</span>
     <div class="seg" data-seam-query>
-      <a class="{{if eq .Filter ""}}on{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">All</a>
-      <a class="{{if eq .Filter "active"}}on{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Active</a>
-      <a class="{{if eq .Filter "completed"}}on{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Completed</a>
-      <a class="{{if eq .Filter "expired"}}on{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}">Expired</a>
+      <a class="{{if eq .Filter ""}}on{{end}}" href="/console/sessions?w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">All</a>
+      <a class="{{if eq .Filter "active"}}on{{end}}" href="/console/sessions?status=active&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Active</a>
+      <a class="{{if eq .Filter "completed"}}on{{end}}" href="/console/sessions?status=completed&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Completed</a>
+      <a class="{{if eq .Filter "expired"}}on{{end}}" href="/console/sessions?status=expired&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Expired</a>
+    </div>
+  </div>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Retained</span>
+    <div class="seg" data-seam-query>
+      <a class="{{if eq .Retained ""}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}">All</a>
+      <a class="{{if eq .Retained "yes"}}on{{end}}" title="Sessions that left a durable artifact behind: findings, a memory, a note, or a trial" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained=yes">Knowledge</a>
+      <a class="{{if eq .Retained "no"}}on{{end}}" title="Sessions that retained nothing durable" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained=no">Nothing</a>
     </div>
   </div>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Sort</span>
     <div class="seg" data-seam-query>
-      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}">Recent</a>
-      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}">Name</a>
+      <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Recent</a>
+      <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Name</a>
     </div>
   </div>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Updated</span>
     <div class="seg" data-seam-query>
-      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}">{{.Label}}</a>{{end}}
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;retained={{$retained}}">{{.Label}}</a>{{end}}
     </div>
   </div>
 </header>
@@ -47,7 +57,8 @@
     <span class="mom-cal-streak"><strong>{{.Current}}</strong>{{if .Ember}}<span class="mom-cal-ember" title="{{.EmberTitle}}">{{icon "flame"}}</span>{{end}}<small>day capture streak</small></span>
     <span class="mom-cal-streak"><strong>{{.Longest}}</strong><small>longest ever</small></span>
     {{end}}
-    <span class="mom-cal-key"><i class="mom-cal-key-dot"></i>day that captured knowledge</span>
+    {{if .Day}}<span class="mom-cal-day" title="The session map below is focused on this day">{{.DayLabel}}<a class="mom-cal-day-x" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;retained={{.Retained}}" data-seam-query aria-label="Clear the day focus" title="Back to the {{.WindowLabel}} view">&times;</a></span>{{end}}
+    <span class="mom-cal-key"><span class="mom-cal-ramp" title="Cell intensity scales with sessions that day">less<i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i>more</span><i class="mom-cal-key-dot"></i>day that captured knowledge</span>
   </header>
   <div class="mom-cal-scroll">{{.Calendar}}</div>
 </section>
@@ -57,7 +68,7 @@
   <header class="ops-stage-head">
     <div class="ops-stage-title">
       <span class="ops-stage-eyebrow">Session map</span>
-      <strong>{{len .Sessions}} run{{if ne (len .Sessions) 1}}s{{end}} in this view</strong>
+      <strong>{{len .Sessions}} run{{if ne (len .Sessions) 1}}s{{end}} {{if .Day}}on {{.DayLabel}}{{else}}in this view{{end}}</strong>
     </div>
     <div class="ops-stage-meta"><span class="status-key live"><span class="live-dot"></span>{{.Active}} live</span>{{if .Idle}}<span class="status-key idle">{{.Idle}} idle</span>{{end}}<span class="status-key done">{{.Completed}} completed</span><span class="status-key expired">{{.Expired}} expired</span></div>
   </header>
@@ -137,9 +148,13 @@
 
 {{else}}
 {{if .Query}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions match &ldquo;{{.Query}}&rdquo;{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{end}}.</div></div>
+<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions match &ldquo;{{.Query}}&rdquo;{{if .Filter}} with status "{{.Filter}}"{{end}}{{if eq .Retained "yes"}} that retained knowledge{{else if eq .Retained "no"}} that retained nothing{{end}}{{if .Day}} on {{.DayLabel}}{{else if ne .Window "all"}} in the last {{.WindowLabel}}{{end}}.</div></div>
+{{else if eq .Retained "no"}}
+{{/* The continuity vital links here; an empty list is the GOOD outcome and
+     must read as one, not as a dead end. */}}
+<div class="empty dotgrid"><span class="empty-ico">{{icon "brain"}}</span><div>Nothing dropped &mdash; every session{{if .Filter}} with status "{{.Filter}}"{{end}}{{if .Day}} on {{.DayLabel}}{{else if ne .Window "all"}} in the last {{.WindowLabel}}{{end}} retained knowledge.</div></div>
 {{else}}
-<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}} &mdash; each hooked agent run records a session here.</div></div>
+<div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if eq .Retained "yes"}} that retained knowledge{{end}}{{if .Day}} on {{.DayLabel}}{{else if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}} &mdash; each hooked agent run records a session here.</div></div>
 {{end}}
 {{end}}
   </div><!-- .list-pane -->

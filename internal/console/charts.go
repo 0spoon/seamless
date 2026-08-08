@@ -547,7 +547,15 @@ func sparkLine(s spark) template.HTML {
 // Each week column is a group carrying a staggered --d delay for the entry
 // wave; live morphs preserve these nodes, so the wave plays on a fresh render
 // and never on a data patch.
-func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
+//
+// The grid is an instrument, not wallpaper: every cell carries its local date
+// as data-day, and charts.js turns that into a hover/keyboard readout and a
+// click that focuses the Session map on exactly that day (the ?day filter in
+// sessions.go). selected is that filter's current day ("" when unfocused); its
+// cell wears the sel outline so the grid shows which day the list is answering
+// about. The <title> children stay as the no-JS fallback -- the client lifts
+// them into its own readout so the browser tooltip cannot double up.
+func calendarGrid(days []store.CoverageBucket, start time.Time, selected string) template.HTML {
 	if len(days) == 0 {
 		return ""
 	}
@@ -592,17 +600,21 @@ func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
 		if d.Total > 0 && maxN > 0 {
 			lvl = min(4, 1+(d.Total*4-1)/maxN)
 		}
-		title := day.Format("Jan 02") + " -- no sessions"
+		title := day.Format("Mon, Jan 02") + " -- no sessions"
 		if d.Total > 0 {
-			title = fmt.Sprintf("%s -- %s, %d captured", day.Format("Jan 02"),
+			title = fmt.Sprintf("%s -- %s, %d captured", day.Format("Mon, Jan 02"),
 				plural(d.Total, "session", "sessions"), d.Covered)
 		}
+		key := day.Format("2006-01-02")
 		cls := fmt.Sprintf("mom-cal-cell l%d", lvl)
+		if key == selected {
+			cls += " sel"
+		}
 		if i == len(days)-1 {
 			cls += " today"
 		}
-		fmt.Fprintf(&cells, `<rect class="%s" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2"><title>%s</title></rect>`,
-			cls, x, y, cell, cell, template.HTMLEscapeString(title))
+		fmt.Fprintf(&cells, `<rect class="%s" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2" data-day="%s"><title>%s</title></rect>`,
+			cls, x, y, cell, cell, key, template.HTMLEscapeString(title))
 		if d.Covered > 0 {
 			fmt.Fprintf(&cells, `<circle class="mom-cal-dot" cx="%.1f" cy="%.1f" r="1.8"></circle>`,
 				x+cell/2, y+cell/2)
@@ -621,8 +633,11 @@ func calendarGrid(days []store.CoverageBucket, start time.Time) template.HTML {
 
 	w := left + float64(weeks)*pitch
 	h := top + 7*pitch
+	// tabindex makes the grid keyboard-walkable (the charts.js readout, same as
+	// the trend charts); the aria-label stays the whole-grid summary because the
+	// per-day readout is a sighted affordance.
 	return template.HTML(fmt.Sprintf(
-		`<svg class="mom-cal-grid" viewBox="0 0 %.0f %.0f" width="%.0f" height="%.0f" role="img" aria-label="Sessions per day over the last year; a dot marks days that captured knowledge">`+
+		`<svg class="mom-cal-grid" viewBox="0 0 %.0f %.0f" width="%.0f" height="%.0f" tabindex="0" role="img" aria-label="Sessions per day over the last year; a dot marks days that captured knowledge. Arrow keys walk the days; Enter focuses the session list on one.">`+
 			`<g class="mom-cal-months">%s</g><g class="mom-cal-wdays">%s</g>%s</svg>`,
 		w, h, w, h, months.String(), wdays.String(), cells.String()))
 }

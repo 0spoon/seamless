@@ -40,14 +40,17 @@
   </section>
   {{end}}
 
+  {{/* Each vital is a drill-down link into the screen that explains its
+       number, keeping the active window; empty-state cards stay linked because
+       the destination states why there is nothing. */}}
   <section class="ov2-vitals" aria-label="Vitals">
     {{range .Vitals}}
-    <article class="ov2-vital">
-      <span class="ov2-vital-label">{{icon .Icon}}{{.Label}}</span>
+    <a class="ov2-vital" href="{{.Href}}" title="{{.HrefTitle}}">
+      <span class="ov2-vital-label">{{icon .Icon}}{{.Label}}{{icon "arrow-right"}}</span>
       <div class="ov2-vital-num"><strong>{{if .Value}}{{.Value}}{{else}}&mdash;{{end}}</strong>{{deltaChip .Delta}}</div>
       <span class="ov2-vital-sub">{{.Sub}}</span>
       <div class="ov2-vital-foot">{{bandLine .Band}}{{sparkLine .Spark}}</div>
-    </article>
+    </a>
     {{end}}
   </section>
 

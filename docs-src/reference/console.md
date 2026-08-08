@@ -142,6 +142,14 @@ The landing page and the health check. It carries:
   "No mishaps reported" state.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
+The four judged vitals at the top (memory reach, knowledge continuity, context
+injections, sessions reached) are drill-down links carrying the selected
+window: reach, injections, and sessions reached land on the Retrieval screen
+whose hero and delivery funnel are the same numbers over the same report, and
+continuity lands on the Sessions list filtered to `?retained=no` - the
+sessions that kept nothing. An empty-state card stays linked, because the
+destination explains why there is nothing.
+
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 `active` count that an idle session inflates until the reaper runs.
@@ -277,7 +285,12 @@ unknown slug is a 404.
 
 The list separates **active** (live: active and heartbeated within the idle TTL)
 from **idle** (active but gone quiet past it, awaiting the reaper) from
-**completed** and **expired**. Filterable by status, searchable, windowed.
+**completed** and **expired**. Filterable by status, searchable, windowed, and
+filterable by retention (`?retained=yes|no`): whether the session left a
+durable artifact behind - non-empty findings, or a written memory, note, or
+recorded trial, the same covered-ness test the coverage numbers apply. The
+Overview's continuity vital links straight to `?retained=no`, so its click
+answers "which sessions dropped knowledge".
 
 A session's page is the workspace: its findings (rendered), its full event
 timeline as interaction rows, per-session counts (tool calls, memory reads and
@@ -526,7 +539,11 @@ it on adds seven surfaces where you already look:
   quiet numbers -- the current capture streak and the longest ever. The streak
   counts covered days, so it rewards capture, not raw usage; a streak of seven
   covered days or more earns a small flame beside the number, and the number
-  itself stays verbatim.
+  itself stays verbatim. The grid is an instrument, not wallpaper: hovering a
+  cell reads out its day, clicking one focuses the session map on exactly that
+  day (a clearable chip names the focus; picking a time window widens back
+  out), and the grid is keyboard-walkable -- arrows move a day or a week,
+  Enter focuses, all without a page reload.
 - **Knowledge payoff moments**: the first time a memory is read by a session
   other than the one that wrote it, the moment lands in the activity ledger
   ("gotcha chroma-boot-race just paid off for the first time") -- once per

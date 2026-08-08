@@ -437,6 +437,13 @@ Warning tones appear only when reports exist; an empty rail is a positive
 &quot;No mishaps reported&quot; state.</li>
 <li><strong>Recent activity</strong> - the last twelve events, each linking to its detail page.</li>
 </ul>
+<p>The four judged vitals at the top (memory reach, knowledge continuity, context
+injections, sessions reached) are drill-down links carrying the selected
+window: reach, injections, and sessions reached land on the Retrieval screen
+whose hero and delivery funnel are the same numbers over the same report, and
+continuity lands on the Sessions list filtered to <code>?retained=no</code> - the
+sessions that kept nothing. An empty-state card stays linked, because the
+destination explains why there is nothing.</p>
 <p>Live sessions are counted TTL-aware (active <em>and</em> heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 <code>active</code> count that an idle session inflates until the reaper runs.</p>
@@ -578,7 +585,12 @@ unknown slug is a 404.</p>
 <p><code>/console/sessions</code>, <code>/console/sessions/{id}</code></p>
 <p>The list separates <strong>active</strong> (live: active and heartbeated within the idle TTL)
 from <strong>idle</strong> (active but gone quiet past it, awaiting the reaper) from
-<strong>completed</strong> and <strong>expired</strong>. Filterable by status, searchable, windowed.</p>
+<strong>completed</strong> and <strong>expired</strong>. Filterable by status, searchable, windowed, and
+filterable by retention (<code>?retained=yes|no</code>): whether the session left a
+durable artifact behind - non-empty findings, or a written memory, note, or
+recorded trial, the same covered-ness test the coverage numbers apply. The
+Overview's continuity vital links straight to <code>?retained=no</code>, so its click
+answers &quot;which sessions dropped knowledge&quot;.</p>
 <p>A session's page is the workspace: its findings (rendered), its full event
 timeline as interaction rows, per-session counts (tool calls, memory reads and
 writes, items injected, and read-after-inject), the tasks it currently claims with
@@ -779,7 +791,11 @@ knowledge (a session left findings, a memory, a note, or a trial), and two
 quiet numbers -- the current capture streak and the longest ever. The streak
 counts covered days, so it rewards capture, not raw usage; a streak of seven
 covered days or more earns a small flame beside the number, and the number
-itself stays verbatim.</li>
+itself stays verbatim. The grid is an instrument, not wallpaper: hovering a
+cell reads out its day, clicking one focuses the session map on exactly that
+day (a clearable chip names the focus; picking a time window widens back
+out), and the grid is keyboard-walkable -- arrows move a day or a week,
+Enter focuses, all without a page reload.</li>
 <li><strong>Knowledge payoff moments</strong>: the first time a memory is read by a session
 other than the one that wrote it, the moment lands in the activity ledger
 (&quot;gotcha chroma-boot-race just paid off for the first time&quot;) -- once per

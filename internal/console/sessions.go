@@ -69,6 +69,16 @@ type sessionsData struct {
 	WindowLabel string         `json:"windowLabel"`
 	Windows     []windowOption `json:"-"`
 	Sessions    []sessionRow   `json:"sessions"`
+	// Day and DayLabel carry the ?day drill-down: a single local day the list
+	// is focused on (clicking a capture-calendar cell mints these URLs), empty
+	// when the list answers about a window instead.
+	Day      string `json:"day,omitempty"`
+	DayLabel string `json:"-"`
+	// Retained carries the ?retained drill-down: "yes" keeps only sessions
+	// that left a durable artifact behind (GetSessionCoverage's covered-ness
+	// test), "no" only those that retained nothing, "" applies no filter. The
+	// Overview's Knowledge continuity vital mints ?retained=no links.
+	Retained string `json:"retained,omitempty"`
 	// Calendar and Streak are the momentum capture calendar (a year of daily
 	// activity with covered-day marks) and its two quiet numbers. Both are nil
 	// while the momentum feature is off -- zero trace, including in the JSON.
@@ -125,11 +135,48 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(sessionSortKeys, ", ")))
 		return
 	}
+	// The ?retained filter: the Overview's Knowledge continuity vital links
+	// here with retained=no, so the card's click lands on the sessions that
+	// dropped knowledge. Present-but-uninterpretable is a loud 400 like a bad
+	// sort or day.
+	retained := r.URL.Query().Get("retained") // "", yes, no
+	if retained != "" && retained != "yes" && retained != "no" {
+		s.badRequest(w, r, fmt.Sprintf("invalid retained %q: valid values are yes, no", retained))
+		return
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	q := strings.ToLower(query)
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
 
-	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, win.Since, 200)
+	// The ?day drill-down: clicking a capture-calendar cell focuses the list on
+	// the sessions CREATED that local day -- created, not updated, because that
+	// is what the calendar counted for the cell. A day present but
+	// uninterpretable is a loud 400 like a bad sort, never a silent
+	// list-everything. A focused day bypasses the ?w window (two time filters
+	// would compose to confusion -- a day outside the window would show a lit
+	// cell over an empty list; the template's window links drop ?day for the
+	// same reason): the fetch bound becomes the day itself, sound because
+	// updated_at never precedes created_at, and the list cap trades up so every
+	// session the calendar counted for that day stays reachable.
+	dayParam := r.URL.Query().Get("day")
+	var dayStart, dayEnd time.Time
+	var dayLabel string
+	if dayParam != "" {
+		var derr error
+		dayStart, derr = time.ParseInLocation("2006-01-02", dayParam, time.Local)
+		if derr != nil {
+			s.badRequest(w, r, fmt.Sprintf("invalid day %q: expected YYYY-MM-DD", dayParam))
+			return
+		}
+		dayEnd = dayStart.AddDate(0, 0, 1)
+		dayLabel = dayStart.Format("Mon, Jan 02")
+	}
+	since, limit := win.Since, 200
+	if !dayStart.IsZero() {
+		since, limit = dayStart, 1000
+	}
+
+	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, since, limit)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -139,14 +186,37 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// The event half of the covered-ness test, loaded only when the filter is
+	// on; the findings half lives on the rows already fetched.
+	var artifacts map[string]struct{}
+	if retained != "" {
+		artifacts, err = store.SessionsWithArtifacts(ctx, s.cfg.DB)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
 
 	now := time.Now()
 	rows := make([]sessionRow, 0, len(sessions))
 	active, idle, completed, expired := 0, 0, 0, 0
 	for _, sess := range sessions {
+		if !dayStart.IsZero() {
+			if c := sess.CreatedAt.Local(); c.Before(dayStart) || !c.Before(dayEnd) {
+				continue
+			}
+		}
 		plain := markdown.PlainText(sess.Findings)
 		if !sessionMatches(sess.Name, sess.ProjectSlug, plain, sess.ID, q) {
 			continue
+		}
+		// Covered-ness exactly as GetSessionCoverage computes it: non-empty
+		// findings on the row, or a durable-artifact event in the log.
+		if retained != "" {
+			_, artifact := artifacts[sess.ID]
+			if (sess.Findings != "" || artifact) != (retained == "yes") {
+				continue
+			}
 		}
 		live := sess.LiveAsOf(now, s.cfg.SessionIdleTTL)
 		switch sess.Status {
@@ -174,7 +244,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			return sessionSortName(rows[i]) < sessionSortName(rows[j])
 		})
 	}
-	calendar, streak := s.captureCalendar(ctx, now)
+	calendar, streak := s.captureCalendar(ctx, now, dayParam)
 	s.render(w, r, "sessions", pageData{
 		Title:  "Sessions",
 		Active: "sessions",
@@ -183,6 +253,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			Active: active, Idle: idle, Completed: completed, Expired: expired,
 			Total:  counts.Sessions,
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+			Day: dayParam, DayLabel: dayLabel, Retained: retained,
 			Sessions: rows,
 			Calendar: calendar, Streak: streak,
 		},
@@ -193,10 +264,12 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 // page: a full year of daily session activity with covered-day marks, plus the
 // streak numbers. Sessions is the screen about daily rhythm, so the full-year
 // grid lives here rather than as a compact strip on Overview (the placement
-// call the plan left to the implementer). Gated on the momentum feature --
-// off, neither query runs and the page is byte-identical to before -- and
-// failure-soft: a store error costs the calendar, never the page.
-func (s *Service) captureCalendar(ctx context.Context, now time.Time) (template.HTML, *captureStreak) {
+// call the plan left to the implementer). selected is the active ?day filter,
+// so the grid can outline the cell the list is currently answering about.
+// Gated on the momentum feature -- off, neither query runs and the page is
+// byte-identical to before -- and failure-soft: a store error costs the
+// calendar, never the page.
+func (s *Service) captureCalendar(ctx context.Context, now time.Time, selected string) (template.HTML, *captureStreak) {
 	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
 		return "", nil
 	}
@@ -218,9 +291,9 @@ func (s *Service) captureCalendar(ctx context.Context, now time.Time) (template.
 	current, longest, err := store.CaptureStreak(ctx, s.cfg.DB, now)
 	if err != nil {
 		s.logger.Warn("console: capture streak", "error", err)
-		return calendarGrid(buckets, start), nil
+		return calendarGrid(buckets, start, selected), nil
 	}
-	return calendarGrid(buckets, start), &captureStreak{Current: current, Longest: longest}
+	return calendarGrid(buckets, start, selected), &captureStreak{Current: current, Longest: longest}
 }
 
 // sessionMatches reports whether a session row satisfies the ?q text filter

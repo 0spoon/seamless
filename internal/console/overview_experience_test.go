@@ -45,6 +45,19 @@ func TestOverview_IsAStatusPageNotAPitch(t *testing.T) {
 	for _, label := range []string{"Memory reach", "Knowledge continuity", "Context injections", "Sessions reached"} {
 		require.Contains(t, body, label)
 	}
+
+	// Each vital is a drill-down link into the screen that explains its number,
+	// carrying the selected window: reach and sessions-reached to Retrieval's
+	// hero, injections to its delivery funnel, continuity to the Sessions list
+	// filtered to the sessions that retained nothing.
+	for _, href := range []string{
+		`<a class="ov2-vital" href="/console/retrieval?w=7d" title="Reach detail in Retrieval">`,
+		`<a class="ov2-vital" href="/console/retrieval?w=7d#retrieval-delivery-title"`,
+		`<a class="ov2-vital" href="/console/sessions?w=7d&amp;retained=no"`,
+		`<a class="ov2-vital" href="/console/retrieval?w=7d" title="Sessions reached in Retrieval">`,
+	} {
+		require.Contains(t, body, href)
+	}
 }
 
 func TestOverview_EmptyDatabaseRendersNoHollowPanels(t *testing.T) {
@@ -61,6 +74,9 @@ func TestOverview_EmptyDatabaseRendersNoHollowPanels(t *testing.T) {
 	require.Contains(t, body, `class="ov2-vitals"`)
 	require.Contains(t, body, "&mdash;")
 	require.Contains(t, body, "no active memories to reach yet")
+	// Empty-state cards keep their drill-down link: the destination explains
+	// why there is nothing, which a dead card cannot.
+	require.Contains(t, body, `<a class="ov2-vital" href="/console/retrieval?w=24h"`)
 }
 
 func TestOverview_AttentionStripOrdersBySeverityAndLinksOut(t *testing.T) {

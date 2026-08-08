@@ -95,7 +95,7 @@ func TestQueryControls_AreWiredAcrossConsole(t *testing.T) {
 		"retrieval": 1,
 		"projects":  4,
 		"context":   2,
-		"sessions":  4,
+		"sessions":  5,
 		"search":    5,
 		"memories":  2,
 		"notes":     2,
