@@ -15,6 +15,38 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.10 {#v0-4-10}
+
+Released 2026-08-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.10)
+
+### Features
+
+- feat(momentum): ledger milestones + witnessed unlock notices
+- feat(momentum): plan.shipped settlement + settle wash and monthly count on Plans
+- feat(momentum): milestone event layer (latched firsts and counts)
+- feat(momentum): finish-line card progress draw
+- feat(momentum): ledger glints for live payoff and stage-crossing arrivals
+- feat(momentum): streak ember on the capture streak number
+- feat(momentum): capture calendar entry wave + breathing today cell
+- feat(console): add the Now screen, the cross-project live agent view
+- feat(console): turn the Overview attention strip into a scroll-snap carousel
+- feat(plans): name the composition slug at capture, and fold the strays in
+- feat(momentum): latched project maturity stages
+- feat(momentum): knowledge payoff moments -- first reuse + monthly spotlight
+- feat(momentum): capture calendar with streak on the Sessions page
+- feat(momentum): finish-line cards on Overview + briefing plan-line emphasis
+- feat(momentum): the momentum optional feature -- registry, config, in-page surface gating
+- feat(edit): partial edits on a concurrency-safe mutation substrate
+- feat(features): optional features -- per-feature toggles, research ships off
+- feat(gardener): two-tier rejection -- dismiss until it recurs, hide forever
+- feat(isolation): close the fence -- gardener proposals, usage names, topology
+- feat(isolation): confidential and sealed projects -- the agent-to-agent fence
+- feat(console): UX revision -- judged numbers, compact chrome, honest empty states
+
+### Fixes
+
+- fix(hooks): wait for a subagent transcript to settle before capturing it
+
 ## v0.4.9 {#v0-4-9}
 
 Released 2026-07-31 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.9)
