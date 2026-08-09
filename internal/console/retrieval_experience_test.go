@@ -54,6 +54,7 @@ func TestRetrievalCirculationReport_StylesStayScopedAndResponsive(t *testing.T) 
 		".retrieval-flow {",
 		".retrieval-analysis-grid {",
 		".retrieval-scope-row {",
+		".retrieval-scope-quiet {",
 		".retrieval-pressure-grid {",
 	} {
 		require.Contains(t, retrievalCSS, selector)

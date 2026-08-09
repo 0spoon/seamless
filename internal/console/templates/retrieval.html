@@ -29,7 +29,7 @@
     <div class="retrieval-instrument-metrics" aria-label="Retrieval volume and cost">
       <div><div class="judged-row"><strong>{{.Injections}}</strong>{{deltaChip .InjectionsDelta}}</div><span>memory injections</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
       <div><div class="judged-row"><strong>{{.SessionsReached}}</strong>{{deltaChip .SessionsDelta}}</div><span>sessions reached</span><div class="judged-band">{{bandLine .VolumeBand}}</div></div>
-      <div><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong><span>est. tokens injected</span></div>
+      <div><div class="judged-row"><strong>{{if .Injections}}~{{compactNum .InjectedTokens}}{{else}}&mdash;{{end}}</strong>{{deltaChip .TokensDelta}}</div><span>est. tokens injected</span><div class="judged-band">{{if .Injections}}{{bandLine .VolumeBand}}{{end}}</div></div>
     </div>
   </section>
 
@@ -120,8 +120,9 @@
     </header>
 
     {{if .ByProject}}
+    {{if .ScopesTouched}}
     <div class="retrieval-scope-list">
-      {{range .ByProject}}
+      {{range .ScopesTouched}}
       <article class="retrieval-scope-row">
         <div class="retrieval-scope-identity">
           <span class="retrieval-scope-icon">{{if .Project}}{{icon "box"}}{{else}}{{icon "database"}}{{end}}</span>
@@ -135,6 +136,18 @@
       </article>
       {{end}}
     </div>
+    {{end}}
+    {{if .ScopesQuiet}}
+    <div class="retrieval-scope-quiet">
+      <div class="retrieval-scope-quiet-copy">
+        <span class="retrieval-scope-quiet-mark">{{icon "moon"}}</span>
+        <div><strong>{{len .ScopesQuiet}} quiet scope{{if ne (len .ScopesQuiet) 1}}s{{end}}</strong><small>No retrieval reached these knowledge bases in the {{.WindowLabel}} window.</small></div>
+      </div>
+      <div class="retrieval-scope-quiet-chips">
+        {{range .ScopesQuiet}}{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek title="0 of {{.Active}} active memories surfaced">{{.Project}}<small>{{.Active}}</small></a>{{else}}<span title="0 of {{.Active}} active memories surfaced">Global context<small>{{.Active}}</small></span>{{end}}{{end}}
+      </div>
+    </div>
+    {{end}}
     {{else}}
     <div class="retrieval-wide-empty"><span>{{icon "folder-tree"}}</span><strong>No active knowledge bases</strong><small>Project reach appears after an active memory is indexed.</small></div>
     {{end}}

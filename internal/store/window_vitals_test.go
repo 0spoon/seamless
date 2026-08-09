@@ -85,6 +85,50 @@ func TestGetWindowVitals_BoundedOnBothSides(t *testing.T) {
 	require.Error(t, err, "an empty slug is ambiguous, never 'every scope'")
 }
 
+// insertInjectionPayload is insertInjection with an explicit payload, for the
+// token-cost and multi-item cases.
+func insertInjectionPayload(t *testing.T, db *sql.DB, sessionID, payload string, ts time.Time) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		VALUES (?, ?, ?, ?, '', '', ?)`,
+		id, core.FormatTime(ts), string(core.EventInjected), sessionID, payload)
+	require.NoError(t, err)
+}
+
+func TestGetWindowVitals_TokensFollowAttribution(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Date(2026, 8, 1, 12, 0, 0, 0, time.UTC)
+	stamp := func(d time.Duration) string { return core.FormatTime(now.Add(d)) }
+
+	insertMemory(t, db, "m1", "gotcha", "one", "", "alpha", "b", stamp(-100*time.Hour), "")
+	insertMemory(t, db, "m2", "gotcha", "two", "", "", "b", stamp(-100*time.Hour), "")
+
+	// Single-item event: full cost, and fully alpha's.
+	insertInjectionPayload(t, db, "sA", `{"item_ids":["m1"],"emitted_estimated_tokens":100}`, now.Add(-40*time.Hour))
+	// Two-item event: the whole event counts once for the all-scope cost, and
+	// alpha carries an equal share for its one memory of the two.
+	insertInjectionPayload(t, db, "sA", `{"item_ids":["m1","m2"],"emitted_estimated_tokens":40}`, now.Add(-39*time.Hour))
+	// Zero-cost event (a recall pull, no context block pushed).
+	insertInjectionPayload(t, db, "sB", `{"item_ids":["m2"]}`, now.Add(-30*time.Hour))
+
+	since, until, ok := PriorWindow(ResolveRetrievalWindow("24h", now), now)
+	require.True(t, ok)
+
+	v, err := GetWindowVitals(ctx, db, since, until)
+	require.NoError(t, err)
+	require.Equal(t, 4, v.Injections)
+	require.Equal(t, 140, v.InjectedTokens, "each event's cost counts once at the all-scope level")
+
+	pv, err := GetWindowVitalsForProject(ctx, db, "alpha", since, until)
+	require.NoError(t, err)
+	require.Equal(t, 2, pv.Injections)
+	require.Equal(t, 120, pv.InjectedTokens, "100 plus alpha's half of the shared 40-token event")
+}
+
 func TestGetWindowVitals_ContinuityIsWindowScoped(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

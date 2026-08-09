@@ -26,6 +26,7 @@ import (
 // then vs now) rather than a mix of reach and churn.
 type WindowVitals struct {
 	Injections       int `json:"injections"`       // item-level injections in the window
+	InjectedTokens   int `json:"injectedTokens"`   // estimated tokens of injected context (reach's cost side)
 	MemoriesSurfaced int `json:"memoriesSurfaced"` // distinct active memories surfaced >=1x
 	SessionsReached  int `json:"sessionsReached"`  // distinct sessions that received >=1 injection
 	ActiveMemories   int `json:"activeMemories"`   // active memories as of now (reach denominator)
@@ -112,7 +113,14 @@ func windowVitals(ctx context.Context, db *sql.DB, project string, byProject boo
 			return v, fmt.Errorf("scan injection: %w", err)
 		}
 		ids := injectedItemIDs(itemID, payload)
+		cost := injectedTokenCost(payload)
+		if !byProject {
+			// All-scope cost counts each event once, matching
+			// RetrievalReport.InjectedTokens so the delta compares like with like.
+			v.InjectedTokens += cost
+		}
 		counted := false
+		countedIDs := 0
 		for _, id := range ids {
 			m, active := meta[id]
 			if byProject && (!active || m.project != project) {
@@ -123,9 +131,15 @@ func windowVitals(ctx context.Context, db *sql.DB, project string, byProject boo
 			}
 			v.Injections++
 			counted = true
+			countedIDs++
 			if active {
 				surfaced[id] = struct{}{}
 			}
+		}
+		if byProject && countedIDs > 0 {
+			// Same equal-share attribution as the report's per-memory token
+			// split: one event records one cost for its whole content block.
+			v.InjectedTokens += int(float64(cost)*float64(countedIDs)/float64(len(ids)) + 0.5)
 		}
 		if counted {
 			if s := injectedSessionKey(sessionID, payload); s != "" {
