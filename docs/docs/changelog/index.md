@@ -10,6 +10,17 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.4.11 {#v0-4-11}
+
+Released 2026-08-11 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.11)
+
+### Features
+
+- feat(console): plan-level model token attribution
+- feat(console): polish the Retrieval screen
+- feat(console): compact title bars for Search and Retrieval
+- feat(console): interactive capture calendar and vitals drill-downs
+
 ## v0.4.10 {#v0-4-10}
 
 Released 2026-08-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.10)
