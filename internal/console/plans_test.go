@@ -498,3 +498,94 @@ func TestPlans_HTMLGroupsInOrder(t *testing.T) {
 	require.Greater(t, ready, inProgress, "ready group after in progress")
 	require.Greater(t, done, ready, "done group after ready")
 }
+
+// seedPlanTransition inserts a task.transition event attributing a session to
+// the task's plan, the durable link PlanTokenRollups reads.
+func seedPlanTransition(t *testing.T, db *sql.DB, sessionID, taskID string) {
+	t.Helper()
+	id, err := core.NewID()
+	require.NoError(t, err)
+	_, err = db.ExecContext(context.Background(), `
+		INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		VALUES (?, ?, ?, ?, 'demo', ?, '{}')`,
+		id, core.FormatTime(time.Now().UTC()), string(core.EventTaskTransition), sessionID, taskID)
+	require.NoError(t, err)
+}
+
+// TestPlans_TokenRollupSurfaces covers the plan-level model-token attribution
+// end to end: a reporting session and a live (unreported) one both moved the
+// plan's step, and the rollup lands on the JSON row, the rail meta, the reader
+// fact, and the peek fragment.
+func TestPlans_TokenRollupSurfaces(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	seedPlanComposition(t, mgr)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	taskID, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateTask(ctx, db, core.Task{
+		ID: taskID, ProjectSlug: "demo", Title: "step", Status: core.TaskDone,
+		PlanSlug: "my-plan", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: "aaaaaaaaaaaaaaaaaaaaaaaaaa", Name: "cc/worked", Status: core.SessionCompleted,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+	_, err = db.ExecContext(ctx,
+		`UPDATE sessions SET total_tokens = 483000 WHERE id = ?`, "aaaaaaaaaaaaaaaaaaaaaaaaaa")
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: "bbbbbbbbbbbbbbbbbbbbbbbbbb", Name: "cc/live", Status: core.SessionActive,
+		CreatedAt: now, UpdatedAt: now,
+	}))
+	seedPlanTransition(t, db, "aaaaaaaaaaaaaaaaaaaaaaaaaa", taskID)
+	seedPlanTransition(t, db, "bbbbbbbbbbbbbbbbbbbbbbbbbb", taskID)
+
+	var list plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &list)
+	require.Equal(t, 1, list.Count)
+	row := list.Rows[0]
+	require.Equal(t, 483000, row.Tokens)
+	require.Equal(t, 2, row.TokenSessions)
+	require.Equal(t, 1, row.TokenUnreported)
+	require.Zero(t, row.TokenShared)
+
+	var d planDetailData
+	getJSON(t, mux, "/console/plans/my-plan?format=json", &d)
+	require.Equal(t, 483000, d.Row.Tokens)
+	require.Equal(t, 2, d.Row.TokenSessions)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/plans?w=all", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	body := rr.Body.String()
+	require.Contains(t, body, "~483k tok", "rail meta carries the compact total")
+	require.Contains(t, body, "~483k model tokens", "reader fact carries the qualified total")
+	require.Contains(t, body, "(1 unreported)", "the live session is disclosed, not silently dropped")
+
+	frag := getPeek(t, mux, "/console/plans/my-plan?peek=1")
+	require.Equal(t, http.StatusOK, frag.Code)
+	require.Contains(t, frag.Body.String(), "Model tokens")
+	require.Contains(t, frag.Body.String(), "~483k")
+}
+
+// TestPlans_NoTokenAttributionRendersNothing pins the absence contract: a plan
+// nothing has worked shows no token fact anywhere -- "no attribution" and
+// "zero tokens" are different answers.
+func TestPlans_NoTokenAttributionRendersNothing(t *testing.T) {
+	_, mgr, mux := newConsoleWithFiles(t)
+	seedPlanComposition(t, mgr)
+
+	var list plansData
+	getJSON(t, mux, "/console/plans?format=json&w=all", &list)
+	require.Zero(t, list.Rows[0].Tokens)
+	require.Zero(t, list.Rows[0].TokenSessions)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/plans?w=all", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.NotContains(t, rr.Body.String(), "model tokens")
+	require.NotContains(t, rr.Body.String(), " tok<")
+}

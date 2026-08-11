@@ -38,7 +38,7 @@
           {{range phaseRows .Rows "in_progress"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -51,7 +51,7 @@
           {{range phaseRows .Rows "ready"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -66,7 +66,7 @@
                the one-time wash plays only on live arrival (.live-in). */}}
           <a class="rail-item dim{{if .Shipped}} mom-settle{{end}}{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -111,6 +111,7 @@
       {{if .Row.Iteration}}<span class="fact">iteration {{.Row.Iteration}}</span>{{end}}
       {{if .Row.TasksTotal}}<span class="fact">{{.Row.TasksDone}}/{{.Row.TasksTotal}} steps done{{if .Row.TasksWIP}} &middot; {{.Row.TasksWIP}} in progress{{end}}</span>{{end}}
       {{if .Row.Agents}}<span class="fact">{{.Row.Agents}} agent run{{if ne .Row.Agents 1}}s{{end}}</span>{{end}}
+      {{if .Row.TokenSessions}}<span class="fact" title="Cumulative model tokens harvested from the transcripts of the sessions attributed to this plan (moved a step, or captured the plan). Whole-session totals: a session's full burn counts toward every plan it touched, so plan totals must not be summed. Claude Code reports tokens at session end, so a live session stays unreported until it finishes.">{{if .Row.Tokens}}~{{compactNum .Row.Tokens}} model tokens{{else}}model tokens pending{{end}} &middot; {{.Row.TokenSessions}} session{{if ne .Row.TokenSessions 1}}s{{end}}{{if .Row.TokenUnreported}} ({{.Row.TokenUnreported}} unreported){{end}}{{if .Row.TokenShared}} &middot; {{.Row.TokenShared}} shared with other plans{{end}}</span>{{end}}
       <span class="fact" title="{{ts .Row.Updated}}">updated {{ago .Row.Updated}}</span>
       <span class="fact"><a href="/console/notes/{{.Row.NoteID}}">{{icon "file-text"}} note</a></span>
     </div>

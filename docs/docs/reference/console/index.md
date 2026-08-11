@@ -363,6 +363,17 @@ the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). **Approve** appears here, for
 captures only.
 
+Each plan also carries a **model tokens** rollup - the cumulative transcript
+tokens of every session attributed to the plan (any session that moved a step,
+or captured the plan) - compact in the rail (`~483k tok`) and qualified in the
+reader (`~483k model tokens · 3 sessions (1 unreported)`). Attribution is
+whole-session on purpose: tokens are only ever known per session, so a
+session's full burn counts toward each plan it touched, counted once however
+many steps it moved. Claude Code reports tokens at session end, so a live
+session stays *unreported* until it finishes; a session that touched more than
+one plan is disclosed as *shared* rather than split by guesswork - which is
+also why plan totals must never be summed across plans.
+
 ## Labs
 
 `/console/labs`, `/console/labs/{name}`

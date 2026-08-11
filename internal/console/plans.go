@@ -69,6 +69,18 @@ type planRow struct {
 	// month -- the mom-settle hook the live-arrival wash keys on. A momentum
 	// surface: never set while the feature is off (zero trace, JSON included).
 	Shipped bool `json:"shipped,omitempty"`
+	// Token fields project store.PlanTokenRollup: the cumulative model tokens
+	// of the sessions attributed to this plan (whole-session transcript totals,
+	// a session counted once however many steps it moved). The qualifiers
+	// travel with the number so no surface renders it bare: TokenSessions is
+	// the attributed-session count, TokenUnreported the sessions whose tokens
+	// have not landed (live, or ended without a clean SessionEnd), TokenShared
+	// the sessions also attributed to another plan -- which is why plan tokens
+	// must never be summed across plans.
+	Tokens          int `json:"tokens,omitempty"`
+	TokenSessions   int `json:"tokenSessions,omitempty"`
+	TokenUnreported int `json:"tokenUnreported,omitempty"`
+	TokenShared     int `json:"tokenShared,omitempty"`
 }
 
 // plansData is the Plans library payload. Rows are one merged, newest-first
@@ -195,6 +207,10 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 	if err != nil {
 		return plansData{}, err
 	}
+	tokens, err := store.PlanTokenRollups(ctx, s.cfg.DB)
+	if err != nil {
+		return plansData{}, err
+	}
 	// Every note carrying a plan:<slug> tag, both sources: composedPrimaries picks
 	// the composed narratives out of this set, and the activity index spans all of
 	// it (captures and agent caches carry the slug tag too).
@@ -213,14 +229,14 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 	rows := make([]planRow, 0, len(captures))
 	owned := make(map[string]bool, len(captures))
 	for _, n := range captures {
-		row := s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))])
+		row := s.planRow(ctx, n, agentCount, tokens, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))])
 		owned[planKey(n.Project, row.Slug)] = true
 		rows = append(rows, row)
 	}
 	// Composed plans: any note carrying a plan:<slug> tag that is not itself a
 	// capture. The earliest-created non-agent note is the narrative primary.
 	for _, n := range composedPrimaries(composed, owned) {
-		rows = append(rows, s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
+		rows = append(rows, s.planRow(ctx, n, agentCount, tokens, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
 	}
 	// Total is every plan regardless of window -- the headline the sidebar badge
 	// must agree with. Window-filter last so it applies uniformly across sources,
@@ -325,6 +341,10 @@ func (s *Service) planDetailBySlug(ctx context.Context, slug string) (planDetail
 	if err != nil {
 		return planDetailData{}, false, err
 	}
+	tokens, err := store.PlanTokenRollups(ctx, s.cfg.DB)
+	if err != nil {
+		return planDetailData{}, false, err
+	}
 	// attached is every other note in the composition, so it carries the same
 	// note-activity the list derives from its index -- keep the two in step.
 	noteActivity := planNote.Updated
@@ -333,7 +353,7 @@ func (s *Service) planDetailBySlug(ctx context.Context, slug string) (planDetail
 			noteActivity = a.Updated
 		}
 	}
-	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount, noteActivity), Attached: attached}
+	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount, tokens, noteActivity), Attached: attached}
 	// The approve escape hatch is a CC-capture lifecycle action; composed plans
 	// have no draft/presented/approved state to flip.
 	d.CanApprove = d.Row.Source == planSourceCapture && d.Row.Status != plans.StatusApproved
@@ -526,7 +546,7 @@ func (s *Service) planAgentCounts(ctx context.Context) (map[string]int, error) {
 // noteActivity is the newest stamp across the composition's OTHER notes (zero if
 // unknown, which degrades to the primary's own); planRow folds in the step tasks
 // itself, since it already loads them. See planRow.Updated.
-func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int, noteActivity time.Time) planRow {
+func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int, tokens map[store.PlanRef]store.PlanTokenRollup, noteActivity time.Time) planRow {
 	slug := plans.SlugFromTags(n.Tags)
 	isCapture := slices.Contains(n.Tags, plans.TagPlan)
 	row := planRow{
@@ -535,6 +555,12 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 		Status: plans.StatusFromTags(n.Tags), Favorite: n.Favorite,
 		Agents:  agentCount[slug],
 		Updated: n.Updated,
+	}
+	if tr, ok := tokens[store.PlanRef{Project: n.Project, Slug: slug}]; ok {
+		row.Tokens = tr.Tokens
+		row.TokenSessions = tr.Sessions
+		row.TokenUnreported = tr.Unreported
+		row.TokenShared = tr.Shared
 	}
 	if noteActivity.After(row.Updated) {
 		row.Updated = noteActivity

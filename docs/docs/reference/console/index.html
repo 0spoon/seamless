@@ -648,6 +648,16 @@ fields.</li>
 the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). <strong>Approve</strong> appears here, for
 captures only.</p>
+<p>Each plan also carries a <strong>model tokens</strong> rollup - the cumulative transcript
+tokens of every session attributed to the plan (any session that moved a step,
+or captured the plan) - compact in the rail (<code>~483k tok</code>) and qualified in the
+reader (<code>~483k model tokens · 3 sessions (1 unreported)</code>). Attribution is
+whole-session on purpose: tokens are only ever known per session, so a
+session's full burn counts toward each plan it touched, counted once however
+many steps it moved. Claude Code reports tokens at session end, so a live
+session stays <em>unreported</em> until it finishes; a session that touched more than
+one plan is disclosed as <em>shared</em> rather than split by guesswork - which is
+also why plan totals must never be summed across plans.</p>
 <h2 id="labs">Labs</h2>
 <p><code>/console/labs</code>, <code>/console/labs/{name}</code></p>
 <p>The research-lab surface (the console twin of <code>lab_open</code> / <code>trial_record</code> /
