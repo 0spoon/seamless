@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"sort"
@@ -23,7 +24,7 @@ import (
 //	seamlessd family remove <name> [<slug>...]
 func runFamily(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("seamlessd.family: usage: family <list|add|remove> ...")
+		return errors.New("seamlessd.family: usage: family <list|add|remove> [args]")
 	}
 	sub, rest := args[0], args[1:]
 

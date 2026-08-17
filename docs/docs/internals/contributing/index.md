@@ -185,6 +185,18 @@ and `time.Sleep`, `rowserrcheck` catches a missing `rows.Err()`, `errorlint`
 catches `err ==` sentinel comparisons, and `errcheck` runs with `check-blank: true`
 so errors discarded into `_` are reported too.
 
+`.golangci.yml` is schema **v2**, so `make lint` needs golangci-lint v2 - note the
+`/v2` in the module path, since v1's path installs a v1 binary:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+```
+
+The two schema generations are mutually unreadable, so a mismatched binary does
+not lint badly - it refuses to start, and the gate silently stops being a gate.
+`make lint` checks the major version up front and says so rather than letting the
+raw schema error surface. CI pins the same version; bump both together.
+
 That last one is the guardrail worth understanding. `n, _ := res.RowsAffected()`
 in front of `if n == 0 { return ErrNotFound }` turns a driver failure into a
 confident "not found" - the caller believes it, and there is no way to tell the

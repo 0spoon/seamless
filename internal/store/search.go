@@ -507,6 +507,13 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 
 	// Notes: a plan:<slug> tag, matched on the note's title or on the tag's own
 	// slug suffix. json_each is the tag-array reader NotesByTagPrefix uses.
+	//
+	// Both this query and the tasks one below are drained inside a closure whose
+	// defer closes them, so the note rows are released before the task query
+	// opens. sqlclosecheck only recognizes a defer in the same function scope as
+	// the query and reports both as leaks; a plain defer would instead hold the
+	// note rows open across the second query, which is the thing worth avoiding.
+	//nolint:sqlclosecheck // closed by the closure's defer, see above
 	noteRows, err := db.QueryContext(ctx, `
 		SELECT je.value, n.project, n.title, n.favorite, n.updated_at
 		FROM notes_index n, json_each(n.tags) je
@@ -564,6 +571,7 @@ func searchPlansSince(ctx context.Context, db *sql.DB, q string, since time.Time
 	}
 
 	// Tasks: the plan_slug column itself.
+	//nolint:sqlclosecheck // closed by the closure's defer, as above
 	taskRows, err := db.QueryContext(ctx, `
 		SELECT plan_slug, project_slug, MAX(updated_at) FROM tasks
 		WHERE plan_slug != '' AND plan_slug LIKE ? ESCAPE '\'

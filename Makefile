@@ -5,6 +5,13 @@ BIN_DIR := bin
 PKG     := ./...
 GO      ?= go
 
+# golangci-lint major line. .golangci.yml declares `version: "2"`, and the two
+# schema generations are mutually unreadable, so a v1 binary does not lint badly
+# here -- it refuses to start. The `lint` target checks for that rather than
+# letting the raw schema error surface. CI pins this same version; bump both.
+GOLANGCI_VERSION ?= v2.12.2
+GOLANGCI_INSTALL := github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
 # Build metadata linked into the daemon (surfaced in /healthz, the MCP handshake,
 # and the startup log so a stale running daemon is visible). A plain `go build`
 # leaves these at their in-source defaults ("unknown"/"0.0.0-dev"); only
@@ -229,6 +236,12 @@ seambench:
 	$(GO) run ./cmd/seambench report $(SEAMBENCH_OUT) $(REPORT_ARGS)
 
 lint:
+	@command -v golangci-lint >/dev/null \
+	    || { echo "ERROR: golangci-lint not found (go install $(GOLANGCI_INSTALL))"; exit 1; }
+	@golangci-lint version 2>&1 | grep -q 'version v\{0,1\}2\.' \
+	    || { echo "ERROR: .golangci.yml is schema v2 and needs golangci-lint v2; found:"; \
+	         golangci-lint version 2>&1 | head -1 | sed 's/^/  /'; \
+	         echo "  go install $(GOLANGCI_INSTALL)   (note the /v2 in the path)"; exit 1; }
 	golangci-lint run
 
 vet:
