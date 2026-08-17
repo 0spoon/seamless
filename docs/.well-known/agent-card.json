@@ -38,7 +38,7 @@
     {
       "id": "recall",
       "name": "Recall",
-      "description": "Search the owner's memories and notes by meaning and keyword (RRF-fused). Send the query as a text part; optional message metadata scopes it (project, scope: all|memories|notes, limit). The reply carries a data part ({\"hits\": [...]}) and a text summary of the same hits.",
+      "description": "Search the owner's durable knowledge and work record by meaning and keyword (RRF-fused). Send the query as a text part; optional message metadata scopes it (project, scope: all|memories|notes|tasks|trials|sessions, limit). The reply carries a data part ({\"hits\": [...]}) and a text summary of the same hits.",
       "tags": [
         "memory",
         "search",

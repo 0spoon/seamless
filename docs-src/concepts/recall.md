@@ -15,6 +15,38 @@ degrades the same way instead of erroring.
 separate semantic search, no "advanced" variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.
 
+## What it searches
+
+`recall` spans two halves of the store, and the default scope (`all`) covers
+both:
+
+| Half | Kinds | Matched by |
+|---|---|---|
+| **Durable knowledge** | memories, notes | keyword + vector |
+| **The work record** | tasks, trials, session findings | keyword |
+
+The work record is there because knowledge does not only get written as a
+memory. A task body carries the acceptance criteria and the record of what was
+already tried; a dropped task is often the only account of why something was
+*not* done. A trial carries expected-vs-actual. A session's findings are the
+handoff its author wrote for whoever came next. All of it used to be reachable
+only by an agent already knowing which list tool to call - which is to say, only
+by an agent that already suspected the answer existed.
+
+Narrow it with `scope`: `memories`, `notes`, `tasks`, `trials`, `sessions`.
+
+Two things follow from the work record being keyword-only. It carries no
+embedding: there is no file behind a task row and so no content-hash reconcile
+loop, and vectorizing on write would put a provider round-trip inside every
+`tasks_add`. And because fusion rewards an item that *both* retrievers rank, a
+work-record hit can never outrank a memory that matched both ways on the same
+query - the ordering prefers curated knowledge without needing a rule that says
+so.
+
+Work-record hits carry a `status` (a task's status, a trial's outcome), which is
+what separates a step you can still claim from a decision you can only learn
+from.
+
 ## How it works
 
 Two retrievers run over the store and their rankings are fused:
@@ -24,7 +56,8 @@ Two retrievers run over the store and their rankings are fused:
   what finds it.
 - **Vector similarity.** Embeddings stored as float32 blobs in SQLite, compared
   by brute-force cosine. This finds the memory that is *about* your problem when
-  you don't know its name.
+  you don't know its name. Knowledge kinds only - see
+  [What it searches](#what-it-searches).
 
 Their results are combined with **reciprocal rank fusion**: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets

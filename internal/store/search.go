@@ -2,8 +2,15 @@
 // and notes still get their text candidates from FTSSearch (fused with semantic
 // hits by internal/retrieve), but their ids, memory names, and note slugs are
 // resolved here from the index mirrors so an exact reference cannot be lost in
-// tokenized FTS results. Tasks, sessions, projects, plans, and trials have no FTS
-// mirror and match with LIKE over their short, low-cardinality labels.
+// tokenized FTS results. Tasks, sessions, projects, plans, and trials match with
+// LIKE over their own columns.
+//
+// Tasks, trials, and sessions DO have FTS rows now (store/index_work.go), which
+// is what recall searches. The console keeps its LIKE queries anyway: they are
+// per-entity sections that need whole typed rows with their structured filters
+// and orderings, not a fused rank across kinds. The predicates here cover the
+// same columns that indexer feeds FTS, so the two surfaces agree on what a query
+// can find even though they rank differently.
 //
 // Every query takes the search text as a bound parameter escaped through
 // escapeLikePrefix, so a literal % or _ matches itself rather than acting as a
@@ -285,8 +292,14 @@ func addSearchSince(sqlStr string, args []any, column string, since time.Time) (
 	return sqlStr + " AND " + column + " >= ?", append(args, core.FormatTime(since.UTC()))
 }
 
-// SearchTasks returns tasks whose title contains q, newest-updated first. An
-// exact id also matches, so pasting a task id from a log finds its task.
+// SearchTasks returns tasks whose title or body contains q, newest-updated
+// first. An exact id also matches, so pasting a task id from a log finds its
+// task.
+//
+// The body is searched because that is where a task's acceptance criteria and
+// its record of what was already tried live; recall reaches that text through
+// FTS (store/index_work.go), and a console section that saw only titles would
+// quietly find less than the agent-facing tool on the same query.
 func SearchTasks(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Task, error) {
 	return searchTasksSince(ctx, db, q, time.Time{}, limit, "store.SearchTasks")
 }
@@ -299,9 +312,10 @@ func SearchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time
 
 func searchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Task, error) {
 	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
+	needle := likeContains(q)
 	sqlStr := `SELECT ` + taskCols + ` FROM tasks
-		WHERE (title LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
-	args := append([]any{likeContains(q)}, idArgs...)
+		WHERE (title LIKE ? ESCAPE '\' OR body LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{needle, needle}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
 	sqlStr += ` ORDER BY ` + idOrder + `, updated_at DESC, id DESC LIMIT ?`
 	args = append(args, idOrderArgs...)
@@ -317,8 +331,13 @@ func searchTasksSince(ctx context.Context, db *sql.DB, q string, since time.Time
 	return tasks, nil
 }
 
-// SearchSessions returns sessions whose name contains q, newest-updated first.
-// An exact id also matches.
+// SearchSessions returns sessions whose name or findings contain q,
+// newest-updated first. An exact id also matches.
+//
+// Findings are the whole reason a session is worth searching -- the handoff
+// prose the next agent inherits -- and recall now reaches them; matching on the
+// name alone would leave the console able to find only sessions whose generated
+// handle happened to contain the query.
 func SearchSessions(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Session, error) {
 	return searchSessionsSince(ctx, db, q, time.Time{}, limit, "store.SearchSessions")
 }
@@ -331,9 +350,10 @@ func SearchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.T
 
 func searchSessionsSince(ctx context.Context, db *sql.DB, q string, since time.Time, limit int, op string) ([]core.Session, error) {
 	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
+	needle := likeContains(q)
 	sqlStr := `SELECT ` + sessionCols + ` FROM sessions
-		WHERE (name LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
-	args := append([]any{likeContains(q)}, idArgs...)
+		WHERE (name LIKE ? ESCAPE '\' OR findings LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{needle, needle}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "updated_at", since)
 	sqlStr += ` ORDER BY ` + idOrder + `, updated_at DESC, id DESC LIMIT ?`
 	args = append(args, idOrderArgs...)
@@ -398,8 +418,13 @@ func searchProjectsSince(ctx context.Context, db *sql.DB, q string, since time.T
 	return out, nil
 }
 
-// SearchTrials returns trials whose title or lab contains q, newest first. An
-// exact id also matches, so pasting a trial id from a log finds its trial.
+// SearchTrials returns trials whose title, lab, or expected-vs-actual prose
+// contains q, newest first. An exact id also matches, so pasting a trial id from
+// a log finds its trial.
+//
+// The prose fields are searched for the same reason recall indexes them: a lab's
+// value to a later reader is what was tried and what happened, and neither is in
+// the title.
 func SearchTrials(ctx context.Context, db *sql.DB, q string, limit int) ([]core.Trial, error) {
 	return searchTrialsSince(ctx, db, q, time.Time{}, limit, "store.SearchTrials")
 }
@@ -414,8 +439,10 @@ func searchTrialsSince(ctx context.Context, db *sql.DB, q string, since time.Tim
 	needle := likeContains(q)
 	idPredicate, idArgs, idOrder, idOrderArgs := idSearchSQL("id", q)
 	sqlStr := `SELECT ` + trialCols + ` FROM trials
-		WHERE (title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
-	args := append([]any{needle, needle}, idArgs...)
+		WHERE (title LIKE ? ESCAPE '\' OR lab LIKE ? ESCAPE '\'
+		       OR changes LIKE ? ESCAPE '\' OR expected LIKE ? ESCAPE '\'
+		       OR actual LIKE ? ESCAPE '\' OR ` + idPredicate + `)`
+	args := append([]any{needle, needle, needle, needle, needle}, idArgs...)
 	sqlStr, args = addSearchSince(sqlStr, args, "created_at", since)
 	sqlStr += ` ORDER BY ` + idOrder + `, created_at DESC, id DESC LIMIT ?`
 	args = append(args, idOrderArgs...)

@@ -228,7 +228,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
+      <li class="lvl-2"><a href="#what-it-searches">What it searches</a></li><li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
     </ul>
   </details>
   <p>In Seamless, <code>recall</code> is the single search entry point an agent calls to
@@ -241,6 +241,50 @@ degrades the same way instead of erroring.</p>
 <p><code>recall</code> is also the <em>only</em> search tool. There is no separate keyword search, no
 separate semantic search, no &quot;advanced&quot; variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.</p>
+<h2 id="what-it-searches">What it searches</h2>
+<p><code>recall</code> spans two halves of the store, and the default scope (<code>all</code>) covers
+both:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Half</th>
+<th>Kinds</th>
+<th>Matched by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Durable knowledge</strong></td>
+<td>memories, notes</td>
+<td>keyword + vector</td>
+</tr>
+<tr>
+<td><strong>The work record</strong></td>
+<td>tasks, trials, session findings</td>
+<td>keyword</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>The work record is there because knowledge does not only get written as a
+memory. A task body carries the acceptance criteria and the record of what was
+already tried; a dropped task is often the only account of why something was
+<em>not</em> done. A trial carries expected-vs-actual. A session's findings are the
+handoff its author wrote for whoever came next. All of it used to be reachable
+only by an agent already knowing which list tool to call - which is to say, only
+by an agent that already suspected the answer existed.</p>
+<p>Narrow it with <code>scope</code>: <code>memories</code>, <code>notes</code>, <code>tasks</code>, <code>trials</code>, <code>sessions</code>.</p>
+<p>Two things follow from the work record being keyword-only. It carries no
+embedding: there is no file behind a task row and so no content-hash reconcile
+loop, and vectorizing on write would put a provider round-trip inside every
+<code>tasks_add</code>. And because fusion rewards an item that <em>both</em> retrievers rank, a
+work-record hit can never outrank a memory that matched both ways on the same
+query - the ordering prefers curated knowledge without needing a rule that says
+so.</p>
+<p>Work-record hits carry a <code>status</code> (a task's status, a trial's outcome), which is
+what separates a step you can still claim from a decision you can only learn
+from.</p>
 <h2 id="how-it-works">How it works</h2>
 <p>Two retrievers run over the store and their rankings are fused:</p>
 <ul>
@@ -249,7 +293,8 @@ search is worst at. If you know a memory is called <code>chroma-boot-race</code>
 what finds it.</li>
 <li><strong>Vector similarity.</strong> Embeddings stored as float32 blobs in SQLite, compared
 by brute-force cosine. This finds the memory that is <em>about</em> your problem when
-you don't know its name.</li>
+you don't know its name. Knowledge kinds only - see
+<a href="#what-it-searches">What it searches</a>.</li>
 </ul>
 <p>Their results are combined with <strong>reciprocal rank fusion</strong>: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets
@@ -358,7 +403,7 @@ retrieval surface - see <a href="../../concepts/memory/">Memory &amp; notes</a>.
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
+      <li class="lvl-2"><a href="#what-it-searches">What it searches</a></li><li class="lvl-2"><a href="#how-it-works">How it works</a></li><li class="lvl-3"><a href="#about-that-brute-force-scan">About that brute-force scan</a></li><li class="lvl-3"><a href="#the-utility-nudge">The utility nudge</a></li><li class="lvl-2"><a href="#the-recall-triad">The recall triad</a></li><li class="lvl-2"><a href="#degradation-is-deliberate">Degradation is deliberate</a></li><li class="lvl-2"><a href="#writing-memories-that-get-recalled">Writing memories that get recalled</a></li>
     </ul>
   </aside>
   

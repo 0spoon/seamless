@@ -297,3 +297,34 @@ func TestProposeMemoryWanted_PartialTermOverlapDoesNotSuppress(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, n)
 }
+
+// The liveness probe spans everything recall spans, the work record included.
+// A task covering every term of the signature means an agent re-running that
+// query today gets an answer, so the miss would no longer be recorded and
+// proposing a memory would ask the owner to fill a gap recall already fills.
+func TestProposeMemoryWanted_WorkRecordCoverageSuppresses(t *testing.T) {
+	now := time.Date(2026, 7, 20, 12, 0, 0, 0, time.UTC)
+	g, _, rec := newWantedFixture(t, now)
+	ctx := context.Background()
+
+	recordMiss(t, rec, now.Add(-48*time.Hour), "S1", "proj", "zeta protocol handshake")
+	recordMiss(t, rec, now.Add(-24*time.Hour), "S2", "proj", "zeta protocol handshake")
+
+	n, err := g.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, g.db))
+	require.NoError(t, err)
+	require.Equal(t, 1, n, "with nothing covering the terms the gap is real")
+
+	// The same misses in a store where a task body covers every term.
+	covered, _, rec2 := newWantedFixture(t, now)
+	recordMiss(t, rec2, now.Add(-48*time.Hour), "S1", "proj", "zeta protocol handshake")
+	recordMiss(t, rec2, now.Add(-24*time.Hour), "S2", "proj", "zeta protocol handshake")
+	require.NoError(t, store.CreateTask(ctx, covered.db, core.Task{
+		ID: "01COVER", ProjectSlug: "proj", Title: "wire the client",
+		Body:   "the zeta protocol handshake retries twice before failing",
+		Status: core.TaskDone, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	n, err = covered.proposeMemoryWanted(ctx, loadSeenKeys(t, ctx, covered.db))
+	require.NoError(t, err)
+	require.Zero(t, n, "a task covering every term is evidence the gap is filled")
+}

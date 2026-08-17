@@ -208,12 +208,12 @@ Delete a memory by name: the markdown file leaves the disk and its index row goe
 
 ## recall {#recall}
 
-Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).
+Search durable knowledge (memories, notes) and the work record (tasks, trials, session findings) by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. Work-record hits carry a status (a task's status, a trial's outcome) and match on keyword only. With kind set and no query it lists that memory kind newest-first instead (browse).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so any scope that excludes memories is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | integer | no | maximum results (default 10, max 100) |
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
-| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |
+| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`, `tasks`, `trials`, `sessions`. |

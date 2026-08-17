@@ -92,6 +92,12 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	if n == 0 {
 		return fmt.Errorf("store.UpdateSession: no session with id %q", s.ID)
 	}
+	// session_end lands findings here, so this is the main entry point for a
+	// session into the search corpus; IndexSessionFTS also removes the row when
+	// findings were cleared back to nothing.
+	if err := IndexSessionFTS(ctx, db, s); err != nil {
+		return fmt.Errorf("store.UpdateSession: %w", err)
+	}
 	return nil
 }
 
@@ -314,6 +320,15 @@ func UpdateAmbientFindings(
 	n, err := res.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("store.UpdateAmbientFindings: rows affected: %w", err)
+	}
+	if n > 0 {
+		// Codex has no SessionEnd, so for those sessions this is the only path
+		// findings ever take -- without it their handoff prose would never
+		// reach the corpus. Keyed by external identity, so the mirror looks the
+		// id up rather than making this targeted write a transaction.
+		if err := reindexSessionFTSByExternal(ctx, db, externalClient, externalSessionID); err != nil {
+			return true, fmt.Errorf("store.UpdateAmbientFindings: %w", err)
+		}
 	}
 	return n > 0, nil
 }

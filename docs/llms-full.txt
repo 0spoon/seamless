@@ -2216,6 +2216,38 @@ degrades the same way instead of erroring.
 separate semantic search, no "advanced" variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.
 
+## What it searches
+
+`recall` spans two halves of the store, and the default scope (`all`) covers
+both:
+
+| Half | Kinds | Matched by |
+|---|---|---|
+| **Durable knowledge** | memories, notes | keyword + vector |
+| **The work record** | tasks, trials, session findings | keyword |
+
+The work record is there because knowledge does not only get written as a
+memory. A task body carries the acceptance criteria and the record of what was
+already tried; a dropped task is often the only account of why something was
+*not* done. A trial carries expected-vs-actual. A session's findings are the
+handoff its author wrote for whoever came next. All of it used to be reachable
+only by an agent already knowing which list tool to call - which is to say, only
+by an agent that already suspected the answer existed.
+
+Narrow it with `scope`: `memories`, `notes`, `tasks`, `trials`, `sessions`.
+
+Two things follow from the work record being keyword-only. It carries no
+embedding: there is no file behind a task row and so no content-hash reconcile
+loop, and vectorizing on write would put a provider round-trip inside every
+`tasks_add`. And because fusion rewards an item that *both* retrievers rank, a
+work-record hit can never outrank a memory that matched both ways on the same
+query - the ordering prefers curated knowledge without needing a rule that says
+so.
+
+Work-record hits carry a `status` (a task's status, a trial's outcome), which is
+what separates a step you can still claim from a decision you can only learn
+from.
+
 ## How it works
 
 Two retrievers run over the store and their rankings are fused:
@@ -2225,7 +2257,8 @@ Two retrievers run over the store and their rankings are fused:
   what finds it.
 - **Vector similarity.** Embeddings stored as float32 blobs in SQLite, compared
   by brute-force cosine. This finds the memory that is *about* your problem when
-  you don't know its name.
+  you don't know its name. Knowledge kinds only - see
+  [What it searches](#what-it-searches).
 
 Their results are combined with **reciprocal rank fusion**: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets
@@ -5165,15 +5198,15 @@ Delete a memory by name: the markdown file leaves the disk and its index row goe
 
 ## recall {#recall}
 
-Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).
+Search durable knowledge (memories, notes) and the work record (tasks, trials, session findings) by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. Work-record hits carry a status (a task's status, a trial's outcome) and match on keyword only. With kind set and no query it lists that memory kind newest-first instead (browse).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so any scope that excludes memories is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | integer | no | maximum results (default 10, max 100) |
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
-| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |
+| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`, `tasks`, `trials`, `sessions`. |
 
 ---
 
@@ -8972,9 +9005,16 @@ Always go through them.
   skipped.
 - **Embeddings are little-endian float32 BLOBs** in the `embeddings` table, and
   similarity is brute-force cosine in Go. Do not add a vector database.
-- **The unified FTS5 table (`fts`) spans memories and notes** and is managed from
-  the files layer with explicit INSERT/DELETE - not triggers, because it is not
-  an external-content table.
+- **The unified FTS5 table (`fts`) spans both halves of the corpus**, with
+  `fts.kind` naming which. It is managed with explicit INSERT/DELETE - not
+  triggers, because it is not an external-content table - and each half is
+  maintained next to its own writer: the file-backed knowledge kinds (memory,
+  note) from the files layer, the DB-native work record (task, trial, session
+  findings) from `store/index_work.go`.
+- **The work record carries no embeddings.** There is no `content_hash`
+  reconcile loop behind a DB row, so vectorizing one would put a provider
+  round-trip inside every `tasks_add` and leave older rows unbackfillable. Those
+  kinds are lexical-only by design.
 
 ## Testing rules
 

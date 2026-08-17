@@ -1,6 +1,6 @@
 package main
 
-// seam recall -- hybrid search over memories and notes (recall).
+// seam recall -- hybrid search over durable knowledge and the work record.
 
 import (
 	"context"
@@ -18,12 +18,12 @@ import (
 // Duplicating three constants at the surface is house style, not a compromise:
 // console/search.go, console/sessions.go and console/notes.go each declare their
 // own accepted-value slice for exactly this reason. The server still validates.
-var recallScopes = []string{"all", "memories", "notes"}
+var recallScopes = []string{"all", "memories", "notes", "tasks", "trials", "sessions"}
 
 // recall takes its query as an unbounded tail, so the words need no quoting.
 // Until now it hand-rolled its own parser to accept flags on either side of that
 // tail -- the permuting loop gives every command that, so the exception is gone.
-var recallCmd = spec("recall", groupAgentLoop, "search memories and notes",
+var recallCmd = spec("recall", groupAgentLoop, "search knowledge and the work record",
 	atLeast(1, "word"), bindRecall, runRecall).
 	withLong("A query word starting with \"-\" needs the terminator:\n" +
 		"  seam recall -- -foo")
@@ -68,8 +68,19 @@ func runRecall(ctx context.Context, e *env, o *recallOpts, pos []string) error {
 	}
 	for _, h := range hits {
 		m, _ := h.(map[string]any)
-		fmt.Fprintf(e.stdout, "[%s] %s (%s, %s %.3f)\n    %s\n",
-			str(m["kind"]), str(m["name"]), str(m["age"]), str(m["source"]), num(m["score"]), str(m["description"]))
+		// Every knowledge hit has a name (memory name, note slug); a work-record
+		// hit may not (a task outside a plan carries an empty plan slug), so the
+		// title is the fallback label rather than printing a blank row.
+		label := str(m["name"])
+		if label == "" {
+			label = str(m["title"])
+		}
+		status := ""
+		if s := str(m["status"]); s != "" {
+			status = " " + s
+		}
+		fmt.Fprintf(e.stdout, "[%s%s] %s (%s, %s %.3f)\n    %s\n",
+			str(m["kind"]), status, label, str(m["age"]), str(m["source"]), num(m["score"]), str(m["description"]))
 	}
 	return nil
 }

@@ -114,7 +114,7 @@ func TestDispatch_ParseErrorNeverReachesTheHandler(t *testing.T) {
 		want string
 	}{
 		{"unknown flag", []string{"recall", "foo", "--projct", "typo"}, "not defined"},
-		{"bad enum", []string{"recall", "foo", "--scope", "bogus"}, "valid values are all, memories, notes"},
+		{"bad enum", []string{"recall", "foo", "--scope", "bogus"}, "valid values are all, memories, notes, tasks, trials, sessions"},
 		{"non positive limit", []string{"recall", "foo", "--limit", "0"}, "must be a positive integer"},
 		{"missing query", []string{"recall"}, "missing argument"},
 		{"missing url", []string{"capture"}, "missing argument"},

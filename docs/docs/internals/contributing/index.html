@@ -374,9 +374,16 @@ startup reconciliation; <code>content_hash</code> is what lets an unchanged file
 skipped.</li>
 <li><strong>Embeddings are little-endian float32 BLOBs</strong> in the <code>embeddings</code> table, and
 similarity is brute-force cosine in Go. Do not add a vector database.</li>
-<li><strong>The unified FTS5 table (<code>fts</code>) spans memories and notes</strong> and is managed from
-the files layer with explicit INSERT/DELETE - not triggers, because it is not
-an external-content table.</li>
+<li><strong>The unified FTS5 table (<code>fts</code>) spans both halves of the corpus</strong>, with
+<code>fts.kind</code> naming which. It is managed with explicit INSERT/DELETE - not
+triggers, because it is not an external-content table - and each half is
+maintained next to its own writer: the file-backed knowledge kinds (memory,
+note) from the files layer, the DB-native work record (task, trial, session
+findings) from <code>store/index_work.go</code>.</li>
+<li><strong>The work record carries no embeddings.</strong> There is no <code>content_hash</code>
+reconcile loop behind a DB row, so vectorizing one would put a provider
+round-trip inside every <code>tasks_add</code> and leave older rows unbackfillable. Those
+kinds are lexical-only by design.</li>
 </ul>
 <h2 id="testing-rules">Testing rules</h2>
 <ul>

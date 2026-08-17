@@ -64,6 +64,35 @@ func (i Isolation) FencesOutbound() bool {
 func (i Isolation) FencesInbound() bool { return i == IsolationSealed }
 
 // ---------------------------------------------------------------------------
+// Indexed item kinds
+// ---------------------------------------------------------------------------
+
+// Item kinds, as stored in the fts.kind and embeddings.kind columns. They name
+// what an indexed row IS, which is a different axis from MemoryKind (the
+// frontmatter kind of a memory) -- do not conflate the two.
+//
+// The first two are the durable-knowledge kinds: file-backed, embedded, indexed
+// from the files layer. The rest are the work record: DB-native rows indexed
+// from the store layer, lexical-only (see store.IndexTaskFTS).
+const (
+	ItemKindMemory  = "memory"
+	ItemKindNote    = "note"
+	ItemKindTask    = "task"
+	ItemKindTrial   = "trial"
+	ItemKindSession = "session"
+)
+
+// KnowledgeItemKinds are the file-backed kinds: the source of truth is a
+// markdown file, and both retrieval legs (FTS and cosine) cover them.
+var KnowledgeItemKinds = []string{ItemKindMemory, ItemKindNote}
+
+// WorkItemKinds are the DB-native kinds mirrored into FTS by the store layer.
+// They carry no embedding: there is no content-hash reconcile loop behind them,
+// so vectorizing would put a provider round-trip on every task/trial/session
+// write. Lexical-only is the deliberate trade (see store/index_work.go).
+var WorkItemKinds = []string{ItemKindTask, ItemKindTrial, ItemKindSession}
+
+// ---------------------------------------------------------------------------
 // Memory
 // ---------------------------------------------------------------------------
 

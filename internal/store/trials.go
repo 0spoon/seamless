@@ -58,6 +58,9 @@ func CreateTrial(ctx context.Context, db *sql.DB, tr core.Trial) error {
 	if err != nil {
 		return fmt.Errorf("store.CreateTrial: %w", err)
 	}
+	if err := IndexTrialFTS(ctx, db, tr); err != nil {
+		return fmt.Errorf("store.CreateTrial: %w", err)
+	}
 	return nil
 }
 

@@ -74,8 +74,18 @@ cmd/seamlessd, cmd/seam, cmd/seambench, cmd/demoseed, cmd/docsgen
   watcher + startup reconciliation; use `content_hash` to skip unchanged files.
 - Embeddings live in the `embeddings` table as little-endian float32 BLOBs.
   Similarity is brute-force cosine in Go -- do NOT add a vector database.
-- Unified FTS5 (`fts`) spans memories and notes; it is managed from the files
-  layer (explicit INSERT/DELETE), not triggers, because it is not external-content.
+- Unified FTS5 (`fts`) spans both halves of the corpus, with `fts.kind` naming
+  which (`core.ItemKind*`). It is maintained by explicit INSERT/DELETE, not
+  triggers, because it is not external-content -- and each half is maintained
+  next to its own writer: the file-backed knowledge kinds (memory, note) from
+  the files layer, the DB-native work record (task, trial, session findings)
+  from `store/index_work.go`. A new writer of an indexed column must refresh the
+  mirror; a new indexed KIND must also appear in `recallScopeKinds`, or it is
+  indexed and unreachable.
+- The work record carries no embeddings. There is no `content_hash` reconcile
+  loop behind a DB row, so vectorizing one would mean a provider round-trip
+  inside `tasks_add`/`trial_record`/`session_end` with no way to backfill. Those
+  kinds are lexical-only on purpose; do not "complete" them by embedding them.
 
 ### Testing
 

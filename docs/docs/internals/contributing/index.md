@@ -133,9 +133,16 @@ Always go through them.
   skipped.
 - **Embeddings are little-endian float32 BLOBs** in the `embeddings` table, and
   similarity is brute-force cosine in Go. Do not add a vector database.
-- **The unified FTS5 table (`fts`) spans memories and notes** and is managed from
-  the files layer with explicit INSERT/DELETE - not triggers, because it is not
-  an external-content table.
+- **The unified FTS5 table (`fts`) spans both halves of the corpus**, with
+  `fts.kind` naming which. It is managed with explicit INSERT/DELETE - not
+  triggers, because it is not an external-content table - and each half is
+  maintained next to its own writer: the file-backed knowledge kinds (memory,
+  note) from the files layer, the DB-native work record (task, trial, session
+  findings) from `store/index_work.go`.
+- **The work record carries no embeddings.** There is no `content_hash`
+  reconcile loop behind a DB row, so vectorizing one would put a provider
+  round-trip inside every `tasks_add` and leave older rows unbackfillable. Those
+  kinds are lexical-only by design.
 
 ## Testing rules
 

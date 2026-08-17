@@ -165,7 +165,15 @@ func (s *Service) proposeMemoryWanted(ctx context.Context, seen seenKeys) (int, 
 		// group's scope (project + global, mirroring recall) -- an item covering
 		// every content term is evidence the knowledge now exists, while the
 		// recall-style OR would let any item sharing one common word suppress a
-		// real gap.
+		// real gap (fts-or-vs-allterms-presence-probe).
+		//
+		// The nil kinds filter is load-bearing, not laziness: it makes the probe
+		// span exactly what recall spans, the work record included. A task or a
+		// session's findings covering every term means an agent re-running the
+		// query today gets an answer, so the miss that produced this signature
+		// would no longer be recorded -- proposing a memory for it would ask the
+		// owner to fill a gap that recall already fills. If recall's default
+		// scope ever narrows, this has to narrow with it.
 		latest := g.queries[len(g.queries)-1]
 		probe, err := store.FTSSearchAllTerms(ctx, s.db, strings.Split(g.sig, "-"), nil, []string{g.project, ""}, 1)
 		if err != nil {
