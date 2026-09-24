@@ -168,6 +168,13 @@ searches ahead of `./seamless.yaml`, so the hooks resolve it from any directory.
 It is seeded **only when absent** - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.
 
+On a `role: client` config, `make install` branches the same way the one-liner
+does: it installs the binaries and wires the agent clients, prints the service
+step as skipped naming the server, and polls **that server's** `/healthz`
+instead of a local one - an unanswered server is a warning, not a failed
+install. A client runs no daemon here, so rendering the plist would hand launchd
+a job `seamlessd serve` refuses by design.
+
 ### Go install and release archives
 
 The remaining routes end up in the same place with less done for you:

@@ -429,6 +429,12 @@ it as the edit-test loop.</p>
 searches ahead of <code>./seamless.yaml</code>, so the hooks resolve it from any directory.
 It is seeded <strong>only when absent</strong> - an install never clobbers a config holding
 your bearer key. Delete it to re-seed.</p>
+<p>On a <code>role: client</code> config, <code>make install</code> branches the same way the one-liner
+does: it installs the binaries and wires the agent clients, prints the service
+step as skipped naming the server, and polls <strong>that server's</strong> <code>/healthz</code>
+instead of a local one - an unanswered server is a warning, not a failed
+install. A client runs no daemon here, so rendering the plist would hand launchd
+a job <code>seamlessd serve</code> refuses by design.</p>
 <h3 id="go-install-and-release-archives">Go install and release archives</h3>
 <p>The remaining routes end up in the same place with less done for you:
 <code>go install github.com/0spoon/seamless/cmd/...@latest</code> needs Go 1.25+, and the

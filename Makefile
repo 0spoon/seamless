@@ -80,6 +80,20 @@ DEFAULT_ADDR := 127.0.0.1:8081
 CONFIG_ADDR   = $(shell sed -n 's/^addr:[[:space:]]*"\{0,1\}\([^"[:space:]]*\).*/\1/p' $(CONFIG) 2>/dev/null | head -1)
 ADDR          = $(or $(CONFIG_ADDR),$(DEFAULT_ADDR))
 
+# The other two keys this Makefile reads, and for the same reason: `role:
+# client` means this machine runs NO daemon of its own -- `seamlessd serve`
+# refuses outright under it -- so the plist, the service and the local health
+# poll all have to fall away, and the install's health question becomes the
+# SERVER's /healthz at `server_url:`. Same recursive (=) treatment as ADDR, read
+# at use time because _seed-config may create the file during this very run.
+#
+# IS_CLIENT is the flag every branch tests (non-empty = client), so the literal
+# "client" is compared in exactly one place here -- the Makefile's version of
+# the Go side's "read it through IsClient, never by comparing this string".
+CONFIG_ROLE       = $(shell sed -n 's/^role:[[:space:]]*"\{0,1\}\([^"[:space:]]*\).*/\1/p' $(CONFIG) 2>/dev/null | head -1)
+IS_CLIENT         = $(filter client,$(CONFIG_ROLE))
+CONFIG_SERVER_URL = $(shell sed -n 's/^server_url:[[:space:]]*"\{0,1\}\([^"[:space:]]*\).*/\1/p' $(CONFIG) 2>/dev/null | head -1)
+
 # Documentation site (cmd/docsgen). DOCS_OUT is committed; `make check` fails if
 # it drifts from DOCS_SRC. SITE_ROOT is the directory GitHub Pages serves;
 # docsgen additionally writes the crawler files there ($(SITE_FILES),
@@ -106,7 +120,8 @@ PS_INSTALLER := docs/install.ps1
 
 .PHONY: help build test test-race bench seambench lint vet vulncheck fmt fmt-check check check-fast tidy run doctor console console-chrome \
 	docs docs-check docs-serve changelog installer-check site-check site-stamp indexnow metrics release-snapshot install-git-hooks uninstall-git-hooks \
-	install uninstall update _seed-config _reload-service _wait-healthy start stop restart status \
+	install uninstall update _seed-config _install-service _reload-service \
+	_check-health _wait-healthy _check-server start stop restart status \
 	logs install-onboard-skill uninstall-onboard-skill \
 	install-research-skill uninstall-research-skill clean
 
@@ -150,6 +165,8 @@ help:
 	@echo "                       (CLIENT=claude|codex|claude-desktop|all|detect, or a comma"
 	@echo "                       list, selects the wired agent"
 	@echo "                       client; default detect = the clients on this machine)"
+	@echo "                       under 'role: client' the service is skipped and the"
+	@echo "                       SERVER's /healthz is polled -- this machine runs no daemon"
 	@echo "    uninstall          remove service, hooks, MCP, skills + binaries (config/data kept;"
 	@echo "                       PURGE=1 also deletes config + ~/.seamless)"
 	@echo "    update             upgrade in place to the latest release (CHECK=1 only reports)"
@@ -491,28 +508,70 @@ _reload-service:
 #
 # One instance per machine (data dir ~/.seamless; bind from the config's addr).
 # Override the location with `make install PREFIX=/opt`.
+#
+# Both halves that assume a local daemon -- the service and the health poll --
+# go through a role branch (_install-service, _check-health), because a `role:
+# client` config means there is no daemon on this machine to render, supervise
+# or poll. Everything else here is role-blind: a client gets the same binaries,
+# the same config location and the same wired hooks.
+#
+# Each of those runs as a sub-make so its $(shell ...) reads the config AFTER
+# _seed-config may have written it, the same reason _wait-healthy has always
+# been invoked that way.
 install: build
-	@mkdir -p $(PREFIX_BIN) $(CONFIG_DIR) $(HOME)/Library/LaunchAgents $(HOME)/.seamless
+	@mkdir -p $(PREFIX_BIN) $(CONFIG_DIR)
 	@install -m 0755 $(BIN_DIR)/$(BINARY) $(PREFIX_BIN)/$(BINARY)
 	@install -m 0755 $(BIN_DIR)/$(CLI) $(PREFIX_BIN)/$(CLI)
 	@$(MAKE) _seed-config
-	@tmp=$$(mktemp) || exit 1; \
-	    sed -e 's#__BINARY__#$(PREFIX_BIN)/$(BINARY)#g' \
-	        -e 's#__CONFIG__#$(CONFIG)#g' \
-	        -e 's#__LOG__#$(SVC_LOG)#g' \
-	        $(SVC_TEMPLATE) > $$tmp || exit 1; \
-	    if cmp -s $$tmp $(SVC_PLIST); then \
-	        rm -f $$tmp; \
-	        echo "reloading $(SVC_LABEL) (plist unchanged)"; \
-	    else \
-	        install -m 0644 $$tmp $(SVC_PLIST) || exit 1; \
-	        rm -f $$tmp; \
-	        echo "reloading $(SVC_LABEL) (plist updated)"; \
-	    fi
-	@$(MAKE) _reload-service
+	@$(MAKE) _install-service
 	@SEAMLESS_CONFIG=$(CONFIG) $(PREFIX_BIN)/$(BINARY) install-hooks --client $(CLIENT) --seam $(PREFIX_BIN)/$(CLI)
-	@$(MAKE) _wait-healthy
+	@$(MAKE) _check-health
 	@$(PREFIX_BIN)/$(BINARY) install-summary --bin-dir $(PREFIX_BIN) --config $(CONFIG) --bins $(BINARY),$(CLI)
+
+# Render the plist and (re)boot the service -- unless this is a client install.
+#
+# Under `role: client` there is nothing to supervise: serve() refuses before it
+# opens a file or a port, so bootstrapping it anyway hands launchd a job that
+# exits immediately, KeepAlive restarts it on the 10s throttle, and the install
+# then fails at the health poll -- a crash loop and a red install on a machine
+# that is in fact correctly configured. The curl installer prints this step as
+# skipped and names the server; so does this.
+#
+# The launchd-only directories are created here rather than in `install` for the
+# same reason: ~/Library/LaunchAgents holds a plist a client never renders, and
+# ~/.seamless is the data dir a client deliberately does not have (it holds no
+# corpus and opens no database), so neither should appear on one.
+#
+# The reload is a separate recipe line, and deliberately not folded into the
+# shell block above it: make RUNS any line containing $(MAKE) even under -n, so
+# a combined line would have `make -n install` render and install the plist for
+# real. Split, the dry run prints the render and only recurses for the reload,
+# which is what this file did before the role branch existed.
+_install-service:
+	@if [ -n "$(IS_CLIENT)" ]; then \
+	    echo "service skipped (client of $(CONFIG_SERVER_URL)) -- no daemon on this machine"; \
+	    exit 0; \
+	fi; \
+	mkdir -p $(HOME)/Library/LaunchAgents $(HOME)/.seamless; \
+	tmp=$$(mktemp) || exit 1; \
+	sed -e 's#__BINARY__#$(PREFIX_BIN)/$(BINARY)#g' \
+	    -e 's#__CONFIG__#$(CONFIG)#g' \
+	    -e 's#__LOG__#$(SVC_LOG)#g' \
+	    $(SVC_TEMPLATE) > $$tmp || exit 1; \
+	if cmp -s $$tmp $(SVC_PLIST); then \
+	    rm -f $$tmp; \
+	    echo "reloading $(SVC_LABEL) (plist unchanged)"; \
+	else \
+	    install -m 0644 $$tmp $(SVC_PLIST) || exit 1; \
+	    rm -f $$tmp; \
+	    echo "reloading $(SVC_LABEL) (plist updated)"; \
+	fi
+	@if [ -z "$(IS_CLIENT)" ]; then $(MAKE) _reload-service; fi
+
+# Which end to ask "is it serving?" -- this machine's listener, or the server a
+# client install dials.
+_check-health:
+	@if [ -n "$(IS_CLIENT)" ]; then $(MAKE) _check-server; else $(MAKE) _wait-healthy; fi
 
 # launchd returns as soon as it has *started* the process, but the daemon binds
 # its listener ~100ms later. Without this, `make install && make doctor` -- the
@@ -541,6 +600,31 @@ _wait-healthy:
 	    sleep 0.1; \
 	done; \
 	echo "ERROR: no /healthz from $(ADDR) over http or https after 50 attempts; check $(SVC_LOG)"; exit 1
+
+# The client half of _wait-healthy. Nothing was started here, so there is no
+# listener race to wait out: this asks the server whether it answers this
+# machine, and a few tries absorb a slow link rather than a boot. server_url
+# carries its own scheme, so unlike _wait-healthy there is no scheme to guess.
+#
+# A silent server is a WARNING, not a failure, matching the curl installer: the
+# agent clients are wired either way and the install is complete, and re-running
+# `make install` is not how you retry a server that was merely asleep.
+#
+# -k for the reason reachabilityProbe gives in cmd/seamlessd/doctor.go: no
+# credential is sent and no body is read, so this asks only "is something
+# serving there", and a verifying probe would report a server behind a private
+# CA as down. Whether this machine TRUSTS that certificate is tls.ca_file's
+# question, asked on the surfaces that carry the bearer key (seam doctor, the
+# hooks, the MCP bridge), all of which fail loudly when it is wrong.
+_check-server:
+	@for i in 1 2 3 4 5; do \
+	    curl -sfk --max-time 2 -o /dev/null "$(CONFIG_SERVER_URL)/healthz" 2>/dev/null \
+	        && { echo "healthz ok -- $(CONFIG_SERVER_URL)"; exit 0; }; \
+	    sleep 0.2; \
+	done; \
+	echo "WARNING: no /healthz from $(CONFIG_SERVER_URL) -- this machine is wired to it anyway."; \
+	echo "         Check that seamlessd is serving there, that its addr is not loopback-only,"; \
+	echo "         and that this machine can reach that host and port."
 
 # Seed $(CONFIG) on first install only -- never clobber a config that may hold an
 # edited bearer key. ./seamless.yaml (gitignored, the pre-install layout's live
@@ -599,8 +683,15 @@ restart: build
 status: build
 	@$(BIN_DIR)/$(BINARY) status
 
+# The other target that assumes a local daemon: there is no log on a client
+# because there is no process writing one. Say where it is instead of pointing
+# at a path on this machine that will never exist.
 logs:
-	@test -f $(SVC_LOG) || { echo "no log yet at $(SVC_LOG)"; exit 1; }
+	@if [ -n "$(IS_CLIENT)" ]; then \
+	    echo "no local log: this machine is a client of $(CONFIG_SERVER_URL); the daemon logs there"; \
+	    exit 1; \
+	fi; \
+	test -f $(SVC_LOG) || { echo "no log yet at $(SVC_LOG)"; exit 1; }
 	@tail -f $(SVC_LOG)
 
 install-onboard-skill:
