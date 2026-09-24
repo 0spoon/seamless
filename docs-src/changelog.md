@@ -15,6 +15,19 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.5.1 {#v0-5-1}
+
+Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.1)
+
+### Fixes
+
+- fix(install): branch make install on role: client
+- fix(install): probe https as well as http in the health wait
+
+### Other
+
+- build(deps): raise the toolchain floor to go1.25.13
+
 ## v0.5.0 {#v0-5-0}
 
 Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.0)
