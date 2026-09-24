@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	_ "embed"
 	"fmt"
@@ -139,6 +140,10 @@ func LatestSchemaVersion() int {
 // inside its own transaction, recording the version in schema_migrations.
 // Ported from Seam v1 (migrations/migrate.go); the rarely-used PreHook was
 // dropped -- add it back only if a future migration needs pre-transaction DDL.
+//
+// The version read here is only a fast path that keeps the common case (nothing
+// pending) lock-free: applyMigration re-reads it under the write lock, because
+// this one is a snapshot that a concurrent process can invalidate.
 func migrate(db *sql.DB, ms []Migration) error {
 	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
 		version    INTEGER PRIMARY KEY,
@@ -156,21 +161,68 @@ func migrate(db *sql.DB, ms []Migration) error {
 		if m.Version <= current {
 			continue
 		}
-		tx, err := db.Begin()
-		if err != nil {
-			return fmt.Errorf("store.migrate: begin v%d: %w", m.Version, err)
-		}
-		if _, err := tx.Exec(m.SQL); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("store.migrate: apply v%d: %w", m.Version, err)
-		}
-		if _, err := tx.Exec("INSERT INTO schema_migrations (version) VALUES (?)", m.Version); err != nil {
-			_ = tx.Rollback()
-			return fmt.Errorf("store.migrate: record v%d: %w", m.Version, err)
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("store.migrate: commit v%d: %w", m.Version, err)
+		if err := applyMigration(db, m); err != nil {
+			return err
 		}
 	}
+	return nil
+}
+
+// applyMigration applies one migration under SQLite's write lock, skipping it
+// when another process got there first.
+//
+// Two things make this safe to run from several processes at once, and both are
+// load-bearing. BEGIN IMMEDIATE takes the write lock at the start of the
+// transaction rather than at its first write, so competing migrators serialize
+// here instead of interleaving (the busy_timeout on the DSN makes the loser wait
+// rather than fail). Re-reading the applied version INSIDE that lock is what
+// turns the wait into a skip: the snapshot migrate took before the lock can be
+// stale by the time we hold it.
+//
+// Without the pair, `make install` -- which restarts the daemon and then runs
+// install-hooks -- had both processes replay the same pending migration, and the
+// loser died on "duplicate column name". It is a dedicated connection rather
+// than db.Begin so the raw BEGIN/COMMIT cannot be interleaved with another
+// caller's statements on a pooled one.
+func applyMigration(db *sql.DB, m Migration) error {
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("store.migrate: connection for v%d: %w", m.Version, err)
+	}
+	defer func() { _ = conn.Close() }()
+
+	if _, err := conn.ExecContext(ctx, "BEGIN IMMEDIATE"); err != nil {
+		return fmt.Errorf("store.migrate: begin v%d: %w", m.Version, err)
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			// best-effort unwind: every path here is already returning the
+			// error that matters, and a ROLLBACK that fails means a connection
+			// that is about to be closed anyway
+			_, _ = conn.ExecContext(ctx, "ROLLBACK") //nolint:errcheck // see above
+		}
+	}()
+
+	var applied int
+	const q = "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+	if err := conn.QueryRowContext(ctx, q).Scan(&applied); err != nil {
+		return fmt.Errorf("store.migrate: re-read version for v%d: %w", m.Version, err)
+	}
+	if m.Version <= applied {
+		return nil // another process applied it while we waited for the lock
+	}
+
+	if _, err := conn.ExecContext(ctx, m.SQL); err != nil {
+		return fmt.Errorf("store.migrate: apply v%d: %w", m.Version, err)
+	}
+	if _, err := conn.ExecContext(ctx, "INSERT INTO schema_migrations (version) VALUES (?)", m.Version); err != nil {
+		return fmt.Errorf("store.migrate: record v%d: %w", m.Version, err)
+	}
+	if _, err := conn.ExecContext(ctx, "COMMIT"); err != nil {
+		return fmt.Errorf("store.migrate: commit v%d: %w", m.Version, err)
+	}
+	committed = true
 	return nil
 }
