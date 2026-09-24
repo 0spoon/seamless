@@ -36,6 +36,9 @@ const (
 // the program) are kept unless --purge is passed. Every external step is
 // best-effort: an already-gone file or a missing client CLI is a note, never a
 // failure, so uninstall is idempotent and safe to re-run.
+//
+// A client install (role: client) has neither a service nor a data dir, so both
+// of those steps narrow rather than run: see uninstallService and purgePaths.
 func runUninstall(args []string) error {
 	fs := flag.NewFlagSet("uninstall", flag.ContinueOnError)
 	clientFlag := fs.String("client", "all", "which agent client(s) to remove hooks/MCP for: claude|claude-desktop|codex, a comma list of those, or all|detect")
@@ -84,7 +87,17 @@ func runUninstall(args []string) error {
 	if cerr != nil {
 		configDir = "~/.config/seamless"
 	}
+	// A client install owns no data dir. It writes no database and no corpus,
+	// so the ~/.seamless a client's config resolves to is config.Defaults'
+	// placeholder rather than anything this install made -- and on a box that
+	// used to run a server it is the SERVER's corpus, still holding the only
+	// copy of every memory and note. Purging it in a client's name would delete
+	// data this role never owned. Empty here means "not in scope", and every
+	// surface below reads it through purgePaths.
 	dataDir := cfg.DataDir
+	if cfg.IsClient() {
+		dataDir = ""
+	}
 
 	printUninstallPreamble(targetNames(targets), installDir, configDir, dataDir, *purge, *dryRun)
 
@@ -95,8 +108,7 @@ func runUninstall(args []string) error {
 
 	// Service first: stopping it releases the running binary (notably the Windows
 	// image lock) before the binaries are removed.
-	fmt.Printf("\n%s\n", bold("Service"))
-	runTeardown(serviceTeardown(runtime.GOOS, homeDir(), os.Getuid(), installDir), *dryRun)
+	uninstallService(cfg.IsClient(), installDir, *dryRun)
 
 	for _, client := range clients {
 		path, cli := *settings, "claude"
@@ -133,9 +145,49 @@ func runUninstall(args []string) error {
 
 	fmt.Printf("\n%s\n", green("Seamless uninstalled."+dryRunTag(*dryRun)))
 	if !*purge {
-		fmt.Printf("%s%s\n", fieldCont, dim("kept "+tildePath(configDir)+" and "+tildePath(dataDir)+" -- re-run with --purge to delete them"))
+		kept := strings.Join(tildePaths(purgePaths(configDir, dataDir)), " and ")
+		fmt.Printf("%s%s\n", fieldCont, dim("kept "+kept+" -- re-run with --purge to delete"))
 	}
 	return nil
+}
+
+// uninstallService prints the Service block and, on a server install, runs the
+// teardown.
+//
+// A client registers no launchd job, systemd unit or Scheduled Task: the
+// installer skips that branch entirely for it, so there is nothing of this
+// install's to stop. Running the teardown anyway would not be a harmless no-op
+// on the one machine where it matters -- a box hosting both a server and a
+// second user's client would have its running daemon stopped and deregistered
+// by a client uninstall, which is precisely the blast radius the role exists to
+// contain.
+func uninstallService(isClient bool, installDir string, dryRun bool) {
+	fmt.Printf("\n%s\n", bold("Service"))
+	if isClient {
+		fieldRow("kind", dim("not installed (role: client -- this install runs no daemon)"))
+		return
+	}
+	runTeardown(serviceTeardown(runtime.GOOS, homeDir(), os.Getuid(), installDir), dryRun)
+}
+
+// purgePaths is what --purge deletes: the config dir always, the data dir only
+// when this install owns one (dataDir is empty for a client role). It is the one
+// derivation, shared by the preamble, the purge itself, and the "kept" footer,
+// so a client can never be told it will delete a directory it then leaves alone.
+func purgePaths(configDir, dataDir string) []string {
+	if strings.TrimSpace(dataDir) == "" {
+		return []string{configDir}
+	}
+	return []string{configDir, dataDir}
+}
+
+// tildePaths abbreviates each path for display.
+func tildePaths(paths []string) []string {
+	out := make([]string, len(paths))
+	for i, p := range paths {
+		out[i] = tildePath(p)
+	}
+	return out
 }
 
 // purgeExportAdvice is printed above the uninstall confirmation whenever
@@ -151,12 +203,19 @@ func printUninstallPreamble(names []string, installDir, configDir, dataDir strin
 	fmt.Printf("\n%s %s\n", bold("Seamless"), dim("uninstall"+dryRunTag(dryRun)))
 	fieldRow("clients", strings.Join(names, ", "))
 	fieldRow("bin", tildePath(installDir))
+	targets := strings.Join(tildePaths(purgePaths(configDir, dataDir)), ", ")
 	if purge {
-		fieldRow("purge", yellow("will delete ")+dim(tildePath(configDir)+", "+tildePath(dataDir)))
-		fmt.Printf("%s%s%s\n", fieldCont, yellow(purgeExportAdvice),
-			dim(" -- memories and notes are markdown files, and nothing else keeps a copy"))
+		fieldRow("purge", yellow("will delete ")+dim(targets))
+		// The export advice is about the markdown corpus specifically. With no
+		// data dir in scope there is nothing here that only this machine has,
+		// and telling a client to export first would send it to a daemon whose
+		// corpus this uninstall is not touching.
+		if dataDir != "" {
+			fmt.Printf("%s%s%s\n", fieldCont, yellow(purgeExportAdvice),
+				dim(" -- memories and notes are markdown files, and nothing else keeps a copy"))
+		}
 	} else {
-		fieldRow("keep", dim(tildePath(configDir)+", "+tildePath(dataDir)+" (use --purge to delete)"))
+		fieldRow("keep", dim(targets+" (use --purge to delete)"))
 	}
 }
 
@@ -485,10 +544,11 @@ func removeBinary(path string) error {
 
 // purgeData deletes the config and data directories (only with --purge). A guard
 // refuses obviously wrong targets so a misconfigured data_dir cannot turn --purge
-// into a catastrophe.
+// into a catastrophe. On a client role dataDir is empty and only the config dir
+// is in scope -- see purgePaths.
 func purgeData(configDir, dataDir string, dryRun bool) {
 	fmt.Printf("\n%s\n", bold("Purge"))
-	for _, d := range []string{configDir, dataDir} {
+	for _, d := range purgePaths(configDir, dataDir) {
 		if err := purgeGuard(d); err != nil {
 			fieldRow("purge", yellow("refused ")+dim(tildePath(d)+": "+err.Error()))
 			continue

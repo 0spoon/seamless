@@ -7,6 +7,7 @@
 //	seamlessd export        write the whole instance to one archive (corpus + db snapshot + manifest)
 //	seamlessd import        import a Seam v1 data directory, or a seamlessd export archive
 //	seamlessd install-hooks install agent hooks, MCP, and maintained skills
+//	seamlessd client-config print the pairing commands for a client machine
 //	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
 //	seamlessd update        upgrade in place to the latest release (re-runs the installer)
 //	seamlessd map-repo      override a repo's auto-derived project slug (rarely needed)
@@ -99,6 +100,8 @@ func main() {
 		err = runInstallHooks(args)
 	case "install-summary":
 		err = runInstallSummary(args)
+	case "client-config":
+		err = runClientConfig(args)
 	case "uninstall":
 		err = runUninstall(args)
 	case "update":
@@ -143,6 +146,8 @@ usage:
   seamlessd import         import a Seam v1 data directory (--from ~/.seam), or a seamlessd export
                            archive (--from FILE|-; --dry-run previews, --force allows a live restore)
   seamlessd install-hooks  install Claude Code/Codex hooks, MCP, and maintained skills
+  seamlessd client-config  print the commands that pair another machine as a client (run on the SERVER;
+                           --redact masks the key so the output is safe to paste into a ticket)
   seamlessd uninstall      remove Seamless: service, hooks, MCP, skills, binaries
                            (--purge also deletes config + ~/.seamless; --dry-run to preview)
   seamlessd update         upgrade in place to the latest release by re-running the installer

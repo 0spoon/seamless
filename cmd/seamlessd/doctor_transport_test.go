@@ -199,12 +199,77 @@ func TestTLSCheck(t *testing.T) {
 }
 
 // A client install binds nothing and holds no certificate, so reporting a bind
-// address it never binds would be a confident wrong answer.
+// address it never binds would be a confident wrong answer. What it does get is
+// the one transport fact it owns: whether the URL it dials answers.
 func TestTransportChecksOnAClient(t *testing.T) {
-	checks := transportChecks(config.Config{Role: config.RoleClient, AdvertisedURL: "https://seam.lan"})
-	require.Len(t, checks, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	checks := transportChecks(config.Config{Role: config.RoleClient, AdvertisedURL: srv.URL})
+	require.Len(t, checks, 2)
 	require.Equal(t, "role", checks[0].name)
-	require.Contains(t, checks[0].detail, "runs no daemon and dials https://seam.lan")
+	require.Contains(t, checks[0].detail, "runs no daemon and dials "+srv.URL)
+	require.Equal(t, "server_url", checks[1].name)
+	require.Equal(t, statusOK, checks[1].status, checks[1].detail)
+
+	// No bind, no tls: naming either would describe a listener this install
+	// does not have.
+	for _, c := range checks {
+		require.NotEqual(t, "bind", c.name)
+		require.NotEqual(t, "tls", c.name)
+	}
+}
+
+// The severity split against serverURLCheck is the point: a server's own daemon
+// being stopped is a normal state doctor reports as info, while a client with no
+// server has nothing left working at all.
+func TestClientServerURLCheck(t *testing.T) {
+	t.Run("reachable", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer srv.Close()
+		c := clientServerURLCheck(config.Config{Role: config.RoleClient, AdvertisedURL: srv.URL})
+		require.Equal(t, statusOK, c.status, c.detail)
+		require.Contains(t, c.detail, "reaches the server")
+	})
+
+	t.Run("unreachable fails, unlike the server role's info", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+		down := srv.URL
+		srv.Close()
+
+		client := clientServerURLCheck(config.Config{Role: config.RoleClient, AdvertisedURL: down})
+		require.Equal(t, statusFail, client.status, client.detail)
+		require.Contains(t, client.detail, "is not answering")
+
+		// Same URL, server role: info, because `seamlessd serve` is the fix and
+		// a stopped local daemon is not a misconfiguration.
+		require.Equal(t, statusInfo, serverURLCheck(config.Config{Addr: "127.0.0.1:8081", AdvertisedURL: down}).status)
+	})
+
+	t.Run("421 points at the server's allowlist, not the client's", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusMisdirectedRequest)
+		}))
+		defer srv.Close()
+		c := clientServerURLCheck(config.Config{Role: config.RoleClient, AdvertisedURL: srv.URL})
+		require.Equal(t, statusFail, c.status, c.detail)
+		require.Contains(t, c.detail, "answers 421")
+		require.Contains(t, c.detail, "SERVER's allowed_hosts")
+	})
+
+	t.Run("another status is a warning", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusBadGateway)
+		}))
+		defer srv.Close()
+		c := clientServerURLCheck(config.Config{Role: config.RoleClient, AdvertisedURL: srv.URL})
+		require.Equal(t, statusWarn, c.status, c.detail)
+		require.Contains(t, c.detail, "502")
+	})
 }
 
 func TestRemoteSessionsCheck(t *testing.T) {

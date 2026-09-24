@@ -35,9 +35,11 @@ import (
 // That pin is load-bearing: because a hook fails open, drift here is a silent
 // no-op rather than an error.
 //
-// user-prompt-submit has no command-hook counterpart there (the installer wires
-// it as an http hook, which is reliable mid-turn). seam has always accepted it,
-// and a hand-wired command hook is a supported thing to have, so it stays.
+// user-prompt-submit is the one event whose shape follows the transport: on an
+// http base URL the installer wires it as an http hook (reliable mid-turn), and
+// on an https one profileForBaseURL turns it into a command hook so no bearer key
+// lands in settings.json. seam has always accepted the command form, so it stays
+// either way.
 var hookEvents = []struct{ event, endpoint string }{
 	{"session-start", "/api/hooks/session-start"},
 	{"user-prompt-submit", "/api/hooks/user-prompt-submit"},

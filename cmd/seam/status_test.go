@@ -73,6 +73,44 @@ func TestStatus_PrintsPartialStatusAndStillFails(t *testing.T) {
 	require.NotContains(t, got, "check(s) failed", "the result is not part of the output")
 }
 
+// A client install writes nothing locally, so there is no data dir to report.
+// The line cannot simply be left to print an empty value either: config.Defaults
+// supplies ~/.seamless whether or not the client config names it, so the
+// unconditional line named a directory this install does not own -- and on a box
+// converted from a server, one whose contents `status` is no longer describing.
+//
+// The server line is asserted alongside it, because the fix must be a narrowing
+// and not the whole block going quiet.
+func TestStatus_ClientPrintsServerAndOmitsTheDataDir(t *testing.T) {
+	e, out, _ := healthzOnly(t, `{"status":"ok","version":"test"}`)
+	inner := e.loadConfig
+	e.loadConfig = func() (config.Config, error) {
+		cfg, err := inner()
+		if err != nil {
+			return cfg, err
+		}
+		// Validate requires a client to name its server, so a faithful client
+		// config always carries server_url; cfg.DataDir stays populated, which
+		// is exactly the state that made the old line misleading.
+		cfg.Role, cfg.AdvertisedURL = config.RoleClient, "http://"+cfg.Addr
+		return cfg, nil
+	}
+
+	require.Equal(t, 1, dispatch(context.Background(), e, []string{"status"}), "mcp is still down")
+	got := out.String()
+	require.Contains(t, got, "server:   ok ("+mustServerURL(t, e)+")")
+	require.NotContains(t, got, "data dir")
+}
+
+// mustServerURL resolves the env's configured server URL, for asserting that
+// status prints the resolved one rather than a rebuilt guess.
+func mustServerURL(t *testing.T, e *env) string {
+	t.Helper()
+	cfg, err := e.loadConfig()
+	require.NoError(t, err)
+	return cfg.ServerURL()
+}
+
 // An unreadable /healthz means something other than seamlessd answered on the
 // port. It used to print the reason and carry on to exit 0.
 func TestStatus_UnreadableHealthCounts(t *testing.T) {

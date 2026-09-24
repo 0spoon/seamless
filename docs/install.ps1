@@ -32,6 +32,15 @@
 #                                     found, and aborts when none is found and
 #                                     the session is non-interactive -- never a
 #                                     silent default)
+#   $env:SEAMLESS_SERVER_URL          install as a CLIENT of a Seamless server
+#                                     running somewhere else: wire this
+#                                     machine's agent clients to that URL,
+#                                     install no service, and keep no data dir
+#                                     here. Requires SEAMLESS_MCP_API_KEY.
+#   $env:SEAMLESS_MCP_API_KEY         the server's bearer key. Required with
+#                                     SEAMLESS_SERVER_URL; `seamlessd
+#                                     client-config` on the server prints the
+#                                     whole command.
 #   $env:SEAMLESS_NO_HOOKS=1          skip agent hooks, MCP registration, and skills
 #   $env:SEAMLESS_NO_ONBOARD_SKILL=1  skip the one-shot seam-onboard skill
 #   $env:SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
@@ -368,7 +377,8 @@ function Install-Binaries {
 # otherwise bind the install to it. Missing claude/seam is a warning inside
 # install-hooks, not a failure, so a box without Claude Code still installs cleanly.
 function Invoke-WireHooks {
-    param([string]$Tmp, [string]$InstallDir, [string]$AgentClient, [string]$Version)
+    param([string]$Tmp, [string]$InstallDir, [string]$AgentClient, [string]$Version,
+        [string]$ServerUrl, [string]$ApiKey)
     if ($env:SEAMLESS_NO_HOOKS) { Step 'hooks' 'skipped (SEAMLESS_NO_HOOKS)'; return }
     $seamlessd = Join-Path $InstallDir 'seamlessd.exe'
     $seam = Join-Path $InstallDir 'seam.exe'
@@ -397,6 +407,14 @@ function Invoke-WireHooks {
             $probe = ''
         } finally {
             $ErrorActionPreference = $prevEap
+        }
+        # --server-url (with --api-key) is the client-install path, and it is
+        # newer than every flag checked below: a pinned $env:SEAMLESS_VERSION
+        # that predates it would fail flag parsing with the binaries already in
+        # place. An empty probe failed to run and proves nothing, so it assumes
+        # the modern binary, exactly like the checks below.
+        if ($ServerUrl -and $probe -and $probe -notmatch '-server-url') {
+            Die "seamless $Version predates --server-url and cannot install as a client of $ServerUrl; drop SEAMLESS_VERSION to get the latest"
         }
         # The claude-desktop target and comma-separated --client lists shipped
         # in the same release, so one probe covers both. A pinned older binary:
@@ -433,6 +451,12 @@ function Invoke-WireHooks {
         # closing seam-onboard advice would name a skill that was never installed.
         if ($probe -and $probe -match '-client' -and $probe -notmatch '-skills') {
             Warn "seamless $Version predates the bundled skills; the seam-onboard/seam-research skills will not be installed (drop SEAMLESS_VERSION to get the latest)"
+        }
+        if ($ServerUrl) {
+            # The client pair: the URL to dial and the key to dial it with. The
+            # binary writes role: client + server_url + mcp.api_key from these
+            # -- no data dir, because a client stores nothing locally.
+            $clientArgs += @('--server-url', $ServerUrl, '--api-key', $ApiKey)
         }
         & $seamlessd install-hooks @clientArgs --seam $seam
         if ($LASTEXITCODE -ne 0) { Die "install-hooks failed (exit $LASTEXITCODE)" }
@@ -544,8 +568,39 @@ function Wait-Healthy {
     Die "no /healthz from $Addr after 10s; check the log: $LogFile"
 }
 
+# The client half of Wait-Healthy. Nothing was started here, so there is no
+# listener race to wait out -- this asks the server whether it answers this
+# machine, and a few tries absorb a slow link rather than a boot. A silent
+# server is a warning and not a Die: the clients are wired either way, the
+# install is complete, and re-running this script is not how you retry a server
+# that was merely asleep.
+function Test-ServerHealth {
+    param([string]$ServerUrl)
+    for ($i = 0; $i -lt 5; $i++) {
+        try {
+            $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 "$ServerUrl/healthz"
+            if ([int]$r.StatusCode -eq 200) { Step 'healthz' "ok -- $ServerUrl"; return }
+        } catch {}
+        Start-Sleep -Milliseconds 200
+    }
+    Warn "no /healthz from $ServerUrl -- this machine is wired to it anyway. Check that seamlessd is serving there, that its addr is not loopback-only, and that this machine can reach that host and port."
+}
+
 function Main {
     $InstallDir = if ($env:SEAMLESS_INSTALL_DIR) { $env:SEAMLESS_INSTALL_DIR } else { Join-Path $HOME '.local\bin' }
+    # Client mode: no daemon here, so no Scheduled Task and no data dir. The
+    # trailing slash is stripped because server_url is a base URL with no path,
+    # and "http://host:8081/" is a path as far as the config validator is
+    # concerned -- a URL pasted out of a browser should still work.
+    $serverUrl = if ($env:SEAMLESS_SERVER_URL) { ($env:SEAMLESS_SERVER_URL).TrimEnd('/') } else { '' }
+    $apiKey = if ($env:SEAMLESS_MCP_API_KEY) { $env:SEAMLESS_MCP_API_KEY } else { '' }
+    if ($serverUrl -and -not $apiKey) {
+        Die @'
+SEAMLESS_SERVER_URL is set but SEAMLESS_MCP_API_KEY is not: a client needs the
+server's bearer key as well as its URL. Run  seamlessd client-config  on the
+server and use the line it prints.
+'@
+    }
     $agentClient = Resolve-AgentClient
     # What actually got wired; Invoke-WireHooks narrows it when a pinned old
     # binary cannot carry the chat surface, so the closing advice stays honest.
@@ -574,15 +629,20 @@ function Main {
             Stop-Process -Force -ErrorAction SilentlyContinue
 
         Install-Binaries $zip $tmp $InstallDir
-        Invoke-WireHooks $tmp $InstallDir $agentClient $version
-        $addr = Get-ConfiguredAddr
+        Invoke-WireHooks $tmp $InstallDir $agentClient $version $serverUrl $apiKey
 
-        if ($env:SEAMLESS_NO_SERVICE) {
+        if ($serverUrl) {
+            # No service and no Get-ConfiguredAddr: a client starts no daemon
+            # and binds no port here, so there is no local addr to read and
+            # nothing to supervise. The health of the install is the server's.
+            Step 'service' "skipped (client of $serverUrl)"
+            Test-ServerHealth $serverUrl
+        } elseif ($env:SEAMLESS_NO_SERVICE) {
             Step 'service' 'skipped (SEAMLESS_NO_SERVICE)'
             Say "start it yourself: & `"$InstallDir\seamlessd.exe`" serve --config `"$Config`""
         } else {
             Register-Service $InstallDir
-            Wait-Healthy $addr
+            Wait-Healthy (Get-ConfiguredAddr)
         }
     } finally {
         Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue

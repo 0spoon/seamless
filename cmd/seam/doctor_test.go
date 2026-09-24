@@ -181,6 +181,14 @@ func TestDoctor_ReportsEachCheckAndFails(t *testing.T) {
 	require.Contains(t, out.String(), "[ok  ] server: ok")
 	require.Contains(t, out.String(), "[FAIL] mcp: connect failed: connection refused")
 	require.Contains(t, errb.String(), "doctor: 1 check(s) failed")
+
+	// The server line names the URL that was actually resolved, not just the
+	// status word. On a client install that URL is server_url rather than
+	// anything derived from a local addr, and it is the single fact that tells
+	// an operator whether this machine is pointed where they think it is.
+	cfg, err := e.loadConfig()
+	require.NoError(t, err)
+	require.Contains(t, out.String(), "server: ok ("+cfg.ServerURL()+")")
 }
 
 // `seam doctor` takes no arguments.

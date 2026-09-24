@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -537,4 +539,165 @@ func TestAgentSkillClient_FollowsHookSelection(t *testing.T) {
 	require.Equal(t, agentskills.ClientCodex, codex)
 	_, err = agentSkillClient(hooks.Client("gemini"))
 	require.ErrorContains(t, err, "valid values are claude, codex")
+}
+
+// clientInstallEnv isolates a client-install test from the developer's own
+// install: a throwaway HOME and none of the SEAMLESS_* overrides that would
+// otherwise decide the config search or the key.
+func clientInstallEnv(t *testing.T, home string) {
+	t.Helper()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+	for _, key := range []string{"SEAMLESS_CONFIG", "SEAMLESS_MCP_API_KEY", "SEAMLESS_SERVER_URL", "SEAMLESS_ROLE"} {
+		if v, ok := os.LookupEnv(key); ok {
+			t.Setenv(key, v)
+		}
+		require.NoError(t, os.Unsetenv(key))
+	}
+}
+
+// A client install: the config file it writes, the server it wires against, the
+// database it must not open, and where the feature state comes from when there
+// is no database to read it from.
+func TestRunInstallHooks_ServerURLWritesTheClientConfigAndOpensNoDatabase(t *testing.T) {
+	home := t.TempDir()
+	clientInstallEnv(t, home)
+	srv, seen := settingsServer(t, http.StatusOK,
+		`{"featuresConfig":{"research":true,"momentum":false,"gamification":false}}`)
+
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	out := captureStdout(t, func() error {
+		return runInstallHooks([]string{
+			"--client", "claude", "--settings", settings, "--mcp=false",
+			"--seam", "/opt/seam", "--server-url", srv.URL, "--api-key", "server-key",
+		})
+	})
+
+	// The config file is the client config, with no data dir.
+	cfgPath := filepath.Join(home, ".config", "seamless", "seamless.yaml")
+	raw, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	body := string(raw)
+	require.Contains(t, body, "role: client\n")
+	require.Contains(t, body, "server_url: \""+srv.URL+"\"\n")
+	require.Contains(t, body, "api_key: \"server-key\"\n")
+	require.NotContains(t, body, "\ndata_dir:")
+	info, err := os.Stat(cfgPath)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
+
+	// The hooks point at the server, not at a loopback daemon.
+	hookFile, err := os.ReadFile(settings)
+	require.NoError(t, err)
+	require.Contains(t, string(hookFile), srv.URL+"/api/hooks/user-prompt-submit")
+	require.Contains(t, string(hookFile), "Bearer server-key")
+	require.NotContains(t, string(hookFile), "127.0.0.1:8081")
+
+	// Nothing local was opened or created: no data dir, no seam.db.
+	require.NoDirExists(t, filepath.Join(home, ".seamless"))
+
+	// The feature state came over the wire. research is off in this machine's
+	// (default) config and on at the server, and the skill follows the server.
+	require.Len(t, *seen, 1)
+	require.FileExists(t, filepath.Join(home, ".claude", "skills", agentskills.ResearchName, "SKILL.md"))
+
+	require.Contains(t, out, "first run:")
+	require.Contains(t, out, "client of "+srv.URL)
+
+	// Re-running the same install is idempotent, not a refusal of its own file.
+	out = captureStdout(t, func() error {
+		return runInstallHooks([]string{
+			"--client", "claude", "--settings", settings, "--mcp=false",
+			"--seam", "/opt/seam", "--server-url", srv.URL, "--api-key", "server-key",
+		})
+	})
+	require.NotContains(t, out, "first run:")
+	require.Contains(t, out, "client of "+srv.URL)
+	after, err := os.ReadFile(cfgPath)
+	require.NoError(t, err)
+	require.Equal(t, body, string(after))
+}
+
+// Under https every Claude Code hook is exec-form -- including UserPromptSubmit,
+// the one http hook of an http install -- and the MCP registration is the stdio
+// bridge. Claude Code's own HTTP client cannot be told about tls.ca_file; seam
+// can.
+func TestRunInstallHooks_HTTPSClientWiresExecFormHooks(t *testing.T) {
+	home := t.TempDir()
+	clientInstallEnv(t, home)
+
+	settings := filepath.Join(t.TempDir(), "settings.json")
+	out := captureStdout(t, func() error {
+		return runInstallHooks([]string{
+			"--client", "claude", "--settings", settings, "--mcp=false", "--skills=false",
+			"--seam", "/opt/seam", "--server-url", "https://seam.example:8443", "--api-key", "server-key",
+		})
+	})
+
+	raw, err := os.ReadFile(settings)
+	require.NoError(t, err)
+	var parsed map[string]any
+	require.NoError(t, json.Unmarshal(raw, &parsed))
+	hooksObj := parsed["hooks"].(map[string]any)
+	for event := range hooksObj {
+		entry := hooksObj[event].([]any)[0].(map[string]any)
+		handler := entry["hooks"].([]any)[0].(map[string]any)
+		require.Equal(t, "command", handler["type"], "%s must be exec-form under https", event)
+	}
+	ups := hooksObj["UserPromptSubmit"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
+	require.Equal(t, "/opt/seam", ups["command"])
+	require.Contains(t, ups["args"], "user-prompt-submit")
+	// No http hook means no bearer key in settings.json.
+	require.NotContains(t, string(raw), "Bearer")
+	require.NotContains(t, string(raw), "server-key")
+
+	require.Contains(t, out, "client of https://seam.example:8443")
+}
+
+// The https MCP registration is the seam stdio bridge: Claude Code speaks stdio
+// to seam, and seam speaks https to the daemon with the CLI's own trust store.
+func TestClaudeMCPAddArgs_HTTPSRegistersTheStdioBridge(t *testing.T) {
+	args := claudeMCPAddArgs("https://seam.example:8443", "/opt/seam", "/etc/seamless.yaml")
+	require.Equal(t, []string{
+		"mcp", "add-json", "--scope", "user", "seamless",
+		`{"args":["mcp-proxy","--config","/etc/seamless.yaml"],"command":"/opt/seam","type":"stdio"}`,
+	}, args)
+	joined := strings.Join(args, " ")
+	require.NotContains(t, joined, "/api/mcp", "an https registration never hands Claude Code the URL directly")
+	require.NotContains(t, joined, "mcp-headers")
+
+	// Without a config path the bridge still registers, resolving config itself.
+	require.Equal(t, `{"args":["mcp-proxy"],"command":"/opt/seam","type":"stdio"}`,
+		claudeMCPAddArgs("https://seam.example:8443", "/opt/seam", "")[5])
+}
+
+// --api-key alone would be a credential silently ignored.
+func TestRunInstallHooks_APIKeyWithoutServerURLIsAnError(t *testing.T) {
+	clientInstallEnv(t, t.TempDir())
+	err := runInstallHooks([]string{
+		"--client", "claude", "--settings", filepath.Join(t.TempDir(), "settings.json"),
+		"--mcp=false", "--skills=false", "--api-key", "server-key",
+	})
+	require.ErrorContains(t, err, "--api-key applies to --server-url")
+}
+
+// The config file is the owner's: a server install already on this machine is
+// never rewritten into a client one.
+func TestRunInstallHooks_ServerURLRefusesAnExistingConfig(t *testing.T) {
+	home := t.TempDir()
+	clientInstallEnv(t, home)
+	cfgPath := filepath.Join(home, ".config", "seamless", "seamless.yaml")
+	require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o700))
+	body := "mcp:\n  api_key: \"local-key\"\n"
+	require.NoError(t, os.WriteFile(cfgPath, []byte(body), 0o600))
+
+	err := runInstallHooks([]string{
+		"--client", "claude", "--settings", filepath.Join(t.TempDir(), "settings.json"),
+		"--mcp=false", "--skills=false", "--server-url", "https://seam.example:8443", "--api-key", "server-key",
+	})
+	require.ErrorContains(t, err, "never edited on your behalf")
+	require.ErrorContains(t, err, "role: client")
+	after, err2 := os.ReadFile(cfgPath)
+	require.NoError(t, err2)
+	require.Equal(t, body, string(after))
 }

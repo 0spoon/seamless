@@ -41,7 +41,9 @@ func runInstallHooks(args []string) error {
 	settings := fs.String("settings", "~/.claude/settings.json", "Claude Code settings.json to install into")
 	codexHooksFlag := fs.String("codex-hooks", "", "Codex hooks.json to install into (default $CODEX_HOME/hooks.json, else ~/.codex/hooks.json)")
 	desktopConfigFlag := fs.String("desktop-config", "", "Claude desktop app claude_desktop_config.json to register the MCP bridge in (default: the app's per-OS location)")
-	urlFlag := fs.String("url", "", "base URL of seamlessd (default derived from config addr)")
+	urlFlag := fs.String("url", "", "base URL of seamlessd for this run only (default derived from config); does not change the config file")
+	serverURLFlag := fs.String("server-url", "", "install as a CLIENT of the seamlessd at this base `URL`: writes role: client, server_url and mcp.api_key to ~/.config/seamless/seamless.yaml on first run")
+	apiKeyFlag := fs.String("api-key", "", "that server's bearer `KEY`, for --server-url (default $SEAMLESS_MCP_API_KEY)")
 	seamFlag := fs.String("seam", "", "path to the seam CLI for command hooks (default: sibling of this binary, else PATH)")
 	mcpFlag := fs.Bool("mcp", true, "register MCP through claude/codex mcp add (prints the Codex app fallback when the management CLI is absent)")
 	skillsFlag := fs.Bool("skills", true, "install the client's seam-onboard and seam-research skills")
@@ -65,18 +67,39 @@ func runInstallHooks(args []string) error {
 	if !*mcpFlag && len(targets) == 1 && targets[0] == targetClaudeDesktop {
 		return errors.New("seamlessd.install-hooks: --client claude-desktop with --mcp=false leaves nothing to install (the Claude app chat surface has no hooks or skills)")
 	}
+	// --api-key only ever names the key of the server --server-url points at. On
+	// its own it would be silently ignored, which is the one thing a flag
+	// carrying a credential must never be.
+	if strings.TrimSpace(*apiKeyFlag) != "" && strings.TrimSpace(*serverURLFlag) == "" {
+		return errors.New("seamlessd.install-hooks: --api-key applies to --server-url (a client install); a server reads its own key from its config file")
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("seamlessd.install-hooks: %w", err)
 	}
-	var keyPath string
-	cfg, keyPath, err = config.EnsureAPIKey(cfg)
-	if err != nil {
-		return fmt.Errorf("seamlessd.install-hooks: %w", err)
-	}
-	if keyPath != "" {
-		fmt.Printf("%s generated mcp.api_key %s\n", green("first run:"), dim("-> "+tildePath(keyPath)))
+	// --server-url makes this machine a CLIENT of a daemon running elsewhere, so
+	// the bootstrap writes role/server_url/key instead of generating a key for a
+	// local daemon that will never run here. Either way the config file is the
+	// owner's: neither call edits an existing one (memory
+	// first-run-key-bootstrap-rules).
+	var wrote string
+	if strings.TrimSpace(*serverURLFlag) != "" {
+		cfg, wrote, err = config.EnsureClientConfig(*serverURLFlag, *apiKeyFlag)
+		if err != nil {
+			return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		}
+		if wrote != "" {
+			fmt.Printf("%s wrote the client config %s\n", green("first run:"), dim("-> "+tildePath(wrote)))
+		}
+	} else {
+		cfg, wrote, err = config.EnsureAPIKey(cfg)
+		if err != nil {
+			return fmt.Errorf("seamlessd.install-hooks: %w", err)
+		}
+		if wrote != "" {
+			fmt.Printf("%s generated mcp.api_key %s\n", green("first run:"), dim("-> "+tildePath(wrote)))
+		}
 	}
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
 		src := cfg.SourcePath()
@@ -104,7 +127,13 @@ func runInstallHooks(args []string) error {
 		if err != nil {
 			return fmt.Errorf("seamlessd.install-hooks: %w", err)
 		}
-		skillOpts.DisabledSkills = disabledFeatureSkills(effectiveFeatures(cfg))
+		// A client has no database here, so the stored override lives on the
+		// server and is read over HTTP; a server reads its own row.
+		if cfg.IsClient() {
+			skillOpts.DisabledSkills = disabledFeatureSkills(clientFeatures(cfg, baseURL))
+		} else {
+			skillOpts.DisabledSkills = disabledFeatureSkills(effectiveFeatures(cfg))
+		}
 	}
 
 	for _, target := range targets {
@@ -145,6 +174,12 @@ func runInstallHooks(args []string) error {
 					fieldCont, dim("set SEAMLESS_NO_ONBOARD_SKILL=1 / SEAMLESS_NO_RESEARCH_SKILL=1 to skip, or rerun install-hooks --skills"))
 			}
 		}
+	}
+	// Close a client install by naming what was wired, since the usual next
+	// steps (a service, a local database, a console on this machine) are all
+	// somewhere else.
+	if cfg.IsClient() {
+		fmt.Printf("\n%s %s %s\n", dim("client of"), baseURL, dim("(no daemon or service on this machine)"))
 	}
 	return nil
 }
@@ -846,6 +881,14 @@ func claudeHeadersHelper(seamBin, configPath string) string {
 // by that command at connection time. This is the same trade the Codex
 // registration already makes with the mcp-proxy bridge.
 //
+// Under an https base URL it registers the `seam mcp-proxy` stdio bridge
+// instead, for the same reason the hooks go exec-form there (see
+// hooks.profileForBaseURL): Claude Code performs an http MCP connection with its
+// own client, which has nowhere to be told about tls.ca_file, so a private-CA
+// server fails in the handshake. The bridge speaks stdio to Claude Code and
+// https to the daemon through the seam CLI's own trust store. This is the same
+// registration the Codex bridge already uses (codexMCPAddArgs).
+//
 // --scope user is deliberate: the default local scope ties the registration to
 // the directory it ran from, and the tools then vanish in every other repo.
 func claudeMCPAddArgs(baseURL, seamBin, configPath string) []string {
@@ -854,7 +897,14 @@ func claudeMCPAddArgs(baseURL, seamBin, configPath string) []string {
 		"url":           baseURL + "/api/mcp",
 		"headersHelper": claudeHeadersHelper(seamBin, configPath),
 	}
-	// A map with fixed keys and string values cannot fail to marshal.
+	if hooks.IsHTTPSBaseURL(baseURL) {
+		args := []any{"mcp-proxy"}
+		if configPath != "" {
+			args = append(args, "--config", configPath)
+		}
+		spec = map[string]any{"type": "stdio", "command": seamBin, "args": args}
+	}
+	// A map of fixed keys over strings cannot fail to marshal.
 	blob, _ := json.Marshal(spec) //nolint:errcheck // static map of strings; marshal cannot fail
 	return []string{"mcp", "add-json", "--scope", "user", "seamless", string(blob)}
 }

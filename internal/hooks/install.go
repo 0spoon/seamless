@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
+	pathpkg "path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -23,7 +26,7 @@ type hookSpec struct {
 	Matcher  string // "" omits the matcher key (UserPromptSubmit/Stop have none)
 	Endpoint string // path appended to the base URL (the http url, and the dedup key)
 	Timeout  int    // seconds (both clients' unit)
-	CLIArg   string // non-empty => install a `command` hook (`<seam> hook <CLIArg>`) not http
+	CLIArg   string // non-empty => install a `command` hook (`<seam> hook <CLIArg>`) not http; profileForBaseURL fills the empty ones under https
 }
 
 // seamlessHooks is the set installed/removed together.
@@ -36,7 +39,10 @@ type hookSpec struct {
 // running it as a command hook Claude Code waits on makes the harvest reliable.
 // Each runs `seam hook <event>` (exec form, no shell), which forwards the
 // payload to Endpoint. UserPromptSubmit fires mid-turn where http is reliable,
-// so it keeps an http hook (and carries the bearer key into settings.json).
+// so it keeps an http hook (and carries the bearer key into settings.json) --
+// on an http base URL. Against an https one profileForBaseURL turns it into a
+// command hook like the rest, because Claude Code's own HTTP client cannot be
+// pointed at tls.ca_file.
 //
 // The plan-capture hooks (PostToolUse, SubagentStop, PermissionRequest) are
 // command hooks too: the seam CLI pre-filters PostToolUse locally so the
@@ -91,6 +97,62 @@ func resolveHookProfile(raw Client) (Client, []hookSpec, error) {
 	return client, seamlessHooks, nil
 }
 
+// profileForBaseURL adapts a client profile to the transport its base URL
+// implies: under https every hook is a command hook, under http the table is
+// returned untouched.
+//
+// The decision is DERIVED from opts.BaseURL rather than carried as an install
+// option on purpose. Install, InstalledStatus, Uninstall, and doctor's
+// desired-vs-installed comparison all already share that one field, so they
+// cannot disagree about which shape is correct; an extra option would have to be
+// set identically in four places, and the one that forgot would wire one shape
+// and judge another -- a desync whose only symptom is a hook reported stale
+// forever, or worse, silently rewritten on every run.
+//
+// Why https forces it: Claude Code performs an http hook's request with its own
+// HTTP client, which knows nothing of tls.ca_file. Against a private-CA or
+// self-signed server that request dies in the TLS handshake with nowhere to
+// configure trust, and a hook that quietly stops firing is the worst failure
+// this profile has. `seam hook <event>` makes the same request through the CLI's
+// single HTTP client, which does read tls.ca_file (cmd/seam/env.go httpClient),
+// and as a bonus it keeps the bearer key out of settings.json. The seam CLI has
+// always accepted every event in this table as a command hook (cmd/seam/hook.go
+// hookEvents), which is what makes the flip a transport change rather than a new
+// protocol.
+func profileForBaseURL(profile []hookSpec, baseURL string) []hookSpec {
+	if !IsHTTPSBaseURL(baseURL) {
+		return profile
+	}
+	out := slices.Clone(profile)
+	for i := range out {
+		if out[i].CLIArg == "" {
+			// The CLI event name is the last segment of the endpoint for every
+			// spec that already has one (TestHookSpecCLIArgsDeriveFromEndpoints
+			// pins it), so this derives rather than transcribing a second table.
+			out[i].CLIArg = pathpkg.Base(out[i].Endpoint)
+		}
+	}
+	return out
+}
+
+// IsHTTPSBaseURL reports whether baseURL names an https endpoint. A value that
+// does not parse is not https: the shapes this gates are the strictly safer
+// ones, so an unreadable URL falls back to today's profile rather than to a
+// speculative change.
+//
+// It is exported for one caller: the installer's MCP registration, which must
+// reach the SAME conclusion as the hook profile above (https -> the seam stdio
+// bridge, http -> the direct URL). Two copies of the scheme test is how a
+// machine ends up with exec-form hooks and an http MCP registration that cannot
+// verify the server.
+func IsHTTPSBaseURL(baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil {
+		return false
+	}
+	return strings.EqualFold(u.Scheme, "https")
+}
+
 // InstallOptions configures an install.
 type InstallOptions struct {
 	Client       Client // agent client profile; "" (zero value) => Claude Code
@@ -138,6 +200,7 @@ func Install(opts InstallOptions) (InstallResult, error) {
 	if err := validateDefinitionPaths("hooks.Install", opts.SeamBin, opts.ConfigPath); err != nil {
 		return InstallResult{}, err
 	}
+	profile = profileForBaseURL(profile, opts.BaseURL)
 
 	settings, mode, err := loadSettings(opts.SettingsPath)
 	if err != nil {
@@ -250,6 +313,7 @@ func InstalledStatus(opts InstallOptions) (InstallStatus, error) {
 	if err := validateDefinitionPaths("hooks.InstalledStatus", opts.SeamBin, opts.ConfigPath); err != nil {
 		return InstallStatus{}, err
 	}
+	profile = profileForBaseURL(profile, opts.BaseURL)
 
 	settings, _, err := loadSettings(opts.SettingsPath)
 	if err != nil {

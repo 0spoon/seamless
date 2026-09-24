@@ -88,6 +88,18 @@ func doctor(args []string) error {
 	checks = append(checks,
 		check{statusOK, "config", "loaded from " + src},
 		configPermissionsCheck(cfg.SourcePath(), runtime.GOOS),
+	)
+
+	// The role branch, and it is placed here because everything below it reads
+	// LOCAL server state. store.Open is the sharp edge: it creates and migrates,
+	// so running it against a client would MINT the ~/.seamless/seam.db whose
+	// absence is what "role: client" means, and every later run would then find
+	// that database and report it as healthy.
+	if cfg.IsClient() {
+		return reportChecks(append(checks, clientChecks(cfg)...))
+	}
+
+	checks = append(checks,
 		check{statusOK, "data_dir", cfg.DataDir},
 		apiKeyCheck(cfg),
 		llmCheck(cfg),
@@ -123,6 +135,42 @@ func doctor(args []string) error {
 	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
+}
+
+// clientChecks is the rest of the report for an install whose role is client.
+//
+// It is a separate list rather than a set of guards inside the server path
+// because the two roles share almost nothing below config: a client has no
+// listener, no database, no corpus and no gardener, so most server checks would
+// not merely be uninformative on one, they would be answering about a machine
+// that is somewhere else. What is left is genuinely this install's: which server
+// it dials, whether that server answers, the key it will present, and the
+// client-side wiring (hooks, skills, MCP registrations) that points at both.
+//
+// Deliberately absent, and each for its own reason:
+//   - database, schema version, repo map, remote sessions, feature skills --
+//     all read the local seam.db, which a client does not have.
+//   - gardener -- a maintenance loop that runs inside the daemon; naming its
+//     ticker here would describe the server's configuration from the wrong file.
+//   - llm, embedder -- the SERVER embeds and calls the model. Warning a client
+//     that "recall degrades to FTS" would report a degradation that is neither
+//     this machine's nor, on a properly configured server, true.
+//   - bind, tls -- transportChecks already refuses to report a bind address an
+//     install never binds, or a server certificate it does not hold.
+//
+// The hook and MCP comparisons are the SAME desired-state ones the server role
+// runs, built from the current config through doctorInstallOptions rather than
+// from the installed artifact -- a client's stale hook is drift by the same rule.
+func clientChecks(cfg config.Config) []check {
+	checks := transportChecks(cfg)
+	checks = append(checks, apiKeyCheck(cfg), mcpToolsCheck())
+	checks = append(checks, claudeRuntimeChecks()...)
+	checks = append(checks, hooksCheck(cfg))
+	checks = append(checks, claudeDesktopChecks(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))...)
+	// A nil db skips the Codex hook-activity line, which reads the event log:
+	// hooks on a client record their observations on the server, not here.
+	checks = append(checks, codexChecks(cfg, nil)...)
+	return checks
 }
 
 // configPermissionsCheck warns when an existing secret-bearing configuration
@@ -315,11 +363,65 @@ func remoteSessionsCheck(db *sql.DB) check {
 func transportChecks(cfg config.Config) []check {
 	if cfg.IsClient() {
 		// A client install has no listener, no allowlist and no server
-		// certificate. Its own checks are Phase 3; saying so is better than
-		// reporting a bind address it never binds.
-		return []check{{statusInfo, "role", "client: this install runs no daemon and dials " + cfg.ServerURL()}}
+		// certificate, so saying so is better than reporting a bind address it
+		// never binds. The posture question it DOES have an answer to is the
+		// other end: does the URL it dials reach anything.
+		return []check{
+			{statusInfo, "role", "client: this install runs no daemon and dials " + cfg.ServerURL()},
+			clientServerURLCheck(cfg),
+		}
 	}
 	return []check{bindCheck(cfg), serverURLCheck(cfg), tlsCheck(cfg)}
+}
+
+// clientServerURLCheck probes the server a client install dials.
+//
+// The severity differs from serverURLCheck's on purpose. On a server install an
+// unanswered URL is INFO, because doctor runs with the local daemon stopped as
+// often as not and `seamlessd serve` is the whole fix. A client has no such
+// benign state: the server IS the install, so until it answers there are no
+// briefings, no memories and no tools on this machine, and reporting that as
+// information would bury the only fault the report is able to find.
+func clientServerURLCheck(cfg config.Config) check {
+	const name = "server_url"
+	base := cfg.ServerURL()
+	resp, err := reachabilityProbe().Get(base + "/healthz")
+	if err != nil {
+		return check{statusFail, name, fmt.Sprintf(
+			"%s is not answering (%v) -- start seamlessd there, or correct server_url", base, err)}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	switch {
+	case resp.StatusCode == http.StatusMisdirectedRequest:
+		// Same 421 as serverURLCheck's, but the repair is on the other machine:
+		// pointing a client's operator at their own config would send them
+		// looking for a key their install does not have.
+		return check{statusFail, name, fmt.Sprintf(
+			"%s answers 421 to Host %q: that host belongs in the SERVER's allowed_hosts (or its server_url); add it there and restart it",
+			base, cfg.ServerHost())}
+	case resp.StatusCode != http.StatusOK:
+		return check{statusWarn, name, fmt.Sprintf("%s answered %s", base, resp.Status)}
+	}
+	return check{statusOK, name, base + " reaches the server"}
+}
+
+// reachabilityProbe is the HTTP client both server_url checks use.
+//
+// It skips certificate verification because it is a REACHABILITY probe and
+// nothing else: no credential is sent and nothing is read from the body. A probe
+// that refused a private CA would report "not answering" for a server that is
+// answering perfectly well, which is the opposite of what this check is for.
+// Whether this machine TRUSTS that certificate is tls.ca_file's question, and it
+// is asked where it matters -- on the credential-bearing surfaces (`seam
+// doctor`, the hooks, the MCP bridge), all of which fail loudly when it is wrong.
+func reachabilityProbe() *http.Client {
+	return &http.Client{
+		Timeout: codexActivityTimeout,
+		Transport: &http.Transport{
+			//nolint:gosec // reachability probe: nothing is read from the body and no credential is sent
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
+		},
+	}
 }
 
 // bindCheck reports the listener's exposure. Non-loopback without TLS is a warn
@@ -353,14 +455,7 @@ func serverURLCheck(cfg config.Config) check {
 	if strings.TrimSpace(cfg.AdvertisedURL) == "" {
 		detail = base + " (derived from addr; set server_url when clients reach this daemon by another name)"
 	}
-	client := &http.Client{
-		Timeout: codexActivityTimeout,
-		Transport: &http.Transport{
-			//nolint:gosec // reachability probe: nothing is read from the body and no credential is sent
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
-		},
-	}
-	resp, err := client.Get(base + "/healthz")
+	resp, err := reachabilityProbe().Get(base + "/healthz")
 	if err != nil {
 		// Not a failure: doctor runs with the daemon stopped as often as not.
 		return check{statusInfo, name, detail + " -- not answering right now (" + err.Error() + ")"}

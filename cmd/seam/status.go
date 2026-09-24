@@ -59,7 +59,14 @@ func runStatus(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 		fmt.Fprintf(e.stdout, "server:   %s (%s)\n", str(hz["status"]), base)
 		fmt.Fprintf(e.stdout, "version:  %s\n", str(hz["version"]))
 	}
-	fmt.Fprintf(e.stdout, "data dir: %s\n", cfg.DataDir)
+	// A client install writes nothing here: no database, no corpus, no data dir.
+	// The value would still be non-empty (config.Defaults supplies ~/.seamless
+	// when the client config omits data_dir), so printing it would name a
+	// directory this install does not own -- and on a box converted from a
+	// server, one whose contents are no longer what this `status` is describing.
+	if !cfg.IsClient() {
+		fmt.Fprintf(e.stdout, "data dir: %s\n", cfg.DataDir)
+	}
 
 	// Project count via MCP (also proves the static key works).
 	cli, _, err := e.dial(ctx)

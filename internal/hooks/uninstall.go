@@ -41,6 +41,10 @@ func Uninstall(opts UninstallOptions) (UninstallResult, error) {
 	if strings.TrimSpace(opts.BaseURL) == "" {
 		return UninstallResult{}, fmt.Errorf("hooks.Uninstall: base URL is required")
 	}
+	// The same scheme-derived profile the install used, so an https install's
+	// command hooks are recognized as current rather than only as marked-stale
+	// (a marker Claude Code may have stripped).
+	profile = profileForBaseURL(profile, opts.BaseURL)
 
 	settings, mode, err := loadSettings(opts.SettingsPath)
 	if err != nil {

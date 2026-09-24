@@ -28,6 +28,14 @@
 #                               prompts on the terminal when several or none are
 #                               found, and aborts when none is found and no
 #                               terminal is attached -- never a silent default)
+#   SEAMLESS_SERVER_URL         install as a CLIENT of a Seamless server running
+#                               somewhere else: wire this machine's agent
+#                               clients to that URL, install no service, and
+#                               keep no data dir here. Requires
+#                               SEAMLESS_MCP_API_KEY.
+#   SEAMLESS_MCP_API_KEY        the server's bearer key. Required with
+#                               SEAMLESS_SERVER_URL; `seamlessd client-config`
+#                               on the server prints the whole command.
 #   SEAMLESS_NO_HOOKS=1         skip agent hooks, MCP registration, and skills
 #   SEAMLESS_NO_ONBOARD_SKILL=1 skip the one-shot seam-onboard skill
 #   SEAMLESS_NO_RESEARCH_SKILL=1 skip the recurring seam-research skill
@@ -57,6 +65,14 @@ DEFAULT_ADDR=127.0.0.1:8081
 SERVICE_STARTED=0
 
 AGENT_CLIENT=
+
+# Non-empty when SEAMLESS_SERVER_URL asked for a client install: this machine
+# runs no daemon at all. It wires its agent clients to that URL, installs no
+# service, reads no local addr, and keeps no data dir -- the config the binary
+# writes is role: client + server_url + mcp.api_key and nothing else. main()
+# sets it before anything reads it, together with the key that pairs with it.
+SERVER_URL=
+SERVER_KEY=
 
 say()  { printf '  %s\n' "$*"; }
 step() { printf '  %-12s %s\n' "$1" "$2"; }
@@ -436,10 +452,24 @@ supports_desktop_client() {
 	printf '%s' "$probe" | grep -q -- 'claude-desktop'
 }
 
+# --server-url (with --api-key) is the client-install path, and it is newer than
+# all of the above. Same probe, same reason: a pinned SEAMLESS_VERSION that
+# predates it would fail flag parsing and abort the install after the binaries
+# are already in place. An empty probe failed to run and proves nothing, so it
+# assumes the modern binary, exactly like the probes above.
+supports_server_url_flag() {
+	probe=$("$INSTALL_DIR/seamlessd" install-hooks -h 2>&1 || true)
+	[ -n "$probe" ] || return 0
+	printf '%s' "$probe" | grep -q -- '-server-url'
+}
+
 wire_hooks() {
 	if [ -n "${SEAMLESS_NO_HOOKS:-}" ]; then
 		step hooks "skipped (SEAMLESS_NO_HOOKS)"
 		return 0
+	fi
+	if [ -n "$SERVER_URL" ] && ! supports_server_url_flag; then
+		die "seamless $VERSION predates --server-url and cannot install as a client of $SERVER_URL; drop SEAMLESS_VERSION to get the latest"
 	fi
 	if ! supports_desktop_client && client_has "$AGENT_CLIENT" claude-desktop; then
 		# A pinned pre-chat-surface binary: drop the desktop target visibly (the
@@ -469,14 +499,25 @@ wire_hooks() {
 	if [ -n "$CLIENT_ARGS" ] && ! supports_skills_flag; then
 		warn "seamless $VERSION predates the bundled skills; the seam-onboard/seam-research skills will not be installed (drop SEAMLESS_VERSION to get the latest)"
 	fi
+	# The tail of the argument list rides in the positional parameters (local to
+	# this function) rather than in another string: the API key is user input
+	# and may carry whitespace, and "$@" is the only expansion that keeps it one
+	# word. $CLIENT_ARGS stays unquoted on purpose -- see above.
+	set -- --seam "$INSTALL_DIR/seam"
+	if [ -n "$SERVER_URL" ]; then
+		# The client pair: the URL to dial and the key to dial it with. The
+		# binary writes role: client + server_url + mcp.api_key from these --
+		# no data dir, because a client stores nothing locally.
+		set -- --server-url "$SERVER_URL" --api-key "$SERVER_KEY" "$@"
+	fi
 	if [ -f "$CONFIG" ]; then
 		# shellcheck disable=SC2086
-		(cd "$TMP" && SEAMLESS_CONFIG="$CONFIG" "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS --seam "$INSTALL_DIR/seam")
+		(cd "$TMP" && SEAMLESS_CONFIG="$CONFIG" "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS "$@")
 	else
 		# Unset, not pointed at $CONFIG: the file does not exist yet, and
 		# EnsureAPIKey only writes it when the config resolves to nothing.
 		# shellcheck disable=SC2086
-		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS --seam "$INSTALL_DIR/seam")
+		(cd "$TMP" && unset SEAMLESS_CONFIG && "$INSTALL_DIR/seamlessd" install-hooks $CLIENT_ARGS "$@")
 	fi
 }
 
@@ -610,6 +651,27 @@ wait_healthy() {
 	die "no /healthz from $ADDR after 10s; $where"
 }
 
+# The client half of wait_healthy. Nothing was started here, so there is no
+# listener race to wait out -- this asks the server whether it answers this
+# machine, and a few tries absorb a slow link rather than a boot. A silent
+# server is a warning and not a die: the clients are wired either way, the
+# install is complete, and re-running this script is not how you retry a server
+# that was merely asleep.
+check_server() {
+	i=0
+	while [ "$i" -lt 5 ]; do
+		if http_ok "$SERVER_URL/healthz"; then
+			step healthz "ok -- $SERVER_URL"
+			return 0
+		fi
+		i=$((i + 1))
+		sleep 0.2
+	done
+	warn "no /healthz from $SERVER_URL -- this machine is wired to it anyway.
+    Check that seamlessd is serving there, that its addr is not loopback-only,
+    and that this machine can reach that host and port."
+}
+
 main() {
 	INSTALL_DIR=${SEAMLESS_INSTALL_DIR:-$HOME/.local/bin}
 
@@ -630,6 +692,18 @@ into \$HOME (set SEAMLESS_ALLOW_ROOT=1 if you really are a single-user container
 unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	fi
 
+	# Client mode. The trailing slash is stripped because server_url is a base
+	# URL with no path, and "http://host:8081/" is a path as far as the config
+	# validator is concerned -- a pasted browser URL should still work.
+	SERVER_URL=${SEAMLESS_SERVER_URL:-}
+	SERVER_URL=${SERVER_URL%/}
+	SERVER_KEY=${SEAMLESS_MCP_API_KEY:-}
+	if [ -n "$SERVER_URL" ] && [ -z "$SERVER_KEY" ]; then
+		die "SEAMLESS_SERVER_URL is set but SEAMLESS_MCP_API_KEY is not: a client needs the
+server's bearer key as well as its URL. Run  seamlessd client-config  on the
+server and use the line it prints."
+	fi
+
 	detect_platform
 	select_agent_client
 	resolve_version
@@ -641,19 +715,27 @@ unset it to install, or set the daemon up by hand: $DOCS"'install/'
 	download
 	unpack
 	wire_hooks
-	read_addr
 
-	if [ -n "${SEAMLESS_NO_SERVICE:-}" ]; then
-		step service "skipped (SEAMLESS_NO_SERVICE)"
-		say "start it yourself: SEAMLESS_CONFIG=$CONFIG $INSTALL_DIR/seamlessd serve"
+	if [ -n "$SERVER_URL" ]; then
+		# No service and no read_addr: a client starts no daemon and binds no
+		# port here, so there is no local addr to read and nothing to
+		# supervise. The health of the install is the server's /healthz.
+		step service "skipped (client of $SERVER_URL)"
+		check_server
 	else
-		case $OS in
-		darwin) service_launchd ;;
-		linux) service_systemd ;;
-		esac
-	fi
-	if [ "$SERVICE_STARTED" = 1 ]; then
-		wait_healthy
+		read_addr
+		if [ -n "${SEAMLESS_NO_SERVICE:-}" ]; then
+			step service "skipped (SEAMLESS_NO_SERVICE)"
+			say "start it yourself: SEAMLESS_CONFIG=$CONFIG $INSTALL_DIR/seamlessd serve"
+		else
+			case $OS in
+			darwin) service_launchd ;;
+			linux) service_systemd ;;
+			esac
+		fi
+		if [ "$SERVICE_STARTED" = 1 ]; then
+			wait_healthy
+		fi
 	fi
 
 	printf '\n'

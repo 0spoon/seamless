@@ -117,20 +117,92 @@ func TestResolveInstallDir(t *testing.T) {
 // command above the confirmation. Without --purge there is nothing to warn
 // about and the line must not appear.
 func TestPrintUninstallPreamble_PurgeOffersAnExportFirst(t *testing.T) {
-	withPurge := capturePreamble(t, true)
+	withPurge := capturePreamble(t, "/tmp/data", true)
 	require.Contains(t, withPurge, purgeExportAdvice)
 	require.Contains(t, withPurge, "seamlessd export")
 
-	require.NotContains(t, capturePreamble(t, false), "seamlessd export")
+	require.NotContains(t, capturePreamble(t, "/tmp/data", false), "seamlessd export")
 }
 
-// capturePreamble returns what printUninstallPreamble printed.
-func capturePreamble(t *testing.T, purge bool) string {
+// A client install owns no data dir, so it is neither listed as a purge target
+// nor offered the export advice: there is no corpus here to lose, and the
+// ~/.seamless a client's config resolves to may be a SERVER's on a box that once
+// ran one. Promising to delete it would be both a lie and a data-loss hazard.
+func TestPrintUninstallPreamble_ClientHasNoDataDir(t *testing.T) {
+	purge := capturePreamble(t, "", true)
+	require.Contains(t, purge, tildePath("/tmp/cfg"))
+	require.NotContains(t, purge, "/tmp/data")
+	require.NotContains(t, purge, purgeExportAdvice,
+		"there is no local corpus to export before deleting")
+
+	keep := capturePreamble(t, "", false)
+	require.Contains(t, keep, tildePath("/tmp/cfg"))
+	require.NotContains(t, keep, "/tmp/data")
+}
+
+// capturePreamble returns what printUninstallPreamble printed. An empty dataDir
+// is the client role: no data dir in scope.
+func capturePreamble(t *testing.T, dataDir string, purge bool) string {
 	t.Helper()
 	return captureStdout(t, func() error {
-		printUninstallPreamble([]string{"claude"}, "/opt/bin", "/tmp/cfg", "/tmp/data", purge, false)
+		printUninstallPreamble([]string{"claude"}, "/opt/bin", "/tmp/cfg", dataDir, purge, false)
 		return nil
 	})
+}
+
+// purgePaths is the single derivation the preamble, the purge and the "kept"
+// footer all read, so a client can never be told it will delete a directory the
+// purge then leaves alone.
+func TestPurgePaths(t *testing.T) {
+	require.Equal(t, []string{"/tmp/cfg", "/tmp/data"}, purgePaths("/tmp/cfg", "/tmp/data"))
+	require.Equal(t, []string{"/tmp/cfg"}, purgePaths("/tmp/cfg", ""), "client role")
+	require.Equal(t, []string{"/tmp/cfg"}, purgePaths("/tmp/cfg", "   "))
+}
+
+// purgeData follows purgePaths: with no data dir in scope the block reports the
+// config dir and nothing else, and the data dir is left on disk.
+func TestPurgeData_ClientTouchesOnlyTheConfigDir(t *testing.T) {
+	root := t.TempDir()
+	configDir := filepath.Join(root, "config")
+	dataDir := filepath.Join(root, "data")
+	for _, d := range []string{configDir, dataDir} {
+		require.NoError(t, os.MkdirAll(d, 0o700))
+	}
+
+	out := captureStdout(t, func() error {
+		purgeData(configDir, "", false)
+		return nil
+	})
+
+	require.NoDirExists(t, configDir)
+	require.DirExists(t, dataDir, "a client uninstall must not delete a corpus it does not own")
+	require.NotContains(t, out, dataDir)
+}
+
+// A client registers no launchd job, systemd unit or Scheduled Task. Running the
+// teardown anyway is not a harmless no-op on the one box where it matters: a
+// machine hosting both a server and a second user's client would have its
+// running daemon stopped and deregistered by that client's uninstall.
+func TestUninstallService_ClientReportsNotInstalled(t *testing.T) {
+	client := captureStdout(t, func() error {
+		uninstallService(true, "/opt/bin", false)
+		return nil
+	})
+	require.Contains(t, client, "not installed")
+	require.Contains(t, client, "role: client")
+	for _, cmd := range []string{"launchctl", "systemctl", "schtasks"} {
+		require.NotContains(t, client, cmd, "no service manager is named, let alone run")
+	}
+
+	// The server role still describes the real teardown (dry run, so nothing
+	// is executed), which is what keeps the assertion above from passing on a
+	// function that went silent for everyone.
+	server := captureStdout(t, func() error {
+		uninstallService(false, "/opt/bin", true)
+		return nil
+	})
+	require.Contains(t, server, "would run")
+	require.NotContains(t, server, "not installed")
 }
 
 func TestPurgeGuard(t *testing.T) {
