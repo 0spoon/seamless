@@ -118,16 +118,20 @@ type promptHit struct {
 }
 
 // PromptRecall matches a user's prompt against the active memory index for the
-// cwd's project and returns a <seam-recall> block (or "" when nothing clears the
-// overlap and score floors). The second return value is the ids of the memories
-// surfaced, so the caller can record them as a retrieval.injected event. It never
-// errors on the hook path except on a store failure.
-func (s *Service) PromptRecall(ctx context.Context, cwd, prompt string) (string, []string, error) {
+// (host, cwd) project and returns a <seam-recall> block (or "" when nothing
+// clears the overlap and score floors). The second return value is the ids of the
+// memories surfaced, so the caller can record them as a retrieval.injected event.
+// It never errors on the hook path except on a store failure.
+//
+// host is the machine the cwd belongs to; "" is the daemon's own map. The
+// UserPromptSubmit hook has no host of its own (it stays an http hook, so no
+// seam CLI computes one), and gets it from the ambient session instead.
+func (s *Service) PromptRecall(ctx context.Context, host, cwd, prompt string) (string, []string, error) {
 	tokens := promptTokenize(prompt)
 	if len(tokens) == 0 {
 		return "", nil, nil
 	}
-	project, err := store.ResolveProjectForCWD(ctx, s.db, cwd)
+	project, err := store.ResolveProjectForCWD(ctx, s.db, host, cwd)
 	if err != nil {
 		return "", nil, err
 	}

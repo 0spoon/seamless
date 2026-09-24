@@ -599,13 +599,13 @@ func TestPromptRecall(t *testing.T) {
 
 	svc := New(db, nil, budgets(), nil)
 
-	out, ids, err := svc.PromptRecall(ctx, "/w", "why does the chroma container fail its health check")
+	out, ids, err := svc.PromptRecall(ctx, "", "/w", "why does the chroma container fail its health check")
 	require.NoError(t, err)
 	require.Contains(t, out, "<seam-recall>")
 	require.Contains(t, out, "chroma-boot-race")
 	require.Contains(t, ids, "01A") // the surfaced memory's id, for the funnel
 
-	none, noneIDs, err := svc.PromptRecall(ctx, "/w", "what is the weather in paris")
+	none, noneIDs, err := svc.PromptRecall(ctx, "", "/w", "what is the weather in paris")
 	require.NoError(t, err)
 	require.Empty(t, none)
 	require.Empty(t, noneIDs)

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // Codex's hook payloads differ from Claude Code's in a few field names (captured
@@ -147,4 +148,52 @@ func decodeSubagentStop(_ Client, body []byte) subagentPayload {
 	var p subagentPayload
 	_ = json.Unmarshal(body, &p) //nolint:errcheck // tolerant: a decode error leaves p zero
 	return p
+}
+
+// The agent's MACHINE identity rides out of band too, on the same query string
+// as ?client=, and for the same reason: the daemon must know which filesystem a
+// payload's paths belong to before it reads any of them, and a hook body is the
+// client's schema rather than ours. `seam hook` resolves its own git identity
+// locally (it is the only process that can) and appends these four params.
+//
+// Absent is the old `seam` binary, which only ever talked to a daemon on its own
+// machine -- so an absent host means the local one, and every existing Claude
+// Code install keeps working byte-for-byte.
+const (
+	hostQueryParam     = "host"
+	repoRootQueryParam = "repo_root"
+	mainRootQueryParam = "main_root"
+	originQueryParam   = "origin"
+)
+
+// IdentityQueryParams lists the identity query keys in a stable order. cmd/seam
+// keeps its own copy of these literals (it must not import this package, which
+// would drag SQLite into a binary whose job is one POST); the two are
+// test-pinned, exactly as clientQueryParam is, so a rename cannot silently strip
+// the identity off every hook.
+func IdentityQueryParams() []string {
+	return []string{hostQueryParam, repoRootQueryParam, mainRootQueryParam, originQueryParam}
+}
+
+// hookIdentity is the agent machine's self-reported identity for one hook call.
+type hookIdentity struct {
+	Host     string // lower-cased hostname; "" = not sent (an older seam)
+	RepoRoot string // enclosing repository root; "" = unknown or not a repo
+	MainRoot string // main checkout root when RepoRoot is a linked worktree
+	Origin   string // origin remote URL; "" = unknown
+}
+
+// identityFromRequest reads the machine identity off the hook request. Every
+// field is optional: a missing one is "not sent", never an error, because the
+// hook contract is fail-open and an older client sends none of them. The query
+// itself has already been parsed strictly by clientFromRequest, which runs first
+// on every route.
+func identityFromRequest(r *http.Request) hookIdentity {
+	q := r.URL.Query()
+	return hookIdentity{
+		Host:     strings.ToLower(strings.TrimSpace(q.Get(hostQueryParam))),
+		RepoRoot: strings.TrimSpace(q.Get(repoRootQueryParam)),
+		MainRoot: strings.TrimSpace(q.Get(mainRootQueryParam)),
+		Origin:   strings.TrimSpace(q.Get(originQueryParam)),
+	}
 }

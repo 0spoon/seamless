@@ -69,14 +69,14 @@ func runMCPHeaders(_ context.Context, e *env, o *mcpHeadersOpts, _ []string) err
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	key := strings.TrimSpace(cfg.MCP.APIKey)
-	if key == "" {
+	cfg.MCP.APIKey = strings.TrimSpace(cfg.MCP.APIKey)
+	if cfg.MCP.APIKey == "" {
 		// Fail loudly rather than emitting an empty header: the daemon rejects
 		// an empty key anyway, and a silent {} would surface as a confusing
 		// unauthorized error at the first tool call instead of here.
 		return fmt.Errorf("mcp.api_key is empty; run `seamlessd serve` once to generate it, or set it in seamless.yaml")
 	}
-	out, err := json.Marshal(map[string]string{"Authorization": "Bearer " + key})
+	out, err := json.Marshal(mcpHeaders(cfg))
 	if err != nil {
 		return fmt.Errorf("encode headers: %w", err)
 	}

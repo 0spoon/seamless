@@ -12,7 +12,7 @@ import (
 )
 
 const sessionCols = `id, name, project_slug, status, findings, claude_session_id,
-	external_client, cwd, source, model, ambient, favorite, metadata, created_at, updated_at,
+	external_client, cwd, host, source, model, ambient, favorite, metadata, created_at, updated_at,
 	input_tokens, cached_input_tokens, cache_creation_tokens, output_tokens, total_tokens`
 
 // ErrSessionNameExists is returned by CreateSession when the name is already
@@ -43,12 +43,12 @@ func CreateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO sessions
 		    (id, name, project_slug, status, findings, claude_session_id,
-		     external_client, cwd, source, model, ambient, metadata, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		     external_client, cwd, host, source, model, ambient, metadata, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		// claude_session_id column holds core.Session.ExternalSessionID (the column
 		// name predates Codex; see the field's doc for the intentional mismatch).
 		s.ID, s.Name, s.ProjectSlug, string(s.Status), s.Findings, s.ExternalSessionID,
-		s.ExternalClient, s.CWD, s.Source, s.Model, boolToInt(s.Ambient), meta,
+		s.ExternalClient, s.CWD, s.Host, s.Source, s.Model, boolToInt(s.Ambient), meta,
 		core.FormatTime(s.CreatedAt), core.FormatTime(s.UpdatedAt))
 	if err != nil {
 		if isUniqueViolation(err) {
@@ -407,19 +407,24 @@ func staleActiveSessions(ctx context.Context, db *sql.DB, cutoff time.Time) ([]c
 	return stale, nil
 }
 
-// ActiveAmbientByCWD returns the active ambient (cc/* or cx/*) sessions whose cwd
-// matches, most recent first. session_start consults it to link a freshly created explicit
-// session to the Claude session that owns the cwd (via its claude_session_id), so a
-// graceful SessionEnd can close both at once instead of leaving the explicit one to
-// the idle reaper. An empty cwd matches nothing (no basis to link).
-func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, cwd string) ([]core.Session, error) {
+// ActiveAmbientByCWD returns the active ambient (cc/* or cx/*) sessions on one
+// host whose cwd matches, most recent first. session_start consults it to link a
+// freshly created explicit session to the Claude session that owns the cwd (via
+// its claude_session_id), so a graceful SessionEnd can close both at once instead
+// of leaving the explicit one to the idle reaper. An empty cwd matches nothing
+// (no basis to link).
+//
+// The host is matched exactly, including the empty one: the same absolute path
+// on two machines is two different working directories, and linking across them
+// would hand one agent's session to another agent entirely.
+func ActiveAmbientByCWD(ctx context.Context, db *sql.DB, host, cwd string) ([]core.Session, error) {
 	if cwd == "" {
 		return nil, nil
 	}
 	rows, err := db.QueryContext(ctx, `SELECT `+sessionCols+`
 		FROM sessions
-		WHERE status = 'active' AND ambient = 1 AND cwd = ?
-		ORDER BY updated_at DESC, id DESC`, cwd)
+		WHERE status = 'active' AND ambient = 1 AND host = ? AND cwd = ?
+		ORDER BY updated_at DESC, id DESC`, host, cwd)
 	if err != nil {
 		return nil, fmt.Errorf("store.ActiveAmbientByCWD: %w", err)
 	}
@@ -606,10 +611,18 @@ func LiveSessionCount(ctx context.Context, db *sql.DB, cutoff time.Time) (int, e
 // writes without calling session_start inherits its project's ambient session's
 // provenance. A non-positive within disables the recency filter. Scoping to a
 // single project is what prevents cross-agent bleed -- see ActiveAmbientProjects.
-func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, project string, within time.Duration) (core.Session, bool, error) {
+//
+// host narrows the candidates to one machine; "" means every host (the filter is
+// absent, not a match on the unnamed bucket), which is what lets a caller widen
+// its search after finding nothing on its own machine.
+func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, host, project string, within time.Duration) (core.Session, bool, error) {
 	query := `SELECT ` + sessionCols + ` FROM sessions
 		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
 	args := []any{project}
+	if host != "" {
+		query += ` AND host = ?`
+		args = append(args, host)
+	}
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
@@ -625,10 +638,17 @@ func LatestActiveAmbientSessionForProject(ctx context.Context, db *sql.DB, proje
 // (len > 1, agents in different repos) where guessing would bleed a write into
 // the wrong project. A non-positive within disables the recency filter. The
 // global scope is reported as the empty string, distinct from any named project.
-func ActiveAmbientProjects(ctx context.Context, db *sql.DB, within time.Duration) ([]string, error) {
+//
+// host narrows the candidates to one machine; "" means every host (the filter is
+// absent, not a match on the unnamed bucket).
+func ActiveAmbientProjects(ctx context.Context, db *sql.DB, host string, within time.Duration) ([]string, error) {
 	query := `SELECT project_slug FROM sessions
 		WHERE status = 'active' AND ambient = 1`
 	args := []any{}
+	if host != "" {
+		query += ` AND host = ?`
+		args = append(args, host)
+	}
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
@@ -655,11 +675,17 @@ func ActiveAmbientProjects(ctx context.Context, db *sql.DB, within time.Duration
 // uses it to refuse targeting a session by inference when more than one same-
 // project ambient could be the one meant -- two agents in the same repo -- so a
 // session_update/end without an explicit id can't complete a sibling's session.
-// A non-positive within disables the recency filter.
-func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, project string, within time.Duration) ([]core.Session, error) {
+// A non-positive within disables the recency filter. host narrows the candidates
+// to one machine; "" means every host (the filter is absent, not a match on the
+// unnamed bucket).
+func ActiveAmbientSessionsForProject(ctx context.Context, db *sql.DB, host, project string, within time.Duration) ([]core.Session, error) {
 	query := `SELECT ` + sessionCols + ` FROM sessions
 		WHERE status = 'active' AND ambient = 1 AND project_slug = ?`
 	args := []any{project}
+	if host != "" {
+		query += ` AND host = ?`
+		args = append(args, host)
+	}
 	if within > 0 {
 		query += ` AND updated_at >= ?`
 		args = append(args, core.FormatTime(time.Now().UTC().Add(-within)))
@@ -747,7 +773,7 @@ func scanSession(rows *sql.Rows) (core.Session, error) {
 	)
 	if err := rows.Scan(
 		&s.ID, &s.Name, &s.ProjectSlug, &status, &s.Findings, &s.ExternalSessionID,
-		&s.ExternalClient, &s.CWD, &s.Source, &s.Model, &ambient, &s.Favorite, &meta, &created, &updated,
+		&s.ExternalClient, &s.CWD, &s.Host, &s.Source, &s.Model, &ambient, &s.Favorite, &meta, &created, &updated,
 		&s.Tokens.Input, &s.Tokens.Cached, &s.Tokens.CacheCreation, &s.Tokens.Output, &s.Tokens.Total,
 	); err != nil {
 		return core.Session{}, err

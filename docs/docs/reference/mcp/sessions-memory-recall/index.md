@@ -124,8 +124,12 @@ Begin or resume an agent work session and bind it to this connection. Returns th
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `cwd` | string | no | Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug) |
+| `host` | string | no | Machine this agent runs on (hostname). Defaults to the X-Seamless-Host header, then to the daemon's own host; pass it only when dialling a daemon on another machine |
+| `main_worktree_root` | string | no | Absolute root of the repository's MAIN checkout when repo_root is a linked worktree; defaults to repo_root |
 | `model` | string | no | Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients |
 | `name` | string | no | Optional stable session name; reusing a name resumes that session |
+| `repo_origin` | string | no | The repository's origin remote URL, which is how the same repo checked out on two machines is recognized as one project |
+| `repo_root` | string | no | Absolute git repository root enclosing cwd, resolved on YOUR machine. Required when host is not the daemon's: the daemon cannot read your filesystem to find it |
 | `source` | string | no | what began this session (default explicit). One of: `startup`, `resume`, `clear`, `compact`, `explicit`. |
 
 ## session_update {#session_update}

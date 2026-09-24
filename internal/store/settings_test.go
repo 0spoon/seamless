@@ -225,24 +225,24 @@ func TestResolveProjectForCWD(t *testing.T) {
 	ctx := context.Background()
 
 	// Unconfigured map resolves everything to the global scope.
-	slug, err := ResolveProjectForCWD(ctx, db, "/Users/x/repos/seamless")
+	slug, err := ResolveProjectForCWD(ctx, db, "", "/Users/x/repos/seamless")
 	require.NoError(t, err)
 	require.Equal(t, "", slug)
 
 	require.NoError(t, SetSetting(ctx, db, SettingRepoProjectMap,
 		`{"/Users/x/repos/seamless":"seamless","/Users/x/repos/seam":"seam"}`))
 
-	slug, err = ResolveProjectForCWD(ctx, db, "/Users/x/repos/seamless/internal/mcp")
+	slug, err = ResolveProjectForCWD(ctx, db, "", "/Users/x/repos/seamless/internal/mcp")
 	require.NoError(t, err)
 	require.Equal(t, "seamless", slug)
 
 	// A sibling that shares a string prefix but not a path boundary must not match.
-	slug, err = ResolveProjectForCWD(ctx, db, "/Users/x/repos/seamless-old")
+	slug, err = ResolveProjectForCWD(ctx, db, "", "/Users/x/repos/seamless-old")
 	require.NoError(t, err)
 	require.Equal(t, "", slug)
 
 	// Exact directory resolves.
-	slug, err = ResolveProjectForCWD(ctx, db, "/Users/x/repos/seam")
+	slug, err = ResolveProjectForCWD(ctx, db, "", "/Users/x/repos/seam")
 	require.NoError(t, err)
 	require.Equal(t, "seam", slug)
 }

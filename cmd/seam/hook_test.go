@@ -129,14 +129,18 @@ func TestRunHook_ClientFlagForwardsQueryParam(t *testing.T) {
 	}
 }
 
-// The default (no --client) leaves the forwarded URL byte-identical to before --
-// no query string at all -- so every existing Claude Code hook is untouched.
+// The default (no --client) sends no client param, so the daemon still resolves
+// the request to Claude Code exactly as it did before the discriminator existed.
+// The query string is no longer empty -- the machine identity always rides on it
+// (see identityParams) -- but the client half is absent, which is the half that
+// selects a payload adapter.
 func TestRunHook_NoClientFlagOmitsQueryParam(t *testing.T) {
 	e, got := captureHookServer(t, `{"session_id":"abc","cwd":"/w"}`)
 	require.NoError(t, runHook(context.Background(), e, &hookOpts{}, []string{"session-start"}))
 	require.NotNil(t, *got, "seam hook must forward to the daemon")
 	require.Equal(t, "/api/hooks/session-start", (*got).URL.Path)
-	require.Empty(t, (*got).URL.RawQuery, "no --client => no query string, CC request unchanged")
+	require.False(t, (*got).URL.Query().Has("client"),
+		"no --client => no client param, so the daemon defaults to Claude Code")
 }
 
 // The pin that keeps the CLI's copy of the event table honest against the

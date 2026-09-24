@@ -27,7 +27,6 @@ package gardener
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"os"
 	"sort"
@@ -69,7 +68,7 @@ func (s *Service) proposeStalePlans(ctx context.Context, seen seenKeys) (int, er
 			continue
 		}
 		if roots == nil {
-			if roots, err = projectRepoRoots(ctx, s.db); err != nil {
+			if roots, err = store.RepoRootsForProject(ctx, s.db, s.cfg.LocalHost); err != nil {
 				return created, err
 			}
 		}
@@ -198,6 +197,14 @@ func (e shipEvidence) reason(days int) string {
 // match the plan's tokens. Best-effort throughout -- any gap yields weaker
 // evidence, never an error.
 func (s *Service) shipEvidence(n core.Note, roots []string) shipEvidence {
+	if len(roots) == 0 {
+		// Either the project has no mapped repo at all, or every mapping belongs
+		// to another machine: RepoRootsForProject was asked for THIS host only.
+		// Both mean there is no history here to read, and an absent repo is not
+		// evidence that nothing shipped.
+		s.logger.Debug("gardener: no local repo mapped for project", "project", n.Project)
+		return shipEvidence{}
+	}
 	full, err := s.files.Store().ReadNote(n.FilePath)
 	if err != nil {
 		return shipEvidence{}
@@ -251,21 +258,6 @@ func (s *Service) shipEvidence(n core.Note, roots []string) shipEvidence {
 		}
 	}
 	return shipEvidence{stamp: stamp}
-}
-
-// projectRepoRoots inverts the repo_project_map: every mapped repo path per
-// project slug (a project can own several -- the main checkout plus
-// out-of-tree worktrees).
-func projectRepoRoots(ctx context.Context, db *sql.DB) (map[string][]string, error) {
-	m, err := store.RepoProjectMap(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	out := make(map[string][]string, len(m))
-	for path, slug := range m {
-		out[slug] = append(out[slug], path)
-	}
-	return out, nil
 }
 
 // landedCommitPrefixes are the reflog actions that add commits to the current

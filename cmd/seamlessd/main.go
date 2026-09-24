@@ -203,6 +203,14 @@ func runServe(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// Claim this machine's identity before anything reads the repo map or a
+	// session row: rows written before host scoping (and by seeders or a
+	// map-repo that ran before the daemon ever did) carry no host, and every
+	// resolver below asks for one. It is idempotent, so it runs on every start.
+	if err := store.AdoptLocalHost(ctx, db, config.Hostname()); err != nil {
+		return fmt.Errorf("seamlessd.serve: adopt local host: %w", err)
+	}
+
 	// Files subsystem: markdown source of truth, watcher, reconcile, and
 	// embed-on-index when an embedder is configured.
 	mgr, err := files.NewManager(cfg.DataDir, db, logger)
@@ -277,7 +285,7 @@ func runServe(args []string) error {
 	}
 	mcpSrv := mcp.New(mcp.Config{
 		DB: db, Files: mgr, Retrieve: ret, Events: rec, Gardener: garden, Embedder: embedder,
-		APIKey: cfg.MCP.APIKey, Version: buildVersion(),
+		APIKey: cfg.MCP.APIKey, Version: buildVersion(), LocalHost: config.Hostname(),
 		ToolEventMaxChars:   cfg.Budgets.ToolEventMaxChars,
 		CaptureAllowedPorts: cfg.Capture.AllowedPorts, Logger: logger,
 		// The file/env optional-features base. The server layers the console's
@@ -300,7 +308,7 @@ func runServe(args []string) error {
 	hooksH := hooks.NewHandler(hooks.Config{
 		DB: db, Retrieve: ret, Events: rec, Files: mgr,
 		APIKey: cfg.MCP.APIKey, MaxEventChars: cfg.Budgets.ToolEventMaxChars,
-		PlanCapture: cfg.PlanCapture, Logger: logger,
+		PlanCapture: cfg.PlanCapture, LocalHost: config.Hostname(), Logger: logger,
 	})
 	consoleSrv, err := console.New(console.Config{
 		DB: db, Files: mgr, Gardener: garden, Events: rec, Retrieve: ret,

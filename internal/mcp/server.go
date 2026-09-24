@@ -204,6 +204,12 @@ type Config struct {
 	// (config.Capture.AllowedPorts). Empty means the capture package's 80/443
 	// default, never "any port".
 	CaptureAllowedPorts []int
+	// LocalHost is this daemon's own machine name (config.Hostname). It is the
+	// host a caller that sends no X-Seamless-Host header is attributed to: an
+	// older seam, or a client on this very box. Empty means "this machine has
+	// not named itself", which matches every session row written before host
+	// scoping existed.
+	LocalHost string
 	// Features is the file/env optional-features config (config.Config.Features).
 	// It is only the BASE: the stored override row layers over it per request in
 	// effectiveFeatures, so a console toggle needs no restart. The zero value is
@@ -329,6 +335,14 @@ func (s *Server) Handler() http.Handler {
 			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 		}
 		ctx := context.WithValue(r.Context(), authedKey{}, true)
+		// The caller's machine, stashed for the tools that place a working
+		// directory or look for a sibling ambient session. It rides as a header
+		// rather than a tool argument because it is a property of the CONNECTION,
+		// not of any one call -- and because every tool would otherwise have to
+		// declare and forward it. session_start may still override it explicitly.
+		if host := strings.ToLower(strings.TrimSpace(r.Header.Get(HostHeader))); host != "" {
+			ctx = context.WithValue(ctx, hostKey{}, host)
+		}
 		transport.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
@@ -383,6 +397,25 @@ func (s *Server) registerTools() {
 // ---------------------------------------------------------------------------
 
 type authedKey struct{}
+
+// HostHeader carries the calling agent's machine name on every MCP request.
+// `seam mcp-headers` emits it, the mcp-proxy bridge and the CLI's own dial set
+// it; a client that sends none is attributed to the daemon's own host, which is
+// what keeps a loopback install unchanged.
+const HostHeader = "X-Seamless-Host"
+
+type hostKey struct{}
+
+// callerHost is the machine an MCP call speaks for: the X-Seamless-Host header
+// when present, else this daemon's own host. It is never a guess at some other
+// machine -- an absent header means a client that predates host scoping, and
+// such a client can only be talking to a daemon on its own box.
+func (s *Server) callerHost(ctx context.Context) string {
+	if host, _ := ctx.Value(hostKey{}).(string); host != "" {
+		return host
+	}
+	return s.cfg.LocalHost
+}
 
 // authMiddleware rejects any tool call whose HTTP request did not present the
 // valid static key (tool errors are returned as results, not Go errors).
@@ -842,7 +875,7 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 // time is enough for provenance and wrong once is enough for a leak, so the
 // isolated case takes an explicit binding instead.
 func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, fenced error) {
-	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
+	projects, scope, err := s.ambientProjectsNearestFirst(ctx)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback projects", "error", err)
 		return core.Session{}, false, false, nil
@@ -865,12 +898,29 @@ func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok boo
 	if !visible {
 		return core.Session{}, false, false, s.ambientFenceErr(ctx, projects[0])
 	}
-	sess, ok, err = store.LatestActiveAmbientSessionForProject(ctx, s.cfg.DB, projects[0], ambientFallbackWindow)
+	sess, ok, err = store.LatestActiveAmbientSessionForProject(ctx, s.cfg.DB, scope, projects[0], ambientFallbackWindow)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback lookup", "error", err)
 		return core.Session{}, false, false, nil
 	}
 	return sess, ok, false, nil
+}
+
+// ambientProjectsNearestFirst asks the CALLER's own machine first and widens to
+// every host only when that machine has nothing active. Narrow-first is what
+// keeps two devices working in identically-named directories from reading as one
+// ambiguous pair; widening afterwards is what keeps a single-machine install --
+// and a client that sends no host at all -- behaving exactly as before. The
+// returned scope is the host filter the follow-up session lookups must reuse, so
+// a widened search does not re-narrow halfway through.
+func (s *Server) ambientProjectsNearestFirst(ctx context.Context) (projects []string, scope string, err error) {
+	host := s.callerHost(ctx)
+	projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, host, ambientFallbackWindow)
+	if err != nil || len(projects) > 0 || host == "" {
+		return projects, host, err
+	}
+	projects, err = store.ActiveAmbientProjects(ctx, s.cfg.DB, "", ambientFallbackWindow)
+	return projects, "", err
 }
 
 // record appends an event best-effort; a logging failure never fails a tool.

@@ -43,6 +43,7 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no tool name -> no capture)
+	p.Identity = identityFromRequest(r)
 
 	// Heartbeat the ambient session on any tool activity, so a long turn that never
 	// calls a seamless MCP tool still keeps its cc/* session live for the reaper.
@@ -51,14 +52,21 @@ func (h *Handler) postToolUse(w http.ResponseWriter, r *http.Request) {
 	h.touchAmbient(hbCtx, ClientClaudeCode, p.SessionID)
 	hbCancel()
 
+	// The tool name is checked BEFORE the machine check, so a remote agent's
+	// ordinary edits do not each record a skip: only a call that would actually
+	// have captured something is worth reporting as skipped.
 	var extra preparedHookContext
-	if h.captureEnabled() {
-		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
-		defer cancel()
-		switch p.ToolName {
-		case "Write", "Edit", "MultiEdit":
+	switch p.ToolName {
+	case "Write", "Edit", "MultiEdit":
+		if h.captureLocal(r.Context(), "plan-capture", p.Identity) {
+			ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
+			defer cancel()
 			extra = h.capturePlanIteration(ctx, p)
-		case "ExitPlanMode":
+		}
+	case "ExitPlanMode":
+		if h.captureLocal(r.Context(), "plan-approval", p.Identity) {
+			ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
+			defer cancel()
 			extra = h.capturePlanApproval(ctx, p)
 		}
 	}
@@ -86,8 +94,9 @@ func (h *Handler) permissionRequest(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var p toolPayload
 	_ = json.NewDecoder(r.Body).Decode(&p) //nolint:errcheck // tolerant: a decode error just leaves p zero (no tool name -> no capture)
+	p.Identity = identityFromRequest(r)
 
-	if h.captureEnabled() && p.ToolName == "ExitPlanMode" {
+	if p.ToolName == "ExitPlanMode" && h.captureLocal(r.Context(), "plan-presented", p.Identity) {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
 		defer cancel()
 		h.markPlanPresented(ctx, p)
@@ -98,6 +107,18 @@ func (h *Handler) permissionRequest(w http.ResponseWriter, r *http.Request) {
 // captureEnabled reports whether plan/subagent capture can run at all.
 func (h *Handler) captureEnabled() bool {
 	return h.planCapture.Enabled && h.db != nil && h.files != nil
+}
+
+// captureLocal is captureEnabled plus the machine check: every capture path
+// below re-reads the plan file, the transcript, or the repo's git HEAD from
+// disk, and on another machine those paths are not this agent's. The skip is
+// recorded (INFO) so a remote device's missing captures are visible rather than
+// simply absent.
+func (h *Handler) captureLocal(ctx context.Context, what string, id hookIdentity) bool {
+	if !h.captureEnabled() {
+		return false
+	}
+	return h.localDiskOK(ctx, what, ClientClaudeCode, h.hostOf(id))
 }
 
 // capturePlanIteration re-reads the just-written plan file from disk (the hook
@@ -184,7 +205,7 @@ func (h *Handler) markPlanPresented(ctx context.Context, p toolPayload) {
 	if !ok || meta.Basename == "" || meta.Status != plans.StatusDraft {
 		return
 	}
-	project := h.resolveProject(ctx, p.CWD)
+	project := h.resolveProject(ctx, h.hostOf(p.Identity), p.CWD)
 	path, found := h.noteFileBySlug(ctx, project, plans.NotePrefix+meta.Basename)
 	if !found {
 		return

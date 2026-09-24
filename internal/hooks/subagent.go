@@ -31,7 +31,6 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
-	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
 )
@@ -72,6 +71,8 @@ func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := decodeSubagentStart(client, readHookBody(w, r))
+	p.Identity = identityFromRequest(r)
+	host := h.hostOf(p.Identity)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -84,7 +85,14 @@ func (h *Handler) subagentStart(w http.ResponseWriter, r *http.Request) {
 			p.ParentSessionID, "", "", false, nil)
 		return
 	}
-	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, subagentBriefingInput(client, p))
+	// The spawn prompt is read out of the child's transcript, so it is resolved
+	// only for an agent on this machine; a remote child still gets the project's
+	// constraints, just without the prompt-matched RELEVANT section.
+	prompt := ""
+	if h.localDiskOK(ctx, "subagent-spawn-prompt", client, host) {
+		prompt = subagentSpawnPrompt(client, p)
+	}
+	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, subagentBriefingInput(p, host, prompt))
 	if err != nil {
 		h.logger.Warn("hooks: subagent-start briefing failed", "error", err)
 		briefing, injectedIDs = "", nil
@@ -107,6 +115,7 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := decodeSubagentStop(client, readHookBody(w, r))
+	p.Identity = identityFromRequest(r)
 
 	if client == ClientCodex {
 		// The Codex contract shares the parent session_id. Keep it alive, but do
@@ -119,7 +128,7 @@ func (h *Handler) subagentStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.captureEnabled() {
+	if h.captureLocal(r.Context(), "subagent-transcript", p.Identity) {
 		ctx, cancel := context.WithTimeout(r.Context(), captureTimeout)
 		defer cancel()
 		h.captureSubagent(ctx, p)
@@ -152,7 +161,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p subagentPayload) {
 		return
 	}
 
-	project := h.resolveProject(ctx, p.CWD)
+	project := h.resolveProject(ctx, h.hostOf(p.Identity), p.CWD)
 	noteSlug := plans.AgentNotePrefix + core.Slugify(p.AgentID)
 	now := time.Now().UTC()
 
@@ -178,7 +187,7 @@ func (h *Handler) captureSubagent(ctx context.Context, p subagentPayload) {
 		note.Description = fmt.Sprintf("Cached planning-subagent run (%s) -- prompt + final report", p.AgentType)
 		note.Body = agentStamp(
 			h.ambientDisplayName(ctx, ClientClaudeCode, p.ParentSessionID),
-			p.AgentID, gitread.Head(p.CWD), now,
+			p.AgentID, h.gitHead(ctx, p.Identity, p.CWD), now,
 		) +
 			"\n\n## Prompt\n\n" + prompt + "\n\n## Report\n\n" + report
 		note.Tags = agentNoteTags(meta.PlanSlug, p.AgentType)
@@ -250,11 +259,12 @@ func agentStamp(sessionName, agentID, head string, now time.Time) string {
 // payload, carrying the spawn prompt when it can be resolved. The briefing
 // matches the prompt against the project's memories and renders the hits as
 // its RELEVANT section; an unresolved (empty) prompt just means no section.
-func subagentBriefingInput(client Client, p subagentPayload) retrieve.BriefingInput {
+func subagentBriefingInput(p subagentPayload, host, prompt string) retrieve.BriefingInput {
 	return retrieve.BriefingInput{
 		CWD:       p.CWD,
+		Host:      host,
 		AgentType: p.AgentType,
-		Prompt:    subagentSpawnPrompt(client, p),
+		Prompt:    prompt,
 	}
 }
 

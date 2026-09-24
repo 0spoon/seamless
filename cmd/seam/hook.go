@@ -11,6 +11,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -19,6 +20,9 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/gitread"
 )
 
 // hookEvents pairs each event seam forwards with the endpoint it posts to. A
@@ -76,6 +80,19 @@ const clientQueryParam = "client"
 // test-only hooks import pins the two sets exactly; production seam avoids the
 // SQLite dependency graph that importing internal/hooks would add.
 var hookClients = []string{"claude-code", "codex"}
+
+// The identity query keys, mirroring internal/hooks' unexported constants (same
+// reason as clientQueryParam: this binary must not import that package). The
+// order is the one hooks.IdentityQueryParams returns, and the pin test compares
+// the two lists.
+//
+// They carry what only THIS process can see: which machine the hook fired on,
+// and the git identity of the directory it fired in. A daemon on another machine
+// cannot derive either -- its own disk answers a different question -- so an
+// absent value makes it fall back to treating the hook as local, which is
+// exactly right for the single-machine install every one of these was written
+// for.
+var hookIdentityParams = []string{"host", "repo_root", "main_root", "origin"}
 
 // hookOpts carries the flags for `seam hook`.
 type hookOpts struct {
@@ -157,10 +174,17 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 		return nil
 	}
 	// --client rides as ?client=<value> so the daemon selects the per-client
-	// payload adapter. Omitted (Claude Code), the URL is byte-identical to before,
-	// so existing CC hooks are untouched.
+	// payload adapter; the machine identity rides beside it. Both are out of band
+	// because the body is the agent client's schema, not ours.
+	q := url.Values{}
 	if o.client != "" {
-		ep += "?" + clientQueryParam + "=" + url.QueryEscape(o.client)
+		q.Set(clientQueryParam, o.client)
+	}
+	for k, v := range identityParams(event, payload) {
+		q.Set(k, v)
+	}
+	if len(q) > 0 {
+		ep += "?" + q.Encode()
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, mcpBase(cfg)+ep, bytes.NewReader(payload))
 	if err != nil {
@@ -181,4 +205,47 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	// must never block the agent by failing here.
 	_, _ = io.Copy(e.stdout, resp.Body) //nolint:errcheck // a hook must not fail on a broken stdout
 	return nil
+}
+
+// identityParams resolves the machine identity to append to a forwarded hook.
+//
+// The host goes on every hook: it is what tells the daemon whether the paths in
+// this payload are on its own disk. The repository roots go on session-start
+// only, because that is the single hook that PLACES a working directory in a
+// project; every other hook resolves through the map that placement already
+// grew. Resolving them is a handful of Lstats plus one config read, and a hook
+// fires on every turn -- so the cheap half runs always and the rest runs once.
+//
+// Every value is best-effort: an unreadable hostname, an unparseable body, or a
+// cwd outside any repo simply omits the param, and the daemon reads the absence
+// as "an older client on my own machine" (see internal/hooks/adapter.go).
+func identityParams(event string, payload []byte) map[string]string {
+	out := map[string]string{}
+	if host := config.Hostname(); host != "" {
+		out["host"] = host
+	}
+	if event != "session-start" {
+		return out
+	}
+	var body struct {
+		CWD string `json:"cwd"`
+	}
+	if err := json.Unmarshal(payload, &body); err != nil || strings.TrimSpace(body.CWD) == "" {
+		return out
+	}
+	root := gitread.RepoRoot(body.CWD)
+	if root == "" {
+		return out // not inside a repo: nothing to place, nothing to send
+	}
+	// A linked worktree is a checkout of the main repository, not a repository of
+	// its own, and project identity keys on the main checkout (store.
+	// RegisterProjectForCWD). Resolving that here is what lets the daemon skip
+	// reading a filesystem it may not own.
+	main := gitread.MainWorktreeRoot(root)
+	out["repo_root"] = root
+	out["main_root"] = main
+	if origin := gitread.OriginURL(main); origin != "" {
+		out["origin"] = origin
+	}
+	return out
 }

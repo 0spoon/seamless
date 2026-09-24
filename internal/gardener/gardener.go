@@ -59,6 +59,11 @@ type Config struct {
 	// active session. Non-positive falls back to core.SessionIdleTTL, keeping
 	// the reaper cutoff aligned with the console's live/idle derivation.
 	SessionIdle time.Duration
+	// LocalHost is this daemon's own machine name (config.Hostname). The
+	// stale-plan pass opens repositories on disk for its ship evidence, so it
+	// reads only the mappings THIS machine made: a remote device's repo path
+	// either is not here, or is a different repository with the same path.
+	LocalHost string
 }
 
 // withDefaults fills non-positive fields from the package defaults.
@@ -92,6 +97,7 @@ func FromConfig(g config.Gardener) Config {
 		StalePlanDays:          g.StalePlanDays,
 		StaleStageDays:         g.StaleStageDays,
 		SessionIdle:            time.Duration(g.SessionIdleMinutes) * time.Minute,
+		LocalHost:              config.Hostname(),
 	}
 }
 

@@ -33,19 +33,19 @@ func TestActiveAmbientProjects(t *testing.T) {
 	mk("cc/done", "done", 1*time.Minute, true, core.SessionCompleted)  // not active
 	mk("sess/x", "explicit", 1*time.Minute, false, core.SessionActive) // not ambient
 
-	projects, err := ActiveAmbientProjects(ctx, db, ambientWindowForTest)
+	projects, err := ActiveAmbientProjects(ctx, db, "", ambientWindowForTest)
 	require.NoError(t, err)
 	// Distinct projects only, ordered by most recent activity: other before demo.
 	require.Equal(t, []string{"other", "demo"}, projects)
 
 	// The project-scoped lookup returns that project's latest ambient session.
-	sess, ok, err := LatestActiveAmbientSessionForProject(ctx, db, "demo", ambientWindowForTest)
+	sess, ok, err := LatestActiveAmbientSessionForProject(ctx, db, "", "demo", ambientWindowForTest)
 	require.NoError(t, err)
 	require.True(t, ok)
 	require.Equal(t, "cc/demo2", sess.Name, "returns the most recently updated ambient in the project")
 
 	// A project with no ambient session yields found=false, not another project's.
-	_, ok, err = LatestActiveAmbientSessionForProject(ctx, db, "nope", ambientWindowForTest)
+	_, ok, err = LatestActiveAmbientSessionForProject(ctx, db, "", "nope", ambientWindowForTest)
 	require.NoError(t, err)
 	require.False(t, ok)
 }
@@ -74,14 +74,14 @@ func TestActiveAmbientSessionsForProject(t *testing.T) {
 	mk("sess/x", "demo", 1*time.Minute, false, core.SessionActive)
 	mk("cc/other", "other", 1*time.Minute, true, core.SessionActive)
 
-	sessions, err := ActiveAmbientSessionsForProject(ctx, db, "demo", ambientWindowForTest)
+	sessions, err := ActiveAmbientSessionsForProject(ctx, db, "", "demo", ambientWindowForTest)
 	require.NoError(t, err)
 	require.Len(t, sessions, 2, "two concurrent same-project ambients -- the ambiguity resolveSession must refuse")
 	require.Equal(t, "cc/demoB", sessions[0].Name, "most recent first")
 	require.Equal(t, "cc/demoA", sessions[1].Name)
 
 	// A lone ambient in a project is unambiguous (the solo ergonomic).
-	solo, err := ActiveAmbientSessionsForProject(ctx, db, "other", ambientWindowForTest)
+	solo, err := ActiveAmbientSessionsForProject(ctx, db, "", "other", ambientWindowForTest)
 	require.NoError(t, err)
 	require.Len(t, solo, 1)
 }

@@ -300,10 +300,11 @@ func TestSubagentSpawnPrompt_ClaudeCode(t *testing.T) {
 // section (the briefing_prompt tests in internal/retrieve cover that half).
 func TestSubagentBriefingInput_PopulatesPrompt(t *testing.T) {
 	// Claude Code: the child transcript exists when the hook fires.
-	in := subagentBriefingInput(ClientClaudeCode, subagentPayload{
+	p42 := subagentPayload{
 		ParentSessionID: "parent", AgentID: "sp42", AgentType: "Explore",
 		CWD: "/work/demo", TranscriptPath: placeSubagentTranscript(t, "sp42"),
-	})
+	}
+	in := subagentBriefingInput(p42, "", subagentSpawnPrompt(ClientClaudeCode, p42))
 	require.Equal(t, "/work/demo", in.CWD)
 	require.Equal(t, "Explore", in.AgentType)
 	require.Equal(t, "Explore the gardener package and report its structure", in.Prompt)
@@ -314,16 +315,17 @@ func TestSubagentBriefingInput_PopulatesPrompt(t *testing.T) {
 	require.Contains(t, filepath.Base(p.TranscriptPath), p.AgentID,
 		"SubagentStart transcript_path must name the child rollout")
 	p.TranscriptPath = rolloutPath() // stand the committed rollout fixture in as the child rollout
-	in = subagentBriefingInput(ClientCodex, p)
+	in = subagentBriefingInput(p, "", subagentSpawnPrompt(ClientCodex, p))
 	require.Equal(t, p.CWD, in.CWD)
 	require.Equal(t, p.AgentType, in.AgentType)
 	require.Equal(t, rolloutUserPrompt, in.Prompt)
 
 	// Not-yet-flushed transcript: the prompt is empty, the input intact.
-	in = subagentBriefingInput(ClientClaudeCode, subagentPayload{
+	p43 := subagentPayload{
 		ParentSessionID: "parent", AgentID: "sp43", AgentType: "Explore",
 		CWD: "/work/demo", TranscriptPath: filepath.Join(t.TempDir(), "missing.jsonl"),
-	})
+	}
+	in = subagentBriefingInput(p43, "", subagentSpawnPrompt(ClientClaudeCode, p43))
 	require.Equal(t, "/work/demo", in.CWD)
 	require.Empty(t, in.Prompt)
 }

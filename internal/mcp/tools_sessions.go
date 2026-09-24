@@ -22,6 +22,14 @@ func sessionStartTool() mcp.Tool {
 		mcp.WithString("cwd", mcp.Description("Absolute working directory; auto-mapped to a project from the repo root on a repo's first session (no setup step -- `seamlessd map-repo` only overrides the derived slug)")),
 		mcp.WithString("source", enumOf(core.SessionSources), mcp.Description("what began this session (default explicit)")),
 		mcp.WithString("model", mcp.Description("Model id powering this agent, exactly as the provider names it (e.g. claude-fable-5, gpt-5.5). Stamped onto memories/notes this session writes; hooks keep it current for Claude Code/Codex sessions, so pass it mainly from other clients")),
+		// Machine identity. Only a client on a DIFFERENT machine than the daemon
+		// needs these: cwd alone is ambiguous across devices, and the daemon will
+		// not read its own disk to resolve another machine's path. A local client
+		// sends none of them and nothing changes.
+		mcp.WithString("host", mcp.Description("Machine this agent runs on (hostname). Defaults to the X-Seamless-Host header, then to the daemon's own host; pass it only when dialling a daemon on another machine")),
+		mcp.WithString("repo_root", mcp.Description("Absolute git repository root enclosing cwd, resolved on YOUR machine. Required when host is not the daemon's: the daemon cannot read your filesystem to find it")),
+		mcp.WithString("main_worktree_root", mcp.Description("Absolute root of the repository's MAIN checkout when repo_root is a linked worktree; defaults to repo_root")),
+		mcp.WithString("repo_origin", mcp.Description("The repository's origin remote URL, which is how the same repo checked out on two machines is recognized as one project")),
 	)
 }
 
@@ -33,12 +41,35 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	if source == "" {
 		source = "explicit"
 	}
+	// Explicit arg beats the connection header beats the daemon's own host: the
+	// arg is the only one an agent can correct when its transport strips headers.
+	host := strings.ToLower(strings.TrimSpace(argString(req, "host")))
+	if host == "" {
+		host = s.callerHost(ctx)
+	}
 	// Resolve the cwd to a project, registering a new repo->project mapping and
 	// projects-table row when the agent works in a not-yet-mapped git repo. A
 	// moved repo adopts its existing project here; surface that remap as an
 	// event so the console shows the map healed itself.
-	project, moved, err := store.RegisterProjectForCWD(ctx, s.cfg.DB, cwd)
-	if err != nil {
+	project, moved, err := store.RegisterProjectForCWD(ctx, s.cfg.DB, store.CWDIdentity{
+		Host:     host,
+		CWD:      cwd,
+		RepoRoot: strings.TrimSpace(argString(req, "repo_root")),
+		MainRoot: strings.TrimSpace(argString(req, "main_worktree_root")),
+		Origin:   strings.TrimSpace(argString(req, "repo_origin")),
+	}, s.cfg.LocalHost)
+	warning := ""
+	switch {
+	case errors.Is(err, store.ErrRemoteRootUnknown):
+		// A session on another machine that named no repo root. The session is
+		// still worth having -- it just cannot be placed in a project, and saying
+		// so is far better than failing the call or inventing a scope.
+		warning = "host " + host + " is not this daemon's machine and sent no repo_root, " +
+			"so this cwd could not be mapped to a project: the session is global. " +
+			"Pass repo_root (and main_worktree_root/repo_origin) resolved on your own machine."
+		s.logger.Warn("session_start: remote cwd without a repo root", "host", host, "cwd", cwd)
+		project = ""
+	case err != nil:
 		return errResult("session_start", err)
 	}
 	if moved != nil {
@@ -69,11 +100,11 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.stampSessionModel(ctx, existing.ID, model)
 			s.setBinding(ctx, existing.ID, project)
 			s.record(ctx, core.EventSessionStarted, existing.ID, project, "", map[string]any{"resumed": true})
-			return jsonResult(map[string]any{
+			return jsonResult(withWarning(map[string]any{
 				"session_id": existing.ID, "name": existing.Name,
 				"project": project, "resumed": true, "scope": scopeNote(project),
-				"briefing": s.briefing(ctx, cwd, source),
-			})
+				"briefing": s.briefing(ctx, host, cwd, source),
+			}, warning))
 		}
 	}
 
@@ -84,7 +115,7 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	// one cwd) fall through to a fresh session, the same unambiguous-or-fallback
 	// guard as linkedExternalIdentity, so adoption can never bind a sibling's session.
 	if name == "" {
-		if ambient, ok := s.soleAmbientByCWD(ctx, cwd); ok {
+		if ambient, ok := s.soleAmbientByCWD(ctx, host, cwd); ok {
 			if project == "" {
 				project = ambient.ProjectSlug
 			}
@@ -97,11 +128,11 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 			s.setBinding(ctx, ambient.ID, project)
 			s.record(ctx, core.EventSessionStarted, ambient.ID, project, "",
 				map[string]any{"resumed": true, "adopted": true})
-			return jsonResult(map[string]any{
+			return jsonResult(withWarning(map[string]any{
 				"session_id": ambient.ID, "name": ambient.Name,
 				"project": project, "resumed": true, "scope": scopeNote(project),
-				"briefing": s.briefing(ctx, cwd, source),
-			})
+				"briefing": s.briefing(ctx, host, cwd, source),
+			}, warning))
 		}
 	}
 
@@ -113,10 +144,10 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 		name = "sess/" + shortID(id)
 	}
 	now := time.Now().UTC()
-	externalSessionID, externalClient := s.linkedExternalIdentity(ctx, cwd)
+	externalSessionID, externalClient := s.linkedExternalIdentity(ctx, host, cwd)
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
-		CWD: cwd, Source: source, Model: model,
+		CWD: cwd, Host: host, Source: source, Model: model,
 		ExternalSessionID: externalSessionID, ExternalClient: externalClient,
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -125,10 +156,10 @@ func (s *Server) handleSessionStart(ctx context.Context, req mcp.CallToolRequest
 	}
 	s.setBinding(ctx, id, project)
 	s.record(ctx, core.EventSessionStarted, id, project, "", nil)
-	return jsonResult(map[string]any{
+	return jsonResult(withWarning(map[string]any{
 		"session_id": id, "name": name, "project": project, "scope": scopeNote(project),
-		"briefing": s.briefing(ctx, cwd, source),
-	})
+		"briefing": s.briefing(ctx, host, cwd, source),
+	}, warning))
 }
 
 // stampSessionModel records a self-reported model id on a resumed/adopted
@@ -163,8 +194,8 @@ func scopeNote(project string) string {
 // briefing assembles the session_start briefing, degrading to "" on error. The
 // failure is logged (it was previously discarded silently): a broken briefing
 // should never fail a session_start, but it must not vanish without a trace.
-func (s *Server) briefing(ctx context.Context, cwd, source string) string {
-	briefing, _, err := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Source: source})
+func (s *Server) briefing(ctx context.Context, host, cwd, source string) string {
+	briefing, _, err := s.cfg.Retrieve.Briefing(ctx, retrieve.BriefingInput{CWD: cwd, Host: host, Source: source})
 	if err != nil {
 		s.logger.Warn("session_start: briefing", "error", err)
 		return ""
@@ -178,8 +209,8 @@ func (s *Server) briefing(ctx context.Context, cwd, source string) string {
 // session_start with a sole same-cwd ambient adopts that session outright and
 // never gets here.) Ambiguity yields empty values so the session falls back to
 // the reaper instead of risking a link to the wrong agent. Best-effort.
-func (s *Server) linkedExternalIdentity(ctx context.Context, cwd string) (externalSessionID, externalClient string) {
-	ambient, ok := s.soleAmbientByCWD(ctx, cwd)
+func (s *Server) linkedExternalIdentity(ctx context.Context, host, cwd string) (externalSessionID, externalClient string) {
+	ambient, ok := s.soleAmbientByCWD(ctx, host, cwd)
 	if !ok {
 		return "", ""
 	}
@@ -191,8 +222,8 @@ func (s *Server) linkedExternalIdentity(ctx context.Context, cwd string) (extern
 // agents in one cwd) report ok=false so callers fall back to a fresh session rather
 // than risking a cross-agent match. Best-effort: a lookup error logs and reports no
 // match.
-func (s *Server) soleAmbientByCWD(ctx context.Context, cwd string) (core.Session, bool) {
-	ambients, err := store.ActiveAmbientByCWD(ctx, s.cfg.DB, cwd)
+func (s *Server) soleAmbientByCWD(ctx context.Context, host, cwd string) (core.Session, bool) {
+	ambients, err := store.ActiveAmbientByCWD(ctx, s.cfg.DB, host, cwd)
 	if err != nil {
 		s.logger.Warn("session_start: ambient lookup", "error", err)
 		return core.Session{}, false
@@ -382,7 +413,7 @@ func (s *Server) resolveSession(ctx context.Context, req mcp.CallToolRequest) (c
 // cx/* ambients in one project -- yields ambiguous=true and no session, so the caller
 // must name the session. Exactly one candidate (the solo-agent case) resolves.
 func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, err error) {
-	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
+	projects, scope, err := s.ambientProjectsNearestFirst(ctx)
 	if err != nil {
 		return core.Session{}, false, false, err
 	}
@@ -394,7 +425,7 @@ func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, o
 	default:
 		return core.Session{}, false, true, nil
 	}
-	sessions, err := store.ActiveAmbientSessionsForProject(ctx, s.cfg.DB, projects[0], ambientFallbackWindow)
+	sessions, err := store.ActiveAmbientSessionsForProject(ctx, s.cfg.DB, scope, projects[0], ambientFallbackWindow)
 	if err != nil {
 		return core.Session{}, false, false, err
 	}
@@ -402,6 +433,17 @@ func (s *Server) ambientSessionTarget(ctx context.Context) (sess core.Session, o
 		return core.Session{}, false, len(sessions) > 1, nil
 	}
 	return sessions[0], true, false, nil
+}
+
+// withWarning attaches a non-fatal warning to a tool result. It is only ever
+// added when something the caller can FIX went wrong (an unplaceable remote
+// cwd); a result with no warning key is unchanged, so no existing caller sees a
+// new field.
+func withWarning(out map[string]any, warning string) map[string]any {
+	if warning != "" {
+		out["warning"] = warning
+	}
+	return out
 }
 
 // shortID returns the last 8 characters of a ULID, lowercased, for a readable

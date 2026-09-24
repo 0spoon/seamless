@@ -87,6 +87,23 @@ func mcpBase(cfg config.Config) string {
 	return cfg.ServerURL()
 }
 
+// hostHeader carries this machine's name to the daemon on every MCP request.
+// It mirrors internal/mcp.HostHeader; the CLI keeps its own literal for the same
+// reason it keeps its own hook client enum -- importing that package would drag
+// SQLite into a binary whose job is one HTTP call -- and a test pins the two.
+const hostHeader = "X-Seamless-Host"
+
+// mcpHeaders is the header set every MCP client in this CLI sends: the bearer
+// key, plus the machine the caller is on. One constructor so the proxy bridge,
+// `seam mcp-headers` and dial cannot drift apart.
+func mcpHeaders(cfg config.Config) map[string]string {
+	h := map[string]string{"Authorization": "Bearer " + cfg.MCP.APIKey}
+	if host := config.Hostname(); host != "" {
+		h[hostHeader] = host
+	}
+	return h
+}
+
 // dial loads config and returns an initialized MCP client plus the base URL.
 func dial(ctx context.Context) (*mcpclient.Client, config.Config, error) {
 	cfg, err := config.Load()
@@ -94,7 +111,7 @@ func dial(ctx context.Context) (*mcpclient.Client, config.Config, error) {
 		return nil, cfg, err
 	}
 	cli, err := mcpclient.NewStreamableHttpClient(mcpBase(cfg)+"/api/mcp",
-		transport.WithHTTPHeaders(map[string]string{"Authorization": "Bearer " + cfg.MCP.APIKey}))
+		transport.WithHTTPHeaders(mcpHeaders(cfg)))
 	if err != nil {
 		return nil, cfg, err
 	}

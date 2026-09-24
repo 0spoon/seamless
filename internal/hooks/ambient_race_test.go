@@ -40,7 +40,7 @@ func TestEnsureAmbientSession_ResumeDoesNotClobberHarvest(t *testing.T) {
 
 	payload := hookPayload{SessionID: "racecafe-0001", Source: "startup"}
 	name := ambientName(ClientClaudeCode, payload.SessionID)
-	require.Equal(t, name, h.ensureAmbientSession(ctx, ClientClaudeCode, payload))
+	require.Equal(t, name, h.ensureAmbientSession(ctx, ClientClaudeCode, "", payload))
 	sess, ok, err := store.AmbientSessionByExternalIdentity(
 		ctx, db, ClientClaudeCode.externalIdentity(), payload.SessionID)
 	require.NoError(t, err)
@@ -67,7 +67,7 @@ func TestEnsureAmbientSession_ResumeDoesNotClobberHarvest(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := range iters {
-			if got := h.ensureAmbientSession(ctx, ClientClaudeCode, payload); got != name {
+			if got := h.ensureAmbientSession(ctx, ClientClaudeCode, "", payload); got != name {
 				t.Errorf("resume %d: got %q, want %s", i, got, name)
 				return
 			}
@@ -102,7 +102,7 @@ func TestEnsureAmbientSession_ConcurrentCreateSingleRow(t *testing.T) {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-			results[i] = h.ensureAmbientSession(ctx, ClientClaudeCode, payload)
+			results[i] = h.ensureAmbientSession(ctx, ClientClaudeCode, "", payload)
 		}(i)
 	}
 	wg.Wait()
@@ -129,18 +129,18 @@ func TestCodexAmbientIdentity_SameUUIDv7PrefixStaysIsolated(t *testing.T) {
 		idA = "019f7291-40f1-7311-8997-0d497579d27b"
 		idB = "019f7291-b0b2-7d0a-8a84-7526b23b72f1"
 	)
-	nameA := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+	nameA := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 		SessionID: idA, CWD: "/work/alpha", Source: "startup",
 	})
-	nameB := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+	nameB := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 		SessionID: idB, CWD: "/work/beta", Source: "startup",
 	})
 	require.NotEqual(t, nameA, nameB)
 	require.Equal(t, "cx/019f7291-", nameA[:len("cx/019f7291-")])
 	require.Equal(t, "cx/019f7291-", nameB[:len("cx/019f7291-")])
 
-	h.setAmbientModel(ctx, ClientCodex, idA, "gpt-alpha", "")
-	h.setAmbientModel(ctx, ClientCodex, idB, "gpt-beta", "")
+	h.setAmbientModel(ctx, ClientCodex, "", idA, "gpt-alpha", "")
+	h.setAmbientModel(ctx, ClientCodex, "", idB, "gpt-beta", "")
 	a, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "codex", idA)
 	require.NoError(t, err)
 	require.True(t, ok)
@@ -161,8 +161,8 @@ func TestCodexAmbientIdentity_SameUUIDv7PrefixStaysIsolated(t *testing.T) {
 	require.NoError(t, store.UpdateSession(ctx, db, a))
 	require.NoError(t, store.UpdateSession(ctx, db, b))
 	h.touchAmbient(ctx, ClientCodex, idA)
-	h.setAmbientModel(ctx, ClientCodex, idA, "gpt-alpha-switched", "")
-	h.harvestCodexStop(ctx, stopPayload{
+	h.setAmbientModel(ctx, ClientCodex, "", idA, "gpt-alpha-switched", "")
+	h.harvestCodexStop(ctx, "", stopPayload{
 		SessionID: idA, LastAssistantMessage: "alpha turn complete",
 	})
 
@@ -216,7 +216,7 @@ func TestEnsureAmbientSession_ResumeSourcesAndLegacyNameStayOneRow(t *testing.T)
 	h := NewHandler(Config{DB: db, APIKey: testKey})
 
 	const externalID = "019f7291-40f1-7311-8997-0d497579d27b"
-	startupName := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+	startupName := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 		SessionID: externalID, CWD: "/work/alpha", Source: "startup",
 	})
 	startup, ok, err := store.AmbientSessionByExternalIdentity(ctx, db, "codex", externalID)
@@ -224,7 +224,7 @@ func TestEnsureAmbientSession_ResumeSourcesAndLegacyNameStayOneRow(t *testing.T)
 	require.True(t, ok)
 
 	for _, source := range []string{"resume", "compact"} {
-		got := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+		got := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 			SessionID: externalID, CWD: "/work/beta", Source: source,
 		})
 		require.Equal(t, startupName, got)
@@ -245,7 +245,7 @@ func TestEnsureAmbientSession_ResumeSourcesAndLegacyNameStayOneRow(t *testing.T)
 		Status: core.SessionExpired, ExternalSessionID: legacyID, ExternalClient: "codex",
 		Ambient: true, CreatedAt: now, UpdatedAt: now,
 	}))
-	legacyName := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+	legacyName := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 		SessionID: legacyID, CWD: "/work/beta", Source: "resume",
 	})
 	require.Equal(t, "cx/019f7291", legacyName, "a migrated legacy row keeps its display name")
@@ -265,10 +265,10 @@ func TestAmbientIdentity_SameExternalIDAcrossClientsCannotCrossMatch(t *testing.
 	h := NewHandler(Config{DB: db, APIKey: testKey})
 	const externalID = "same-id-from-two-clients"
 
-	claudeName := h.ensureAmbientSession(ctx, ClientClaudeCode, hookPayload{
+	claudeName := h.ensureAmbientSession(ctx, ClientClaudeCode, "", hookPayload{
 		SessionID: externalID, Source: "startup",
 	})
-	codexName := h.ensureAmbientSession(ctx, ClientCodex, hookPayload{
+	codexName := h.ensureAmbientSession(ctx, ClientCodex, "", hookPayload{
 		SessionID: externalID, Source: "startup",
 	})
 	require.NotEqual(t, claudeName, codexName)
@@ -280,7 +280,7 @@ func TestAmbientIdentity_SameExternalIDAcrossClientsCannotCrossMatch(t *testing.
 	require.True(t, ok)
 	require.NotEqual(t, claude.ID, codex.ID)
 
-	h.harvestCodexStop(ctx, stopPayload{
+	h.harvestCodexStop(ctx, "", stopPayload{
 		SessionID: externalID, LastAssistantMessage: "codex only",
 	})
 	h.completeClaudeSessions(ctx, ClientClaudeCode, endPayload{SessionID: externalID})

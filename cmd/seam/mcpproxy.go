@@ -35,6 +35,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 // headerSessionID is the streamable-HTTP session header (mcp-go's
@@ -146,6 +148,11 @@ func (b *bridge) forward(ctx context.Context, frame []byte, w io.Writer) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json, text/event-stream")
 	req.Header.Set("Authorization", "Bearer "+b.apiKey)
+	// Which machine this bridge runs on. The daemon may be another one, and
+	// without this every remote agent would be attributed to the daemon's host.
+	if host := config.Hostname(); host != "" {
+		req.Header.Set(hostHeader, host)
+	}
 	if b.sessionID != "" {
 		req.Header.Set(headerSessionID, b.sessionID)
 	}

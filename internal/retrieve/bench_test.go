@@ -258,12 +258,12 @@ func BenchmarkPromptRecall(b *testing.B) {
 		svc := New(db, nil, benchBudgets(), nil)
 
 		b.Run(fmt.Sprintf("warm/memories=%d", n), func(b *testing.B) {
-			out, _, err := svc.PromptRecall(ctx, benchCWD, benchPrompt) // prime the corpus cache
+			out, _, err := svc.PromptRecall(ctx, "", benchCWD, benchPrompt) // prime the corpus cache
 			require.NoError(b, err)
 			require.NotEmpty(b, out, "fixture must produce prompt-recall hits")
 			b.ReportAllocs()
 			for b.Loop() {
-				if _, _, err := svc.PromptRecall(ctx, benchCWD, benchPrompt); err != nil {
+				if _, _, err := svc.PromptRecall(ctx, "", benchCWD, benchPrompt); err != nil {
 					b.Fatal(err)
 				}
 			}
@@ -275,7 +275,7 @@ func BenchmarkPromptRecall(b *testing.B) {
 				svc.corpus.mu.Lock()
 				delete(svc.corpus.entries, benchProject)
 				svc.corpus.mu.Unlock()
-				if _, _, err := svc.PromptRecall(ctx, benchCWD, benchPrompt); err != nil {
+				if _, _, err := svc.PromptRecall(ctx, "", benchCWD, benchPrompt); err != nil {
 					b.Fatal(err)
 				}
 			}

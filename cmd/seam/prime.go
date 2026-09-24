@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
@@ -37,7 +38,16 @@ func runPrime(ctx context.Context, e *env, o *primeOpts, _ []string) error {
 	}
 	defer func() { _ = cli.Close() }()
 
-	out, err := callTool(ctx, cli, "session_start", map[string]any{"cwd": cwd, "name": *o.name, "source": "explicit"})
+	args := map[string]any{"cwd": cwd, "name": *o.name, "source": "explicit"}
+	// The same identity `seam hook` sends, for the same reason: when the daemon
+	// is on another machine it cannot resolve this cwd's repository itself, and
+	// the session would land in the global scope. Resolved here, where the repo
+	// actually is. dial() also sends the host header; passing it explicitly is
+	// what survives a transport that drops headers.
+	for k, v := range identityParams("session-start", primeIdentityPayload(cwd)) {
+		args[primeArgNames[k]] = v
+	}
+	out, err := callTool(ctx, cli, "session_start", args)
 	if err != nil {
 		return err
 	}
@@ -50,4 +60,26 @@ func runPrime(ctx context.Context, e *env, o *primeOpts, _ []string) error {
 		fmt.Fprintln(e.stderr, "(no briefing content yet)")
 	}
 	return nil
+}
+
+// primeArgNames maps the hook query keys onto session_start's argument names.
+// The two surfaces name the same four values differently (a query param is
+// terse, a tool argument is self-describing), and this is the single place that
+// knows it.
+var primeArgNames = map[string]string{
+	"host":      "host",
+	"repo_root": "repo_root",
+	"main_root": "main_worktree_root",
+	"origin":    "repo_origin",
+}
+
+// primeIdentityPayload shapes a cwd like the hook body identityParams reads, so
+// both surfaces resolve machine identity through one function rather than two
+// that drift.
+func primeIdentityPayload(cwd string) []byte {
+	b, err := json.Marshal(map[string]string{"cwd": cwd})
+	if err != nil {
+		return nil // identityParams tolerates it: the host alone still travels
+	}
+	return b
 }

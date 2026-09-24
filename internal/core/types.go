@@ -247,7 +247,16 @@ type Session struct {
 	// session identity; Name remains a human-readable display handle.
 	ExternalClient string `json:"externalClient"`
 	CWD            string `json:"cwd"`
-	Source         string `json:"source"` // startup|resume|compact|clear|explicit
+	// Host is the machine the agent is running on, lower-cased, as the client
+	// reported it (config.Hostname on the daemon's own box). It is what makes
+	// CWD meaningful once several devices share one daemon: the same absolute
+	// path names different repositories on different machines, and any work the
+	// daemon does on the agent's behalf that touches a filesystem -- plan
+	// capture, git stamps, transcript harvest -- is only valid when this equals
+	// the daemon's own host. "" means the client did not say, which the daemon
+	// reads as its own host (an older seam CLI).
+	Host   string `json:"host,omitempty"`
+	Source string `json:"source"` // startup|resume|compact|clear|explicit
 	// Model is the LLM currently powering the session's agent, stored verbatim
 	// as the provider names it ("claude-fable-5", "gpt-5.5"). Sources, in
 	// arrival order: the session_start tool's model arg, the Codex hook

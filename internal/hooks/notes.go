@@ -9,10 +9,12 @@ import (
 	"github.com/0spoon/seamless/internal/store"
 )
 
-// resolveProject maps the hook payload cwd to a project slug (best-effort; ""
-// scopes globally).
-func (h *Handler) resolveProject(ctx context.Context, cwd string) string {
-	project, err := store.ResolveProjectForCWD(ctx, h.db, cwd)
+// resolveProject maps a hook payload's (host, cwd) to a project slug
+// (best-effort; "" scopes globally). The host matters: the same absolute path is
+// a different repository on a different machine, so resolving without it would
+// file a remote agent's capture under a local project.
+func (h *Handler) resolveProject(ctx context.Context, host, cwd string) string {
+	project, err := store.ResolveProjectForCWD(ctx, h.db, host, cwd)
 	if err != nil {
 		h.logger.Warn("hooks: plan project resolve", "error", err)
 		return ""

@@ -221,12 +221,12 @@ func TestPromptRecall_SealedMatchesOwnProjectOnly(t *testing.T) {
 	svc := New(db, nil, budgets(), nil)
 	const prompt = "why does the chroma container fail its health check"
 
-	open, openIDs, err := svc.PromptRecall(ctx, "/w/open", prompt)
+	open, openIDs, err := svc.PromptRecall(ctx, "", "/w/open", prompt)
 	require.NoError(t, err)
 	require.Contains(t, open, "chroma-boot-race", "an open project matches global memories")
 	require.Contains(t, openIDs, "01G1")
 
-	sealed, sealedIDs, err := svc.PromptRecall(ctx, "/w/vault", prompt)
+	sealed, sealedIDs, err := svc.PromptRecall(ctx, "", "/w/vault", prompt)
 	require.NoError(t, err)
 	require.Empty(t, sealed, "a sealed project's prompt corpus holds no global memories")
 	require.Empty(t, sealedIDs)

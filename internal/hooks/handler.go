@@ -26,6 +26,7 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
+	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -60,7 +61,11 @@ const ambientDigestBytes = 8
 // captured prompt/findings text (0 = unlimited); injected content is always
 // stored in full (it is bounded by the client-aware context policy upstream).
 // PlansDir is where Claude Code writes plan-mode files; empty defaults to
-// ~/.claude/plans (tests override it).
+// ~/.claude/plans (tests override it). LocalHost is this daemon's own machine
+// name (config.Hostname): every capture that reads the agent's filesystem is
+// gated on the hook's host matching it, so a shared daemon never opens its own
+// copy of a remote agent's path. Empty means "this machine has not named
+// itself", which matches every hook that sends no host.
 type Config struct {
 	DB            *sql.DB
 	Retrieve      *retrieve.Service
@@ -70,6 +75,7 @@ type Config struct {
 	MaxEventChars int
 	PlanCapture   config.PlanCapture
 	PlansDir      string
+	LocalHost     string
 	Logger        *slog.Logger
 }
 
@@ -83,6 +89,7 @@ type Handler struct {
 	maxEventChars int
 	planCapture   config.PlanCapture
 	plansDir      string
+	localHost     string
 	logger        *slog.Logger
 }
 
@@ -99,7 +106,8 @@ func NewHandler(cfg Config) *Handler {
 	return &Handler{
 		db: cfg.DB, retrieve: cfg.Retrieve, events: cfg.Events, files: cfg.Files,
 		apiKey: cfg.APIKey, maxEventChars: cfg.MaxEventChars,
-		planCapture: cfg.PlanCapture, plansDir: cfg.PlansDir, logger: cfg.Logger,
+		planCapture: cfg.PlanCapture, plansDir: cfg.PlansDir,
+		localHost: strings.ToLower(strings.TrimSpace(cfg.LocalHost)), logger: cfg.Logger,
 	}
 }
 
@@ -125,6 +133,9 @@ type hookPayload struct {
 	Source         string `json:"source"`     // startup|resume|clear|compact
 	AgentType      string `json:"agent_type"` // non-empty => subagent
 	Model          string `json:"model"`      // Codex sends it; Claude Code does not (see setAmbientModel)
+	// Identity travels on the query string, not in the body (see adapter.go);
+	// the handler copies it in so everything downstream reads one payload.
+	Identity hookIdentity `json:"-"`
 }
 
 type promptPayload struct {
@@ -134,13 +145,18 @@ type promptPayload struct {
 	UserPrompt     string `json:"user_prompt"` // Codex names this `prompt`; decodePrompt normalizes it
 	HookEventName  string `json:"hook_event_name"`
 	Model          string `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
+	// Host is resolved by the handler, not the client: UserPromptSubmit stays an
+	// http hook, so no seam process computes an identity for it. The daemon
+	// attributes it through the ambient session it already owns.
+	Host string `json:"-"`
 }
 
 // endPayload is the SessionEnd request body.
 type endPayload struct {
-	SessionID      string `json:"session_id"`
-	TranscriptPath string `json:"transcript_path"`
-	Reason         string `json:"reason"` // clear|logout|prompt_input_exit|other
+	SessionID      string       `json:"session_id"`
+	TranscriptPath string       `json:"transcript_path"`
+	Reason         string       `json:"reason"` // clear|logout|prompt_input_exit|other
+	Identity       hookIdentity `json:"-"`
 }
 
 // stopPayload is the Codex Stop request body. Stop fires at every turn end and,
@@ -148,12 +164,13 @@ type endPayload struct {
 // agent message directly (LastAssistantMessage), with transcript_path as the
 // rollout-file fallback when it is absent.
 type stopPayload struct {
-	SessionID            string `json:"session_id"`
-	CWD                  string `json:"cwd"`
-	TranscriptPath       string `json:"transcript_path"`
-	LastAssistantMessage string `json:"last_assistant_message"`
-	StopHookActive       bool   `json:"stop_hook_active"`
-	Model                string `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
+	SessionID            string       `json:"session_id"`
+	CWD                  string       `json:"cwd"`
+	TranscriptPath       string       `json:"transcript_path"`
+	LastAssistantMessage string       `json:"last_assistant_message"`
+	StopHookActive       bool         `json:"stop_hook_active"`
+	Model                string       `json:"model"` // Codex sends it; Claude Code does not (see setAmbientModel)
+	Identity             hookIdentity `json:"-"`
 }
 
 // toolPayload is the tolerant shape of the PostToolUse and PermissionRequest
@@ -168,6 +185,7 @@ type toolPayload struct {
 	HookEventName  string          `json:"hook_event_name"`
 	ToolInput      json.RawMessage `json:"tool_input"`
 	ToolResponse   json.RawMessage `json:"tool_response"`
+	Identity       hookIdentity    `json:"-"`
 }
 
 // subagentPayload is the normalized SubagentStart/SubagentStop shape. Both
@@ -177,18 +195,19 @@ type toolPayload struct {
 // smaller SubagentStop payload decodes into the same shape with the Codex-only
 // fields left empty, preserving its plan-capture path.
 type subagentPayload struct {
-	ParentSessionID      string `json:"session_id"`
-	TurnID               string `json:"turn_id"`
-	AgentID              string `json:"agent_id"`
-	AgentType            string `json:"agent_type"`
-	CWD                  string `json:"cwd"`
-	Model                string `json:"model"`
-	PermissionMode       string `json:"permission_mode"`
-	HookEventName        string `json:"hook_event_name"`
-	TranscriptPath       string `json:"transcript_path"`
-	AgentTranscriptPath  string `json:"agent_transcript_path"`
-	LastAssistantMessage string `json:"last_assistant_message"`
-	StopHookActive       bool   `json:"stop_hook_active"`
+	ParentSessionID      string       `json:"session_id"`
+	TurnID               string       `json:"turn_id"`
+	AgentID              string       `json:"agent_id"`
+	AgentType            string       `json:"agent_type"`
+	CWD                  string       `json:"cwd"`
+	Model                string       `json:"model"`
+	PermissionMode       string       `json:"permission_mode"`
+	HookEventName        string       `json:"hook_event_name"`
+	TranscriptPath       string       `json:"transcript_path"`
+	AgentTranscriptPath  string       `json:"agent_transcript_path"`
+	LastAssistantMessage string       `json:"last_assistant_message"`
+	StopHookActive       bool         `json:"stop_hook_active"`
+	Identity             hookIdentity `json:"-"`
 }
 
 // hookResponse is the Claude Code hook response envelope; the field names are
@@ -214,6 +233,8 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := decodeSessionStart(client, readHookBody(w, r))
+	p.Identity = identityFromRequest(r)
+	host := h.hostOf(p.Identity)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -226,14 +247,22 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// preferable to failing session start, so it is logged rather than hidden --
 	// the explicit session_start tool resolves the same cwd and does surface the
 	// error, and that is the path where a wrong binding actually sticks.
-	if _, moved, err := store.RegisterProjectForCWD(ctx, h.db, p.CWD); err != nil {
-		h.recordHookError(ctx, "register-project", client, err, "cwd", p.CWD)
+	//
+	// A remote agent that sent no repo root is the one case with its own stage:
+	// nothing was written and nothing could be, because deriving the roots would
+	// mean reading THIS machine's disk for another machine's path.
+	if _, moved, err := store.RegisterProjectForCWD(ctx, h.db, p.identity(host), h.localHost); err != nil {
+		stage := "register-project"
+		if errors.Is(err, store.ErrRemoteRootUnknown) {
+			stage = "register-project-remote-root"
+		}
+		h.recordHookError(ctx, stage, client, err, "cwd", p.CWD, "host", host)
 	} else if moved != nil {
 		h.recordRepoMoved(ctx, client, moved)
 	}
 
 	briefing, injectedIDs, err := h.retrieve.Briefing(ctx, retrieve.BriefingInput{
-		CWD: p.CWD, Source: p.Source, AgentType: p.AgentType,
+		CWD: p.CWD, Host: host, Source: p.Source, AgentType: p.AgentType,
 	})
 	if err != nil {
 		h.recordHookError(ctx, "session-start-briefing", client, err)
@@ -245,9 +274,9 @@ func (h *Handler) sessionStart(w http.ResponseWriter, r *http.Request) {
 	// session, so they get no ambient session of their own. Best-effort: a failure
 	// just omits the ambient line.
 	if p.AgentType == "" {
-		if name := h.ensureAmbientSession(ctx, client, p); name != "" {
+		if name := h.ensureAmbientSession(ctx, client, host, p); name != "" {
 			briefing = injectAmbientLine(briefing, name)
-			h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
+			h.setAmbientModel(ctx, client, host, p.SessionID, p.Model, p.TranscriptPath)
 		}
 	}
 	// Cap after the ambient line is appended, then record and serialize the same
@@ -266,6 +295,7 @@ func (h *Handler) sessionEnd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := decodeSessionEnd(client, readHookBody(w, r))
+	p.Identity = identityFromRequest(r)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -293,6 +323,8 @@ func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	p := decodeStop(client, readHookBody(w, r))
+	p.Identity = identityFromRequest(r)
+	host := h.hostOf(p.Identity)
 
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
@@ -300,10 +332,10 @@ func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
 	// A Stop is proof the agent is alive this turn: heartbeat so the idle reaper
 	// does not expire the session mid-work. Always, for every client.
 	h.touchAmbient(ctx, client, p.SessionID)
-	h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
+	h.setAmbientModel(ctx, client, host, p.SessionID, p.Model, p.TranscriptPath)
 
 	if client == ClientCodex {
-		h.harvestCodexStop(ctx, p)
+		h.harvestCodexStop(ctx, host, p)
 	}
 
 	// Stop has no hookSpecificOutput variant in Codex's schema (it can only
@@ -317,8 +349,15 @@ func (h *Handler) stop(w http.ResponseWriter, r *http.Request) {
 // contract: a missing session id or DB, a turn with nothing to harvest, or a
 // store error all leave the heartbeat above as the Stop's only effect, logged at
 // debug rather than surfaced. Repeated Stops converge findings on the latest turn.
-func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
+func (h *Handler) harvestCodexStop(ctx context.Context, host string, p stopPayload) {
 	if h.db == nil || p.SessionID == "" {
+		return
+	}
+	// Everything below reads the agent's rollout file. On another machine that
+	// path either does not exist here or, worse, is a DIFFERENT session's
+	// rollout under the same username and home layout -- so the turn is recorded
+	// as skipped rather than harvested from the wrong file.
+	if !h.localDiskOK(ctx, "codex-rollout", ClientCodex, host) {
 		return
 	}
 	// Real token totals: the rollout carries a cumulative token_count every turn, so
@@ -350,8 +389,11 @@ func (h *Handler) harvestCodexStop(ctx context.Context, p stopPayload) {
 // (never an error). It must run while the row is still active -- the caller invokes
 // it before the SessionEnd completion flips the status, so SetAmbientSessionTokens'
 // active-only guard matches.
-func (h *Handler) harvestClaudeTokens(ctx context.Context, client Client, externalSessionID, transcriptPath string, now time.Time) {
+func (h *Handler) harvestClaudeTokens(ctx context.Context, client Client, host, externalSessionID, transcriptPath string, now time.Time) {
 	if h.db == nil || externalSessionID == "" {
+		return
+	}
+	if !h.localDiskOK(ctx, "token-harvest", client, host) {
 		return
 	}
 	usage, ok := claudeTranscriptTokens(transcriptPath)
@@ -373,12 +415,12 @@ func (h *Handler) harvestClaudeTokens(ctx context.Context, client Client, extern
 // owns (status, project scope, recency) -- never a full-row read-modify-write,
 // which could clobber the findings a concurrent transcript harvest wrote to the
 // same session between the read and the write-back.
-func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hookPayload) string {
+func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, host string, p hookPayload) string {
 	if h.db == nil || p.SessionID == "" {
 		return ""
 	}
 	externalClient := client.externalIdentity()
-	project, err := store.ResolveProjectForCWD(ctx, h.db, p.CWD)
+	project, err := store.ResolveProjectForCWD(ctx, h.db, host, p.CWD)
 	if err != nil {
 		h.recordHookError(ctx, "ambient-project-resolve", client, err, "cwd", p.CWD)
 		project = ""
@@ -405,10 +447,10 @@ func (h *Handler) ensureAmbientSession(ctx context.Context, client Client, p hoo
 	sess := core.Session{
 		ID: id, Name: name, ProjectSlug: project, Status: core.SessionActive,
 		ExternalSessionID: p.SessionID, ExternalClient: externalClient,
-		CWD: p.CWD, Source: p.Source, Ambient: true,
+		CWD: p.CWD, Host: host, Source: p.Source, Ambient: true,
 		Metadata: map[string]any{
 			"claude_session_id": p.SessionID, "external_client": externalClient,
-			"cwd": p.CWD, "source": p.Source,
+			"cwd": p.CWD, "host": host, "source": p.Source,
 		},
 		CreatedAt: now, UpdatedAt: now,
 	}
@@ -449,6 +491,13 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 		h.recordHookError(ctx, "session-end-lookup", client, err)
 		return
 	}
+	if len(sessions) == 0 {
+		// Nothing active to complete (an explicit session_end already ran, or a
+		// crash left it to the reaper). Returning here rather than falling into an
+		// empty loop is what keeps a remote end from recording a skipped capture
+		// for work there was none of.
+		return
+	}
 
 	now := time.Now().UTC()
 	// A one-turn Claude session can start before its transcript has an assistant
@@ -456,8 +505,14 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 	// to sniff it. SessionEnd is the last reliable point at which the complete
 	// transcript exists. Apply the final main-thread model to the ambient row and
 	// any linked explicit session; an empty sniff preserves their prior values.
+	// Every transcript read below is a read of the AGENT's disk. When the agent
+	// is on another machine the daemon has no transcript to read, and the path it
+	// would open belongs to someone else, so the session completes with whatever
+	// the client already told us and the skips are recorded.
+	host := h.hostOf(p.Identity)
+	localDisk := h.localDiskOK(ctx, "session-end-transcript", client, host)
 	finalModel := ""
-	if client == ClientClaudeCode {
+	if client == ClientClaudeCode && localDisk {
 		finalModel = transcriptModel(p.TranscriptPath)
 	}
 	harvested := "" // harvest the transcript once, lazily, only when an ambient needs it
@@ -475,7 +530,7 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 		}
 		sess.Status = core.SessionCompleted
 		sess.UpdatedAt = now
-		if sess.Ambient {
+		if sess.Ambient && localDisk {
 			if harvested == "" {
 				harvested = harvestFindings(p.TranscriptPath)
 			}
@@ -483,7 +538,7 @@ func (h *Handler) completeClaudeSessions(ctx context.Context, client Client, p e
 			// Overwrite the real token totals while the row is STILL active, before the
 			// UpdateSession below flips it to completed -- SetAmbientSessionTokens guards
 			// on status = 'active'.
-			h.harvestClaudeTokens(ctx, client, p.SessionID, p.TranscriptPath, now)
+			h.harvestClaudeTokens(ctx, client, host, p.SessionID, p.TranscriptPath, now)
 		}
 		if err := store.UpdateSession(ctx, h.db, sess); err != nil {
 			h.recordHookError(ctx, "session-end-complete", client, err, "session", sess.ID)
@@ -558,10 +613,17 @@ func (h *Handler) userPromptSubmit(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), hookTimeout)
 	defer cancel()
 
-	h.touchAmbient(ctx, client, p.SessionID)
-	h.setAmbientModel(ctx, client, p.SessionID, p.Model, p.TranscriptPath)
+	// UserPromptSubmit is installed as an http hook (it is reliable mid-turn),
+	// so no seam process computed an identity for it. The ambient session the
+	// SessionStart hook already created carries the host, and that is the only
+	// honest source here -- guessing "local" would read a remote agent's
+	// transcript path off this machine.
+	p.Host = h.ambientHost(ctx, client, p.SessionID)
 
-	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.CWD, p.UserPrompt)
+	h.touchAmbient(ctx, client, p.SessionID)
+	h.setAmbientModel(ctx, client, p.Host, p.SessionID, p.Model, p.TranscriptPath)
+
+	out, injectedIDs, err := h.retrieve.PromptRecall(ctx, p.Host, p.CWD, p.UserPrompt)
 	if err != nil {
 		h.recordHookError(ctx, "prompt-recall", client, err)
 		out, injectedIDs = "", nil
@@ -673,12 +735,14 @@ func (h *Handler) touchAmbient(ctx context.Context, client Client, claudeSession
 // value is unchanged). Best-effort by the package's never-block contract:
 // nothing sniffable leaves the previous attribution in place, and a store error
 // only logs.
-func (h *Handler) setAmbientModel(ctx context.Context, client Client, claudeSessionID, model, transcriptPath string) {
+func (h *Handler) setAmbientModel(ctx context.Context, client Client, host, claudeSessionID, model, transcriptPath string) {
 	if h.db == nil || claudeSessionID == "" {
 		return
 	}
 	model = strings.TrimSpace(model)
-	if model == "" && client == ClientClaudeCode {
+	// A model the client STATED is good from any machine; sniffing one out of a
+	// transcript means opening a file, so that half is host-gated.
+	if model == "" && client == ClientClaudeCode && h.localDiskOK(ctx, "model-sniff", client, host) {
 		model = transcriptModel(transcriptPath)
 	}
 	if model == "" {
@@ -748,6 +812,108 @@ func (h *Handler) ambientDisplayName(ctx context.Context, client Client, externa
 		}
 	}
 	return ambientName(client, externalSessionID)
+}
+
+// hostOf resolves the machine a hook call speaks for: the host the client sent,
+// or this daemon's own when it sent none. An older `seam` sends no host and can
+// only be talking to a daemon on its own box, so treating absent as local is
+// what keeps every existing install byte-for-byte unchanged.
+func (h *Handler) hostOf(id hookIdentity) string {
+	if host := strings.ToLower(strings.TrimSpace(id.Host)); host != "" {
+		return host
+	}
+	return h.localHost
+}
+
+// identity builds the store's placement input from a SessionStart payload. The
+// roots come from the client, which is the only process that can see them; the
+// daemon fills them in from its own disk only for its own host (see
+// store.RegisterProjectForCWD).
+func (p hookPayload) identity(host string) store.CWDIdentity {
+	return store.CWDIdentity{
+		Host:     host,
+		CWD:      p.CWD,
+		RepoRoot: p.Identity.RepoRoot,
+		MainRoot: p.Identity.MainRoot,
+		Origin:   p.Identity.Origin,
+	}
+}
+
+// sameHost reports whether a hook's machine is this daemon's, which is the
+// precondition for reading any path the agent named. An empty host is an older
+// client (see hostOf) and counts as local.
+//
+// It is a HOST check and deliberately not a "does the file exist" check: two
+// devices with the same username and home layout produce the same transcript and
+// plan-file paths, so a missing-file test would sometimes find a real file --
+// the wrong one -- and capture another machine's session as this one's.
+func (h *Handler) sameHost(host string) bool {
+	host = strings.ToLower(strings.TrimSpace(host))
+	return host == "" || host == h.localHost
+}
+
+// localDiskOK reports whether the daemon may read the agent's filesystem for
+// this hook, recording the skip when it may not. what is a stable curated label
+// for the capture being skipped (the aggregation key, like a hook.error stage);
+// the host rides in the payload.
+func (h *Handler) localDiskOK(ctx context.Context, what string, client Client, host string) bool {
+	if h.sameHost(host) {
+		return true
+	}
+	h.recordRemoteSkip(ctx, what, client, host)
+	return false
+}
+
+// recordRemoteSkip records that a daemon-side filesystem capture was skipped
+// because the agent is on another machine. It is INFO, not a warning: on a
+// shared daemon this is the design working, and the event exists so doctor and
+// the console can say plainly what a remote device does not get.
+func (h *Handler) recordRemoteSkip(ctx context.Context, what string, client Client, host string) {
+	h.logger.Info("hooks: remote host, skipping local capture", "what", what, "host", host)
+	if h.events == nil {
+		return
+	}
+	payload := map[string]any{"stage": "remote-host-skip", "what": what, "host": host}
+	if client != "" {
+		payload["client"] = client.externalIdentity()
+	}
+	if _, err := h.events.Record(ctx, core.Event{
+		Kind: core.EventHookError, Payload: payload,
+	}); err != nil {
+		h.logger.Debug("hooks: record remote-host skip", "what", what, "error", err)
+	}
+}
+
+// gitHead is the capture stamp's commit hash, gated on the agent's machine. A
+// remote agent's repo is not on this disk, and a same-named checkout here would
+// stamp a commit from an unrelated history -- so the stamp is left empty, which
+// renders as "unknown" (shortHead) and which plans.StampHead and the gardener's
+// ship-evidence pass already treat as absent.
+func (h *Handler) gitHead(ctx context.Context, id hookIdentity, cwd string) string {
+	if !h.localDiskOK(ctx, "git-stamp", ClientClaudeCode, h.hostOf(id)) {
+		return ""
+	}
+	return gitread.Head(cwd)
+}
+
+// ambientHost returns the machine recorded on the client's ambient session, for
+// the hooks that carry no identity of their own (UserPromptSubmit is an http
+// hook, so no seam process computes one). "" when there is no such session --
+// which hostOf/sameHost read as local, the same as an older client.
+func (h *Handler) ambientHost(ctx context.Context, client Client, claudeSessionID string) string {
+	if h.db == nil || claudeSessionID == "" {
+		return ""
+	}
+	sess, ok, err := store.AmbientSessionByExternalIdentity(
+		ctx, h.db, client.externalIdentity(), claudeSessionID)
+	if err != nil {
+		h.recordHookError(ctx, "ambient-host-lookup", client, err)
+		return ""
+	}
+	if !ok {
+		return ""
+	}
+	return sess.Host
 }
 
 // recordHookError logs a swallowed hook-stage failure (the package's fail-open

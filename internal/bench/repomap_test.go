@@ -57,7 +57,7 @@ func TestScenarioSeed_BindsRepoThroughASymlinkedPath(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEqual(t, logical, reported, "test setup: the symlink resolved to itself")
 
-			slug, adopted, err := store.RegisterProjectForCWD(ctx, db, reported)
+			slug, adopted, err := store.RegisterProjectForCWD(ctx, db, store.CWDIdentity{CWD: reported}, "")
 			require.NoError(t, err)
 			require.Nil(t, adopted)
 			require.Equal(t, benchProject, slug,

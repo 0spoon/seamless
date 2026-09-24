@@ -21,7 +21,12 @@ import (
 
 // BriefingInput carries the SessionStart hook fields the briefing depends on.
 type BriefingInput struct {
-	CWD       string // agent working directory; resolved to a project slug
+	CWD string // agent working directory; resolved to a project slug
+	// Host is the machine that CWD belongs to. The same absolute path maps to
+	// different projects on different machines once a daemon is shared, so the
+	// cwd is only half of the question. "" is the daemon's own map (the caller
+	// did not say which machine it is on).
+	Host      string
 	Source    string // startup|resume|clear|compact
 	AgentType string // non-empty => subagent => constraints-only briefing
 	// Prompt is the child's spawn prompt, resolved best-effort at SubagentStart
@@ -43,7 +48,7 @@ type BriefingInput struct {
 // funnel -- the same telemetry the recall tool emits.
 func (s *Service) Briefing(ctx context.Context, in BriefingInput) (string, []string, error) {
 	cfg := s.effectiveBriefing(ctx)
-	project, err := store.ResolveProjectForCWD(ctx, s.db, in.CWD)
+	project, err := store.ResolveProjectForCWD(ctx, s.db, in.Host, in.CWD)
 	if err != nil {
 		return "", nil, err
 	}
