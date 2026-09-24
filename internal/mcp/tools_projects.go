@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
@@ -13,9 +14,20 @@ import (
 	"github.com/0spoon/seamless/internal/validate"
 )
 
+// isolationStatesDesc renders the isolation vocabulary for the two project tool
+// descriptions. Derived from core.Isolations rather than transcribed, so a
+// fourth state cannot reach the enum while the prose still lists three.
+var isolationStatesDesc = func() string {
+	names := make([]string, len(core.Isolations))
+	for i, v := range core.Isolations {
+		names[i] = string(v)
+	}
+	return strings.Join(names, "|")
+}()
+
 func projectListTool() mcp.Tool {
 	return mcp.NewTool("project_list", hintRead(),
-		mcp.WithDescription("List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall."),
+		mcp.WithDescription("List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state ("+isolationStatesDesc+"), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall."),
 	)
 }
 
@@ -26,8 +38,16 @@ func (s *Server) handleProjectList(ctx context.Context, _ mcp.CallToolRequest) (
 	}
 	out := make([]map[string]any, 0, len(ps))
 	for _, p := range ps {
+		// Always present, never omitempty: "open" is a real answer, and a missing
+		// field would be indistinguishable from a server that does not fence at
+		// all -- the one reading an agent must not get wrong.
+		state := p.Isolation
+		if state == "" {
+			state = core.IsolationOpen // core.Project documents "" as open
+		}
 		out = append(out, map[string]any{
 			"id": p.ID, "slug": p.Slug, "name": p.Name, "description": p.Description,
+			"isolation": string(state),
 		})
 	}
 	return jsonResult(map[string]any{"projects": out})
@@ -39,6 +59,14 @@ func projectCreateTool() mcp.Tool {
 		mcp.WithString("name", mcp.Required(), mcp.Description("human-readable project name")),
 		mcp.WithString("slug", mcp.Description("optional explicit slug")),
 		mcp.WithString("description", mcp.Description("optional one-line description")),
+		mcp.WithString("isolation", enumOf(core.Isolations),
+			mcp.Description("optional isolation state ("+isolationStatesDesc+"); omit for open. "+
+				"open shares normally. confidential means nothing leaves: agents in other projects never read this one, "+
+				"and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this "+
+				"project: no global memories, no family, no cross-project reads. Set it at creation for work that is "+
+				"sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and "+
+				"parent links and is an owner decision, made on an owner surface. "+
+				"Isolation requires a standalone project, so do not create an isolated child of another project.")),
 	)
 }
 
@@ -65,17 +93,35 @@ func (s *Server) handleProjectCreate(ctx context.Context, req mcp.CallToolReques
 	if err := validate.Name(slug); err != nil {
 		return errResult("project_create", fmt.Errorf("invalid slug %q: %w", slug, err))
 	}
+	// Absent -> the default; present but uninterpretable -> an error naming the
+	// accepted values. validateMiddleware already enforces the declared enum, so
+	// this is the same guard at the handler boundary rather than a second rule --
+	// and validate.Isolation is where the accepted set is derived from
+	// core.Isolations, never transcribed.
+	isolation := core.IsolationOpen
+	if raw := argString(req, "isolation"); raw != "" {
+		state, ierr := validate.Isolation(raw)
+		if ierr != nil {
+			return errResult("project_create", ierr)
+		}
+		isolation = state
+	}
 	id, err := core.NewID()
 	if err != nil {
 		return errResult("project_create", err)
 	}
 	now := time.Now().UTC()
-	p := core.Project{ID: id, Slug: slug, Name: name, Description: argString(req, "description"), CreatedAt: now, UpdatedAt: now}
+	p := core.Project{
+		ID: id, Slug: slug, Name: name, Description: argString(req, "description"),
+		Isolation: isolation, CreatedAt: now, UpdatedAt: now,
+	}
 	if err := store.CreateProject(ctx, s.cfg.DB, p); err != nil {
 		if errors.Is(err, store.ErrSlugExists) {
 			return errResult("project_create", fmt.Errorf("project slug %q already exists", slug))
 		}
 		return errResult("project_create", err)
 	}
-	return jsonResult(map[string]any{"project_id": id, "slug": slug, "name": name})
+	return jsonResult(map[string]any{
+		"project_id": id, "slug": slug, "name": name, "isolation": string(isolation),
+	})
 }

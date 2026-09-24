@@ -6,6 +6,7 @@ package hooks
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -13,11 +14,18 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/gitread"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/retrieve"
 	"github.com/0spoon/seamless/internal/validate"
 )
+
+// errPlanCaptureDropped is the fail-open signal out of the locked upsert: this
+// capture cannot be recorded (nothing to write, no id, the write failed), so the
+// hook stays silent rather than failing the agent's tool call. It never leaves
+// upsertPlanNote -- the caller sees the same "not captured" it always did.
+var errPlanCaptureDropped = errors.New("plan capture dropped")
 
 // planUpsert is upsertPlanNote's result: the written note, its composition
 // slug, and whether this was the session's first plan capture (no plan_capture
@@ -40,69 +48,95 @@ type planUpsert struct {
 func (h *Handler) upsertPlanNote(ctx context.Context, p toolPayload, basename, content string, approve bool) (planUpsert, bool) {
 	project := h.resolveProject(ctx, p.CWD)
 	noteSlug := plans.NotePrefix + basename
-	existing, found := h.loadNoteBySlug(ctx, project, noteSlug)
-
 	trimmed := strings.TrimSpace(content)
-	if trimmed == "" && !(approve && found) {
-		return planUpsert{}, false
-	}
 
-	now := time.Now().UTC()
-	note := existing
-	iter := 1
-	if found {
-		iter = plans.NoteIteration(existing)
-		if !approve && trimmed != "" {
-			iter++
+	var written core.Note
+	var planSlug, status string
+	var iter int
+	// A capture is a read-modify-write of one note file, and its racers are the
+	// ordinary case rather than the pathological one: successive plan-file saves
+	// fire this hook back to back, and an approval can land while the previous
+	// save is still being written. Unserialized, both sides rendered the whole
+	// file from the same pre-capture note and the second rename erased the first
+	// -- iteration count, composition slug, owner tags and all -- with no error
+	// anywhere. The lock spans the lookup, the read and the write; the session
+	// metadata, the agent adoption and the event below are DB work on other rows
+	// and stay outside it.
+	err := h.files.Mutate(ctx, files.NoteRelPath(project, noteSlug), func(ctx context.Context) error {
+		existing, found := h.loadNoteBySlug(ctx, project, noteSlug)
+		if trimmed == "" && !(approve && found) {
+			return errPlanCaptureDropped
 		}
-	} else {
-		id, err := core.NewID()
-		if err != nil {
-			h.logger.Warn("hooks: plan note id", "error", err)
-			return planUpsert{}, false
-		}
-		note = core.Note{ID: id, Slug: noteSlug, Project: project, Created: now}
-	}
 
-	status := plans.StatusDraft
-	if found && plans.StatusFromTags(existing.Tags) == plans.StatusApproved {
-		status = plans.StatusApproved // an approved plan never regresses to draft
-	}
-	if approve {
-		status = plans.StatusApproved
-	}
-
-	planSlug := plans.SlugFromTags(note.Tags)
-	if trimmed != "" {
-		title := firstHeading(content)
-		if title == "" || validate.Title(title) != nil {
-			title = basename
+		now := time.Now().UTC()
+		note := existing
+		iter = 1
+		if found {
+			iter = plans.NoteIteration(existing)
+			if !approve && trimmed != "" {
+				iter++
+			}
+		} else {
+			id, err := core.NewID()
+			if err != nil {
+				h.logger.Warn("hooks: plan note id", "error", err)
+				return errPlanCaptureDropped
+			}
+			note = core.Note{ID: id, Slug: noteSlug, Project: project, Created: now}
 		}
-		note.Title = title
-		note.Body = planStamp(
-			h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
-			basename, iter, gitread.Head(p.CWD), now,
-		) + "\n\n" + content
-		// New plan content is attributed to the capturing session's model; an
-		// unknown model keeps the note's prior attribution.
-		if m := h.ambientModel(ctx, ClientClaudeCode, p.SessionID); m != "" {
-			note.Model = m
-		}
-	}
-	if planSlug == "" {
-		planSlug = core.Slugify(note.Title)
-	}
-	note.Description = plans.NoteDescription(basename, iter, status)
-	note.Tags = plans.SetStatusTag(mergePlanTags(note.Tags, planSlug), status)
-	note.Updated = now
-	if note.Extra == nil {
-		note.Extra = map[string]any{}
-	}
-	note.Extra["plan_iteration"] = iter
 
-	written, err := h.files.WriteNote(ctx, note)
+		status = plans.StatusDraft
+		if found && plans.StatusFromTags(existing.Tags) == plans.StatusApproved {
+			status = plans.StatusApproved // an approved plan never regresses to draft
+		}
+		if approve {
+			status = plans.StatusApproved
+		}
+
+		planSlug = plans.SlugFromTags(note.Tags)
+		if trimmed != "" {
+			title := firstHeading(content)
+			if title == "" || validate.Title(title) != nil {
+				title = basename
+			}
+			note.Title = title
+			note.Body = planStamp(
+				h.ambientDisplayName(ctx, ClientClaudeCode, p.SessionID),
+				basename, iter, gitread.Head(p.CWD), now,
+			) + "\n\n" + content
+			// New plan content is attributed to the capturing session's model; an
+			// unknown model keeps the note's prior attribution.
+			if m := h.ambientModel(ctx, ClientClaudeCode, p.SessionID); m != "" {
+				note.Model = m
+			}
+		}
+		if planSlug == "" {
+			planSlug = core.Slugify(note.Title)
+		}
+		note.Description = plans.NoteDescription(basename, iter, status)
+		note.Tags = plans.SetStatusTag(mergePlanTags(note.Tags, planSlug), status)
+		note.Updated = now
+		if note.Extra == nil {
+			note.Extra = map[string]any{}
+		}
+		note.Extra["plan_iteration"] = iter
+
+		w, werr := h.files.WriteNote(ctx, note)
+		if werr != nil {
+			h.logger.Warn("hooks: plan note write", "slug", noteSlug, "error", werr)
+			return errPlanCaptureDropped
+		}
+		written = w
+		return nil
+	})
 	if err != nil {
-		h.logger.Warn("hooks: plan note write", "slug", noteSlug, "error", err)
+		// Every dropped capture already logged its own reason (or is a deliberate
+		// silent skip); anything else is the lock itself failing -- a cancelled
+		// request or a path that cannot be locked -- which nothing downstream has
+		// reported yet.
+		if !errors.Is(err, errPlanCaptureDropped) {
+			h.logger.Warn("hooks: plan note lock", "slug", noteSlug, "error", err)
+		}
 		return planUpsert{}, false
 	}
 
@@ -158,17 +192,32 @@ func mergePlanTags(existing []string, planSlug string) []string {
 func (h *Handler) adoptPendingAgents(ctx context.Context, project, planSlug string, slugs []string) int {
 	adopted := 0
 	for _, slug := range slugs {
-		note, found := h.loadNoteBySlug(ctx, project, slug)
-		if !found || plans.SlugFromTags(note.Tags) != "" {
+		path, found := h.noteFileBySlug(ctx, project, slug)
+		if !found {
 			continue
 		}
-		note.Tags = append([]string{plans.SlugTag(planSlug)}, note.Tags...)
-		note.Updated = time.Now().UTC()
-		if _, err := h.files.WriteNote(ctx, note); err != nil {
+		// captureSubagent writes these same files, so the tag goes on under the
+		// note's lock: the write renders the whole note, and a subagent report
+		// landing between an unlocked read and this write would be erased by it.
+		// A note that already belongs to a composition reports ErrNoChange, which
+		// skips the write rather than re-rendering an unchanged file -- and is why
+		// the adoption count is taken from the callback rather than from err.
+		tagged := false
+		if _, err := h.files.MutateNote(ctx, path, func(_ context.Context, note core.Note) (core.Note, error) {
+			if plans.SlugFromTags(note.Tags) != "" {
+				return note, files.ErrNoChange
+			}
+			note.Tags = append([]string{plans.SlugTag(planSlug)}, note.Tags...)
+			note.Updated = time.Now().UTC()
+			tagged = true
+			return note, nil
+		}); err != nil {
 			h.logger.Warn("hooks: adopt pending agent note", "slug", slug, "error", err)
 			continue
 		}
-		adopted++
+		if tagged {
+			adopted++
+		}
 	}
 	return adopted
 }
@@ -198,24 +247,72 @@ func (h *Handler) ensurePlanTask(ctx context.Context, p toolPayload, note core.N
 // relatedPlanHits caps how many recall hits the first-capture injection lists.
 const relatedPlanHits = 5
 
-// relatedPlanContext builds the additionalContext block returned on a
-// session's first captured plan iteration: top recall hits for the plan title
-// (prior plans, constraints, related notes), so the planning agent sees prior
-// art before the plan is finalized. Returns the zero value when recall is
-// unavailable, errors, or finds nothing beyond the plan's own note; a
-// non-empty block is recorded as a retrieval.injected event and returned as
-// the SAME prepared value the caller must emit, so response and telemetry
-// cannot drift apart.
-func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note core.Note) preparedHookContext {
+// planCompositionLine names the composition a captured plan was filed under.
+//
+// Without it the agent never learns the slug upsertPlanNote just minted from
+// its own H1: the `PLAN: <slug>` briefing line appears only in the NEXT
+// session, long after this one has invented a second slug for the same work via
+// tasks_add. Approval used to paper the gap over -- ensurePlanTask wires the
+// tracking task onto the captured slug -- which is exactly why the stranded
+// captures are concentrated in the plans that were presented and never
+// approved: no approval, no wiring, and the capture is left with no steps while
+// the real steps accrue under a slug it has never heard of.
+func planCompositionLine(planSlug string) string {
+	return "Seamless filed this plan as composition plan:" + planSlug +
+		". Attach its steps with tasks_add plan=" + planSlug + " and supporting notes with the" +
+		" tag plan:" + planSlug + " -- do not mint a second slug for this work."
+}
+
+// planCaptureContext builds the additionalContext returned to a capturing
+// agent. The composition line is always present: it is mechanism rather than
+// retrieval, so it is gated only by capture being on at all, not by
+// InjectRelated (which the owner sets to control prior-knowledge lookups).
+// The related-knowledge list is appended when that IS on and recall found
+// something beyond the plan's own note.
+func (h *Handler) planCaptureContext(ctx context.Context, p toolPayload, note core.Note, planSlug string, lookUpRelated bool) preparedHookContext {
+	var b strings.Builder
+	b.WriteString("<seam-plan-context>\n")
+	b.WriteString(planCompositionLine(planSlug))
+
+	var ids []string
+	if lookUpRelated && h.planCapture.InjectRelated {
+		var related string
+		related, ids = h.relatedPlanKnowledge(ctx, note)
+		if related != "" {
+			b.WriteString("\nSeamless has prior knowledge related to this plan; check before finalizing:")
+			b.WriteString(related)
+		}
+	}
+	b.WriteString("\n</seam-plan-context>")
+
+	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
+	prepared := prepareHookContext(ClientClaudeCode, b.String())
+	// Only the recall half is a retrieval. With no hits there are no item ids to
+	// attribute, and recording an injection anyway would add an event to the
+	// injected-then-read funnel that surfaced nothing to read. When there ARE
+	// hits, telemetry and response consume the same prepared value, so the two
+	// cannot drift apart.
+	if len(ids) > 0 {
+		h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", prepared, ids)
+	}
+	return prepared
+}
+
+// relatedPlanKnowledge renders the top recall hits for a plan's title (prior
+// plans, constraints, related notes) so the planning agent sees prior art
+// before the plan is finalized, with the ids for injection telemetry. Both are
+// empty when recall is unavailable, errors, or finds nothing beyond the plan's
+// own note.
+func (h *Handler) relatedPlanKnowledge(ctx context.Context, note core.Note) (string, []string) {
 	if h.retrieve == nil || strings.TrimSpace(note.Title) == "" {
-		return preparedHookContext{}
+		return "", nil
 	}
 	hits, err := h.retrieve.Recall(ctx, retrieve.RecallInput{
 		Query: note.Title, Project: note.Project, Limit: relatedPlanHits + 1,
 	})
 	if err != nil {
 		h.logger.Warn("hooks: related plan recall", "error", err)
-		return preparedHookContext{}
+		return "", nil
 	}
 	var b strings.Builder
 	ids := make([]string, 0, len(hits))
@@ -234,14 +331,9 @@ func (h *Handler) relatedPlanContext(ctx context.Context, p toolPayload, note co
 		ids = append(ids, hit.ID)
 	}
 	if len(ids) == 0 {
-		return preparedHookContext{}
+		return "", nil
 	}
-	block := "<seam-plan-context>\nSeamless has prior knowledge related to this plan; check before finalizing:" +
-		b.String() + "\n</seam-plan-context>"
-	// Plan capture is Claude Code-only (Codex registers no plan-capture hooks).
-	prepared := prepareHookContext(ClientClaudeCode, block)
-	h.recordInjection(ctx, "post-tool-use", ClientClaudeCode, p.SessionID, "", prepared, ids)
-	return prepared
+	return b.String(), ids
 }
 
 // recordPlanEvent appends a plan-capture event, attributed to the ambient

@@ -80,7 +80,7 @@ func TestProposeDeadWeight(t *testing.T) {
 		fmt.Sprintf(`{"item_ids":[%q],"source":"recall"}`, demanded), recent)
 
 	g := New(db, mgr, nil, nil, events.NewRecorder(db), Config{}, slog.Default())
-	seen := map[string]struct{}{}
+	seen := seenKeys{}
 	n, err := g.proposeDeadWeight(ctx, seen)
 	require.NoError(t, err)
 	require.Equal(t, 1, n, "only the exposed, undemanded, unprotected memory")

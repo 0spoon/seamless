@@ -88,6 +88,45 @@ explicit tool error makes the agent deal with it. The new memory is still kept -
 its content is valid knowledge, and re-writing the same name is a lossless
 in-place update, so fixing the target and retrying is safe.
 
+## Mutating a corpus file
+
+Enforced in `internal/files` (`mutate.go`). Concepts:
+[Memory & notes](/concepts/memory/).
+
+### Every read-modify-write goes through `Mutate`
+
+A handler that reads an item, edits the struct, and writes the whole file back
+is a lost update waiting to happen: two of them racing on one file both read the
+same starting content, both render, and the second atomic rename wins. Nothing
+errors - the index upsert is by id, so even the `UNIQUE file_path` constraint
+stays quiet, and the losing agent is told its write succeeded.
+
+`files.Manager.Mutate(path, fn)` takes a per-path lock for the duration of the
+read *and* the write. `seamlessd` is a single daemon, which is what makes an
+in-process lock a complete answer rather than a partial one: every application
+write to the corpus goes through this one Manager.
+
+The invariant is not "the write is locked" - it is **the read that feeds the
+write happens inside the same lock**. Wrapping only the write fixes nothing, and
+looks exactly like a fix.
+
+`MutatePaths` locks several files in sorted order for a mutation that spans two
+of them (a note moving project writes the new path and removes the old); the
+sorted order is what keeps two opposite moves from deadlocking. The lock is not
+reentrant, which is why `WriteMemory`/`WriteNote`/`Remove` deliberately take no
+lock of their own - calling them from inside `fn` is the point.
+
+### `expect_hash` is checked against the FILE, inside the lock
+
+The mutation lock cannot see an agent acting on something it read minutes ago,
+or the owner editing the markdown in an editor. That is what the optional
+`expect_hash` precondition catches - and it must be compared against the hash of
+the file as just read under the lock, never against the index row.
+
+The watcher re-indexes on a 300 ms debounce. For that window the index still
+reports the hash the stale caller is holding, so an index-based check would pass
+on precisely the edit it exists to refuse.
+
 ## Session binding and scope
 
 Enforced in `internal/mcp`. Concepts: [Projects & scope](/concepts/projects/).

@@ -107,6 +107,90 @@ func TestInstall_RecurringSkillRefreshesAndOptOutsStayLocal(t *testing.T) {
 	require.Equal(t, ActionSkipped, result.Research)
 }
 
+// A skill whose optional feature is off must not be installed, and a copy left
+// from when the feature was on must go: the whole point is that agents never
+// read about tools the server no longer exposes. Re-enabling restores it.
+func TestInstall_DisabledSkillIsRemovedAndReturnsWhenEnabled(t *testing.T) {
+	home := t.TempDir()
+	enabled := Options{HomeDir: home}
+	disabled := Options{HomeDir: home, DisabledSkills: []string{ResearchName}}
+
+	result, err := Install(ClientClaude, enabled)
+	require.NoError(t, err)
+	require.Equal(t, ActionInstalled, result.Research)
+	require.FileExists(t, filepath.Join(result.Root, ResearchName, "SKILL.md"))
+
+	result, err = Install(ClientClaude, disabled)
+	require.NoError(t, err)
+	require.Equal(t, ActionRemoved, result.Research)
+	require.NoDirExists(t, filepath.Join(result.Root, ResearchName))
+	// Only the one package goes: the onboarding skill and its marker are a
+	// different concern and stay exactly where they were.
+	require.Equal(t, ActionUnchanged, result.Onboard)
+	require.DirExists(t, filepath.Join(result.Root, OnboardName))
+	require.FileExists(t, filepath.Join(result.Root, OnboardMarker))
+
+	// Steady state reports the truth rather than a second "removed".
+	result, err = Install(ClientClaude, disabled)
+	require.NoError(t, err)
+	require.Equal(t, ActionDisabled, result.Research)
+	require.NoDirExists(t, filepath.Join(result.Root, ResearchName))
+
+	result, err = Install(ClientClaude, enabled)
+	require.NoError(t, err)
+	require.Equal(t, ActionInstalled, result.Research)
+	require.FileExists(t, filepath.Join(result.Root, ResearchName, "SKILL.md"))
+}
+
+// The explicit opt-out means "Seamless does not manage this package", which
+// outranks the feature state in both directions: nothing is installed, and
+// nothing is deleted.
+func TestInstall_ExplicitOptOutOutranksTheFeatureState(t *testing.T) {
+	home := t.TempDir()
+	installed, err := Install(ClientCodex, Options{HomeDir: home})
+	require.NoError(t, err)
+	require.Equal(t, ActionInstalled, installed.Research)
+
+	result, err := Install(ClientCodex, Options{
+		HomeDir:        home,
+		SkipResearch:   true,
+		DisabledSkills: []string{ResearchName},
+	})
+	require.NoError(t, err)
+	require.Equal(t, ActionSkipped, result.Research)
+	require.FileExists(t, filepath.Join(result.Root, ResearchName, "SKILL.md"))
+
+	// And with the feature ON, the env escape hatch still forces a skip.
+	result, err = Install(ClientCodex, Options{HomeDir: home, SkipResearch: true})
+	require.NoError(t, err)
+	require.Equal(t, ActionSkipped, result.Research)
+	require.FileExists(t, filepath.Join(result.Root, ResearchName, "SKILL.md"))
+}
+
+func TestInstalled_ReportsPackagePresencePerClient(t *testing.T) {
+	home := t.TempDir()
+	opts := Options{HomeDir: home}
+
+	path, present, err := Installed(ClientClaude, opts, ResearchName)
+	require.NoError(t, err)
+	require.False(t, present)
+	require.Equal(t, filepath.Join(home, ".claude", "skills", ResearchName), path)
+
+	_, err = Install(ClientClaude, opts)
+	require.NoError(t, err)
+	_, present, err = Installed(ClientClaude, opts, ResearchName)
+	require.NoError(t, err)
+	require.True(t, present)
+
+	// Claude's copy says nothing about Codex's root.
+	_, present, err = Installed(ClientCodex, opts, ResearchName)
+	require.NoError(t, err)
+	require.False(t, present)
+
+	_, _, err = Installed(Client("gemini"), opts, ResearchName)
+	require.ErrorContains(t, err, "valid values are claude, codex")
+}
+
 func TestRemove_DryRunAndSelectedClientIsolation(t *testing.T) {
 	home := t.TempDir()
 	opts := Options{HomeDir: home}

@@ -235,10 +235,11 @@ func TestArgsEnforceEnums(t *testing.T) {
 		want string
 	}{
 		{
-			// Used to hit scopeKinds' bare default: both kinds searched, success reported.
+			// Used to hit the scope mapping's bare default: every kind searched,
+			// success reported.
 			"a typo'd scope does not silently search everything",
 			"recall", map[string]any{"query": "q", "scope": "memoires"},
-			"valid values are all, memories, notes",
+			"valid values are all, memories, notes, tasks, trials, sessions",
 		},
 		{
 			"a hyphen is not an underscore",

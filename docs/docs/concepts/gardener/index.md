@@ -36,7 +36,7 @@ found, `gardener_apply` to act on one.
 | **dedup** | Two memories more similar than `gardener.dedup_threshold` (0.88) | **merge**: one is kept as-is, the other superseded and pointed at it |
 | **staleness** | A memory untouched for `gardener.staleness_days` (90) | **archive**: marked invalid, still readable |
 | **digest** | Enough recent activity over `gardener.digest_days` (30) | a **digest** note summarizing it |
-| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
+| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **merge_plans** when the capture owns no steps and another composition in the project holds the steps for the same work (fold it in there), **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
 | **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 | **dead-weight** | A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read | **archive**: exposure without demand means it costs tokens and steers nothing |
 | **memory-wanted** | The same recall query returned zero hits in 2+ sessions inside 14 days | **memory_wanted**: write the knowledge agents keep searching for; applying opens a task in the queue |
@@ -55,7 +55,7 @@ reach an agent - recurrence here is the one place they surface. Applying its
 proposal opens a repair task rather than pretending the gardener can fix code
 or configuration itself.
 
-Three more proposal types come from requests rather than the timer:
+Four more proposal types come from an action rather than the timer:
 
 - **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
@@ -67,6 +67,12 @@ Three more proposal types come from requests rather than the timer:
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
+- **relocate** - filed when a project is tightened to confidential or sealed
+  (see [Project isolation](https://thereisnospoon.org/docs/concepts/project-isolation/)). Raising a fence does
+  nothing about knowledge that already escaped, so the tighten audits the global
+  scope for memories whose source session belonged to the project and proposes
+  moving each one behind the fence. Dismiss to leave it global. This is the only
+  proposal kind an owner action files rather than a request or the timer.
 
 ## Constraints and stages are exempt from staleness
 
@@ -101,13 +107,42 @@ bypass the review step - what comes back is still a proposal.
 ## Where you review
 
 - **The console** - `/console/gardener` is an inbox: one line per proposal in
-  the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+  the rail, the full evidence and the decision gate in the reader. A whole
   group can be dismissed at once, and anything you decide lands in **Recently
   decided**, where Undo puts it back in the queue and reverses what applying it
   did. Applying a consolidation or a project split is the exception - both
   create things that immediately accrue content, so they ask for a confirm
   instead and cannot be undone from the console.
 - **`gardener_proposals`** - the same, for an agent.
+
+## Saying no, twice
+
+Rejecting has two strengths, because "not this one" and "not ever" are
+different answers:
+
+- **Dismiss** settles the proposal and the evidence behind it. It is not a
+  verdict on the pattern: if the same thing happens *again* after you decided -
+  agents keep hitting that error, keep searching for that missing memory - the
+  gardener raises it once more, under the same key, with the new evidence. This
+  is the one to reach for by default.
+- **Hide forever** blocks the pattern outright. No recurrence gets past it.
+
+For the passes with no recurrence clock (merge, archive, digest, and the
+request-driven kinds), a dismissal already lasts until the underlying content
+changes - their key encodes what they propose, so a changed world asks a new
+question rather than repeating the old one. The distinction bites on the error
+and knowledge-gap passes, whose key is the *pattern's* identity and stays put
+while evidence piles up under it.
+
+Both are reversible, and the two exits are not the same:
+
+- **Undo**, from Recently decided, puts that proposal back in the queue.
+- **Unhide**, from **Hidden forever** in the rail, lifts the block and leaves
+  the proposal resolved. Nothing returns on the spot - the next recurrence is
+  what brings the pattern back, and if it has stopped recurring, nothing does.
+
+`gardener_apply` carries the same two tiers for agents: `action=dismiss` and
+`action=hide`.
 
 The gardener runs every `gardener.interval_minutes` (60) when
 `gardener.enabled` is on. Everything in this page is tunable - see

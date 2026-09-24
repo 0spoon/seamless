@@ -200,7 +200,7 @@ func (s *Service) fillOverviewTab(ctx context.Context, data *projectWorkspaceDat
 	data.Trend = trend
 
 	if s.cfg.Events != nil {
-		evs, err := s.cfg.Events.RecentExcluding(ctx, 120, core.EventToolCall, core.EventHookPrompt)
+		evs, err := s.cfg.Events.RecentExcluding(ctx, 120, s.ledgerExcludedKinds(ctx)...)
 		if err != nil {
 			return err
 		}
@@ -601,7 +601,9 @@ func (s *Service) stalePlanSlugs(ctx context.Context, project string) map[string
 	}
 	out := map[string]bool{}
 	for _, p := range proposals {
-		if p.Kind != store.ProposalShipPlan && p.Kind != store.ProposalAbandonPlan {
+		switch p.Kind {
+		case store.ProposalShipPlan, store.ProposalAbandonPlan, store.ProposalMergePlans:
+		default:
 			continue
 		}
 		// The payload carries the captured note's project; a global note still

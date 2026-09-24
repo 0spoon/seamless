@@ -182,7 +182,7 @@ func TestProjectsBoard_PortfolioSignalsAndRichCards(t *testing.T) {
 
 	body := getHTMLBody(t, mux, "/console/projects?w=all")
 	require.Contains(t, body, `class="project-summary-grid"`)
-	require.Contains(t, body, `class="project-reach-ring" style="--ring-val:50"`)
+	require.Contains(t, body, "1 of 2 surfaced", "the reach card states its denominator")
 	require.Contains(t, body, `class="project-card row-link working blocked"`)
 	require.Contains(t, body, "1 / 2 surfaced")
 	require.Contains(t, body, "1 blocked")

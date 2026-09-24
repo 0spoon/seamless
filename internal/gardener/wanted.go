@@ -42,9 +42,10 @@ var missStopwords = map[string]struct{}{
 // terms, deduplicated and sorted, joined with "-". Word order, casing,
 // punctuation, and framing words all wash out, so rephrasings of the same
 // question group together. The signature is the stable identity of a knowledge
-// gap -- the proposal key derives from it and nothing else, which is what lets
-// a dismissal hold forever. An empty signature means the query had no usable
-// content terms.
+// gap -- the proposal key derives from it and nothing else, so a decision about
+// the gap survives the individual misses that evidenced it (hidden forever, or
+// dismissed until agents search for it again). An empty signature means the
+// query had no usable content terms.
 func normalizeMissQuery(q string) string {
 	fields := strings.FieldsFunc(strings.ToLower(q), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
@@ -84,9 +85,10 @@ type missGroup struct {
 // enough sessions -- unless the same signature also succeeded in the window (an
 // intermittent miss is a ranking problem, not a gap), or an FTS probe shows the
 // gap has since been filled. The key depends only on the group identity, never
-// on membership or counts, so a dismissed gap stays dismissed as evidence
-// accumulates and pruning cannot resurrect it.
-func (s *Service) proposeMemoryWanted(ctx context.Context, seen map[string]struct{}) (int, error) {
+// on membership or counts, so pruning cannot resurrect a settled gap; a regular
+// dismissal is re-raised only by misses newer than the dismissal itself, and a
+// hidden one never is.
+func (s *Service) proposeMemoryWanted(ctx context.Context, seen seenKeys) (int, error) {
 	now := s.now().UTC()
 	since := now.Add(-memoryWantedWindow)
 	misses, err := store.RecallMissesSince(ctx, s.db, since)
@@ -152,7 +154,10 @@ func (s *Service) proposeMemoryWanted(ctx context.Context, seen map[string]struc
 			continue
 		}
 		key := "memory_wanted:" + g.project + ":" + g.sig
-		if _, dup := seen[key]; dup {
+		// g.last is the newest miss on this signature. A regular dismissal covers
+		// only the misses it was shown; agents still searching for the same thing
+		// afterwards is a recurrence, and gets asked again.
+		if seen.blockedSince(key, g.last) {
 			continue
 		}
 		// Liveness guard: the gap may have been filled since the misses were
@@ -160,7 +165,15 @@ func (s *Service) proposeMemoryWanted(ctx context.Context, seen map[string]struc
 		// group's scope (project + global, mirroring recall) -- an item covering
 		// every content term is evidence the knowledge now exists, while the
 		// recall-style OR would let any item sharing one common word suppress a
-		// real gap.
+		// real gap (fts-or-vs-allterms-presence-probe).
+		//
+		// The nil kinds filter is load-bearing, not laziness: it makes the probe
+		// span exactly what recall spans, the work record included. A task or a
+		// session's findings covering every term means an agent re-running the
+		// query today gets an answer, so the miss that produced this signature
+		// would no longer be recorded -- proposing a memory for it would ask the
+		// owner to fill a gap that recall already fills. If recall's default
+		// scope ever narrows, this has to narrow with it.
 		latest := g.queries[len(g.queries)-1]
 		probe, err := store.FTSSearchAllTerms(ctx, s.db, strings.Split(g.sig, "-"), nil, []string{g.project, ""}, 1)
 		if err != nil {

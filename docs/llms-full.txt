@@ -339,9 +339,12 @@ shows the marked Seamless-awareness block it can add to global or project
 `CLAUDE.md`. It edits only after you choose a scope and approve the change, then
 removes its own one-shot skill directory.
 
-The installer drops a second skill alongside it: `/seam-research`, the
-research-lab workflow for systematic debugging (see [Run research
-trials](/guides/research-trials/)). Unlike `/seam-onboard` it is a recurring
+The installer drops a second skill alongside it *if research is enabled*:
+`/seam-research`, the research-lab workflow for systematic debugging (see
+[Run research trials](/guides/research-trials/)). Research is an
+[optional feature](/reference/console/#optional-features) and ships off, so a
+fresh install has no research skill until you turn it on and re-run
+`seamlessd install-hooks`. Unlike `/seam-onboard` it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
 structured trials. From a clone, `make install-research-skill CLIENT=claude`
@@ -621,9 +624,11 @@ detect` - the clients actually present, Codex included. The Codex profile:
    a disabled or stale Seamless bridge, and verifies the written state before it
    reports success. A direct-HTTP or otherwise foreign entry under the reserved
    `seamless` name is never overwritten implicitly.
-3. **Installs two Codex skills** under
-   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
-   the recurring `$seam-research` lab workflow. Claude's copies remain in
+3. **Installs the Codex skills** under
+   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow,
+   plus the recurring `$seam-research` lab workflow while its
+   [optional feature](/reference/console/#optional-features) is on (it ships
+   off). Claude's copies remain in
    `~/.claude/skills/`; their one-shot delivery markers are independent.
 
 The `codex` executable is the supported management surface for automated MCP
@@ -694,8 +699,9 @@ make install-onboard-skill CLIENT=codex
 ```
 
 `$seam-research <lab-name> <problem>` opens or resumes the same structured,
-multi-agent research-lab workflow as Claude Code. It remains installed and is
-refreshed on upgrades.
+multi-agent research-lab workflow as Claude Code. While the research feature is
+on it remains installed and is refreshed on upgrades; switch the feature off and
+the next install run takes it back out.
 
 ## The five hooks, and what they inject
 
@@ -923,9 +929,10 @@ itself. No Go toolchain is involved. In order, it:
 Step 3 detects three install targets - **Claude Code**, the **Claude app chat
 surface** (`claude-desktop`, the app's `mcpServers` bridge; it has no hooks or
 skills), and **Codex** - and wires the detected set. That one selection
-drives hooks, MCP registrations, and the maintained `seam-onboard` /
-`seam-research` skills together. On a terminal the run confirms the selection
-with a multi-select menu - answers are numbers or names, comma-separated
+drives hooks, MCP registrations, and the maintained skills together -
+`seam-onboard` always, `seam-research` only while its
+[optional feature](/reference/console/#optional-features) is on. On a terminal
+the run confirms the selection with a multi-select menu - answers are numbers or names, comma-separated
 (`1,3`), defaulting to the detected set; headless, the detected set is wired
 as-is. With nothing detected, a run on a terminal warns and asks whether to
 install at all (defaulting to no), and a headless run aborts - the installer
@@ -1260,6 +1267,64 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
+
+## v0.4.11 {#v0-4-11}
+
+Released 2026-08-11 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.11)
+
+### Features
+
+- feat(console): plan-level model token attribution
+- feat(console): polish the Retrieval screen
+- feat(console): compact title bars for Search and Retrieval
+- feat(console): interactive capture calendar and vitals drill-downs
+
+## v0.4.10 {#v0-4-10}
+
+Released 2026-08-08 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.10)
+
+### Features
+
+- feat(momentum): ledger milestones + witnessed unlock notices
+- feat(momentum): plan.shipped settlement + settle wash and monthly count on Plans
+- feat(momentum): milestone event layer (latched firsts and counts)
+- feat(momentum): finish-line card progress draw
+- feat(momentum): ledger glints for live payoff and stage-crossing arrivals
+- feat(momentum): streak ember on the capture streak number
+- feat(momentum): capture calendar entry wave + breathing today cell
+- feat(console): add the Now screen, the cross-project live agent view
+- feat(console): turn the Overview attention strip into a scroll-snap carousel
+- feat(plans): name the composition slug at capture, and fold the strays in
+- feat(momentum): latched project maturity stages
+- feat(momentum): knowledge payoff moments -- first reuse + monthly spotlight
+- feat(momentum): capture calendar with streak on the Sessions page
+- feat(momentum): finish-line cards on Overview + briefing plan-line emphasis
+- feat(momentum): the momentum optional feature -- registry, config, in-page surface gating
+- feat(edit): partial edits on a concurrency-safe mutation substrate
+- feat(features): optional features -- per-feature toggles, research ships off
+- feat(gardener): two-tier rejection -- dismiss until it recurs, hide forever
+- feat(isolation): close the fence -- gardener proposals, usage names, topology
+- feat(isolation): confidential and sealed projects -- the agent-to-agent fence
+- feat(console): UX revision -- judged numbers, compact chrome, honest empty states
+
+### Fixes
+
+- fix(hooks): wait for a subagent transcript to settle before capturing it
+
+## v0.4.9 {#v0-4-9}
+
+Released 2026-07-31 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.9)
+
+### Features
+
+- feat(search): rank exact names, slugs, and ULIDs in their own lookup lane
+- feat(console): order plan steps frontier-first and rewrite the ledger row
+- feat(console): make the project workspace's Plans &amp; tasks tab interactive
+
+### Fixes
+
+- fix(security): remediate deep audit findings
+- fix(install): unique aside names for the Windows binary swap
 
 ## v0.4.8 {#v0-4-8}
 
@@ -2151,6 +2216,38 @@ degrades the same way instead of erroring.
 separate semantic search, no "advanced" variant. One entry point, because a
 surface with three search tools is a surface where agents pick the wrong one.
 
+## What it searches
+
+`recall` spans two halves of the store, and the default scope (`all`) covers
+both:
+
+| Half | Kinds | Matched by |
+|---|---|---|
+| **Durable knowledge** | memories, notes | keyword + vector |
+| **The work record** | tasks, trials, session findings | keyword |
+
+The work record is there because knowledge does not only get written as a
+memory. A task body carries the acceptance criteria and the record of what was
+already tried; a dropped task is often the only account of why something was
+*not* done. A trial carries expected-vs-actual. A session's findings are the
+handoff its author wrote for whoever came next. All of it used to be reachable
+only by an agent already knowing which list tool to call - which is to say, only
+by an agent that already suspected the answer existed.
+
+Narrow it with `scope`: `memories`, `notes`, `tasks`, `trials`, `sessions`.
+
+Two things follow from the work record being keyword-only. It carries no
+embedding: there is no file behind a task row and so no content-hash reconcile
+loop, and vectorizing on write would put a provider round-trip inside every
+`tasks_add`. And because fusion rewards an item that *both* retrievers rank, a
+work-record hit can never outrank a memory that matched both ways on the same
+query - the ordering prefers curated knowledge without needing a rule that says
+so.
+
+Work-record hits carry a `status` (a task's status, a trial's outcome), which is
+what separates a step you can still claim from a decision you can only learn
+from.
+
 ## How it works
 
 Two retrievers run over the store and their rankings are fused:
@@ -2160,7 +2257,8 @@ Two retrievers run over the store and their rankings are fused:
   what finds it.
 - **Vector similarity.** Embeddings stored as float32 blobs in SQLite, compared
   by brute-force cosine. This finds the memory that is *about* your problem when
-  you don't know its name.
+  you don't know its name. Knowledge kinds only - see
+  [What it searches](#what-it-searches).
 
 Their results are combined with **reciprocal rank fusion**: each retriever's
 ranking contributes, and something both rank highly wins. Neither retriever gets
@@ -2381,7 +2479,7 @@ You do not have to build the composition by hand. Claude Code's plan mode is
 captured:
 
 - Saving a plan file upserts a `cc-plan-<basename>` note, tagged with its status
-  (`plan-status:draft|presented|approved|abandoned|shipped`).
+  (`plan-status:draft|presented|approved|abandoned|shipped|merged`).
 - Planning subagents are cached as `cc-agent-<id>` notes in the same composition.
 - Approving the plan creates the tracking task.
 - Unapproved captures appear in the briefing's Plans section as
@@ -2529,6 +2627,167 @@ The symptom is almost always "the agent wrote it somewhere I can't find it" or
 
 ---
 
+# Project isolation
+
+URL: https://thereisnospoon.org/docs/concepts/project-isolation/
+
+
+By default, projects are cooperative rather than isolated. Any agent can read or
+write any project by passing `project`, global memories reach every briefing, and
+family surfaces deliberately carry knowledge between related projects. That is
+the right default for one person's interlocking work.
+
+It is the wrong default for a client project, private research, or anything you
+need to keep out of the agents serving your other work. **Isolation** is the
+per-project setting that draws a real boundary.
+
+## The three states
+
+Isolation is **directional**. The two fenced states solve different problems and
+should not be conflated.
+
+| State | Nothing leaves | Nothing enters |
+|---|---|---|
+| `open` (default) | no | no |
+| `confidential` | **yes** | no |
+| `sealed` | **yes** | **yes** |
+
+**`open`** shares normally. Global knowledge flows in; family surfaces may
+include it.
+
+**`confidential` - nothing leaves.** Sessions bound elsewhere can never read this
+project: not by explicit `project=`, not by ULID, not through trials, not through
+recall. It is excluded from family surfaces and from the gardener's cross-project
+passes. Critically, sessions bound *to* it cannot write *outside* it - not to
+another slug, and not to `project: global`, because an agent-initiated global
+write is a leak too.
+
+Inbound is deliberately unchanged: its agents still receive your global memories
+and can still read open projects. This is the common case - sensitive work that
+still wants your conventions available inside it.
+
+**`sealed` - nothing in or out.** Confidential plus the inbound fence. Briefing,
+recall, and the prompt matcher scope to the project alone; global memories are
+dropped, there is no family, and there are no cross-project reads in either
+direction. A clean room.
+
+Because a sealed project's world is genuinely smaller, its agents are told so.
+The briefing carries a line stating the mode, on both the main and subagent
+surfaces, so an agent inside understands why a write outside will be refused
+rather than discovering it as an unexplained error.
+
+## The console is exempt
+
+The threat model is **agent-to-agent leakage, not hiding from you.** Console
+search and views still see everything; isolated projects are simply badged with a
+lock pill. Nothing about an isolated project's pages turns scary or
+half-rendered - the pill and the Overview control are the whole story.
+
+## Isolation requires a standalone project
+
+A project cannot be isolated while it is entangled in a family: no family
+membership, no parent, no children.
+
+Tightening therefore **detaches** family membership and the parent link, and the
+confirmation step shows you exactly which. A project **with children refuses to
+tighten** until they are re-parented - Seamless will not silently orphan a scope
+that inherits from it.
+
+This keeps the fence surface small. Rather than threading isolation checks
+through every topology path, the rule guarantees there is no topology to thread.
+The briefing-side exclusions remain anyway, as defense in depth against stale
+data.
+
+## Tightening and loosening
+
+**Tightening is the ceremonious direction**, because it changes what other agents
+can see. It is two-step in the console: choosing confidential or sealed returns a
+confirmation panel stating exactly what will change - the family and parent it
+will detach from, or the children blocking it, plus the promise of the state you
+picked - and applies only when you confirm.
+
+**Loosening is immediate.** It is fully reversible and nothing leaked while the
+fence was up, so there is nothing to confirm.
+
+## Knowledge that already got out
+
+Raising a fence does nothing about what escaped before it existed. The most
+likely leak is **global memories written by this project's own sessions** - they
+were the right call at the time and are now injected into every other project's
+briefing, forever.
+
+So tightening runs a provenance audit: it traces global memories back through
+`source_session` to the sessions that wrote them, and for each one that belonged
+to this project it files a **relocate** proposal in the
+[Gardener inbox](/concepts/gardener/) offering to move it behind the fence.
+
+Two things this deliberately is not. It does not move anything on its own -
+the gardener only ever proposes, and dismissing the proposal is how you say the
+memory really is general knowledge. And it does not run on a timer: once the
+fence is up, the write funnel refuses this project's sessions any write outside
+it, so the leak set is closed at the moment of tightening and never grows.
+
+The confirmation step tells you the count before you commit, and distinguishes a
+proven zero from an unanswered question - if the audit could not run, it says
+nothing rather than reporting "none".
+
+### In the console
+
+The control lives on the project's **Overview** tab: a three-option segmented
+control with each state's promise written under it. The isolation change is
+recorded as an event, so it appears in Recent activity like any other change.
+
+### From the CLI
+
+```bash
+seam project isolation <slug>                    # print the current state and its promise
+seam project isolation <slug> confidential       # print consequences, apply nothing
+seam project isolation <slug> confidential --yes # apply
+seam project isolation <slug> open               # loosen, immediate
+```
+
+Tightening requires `--yes`, which stands in for the console's confirmation step:
+without it the command prints the same consequences and exits having changed
+nothing.
+
+## What agents see
+
+- **`project_list`** reports each project's isolation state, so an agent can
+  discover the boundary rather than guess at it.
+- **`project_create`** accepts `isolation`. There is no tool to change it
+  afterwards: tightening detaches topology and is an owner decision, not an agent
+  one.
+- **Refusals state the rule and the remedy** and never echo the content they are
+  withholding - an error that quoted the memory it was protecting would leak the
+  very thing the fence exists to keep in. They do not hide that the project
+  *exists*, because every scope error already lists the machine's projects.
+
+## Honest limits
+
+This matters more than the feature list, so it is stated plainly.
+
+**What this is.** A policy fence at every Seamless surface - briefings, recall,
+tool reads and writes, the gardener. That is where accidental cross-contamination
+actually happens, and it is now closed.
+
+**What this is not.** It is **not** a defense against a local agent reading
+`~/.seamless/memory/<project>/*.md` directly. Every MCP caller shares one static
+bearer key, and the fence keys off the **self-reported session binding**. An
+agent that does not bind a session is judged as the global scope - which fails
+closed against reading an isolated project, but also means the fence cannot
+recognize it as belonging to one.
+
+**What would make it stronger.** Per-project bearer keys: a confidential project
+gets its own key, the repo's hooks use it, and the shared key cannot touch it.
+That upgrades the fence from policy to an auth boundary at the daemon. It is not
+built.
+
+**The hard boundary today** is a separate Seamless instance - its own data dir,
+port, and key. If your threat model is adversarial rather than accidental, that
+is the honest answer.
+
+---
+
 # The gardener
 
 URL: https://thereisnospoon.org/docs/concepts/gardener/
@@ -2568,7 +2827,7 @@ found, `gardener_apply` to act on one.
 | **dedup** | Two memories more similar than `gardener.dedup_threshold` (0.88) | **merge**: one is kept as-is, the other superseded and pointed at it |
 | **staleness** | A memory untouched for `gardener.staleness_days` (90) | **archive**: marked invalid, still readable |
 | **digest** | Enough recent activity over `gardener.digest_days` (30) | a **digest** note summarizing it |
-| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
+| **stale-plan** | A captured plan still unapproved after `gardener.stale_plan_days` (14) | settling it deliberately rather than by neglect: **merge_plans** when the capture owns no steps and another composition in the project holds the steps for the same work (fold it in there), **ship_plan** when commits since the capture's git stamp match the plan (the work landed without the approval ceremony), **abandon_plan** otherwise |
 | **stale-stage** | A `stage` memory whose `Status:` header is done, missing, or unrecognized, unchanged for `gardener.stale_stage_days` (14) | **archive**: a stage that gates nothing should not hold a permanent briefing pin |
 | **dead-weight** | A memory briefings injected 20+ times in 30 days without a single recall hit, prompt match, or read | **archive**: exposure without demand means it costs tokens and steers nothing |
 | **memory-wanted** | The same recall query returned zero hits in 2+ sessions inside 14 days | **memory_wanted**: write the knowledge agents keep searching for; applying opens a task in the queue |
@@ -2587,7 +2846,7 @@ reach an agent - recurrence here is the one place they surface. Applying its
 proposal opens a repair task rather than pretending the gardener can fix code
 or configuration itself.
 
-Three more proposal types come from requests rather than the timer:
+Four more proposal types come from an action rather than the timer:
 
 - **reproject** - a memory filed under the wrong project, moved to a project that
   **already exists**.
@@ -2599,6 +2858,12 @@ Three more proposal types come from requests rather than the timer:
   and a shared parent, so it is planned as a unit, not as a pile of moves. That
   is why it is a separate tool (`gardener_split`) and not just a reproject to a
   name that does not exist yet.
+- **relocate** - filed when a project is tightened to confidential or sealed
+  (see [Project isolation](/concepts/project-isolation/)). Raising a fence does
+  nothing about knowledge that already escaped, so the tighten audits the global
+  scope for memories whose source session belonged to the project and proposes
+  moving each one behind the fence. Dismiss to leave it global. This is the only
+  proposal kind an owner action files rather than a request or the timer.
 
 ## Constraints and stages are exempt from staleness
 
@@ -2633,13 +2898,42 @@ bypass the review step - what comes back is still a proposal.
 ## Where you review
 
 - **The console** - `/console/gardener` is an inbox: one line per proposal in
-  the rail, the full evidence and the Apply/Dismiss gate in the reader. A whole
+  the rail, the full evidence and the decision gate in the reader. A whole
   group can be dismissed at once, and anything you decide lands in **Recently
   decided**, where Undo puts it back in the queue and reverses what applying it
   did. Applying a consolidation or a project split is the exception - both
   create things that immediately accrue content, so they ask for a confirm
   instead and cannot be undone from the console.
 - **`gardener_proposals`** - the same, for an agent.
+
+## Saying no, twice
+
+Rejecting has two strengths, because "not this one" and "not ever" are
+different answers:
+
+- **Dismiss** settles the proposal and the evidence behind it. It is not a
+  verdict on the pattern: if the same thing happens *again* after you decided -
+  agents keep hitting that error, keep searching for that missing memory - the
+  gardener raises it once more, under the same key, with the new evidence. This
+  is the one to reach for by default.
+- **Hide forever** blocks the pattern outright. No recurrence gets past it.
+
+For the passes with no recurrence clock (merge, archive, digest, and the
+request-driven kinds), a dismissal already lasts until the underlying content
+changes - their key encodes what they propose, so a changed world asks a new
+question rather than repeating the old one. The distinction bites on the error
+and knowledge-gap passes, whose key is the *pattern's* identity and stays put
+while evidence piles up under it.
+
+Both are reversible, and the two exits are not the same:
+
+- **Undo**, from Recently decided, puts that proposal back in the queue.
+- **Unhide**, from **Hidden forever** in the rail, lifts the block and leaves
+  the proposal resolved. Nothing returns on the spot - the next recurrence is
+  what brings the pattern back, and if it has stopped recurring, nothing does.
+
+`gardener_apply` carries the same two tiers for agents: `action=dismiss` and
+`action=hide`.
 
 The gardener runs every `gardener.interval_minutes` (60) when
 `gardener.enabled` is on. Everything in this page is tunable - see
@@ -2691,6 +2985,20 @@ answer and the new one match every future search, and each retrieval - every
 session, forever - has to re-adjudicate which is current. Supersession
 adjudicates once, at write time, when the contradiction is actually in front of
 the writer, and every later reader inherits the verdict.
+
+## The line an in-place edit must not cross
+
+`memory_edit` changes part of a memory without resending it, which makes it the
+cheapest way to touch the store - and therefore the one most likely to be reached
+for when superseding is what is actually called for.
+
+The boundary is whether the change carries a new **claim**. A typo, a broken
+code fence, a stale path or command, a `Status:` flip on a stage, a description,
+a tag: none of those change what the memory asserts, and editing them in place
+loses nothing. But if the conclusion is now different - the advice reversed, the
+finding overturned - an edit silently rewrites the record so that nothing in the
+store ever shows it believed otherwise. That is exactly the history superseding
+exists to keep, so that change goes through `memory_write` with `supersedes`.
 
 ## The honest limit
 
@@ -3902,11 +4210,12 @@ Captured-plan lifecycle
 3a · approved Tracking begins Status becomes approved and an implementation task is created.
 3b · abandoned Closed deliberately An unapproved plan can be marked abandoned instead of lingering.
 3c · shipped Landed without ceremony When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.
+3d · merged Folded into another plan When the capture has no steps and another composition holds them for the same work, the gardener proposes moving its notes there.
 A captured plan remains one composition across edits; approval changes its state and opens the execution loop.
 ```
 
 The statuses are stored as a `plan-status:<value>` tag on the note:
-`draft`, `presented`, `approved`, `abandoned`, `shipped`.
+`draft`, `presented`, `approved`, `abandoned`, `shipped`, `merged`.
 
 ## Why unapproved plans show up in the briefing
 
@@ -3975,6 +4284,26 @@ one time in thirty. A config that works on one machine.
 Agents are bad at this in a specific way: each one starts fresh, re-derives the
 same first three hypotheses, and tries them again. A **lab** is where that stops.
 
+## Turn it on first
+
+Labs and trials are an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. On a fresh install the screens and the three tools below are not
+there until you enable research, in any one of three places:
+
+- **The console** - Settings → Features, the fastest route. It applies to the
+  console immediately; agents pick it up on their next session.
+- **The config file** - `features: research: true` in `seamless.yaml`.
+- **The environment** - `SEAMLESS_FEATURES_RESEARCH=1`.
+
+A console toggle stores an override that wins over the file and the environment
+until you reset it, so if the YAML says one thing and the tools disagree, check
+the console first. An installation that was already recording trials before this
+became optional keeps it on across the upgrade - the feature is never switched
+off underneath existing data, and switching it off later hides the screens and
+the tools without deleting a single trial. See
+[Configuration](/reference/configuration/#precedence).
+
 ## The loop
 
 ```text
@@ -4041,8 +4370,13 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 
 ## The skill
 
-The installer drops the portable `seam-research` package into the selected
-client's skill home. From a clone, use `make install-research-skill
+While the feature is on, the installer drops the portable `seam-research`
+package into the selected client's skill home - and while it is off, `seamlessd
+install-hooks` skips it and removes a copy it previously delivered, so no agent
+reads about tools its server will refuse. A toggle in the console cannot reach a
+client's skill home on its own, so `seamlessd doctor` raises an info line until
+the next install run reconciles the two. From a clone, use
+`make install-research-skill
 CLIENT=claude` for Claude Code or `make install-research-skill CLIENT=codex` for
 Codex (`CLIENT=detect` is the default). It wraps this loop
 - open the lab, query before trying, predict before running, record once with
@@ -4433,6 +4767,39 @@ config file is not the last word, and it exists so you can tune what agents get
 injected while they are running. See
 [Configuration](/reference/configuration/).
 
+## A tool is missing, or a console screen says it is switched off
+
+**What is happening.** It belongs to an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. Nothing is broken and nothing was deleted - the feature's data is
+untouched, and every surface returns the moment it is switched back on. Tools
+and whole screens belong to research (the Labs and Trials screens, the trials
+search scope, and `lab_open`, `trial_record`, `trial_query`); the in-page
+momentum surfaces (finish-line cards, the capture calendar, payoff moments,
+maturity stages) belong to momentum; the Now screen's arcade (the day tape,
+personal records, the hot-streak pulse, celebration moments) belongs to
+gamification - the Now screen itself is core and always on.
+
+**Fix.** Turn the feature on in the console under Settings → Features (or set
+its `features:` key in YAML, or `SEAMLESS_FEATURES_RESEARCH=1` /
+`SEAMLESS_FEATURES_MOMENTUM=1` / `SEAMLESS_FEATURES_GAMIFICATION=1`). The
+console toggle stores an override that beats both the file and the
+environment, so check it before you edit YAML.
+
+**If you already turned it on and the agent still cannot call the tool**, you
+are looking at the propagation seam, not a failure:
+
+| Surface | When the change lands |
+|---|---|
+| The console | Immediately. |
+| A tool call | Immediately - and while a feature is off its tools are refused as *unknown*, which is what a client holding a stale list should see. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it was given. Start a new session rather than hunting for a refresh button. |
+| The `seam-research` skill in a client's skill home | The next `seamlessd install-hooks` run. `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still installed - it never deletes in a client's directory behind your back. |
+
+One thing that is *not* a symptom of this: a gated tool call leaves no row in
+the Interactions feed. The filter rejects it before the middleware that records
+tool calls, so silence there is expected.
+
 ## Two daemons, the wrong port, or code changes that never land
 
 **What is happening.** Seamless is **one instance per machine**: one port (8081),
@@ -4596,14 +4963,24 @@ Pass `project: global` to mean global deliberately.
 
 ## The tool surface
 
-Seamless registers **31 tools**. They are documented in groups:
+Seamless registers **33 tools**. They are documented in groups:
 
 | Group | Tools |
 |---|---|
-| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_read`, `memory_delete`, `recall` |
-| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
+| Sessions, memory, and recall | `session_start`, `session_update`, `session_end`, `memory_write`, `memory_append`, `memory_edit`, `memory_read`, `memory_delete`, `recall` |
+| Notes, projects, and capture | `notes_create`, `notes_read`, `notes_update`, `notes_edit`, `notes_append`, `notes_delete`, `project_list`, `project_create`, `capture_url` |
 | [Tasks](/reference/mcp/tasks/) | `tasks_add`, `tasks_update`, `tasks_ready`, `tasks_list`, `tasks_claim`, `tasks_release` |
 | Lab, gardener, and usage | `lab_open`, `trial_record`, `trial_query`, `gardener_proposals`, `gardener_request`, `gardener_split`, `gardener_apply`, `usage_summary`, `favorite_set` |
+
+That is the count the server **registers**; what a client is offered can be
+smaller. Tools belonging to an
+[optional feature](/reference/console/#optional-features) are hidden from
+`tools/list` while that feature is off, and a call to one is refused as an
+unknown tool. Optional features ship off, so a fresh install advertises fewer
+than 33 until you turn one on - each affected tool says so on its own reference
+page. Nothing about registration changes: the catalog these pages are generated
+from, and the registered-tool count `seamlessd doctor` asserts, stay the full
+set either way.
 
 Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.
@@ -4615,7 +4992,7 @@ own registration, so they cannot drift from what the daemon accepts.
 URL: https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/
 
 
-These eight tools are the agent loop. In a repo mapped to a project, most of them
+These nine tools are the agent loop. In a repo mapped to a project, most of them
 need no `project` argument at all: `session_start` binds the connection, and
 everything after it inherits that scope.
 
@@ -4631,13 +5008,14 @@ If `tasks_update` ever fails claiming a task is held by *your own* session id,
 the connection binding was lost. Re-run `session_start` with the same name to
 rebind.
 
-## Update, append, supersede, or delete?
+## Edit, update, append, supersede, or delete?
 
-Four ways to change memory, and picking the wrong one is how a store rots:
+Five ways to change memory, and picking the wrong one is how a store rots:
 
 | You want to | Use | What happens |
 |---|---|---|
-| Correct or extend what a memory says | `memory_write` with the same `name` | Updated in place; the id is stable |
+| Fix part of a memory without resending it | `memory_edit` | Exact search/replace on the body, plus `description` and tag add/remove; returns a diff |
+| Rewrite what a memory says, whole | `memory_write` with the same `name` | Updated in place; the id is stable |
 | Add to the end without rereading it | `memory_append` | Body grows; nothing else changes |
 | Replace a **different**, now-outdated memory | `memory_write` with `supersedes` | The old one is marked invalid, leaves every index, and stays readable with a pointer to its replacement |
 | Remove something written by mistake | `memory_delete` | Gone |
@@ -4652,11 +5030,46 @@ A `supersedes` that fails is reported rather than swallowed: the new memory is
 still written and kept, and the call returns an error naming it. The target is
 then still active, so re-run the supersede.
 
+### Edit vs. supersede
+
+`memory_edit` is cheap, which is exactly why its boundary has to be explicit.
+Edit is for changes that carry no new claim: a typo, broken formatting, a stale
+path or command, a stage's `Status` flip, a description, a tag. If the **meaning**
+changes - the conclusion is now different, the advice reversed - that is a new
+memory, and it goes through `memory_write` with `supersedes`.
+
+The reason is provenance. A supersession retires the old memory into readable
+history; an in-place edit leaves no trace that the store ever believed something
+else. Using edit to change what a memory claims silently rewrites the record.
+
+`memory_edit` is also the only way to change a memory's `description` or tags
+without rewriting its body, and `tags_remove` is the only way to clear a tag at
+all - an empty `tags` array reads as absent everywhere else.
+
+## Concurrency: content_hash and expect_hash
+
+`memory_read` and `notes_read` return a `content_hash` - the SHA-256 of the whole
+file. Pass it back as `expect_hash` on `memory_edit`, `notes_edit`, or
+`notes_update`, and the write is refused if the stored file has moved on since
+you read it. Omit it and the write is unconditional.
+
+It answers a different question from the daemon's own serialization. Every
+application write already goes through a per-file lock, so two agents can no
+longer interleave a read and a write and lose one of them. What the lock cannot
+see is an agent acting on something it read minutes ago, or the owner editing the
+markdown in an editor - which is why the precondition is checked against the
+**file**, inside the lock, rather than against the index (the watcher re-indexes
+on a debounce, so the index would happily confirm the stale hash).
+
 ## Scope
 
 `memory_write` **fails closed**: with no session and no explicit `project`, it is
 rejected as ambiguous rather than silently landing in the global scope. Pass
 `project: global` to write a deliberately cross-project memory.
+
+`memory_edit` targets a memory that already exists, so it resolves like
+`memory_append`: the session's scope first, then a global fallback. The write is
+judged against the project the memory actually sits in.
 
 ## Recall is the only search tool
 
@@ -4690,6 +5103,7 @@ is surfaced instead of hidden - the two cases are deliberately not treated alike
 |---|---|---|
 | `session_start` | `session_id`, `name`, resolved `project`, explanatory `scope`, and `briefing`; resumed/adopted sessions also say `resumed: true` | Briefing assembly degrades to an empty string and logs; creating or binding the session itself still fails loudly |
 | `memory_write` | Stable `id`, canonical `name`, resolved `project`, `updated`, optional `similar`, and optional `superseded` | An occupied tombstone path is an error; if the new memory lands but supersession fails, the tool errors while naming the kept replacement and the still-active target |
+| `memory_edit` | `id`, `name`, `project`, the new `content_hash`, a unified `diff`, and a `stage_hint` when a `kind=stage` body still has no parseable `Status` | An `old_string` that matches zero or several places is an error naming the count, and **nothing** is written - the edits apply all-or-nothing. A stale `expect_hash` is refused rather than overwriting |
 | `recall` | `hits`, possibly empty | Remote embedder failures degrade to lexical-only; local request/config construction errors surface |
 | `session_end` | Confirmation of the close - `session_id`, `claims_released`, `mishaps_recorded`; findings persist for the next briefing | A missing/ambiguous session is an error rather than a fabricated successful close |
 
@@ -4727,15 +5141,15 @@ Complete the current session, persisting its findings for future briefings. Uses
 
 ## memory_write {#memory_write}
 
-Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
+Create or update a durable memory -- the compact knowledge a future session must not miss (a constraint, gotcha, decision, runbook). Long-form write-ups belong in notes_create; put the one-line lesson here. Writing an existing name updates it in place (its id is stable). On a new name, a semantically similar existing memory is reported as an advisory hint; the write still proceeds. The hint is withheld when the target project's content is fenced from you (see the withheld marker on the response) -- the write lands either way. Pass supersedes to replace a DIFFERENT, now-outdated memory: it is marked invalid and leaves every index (briefing, recall) but stays readable with a pointer here. If superseding fails, the new memory is still written and kept; the error says how to retry.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `name` | string | **yes** | kebab-case identifier, unique within the project |
-| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | **yes** | memory kind; constraint = what any agent must or must not do regardless of task; convention = a project-local choice or layout fact (naming, branding, where things live or deploy, which files sync together); for kind=stage, open the body with Status: open\|in_progress\|blocked\|done and optionally Gate: human\|ai, and flip the status with memory_edit (or a full memory_write) -- append cannot change the header, which is parsed from the top of the body. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `description` | string | **yes** | one line, &lt;=150 chars -- the only text shown in indexes |
 | `body` | string | **yes** | markdown body (aliases: content, text) |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 | `supersedes` | string | no | name of an existing memory this one replaces; that memory is marked superseded (invalid) and pointed here |
 | `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); omit to leave an existing memory's tags untouched, and note an empty list reads as absent, not as a clear |
 
@@ -4748,6 +5162,20 @@ Append markdown to an existing memory's body. The memory keeps its id. To create
 | `name` | string | **yes** | memory name |
 | `body` | string | **yes** | markdown to append (aliases: content, text) |
 | `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+
+## memory_edit {#memory_edit}
+
+Edit an existing memory in place with exact search/replace, instead of resending its whole body through memory_write. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. It is also the only way to change a memory's description or tags on their own: send description/tags_add/tags_remove with no edits and the body is left untouched (memory_write requires a body, so there was no metadata-only path before this), and tags_remove is the only way to clear a tag at all. Returns a unified diff of what landed plus the new content_hash. Use this for corrections that do not change what the item CLAIMS: typos, broken formatting, a stale path or command, a stage's Status flip, metadata. If the MEANING changes -- the conclusion is now different, the advice reversed -- that is a new memory: use memory_write with supersedes, which retires the old one into readable history instead of erasing what it used to say.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | **yes** | memory name (kebab-case, as memory_read takes it) |
+| `description` | string | no | replace the one-line description (&lt;=150 chars -- the only text shown in indexes); omit to leave it untouched |
+| `edits` | array | no | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project, then global. Pass project=global to target a global memory. |
+| `tags_add` | array | no | tags to add, leaving the rest in place (a comma-separated string is also accepted) |
+| `tags_remove` | array | no | tags to remove, leaving the rest in place; this is how a tag gets cleared (a comma-separated string is also accepted) |
 
 ## memory_read {#memory_read}
 
@@ -4770,15 +5198,15 @@ Delete a memory by name: the markdown file leaves the disk and its index row goe
 
 ## recall {#recall}
 
-Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse).
+Search durable knowledge (memories, notes) and the work record (tasks, trials, session findings) by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. Work-record hits carry a status (a task's status, a trial's outcome) and match on keyword only. With kind set and no query it lists that memory kind newest-first instead (browse).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
+| `kind` | string | no | only memories of this frontmatter kind (e.g. convention); implies memories-only, so any scope that excludes memories is rejected; with no query, lists the kind newest-first. One of: `constraint`, `convention`, `runbook`, `protocol`, `gotcha`, `decision`, `refuted`, `reference`, `stage`. |
 | `limit` | integer | no | maximum results (default 10, max 100) |
 | `project` | string | no | project slug; defaults to the bound session's project |
 | `query` | string | no | what you are looking for; required unless kind is set (kind alone lists that kind newest-first) |
-| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`. |
+| `scope` | string | no | what to search (default all). One of: `all`, `memories`, `notes`, `tasks`, `trials`, `sessions`. |
 
 ---
 
@@ -4810,6 +5238,34 @@ inject, too specific to generalize, and it pushes real constraints out of the
 briefing's budget.
 
 Agent-created notes are automatically tagged `created-by:agent`.
+
+## Four ways to change a note
+
+Notes are long, and the transport caps a request body at 1 MB, so resending a
+whole note to fix one paragraph is both wasteful and the thing most likely to
+fail on the biggest artifacts.
+
+| You want to | Use | What happens |
+|---|---|---|
+| Fix or restructure part of the body | `notes_edit` | Exact search/replace, all-or-nothing, returns a diff |
+| Replace the body, or change title/description/project/tags | `notes_update` | Field-wise patch; omitted fields are untouched |
+| Add to the end | `notes_append` | A UTC-timestamped line joins the body |
+| Remove an artifact that should not exist | `notes_delete` | Gone, with no pointer left behind |
+
+`notes_edit` takes the note's `id` and a list of `{old_string, new_string}`
+edits. Each `old_string` must match the current body exactly and uniquely - or
+pass `replace_all` - and if any edit fails to match, **nothing** is written. That
+refusal is the feature: a partial apply, or a fuzzy match landing somewhere
+plausible, is the silent corruption the exact-match contract exists to prevent.
+
+`notes_update` gains the same staleness guard (`expect_hash`) plus `tags_add` and
+`tags_remove`, which are race-friendlier than replacing the whole tag list and
+are the only way to clear a tag - an empty `tags` array reads as absent. See
+[Concurrency](/reference/mcp/sessions-memory-recall/#concurrency-content_hash-and-expect_hash).
+
+Every note mutation now records a `note.written` event, and `notes_read` records
+`note.read` - the note-side twin of `memory.read`, which is what lets note demand
+count toward [recall's utility nudge](/concepts/recall/#the-utility-nudge).
 
 ## Notes are how plans get their narrative
 
@@ -4856,7 +5312,7 @@ Create a work note -- a research finding, decision record, meeting summary, or a
 | `body` | string | **yes** | markdown body (aliases: content, text) |
 | `description` | string | no | optional one-line summary |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention): tags this note into that plan's composition so it surfaces on the Plans screen alongside its tasks_add plan=&lt;slug&gt; steps. Use it whenever this note is a plan's narrative or supporting context. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 | `source_url` | string | no | optional source URL |
 | `tags` | array | no | tags (a comma-separated string is also accepted) |
 
@@ -4872,16 +5328,29 @@ Read a note by id, or by slug within the current project (falling back to a glob
 
 ## notes_update {#notes_update}
 
-Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; tags replace all. The slug and id stay stable.
+Update a note's fields by id (title, description, body, project, tags). Omitted fields are untouched; the slug and id stay stable. body replaces the WHOLE body, so pass expect_hash (notes_read returns it) to have the write refused rather than silently overwriting an edit that landed after you read the note -- and use notes_append when you only mean to add to it. Tags come in three flavors: tags replaces the whole set, while tags_add and tags_remove edit it in place; prefer add/remove, since a replace discards whatever another agent tagged in between and tags_remove is the only way to clear a tag at all.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | note id (ULID) |
-| `body` | string | no | new body (aliases: content, text) |
+| `body` | string | no | new body, replacing the whole body (aliases: content, text) |
 | `description` | string | no | new description |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 | `project` | string | no | new project slug ("" or "global" = global scope) |
-| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched |
+| `tags` | array | no | tags, replacing all (a comma-separated string is also accepted); an empty list is read as absent and leaves the tags untouched -- to drop a tag use tags_remove |
+| `tags_add` | array | no | tags to add, leaving the rest in place; a tag already on the note is not duplicated. Applied after tags. |
+| `tags_remove` | array | no | tags to drop, matched exactly; a tag the note does not carry is ignored. Applied last, so it also removes what tags/tags_add just set. |
 | `title` | string | no | new title |
+
+## notes_edit {#notes_edit}
+
+Edit an existing note in place with exact search/replace, by id, instead of resending its whole body through notes_update. Each edit's old_string must match the current body exactly and uniquely (or pass replace_all); all edits apply together or none do, so a failed match changes nothing. This is the tool for correcting or restructuring part of a long note -- notes_append only ever adds, and notes_update replaces the whole body. Returns a unified diff of what landed plus the new content_hash.
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `id` | string | **yes** | note id (ULID), as notes_create returns and briefings and plan compositions carry |
+| `edits` | array | **yes** | ordered list of exact search/replace edits, applied in order to the CURRENT body. Each is {old_string, new_string, replace_all?}. old_string must match the body EXACTLY (whitespace and indentation included) and must be unique unless replace_all is true; include surrounding lines to make it unique. All-or-nothing: if any edit fails to match, nothing is written. |
+| `expect_hash` | string | no | optional precondition: the content_hash you last read for this item (memory_read/notes_read return it). The write is refused if the stored file has changed since -- another agent or the owner edited it -- so re-read and re-apply your change instead of overwriting theirs. Omit it to write unconditionally. |
 
 ## notes_append {#notes_append}
 
@@ -4902,7 +5371,7 @@ Delete a note by id: the markdown file leaves the disk and its index row goes wi
 
 ## project_list {#project_list}
 
-List every project (slug, name, description). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. It returns identity, not contents; to search what is inside a project, use recall.
+List every project (slug, name, description, isolation). Use it to learn the exact slug before a deliberate cross-project write or a project_create -- coining a near-duplicate of a slug that already exists is the failure this prevents -- and to see whether work already has a home. You usually do NOT need it to pick a scope: memory, note, and task calls inherit the project from the session binding, and passing project= is for writing outside that on purpose. Each row carries its isolation state (open|confidential|sealed), which is what a cross-project call has to respect: a confidential or sealed project is readable only from a session bound to it, and a sealed one takes no writes from outside either. It returns identity, not contents; to search what is inside a project, use recall.
 
 Takes no parameters.
 
@@ -4914,6 +5383,7 @@ Register a project up front, with a human-readable name and an optional descript
 |---|---|---|---|
 | `name` | string | **yes** | human-readable project name |
 | `description` | string | no | optional one-line description |
+| `isolation` | string | no | optional isolation state (open\|confidential\|sealed); omit for open. open shares normally. confidential means nothing leaves: agents in other projects never read this one, and agents bound to it cannot write outside it. sealed adds the inbound half -- agents here see only this project: no global memories, no family, no cross-project reads. Set it at creation for work that is sensitive from the start; there is no tool to change it afterwards, because tightening detaches family and parent links and is an owner decision, made on an owner surface. Isolation requires a standalone project, so do not create an isolated child of another project. One of: `open`, `confidential`, `sealed`. |
 | `slug` | string | no | optional explicit slug |
 
 ## capture_url {#capture_url}
@@ -4923,7 +5393,7 @@ Fetch a web page (SSRF-guarded: private/loopback addresses are rejected) and sav
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `url` | string | **yes** | http(s) URL to capture |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ---
 
@@ -4989,7 +5459,7 @@ Add a task to the dependency-aware ready queue. depends_on lists task ids that m
 | `body` | string | no | optional details / acceptance criteria (aliases: content, text) |
 | `depends_on` | array | no | task ids this task is blocked by (a comma-separated string is also accepted) |
 | `plan` | string | no | optional plan slug (plan:&lt;slug&gt; convention) that composes this task as a step of a plan. Plan steps are excluded from the default ready-queue and surfaced under the plan filter. |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## tasks_update {#tasks_update}
 
@@ -5132,8 +5602,13 @@ updated time - it is metadata, not authorship.
 
 ## Applying is an explicit boundary
 
-`gardener_apply` accepts only `apply` or `dismiss`. Dismissal closes the proposal
-without changing its target. Apply performs the proposal's typed action and
+`gardener_apply` accepts `apply`, `dismiss`, or `hide`. Both rejections close
+the proposal without changing its target; they differ in how long the answer
+holds. `dismiss` settles the evidence in front of you, so a pattern that keeps
+recurring is raised again later - reach for it by default. `hide` blocks the
+pattern permanently, for a suggestion that is wrong in principle rather than
+wrong for now; the owner can lift it from the console's **Hidden forever** list.
+Apply performs the proposal's typed action and
 returns that real outcome; it never substitutes a plausible dummy when the
 target disappeared or a file/store mutation failed. Memory-changing actions
 route through the lifecycle/files services, so supersession, atomic Markdown
@@ -5142,6 +5617,8 @@ writes, and occupied-path protections remain the same as direct tools.
 ## lab_open {#lab_open}
 
 Open a research lab and get its recent trial history for context -- including trials other agents recorded, so parallel agents can share one investigation. Use a lab for systematic investigations whose expected-vs-actual results must outlive the session. Binds the lab to this connection so later trial_record calls inherit it. A lab is just a label -- a new one needs no setup; it exists once its first trial is recorded.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5152,6 +5629,8 @@ Open a research lab and get its recent trial history for context -- including tr
 
 Record one experiment in a research lab: what changed, expected vs actual, outcome, and optional structured metrics for later querying. Inherits the lab from lab_open unless you pass one.
 
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
+
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `title` | string | **yes** | short trial title |
@@ -5161,11 +5640,13 @@ Record one experiment in a research lab: what changed, expected vs actual, outco
 | `lab` | string | no | lab name; defaults to the lab opened on this connection |
 | `metrics` | object | no | optional object of structured metrics, e.g. {"hz":497,"err_pct":0.2} (a JSON-object string is also accepted) |
 | `outcome` | string | no | suggested values pass\|fail\|partial\|inconclusive; free text accepted |
-| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. |
+| `project` | string | no | project slug; defaults to the bound/ambient session's project. An unknown slug CREATES that project -- naming a new one is normal and never an error. Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a neutral default. With no session and no explicit project the call is rejected as ambiguous. A session bound to a confidential or sealed project can write ONLY into that project. |
 
 ## trial_query {#trial_query}
 
 Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics filter over the metrics recorded by trial_record.
+
+**Optional** - part of *Research labs &amp; trials*, hidden when the `research` feature is disabled: the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data stays exactly where it was. See [Optional features](/reference/console/#optional-features).
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
@@ -5176,11 +5657,11 @@ Query recorded trials, filtered by lab, outcome, and/or an exact-match metrics f
 
 ## gardener_proposals {#gardener_proposals}
 
-List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only.
+List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, fold a stranded captured plan into the composition that carries its steps, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply, dismiss or hide each with gardener_apply. Read-only.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`. |
+| `kind` | string | no | filter by proposal kind (default: all pending). One of: `merge`, `archive`, `digest`, `consolidate`, `reproject`, `split`, `abandon_plan`, `memory_wanted`, `tool_error`, `rekind`, `ship_plan`, `relocate`, `merge_plans`. |
 
 ## gardener_request {#gardener_request}
 
@@ -5202,16 +5683,16 @@ Plan a project SPLIT: divide one existing project into two or more NEW child pro
 
 ## gardener_apply {#gardener_apply}
 
-Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised.
+Resolve a gardener proposal. action=apply carries out the effect (archive -&gt; retire the memory; merge -&gt; supersede the older by the newer; consolidate -&gt; write a unified memory superseding its sources; digest -&gt; save the summary as a note; reproject -&gt; move the memory to another project; rekind -&gt; reclassify the memory's kind in place; split -&gt; create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -&gt; open a task to write the missing memory; tool_error -&gt; open a task to fix the recurring error; merge_plans -&gt; retag a stranded captured plan's notes onto the plan that holds the steps and settle the capture as merged). Rejecting has two strengths: action=dismiss discards this proposal and the evidence behind it, so a pattern that keeps recurring is raised again later; action=hide blocks the pattern permanently, so no recurrence re-raises it. Prefer dismiss unless the suggestion is wrong in principle rather than wrong for now. Both are reversible by the owner from the console.
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `id` | string | **yes** | proposal id (ULID) |
-| `action` | string | no | apply (default) or dismiss. One of: `apply`, `dismiss`. |
+| `action` | string | no | apply (default), dismiss (until it recurs), or hide (forever). One of: `apply`, `dismiss`, `hide`. |
 
 ## usage_summary {#usage_summary}
 
-Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Read-only.
+Report a roll-up of activity: memory/note/session/task counts, retrieval totals with the most-injected memories, pending gardener proposals, and events by kind. Every count is machine-wide and identical for every caller; only the named memory lists (topInjected, topUtility) are fenced, so memories this session may not read under project isolation are dropped from them and those lists can come back shorter than the counts imply. Read-only.
 
 Takes no parameters.
 
@@ -5538,6 +6019,29 @@ Favorites sort first in the console, can be filtered there, and starred
 memories are pinned into every session briefing and rank-boosted in recall. A
 plan's star lives on its primary note, so a task-only plan cannot be starred.
 
+### seam project isolation {#seam_project_isolation}
+
+```bash
+seam project isolation [--yes] <slug> [<state>]
+```
+
+Shows or sets a project's [isolation](/concepts/project-isolation/) state.
+`state` is one of `open`, `confidential`, or `sealed`; omit it to print the
+current state and its promise line. Unlike most subcommands this one talks to
+the console's JSON endpoint rather than an MCP tool - there is deliberately no
+tool to change isolation, because tightening detaches family and parent links
+and is an owner decision.
+
+**Tightening requires `--yes`.** Without it, the command prints exactly the
+consequences the console's confirm panel shows - the family and parent it would
+detach from - applies nothing, and exits non-zero, so a script cannot mistake an
+unconfirmed tighten for a fence that went up. **Loosening is immediate** and
+ignores `--yes`.
+
+A project with children refuses to tighten until they are re-parented; the
+refusal names them. Promise text is echoed from the server rather than
+transcribed here, so the console and the CLI cannot drift apart.
+
 ### seam usage {#seam_usage}
 
 ```bash
@@ -5559,7 +6063,14 @@ Client-side checks, each reported `ok` or `FAIL`, exiting non-zero if any failed
 
 1. **server** - `/healthz` reachable and reporting `ok`.
 2. **mcp_tools** - `tools/list` returns the tool count this CLI was built to
-   expect. A mismatch means the running daemon is a different build.
+   expect, minus the tools of any [optional
+   feature](/reference/console/#optional-features) that is switched off (the
+   line reads `31 registered, 28 exposed (research disabled)`). A mismatch that
+   feature state does not explain means the running daemon is a different build.
+   When the feature state cannot be read - the daemon is older than optional
+   features, or its settings endpoint did not answer - the check judges the
+   plausible range instead and names the reason rather than failing a healthy
+   daemon.
 3. **projects** - `project_list` answers.
 
 This is the client-side view. `seamlessd doctor` checks config, database, and
@@ -5703,9 +6214,9 @@ you spot a daemon running older code than your working tree.
 seamlessd doctor
 ```
 
-Server-side self-checks. Each line reports `ok`, `warn`, or `fail`; **only a
-`fail` exits non-zero** - warnings are informational. Checks stop early if
-config or the database cannot be loaded at all.
+Server-side self-checks. Each line reports `ok`, `info`, `warn`, or `fail`;
+**only a `fail` exits non-zero** - warnings and info lines are informational.
+Checks stop early if config or the database cannot be loaded at all.
 
 | Check | What it reports |
 |---|---|
@@ -5726,6 +6237,7 @@ config or the database cannot be loaded at all.
 | `codex hook trust` | Always warns that trust is unverified and directs you to Codex `/hooks`; no private trust state is read. |
 | `codex hook activity` | Last observed SessionStart/UserPromptSubmit event, if any; evidence only, not proof of current trust. |
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
+| `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
 
 The definition checks compare current desired state, not mere existence. The
@@ -5769,8 +6281,12 @@ Wires the selected install target(s) to Seamless: merges the hook entries into
 each hook client's file (Claude Code `settings.json`, Codex `hooks.json`),
 registers the MCP server (via the client's CLI, or for the Claude app chat
 surface by editing `claude_desktop_config.json` directly), and installs the
-embedded `seam-onboard` and `seam-research` skills into each hook client's
-skill home. The `claude-desktop` target is the chat surface's MCP bridge only -
+embedded skills into each hook client's skill home - `seam-onboard` always, and
+`seam-research` only while its
+[optional feature](/reference/console/#optional-features) is on. A skill whose
+feature is off is not installed, and a copy this installer previously delivered
+is removed, so an agent never reads about tools the server no longer exposes.
+The `claude-desktop` target is the chat surface's MCP bridge only -
 it has no hooks and no skills - so selecting only it together with
 `--mcp=false` is an error rather than a silent no-op.
 
@@ -6016,14 +6532,28 @@ Four layers resolve each key. Later layers win:
 1. **Defaults** - the built-in values in the table below.
 2. **File** - whatever the YAML sets.
 3. **Environment** - `SEAMLESS_*` overrides the file.
-4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
-   in the database. They win over file *and* env, apply from the next session
-   start without a daemon restart, and stay until reset.
+4. **Runtime override (DB)** - the console's Settings forms store some blocks in
+   the database. They win over file *and* env, take effect without a daemon
+   restart, and stay until reset.
 
-That fourth layer only covers the `briefing:` block. It exists so you can tune
-what agents get injected while they are running, and it is the one place where
-the config file is not the last word - check the console before concluding a
-briefing setting is being ignored.
+That fourth layer covers two blocks, and only those two:
+
+| Block | Written by | When it takes effect |
+|---|---|---|
+| `briefing:` | Settings → Briefing injection | From the next session start. |
+| `features:` | Settings → [Features](/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
+
+It exists so you can change what agents get injected - and what they can reach -
+while they are running, and it is the one place where the config file is not the
+last word: check the console before concluding a `briefing:` or `features:`
+setting is being ignored. Neither form ever writes your config file, and
+**Reset** on either clears the stored row and hands that block back to file/env.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds a stored `features:` override
+with research on, so a feature that now ships off does not disappear from under
+data you were already using. The console labels it a stored override, not your
+choice; **Reset** clears it like any other.
 
 ## Generating a key
 
@@ -6066,6 +6596,9 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.include_sibling_memories` | bool | - |
 | `briefing.utility_weight` | float64 | `0.4` |
 | `briefing.utility_mode` | string | `auto` |
+| `features.research` | bool | - |
+| `features.momentum` | bool | - |
+| `features.gamification` | bool | - |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -6212,6 +6745,29 @@ briefing:
   # bounded recall/prompt-recall utility boosts are always on.
   # env: SEAMLESS_BRIEFING_UTILITY_MODE
   utility_mode: auto
+
+# Optional features. These ship OFF: a fresh installation exposes none of them
+# until you turn one on -- here, via env, or live in the console (Settings ->
+# Features), which stores a runtime override in the database that WINS over this
+# file and env until reset. Turning a feature off hides its console screens, its
+# MCP tools, and its agent-facing mentions; it never deletes stored data, and
+# re-enabling restores every surface. An installation that already holds research
+# data keeps the feature on across the upgrade (a one-time seeded override).
+features:
+  # Research labs and trials: the Labs and Trials console screens, the trials
+  # search scope, and the lab_open, trial_record, trial_query MCP tools.
+  # env: SEAMLESS_FEATURES_RESEARCH
+  research: false
+  # Momentum surfaces woven into existing screens: the plan finish-line card
+  # (and its agent-briefing emphasis), the activity calendar with capture
+  # streaks, knowledge payoff moments, and project maturity stages.
+  # env: SEAMLESS_FEATURES_MOMENTUM
+  momentum: false
+  # The arcade layer of the Now screen: the day tape, personal records, the
+  # hot-streak pulse, and celebration moments. Every number is judged from
+  # real recorded activity; off, the Now screen carries no trace of it.
+  # env: SEAMLESS_FEATURES_GAMIFICATION
+  gamification: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.
@@ -6786,7 +7342,7 @@ the same relative locations on every OS.
 | Daemon log | `~/.seamless/seamlessd.log` (macOS, Windows); journald (Linux) | `make logs` from a clone, `journalctl --user -u seamless -f` on Linux |
 | Claude Code hooks | `~/.claude/settings.json` | exactly what is written: [Hooks](/reference/hooks/) |
 | Codex hooks | `${CODEX_HOME:-~/.codex}/hooks.json` | same reference, [shell-string forms](/reference/hooks/#the-codex-profile-is-shell-strings) |
-| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` + `seam-research`, delivered per client |
+| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` always; `seam-research` while its [optional feature](/reference/console/#optional-features) is on. Delivered per client |
 | Claude app chat MCP | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS); `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | the chat surface's only artifact - [Claude app chat setup](/claude-app/) |
 
 ## Removing the service by hand {#removing-the-service-by-hand}
@@ -7008,11 +7564,15 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Ask the gardener for proposals | `POST /console/gardener/request` | Interprets a natural-language maintenance request into **pending proposals**. It never mutates a memory. |
 | Plan a project split | `POST /console/gardener/split` | Interprets a split request into a plan batch of **pending proposals** (one split setup plus one reproject per memory). Also never mutates a memory. |
 | Apply one proposal | `POST /console/gardener/{id}/apply` | Carries out that proposal's effect. |
-| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. |
+| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. The pattern is raised again if new evidence for it arrives after the decision. |
+| Hide a proposal forever | `POST /console/gardener/{id}/hide` | Drops it without acting and blocks the pattern permanently - no recurrence re-raises it. Listed under **Hidden forever**. |
+| Unhide a pattern | `POST /console/gardener/{id}/unhide` | Lifts a forever block. The proposal stays resolved; the gardener may propose the pattern again the next time it recurs. |
 | Retarget a reproject proposal | `POST /console/gardener/{id}/retarget` | Rewrites a **pending** reproject's destination project before it is applied. Reproject proposals only. |
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
+| Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -7022,8 +7582,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, project families) that shapes future
-briefings without touching any memory's content.
+configuration knob (briefing overrides, feature switches, project families) that
+shapes future briefings, or what is exposed, without touching any memory's
+content.
 
 This is deliberate, and it is the same principle as
 [the gardener's](/concepts/gardener/) propose-only contract. The store is written
@@ -7122,9 +7683,60 @@ The landing page and the health check. It carries:
   "No mishaps reported" state.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
+The four judged vitals at the top (memory reach, knowledge continuity, context
+injections, sessions reached) are drill-down links carrying the selected
+window: reach, injections, and sessions reached land on the Retrieval screen
+whose hero and delivery funnel are the same numbers over the same report, and
+continuity lands on the Sessions list filtered to `?retained=no` - the
+sessions that kept nothing. An empty-state card stays linked, because the
+destination explains why there is nothing.
+
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 `active` count that an idle session inflates until the reaper runs.
+
+## Now
+
+`/console/now`
+
+The exploded live view: what every agent is doing right now, across every
+project and plan at once. Where the project workspace is task-centric, Now is
+agent-centric - the unit is the live session, and everything it holds rides its
+card. The sidebar entry's badge is the live agent count, and the page refreshes
+on **every** event kind (tool calls included - here they are the signal, not
+noise), morphing in place like every other screen.
+
+Top to bottom:
+
+- **The titlebar** - live agent count and the fleet-wide pulse: an events-per-
+  five-minutes sparkline over the last hour, all kinds, deliberately unfiltered
+  by scope.
+- **A scope strip** - one chip per project with a live agent (`?scope=<slug>`;
+  the empty project scope filters as `global`). Filtering narrows every zone
+  except the pulse.
+- **On duty** - one card per live session: harness+model pill, project, last
+  heartbeat (cards are toned hot/warm/quiet by heartbeat age), session wall
+  clock, cumulative tokens, a star toggle, every claim it holds with a live
+  lease countdown, and a short trail of what it just produced. A live agent
+  holding nothing says so: "no claim held - roaming".
+- **Loose ends** - `in_progress` tasks no live agent is carrying: a lapsed
+  lease, a claimless start (`tasks_update status=in_progress` without a
+  claim), or a holder that went quiet mid-lease. A lapsed claim offers
+  **release claim** with no confirmation - the lease is already dead, so there
+  is no live holder to interrupt, only a stale lock to clear.
+- **Plans in motion** - a horizontally scrolling rail of every incomplete plan
+  across every project, done/in-flight progress bars and ready counts, cards
+  dimmed once a plan has rested for 24h. Each links to its project's Plans &
+  tasks tab.
+- **Up next** - the cross-project ready queue: claimable this instant, plan
+  steps included, each naming what closing it would unblock.
+- **The wire** - the freshest business events, scope-filtered.
+
+Everything links onward - sessions, tasks, plans, projects, events - and the
+lease countdowns tick client-side between refreshes. With the
+[gamification](#optional-features) feature on, the page also carries the day
+tape, the personal-records rail, the hot-streak pulse, and celebration moments;
+off (the default), none of that renders.
 
 ## Interactions
 
@@ -7214,7 +7826,12 @@ unknown slug is a 404.
 
 The list separates **active** (live: active and heartbeated within the idle TTL)
 from **idle** (active but gone quiet past it, awaiting the reaper) from
-**completed** and **expired**. Filterable by status, searchable, windowed.
+**completed** and **expired**. Filterable by status, searchable, windowed, and
+filterable by retention (`?retained=yes|no`): whether the session left a
+durable artifact behind - non-empty findings, or a written memory, note, or
+recorded trial, the same covered-ness test the coverage numbers apply. The
+Overview's continuity vital links straight to `?retained=no`, so its click
+answers "which sessions dropped knowledge".
 
 A session's page is the workspace: its findings (rendered), its full event
 timeline as interaction rows, per-session counts (tool calls, memory reads and
@@ -7288,14 +7905,29 @@ the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). **Approve** appears here, for
 captures only.
 
+Each plan also carries a **model tokens** rollup - the cumulative transcript
+tokens of every session attributed to the plan (any session that moved a step,
+or captured the plan) - compact in the rail (`~483k tok`) and qualified in the
+reader (`~483k model tokens · 3 sessions (1 unreported)`). Attribution is
+whole-session on purpose: tokens are only ever known per session, so a
+session's full burn counts toward each plan it touched, counted once however
+many steps it moved. Claude Code reports tokens at session end, so a live
+session stays *unreported* until it finishes; a session that touched more than
+one plan is disclosed as *shared* rather than split by guesswork - which is
+also why plan totals must never be summed across plans.
+
 ## Labs
 
 `/console/labs`, `/console/labs/{name}`
 
 The research-lab surface (the console twin of `lab_open` / `trial_record` /
-`trial_query`). A lab is not a stored entity - it is the label its trials carry,
-a stable name for one line of investigation - so this screen is an aggregation
-over the trials table and there is nothing to write.
+`trial_query`). Labs and Trials are one [optional feature](#optional-features)
+and ship off; while it is off both screens answer with a short "switched off"
+page and neither appears in the nav.
+
+A lab is not a stored entity - it is the label its trials carry, a stable name
+for one line of investigation - so this screen is an aggregation over the trials
+table and there is nothing to write.
 
 The same library shape: a rail of labs, most recently active first, each with
 its trial count and pass/fail tallies. The reader shows one lab's whole
@@ -7310,8 +7942,10 @@ uncapped, filterable view.
 `/console/trials`, `/console/trials/{id}`
 
 The flat, filterable view over every recorded trial - the console twin of the
-`trial_query` MCP tool. The rail groups trials by lab (a group sits where its
-newest trial does) and filters by `?lab=` and `?outcome=`. Outcomes are
+`trial_query` MCP tool, and part of the same
+[optional feature](#optional-features) as [Labs](#labs). The rail groups trials
+by lab (a group sits where its newest trial does) and filters by `?lab=` and
+`?outcome=`. Outcomes are
 free-form by design, so `?outcome=` is an exact-match filter rather than a
 validated enum; the seg offers the conventional values (`pass`, `fail`,
 `partial`, `inconclusive`).
@@ -7400,8 +8034,13 @@ opens a task; nothing is written until someone writes the memory.
 Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.
 
-The actions are **apply**, **dismiss**, **retarget** (reproject cards only), and
-**apply plan**. Above them sits a single ask-in-words box, and it only ever
+The actions are **apply**, **dismiss**, **hide forever**, **retarget**
+(reproject cards only), and **apply plan**. Dismissing answers the evidence in
+front of you - the pattern comes back if it recurs; hiding answers the pattern
+itself. Everything you decide lands in **Recently decided** with an Undo, and a
+hide is additionally listed under **Hidden forever**, where **Unhide** lifts the
+block without returning the proposal to the queue. Above them sits a single
+ask-in-words box, and it only ever
 produces more proposals for this same queue. A request recognized as a project
 split is planned as a split directly - the plan batch appears below like any
 other. When the split's source project cannot be matched, an inline follow-up
@@ -7414,14 +8053,149 @@ See [The gardener](/concepts/gardener/) for what each proposal type means.
 `/console/settings`
 
 A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for the
-semantic index, briefing injection (including utility ranking), and project
-families.
+registered projects, and the repo→project map - with editable blocks for
+optional features, the semantic index, briefing injection (including utility
+ranking), and project families.
 
-**Semantic index & storage**: the embedding pipeline and the SQLite database,
-side by side. The embedder card shows the active provider and model - and when
-embeddings are off, the exact cause, with distinct copy for the owner off
-switch, the no-key lexical fallback, and a config error. The off/auto switch is
+### Optional features
+
+`/console/settings#features`
+
+Optional features are the parts of Seamless you can switch on and off, and they
+ship **off**: a fresh install exposes none of them until you turn one on. The
+zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+feature is, a generated line naming exactly what switching it off hides, and a
+live count of the data it holds either way ("Data kept: 12 trials across 3
+labs").
+
+There are three today:
+
+**Research labs & trials** owns the [Labs](#labs) and [Trials](#trials)
+screens, the trials search scope, and the `lab_open`, `trial_record`, and
+`trial_query` MCP tools. Screens and tools move together on purpose, so an
+agent never sees a tool for a screen you switched off.
+
+**Momentum** is gentle progress cues woven into existing screens -- plan finish
+lines, capture streaks, knowledge payoffs, and project growth -- judged from
+real activity, never invented. It owns no screens or tools of its own; turning
+it on adds seven surfaces where you already look:
+
+- **Plan finish-line cards** on the Overview attention strip: any plan at least
+  80% done gets one positive card naming the exact remaining steps ("seambench
+  -- one step from shipped"), linking to the plan, with a thin progress bar
+  drawn to the plan's exact done/total percent. The agent briefing's plan
+  line carries the same emphasis, so agents are nudged to close it too.
+- **The capture calendar** on Sessions: a year of daily activity, cell
+  intensity from sessions per day, a distinct dot on days that captured
+  knowledge (a session left findings, a memory, a note, or a trial), and two
+  quiet numbers -- the current capture streak and the longest ever. The streak
+  counts covered days, so it rewards capture, not raw usage; a streak of seven
+  covered days or more earns a small flame beside the number, and the number
+  itself stays verbatim. The grid is an instrument, not wallpaper: hovering a
+  cell reads out its day, clicking one focuses the session map on exactly that
+  day (a clearable chip names the focus; picking a time window widens back
+  out), and the grid is keyboard-walkable -- arrows move a day or a week,
+  Enter focuses, all without a page reload.
+- **Knowledge payoff moments**: the first time a memory is read by a session
+  other than the one that wrote it, the moment lands in the activity ledger
+  ("gotcha chroma-boot-race just paid off for the first time") -- once per
+  memory, ever -- and the Overview rail gains a **Memory of the month** panel
+  naming the last 30 days' top-utility memory with the counts behind the claim.
+- **Maturity stages** on the project board and detail header: each project
+  earns a latched stage -- seedling, sprouting, established, deep-rooted --
+  from real thresholds over age, memories, event volume, and reach. Stages
+  never regress, and the pill's tooltip states exactly what the next stage
+  asks for.
+- **The plan-shipped settle** on Plans: the task transition that closes a
+  plan's last step -- wherever it lands, an agent shipping over MCP included --
+  mints a once-ever plan.shipped moment. The plan's row settles with a single
+  wash when it happens while you are watching, the ledger renders it under its
+  own flag icon, and the Plans header counts the local month: "Plans shipped
+  this month: N".
+- **Milestone moments** in the activity ledger: a short latched set of honest
+  firsts and counts -- a project's 100th/500th/1000th memory, its 1000th
+  answered recall, its first supersession, its first shipped plan, and its
+  birthdays -- each minted once ever and rendered under an award glyph with
+  the exact claim ("100 memories written in seamless"). Milestones accumulate
+  in the ledger only; there is no trophy screen.
+- **Witnessed unlocks** on Settings: the utility-activation table's armed
+  note upgrades to the date each stage unlocked, so a latch that used to flip
+  silently is witnessed.
+
+Motion keeps one register: every animation plays once -- on a live arrival or
+on first render -- and nothing loops except the existing pulse idioms. A moment
+already on screen when the page loads renders plain; only a new arrival over
+the live feed animates. `prefers-reduced-motion` stills all of it, and the
+shipped-plan settle is the ceiling: no confetti and no toasts, which belong to
+gamification's arcade on Now.
+
+Momentum keeps the console's judged-numbers ethos: every number is real and
+verifiable, empty states say so honestly, and there are no punishment mechanics
+-- an inactive day is an empty cell, never a warning, and nothing nags or
+expires. Off (the default), none of it renders and none of it is computed: no
+latch moves and no moment is minted. Moments minted while it was on stay in
+the event history (nothing is ever deleted), though milestone rows leave the
+activity feeds until it returns.
+
+**Gamification** is the arcade layer of the [Now](#now) screen. Where momentum
+asks "is this knowledge practice building on itself?", gamification plays back
+"how hard is the fleet running right now?" - and an owner who enjoys one
+framing may find the other noisy, so they toggle separately. It owns no screens
+or tools of its own; turning it on adds four surfaces to Now:
+
+- **The day tape**: today's judged output - tasks closed, memories and notes
+  written, plans touched, sessions started - each cell against its trailing
+  7-day daily average.
+- **The personal-records rail**: latched bests (most tasks closed in a day,
+  most memories written in a day, most agents live at once). Records only ever
+  move forward, like maturity stages; an unset record reads "today could be
+  the day".
+- **The hot-streak pulse**: the last ten minutes' event count beside the
+  titlebar pulse, catching fire past a fixed floor. The count is shown
+  verbatim either way, so the claim stays verifiable.
+- **Celebration moments**: a record falling or a plan shipping its last step
+  today renders a moment chip - and when one lands while you are watching, a
+  toast and a brief confetti burst (skipped under reduced motion). A record
+  crossing is minted into the event ledger at most once per record per day.
+
+The same guardrails as momentum apply: every number is judged from recorded
+activity, never invented, and there are no punishment mechanics - a quiet day
+is an empty tape, never a warning. Off (the default), none of it is computed,
+no record latch is written, and the Now page carries zero trace of it.
+
+**Nothing is ever deleted.** Switching a feature off gates exposure and nothing
+else: the trials stay in the database, its screens answer with a short "switched
+off" page that links back here (a JSON caller gets a 403), and switching it back
+on restores every surface exactly as it was. That is what the data-kept line on
+each card is for - it reports the feature's own rows whether it is on or off.
+
+**When the change lands** has four different answers:
+
+| Surface | When |
+|---|---|
+| The console | Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render. |
+| A tool call | Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding. |
+| The agent briefing | The next session start - momentum's finish-line emphasis reads the same stored override the console gates on. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it already has. |
+| The client-side skill | The next `seamlessd install-hooks` run. The daemon does not reach into `~/.claude/skills` on a toggle, so `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still sitting in a client's skill home. |
+
+Saving writes a **stored override** row in the database - the same layer the
+briefing form uses. It wins over file and env, never touches your config file,
+and holds until **Reset to file + env** clears it; reset means back to the
+file/env configuration, which unless you set `features:` there is off.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds the override with research on,
+so a feature that now ships off does not disappear from under data you were
+already using. That is why the zone states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.
+
+### Semantic index & storage
+
+The embedding pipeline and the SQLite database, side by side. The embedder card
+shows the active provider and model - and when embeddings are off, the exact
+cause, with distinct copy for the owner off switch, the no-key lexical fallback,
+and a config error. The off/auto switch is
 a settings row read once at serve start, so the page flags a pending restart
 whenever the stored switch disagrees with the running process. Below it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
@@ -7430,9 +8204,11 @@ table that badges models the running embedder no longer writes as stale -
 background. The database card shows the file path, size on disk including the
 WAL, and schema version.
 
-**Briefing injection**: saving writes a runtime override row in the DB. It
-layers over the file/env values and wins until reset, and it applies from the
-next session start - no daemon restart. It never touches your config file, so
+### Briefing injection
+
+Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so
 `seamless.yaml` stays the thing you wrote. **Reset** clears the override and
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
@@ -7451,7 +8227,9 @@ overrides the latch in either direction; when the global mode is `on` or
 [Sessions & briefings](/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
-**Project families**: create, rename, edit, or delete the named groupings that
+### Project families
+
+Create, rename, edit, or delete the named groupings that
 [`seamlessd family`](/reference/cli-seamlessd/#seamlessd_family) manages from
 the CLI - the same `project_families` setting, so a change on either surface
 shows up on the other. Members are chosen from a closed picker of registered
@@ -8227,9 +9005,16 @@ Always go through them.
   skipped.
 - **Embeddings are little-endian float32 BLOBs** in the `embeddings` table, and
   similarity is brute-force cosine in Go. Do not add a vector database.
-- **The unified FTS5 table (`fts`) spans memories and notes** and is managed from
-  the files layer with explicit INSERT/DELETE - not triggers, because it is not
-  an external-content table.
+- **The unified FTS5 table (`fts`) spans both halves of the corpus**, with
+  `fts.kind` naming which. It is managed with explicit INSERT/DELETE - not
+  triggers, because it is not an external-content table - and each half is
+  maintained next to its own writer: the file-backed knowledge kinds (memory,
+  note) from the files layer, the DB-native work record (task, trial, session
+  findings) from `store/index_work.go`.
+- **The work record carries no embeddings.** There is no `content_hash`
+  reconcile loop behind a DB row, so vectorizing one would put a provider
+  round-trip inside every `tasks_add` and leave older rows unbackfillable. Those
+  kinds are lexical-only by design.
 
 ## Testing rules
 
@@ -8271,6 +9056,18 @@ Each row is a pattern that compiles, looks fine in review, and is wrong.
 and `time.Sleep`, `rowserrcheck` catches a missing `rows.Err()`, `errorlint`
 catches `err ==` sentinel comparisons, and `errcheck` runs with `check-blank: true`
 so errors discarded into `_` are reported too.
+
+`.golangci.yml` is schema **v2**, so `make lint` needs golangci-lint v2 - note the
+`/v2` in the module path, since v1's path installs a v1 binary:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+```
+
+The two schema generations are mutually unreadable, so a mismatched binary does
+not lint badly - it refuses to start, and the gate silently stops being a gate.
+`make lint` checks the major version up front and says so rather than letting the
+raw schema error surface. CI pins the same version; bump both together.
 
 That last one is the guardrail worth understanding. `n, _ := res.RowsAffected()`
 in front of `if n == 0 { return ErrNotFound }` turns a driver failure into a
@@ -8326,8 +9123,19 @@ Two places outside `internal/mcp` also track the surface:
 
 - **`cmd/seam/doctor.go`** has an `expectedTools` constant that mirrors
   `ToolCount` without importing the mcp package (which would pull its whole
-  dependency tree into the CLI). `seam doctor` asserts the running server exposes
-  that many tools via `tools/list`.
+  dependency tree into the CLI). It is the **registered** count, and `seam
+  doctor` reports registered against exposed: it reads the effective feature
+  state from `GET /console/settings?format=json` and subtracts the tools of the
+  features that are off, derived from the registry rather than from a second
+  number to keep current (`31 registered, 28 exposed (research disabled)`; `31
+  tools (expected 31)` when everything is on). With that state unreadable - an
+  unreachable endpoint, or a pre-features daemon whose settings JSON carries no
+  `featuresConfig` - it judges a **range** instead of a number and says why,
+  rather than failing a healthy daemon over a fact it could not read.
+  `seamlessd doctor`'s `mcp_tools` check stays a bare equality against
+  registration: the two doctors measure different things, and making the
+  server-side one feature-aware would lose the "written but never wired in"
+  signal it exists for.
 - **A docs page's `tools:` frontmatter list** (under `docs-src/reference/mcp/`)
   decides where the generated reference for the tool appears. A page listing a
   name that is not in `Catalog()` is a docsgen error.
@@ -8435,6 +9243,45 @@ and the store now serves two contradictory answers to the same question. An
 explicit tool error makes the agent deal with it. The new memory is still kept -
 its content is valid knowledge, and re-writing the same name is a lossless
 in-place update, so fixing the target and retrying is safe.
+
+## Mutating a corpus file
+
+Enforced in `internal/files` (`mutate.go`). Concepts:
+[Memory & notes](/concepts/memory/).
+
+### Every read-modify-write goes through `Mutate`
+
+A handler that reads an item, edits the struct, and writes the whole file back
+is a lost update waiting to happen: two of them racing on one file both read the
+same starting content, both render, and the second atomic rename wins. Nothing
+errors - the index upsert is by id, so even the `UNIQUE file_path` constraint
+stays quiet, and the losing agent is told its write succeeded.
+
+`files.Manager.Mutate(path, fn)` takes a per-path lock for the duration of the
+read *and* the write. `seamlessd` is a single daemon, which is what makes an
+in-process lock a complete answer rather than a partial one: every application
+write to the corpus goes through this one Manager.
+
+The invariant is not "the write is locked" - it is **the read that feeds the
+write happens inside the same lock**. Wrapping only the write fixes nothing, and
+looks exactly like a fix.
+
+`MutatePaths` locks several files in sorted order for a mutation that spans two
+of them (a note moving project writes the new path and removes the old); the
+sorted order is what keeps two opposite moves from deadlocking. The lock is not
+reentrant, which is why `WriteMemory`/`WriteNote`/`Remove` deliberately take no
+lock of their own - calling them from inside `fn` is the point.
+
+### `expect_hash` is checked against the FILE, inside the lock
+
+The mutation lock cannot see an agent acting on something it read minutes ago,
+or the owner editing the markdown in an editor. That is what the optional
+`expect_hash` precondition catches - and it must be compared against the hash of
+the file as just read under the lock, never against the index row.
+
+The watcher re-indexes on a 300 ms debounce. For that window the index still
+reports the hash the stale caller is holding, so an index-based check would pass
+on precisely the edit it exists to refuse.
 
 ## Session binding and scope
 

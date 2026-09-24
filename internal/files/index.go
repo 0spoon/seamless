@@ -10,10 +10,13 @@ import (
 	"github.com/0spoon/seamless/internal/core"
 )
 
-// Item kinds, as stored in the fts.kind and embeddings.kind columns.
+// Item kinds, as stored in the fts.kind and embeddings.kind columns. Aliases
+// for the canonical vocabulary in core, kept so this file reads unchanged; the
+// work-record kinds (task, trial, session) live in the same fts table but are
+// mirrored from the store layer, which owns the rows that have no file.
 const (
-	kindMemory = "memory"
-	kindNote   = "note"
+	kindMemory = core.ItemKindMemory
+	kindNote   = core.ItemKindNote
 )
 
 // Indexer mirrors memory/note files into the SQLite index tables and the

@@ -71,6 +71,9 @@ func CreateTask(ctx context.Context, db *sql.DB, t core.Task) error {
 	if err := addDeps(ctx, tx, t.ID, t.DependsOn); err != nil {
 		return err
 	}
+	if err := IndexTaskFTS(ctx, tx, t); err != nil {
+		return fmt.Errorf("store.CreateTask: %w", err)
+	}
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("store.CreateTask: commit: %w", err)
 	}
@@ -157,6 +160,12 @@ func UpdateTask(ctx context.Context, db *sql.DB, id string, patch TaskPatch, act
 	}
 	if err := addDeps(ctx, tx, t.ID, patch.AddDependsOn); err != nil {
 		return core.Task{}, err
+	}
+	// Title, body, and project are all indexed, and a patch may change any of
+	// them; refreshing unconditionally keeps the mirror correct without the
+	// writer having to know which fields FTS reads.
+	if err := IndexTaskFTS(ctx, tx, t); err != nil {
+		return core.Task{}, fmt.Errorf("store.UpdateTask: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return core.Task{}, fmt.Errorf("store.UpdateTask: commit: %w", err)

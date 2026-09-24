@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 
 	"github.com/0spoon/seamless/internal/config"
+	"github.com/0spoon/seamless/internal/features"
 	seamlessmcp "github.com/0spoon/seamless/internal/mcp"
 )
 
@@ -62,6 +63,8 @@ func generateMCPTools(p *Page, srcDir string) (string, error) {
 		catalog[t.Name] = t
 	}
 
+	optional := optionalToolNotes()
+
 	var b strings.Builder
 	for _, name := range p.Tools {
 		tool, ok := catalog[name]
@@ -70,6 +73,10 @@ func generateMCPTools(p *Page, srcDir string) (string, error) {
 		}
 		// Pin the anchor to the tool's real name: /reference/mcp/tasks/#tasks_claim.
 		fmt.Fprintf(&b, "## %s {#%s}\n\n%s\n\n", tool.Name, tool.Name, escapeText(tool.Description))
+		if note := optional[tool.Name]; note != "" {
+			b.WriteString(note)
+			b.WriteString("\n\n")
+		}
 
 		params, err := toolParams(tool)
 		if err != nil {
@@ -99,6 +106,23 @@ func generateMCPTools(p *Page, srcDir string) (string, error) {
 		}
 	}
 	return b.String(), nil
+}
+
+// optionalToolNotes maps every tool an OPTIONAL feature owns to the sentence its
+// generated section carries. The set comes from features.Registry(), never from
+// a list here: a tool that becomes optional annotates itself on the next
+// `make docs`, and one that stops being optional loses the line the same way.
+func optionalToolNotes() map[string]string {
+	notes := make(map[string]string)
+	for _, f := range features.Registry() {
+		for _, name := range f.Tools {
+			notes[name] = fmt.Sprintf("**Optional** - part of *%s*, hidden when the `%s` feature is disabled: "+
+				"the tool leaves `tools/list` and a call to it is refused as an unknown tool, while its stored data "+
+				"stays exactly where it was. See [Optional features](/reference/console/#optional-features).",
+				escapeText(f.Label), escapeText(string(f.Key)))
+		}
+	}
+	return notes
 }
 
 // toolParam is one row of a tool's parameter table.

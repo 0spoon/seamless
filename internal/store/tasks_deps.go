@@ -106,6 +106,11 @@ func dependsOnForTasks(ctx context.Context, q rowQuerier, taskIDs []string) (map
 		for i, id := range batch {
 			args[i] = id
 		}
+		// The rows ARE closed, by the deferred Close in the closure below.
+		// sqlclosecheck only recognizes a defer in the same function scope as the
+		// query, and this is a batch loop: a plain defer here would hold every
+		// batch's rows open until the whole loop returned.
+		//nolint:sqlclosecheck // closed by the closure's defer, see above
 		rows, err := q.QueryContext(ctx, `SELECT task_id, depends_on FROM task_deps
 			WHERE task_id IN (`+placeholders(len(batch))+`)
 			ORDER BY task_id ASC, depends_on ASC`, args...)

@@ -87,7 +87,7 @@ func TestContext_AllScopesShowsEffectiveBriefingTopology(t *testing.T) {
 	require.Contains(t, family.Detail, "sibling memories are off")
 
 	body := getHTMLBody(t, mux, "/console/context")
-	require.Contains(t, body, "Briefing topology")
+	require.Contains(t, body, ">Context</h1>")
 	require.Contains(t, body, "Global memory")
 	require.Contains(t, body, "Briefing families")
 	require.Contains(t, body, `/console/settings#briefing-recipe`)

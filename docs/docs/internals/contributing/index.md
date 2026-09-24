@@ -133,9 +133,16 @@ Always go through them.
   skipped.
 - **Embeddings are little-endian float32 BLOBs** in the `embeddings` table, and
   similarity is brute-force cosine in Go. Do not add a vector database.
-- **The unified FTS5 table (`fts`) spans memories and notes** and is managed from
-  the files layer with explicit INSERT/DELETE - not triggers, because it is not
-  an external-content table.
+- **The unified FTS5 table (`fts`) spans both halves of the corpus**, with
+  `fts.kind` naming which. It is managed with explicit INSERT/DELETE - not
+  triggers, because it is not an external-content table - and each half is
+  maintained next to its own writer: the file-backed knowledge kinds (memory,
+  note) from the files layer, the DB-native work record (task, trial, session
+  findings) from `store/index_work.go`.
+- **The work record carries no embeddings.** There is no `content_hash`
+  reconcile loop behind a DB row, so vectorizing one would put a provider
+  round-trip inside every `tasks_add` and leave older rows unbackfillable. Those
+  kinds are lexical-only by design.
 
 ## Testing rules
 
@@ -177,6 +184,18 @@ Each row is a pattern that compiles, looks fine in review, and is wrong.
 and `time.Sleep`, `rowserrcheck` catches a missing `rows.Err()`, `errorlint`
 catches `err ==` sentinel comparisons, and `errcheck` runs with `check-blank: true`
 so errors discarded into `_` are reported too.
+
+`.golangci.yml` is schema **v2**, so `make lint` needs golangci-lint v2 - note the
+`/v2` in the module path, since v1's path installs a v1 binary:
+
+```bash
+go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.12.2
+```
+
+The two schema generations are mutually unreadable, so a mismatched binary does
+not lint badly - it refuses to start, and the gate silently stops being a gate.
+`make lint` checks the major version up front and says so rather than letting the
+raw schema error surface. CI pins the same version; bump both together.
 
 That last one is the guardrail worth understanding. `n, _ := res.RowsAffected()`
 in front of `if n == 0 { return ErrNotFound }` turns a driver failure into a
@@ -232,8 +251,19 @@ Two places outside `internal/mcp` also track the surface:
 
 - **`cmd/seam/doctor.go`** has an `expectedTools` constant that mirrors
   `ToolCount` without importing the mcp package (which would pull its whole
-  dependency tree into the CLI). `seam doctor` asserts the running server exposes
-  that many tools via `tools/list`.
+  dependency tree into the CLI). It is the **registered** count, and `seam
+  doctor` reports registered against exposed: it reads the effective feature
+  state from `GET /console/settings?format=json` and subtracts the tools of the
+  features that are off, derived from the registry rather than from a second
+  number to keep current (`31 registered, 28 exposed (research disabled)`; `31
+  tools (expected 31)` when everything is on). With that state unreadable - an
+  unreachable endpoint, or a pre-features daemon whose settings JSON carries no
+  `featuresConfig` - it judges a **range** instead of a number and says why,
+  rather than failing a healthy daemon over a fact it could not read.
+  `seamlessd doctor`'s `mcp_tools` check stays a bare equality against
+  registration: the two doctors measure different things, and making the
+  server-side one feature-aware would lose the "written but never wired in"
+  signal it exists for.
 - **A docs page's `tools:` frontmatter list** (under `docs-src/reference/mcp/`)
   decides where the generated reference for the tool appears. A page listing a
   name that is not in `Catalog()` is a docsgen error.

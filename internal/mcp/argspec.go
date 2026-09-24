@@ -293,6 +293,18 @@ func coerceProp(prop map[string]any, v any, name string) (out any, drop bool, er
 		f, err := coerceInteger(v, name)
 		return f, false, err
 	case "array":
+		// An array of objects is its own shape (memory_edit/notes_edit take a
+		// list of {old_string, new_string} edits), and running it through
+		// coerceStrings would reject every element as "expected a string" --
+		// a type error about the caller's correct input. The declared item type
+		// is what tells the two apart, so the schema stays the single source.
+		if itemsType(prop) == "object" {
+			list, err := coerceObjects(v, name)
+			if err != nil {
+				return nil, false, err
+			}
+			return list, len(list) == 0, nil
+		}
 		list, err := coerceStrings(v, name)
 		if err != nil {
 			return nil, false, err
@@ -396,6 +408,49 @@ func coerceStrings(v any, key string) ([]string, error) {
 	default:
 		return nil, fmt.Errorf("invalid %s: expected an array of strings or a comma-separated string, got %s",
 			key, jsonTypeName(v))
+	}
+}
+
+// itemsType returns the declared type of an array property's elements, or ""
+// when the property declares no item schema. mcp.Items stores whatever the call
+// site handed it, and a JSON-decoded schema carries map[string]any, so both are
+// read; anything else reports "" and the property falls back to the string-array
+// path, which is what every array property in this package was before.
+func itemsType(prop map[string]any) string {
+	items, ok := prop["items"].(map[string]any)
+	if !ok {
+		return ""
+	}
+	t, _ := items["type"].(string)
+	return t
+}
+
+// coerceObjects accepts an array of objects, or a JSON-array string (the form an
+// agent sends when it stringifies its own arguments). Unlike coerceStrings it
+// drops nothing: an element of an edit list has no "blank" reading, and silently
+// discarding one would apply a different edit set than the caller asked for.
+func coerceObjects(v any, key string) ([]map[string]any, error) {
+	switch t := v.(type) {
+	case []any:
+		out := make([]map[string]any, 0, len(t))
+		for i, e := range t {
+			m, ok := e.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("invalid %s[%d]: expected an object, got %s", key, i, jsonTypeName(e))
+			}
+			out = append(out, m)
+		}
+		return out, nil
+	case []map[string]any:
+		return t, nil
+	case string:
+		var raw []any
+		if err := json.Unmarshal([]byte(strings.TrimSpace(t)), &raw); err != nil {
+			return nil, fmt.Errorf("invalid %s: expected an array of objects, got %q", key, t)
+		}
+		return coerceObjects(raw, key)
+	default:
+		return nil, fmt.Errorf("invalid %s: expected an array of objects, got %s", key, jsonTypeName(v))
 	}
 }
 

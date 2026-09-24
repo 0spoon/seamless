@@ -22,11 +22,15 @@ The console is **read-mostly**. That is a design claim, so here is the whole lis
 | Ask the gardener for proposals | `POST /console/gardener/request` | Interprets a natural-language maintenance request into **pending proposals**. It never mutates a memory. |
 | Plan a project split | `POST /console/gardener/split` | Interprets a split request into a plan batch of **pending proposals** (one split setup plus one reproject per memory). Also never mutates a memory. |
 | Apply one proposal | `POST /console/gardener/{id}/apply` | Carries out that proposal's effect. |
-| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. |
+| Dismiss a proposal | `POST /console/gardener/{id}/dismiss` | Drops it without acting. The pattern is raised again if new evidence for it arrives after the decision. |
+| Hide a proposal forever | `POST /console/gardener/{id}/hide` | Drops it without acting and blocks the pattern permanently - no recurrence re-raises it. Listed under **Hidden forever**. |
+| Unhide a pattern | `POST /console/gardener/{id}/unhide` | Lifts a forever block. The proposal stays resolved; the gardener may propose the pattern again the next time it recurs. |
 | Retarget a reproject proposal | `POST /console/gardener/{id}/retarget` | Rewrites a **pending** reproject's destination project before it is applied. Reproject proposals only. |
 | Apply a whole plan batch | `POST /console/gardener/plan/{slug}/apply` | Applies every pending proposal in a plan, split setup first so the child projects exist before the memories move. Best-effort: it applies what it can, reports how many landed, and leaves the rest pending. |
 | Save briefing settings | `POST /console/settings/briefing` | Writes the briefing knobs as a runtime **override row** in the DB. It never writes the config file. |
 | Reset briefing settings | `POST /console/settings/briefing/reset` | Clears the override row, reverting to the file/env configuration. |
+| Save optional features | `POST /console/settings/features` | Writes the feature switches as a stored **override row** in the DB. It changes what is exposed - console screens and the matching agent tools - and deletes nothing. |
+| Reset optional features | `POST /console/settings/features/reset` | Clears the override row, reverting to the file/env configuration - which, unless you set the keys there, means every optional feature is off again. Still deletes nothing. |
 | Save a project family | `POST /console/settings/families/save` | Creates a family or replaces one family's name and member set - the same `project_families` setting `seamlessd family` manages. Members come from a closed picker of registered projects, so a typo cannot create an inert member. |
 | Delete a project family | `POST /console/settings/families/delete` | Removes the whole family. Its projects lose the sibling-findings channel; nothing else about them changes. |
 | Sign in / sign out | `POST /console/login`, `POST /console/logout` | Sets or clears the console cookie. Touches no data. |
@@ -36,8 +40,9 @@ Read the shape of that list. There is no "create memory", no "edit note", no
 state are **archive a memory**, **approve a captured plan**, and the **star**
 flag; the rest either manage gardener proposals - which are themselves
 proposals, reviewed before they do anything - or free a lock, or set a
-configuration knob (briefing overrides, project families) that shapes future
-briefings without touching any memory's content.
+configuration knob (briefing overrides, feature switches, project families) that
+shapes future briefings, or what is exposed, without touching any memory's
+content.
 
 This is deliberate, and it is the same principle as
 [the gardener's](https://thereisnospoon.org/docs/concepts/gardener/) propose-only contract. The store is written
@@ -136,9 +141,60 @@ The landing page and the health check. It carries:
   "No mishaps reported" state.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
+The four judged vitals at the top (memory reach, knowledge continuity, context
+injections, sessions reached) are drill-down links carrying the selected
+window: reach, injections, and sessions reached land on the Retrieval screen
+whose hero and delivery funnel are the same numbers over the same report, and
+continuity lands on the Sessions list filtered to `?retained=no` - the
+sessions that kept nothing. An empty-state card stays linked, because the
+destination explains why there is nothing.
+
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 `active` count that an idle session inflates until the reaper runs.
+
+## Now
+
+`/console/now`
+
+The exploded live view: what every agent is doing right now, across every
+project and plan at once. Where the project workspace is task-centric, Now is
+agent-centric - the unit is the live session, and everything it holds rides its
+card. The sidebar entry's badge is the live agent count, and the page refreshes
+on **every** event kind (tool calls included - here they are the signal, not
+noise), morphing in place like every other screen.
+
+Top to bottom:
+
+- **The titlebar** - live agent count and the fleet-wide pulse: an events-per-
+  five-minutes sparkline over the last hour, all kinds, deliberately unfiltered
+  by scope.
+- **A scope strip** - one chip per project with a live agent (`?scope=<slug>`;
+  the empty project scope filters as `global`). Filtering narrows every zone
+  except the pulse.
+- **On duty** - one card per live session: harness+model pill, project, last
+  heartbeat (cards are toned hot/warm/quiet by heartbeat age), session wall
+  clock, cumulative tokens, a star toggle, every claim it holds with a live
+  lease countdown, and a short trail of what it just produced. A live agent
+  holding nothing says so: "no claim held - roaming".
+- **Loose ends** - `in_progress` tasks no live agent is carrying: a lapsed
+  lease, a claimless start (`tasks_update status=in_progress` without a
+  claim), or a holder that went quiet mid-lease. A lapsed claim offers
+  **release claim** with no confirmation - the lease is already dead, so there
+  is no live holder to interrupt, only a stale lock to clear.
+- **Plans in motion** - a horizontally scrolling rail of every incomplete plan
+  across every project, done/in-flight progress bars and ready counts, cards
+  dimmed once a plan has rested for 24h. Each links to its project's Plans &
+  tasks tab.
+- **Up next** - the cross-project ready queue: claimable this instant, plan
+  steps included, each naming what closing it would unblock.
+- **The wire** - the freshest business events, scope-filtered.
+
+Everything links onward - sessions, tasks, plans, projects, events - and the
+lease countdowns tick client-side between refreshes. With the
+[gamification](#optional-features) feature on, the page also carries the day
+tape, the personal-records rail, the hot-streak pulse, and celebration moments;
+off (the default), none of that renders.
 
 ## Interactions
 
@@ -228,7 +284,12 @@ unknown slug is a 404.
 
 The list separates **active** (live: active and heartbeated within the idle TTL)
 from **idle** (active but gone quiet past it, awaiting the reaper) from
-**completed** and **expired**. Filterable by status, searchable, windowed.
+**completed** and **expired**. Filterable by status, searchable, windowed, and
+filterable by retention (`?retained=yes|no`): whether the session left a
+durable artifact behind - non-empty findings, or a written memory, note, or
+recorded trial, the same covered-ness test the coverage numbers apply. The
+Overview's continuity vital links straight to `?retained=no`, so its click
+answers "which sessions dropped knowledge".
 
 A session's page is the workspace: its findings (rendered), its full event
 timeline as interaction rows, per-session counts (tool calls, memory reads and
@@ -302,14 +363,29 @@ the rendered plan body, the step tasks, and the notes attached to the
 composition (supporting notes and agent caches). **Approve** appears here, for
 captures only.
 
+Each plan also carries a **model tokens** rollup - the cumulative transcript
+tokens of every session attributed to the plan (any session that moved a step,
+or captured the plan) - compact in the rail (`~483k tok`) and qualified in the
+reader (`~483k model tokens · 3 sessions (1 unreported)`). Attribution is
+whole-session on purpose: tokens are only ever known per session, so a
+session's full burn counts toward each plan it touched, counted once however
+many steps it moved. Claude Code reports tokens at session end, so a live
+session stays *unreported* until it finishes; a session that touched more than
+one plan is disclosed as *shared* rather than split by guesswork - which is
+also why plan totals must never be summed across plans.
+
 ## Labs
 
 `/console/labs`, `/console/labs/{name}`
 
 The research-lab surface (the console twin of `lab_open` / `trial_record` /
-`trial_query`). A lab is not a stored entity - it is the label its trials carry,
-a stable name for one line of investigation - so this screen is an aggregation
-over the trials table and there is nothing to write.
+`trial_query`). Labs and Trials are one [optional feature](#optional-features)
+and ship off; while it is off both screens answer with a short "switched off"
+page and neither appears in the nav.
+
+A lab is not a stored entity - it is the label its trials carry, a stable name
+for one line of investigation - so this screen is an aggregation over the trials
+table and there is nothing to write.
 
 The same library shape: a rail of labs, most recently active first, each with
 its trial count and pass/fail tallies. The reader shows one lab's whole
@@ -324,8 +400,10 @@ uncapped, filterable view.
 `/console/trials`, `/console/trials/{id}`
 
 The flat, filterable view over every recorded trial - the console twin of the
-`trial_query` MCP tool. The rail groups trials by lab (a group sits where its
-newest trial does) and filters by `?lab=` and `?outcome=`. Outcomes are
+`trial_query` MCP tool, and part of the same
+[optional feature](#optional-features) as [Labs](#labs). The rail groups trials
+by lab (a group sits where its newest trial does) and filters by `?lab=` and
+`?outcome=`. Outcomes are
 free-form by design, so `?outcome=` is an exact-match filter rather than a
 validated enum; the seg offers the conventional values (`pass`, `fail`,
 `partial`, `inconclusive`).
@@ -414,8 +492,13 @@ opens a task; nothing is written until someone writes the memory.
 Split batches are grouped by plan and reviewed together, setup card first, with an
 apply-the-whole-plan action.
 
-The actions are **apply**, **dismiss**, **retarget** (reproject cards only), and
-**apply plan**. Above them sits a single ask-in-words box, and it only ever
+The actions are **apply**, **dismiss**, **hide forever**, **retarget**
+(reproject cards only), and **apply plan**. Dismissing answers the evidence in
+front of you - the pattern comes back if it recurs; hiding answers the pattern
+itself. Everything you decide lands in **Recently decided** with an Undo, and a
+hide is additionally listed under **Hidden forever**, where **Unhide** lifts the
+block without returning the proposal to the queue. Above them sits a single
+ask-in-words box, and it only ever
 produces more proposals for this same queue. A request recognized as a project
 split is planned as a split directly - the plan batch appears below like any
 other. When the split's source project cannot be matched, an inline follow-up
@@ -428,14 +511,149 @@ See [The gardener](https://thereisnospoon.org/docs/concepts/gardener/) for what 
 `/console/settings`
 
 A view of the running configuration - data dir, budgets, gardener settings, the
-registered projects, and the repo→project map - with editable blocks for the
-semantic index, briefing injection (including utility ranking), and project
-families.
+registered projects, and the repo→project map - with editable blocks for
+optional features, the semantic index, briefing injection (including utility
+ranking), and project families.
 
-**Semantic index & storage**: the embedding pipeline and the SQLite database,
-side by side. The embedder card shows the active provider and model - and when
-embeddings are off, the exact cause, with distinct copy for the owner off
-switch, the no-key lexical fallback, and a config error. The off/auto switch is
+### Optional features
+
+`/console/settings#features`
+
+Optional features are the parts of Seamless you can switch on and off, and they
+ship **off**: a fresh install exposes none of them until you turn one on. The
+zone renders one card per feature - a toggle, an Enabled/Disabled pill, what the
+feature is, a generated line naming exactly what switching it off hides, and a
+live count of the data it holds either way ("Data kept: 12 trials across 3
+labs").
+
+There are three today:
+
+**Research labs & trials** owns the [Labs](#labs) and [Trials](#trials)
+screens, the trials search scope, and the `lab_open`, `trial_record`, and
+`trial_query` MCP tools. Screens and tools move together on purpose, so an
+agent never sees a tool for a screen you switched off.
+
+**Momentum** is gentle progress cues woven into existing screens -- plan finish
+lines, capture streaks, knowledge payoffs, and project growth -- judged from
+real activity, never invented. It owns no screens or tools of its own; turning
+it on adds seven surfaces where you already look:
+
+- **Plan finish-line cards** on the Overview attention strip: any plan at least
+  80% done gets one positive card naming the exact remaining steps ("seambench
+  -- one step from shipped"), linking to the plan, with a thin progress bar
+  drawn to the plan's exact done/total percent. The agent briefing's plan
+  line carries the same emphasis, so agents are nudged to close it too.
+- **The capture calendar** on Sessions: a year of daily activity, cell
+  intensity from sessions per day, a distinct dot on days that captured
+  knowledge (a session left findings, a memory, a note, or a trial), and two
+  quiet numbers -- the current capture streak and the longest ever. The streak
+  counts covered days, so it rewards capture, not raw usage; a streak of seven
+  covered days or more earns a small flame beside the number, and the number
+  itself stays verbatim. The grid is an instrument, not wallpaper: hovering a
+  cell reads out its day, clicking one focuses the session map on exactly that
+  day (a clearable chip names the focus; picking a time window widens back
+  out), and the grid is keyboard-walkable -- arrows move a day or a week,
+  Enter focuses, all without a page reload.
+- **Knowledge payoff moments**: the first time a memory is read by a session
+  other than the one that wrote it, the moment lands in the activity ledger
+  ("gotcha chroma-boot-race just paid off for the first time") -- once per
+  memory, ever -- and the Overview rail gains a **Memory of the month** panel
+  naming the last 30 days' top-utility memory with the counts behind the claim.
+- **Maturity stages** on the project board and detail header: each project
+  earns a latched stage -- seedling, sprouting, established, deep-rooted --
+  from real thresholds over age, memories, event volume, and reach. Stages
+  never regress, and the pill's tooltip states exactly what the next stage
+  asks for.
+- **The plan-shipped settle** on Plans: the task transition that closes a
+  plan's last step -- wherever it lands, an agent shipping over MCP included --
+  mints a once-ever plan.shipped moment. The plan's row settles with a single
+  wash when it happens while you are watching, the ledger renders it under its
+  own flag icon, and the Plans header counts the local month: "Plans shipped
+  this month: N".
+- **Milestone moments** in the activity ledger: a short latched set of honest
+  firsts and counts -- a project's 100th/500th/1000th memory, its 1000th
+  answered recall, its first supersession, its first shipped plan, and its
+  birthdays -- each minted once ever and rendered under an award glyph with
+  the exact claim ("100 memories written in seamless"). Milestones accumulate
+  in the ledger only; there is no trophy screen.
+- **Witnessed unlocks** on Settings: the utility-activation table's armed
+  note upgrades to the date each stage unlocked, so a latch that used to flip
+  silently is witnessed.
+
+Motion keeps one register: every animation plays once -- on a live arrival or
+on first render -- and nothing loops except the existing pulse idioms. A moment
+already on screen when the page loads renders plain; only a new arrival over
+the live feed animates. `prefers-reduced-motion` stills all of it, and the
+shipped-plan settle is the ceiling: no confetti and no toasts, which belong to
+gamification's arcade on Now.
+
+Momentum keeps the console's judged-numbers ethos: every number is real and
+verifiable, empty states say so honestly, and there are no punishment mechanics
+-- an inactive day is an empty cell, never a warning, and nothing nags or
+expires. Off (the default), none of it renders and none of it is computed: no
+latch moves and no moment is minted. Moments minted while it was on stay in
+the event history (nothing is ever deleted), though milestone rows leave the
+activity feeds until it returns.
+
+**Gamification** is the arcade layer of the [Now](#now) screen. Where momentum
+asks "is this knowledge practice building on itself?", gamification plays back
+"how hard is the fleet running right now?" - and an owner who enjoys one
+framing may find the other noisy, so they toggle separately. It owns no screens
+or tools of its own; turning it on adds four surfaces to Now:
+
+- **The day tape**: today's judged output - tasks closed, memories and notes
+  written, plans touched, sessions started - each cell against its trailing
+  7-day daily average.
+- **The personal-records rail**: latched bests (most tasks closed in a day,
+  most memories written in a day, most agents live at once). Records only ever
+  move forward, like maturity stages; an unset record reads "today could be
+  the day".
+- **The hot-streak pulse**: the last ten minutes' event count beside the
+  titlebar pulse, catching fire past a fixed floor. The count is shown
+  verbatim either way, so the claim stays verifiable.
+- **Celebration moments**: a record falling or a plan shipping its last step
+  today renders a moment chip - and when one lands while you are watching, a
+  toast and a brief confetti burst (skipped under reduced motion). A record
+  crossing is minted into the event ledger at most once per record per day.
+
+The same guardrails as momentum apply: every number is judged from recorded
+activity, never invented, and there are no punishment mechanics - a quiet day
+is an empty tape, never a warning. Off (the default), none of it is computed,
+no record latch is written, and the Now page carries zero trace of it.
+
+**Nothing is ever deleted.** Switching a feature off gates exposure and nothing
+else: the trials stay in the database, its screens answer with a short "switched
+off" page that links back here (a JSON caller gets a 403), and switching it back
+on restores every surface exactly as it was. That is what the data-kept line on
+each card is for - it reports the feature's own rows whether it is on or off.
+
+**When the change lands** has four different answers:
+
+| Surface | When |
+|---|---|
+| The console | Immediately - nav entries, screens, the search scope, and the overview tiles appear or disappear on the next render. |
+| A tool call | Immediately - a disabled feature's tool is refused as an unknown tool, whatever list the caller is holding. |
+| The agent briefing | The next session start - momentum's finish-line emphasis reads the same stored override the console gates on. |
+| A client's tool list | The next time it lists tools, in practice its next session. Seamless declares `listChanged: false` and sends no tool-list notification, so a connected client keeps the list it already has. |
+| The client-side skill | The next `seamlessd install-hooks` run. The daemon does not reach into `~/.claude/skills` on a toggle, so `seamlessd doctor` raises an **info** line while a skill for a disabled feature is still sitting in a client's skill home. |
+
+Saving writes a **stored override** row in the database - the same layer the
+briefing form uses. It wins over file and env, never touches your config file,
+and holds until **Reset to file + env** clears it; reset means back to the
+file/env configuration, which unless you set `features:` there is off.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds the override with research on,
+so a feature that now ships off does not disappear from under data you were
+already using. That is why the zone states that a stored override is in force
+rather than crediting you with the choice - and reset clears it like any other.
+
+### Semantic index & storage
+
+The embedding pipeline and the SQLite database, side by side. The embedder card
+shows the active provider and model - and when embeddings are off, the exact
+cause, with distinct copy for the owner off switch, the no-key lexical fallback,
+and a config error. The off/auto switch is
 a settings row read once at serve start, so the page flags a pending restart
 whenever the stored switch disagrees with the running process. Below it, the
 stored-vector counts: totals, the not-yet-embedded backlog, and a per-model
@@ -444,9 +662,11 @@ table that badges models the running embedder no longer writes as stale -
 background. The database card shows the file path, size on disk including the
 WAL, and schema version.
 
-**Briefing injection**: saving writes a runtime override row in the DB. It
-layers over the file/env values and wins until reset, and it applies from the
-next session start - no daemon restart. It never touches your config file, so
+### Briefing injection
+
+Saving writes a runtime override row in the DB. It layers over the file/env
+values and wins until reset, and it applies from the next session start - no
+daemon restart. It never touches your config file, so
 `seamless.yaml` stays the thing you wrote. **Reset** clears the override and
 reverts to file/env. The form validates: a non-numeric knob or a value that
 fails `Briefing.Validate()` comes back as an error flash, not a
@@ -465,7 +685,9 @@ overrides the latch in either direction; when the global mode is `on` or
 [Sessions & briefings](https://thereisnospoon.org/docs/concepts/sessions/#the-budget-and-what-survives-it) for
 how the blended order behaves once active.
 
-**Project families**: create, rename, edit, or delete the named groupings that
+### Project families
+
+Create, rename, edit, or delete the named groupings that
 [`seamlessd family`](https://thereisnospoon.org/docs/reference/cli-seamlessd/#seamlessd_family) manages from
 the CLI - the same `project_families` setting, so a change on either surface
 shows up on the other. Members are chosen from a closed picker of registered

@@ -475,3 +475,50 @@ func TestKindTimeline_EmptyKindsOrLimitReturnsNil(t *testing.T) {
 	require.NoError(t, err)
 	require.Nil(t, got)
 }
+
+// RecordOnce is the once-per-item latch: the guard and the insert are one
+// statement, so a second attempt -- same kind, same item -- lands nothing,
+// publishes nothing, and reports recorded=false rather than an error.
+func TestRecordOnce_LatchesPerItem(t *testing.T) {
+	r := newRecorder(t)
+	ctx := context.Background()
+	ch, unsub := r.Subscribe()
+	defer unsub()
+
+	id, recorded, err := r.RecordOnce(ctx, core.Event{
+		Kind: core.EventMemoryFirstReuse, ItemID: "01MEM",
+		Payload: map[string]any{"name": "chroma-boot-race"},
+	})
+	require.NoError(t, err)
+	require.True(t, recorded)
+	require.Len(t, id, 26)
+	select {
+	case e := <-ch:
+		require.Equal(t, core.EventMemoryFirstReuse, e.Kind)
+	default:
+		t.Fatal("the first record must publish to subscribers")
+	}
+
+	id2, recorded2, err := r.RecordOnce(ctx, core.Event{
+		Kind: core.EventMemoryFirstReuse, ItemID: "01MEM",
+	})
+	require.NoError(t, err)
+	require.False(t, recorded2, "the latch was already set")
+	require.Empty(t, id2)
+	select {
+	case <-ch:
+		t.Fatal("a latched no-op must not publish")
+	default:
+	}
+
+	// A different item, and a different kind for the same item, both still land.
+	_, recorded3, err := r.RecordOnce(ctx, core.Event{Kind: core.EventMemoryFirstReuse, ItemID: "01OTHER"})
+	require.NoError(t, err)
+	require.True(t, recorded3)
+	_, recorded4, err := r.RecordOnce(ctx, core.Event{Kind: core.EventMemoryRead, ItemID: "01MEM"})
+	require.NoError(t, err)
+	require.True(t, recorded4)
+
+	_, _, err = r.RecordOnce(ctx, core.Event{Kind: core.EventMemoryFirstReuse})
+	require.Error(t, err, "the latch is per item, so an empty item id is a caller bug")
+}

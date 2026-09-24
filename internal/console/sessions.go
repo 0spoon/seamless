@@ -1,7 +1,7 @@
 package console
 
 import (
-	"encoding/json"
+	"context"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
-	"github.com/0spoon/seamless/internal/events"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/markdown"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -69,6 +69,44 @@ type sessionsData struct {
 	WindowLabel string         `json:"windowLabel"`
 	Windows     []windowOption `json:"-"`
 	Sessions    []sessionRow   `json:"sessions"`
+	// Day and DayLabel carry the ?day drill-down: a single local day the list
+	// is focused on (clicking a capture-calendar cell mints these URLs), empty
+	// when the list answers about a window instead.
+	Day      string `json:"day,omitempty"`
+	DayLabel string `json:"-"`
+	// Retained carries the ?retained drill-down: "yes" keeps only sessions
+	// that left a durable artifact behind (GetSessionCoverage's covered-ness
+	// test), "no" only those that retained nothing, "" applies no filter. The
+	// Overview's Knowledge continuity vital mints ?retained=no links.
+	Retained string `json:"retained,omitempty"`
+	// Calendar and Streak are the momentum capture calendar (a year of daily
+	// activity with covered-day marks) and its two quiet numbers. Both are nil
+	// while the momentum feature is off -- zero trace, including in the JSON.
+	Calendar template.HTML  `json:"-"`
+	Streak   *captureStreak `json:"captureStreak,omitempty"`
+}
+
+// captureStreak carries the calendar's two quiet numbers: the current run of
+// covered days and the longest ever (store.CaptureStreak).
+type captureStreak struct {
+	Current int `json:"current"`
+	Longest int `json:"longest"`
+}
+
+// StreakEmberFloor is the current-streak length, in covered days, at which the
+// calendar header lights its ember. A stated judgment threshold like the
+// targets in atoms.go -- which is why it is a named const, not config.
+const StreakEmberFloor = 7
+
+// Ember reports whether the current streak has reached StreakEmberFloor. Pure
+// presentation on the already-judged number: below the floor the template
+// renders nothing, not a grey ember.
+func (c captureStreak) Ember() bool { return c.Current >= StreakEmberFloor }
+
+// EmberTitle is the ember's tooltip: the verbatim run beside the floor it
+// cleared, so the glyph's claim is verifiable on the surface.
+func (c captureStreak) EmberTitle() string {
+	return fmt.Sprintf("%d covered days running -- the ember lights at %d", c.Current, StreakEmberFloor)
 }
 
 func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
@@ -97,11 +135,48 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, fmt.Sprintf("invalid sort %q: valid values are %s", sortKey, strings.Join(sessionSortKeys, ", ")))
 		return
 	}
+	// The ?retained filter: the Overview's Knowledge continuity vital links
+	// here with retained=no, so the card's click lands on the sessions that
+	// dropped knowledge. Present-but-uninterpretable is a loud 400 like a bad
+	// sort or day.
+	retained := r.URL.Query().Get("retained") // "", yes, no
+	if retained != "" && retained != "yes" && retained != "no" {
+		s.badRequest(w, r, fmt.Sprintf("invalid retained %q: valid values are yes, no", retained))
+		return
+	}
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	q := strings.ToLower(query)
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), time.Now())
 
-	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, win.Since, 200)
+	// The ?day drill-down: clicking a capture-calendar cell focuses the list on
+	// the sessions CREATED that local day -- created, not updated, because that
+	// is what the calendar counted for the cell. A day present but
+	// uninterpretable is a loud 400 like a bad sort, never a silent
+	// list-everything. A focused day bypasses the ?w window (two time filters
+	// would compose to confusion -- a day outside the window would show a lit
+	// cell over an empty list; the template's window links drop ?day for the
+	// same reason): the fetch bound becomes the day itself, sound because
+	// updated_at never precedes created_at, and the list cap trades up so every
+	// session the calendar counted for that day stays reachable.
+	dayParam := r.URL.Query().Get("day")
+	var dayStart, dayEnd time.Time
+	var dayLabel string
+	if dayParam != "" {
+		var derr error
+		dayStart, derr = time.ParseInLocation("2006-01-02", dayParam, time.Local)
+		if derr != nil {
+			s.badRequest(w, r, fmt.Sprintf("invalid day %q: expected YYYY-MM-DD", dayParam))
+			return
+		}
+		dayEnd = dayStart.AddDate(0, 0, 1)
+		dayLabel = dayStart.Format("Mon, Jan 02")
+	}
+	since, limit := win.Since, 200
+	if !dayStart.IsZero() {
+		since, limit = dayStart, 1000
+	}
+
+	sessions, err := store.ListSessions(ctx, s.cfg.DB, statusFilter, since, limit)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -111,14 +186,37 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
+	// The event half of the covered-ness test, loaded only when the filter is
+	// on; the findings half lives on the rows already fetched.
+	var artifacts map[string]struct{}
+	if retained != "" {
+		artifacts, err = store.SessionsWithArtifacts(ctx, s.cfg.DB)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+	}
 
 	now := time.Now()
 	rows := make([]sessionRow, 0, len(sessions))
 	active, idle, completed, expired := 0, 0, 0, 0
 	for _, sess := range sessions {
+		if !dayStart.IsZero() {
+			if c := sess.CreatedAt.Local(); c.Before(dayStart) || !c.Before(dayEnd) {
+				continue
+			}
+		}
 		plain := markdown.PlainText(sess.Findings)
 		if !sessionMatches(sess.Name, sess.ProjectSlug, plain, sess.ID, q) {
 			continue
+		}
+		// Covered-ness exactly as GetSessionCoverage computes it: non-empty
+		// findings on the row, or a durable-artifact event in the log.
+		if retained != "" {
+			_, artifact := artifacts[sess.ID]
+			if (sess.Findings != "" || artifact) != (retained == "yes") {
+				continue
+			}
 		}
 		live := sess.LiveAsOf(now, s.cfg.SessionIdleTTL)
 		switch sess.Status {
@@ -146,6 +244,7 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			return sessionSortName(rows[i]) < sessionSortName(rows[j])
 		})
 	}
+	calendar, streak := s.captureCalendar(ctx, now, dayParam)
 	s.render(w, r, "sessions", pageData{
 		Title:  "Sessions",
 		Active: "sessions",
@@ -154,9 +253,47 @@ func (s *Service) sessionsList(w http.ResponseWriter, r *http.Request) {
 			Active: active, Idle: idle, Completed: completed, Expired: expired,
 			Total:  counts.Sessions,
 			Window: win.Key, WindowLabel: win.Label, Windows: windowOptions(win.Key),
+			Day: dayParam, DayLabel: dayLabel, Retained: retained,
 			Sessions: rows,
+			Calendar: calendar, Streak: streak,
 		},
 	})
+}
+
+// captureCalendar assembles the momentum capture calendar for the Sessions
+// page: a full year of daily session activity with covered-day marks, plus the
+// streak numbers. Sessions is the screen about daily rhythm, so the full-year
+// grid lives here rather than as a compact strip on Overview (the placement
+// call the plan left to the implementer). selected is the active ?day filter,
+// so the grid can outline the cell the list is currently answering about.
+// Gated on the momentum feature -- off, neither query runs and the page is
+// byte-identical to before -- and failure-soft: a store error costs the
+// calendar, never the page.
+func (s *Service) captureCalendar(ctx context.Context, now time.Time, selected string) (template.HTML, *captureStreak) {
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		return "", nil
+	}
+	// A year back from today's local midnight, extended to the previous Sunday
+	// so the grid's first column is a full week (AddDate day arithmetic, per
+	// the localBucketAxis conventions -- never 24h multiples across DST).
+	l := now.Local()
+	start := time.Date(l.Year(), l.Month(), l.Day(), 0, 0, 0, 0, l.Location()).AddDate(0, 0, -364)
+	start = start.AddDate(0, 0, -int(start.Weekday()))
+	buckets, err := store.SessionCoverageBuckets(ctx, s.cfg.DB,
+		store.RetrievalWindow{Key: "calendar", Since: start}, now)
+	if err != nil {
+		s.logger.Warn("console: capture calendar buckets", "error", err)
+		return "", nil
+	}
+	if len(buckets) == 0 {
+		return "", nil // no sessions in the year: absence is the empty state
+	}
+	current, longest, err := store.CaptureStreak(ctx, s.cfg.DB, now)
+	if err != nil {
+		s.logger.Warn("console: capture streak", "error", err)
+		return calendarGrid(buckets, start, selected), nil
+	}
+	return calendarGrid(buckets, start, selected), &captureStreak{Current: current, Longest: longest}
 }
 
 // sessionMatches reports whether a session row satisfies the ?q text filter
@@ -193,7 +330,7 @@ type sessionDetail struct {
 	FindingsHTML template.HTML    `json:"-"`
 	Timeline     []eventRow       `json:"timeline"`
 	Interactions []interactionRow `json:"interactions"` // the timeline as shared IX feed rows
-	IxVolumeJSON string           `json:"-"`            // session-scoped volume buckets for IX.mountVolume
+	Strip        sessionTimeline  `json:"-"`            // proportional wall-clock strip over the session's interactions
 	ToolCalls    int              `json:"toolCalls"`
 	Reads        int              `json:"memoryReads"`
 	Writes       int              `json:"memoryWrites"`
@@ -203,6 +340,10 @@ type sessionDetail struct {
 	ClaimedTasks []claimedTaskVM  `json:"claimedTasks"`
 	Memories     []sessMemVM      `json:"memoriesWritten"`
 	Trials       []sessTrialVM    `json:"trialsRecorded"`
+	// ShowTrials gates the trials surfaces (the "Trials recorded" section and
+	// the peek footer's trial count) on the research feature. When it is false
+	// Trials is not even queried, so the section cannot half-render.
+	ShowTrials bool `json:"-"`
 }
 
 // claimedTaskVM is a task the session currently holds (a live claim), shown on
@@ -246,7 +387,6 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 
 	var timeline []eventRow
 	var interactions []interactionRow
-	var ixVolume string
 	byKind := map[string]int{}
 	toolCalls, reads, writes := 0, 0, 0
 	injected := map[string]struct{}{}
@@ -269,6 +409,15 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 				if e.ItemID != "" {
 					readItems[e.ItemID] = struct{}{}
 				}
+			case core.EventNoteRead:
+				// Read-back evidence: recall surfaces notes as well as
+				// memories, so a note opened after it was injected is context
+				// genuinely used. It stays out of Reads, which the detail page
+				// pairs with Writes under "Memory activity" -- the same reason
+				// note.written is not counted there.
+				if e.ItemID != "" {
+					readItems[e.ItemID] = struct{}{}
+				}
 			case core.EventMemoryWritten:
 				writes++
 			case core.EventInjected:
@@ -278,31 +427,18 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		// Interactions surface: the session's events projected into the shared IX
-		// feed rows (newest first) plus a session-scoped volume histogram, built
-		// in-Go from the same fetch (no extra query). Scoped to the feed's
-		// interaction kinds so the rows, histogram, and kind filter all agree; the
+		// feed rows (newest first). Scoped to the feed's interaction kinds so the
+		// rows, the wall-clock strip, and the kind filter all describe one set; the
 		// right-rail cards cover the non-interaction detail (reads/writes, produced
 		// memories, claimed tasks). BySession returns oldest-first, so we walk it in
-		// reverse to build both newest-first.
+		// reverse to build newest-first.
 		namer := func(string) core.Session { return sess }
-		var ticks []events.KindTick
 		for i := len(evs) - 1; i >= 0; i-- {
 			e := evs[i]
 			if !isInteraction(e) || skipInteraction(e) {
 				continue
 			}
 			interactions = append(interactions, toInteractionRow(e, namer))
-			ticks = append(ticks, events.KindTick{ID: e.ID, TS: e.TS, Kind: string(e.Kind)})
-		}
-		if len(ticks) > 0 {
-			// Span the session's own activity (first -> last event), not up to now,
-			// so a short historical session isn't crushed into a single bucket.
-			newest, oldest := ticks[0].TS, ticks[len(ticks)-1].TS
-			if vol := buildVolume(ticks, newest.Sub(oldest), newest); len(vol) > 0 {
-				if b, jerr := json.Marshal(vol); jerr == nil {
-					ixVolume = string(b)
-				}
-			}
 		}
 	}
 	readBack := 0
@@ -316,8 +452,9 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	data := sessionDetail{
 		Session: sess, Harness: harnessOf(sess), Live: sess.LiveAsOf(now, s.cfg.SessionIdleTTL),
 		Duration: sessionDuration(sess, now), Findings: sess.Findings, Timeline: timeline,
-		Interactions: interactions, IxVolumeJSON: ixVolume,
-		ToolCalls: toolCalls, Reads: reads, Writes: writes,
+		Interactions: interactions,
+		Strip:        buildSessionTimeline(interactions),
+		ToolCalls:    toolCalls, Reads: reads, Writes: writes,
 		Injected: len(injected), ReadBack: readBack, ByKind: sortedKinds(byKind),
 	}
 	data.FindingsHTML = s.renderBody(ctx, sess.Findings, sess.ProjectSlug)
@@ -347,14 +484,20 @@ func (s *Service) sessionDetail(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s.logger.Warn("console: session memories written", "session", sess.ID, "error", merr)
 	}
-	if trials, terr := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{SessionID: sess.ID, Limit: 50}); terr == nil {
-		for _, tr := range trials {
-			data.Trials = append(data.Trials, sessTrialVM{
-				ID: tr.ID, Title: tr.Title, Lab: tr.Lab, Outcome: string(tr.Outcome),
-			})
+	// Trials recorded: a research surface. While that feature is off the query
+	// is skipped entirely -- the rows are still there, the console just does not
+	// offer a way into a gated screen.
+	data.ShowTrials = features.Enabled(s.effectiveFeatures(ctx), features.Research)
+	if data.ShowTrials {
+		if trials, terr := store.QueryTrials(ctx, s.cfg.DB, store.TrialFilter{SessionID: sess.ID, Limit: 50}); terr == nil {
+			for _, tr := range trials {
+				data.Trials = append(data.Trials, sessTrialVM{
+					ID: tr.ID, Title: tr.Title, Lab: tr.Lab, Outcome: string(tr.Outcome),
+				})
+			}
+		} else {
+			s.logger.Warn("console: session trials recorded", "session", sess.ID, "error", terr)
 		}
-	} else {
-		s.logger.Warn("console: session trials recorded", "session", sess.ID, "error", terr)
 	}
 
 	s.renderDetail(w, r, "session", pageData{

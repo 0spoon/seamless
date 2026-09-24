@@ -33,6 +33,7 @@ sections:
       - recall.md
       - tasks-and-plans.md
       - projects.md
+      - project-isolation.md
       - gardener.md
       - memory-supersession.md
       - lease-based-task-claiming.md

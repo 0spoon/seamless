@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -13,7 +14,7 @@ import (
 
 func gardenerProposalsTool() mcp.Tool {
 	return mcp.NewTool("gardener_proposals", hintRead(),
-		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply or dismiss each with gardener_apply. Read-only."),
+		mcp.WithDescription("List pending gardener proposals (merge/consolidate duplicate memories, archive stale memories, write a monthly session digest, reproject a memory to another project, rekind a memory to a different kind, set up a project split, abandon a never-approved captured plan, fold a stranded captured plan into the composition that carries its steps, write a memory agents keep searching for in vain, or fix an error agents keep hitting). Review, then apply, dismiss or hide each with gardener_apply. Read-only."),
 		mcp.WithString("kind", enumOf(store.ProposalKinds), mcp.Description("filter by proposal kind (default: all pending)")),
 	)
 }
@@ -24,7 +25,15 @@ func (s *Server) handleGardenerProposals(ctx context.Context, req mcp.CallToolRe
 	if err != nil {
 		return errResult("gardener_proposals", err)
 	}
-	return jsonResult(map[string]any{"proposals": proposals, "count": len(proposals)})
+	// The listing is the leak surface: a proposal row has no project column, but
+	// its payload carries names, descriptions and similarity scores out of every
+	// project it touches. Drop what this caller may not read -- silently, since a
+	// withheld count would itself report how much a fenced project has going on.
+	visible, err := gardener.NewProposalFence(s.cfg.DB, s.callerScope(ctx)).Filter(ctx, proposals)
+	if err != nil {
+		return errResult("gardener_proposals", err)
+	}
+	return jsonResult(map[string]any{"proposals": visible, "count": len(visible)})
 }
 
 func gardenerRequestTool() mcp.Tool {
@@ -122,9 +131,9 @@ func (s *Server) handleGardenerSplit(ctx context.Context, req mcp.CallToolReques
 
 func gardenerApplyTool() mcp.Tool {
 	return mcp.NewTool("gardener_apply", hintOverwrite(),
-		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; rekind -> reclassify the memory's kind in place; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory; tool_error -> open a task to fix the recurring error); action=dismiss discards it. A dismissed proposal is never re-raised."),
+		mcp.WithDescription("Resolve a gardener proposal. action=apply carries out the effect (archive -> retire the memory; merge -> supersede the older by the newer; consolidate -> write a unified memory superseding its sources; digest -> save the summary as a note; reproject -> move the memory to another project; rekind -> reclassify the memory's kind in place; split -> create the child/shared projects, link the family, parent the children, retire the source; memory_wanted -> open a task to write the missing memory; tool_error -> open a task to fix the recurring error; merge_plans -> retag a stranded captured plan's notes onto the plan that holds the steps and settle the capture as merged). Rejecting has two strengths: action=dismiss discards this proposal and the evidence behind it, so a pattern that keeps recurring is raised again later; action=hide blocks the pattern permanently, so no recurrence re-raises it. Prefer dismiss unless the suggestion is wrong in principle rather than wrong for now. Both are reversible by the owner from the console."),
 		mcp.WithString("id", mcp.Required(), mcp.Description("proposal id (ULID)")),
-		mcp.WithString("action", mcp.Enum("apply", "dismiss"), mcp.Description("apply (default) or dismiss")),
+		mcp.WithString("action", enumOf(gardener.Decisions), mcp.Description("apply (default), dismiss (until it recurs), or hide (forever)")),
 	)
 }
 
@@ -136,23 +145,41 @@ func (s *Server) handleGardenerApply(ctx context.Context, req mcp.CallToolReques
 	if s.cfg.Gardener == nil {
 		return errResult("gardener_apply", errors.New("gardener is not configured on this server"))
 	}
+	// The proposal is loaded here rather than left to Apply/Dismiss because the
+	// fence needs the payload to know which projects the row is about at all.
+	p, ok, err := store.ProposalByID(ctx, s.cfg.DB, id)
+	if err != nil {
+		return errResult("gardener_apply", err)
+	}
+	if !ok {
+		return errResult("gardener_apply", fmt.Errorf("no proposal with id %q", id))
+	}
+	if err := s.fenceProposal(ctx, p); err != nil {
+		return errResult("gardener_apply", err)
+	}
 	action := argString(req, "action")
 	if action == "" {
-		action = "apply"
+		action = gardener.DecisionApply
 	}
 	switch action {
-	case "apply":
+	case gardener.DecisionApply:
 		result, err := s.cfg.Gardener.Apply(ctx, id)
 		if err != nil {
 			return errResult("gardener_apply", err)
 		}
 		return jsonResult(result)
-	case "dismiss":
+	case gardener.DecisionDismiss:
 		if err := s.cfg.Gardener.Dismiss(ctx, id); err != nil {
 			return errResult("gardener_apply", err)
 		}
-		return jsonResult(map[string]any{"id": id, "status": "dismissed"})
+		return jsonResult(map[string]any{"id": id, "status": store.ProposalDismissed})
+	case gardener.DecisionHide:
+		if err := s.cfg.Gardener.Hide(ctx, id); err != nil {
+			return errResult("gardener_apply", err)
+		}
+		return jsonResult(map[string]any{"id": id, "status": store.ProposalHidden})
 	default:
-		return errResult("gardener_apply", fmt.Errorf("unknown action %q (want apply|dismiss)", action))
+		return errResult("gardener_apply", fmt.Errorf("invalid action %q: valid values are %s",
+			action, strings.Join(gardener.Decisions, ", ")))
 	}
 }

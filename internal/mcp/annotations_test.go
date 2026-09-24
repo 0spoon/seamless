@@ -30,8 +30,10 @@ var readOnlyTools = []string{
 var destructiveTools = []string{
 	"gardener_apply",
 	"memory_delete",
+	"memory_edit",
 	"memory_write",
 	"notes_delete",
+	"notes_edit",
 	"notes_update",
 }
 

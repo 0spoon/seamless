@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -123,6 +124,12 @@ func errIsNotFound(err error) bool {
 // setFileFavorite flips the frontmatter flag on a memory, a note, or a plan's
 // primary note. The full file is read first (index rows carry no body) and
 // Updated is left alone -- a star is not authorship.
+//
+// Resolution is a DB lookup that only produces the path, so it stays outside the
+// file's mutation lock; the read that feeds the write is inside it. The owner
+// starring a memory an agent is appending to is the ordinary case here, and
+// unserialized the star rendered the whole file from the pre-append body and
+// erased the agent's write with no error anywhere.
 func (s *Service) setFileFavorite(ctx context.Context, kind, id string, fav bool) (project, itemID string, err error) {
 	if s.cfg.Files == nil {
 		return "", "", errNoFiles
@@ -158,28 +165,31 @@ func (s *Service) setFileFavorite(ctx context.Context, kind, id string, fav bool
 		filePath = primary.FilePath
 	}
 
+	// An item already in the requested state reports ErrNoChange, which skips the
+	// write: re-rendering an unchanged file would re-index and re-embed it, so a
+	// double-click on a star would cost real work for nothing.
 	if kind == "memory" {
-		mem, merr := s.cfg.Files.Store().ReadMemory(filePath)
+		mem, merr := s.cfg.Files.MutateMemory(ctx, filePath, func(_ context.Context, mem core.Memory) (core.Memory, error) {
+			if mem.Favorite == fav {
+				return mem, files.ErrNoChange
+			}
+			mem.Favorite = fav
+			return mem, nil
+		})
 		if merr != nil {
 			return "", "", merr
 		}
-		if mem.Favorite != fav {
-			mem.Favorite = fav
-			if _, err := s.cfg.Files.WriteMemory(ctx, mem); err != nil {
-				return "", "", err
-			}
-		}
 		return mem.Project, mem.ID, nil
 	}
-	note, nerr := s.cfg.Files.Store().ReadNote(filePath)
+	note, nerr := s.cfg.Files.MutateNote(ctx, filePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if note.Favorite == fav {
+			return note, files.ErrNoChange
+		}
+		note.Favorite = fav
+		return note, nil
+	})
 	if nerr != nil {
 		return "", "", nerr
-	}
-	if note.Favorite != fav {
-		note.Favorite = fav
-		if _, err := s.cfg.Files.WriteNote(ctx, note); err != nil {
-			return "", "", err
-		}
 	}
 	return note.Project, note.ID, nil
 }

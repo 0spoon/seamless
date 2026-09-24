@@ -3,34 +3,24 @@
 {{$sel := .Selected}}
 {{$open := add (add (len .Ready) (len .InProgress)) (len .Blocked)}}
 <div class="lib-page" data-library="tasks">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "list-checks"}} Work queue</div>
-    <h1>Tasks</h1>
-    <div class="sub">Ready work, live claims, and dependency blockers across every project.</div>
-  </div>
-  <div class="lib-total" aria-label="{{$open}} open tasks">
-    <strong>{{$open}}</strong><span>open</span>
-    {{if .Closed}}<small>{{add (len .Closed) .ClosedMore}} recently closed</small>{{end}}
+<header class="mv2-bar">
+  <h1 title="Ready work, live claims, and dependency blockers across every project.">{{icon "list-checks"}}Tasks</h1>
+  <span class="mv2-count" aria-label="{{$open}} open tasks">
+    <strong>{{$open}}</strong>open{{if .Closed}}<small>{{add (len .Closed) .ClosedMore}} recently closed</small>{{end}}
+  </span>
+  <span class="mv2-spacer"></span>
+  <div class="lib-summary-pills">
+    {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{len .InProgress}} in progress</a>{{end}}
+    <a class="status-ready" href="#rg-ready">{{len .Ready}} ready</a>
+    {{if .Blocked}}<a class="status-blocked" href="#rg-blocked">{{len .Blocked}} blocked</a>{{end}}
+    {{if .Closed}}<a href="#rg-closed">{{add (len .Closed) .ClosedMore}} closed</a>{{end}}
   </div>
 </header>
 
 {{if or .Ready .InProgress .Blocked .Closed}}
-<nav class="lib-controlbar lib-statusbar" aria-label="Task queue summary">
-  <div class="lib-control">
-    <span class="lib-control-label">Queue state</span>
-    <div class="lib-summary-pills">
-      {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{len .InProgress}} in progress</a>{{end}}
-      <a class="status-ready" href="#rg-ready">{{len .Ready}} ready</a>
-      {{if .Blocked}}<a class="status-blocked" href="#rg-blocked">{{len .Blocked}} blocked</a>{{end}}
-      {{if .Closed}}<a href="#rg-closed">{{add (len .Closed) .ClosedMore}} closed</a>{{end}}
-    </div>
-  </div>
-  <div class="lib-control-note"><strong>Queue order</strong><span>In progress &rarr; ready &rarr; blocked; newest first within each state</span></div>
-</nav>
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/tasks/{{.Selected.ID}}"{{end}}>
   <nav class="lib-rail" aria-label="Tasks">
-    <div class="rail-overview"><span>Queue map</span><span>{{$open}} open</span></div>
+    <div class="rail-overview"><span>Queue map</span><span>State &rarr; task</span></div>
     <div class="rail-scroll">
     <div class="rail-groups">
       {{if .InProgress}}

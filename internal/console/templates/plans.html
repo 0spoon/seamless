@@ -3,37 +3,31 @@
 {{$sel := .Selected}}
 {{$qs := .QS}}
 <div class="lib-page" data-library="plans">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "map"}} Plan library</div>
-    <h1>Plans</h1>
-    <div class="sub">Captured and composed plans, organized by execution state and connected to their steps.</div>
-  </div>
-  <div class="lib-total" aria-label="{{.Total}} plans">
-    <strong>{{.Total}}</strong><span>plan{{if ne .Total 1}}s{{end}}</span>
-    <small>{{if eq .Window "all"}}all time{{else}}{{.Count}} in {{.WindowLabel}}{{end}}</small>
-  </div>
-</header>
-
-{{if or .Total .Selected}}
-<section class="lib-controlbar lib-statusbar" aria-label="Plan time window">
-  {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
-  <div class="lib-control">
-    <span class="lib-control-label">Updated</span>
-    <div class="seg" data-seam-query>
-      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
-    </div>
-  </div>
-  <div class="lib-summary-pills lib-phase-summary">
+{{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
+<header class="mv2-bar">
+  <h1 title="Captured and composed plans, organized by execution state and connected to their steps.">{{icon "map"}}Plans</h1>
+  <span class="mv2-count" aria-label="{{.Total}} plans">
+    <strong>{{.Total}}</strong>plan{{if ne .Total 1}}s{{end}}<small>{{if eq .Window "all"}}all time{{else}}{{.Count}} updated in {{.WindowLabel}}{{end}}</small>
+  </span>
+  <div class="lib-summary-pills">
     {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{.InProgress}} in progress</a>{{end}}
     {{if .Ready}}<a class="status-ready" href="#rg-ready">{{.Ready}} ready</a>{{end}}
     {{if .Done}}<a href="#rg-done">{{.Done}} done</a>{{end}}
   </div>
-  <div class="lib-control-note"><strong>Browse structure</strong><span>Phase &rarr; plan; newest first within each phase</span></div>
-</section>
+  {{with .ShippedMonth}}<span class="mom-shipped" title="Counted from plan.shipped settlements in the current local month">Plans shipped this month: <strong>{{.Count}}</strong></span>{{end}}
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Updated</span>
+    <div class="seg" data-seam-query>
+      {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
+    </div>
+  </div>
+</header>
+
+{{if or .Total .Selected}}
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/plans/{{.Selected.Row.Slug}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Plans">
-    <div class="rail-overview"><span>Plan map</span><span>{{.Count}} shown</span></div>
+    <div class="rail-overview"><span>Plan map</span><span>Phase &rarr; plan</span></div>
     <div class="rail-scroll">
     {{if .Rows}}
     <div class="rail-groups">
@@ -44,7 +38,7 @@
           {{range phaseRows .Rows "in_progress"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="In progress"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -57,7 +51,7 @@
           {{range phaseRows .Rows "ready"}}
           <a class="rail-item{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Ready"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -68,9 +62,11 @@
         <header class="rail-group-hd">done <span class="n">{{.Done}}</span></header>
         <div class="rail-items">
           {{range phaseRows .Rows "done"}}
-          <a class="rail-item dim{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
+          {{/* mom-settle: a plan shipped this local month wears the settle hook;
+               the one-time wash plays only on live arrival (.live-in). */}}
+          <a class="rail-item dim{{if .Shipped}} mom-settle{{end}}{{if and $sel (eq .Slug $sel.Row.Slug)}} selected{{end}}" id="ri-{{.NoteID}}" href="/console/plans/{{.Slug}}{{$qs}}" data-title="{{.Title}}" data-context="Done"{{if and $sel (eq .Slug $sel.Row.Slug)}} aria-current="page"{{end}}>
             <span class="ri-title">{{if .Favorite}}<span class="ri-star" title="Starred">{{icon "star"}}</span>{{end}}{{.Title}}</span>
-            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
+            <span class="ri-meta">{{if .Project}}{{.Project}}{{else}}global{{end}}{{if .TasksTotal}} &middot; {{.TasksDone}}/{{.TasksTotal}} steps{{end}}{{if .Tokens}} &middot; ~{{compactNum .Tokens}} tok{{end}}{{if .Status}} &middot; {{.Status}}{{end}} &middot; <span title="{{ts .Updated}}">{{ago .Updated}}</span></span>
           </a>
           {{end}}
         </div>
@@ -115,6 +111,7 @@
       {{if .Row.Iteration}}<span class="fact">iteration {{.Row.Iteration}}</span>{{end}}
       {{if .Row.TasksTotal}}<span class="fact">{{.Row.TasksDone}}/{{.Row.TasksTotal}} steps done{{if .Row.TasksWIP}} &middot; {{.Row.TasksWIP}} in progress{{end}}</span>{{end}}
       {{if .Row.Agents}}<span class="fact">{{.Row.Agents}} agent run{{if ne .Row.Agents 1}}s{{end}}</span>{{end}}
+      {{if .Row.TokenSessions}}<span class="fact" title="Cumulative model tokens harvested from the transcripts of the sessions attributed to this plan (moved a step, or captured the plan). Whole-session totals: a session's full burn counts toward every plan it touched, so plan totals must not be summed. Claude Code reports tokens at session end, so a live session stays unreported until it finishes.">{{if .Row.Tokens}}~{{compactNum .Row.Tokens}} model tokens{{else}}model tokens pending{{end}} &middot; {{.Row.TokenSessions}} session{{if ne .Row.TokenSessions 1}}s{{end}}{{if .Row.TokenUnreported}} ({{.Row.TokenUnreported}} unreported){{end}}{{if .Row.TokenShared}} &middot; {{.Row.TokenShared}} shared with other plans{{end}}</span>{{end}}
       <span class="fact" title="{{ts .Row.Updated}}">updated {{ago .Row.Updated}}</span>
       <span class="fact"><a href="/console/notes/{{.Row.NoteID}}">{{icon "file-text"}} note</a></span>
     </div>

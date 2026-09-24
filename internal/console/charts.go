@@ -6,6 +6,7 @@ import (
 	"html/template"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -70,11 +71,26 @@ var lucidePaths = map[string]string{
 	"lock":                  `<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`,
 	"timer":                 `<line x1="10" x2="14" y1="2" y2="2"/><line x1="12" x2="15" y1="14" y2="11"/><circle cx="12" cy="14" r="8"/>`,
 	"arrow-right":           `<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>`,
+	"chevron-left":          `<path d="m15 18-6-6 6-6"/>`,
+	"chevron-right":         `<path d="m9 18 6-6-6-6"/>`,
 	"arrow-up-down":         `<path d="m21 16-4 4-4-4"/><path d="M17 20V4"/><path d="m3 8 4-4 4 4"/><path d="M7 4v16"/>`,
 	"undo-2":                `<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5 5.5 5.5 0 0 1-5.5 5.5H11"/>`,
 	"folder-open":           `<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>`,
 	"flask-conical":         `<path d="M10 2v7.527a2 2 0 0 1-.211.896L4.72 20.55a1 1 0 0 0 .9 1.45h12.76a1 1 0 0 0 .9-1.45l-5.069-10.127A2 2 0 0 1 14 9.527V2"/><path d="M8.5 2h7"/><path d="M7 16h10"/>`,
 	"test-tube":             `<path d="M14.5 2v17.5c0 1.4-1.1 2.5-2.5 2.5c-1.4 0-2.5-1.1-2.5-2.5V2"/><path d="M8.5 2h7"/><path d="M14.5 16h-5"/>`,
+	"eye":                   `<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>`,
+	"eye-off":               `<path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/>`,
+	"toggle-right":          `<rect width="20" height="12" x="2" y="6" rx="6" ry="6"/><circle cx="16" cy="12" r="2"/>`,
+	"flag":                  `<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>`,
+	"calendar-days":         `<path d="M8 2v4"/><path d="M16 2v4"/><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M3 10h18"/><path d="M8 14h.01"/><path d="M12 14h.01"/><path d="M16 14h.01"/><path d="M8 18h.01"/><path d="M12 18h.01"/><path d="M16 18h.01"/>`,
+	"leaf":                  `<path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z"/><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12"/>`,
+	"tree-pine":             `<path d="m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-.3a1 1 0 0 1-.7-1.7L9 9h-.2A1 1 0 0 1 8 7.3L12 3l4 4.3a1 1 0 0 1-.8 1.7H15l3 3.3a1 1 0 0 1-.7 1.7H17Z"/><path d="M12 22v-3"/>`,
+	"power":                 `<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>`,
+	"radar":                 `<path d="M19.07 4.93A10 10 0 0 0 6.99 3.34"/><path d="M4 6h.01"/><path d="M2.29 9.62A10 10 0 1 0 21.31 8.35"/><path d="M16.24 7.76A6 6 0 1 0 8.23 16.67"/><path d="M12 18h.01"/><path d="M17.99 11.66A6 6 0 0 1 15.77 16.67"/><circle cx="12" cy="12" r="2"/><path d="m13.41 10.59 5.66-5.66"/>`,
+	"flame":                 `<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>`,
+	"trophy":                `<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>`,
+	"zap":                   `<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>`,
+	"award":                 `<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>`,
 }
 
 // icon renders a named Lucide glyph as an inline SVG that inherits currentColor.
@@ -454,4 +470,211 @@ func stackedBar(ready, inProgress, blocked, closed int) template.HTML {
 			s.color, s.label, s.n)
 	}
 	return template.HTML(`<div class="stackbar-wrap"><div class="stackbar">` + bar.String() + `</div><div class="stackbar-legend">` + legend.String() + `</div></div>`)
+}
+
+// ---------------------------------------------------------------------------
+// Sparkline -- the shape behind a vital's headline number
+// ---------------------------------------------------------------------------
+
+// spark is a vital card's trailing series. Max pins the y-axis: a RATE always
+// plots against 100, so a healthy-but-flat 88% reads flat instead of being
+// stretched to fill the box, while a volume (Max 0) normalizes to its own peak
+// because its ceiling is not a known quantity.
+type spark struct {
+	Points []store.TrendBucket
+	Tone   string // "" = brand; "ok" = the retention green
+	Max    int    // 0 = normalize to the series peak
+	Label  string // aria-label; empty renders it decorative
+}
+
+// sparkLine renders a spark as a bare 96x26 polyline. Fewer than two points
+// renders nothing: a single datum has no shape, and a flat line drawn from it
+// would imply a trend that was never measured.
+func sparkLine(s spark) template.HTML {
+	n := len(s.Points)
+	if n < 2 {
+		return ""
+	}
+	const w, h, pad = 96.0, 26.0, 4.0
+	maxV := s.Max
+	if maxV <= 0 {
+		for _, p := range s.Points {
+			if p.Count > maxV {
+				maxV = p.Count
+			}
+		}
+	}
+	if maxV <= 0 {
+		maxV = 1
+	}
+	var pts strings.Builder
+	for i, p := range s.Points {
+		x := 2 + (float64(i)/float64(n-1))*(w-4)
+		v := float64(p.Count)
+		if v > float64(maxV) {
+			v = float64(maxV)
+		}
+		y := h - pad - (v/float64(maxV))*(h-2*pad)
+		if i > 0 {
+			pts.WriteByte(' ')
+		}
+		fmt.Fprintf(&pts, "%.1f,%.1f", x, y)
+	}
+	cls := "ov2-spark"
+	if s.Tone != "" {
+		cls += " " + s.Tone
+	}
+	attrs := ` aria-hidden="true"`
+	if s.Label != "" {
+		attrs = ` role="img" aria-label="` + template.HTMLEscapeString(s.Label) + `"`
+	}
+	return template.HTML(`<svg class="` + cls + `" viewBox="0 0 96 26"` + attrs +
+		`><polyline points="` + pts.String() + `"></polyline></svg>`)
+}
+
+// ---------------------------------------------------------------------------
+// Capture calendar -- the momentum contribution grid
+// ---------------------------------------------------------------------------
+
+// calendarGrid renders the momentum capture calendar: one cell per local day,
+// weeks as Sunday-first columns, cell intensity from sessions per day, and a
+// distinct dot on covered days (a session left a durable artifact). days must
+// be contiguous daily buckets beginning at start -- a local midnight, ideally
+// week-aligned so the first column is full -- as SessionCoverageBuckets
+// produces over a synthetic window; the bucket axis ends at now, so the final
+// bucket is today's cell and wears the breathing outline. A day with no
+// sessions is an empty cell in the resting tone: a pause, never a warning.
+// Each week column is a group carrying a staggered --d delay for the entry
+// wave; live morphs preserve these nodes, so the wave plays on a fresh render
+// and never on a data patch.
+//
+// The grid is an instrument, not wallpaper: every cell carries its local date
+// as data-day, and charts.js turns that into a hover/keyboard readout and a
+// click that focuses the Session map on exactly that day (the ?day filter in
+// sessions.go). selected is that filter's current day ("" when unfocused); its
+// cell wears the sel outline so the grid shows which day the list is answering
+// about. The <title> children stay as the no-JS fallback -- the client lifts
+// them into its own readout so the browser tooltip cannot double up.
+func calendarGrid(days []store.CoverageBucket, start time.Time, selected string) template.HTML {
+	if len(days) == 0 {
+		return ""
+	}
+	const cell, pitch = 11.0, 14.0 // cell size and grid pitch (cell + 3 gap)
+	const left, top = 30.0, 16.0   // gutters: weekday labels, month labels
+	const wave = 12                // per-column entry-wave delay step, ms
+
+	lead := int(start.Local().Weekday()) // empty rows above the first day, Sunday-first
+	weeks := (lead + len(days) + 6) / 7
+	maxN := 0
+	for _, d := range days {
+		maxN = max(maxN, d.Total)
+	}
+
+	var cells, months strings.Builder
+	lastMonth := time.Month(0)
+	lastCol := -1
+	day := start.Local()
+	for i, d := range days {
+		row := (lead + i) % 7
+		col := (lead + i) / 7
+		x := left + float64(col)*pitch
+		y := top + float64(row)*pitch
+
+		if col != lastCol {
+			if lastCol >= 0 {
+				cells.WriteString(`</g>`)
+			}
+			fmt.Fprintf(&cells, `<g class="mom-cal-col" style="--d:%dms">`, col*wave)
+			lastCol = col
+		}
+
+		// Month labels ride the first cell of each new month's week column.
+		if row == 0 || i == 0 {
+			if m := day.Month(); m != lastMonth {
+				fmt.Fprintf(&months, `<text x="%.0f" y="11">%s</text>`, x, m.String()[:3])
+				lastMonth = m
+			}
+		}
+
+		lvl := 0
+		if d.Total > 0 && maxN > 0 {
+			lvl = min(4, 1+(d.Total*4-1)/maxN)
+		}
+		title := day.Format("Mon, Jan 02") + " -- no sessions"
+		if d.Total > 0 {
+			title = fmt.Sprintf("%s -- %s, %d captured", day.Format("Mon, Jan 02"),
+				plural(d.Total, "session", "sessions"), d.Covered)
+		}
+		key := day.Format("2006-01-02")
+		cls := fmt.Sprintf("mom-cal-cell l%d", lvl)
+		if key == selected {
+			cls += " sel"
+		}
+		if i == len(days)-1 {
+			cls += " today"
+		}
+		fmt.Fprintf(&cells, `<rect class="%s" x="%.0f" y="%.0f" width="%.0f" height="%.0f" rx="2" data-day="%s"><title>%s</title></rect>`,
+			cls, x, y, cell, cell, key, template.HTMLEscapeString(title))
+		if d.Covered > 0 {
+			fmt.Fprintf(&cells, `<circle class="mom-cal-dot" cx="%.1f" cy="%.1f" r="1.8"></circle>`,
+				x+cell/2, y+cell/2)
+		}
+		day = day.AddDate(0, 0, 1)
+	}
+	cells.WriteString(`</g>`)
+
+	var wdays strings.Builder
+	for row, label := range []string{"", "Mon", "", "Wed", "", "Fri", ""} {
+		if label == "" {
+			continue
+		}
+		fmt.Fprintf(&wdays, `<text x="0" y="%.0f">%s</text>`, top+float64(row)*pitch+cell-2, label)
+	}
+
+	w := left + float64(weeks)*pitch
+	h := top + 7*pitch
+	// tabindex makes the grid keyboard-walkable (the charts.js readout, same as
+	// the trend charts); the aria-label stays the whole-grid summary because the
+	// per-day readout is a sighted affordance.
+	return template.HTML(fmt.Sprintf(
+		`<svg class="mom-cal-grid" viewBox="0 0 %.0f %.0f" width="%.0f" height="%.0f" tabindex="0" role="img" aria-label="Sessions per day over the last year; a dot marks days that captured knowledge. Arrow keys walk the days; Enter focuses the session list on one.">`+
+			`<g class="mom-cal-months">%s</g><g class="mom-cal-wdays">%s</g>%s</svg>`,
+		w, h, w, h, months.String(), wdays.String(), cells.String()))
+}
+
+// ---------------------------------------------------------------------------
+// Memory fabric -- composition as one proportional bar
+// ---------------------------------------------------------------------------
+
+// kindBar renders the memory-kind composition as a single proportional bar plus
+// a counted legend, for the Overview rail. It is the compact sibling of
+// kindLegend (which gives each kind its own row): here the question is what the
+// knowledge base is made of, so the shares have to be readable against each
+// other in one glance rather than against the largest kind.
+func kindBar(items []kindCount) template.HTML {
+	total := 0
+	for _, it := range items {
+		total += it.N
+	}
+	if total == 0 {
+		return ""
+	}
+	sorted := make([]kindCount, len(items))
+	copy(sorted, items)
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].N != sorted[j].N {
+			return sorted[i].N > sorted[j].N
+		}
+		return sorted[i].Kind < sorted[j].Kind
+	})
+	var bar, legend strings.Builder
+	for _, it := range sorted {
+		c := kindColorVar(it.Kind)
+		fmt.Fprintf(&bar, `<i style="width:%.2f%%;background:%s" title="%s %d"></i>`,
+			float64(it.N)/float64(total)*100, c, template.HTMLEscapeString(it.Kind), it.N)
+		fmt.Fprintf(&legend, `<span><i style="background:%s"></i>%s %d</span>`,
+			c, template.HTMLEscapeString(it.Kind), it.N)
+	}
+	return template.HTML(`<div class="ov2-kind"><div class="ov2-kind-bar">` + bar.String() +
+		`</div><div class="ov2-kind-legend">` + legend.String() + `</div></div>`)
 }

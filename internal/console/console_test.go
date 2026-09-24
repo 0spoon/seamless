@@ -25,7 +25,20 @@ const testKey = "test-key-abc123"
 
 // newConsole builds a console over a fresh DB and returns the DB (for seeding)
 // and its mux.
+//
+// Optional features are ON here, deliberately: this helper backs the tests that
+// exercise the feature's own screens (labs, trials, the trials search scope,
+// session trials), which would otherwise be testing the gate instead of the
+// surface. The default-OFF state is what newConsoleFeatures exists for, and
+// features_test.go asserts both directions.
 func newConsole(t *testing.T) (*sql.DB, *http.ServeMux) {
+	t.Helper()
+	return newConsoleFeatures(t, config.Features{Research: true})
+}
+
+// newConsoleFeatures builds a console over a fresh DB with an explicit
+// optional-feature base (the file/env layer), for the gating tests.
+func newConsoleFeatures(t *testing.T, feats config.Features) (*sql.DB, *http.ServeMux) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
 	require.NoError(t, err)
@@ -35,6 +48,7 @@ func newConsole(t *testing.T) (*sql.DB, *http.ServeMux) {
 		DB: db, Events: events.NewRecorder(db), APIKey: testKey,
 		// A nil embedder keeps search lexical-only: no test needs a provider.
 		Retrieve: retrieve.New(db, nil, config.Defaults().Budgets, nil),
+		Features: feats,
 	})
 	require.NoError(t, err)
 	mux := http.NewServeMux()

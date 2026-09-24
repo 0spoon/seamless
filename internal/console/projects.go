@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"slices"
 	"sort"
@@ -36,6 +37,7 @@ type projectRowVM struct {
 	Retired      bool
 	Favorite     bool
 	Unregistered bool
+	Isolation    core.Isolation // agent-facing fence; drives the row's lock pill
 	TileClass    string
 	TileIcon     string
 	Working      int // live (active) sessions
@@ -51,6 +53,9 @@ type projectRowVM struct {
 	HasReach     bool // the project has >=1 active memory (a reach denominator)
 	LastActive   time.Time
 	TokensTotal  int // real model tokens burned across the project's sessions
+	// Stage is the momentum maturity glyph, pre-rendered ("" while the feature
+	// is off -- zero trace in the row markup).
+	Stage template.HTML
 }
 
 // projectGroupVM is a family band on the board: a labeled header plus its rows.
@@ -174,12 +179,16 @@ func (s *Service) projectsList(w http.ResponseWriter, r *http.Request) {
 		unregistered   int
 		retired        int
 	)
+	stages := s.projectStages(ctx, board, now)
 	q := strings.ToLower(query)
 	for _, b := range board {
 		p := meta[b.Project]
 		vm := newProjectRowVM(b, p, isParent[b.Project])
 		if p.ParentSlug != "" {
 			vm.Inherited = memoriesBySlug[p.ParentSlug]
+		}
+		if info, ok := stages[b.Project]; ok {
+			vm.Stage = stageGlyph(info, now)
 		}
 		if !matchesQuery(vm, q) {
 			continue
@@ -324,6 +333,7 @@ func newProjectRowVM(b store.ProjectBoardRow, p core.Project, parent bool) proje
 		Retired:      p.Retired(),
 		Favorite:     p.Favorite,
 		Unregistered: b.Unregistered,
+		Isolation:    isolationOf(p),
 		Working:      b.LiveSessions,
 		Sessions:     b.Sessions,
 		OpenTasks:    b.OpenTasks,

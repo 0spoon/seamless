@@ -102,7 +102,7 @@ the same relative locations on every OS.
 | Daemon log | `~/.seamless/seamlessd.log` (macOS, Windows); journald (Linux) | `make logs` from a clone, `journalctl --user -u seamless -f` on Linux |
 | Claude Code hooks | `~/.claude/settings.json` | exactly what is written: [Hooks](https://thereisnospoon.org/docs/reference/hooks/) |
 | Codex hooks | `${CODEX_HOME:-~/.codex}/hooks.json` | same reference, [shell-string forms](https://thereisnospoon.org/docs/reference/hooks/#the-codex-profile-is-shell-strings) |
-| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` + `seam-research`, delivered per client |
+| Skills | `~/.claude/skills/`, `${CODEX_HOME:-~/.codex}/skills/` | `seam-onboard` always; `seam-research` while its [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) is on. Delivered per client |
 | Claude app chat MCP | `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS); `%APPDATA%\Claude\claude_desktop_config.json` (Windows) | the chat surface's only artifact - [Claude app chat setup](https://thereisnospoon.org/docs/claude-app/) |
 
 ## Removing the service by hand {#removing-the-service-by-hand}

@@ -42,6 +42,20 @@ session, forever - has to re-adjudicate which is current. Supersession
 adjudicates once, at write time, when the contradiction is actually in front of
 the writer, and every later reader inherits the verdict.
 
+## The line an in-place edit must not cross
+
+`memory_edit` changes part of a memory without resending it, which makes it the
+cheapest way to touch the store - and therefore the one most likely to be reached
+for when superseding is what is actually called for.
+
+The boundary is whether the change carries a new **claim**. A typo, a broken
+code fence, a stale path or command, a `Status:` flip on a stage, a description,
+a tag: none of those change what the memory asserts, and editing them in place
+loses nothing. But if the conclusion is now different - the advice reversed, the
+finding overturned - an edit silently rewrites the record so that nothing in the
+store ever shows it believed otherwise. That is exactly the history superseding
+exists to keep, so that change goes through `memory_write` with `supersedes`.
+
 ## The honest limit
 
 Supersession requires the writer to *notice* the contradiction - an agent that

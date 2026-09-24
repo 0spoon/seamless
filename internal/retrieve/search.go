@@ -85,7 +85,7 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 	}
 	ordered := rankSearch(acc)
 
-	mems, notes, err := s.hydrate(ctx, ordered, acc)
+	hyd, err := s.hydrate(ctx, ordered, acc)
 	if err != nil {
 		return nil, err
 	}
@@ -102,24 +102,9 @@ func (s *Service) Search(ctx context.Context, in SearchInput) ([]Hit, error) {
 		if f.identifierMatch == "" && f.semantic && !f.fts && f.cosine < s.search.SemanticFloor {
 			continue
 		}
-		var h Hit
-		if f.kind == "note" {
-			n, ok := notes[id]
-			if !ok {
-				continue
-			}
-			h = noteHit(n)
-		} else {
-			m, ok := mems[id]
-			if !ok {
-				continue
-			}
-			// The candidate queries already drop invalidated memories; this is
-			// the residual guard for one superseded between the query and here.
-			if !m.Active() {
-				continue
-			}
-			h = memoryHit(m)
+		h, ok := hyd.hit(id, f.kind)
+		if !ok {
+			continue
 		}
 		if f.identifierMatch != "" {
 			h.Source = "identifier"

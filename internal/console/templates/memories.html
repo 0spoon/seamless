@@ -3,28 +3,20 @@
 {{$sel := .Selected}}
 {{$qs := .QS}}
 <div class="lib-page" data-library="memories">
-<header class="lib-hero">
-  <div class="lib-hero-copy">
-    <div class="lib-eyebrow">{{icon "brain"}} Durable knowledge</div>
-    <h1>Memories</h1>
-    <div class="sub">Constraints, decisions, runbooks, and context that agents carry between sessions.{{if .Query}} Showing matches for &ldquo;{{.Query}}&rdquo;.{{end}}</div>
-  </div>
-  <div class="lib-total" aria-label="{{.ActiveCount}} active memories">
-    <strong>{{.ActiveCount}}</strong><span>active</span>
-    {{if .InactiveCount}}<small>+{{.InactiveCount}} historical</small>{{end}}
-  </div>
-</header>
-
-{{if or .Groups .Inactive .Query}}
-<section class="lib-controlbar" aria-label="Memory filters and sorting">
+{{$base := "/console/memories"}}{{if .Selected}}{{$base = printf "/console/memories/%s" .Selected.ID}}{{end}}
+<header class="mv2-bar">
+  <h1 title="Constraints, decisions, runbooks, and context that agents carry between sessions.">{{icon "database"}}Memories</h1>
+  <span class="mv2-count" aria-label="{{.ActiveCount}} active memories{{if .InactiveCount}}, {{.InactiveCount}} archived and superseded{{end}}">
+    <strong>{{.ActiveCount}}</strong>active{{if .InactiveCount}}<small>{{.InactiveCount}} archived &amp; superseded</small>{{end}}
+  </span>
   <form class="search lib-query" method="get" action="/console/memories" data-seam-query>
     {{icon "search"}}
     <input name="q" aria-label="Filter memories by name, description, kind, or tag" placeholder="Filter names, descriptions, kinds, and tags&hellip;" value="{{.Query}}">
     {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
   </form>
-  {{$base := "/console/memories"}}{{if .Selected}}{{$base = printf "/console/memories/%s" .Selected.ID}}{{end}}
-  <div class="lib-control">
-    <span class="lib-control-label">Sort within kind</span>
+  <span class="mv2-spacer"></span>
+  <div class="mv2-sort">
+    <span class="mv2-sort-label">Sort</span>
     <div class="seg" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
@@ -33,11 +25,12 @@
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
   </div>
-  <div class="lib-control-note"><strong>Browse structure</strong><span>Project &rarr; kind &rarr; memory</span></div>
-</section>
+</header>
+
+{{if or .Groups .Inactive .Query}}
 <div class="lib-layout"{{if and .Selected .SelectedAuto}} data-auto-url="/console/memories/{{.Selected.ID}}{{$qs}}"{{end}}>
   <nav class="lib-rail" aria-label="Memories">
-    <div class="rail-overview"><span>Memory map</span><span>{{add .ActiveCount .InactiveCount}} shown</span></div>
+    <div class="rail-overview"><span>Memory map</span><span>Project &rarr; kind &rarr; memory</span></div>
     <div class="rail-scroll">
     {{if or .Groups .Inactive}}
     <div class="rail-groups">
@@ -118,16 +111,25 @@
       </form>
     </h2>
     {{if .Description}}<p class="reader-desc">{{.Description}}</p>{{end}}
-    <div class="reader-facts">
-      <span class="fact">injected {{.Injects}}&times;{{if .LastInjected}} &middot; last <span title="{{ts .LastInjected}}">{{ago .LastInjected}}</span>{{end}}</span>
-      <span class="fact" title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under injected), so agents rarely re-read a memory they already have.">read {{.Reads}}&times;</span>
-      {{if .Utility}}<span class="fact" title="Time-decayed demand score in [0,1): recall hits, prompt matches, explicit reads. Feeds briefing ordering and recall ranking.{{with .UtilityParts}} Breakdown &mdash; read {{printf "%.1f" .Read}} &middot; recall {{printf "%.1f" .Recall}} &middot; prompt {{printf "%.1f" .Prompt}}{{end}}">utility {{printf "%.2f" .Utility}}</span>{{end}}
-      {{if .Source}}<span class="fact">source {{if .SourceID}}<a href="/console/sessions/{{.SourceID}}">{{.Source}}</a>{{else}}{{.Source}}{{end}}</span>{{end}}
-      <span class="fact" title="{{ts .Updated}}">updated {{ago .Updated}}</span>
-      <span class="fact" title="{{ts .Created}}">created {{ago .Created}}</span>
+    <div class="mv2-facts">
+      <span class="mv2-fact-hi" title="Time-decayed demand score in [0,1): recall hits, prompt matches, explicit reads. Feeds briefing ordering and recall ranking.{{with .UtilityParts}} Breakdown &mdash; read {{printf "%.1f" .Read}} &middot; recall {{printf "%.1f" .Recall}} &middot; prompt {{printf "%.1f" .Prompt}}{{end}}">{{printf "%.2f" .Utility}}<span>utility</span></span>
+      <span class="mv2-fact-hi"{{if .SurfacedTone}} data-tone="{{.SurfacedTone}}"{{end}} title="{{if .LastInjected}}Last entered agent context {{ts .LastInjected}}{{else}}Has never entered an agent context{{end}}">{{.SurfacedAge}}<span>since surfaced</span></span>
+      <span class="mv2-facts-rest">
+        <span>injected {{.Injects}}&times;</span>
+        <span title="Explicit memory_read lookups. Near-zero by design: briefings inject the body (counted under injected), so agents rarely re-read a memory they already have.">read {{.Reads}}&times;</span>
+        {{if .Source}}<span>source {{if .SourceID}}<a href="/console/sessions/{{.SourceID}}">{{.Source}}</a>{{else}}{{.Source}}{{end}}</span>{{end}}
+        <span title="{{ts .Updated}}">updated {{ago .Updated}}</span>
+        <span title="{{ts .Created}}">created {{ago .Created}}</span>
+      </span>
     </div>
   </header>
-  {{if .BodyLoaded}}<div class="prose doc">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
+  {{if not .BodyLoaded}}<div class="peek-note">Body unavailable</div>
+  {{else if .BodyIsEcho}}
+  <div class="mv2-nobody">
+    {{icon "file-text"}}
+    <span>No body beyond the description yet &mdash; captured mid-session.{{if .SourceID}} <a href="/console/sessions/{{.SourceID}}">Open source session {{.Source}}</a> for the full context, or{{end}} <a href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a> to expand it.</span>
+  </div>
+  {{else}}<div class="prose doc">{{.Body}}</div>{{end}}
   {{if .ReplacedByID}}
   <section class="reader-links">
     <h3>Superseded by</h3>

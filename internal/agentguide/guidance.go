@@ -9,7 +9,7 @@ package agentguide
 // call an individual tool. Keep the first paragraph self-contained and under
 // 512 characters; current Codex clients prioritize that prefix.
 const MCPInstructions = "Use Seamless as durable context. Recall before guessing: call recall before asking users to re-find knowledge. memory_write stores compact durable knowledge; notes_create stores long artifacts. Do not duplicate code, AGENTS.md/CLAUDE.md, or this conversation. If scope is ambiguous, pass project explicitly; project=global is only for cross-project knowledge. Use sessions/findings for handoff. Compose plans as notes + tasks with plan:<slug>. Trust each tool's inputSchema required fields and enums over prose.\n\n" +
-	"For non-trivial work, read injected briefing/recall context before searching again. Use session_start/session_end when an explicit handoff record is useful. If this session caused any mishaps (an action a warning said not to take, live state touched by mistake), self-report them in session_end's mishaps field -- recurrence review is how they get fixed. Claim shared plan steps with tasks_claim before working them. When writing a memory, " + KindDiscriminator + "; " + StageContract + ". Task vs stage: " + TaskVsStage + "."
+	"For non-trivial work, read injected briefing/recall context before searching again. Use session_start/session_end when an explicit handoff record is useful. If this session caused any mishaps (an action a warning said not to take, live state touched by mistake), self-report them in session_end's mishaps field -- recurrence review is how they get fixed. Claim shared plan steps with tasks_claim before working them. When writing a memory, " + KindDiscriminator + "; " + StageContract + ". Task vs stage: " + TaskVsStage + ". " + EditVsSupersede
 
 // KindDiscriminator is the constraint-vs-convention call an agent makes at
 // memory_write time. The memory_write kind parameter and MCPInstructions both
@@ -20,11 +20,23 @@ const KindDiscriminator = "constraint = what any agent must or must not do regar
 // memory. The memory_write kind parameter and MCPInstructions both render this
 // string so the write-side contract cannot drift between surfaces; the read
 // side (core.ParseStageHeader) is what makes the header load-bearing.
-const StageContract = "for kind=stage, open the body with Status: open|in_progress|blocked|done and optionally Gate: human|ai, and update status by re-writing via memory_write -- append cannot change the header, which is parsed from the top of the body"
+const StageContract = "for kind=stage, open the body with Status: open|in_progress|blocked|done and optionally Gate: human|ai, and flip the status with memory_edit (or a full memory_write) -- append cannot change the header, which is parsed from the top of the body"
 
 // TaskVsStage is the rule of thumb that keeps external waits out of the task
 // queue and claimable work out of stage memories.
 const TaskVsStage = "task = work someone here can claim and finish; stage = a state of the world you wait on that every session must know while it holds"
+
+// EditVsSupersede is the lifecycle boundary the partial-edit tools have to
+// police, rendered by MCPInstructions and by both edit tools' descriptions so
+// the rule cannot drift into two versions of itself.
+//
+// It needs saying because a cheap in-place edit is exactly the tool an agent
+// reaches for to change what a memory CLAIMS, and that quietly rewrites the
+// corpus's history: a superseded memory leaves the indexes but stays readable
+// pointing at its replacement, which is how a later reader learns the thing was
+// reconsidered rather than that it was never believed. An edit leaves no such
+// trace, so it must stay confined to changes that carry no new claim.
+const EditVsSupersede = "Edit vs supersede: memory_edit and notes_edit are for corrections that do not change what an item CLAIMS -- typos, formatting, a stale path or command, a stage's Status flip, metadata. When the MEANING changes, write the new knowledge with memory_write supersedes so the outdated memory retires into readable history instead of being silently rewritten."
 
 // BriefingFooter is the compact reminder appended to every ambient briefing.
 // It deliberately names only the two retrieval entry points; MCPInstructions

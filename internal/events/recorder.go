@@ -9,11 +9,14 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // truncationMarker is appended to a captured field that Truncate had to trim.
@@ -62,10 +65,51 @@ type Recorder struct {
 	mu     sync.Mutex
 	subs   map[int]chan core.Event
 	nextID int
+
+	// features is the file/env optional-features base the milestone layer
+	// gates on, and featuresArmed whether SetFeatures has supplied it. Until
+	// then the recorder appends events exactly as before -- no gate read, no
+	// milestone checks -- so unwired recorders (tests, benchmarks, one-shot
+	// tools) keep their behavior and cost unchanged.
+	features      config.Features
+	featuresArmed bool
 }
 
 // NewRecorder returns a Recorder backed by db.
 func NewRecorder(db *sql.DB) *Recorder { return &Recorder{db: db} }
+
+// The milestone layer mints through RecordOnce (store.OnceRecorder).
+var _ store.OnceRecorder = (*Recorder)(nil)
+
+// SetFeatures arms the momentum milestone layer with the file/env features
+// base. From then on every successfully recorded event runs
+// store.CheckMilestones, which resolves the effective features live (base
+// overlaid with the console's stored override) and does nothing while
+// momentum is off -- so the console toggle applies immediately, with no
+// daemon restart. Call it once at wiring time, before serving.
+func (r *Recorder) SetFeatures(base config.Features) {
+	r.mu.Lock()
+	r.features = base
+	r.featuresArmed = true
+	r.mu.Unlock()
+}
+
+// mintMilestones runs the store milestone checks against an event that just
+// landed. Best-effort by design: the event is already durably recorded, so a
+// milestone failure is logged and never surfaces to the recording caller. The
+// re-entrant call this makes through RecordOnce terminates immediately:
+// milestone.reached is not a kind CheckMilestones watches.
+func (r *Recorder) mintMilestones(ctx context.Context, e core.Event) {
+	r.mu.Lock()
+	armed, base := r.featuresArmed, r.features
+	r.mu.Unlock()
+	if !armed {
+		return
+	}
+	if err := store.CheckMilestones(ctx, r.db, r, base, e); err != nil {
+		slog.Warn("events: milestone check", "kind", string(e.Kind), "error", err)
+	}
+}
 
 // Subscribe registers a live-event channel and returns it with an unsubscribe
 // func the caller must invoke when done (idempotent). Events are delivered
@@ -144,7 +188,62 @@ func (r *Recorder) Record(ctx context.Context, e core.Event) (string, error) {
 		return "", fmt.Errorf("events.Record: insert: %w", err)
 	}
 	r.publish(e)
+	r.mintMilestones(ctx, e)
 	return e.ID, nil
+}
+
+// RecordOnce appends an event only if no event of its kind exists for its item
+// -- the once-per-item latch behind moments like the momentum first-reuse
+// mark. The guard and the insert are a single statement, so two concurrent
+// recorders cannot both mint the moment; recorded is false when the latch had
+// already been set, and subscribers see the event only when it actually
+// landed.
+func (r *Recorder) RecordOnce(ctx context.Context, e core.Event) (id string, recorded bool, err error) {
+	if e.Kind == "" {
+		return "", false, fmt.Errorf("events.RecordOnce: empty kind")
+	}
+	if e.ItemID == "" {
+		return "", false, fmt.Errorf("events.RecordOnce: empty item id (the latch is per item)")
+	}
+	if e.ID == "" {
+		nid, err := core.NewID()
+		if err != nil {
+			return "", false, fmt.Errorf("events.RecordOnce: %w", err)
+		}
+		e.ID = nid
+	}
+	if e.TS.IsZero() {
+		e.TS = time.Now().UTC()
+	}
+	payload := "{}"
+	if len(e.Payload) > 0 {
+		b, err := json.Marshal(e.Payload)
+		if err != nil {
+			return "", false, fmt.Errorf("events.RecordOnce: marshal payload: %w", err)
+		}
+		payload = string(b)
+	}
+	res, err := r.db.ExecContext(ctx,
+		`INSERT INTO events (id, ts, kind, session_id, project_slug, item_id, payload)
+		 SELECT ?, ?, ?, ?, ?, ?, ?
+		 WHERE NOT EXISTS (SELECT 1 FROM events WHERE kind = ? AND item_id = ?)`,
+		e.ID, core.FormatTime(e.TS), string(e.Kind),
+		e.SessionID, e.ProjectSlug, e.ItemID, payload,
+		string(e.Kind), e.ItemID,
+	)
+	if err != nil {
+		return "", false, fmt.Errorf("events.RecordOnce: insert: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return "", false, fmt.Errorf("events.RecordOnce: rows affected: %w", err)
+	}
+	if n == 0 {
+		return "", false, nil
+	}
+	r.publish(e)
+	r.mintMilestones(ctx, e)
+	return e.ID, true, nil
 }
 
 // ByID returns a single event by its id. ok is false (with a nil error) when no
@@ -184,6 +283,34 @@ func (r *Recorder) BySession(ctx context.Context, sessionID string, limit int) (
 		 FROM events WHERE session_id = ? ORDER BY ts ASC, id ASC LIMIT ?`, sessionID, limit)
 	if err != nil {
 		return nil, fmt.Errorf("events.BySession: %w", err)
+	}
+	return scanEvents(rows)
+}
+
+// LatestBySession returns a session's most recent events of the given kinds,
+// newest first, capped at limit (default 50). Unlike BySession -- whose limit
+// truncates from the oldest side, for timelines -- this reads from the newest
+// side, for "what did this agent just do" trails. An empty kinds slice spans
+// all kinds.
+func (r *Recorder) LatestBySession(ctx context.Context, sessionID string, kinds []core.EventKind, limit int) ([]core.Event, error) {
+	if sessionID == "" {
+		return nil, nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+	q := `SELECT id, ts, kind, session_id, project_slug, item_id, payload
+	      FROM events WHERE session_id = ?`
+	args := []any{sessionID}
+	if ph, kArgs := kindArgs(kinds); ph != "" {
+		q += ` AND kind IN (` + ph + `)`
+		args = append(args, kArgs...)
+	}
+	q += ` ORDER BY ts DESC, id DESC LIMIT ?`
+	args = append(args, limit)
+	rows, err := r.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("events.LatestBySession: %w", err)
 	}
 	return scanEvents(rows)
 }
@@ -327,6 +454,40 @@ func (r *Recorder) KindTimeline(ctx context.Context, kinds []core.EventKind, pro
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("events.KindTimeline: %w", err)
+	}
+	return out, nil
+}
+
+// TimestampsSince returns the timestamps of every event at or after since,
+// oldest first, capped at limit (default 2000) -- the minimal projection behind
+// the Now screen's activity pulse, which buckets them client-blind into a
+// per-interval histogram. All kinds count: the pulse measures how hard the
+// fleet is running, and a tool call is exactly that.
+func (r *Recorder) TimestampsSince(ctx context.Context, since time.Time, limit int) ([]time.Time, error) {
+	if limit <= 0 {
+		limit = 2000
+	}
+	rows, err := r.db.QueryContext(ctx,
+		`SELECT ts FROM events WHERE ts >= ? ORDER BY ts ASC, id ASC LIMIT ?`,
+		core.FormatTime(since), limit)
+	if err != nil {
+		return nil, fmt.Errorf("events.TimestampsSince: %w", err)
+	}
+	defer rows.Close()
+	var out []time.Time
+	for rows.Next() {
+		var tsStr string
+		if err := rows.Scan(&tsStr); err != nil {
+			return nil, fmt.Errorf("events.TimestampsSince scan: %w", err)
+		}
+		ts, err := core.ParseTime(tsStr)
+		if err != nil {
+			return nil, fmt.Errorf("events.TimestampsSince time: %w", err)
+		}
+		out = append(out, ts)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("events.TimestampsSince: %w", err)
 	}
 	return out, nil
 }

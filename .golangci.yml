@@ -1,64 +1,103 @@
 # Lint config for Seamless. A backstop for the grep-detectable subset of the
 # conventions in AGENTS.md > "Common pitfalls"; AGENTS.md is the source of truth
 # (lint cannot catch e.g. os.WriteFile on a .md file or byte-slicing UTF-8).
+#
+# Schema v2 (golangci-lint 2.x). The version key is not decoration: a 2.x binary
+# refuses to load a file without it, and refuses to load the v1 key layout at
+# all -- so the schema, the installed binary, and CI's pinned version move
+# together or `make lint` stops running entirely rather than reporting nothing.
+version: "2"
+
 run:
   timeout: 5m
   tests: true
 
 linters:
-  # Keeps the golangci-lint defaults (errcheck, govet, ineffassign, staticcheck,
-  # unused) and adds a curated set on top.
+  # `default: standard` keeps golangci-lint's own baseline (errcheck, govet,
+  # ineffassign, staticcheck, unused); the list below is the curated set on top.
+  default: standard
   enable:
     - forbidigo      # bans ulid.MustNew, time.Sleep
     - rowserrcheck   # missing rows.Err() after rows.Next()
     - sqlclosecheck  # missing rows.Close() / stmt.Close()
     - errorlint      # err == ErrXxx instead of errors.Is
 
-linters-settings:
-  errcheck:
-    # Check errors discarded into `_` as well as ignored returns. This is what
-    # catches the repo's real defect class: `n, _ := res.RowsAffected()` before
-    # an `if n == 0 { return ErrNotFound }`, where a driver failure reads as
-    # "not found" and the caller believes it (AGENTS.md > Meta-rules > "No fake
-    # results on error"). Every discard that survives below is either listed
-    # here as structurally uninteresting or carries a //nolint:errcheck with a
-    # reason at the site -- there is no third category.
-    check-blank: true
-    exclude-functions:
-      # Deferred rollback: a no-op returning sql.ErrTxDone once Commit has run,
-      # and on the failure path the error is already being returned. Nothing a
-      # caller could do with it.
-      - (*database/sql.Tx).Rollback
-      # Writes to an already-committed HTTP response: the status line is sent,
-      # so a failure cannot be reported to the client that just disappeared.
-      - (*bytes.Buffer).WriteTo
-      - (net/http.ResponseWriter).Write
-      # goldmark's writer buffers in memory; these writes cannot fail.
-      - (github.com/yuin/goldmark/util.BufWriter).WriteString
-  forbidigo:
-    # Patterns match against call-expression text (e.g. "ulid.MustNew").
-    forbid:
-      - p: ^ulid\.MustNew$
-        msg: "use ulid.New + error handling; ulid.MustNew panics on entropy failure (AGENTS.md > Common pitfalls)."
-      - p: ^time\.Sleep$
-        msg: "no time.Sleep for synchronization; use channels/sync.WaitGroup/t.Eventually (AGENTS.md > Testing)."
-    analyze-types: true
-  errorlint:
-    errorf: true
-    errorf-multi: true
-    asserts: true
-    comparison: true
+  settings:
+    errcheck:
+      # Check errors discarded into `_` as well as ignored returns. This is what
+      # catches the repo's real defect class: `n, _ := res.RowsAffected()` before
+      # an `if n == 0 { return ErrNotFound }`, where a driver failure reads as
+      # "not found" and the caller believes it (AGENTS.md > Meta-rules > "No fake
+      # results on error"). Every discard that survives below is either listed
+      # here as structurally uninteresting or carries a //nolint:errcheck with a
+      # reason at the site -- there is no third category.
+      check-blank: true
+      exclude-functions:
+        # Deferred rollback: a no-op returning sql.ErrTxDone once Commit has run,
+        # and on the failure path the error is already being returned. Nothing a
+        # caller could do with it.
+        - (*database/sql.Tx).Rollback
+        # Writes to an already-committed HTTP response: the status line is sent,
+        # so a failure cannot be reported to the client that just disappeared.
+        - (*bytes.Buffer).WriteTo
+        - (net/http.ResponseWriter).Write
+        # goldmark's writer buffers in memory; these writes cannot fail.
+        - (github.com/yuin/goldmark/util.BufWriter).WriteString
+
+    forbidigo:
+      # Patterns match against call-expression text (e.g. "ulid.MustNew"). The
+      # key is `pattern` in schema v2; v1 spelled it `p`.
+      forbid:
+        - pattern: ^ulid\.MustNew$
+          msg: "use ulid.New + error handling; ulid.MustNew panics on entropy failure (AGENTS.md > Common pitfalls)."
+        - pattern: ^time\.Sleep$
+          msg: "no time.Sleep for synchronization; use channels/sync.WaitGroup/t.Eventually (AGENTS.md > Testing)."
+      analyze-types: true
+
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+
+    staticcheck:
+      # Schema v2 folded gosimple and stylecheck into staticcheck and turned the
+      # whole set on, which is a net gain -- ST1005 (error strings) and the S*
+      # simplifications are worth having. The QF ("quickfix") family is not: it
+      # is editor-refactor suggestions, not defects, and QF1001 in particular
+      # wants De Morgan applied to booleans whose negated-as-a-whole form is the
+      # readable one. This config is a backstop for AGENTS.md's conventions, so
+      # an upstream style opinion the project has not adopted stays off.
+      #
+      # The list is the tool's own default with -QF1001 appended; keep the
+      # leading entries in sync when upgrading rather than trimming them.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -QF1001
+
+  exclusions:
+    # The four presets are schema v2's spelling of v1's `exclude-use-default`.
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Tests may use timing-sensitive patterns and construct fixtures with
+      # patterns banned in production code.
+      - path: _test\.go
+        linters:
+          - forbidigo
+          - errcheck
 
 issues:
-  exclude-use-default: true
   # Report every hit. The defaults (50 per linter, 3 of the same message) hide
   # the tail, and a guardrail that shows 3 of 9 reads as "that was all of them".
   max-issues-per-linter: 0
   max-same-issues: 0
-  exclude-rules:
-    # Tests may use timing-sensitive patterns and construct fixtures with
-    # patterns banned in production code.
-    - path: _test\.go
-      linters:
-        - forbidigo
-        - errcheck

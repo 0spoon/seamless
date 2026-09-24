@@ -39,6 +39,21 @@ type reprojectView struct {
 	Rationale string `json:"rationale,omitempty"`
 }
 
+// relocateView is the relocate-specific projection: a GLOBAL memory pulled back
+// inside the project whose sessions wrote it, after that project tightened its
+// isolation. The move is a reproject's; the evidence is provenance, which is why
+// it renders on its own terms -- Session names the stamp that traced it, and
+// Isolation the fence it escaped.
+type relocateView struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Kind        string `json:"kind,omitempty"`
+	Description string `json:"description,omitempty"`
+	To          string `json:"to"`
+	Session     string `json:"session,omitempty"`
+	Isolation   string `json:"isolation,omitempty"`
+}
+
 // rekindView is the rekind-specific projection of a proposal card: a memory
 // reclassified from one kind to another, in place.
 type rekindView struct {
@@ -103,6 +118,9 @@ type proposalCard struct {
 	Reproject *reprojectView `json:"reproject,omitempty"`
 	Split     *splitView     `json:"split,omitempty"`
 
+	// Relocate (pull a leaked global memory back inside a newly fenced project).
+	Relocate *relocateView `json:"relocate,omitempty"`
+
 	// Rekind (reclassify a memory's kind in place).
 	Rekind *rekindView `json:"rekind,omitempty"`
 
@@ -111,6 +129,8 @@ type proposalCard struct {
 
 	// ShipPlan (retag an implemented-but-unapproved captured plan).
 	ShipPlan *shipPlanView `json:"shipPlan,omitempty"`
+	// MergePlans (fold a stranded capture into the plan holding its steps).
+	MergePlans *mergePlansView `json:"mergePlans,omitempty"`
 
 	// MemoryWanted (open a task to write knowledge agents searched for in vain).
 	MemoryWanted *memoryWantedView `json:"memoryWanted,omitempty"`
@@ -144,6 +164,14 @@ type proposalCard struct {
 	// also renders standalone as a ?reader=1 fragment with no page around it.
 	CanUndoApply bool `json:"-"`
 	CanAct       bool `json:"-"`
+	// Fenced is the projects this proposal touches that are isolated NOW,
+	// whether or not they were when it was proposed. The console is exempt from
+	// the isolation fence by design -- the owner sees everything -- so this
+	// never hides or blocks anything; it marks a proposal whose evidence
+	// predates a tighten, so applying it is an informed choice rather than a
+	// silent move across a fence raised after the fact. Agent callers are
+	// refused outright at the MCP surface (mcp.fenceProposal).
+	Fenced []store.ProjectIsolation `json:"-"`
 }
 
 // queueSection is one taxonomy group in the review rail: the pending proposals
@@ -175,8 +203,10 @@ var sectionOfKind = map[string]string{
 	store.ProposalArchive:      "cleanup",
 	store.ProposalRekind:       "cleanup",
 	store.ProposalReproject:    "cleanup",
+	store.ProposalRelocate:     "cleanup",
 	store.ProposalAbandonPlan:  "plans",
 	store.ProposalShipPlan:     "plans",
+	store.ProposalMergePlans:   "plans",
 	store.ProposalDigest:       "digests",
 }
 
@@ -192,9 +222,24 @@ type recentRow struct {
 	Icon       string
 	Tone       string
 	RowTitle   string
-	Status     string // applied | dismissed
+	Status     string // applied | dismissed | hidden
 	ResolvedAt *time.Time
 	CanUndo    bool
+}
+
+// hiddenRow is one entry in the rail's "Hidden forever" section: a pattern the
+// owner blocked permanently, and the handle to lift it. It is deliberately not
+// a recentRow -- these two lists answer different questions ("what did I just
+// do" vs "what am I still blocking") and a hide falls off the first within a
+// handful of decisions while staying in force indefinitely.
+type hiddenRow struct {
+	ID        string
+	Kind      string
+	Icon      string
+	Tone      string
+	RowTitle  string
+	RowDetail string
+	HiddenAt  *time.Time
 }
 
 // memoryWantedView is the memory_wanted projection: the recurring zero-hit
@@ -246,6 +291,21 @@ type shipPlanView struct {
 	Commits      []string `json:"commits"` // "sha message" lines, capped by the gardener
 }
 
+// mergePlansView is the merge_plans projection: the stranded capture on the
+// left, the composition that holds the steps on the right, and how many
+// significant title words tied them together -- the evidence the owner is
+// judging, since applying moves the whole composition.
+type mergePlansView struct {
+	NoteID       string `json:"noteId"`
+	Slug         string `json:"slug"` // the capture's plan:<slug>, the one being retired
+	Title        string `json:"title"`
+	Project      string `json:"project,omitempty"`
+	Status       string `json:"status"` // draft | presented
+	IntoSlug     string `json:"intoSlug"`
+	IntoTitle    string `json:"intoTitle"`
+	SharedTokens int    `json:"sharedTokens"`
+}
+
 // planGroup collects the pending proposals of one plan (a split batch) so the
 // console reviews them together: the setup card first, then the per-memory
 // reproject cards, with Targets listing the projects a reproject may retarget to.
@@ -283,6 +343,7 @@ type gardenerData struct {
 	// Groups/Cards/counts and that shape is fixed.
 	Sections []queueSection `json:"-"`
 	Recent   []recentRow    `json:"-"`
+	Hidden   []hiddenRow    `json:"-"`
 	// Selected is the proposal open in the reader: the requested one on a
 	// /console/gardener/{id} page, or the first row of the queue on the list URL
 	// (SelectedAuto, which the client pins into the URL).
@@ -335,6 +396,7 @@ func (s *Service) gardenerPageData(w http.ResponseWriter, r *http.Request) (data
 		Cards:           ungroupedRows(sections),
 		Sections:        sections,
 		Recent:          s.recentDecisions(ctx),
+		Hidden:          s.hiddenPatterns(ctx),
 		PendingCount:    len(visible),
 		RequestedCount:  requested,
 		BackgroundCount: len(visible) - requested,
@@ -630,7 +692,7 @@ func (s *Service) recentDecisions(ctx context.Context) []recentRow {
 		out = append(out, recentRow{
 			ID: p.ID, Kind: p.Kind, Icon: iconName, Tone: tone, RowTitle: title,
 			Status: p.Status, ResolvedAt: p.ResolvedAt,
-			CanUndo: p.Status == store.ProposalDismissed || gardener.CanUndoApply(p.Kind),
+			CanUndo: gardener.CanUndoResolution(p.Status, p.Kind),
 		})
 	}
 	return out
@@ -640,6 +702,32 @@ func (s *Service) recentDecisions(ctx context.Context) []recentRow {
 // second-thought affordance, not a history browser: the events feed keeps the
 // full record.
 const recentDecisionLimit = 10
+
+// hiddenPatterns projects the forever-blocked proposals into the rail's unhide
+// list. It is uncapped on purpose: a hide is an explicit owner decision, so the
+// list is short by construction, and truncating the one surface that says what
+// is being suppressed would leave a block nobody can find to lift. Best-effort:
+// a query error costs the section, not the page.
+func (s *Service) hiddenPatterns(ctx context.Context) []hiddenRow {
+	if s.cfg.Gardener == nil {
+		return nil
+	}
+	ps, err := s.cfg.Gardener.Hidden(ctx)
+	if err != nil {
+		s.logger.Warn("console: hidden gardener proposals", "error", err)
+		return nil
+	}
+	out := make([]hiddenRow, 0, len(ps))
+	for _, p := range ps {
+		_, _, iconName, tone := proposalPresentation(p.Kind)
+		title, detail := rowSummary(p.Kind, s.toProposalCard(ctx, p))
+		out = append(out, hiddenRow{
+			ID: p.ID, Kind: p.Kind, Icon: iconName, Tone: tone,
+			RowTitle: title, RowDetail: detail, HiddenAt: p.ResolvedAt,
+		})
+	}
+	return out
+}
 
 // groupByPlan partitions cards into plan groups (those carrying a plan slug) and
 // the ungrouped remainder. Within a group the split setup card sorts first, then
@@ -710,6 +798,11 @@ func rowSummary(kind string, c proposalCard) (title, detail string) {
 				c.Reproject.Name, projectLabel(c.Reproject.From), projectLabel(c.Reproject.To))
 		}
 		return "Move memory", ""
+	case store.ProposalRelocate:
+		if c.Relocate != nil {
+			return "Relocate leaked memory", fmt.Sprintf("%s: global → %s", c.Relocate.Name, c.Relocate.To)
+		}
+		return "Relocate leaked memory", ""
 	case store.ProposalRekind:
 		if c.Rekind != nil {
 			return "Reclassify memory", fmt.Sprintf("%s: %s → %s", c.Rekind.Name, c.Rekind.From, c.Rekind.To)
@@ -731,6 +824,11 @@ func rowSummary(kind string, c proposalCard) (title, detail string) {
 				plural(c.ShipPlan.MatchedCount, "matching commit", "matching commits")
 		}
 		return "Mark plan shipped", ""
+	case store.ProposalMergePlans:
+		if c.MergePlans != nil {
+			return "Fold plan into another", c.MergePlans.Title + " → " + c.MergePlans.IntoSlug
+		}
+		return "Fold plan into another", ""
 	case store.ProposalMemoryWanted:
 		if c.MemoryWanted != nil {
 			return "Write missing memory", c.MemoryWanted.SuggestedTitle + " · " +
@@ -853,6 +951,14 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			From: payloadStr(p.Payload, "from"), To: payloadStr(p.Payload, "to"),
 			Rationale: payloadStr(p.Payload, "rationale"),
 		}
+	case store.ProposalRelocate:
+		c.Relocate = &relocateView{
+			ID: payloadStr(p.Payload, "id"), Name: payloadStr(p.Payload, "name"),
+			Kind: payloadStr(p.Payload, "kind"), Description: payloadStr(p.Payload, "description"),
+			To:      payloadStr(p.Payload, "to"),
+			Session: payloadStr(p.Payload, "session"), Isolation: payloadStr(p.Payload, "isolation"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalRekind:
 		c.Rekind = &rekindView{
 			ID: payloadStr(p.Payload, "id"), Name: payloadStr(p.Payload, "name"),
@@ -876,6 +982,17 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 			CommitsSince: int(payloadFloat(p.Payload, "commits_since")),
 			MatchedCount: int(payloadFloat(p.Payload, "matched_count")),
 			Commits:      payloadStrList(p.Payload, "commits"),
+		}
+		c.Reason = payloadStr(p.Payload, "reason")
+	case store.ProposalMergePlans:
+		c.MergePlans = &mergePlansView{
+			NoteID: payloadStr(p.Payload, "id"), Slug: payloadStr(p.Payload, "slug"),
+			Title: payloadStr(p.Payload, "title"), Project: payloadStr(p.Payload, "project"),
+			Status:    payloadStr(p.Payload, "plan_status"),
+			IntoSlug:  payloadStr(p.Payload, "merge_into"),
+			IntoTitle: payloadStr(p.Payload, "merge_into_title"),
+
+			SharedTokens: int(payloadFloat(p.Payload, "shared_tokens")),
 		}
 		c.Reason = payloadStr(p.Payload, "reason")
 	case store.ProposalMemoryWanted:
@@ -920,7 +1037,32 @@ func (s *Service) toProposalCard(ctx context.Context, p store.Proposal) proposal
 	c.RowTitle, c.RowDetail = rowSummary(p.Kind, c)
 	c.CanUndoApply = gardener.CanUndoApply(p.Kind)
 	c.CanAct = s.cfg.Gardener != nil
+	c.Fenced = s.fencedTargets(ctx, p)
 	return c
+}
+
+// fencedTargets reports which of a proposal's projects are isolated now. A
+// resolution failure is not an error the owner should see: the console renders
+// the proposal either way, so a card that cannot be attributed simply carries no
+// mark. That is the opposite of the tool surface, where an unattributable
+// payload fails closed -- there, silence would leak; here, it would only nag.
+//
+// Relocate is exempt, and it is the one kind that must be. A relocate is the
+// tighten's OWN repair -- it pulls a leaked global memory back inside the fence
+// -- so it is created by the tighten and its evidence can never predate it,
+// which is the only thing this mark exists to warn about. Marking it would also
+// be the majority of the queue right after a tighten (one row per leaked
+// memory), and a warning on every row is a warning on none.
+func (s *Service) fencedTargets(ctx context.Context, p store.Proposal) []store.ProjectIsolation {
+	if p.Kind == store.ProposalRelocate {
+		return nil
+	}
+	fenced, err := gardener.FencedProjects(ctx, s.cfg.DB, p)
+	if err != nil {
+		s.logger.Warn("console: resolve proposal isolation", "proposal", p.ID, "kind", p.Kind, "error", err)
+		return nil
+	}
+	return fenced
 }
 
 // proposalPresentation turns store-facing proposal kinds into the outcome-first
@@ -938,6 +1080,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Consolidate into one memory", "Synthesis", "database", "brand"
 	case store.ProposalReproject:
 		return "Move a memory", "Scope correction", "folder-tree", "pop"
+	case store.ProposalRelocate:
+		return "Relocate a memory behind the fence", "Isolation repair", "lock", "warn"
 	case store.ProposalRekind:
 		return "Reclassify a memory", "Kind correction", "arrow-up-down", "pop"
 	case store.ProposalSplit:
@@ -946,6 +1090,8 @@ func proposalPresentation(kind string) (label, eyebrow, iconName, tone string) {
 		return "Retire a stale plan", "Planning hygiene", "archive", "warn"
 	case store.ProposalShipPlan:
 		return "Mark a plan shipped", "Planning hygiene", "git-commit-horizontal", "ok"
+	case store.ProposalMergePlans:
+		return "Fold a plan into another", "Planning hygiene", "git-merge", "pop"
 	case store.ProposalMemoryWanted:
 		return "Write a missing memory", "Knowledge gap", "search", "pop"
 	case store.ProposalToolError:
@@ -1029,6 +1175,43 @@ func (s *Service) gardenerDismiss(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	gardenerRedirect(w, r, next, "notice", "Dismissed the proposal. Undo it from Recently decided.")
+}
+
+// gardenerHide is the strong rejection: the proposal is resolved like a
+// dismissal and its pattern is blocked permanently, so no recurrence brings it
+// back. Both exits stay open, and the flash names them: Undo returns this
+// proposal to the queue, Unhide lifts the block without doing so.
+func (s *Service) gardenerHide(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	id := r.PathValue("id")
+	next := s.nextSelection(r)
+	if err := s.cfg.Gardener.Hide(r.Context(), id); err != nil {
+		s.logger.Warn("console: gardener hide", "id", id, "error", err)
+		gardenerRedirect(w, r, id, "error", err.Error())
+		return
+	}
+	gardenerRedirect(w, r, next, "notice", "Hidden for good. Lift it from Hidden forever, or undo it from Recently decided.")
+}
+
+// gardenerUnhide lifts a forever block without returning its proposal to the
+// queue. The next gardener pass may raise the pattern again once evidence for
+// it recurs -- and if it has stopped recurring, nothing comes back, which the
+// flash says rather than promising a proposal that will not arrive.
+func (s *Service) gardenerUnhide(w http.ResponseWriter, r *http.Request) {
+	if s.cfg.Gardener == nil {
+		s.serverError(w, r, errNoGardener)
+		return
+	}
+	id := r.PathValue("id")
+	if err := s.cfg.Gardener.Unhide(r.Context(), id); err != nil {
+		s.logger.Warn("console: gardener unhide", "id", id, "error", err)
+		gardenerRedirect(w, r, "", "error", err.Error())
+		return
+	}
+	gardenerRedirect(w, r, "", "notice", "Unhidden. The gardener may propose this again if the pattern recurs.")
 }
 
 // gardenerUndo returns a resolved proposal to the queue, inverting whatever its

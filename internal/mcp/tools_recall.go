@@ -17,10 +17,10 @@ const recallMissQueryMax = 500
 
 func recallTool() mcp.Tool {
 	return mcp.NewTool("recall", hintRead(),
-		mcp.WithDescription("Search memories and notes by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. With kind set and no query it lists that kind newest-first instead (browse)."),
+		mcp.WithDescription("Search durable knowledge (memories, notes) and the work record (tasks, trials, session findings) by meaning and keyword (fused), scoped to the current project plus global items. This is the single search entry point. Work-record hits carry a status (a task's status, a trial's outcome) and match on keyword only. With kind set and no query it lists that memory kind newest-first instead (browse)."),
 		mcp.WithString("query", mcp.Description("what you are looking for; required unless kind is set (kind alone lists that kind newest-first)")),
 		mcp.WithString("scope", enumOf(retrieve.RecallScopes), mcp.Description("what to search (default all)")),
-		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so scope=notes is rejected; with no query, lists the kind newest-first")),
+		mcp.WithString("kind", enumOf(core.MemoryKinds), mcp.Description("only memories of this frontmatter kind (e.g. convention); implies memories-only, so any scope that excludes memories is rejected; with no query, lists the kind newest-first")),
 		mcp.WithString("project", mcp.Description("project slug; defaults to the bound session's project")),
 		mcp.WithInteger("limit", mcp.Min(1), mcp.Max(retrieve.MaxRecallLimit),
 			mcp.Description("maximum results (default 10, max 100)")),

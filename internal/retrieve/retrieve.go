@@ -25,6 +25,7 @@ type Service struct {
 	bodyReader MemoryBodyReader // nil => briefing omits the pinned-stage section
 	budgets    config.Budgets
 	briefing   config.Briefing // file/env base; console overrides layer on at briefing time
+	features   config.Features // file/env base; console overrides layer on the same way
 	search     config.Search
 	logger     *slog.Logger
 
@@ -43,6 +44,7 @@ func New(db *sql.DB, embedder llm.Embedder, budgets config.Budgets, logger *slog
 		embedder: embedder,
 		budgets:  budgets,
 		briefing: config.Defaults().Briefing,
+		features: config.Defaults().Features,
 		search:   config.Defaults().Search,
 		logger:   logger,
 		corpus:   newCorpusCache(),
@@ -57,6 +59,12 @@ func (s *Service) SetBriefingConfig(b config.Briefing) { s.briefing = b }
 
 // SetSearchConfig sets the file/env search knobs (Defaults() until called).
 func (s *Service) SetSearchConfig(c config.Search) { s.search = c }
+
+// SetFeaturesConfig sets the file/env optional-features base the Service starts
+// from. The console's runtime override row still layers on top at assembly time
+// (see effectiveFeatures), so a Settings toggle applies to the next briefing
+// without a restart.
+func (s *Service) SetFeaturesConfig(c config.Features) { s.features = c }
 
 // injectionRe strips imperative prompt-injection phrases from any free-prose
 // field lifted out of stored content and shown to an agent as trusted context.

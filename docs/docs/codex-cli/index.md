@@ -42,9 +42,11 @@ detect` - the clients actually present, Codex included. The Codex profile:
    a disabled or stale Seamless bridge, and verifies the written state before it
    reports success. A direct-HTTP or otherwise foreign entry under the reserved
    `seamless` name is never overwritten implicitly.
-3. **Installs two Codex skills** under
-   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow and
-   the recurring `$seam-research` lab workflow. Claude's copies remain in
+3. **Installs the Codex skills** under
+   `${CODEX_HOME:-$HOME/.codex}/skills/`: the one-shot `$seam-onboard` workflow,
+   plus the recurring `$seam-research` lab workflow while its
+   [optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) is on (it ships
+   off). Claude's copies remain in
    `~/.claude/skills/`; their one-shot delivery markers are independent.
 
 The `codex` executable is the supported management surface for automated MCP
@@ -115,8 +117,9 @@ make install-onboard-skill CLIENT=codex
 ```
 
 `$seam-research <lab-name> <problem>` opens or resumes the same structured,
-multi-agent research-lab workflow as Claude Code. It remains installed and is
-refreshed on upgrades.
+multi-agent research-lab workflow as Claude Code. While the research feature is
+on it remains installed and is refreshed on upgrades; switch the feature off and
+the next install run takes it back out.
 
 ## The five hooks, and what they inject
 

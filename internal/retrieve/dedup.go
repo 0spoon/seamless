@@ -29,9 +29,15 @@ func (s *Service) DedupHint(ctx context.Context, project, name, description stri
 		s.logger.Warn("retrieve.DedupHint: embed failed, no hint", "error", err)
 		return nil, nil
 	}
-	scope := []string{""}
-	if project != "" {
-		scope = append(scope, project)
+	// Same scope as recall, isolation included: a sealed project may not read
+	// global, and a hint naming a global memory would leak one into it.
+	globalVisible, err := s.globalReadable(ctx, project)
+	if err != nil {
+		return nil, err
+	}
+	scope := []string{project}
+	if project != "" && globalVisible {
+		scope = append(scope, "")
 	}
 	hits, err := store.CosineSearch(ctx, s.db, qvec, s.embedder.Model(), []string{"memory"}, scope, 3)
 	if err != nil {
@@ -48,7 +54,7 @@ func (s *Service) DedupHint(ctx context.Context, project, name, description stri
 		// CosineSearch already excludes invalidated memories and out-of-scope
 		// ones; this is the residual guard for a memory superseded between that
 		// query and this read.
-		if !ok || m.InvalidAt != nil || !scopeVisible(m.Project, project) {
+		if !ok || m.InvalidAt != nil || !scopeVisible(m.Project, project, globalVisible) {
 			continue
 		}
 		hit := memoryHit(m)

@@ -8,8 +8,10 @@
       <div class="title-row">
         <span class="tile {{.TileClass}}">{{icon .TileIcon}}</span>
         <h1>{{.Name}}</h1>
+        {{.Stage}}
         {{if .Live}}<span class="badge ok"><span class="live-dot"></span>{{.Live}} agent{{if ne .Live 1}}s{{end}} working</span>{{end}}
         {{if .Retired}}<span class="kind warn">retired</span>{{end}}
+        {{isoPill .Isolation}}
         {{if .IsRoot}}<span class="chip-parent">{{icon "git-branch"}}root project</span>{{else}}<span class="chip-parent">{{icon "git-branch"}}child of {{.Parent}}</span>{{end}}
         <form class="star-form" method="post" action="/console/favorites/project/{{.Slug}}">
           <input type="hidden" name="favorite" value="{{if .Favorite}}0{{else}}1{{end}}">
@@ -34,8 +36,8 @@
     <div class="m"><div class="k">Active memories</div><div class="v">{{.Metrics.Memories}}</div></div>
     <div class="m"><div class="k">Sessions</div><div class="v">{{.Metrics.Sessions}}{{if .Metrics.Live}} <small>&middot; {{.Metrics.Live}} live</small>{{end}}</div></div>
     <div class="m"><div class="k">Open tasks</div><div class="v">{{.Metrics.OpenTasks}}{{if .Metrics.Blocked}} <small>&middot; {{.Metrics.Blocked}} blk</small>{{end}}</div></div>
-    <div class="m"><div class="k">Reach</div><div class="v brand">{{if .Metrics.HasReach}}{{.Metrics.ReachRate}}%{{else}}&mdash;{{end}}</div></div>
-    <div class="m"><div class="k">Coverage</div><div class="v ok">{{if .Metrics.HasCoverage}}{{.Metrics.Coverage}}%{{else}}&mdash;{{end}}</div></div>
+    <div class="m"><div class="k">Reach</div><div class="v brand judged-row">{{if .Metrics.HasReach}}{{.Metrics.ReachRate}}%{{else}}&mdash;{{end}}{{deltaChip .Metrics.ReachDelta}}</div><div class="judged-band" title="{{.Metrics.PriorLabel}}">{{bandLine .Metrics.ReachBand}}</div></div>
+    <div class="m"><div class="k">Coverage</div><div class="v ok judged-row">{{if .Metrics.HasCoverage}}{{.Metrics.Coverage}}%{{else}}&mdash;{{end}}{{deltaChip .Metrics.CoverageDelta}}</div><div class="judged-band" title="{{.Metrics.PriorLabel}}">{{bandLine .Metrics.CoverageBand}}</div></div>
   </div>
   <div class="two">
     <div class="card">
@@ -47,6 +49,24 @@
       {{if .MemByKind}}{{kindLegend .MemByKind}}{{else}}<div class="empty">No memories yet</div>{{end}}
     </div>
   </div>
+  <!-- Isolation: per-project single-object state belongs on the project page
+       (the star-form precedent), not the global Settings screen. Loosening
+       applies on click; tightening lands the confirm panel above the control. -->
+  <div class="section" style="margin-top:16px">
+    <div class="card iso-card" id="isolation">
+      <h2>Isolation <span class="h2-meta">{{.Isolation}}</span></h2>
+      {{if .IsolationConfirm}}{{template "isolation-confirm" .IsolationConfirm}}{{end}}
+      <form class="iso-form" method="post" action="/console/projects/{{.Slug}}/isolation">
+        <div class="seg iso-seg">
+          {{range .IsolationOptions}}<button type="submit" name="state" value="{{.State}}" class="{{if .On}}on{{end}}" aria-pressed="{{if .On}}true{{else}}false{{end}}">{{.Label}}</button>{{end}}
+        </div>
+      </form>
+      <ul class="iso-promises">
+        {{range .IsolationOptions}}<li class="{{if .On}}on{{end}}">{{.Promise}}</li>{{end}}
+      </ul>
+    </div>
+  </div>
+
   <div class="section" style="margin-top:16px">
     <div class="card">
       <h2>Recent activity</h2>
@@ -210,7 +230,7 @@
   {{end}}
   <div class="ix-feed" id="ix-pfeed">
     {{range .Interactions}}
-    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
+    <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-sev="{{rowSev .Kind .IsError}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
       <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{agentPill .Harness .Model}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
         {{if or .SessionName .DurationMS .Items .IsError .Ambient}}
@@ -273,6 +293,49 @@
   </form>
 </div>
 {{end}}
+{{end}}
+
+<!-- The tighten confirm step. Server-rendered rather than a JS dialog: it is a
+     GET-addressable page state (?isolate=<state>), so it survives the fetch+morph
+     path, a reload, and a shared link, and the same preview that renders it is
+     the one the apply re-runs inside its transaction. Nothing here is a
+     no-return: cancel is a plain link back to the untouched page. -->
+{{define "isolation-confirm"}}
+<div class="iso-confirm{{if .Blocked}} blocked{{end}}" id="isolation-confirm">
+  {{if .Blocked}}
+  <div class="iso-confirm-head">{{icon "triangle-alert"}}<b>{{.Slug}} cannot become {{.To}} yet.</b></div>
+  <p class="iso-confirm-line">Isolation requires a standalone project. Re-parent {{len .Children}} child project{{if ne (len .Children) 1}}s{{end}} first: {{range .Children}}<a href="/console/projects/{{.}}">{{.}}</a> {{end}}</p>
+  <div class="iso-confirm-actions"><a class="btn small" href="{{.Cancel}}" data-seam-query>Back</a></div>
+  {{else}}
+  <div class="iso-confirm-head">{{icon "lock"}}<b>Make {{.Slug}} {{.To}}?</b><span class="muted">currently {{.From}}</span></div>
+  <p class="iso-confirm-line">{{.Promise}}</p>
+  {{if .Detaches}}
+  <ul class="iso-confirm-effects">
+    {{range .Families}}<li>Leaves family <b>{{.}}</b></li>{{end}}
+    {{if .Parent}}<li>Detaches from parent <a href="/console/projects/{{.Parent}}">{{.Parent}}</a></li>{{end}}
+  </ul>
+  {{end}}
+  {{/* The provenance audit's answer, and only when it HAS one. A known zero is
+       reported rather than promised away: "nothing leaked" is a real finding the
+       owner wants, while the filing promise would be a lie with nothing to file.
+       Unknown (see isolationGlobalProvenance) prints neither. */}}
+  {{if .Provenance.Known}}
+  {{if .Provenance.Count}}
+  <p class="iso-confirm-line">{{.Provenance.Count}} global memor{{if eq .Provenance.Count 1}}y{{else}}ies{{end}} originated in this project&rsquo;s sessions &mdash; relocation proposals will be filed in the <a href="/console/gardener">Gardener inbox</a>.</p>
+  {{else}}
+  <p class="iso-confirm-line muted">No global memories originated in this project&rsquo;s sessions &mdash; nothing to relocate.</p>
+  {{end}}
+  {{end}}
+  <div class="iso-confirm-actions">
+    <form method="post" action="/console/projects/{{.Slug}}/isolation">
+      <input type="hidden" name="state" value="{{.To}}">
+      <input type="hidden" name="confirm" value="1">
+      <button class="btn primary small" type="submit">{{icon "lock"}}Make {{.To}}</button>
+    </form>
+    <a class="btn small" href="{{.Cancel}}" data-seam-query>Cancel</a>
+  </div>
+  {{end}}
+</div>
 {{end}}
 
 {{define "scripts"}}

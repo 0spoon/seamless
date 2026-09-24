@@ -28,7 +28,7 @@
 <script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
-<link rel="stylesheet" href="../../../static/site.css?v=8d1e7f91">
+<link rel="stylesheet" href="../../../static/site.css?v=91f1742e">
 <link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
@@ -119,6 +119,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         <li><a href="../../concepts/tasks-and-plans/">Tasks &amp; plans</a></li>
         
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
+        
+        <li><a href="../../concepts/project-isolation/">Project isolation</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
         
@@ -280,7 +282,7 @@ is not worth an error.</li>
 transport failures.</li>
 </ul>
 <h2 id="the-tool-surface">The tool surface</h2>
-<p>Seamless registers <strong>31 tools</strong>. They are documented in groups:</p>
+<p>Seamless registers <strong>33 tools</strong>. They are documented in groups:</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -292,11 +294,11 @@ transport failures.</li>
 <tbody>
 <tr>
 <td>Sessions, memory, and recall</td>
-<td><code>session_start</code>, <code>session_update</code>, <code>session_end</code>, <code>memory_write</code>, <code>memory_append</code>, <code>memory_read</code>, <code>memory_delete</code>, <code>recall</code></td>
+<td><code>session_start</code>, <code>session_update</code>, <code>session_end</code>, <code>memory_write</code>, <code>memory_append</code>, <code>memory_edit</code>, <code>memory_read</code>, <code>memory_delete</code>, <code>recall</code></td>
 </tr>
 <tr>
 <td>Notes, projects, and capture</td>
-<td><code>notes_create</code>, <code>notes_read</code>, <code>notes_update</code>, <code>notes_append</code>, <code>notes_delete</code>, <code>project_list</code>, <code>project_create</code>, <code>capture_url</code></td>
+<td><code>notes_create</code>, <code>notes_read</code>, <code>notes_update</code>, <code>notes_edit</code>, <code>notes_append</code>, <code>notes_delete</code>, <code>project_list</code>, <code>project_create</code>, <code>capture_url</code></td>
 </tr>
 <tr>
 <td><a href="../../reference/mcp/tasks/">Tasks</a></td>
@@ -309,6 +311,15 @@ transport failures.</li>
 </tbody>
 </table>
 </div>
+<p>That is the count the server <strong>registers</strong>; what a client is offered can be
+smaller. Tools belonging to an
+<a href="../../reference/console/#optional-features">optional feature</a> are hidden from
+<code>tools/list</code> while that feature is off, and a call to one is refused as an
+unknown tool. Optional features ship off, so a fresh install advertises fewer
+than 33 until you turn one on - each affected tool says so on its own reference
+page. Nothing about registration changes: the catalog these pages are generated
+from, and the registered-tool count <code>seamlessd doctor</code> asserts, stay the full
+set either way.</p>
 <p>Every tool's parameters on these pages are generated from the running server's
 own registration, so they cannot drift from what the daemon accepts.</p>
 

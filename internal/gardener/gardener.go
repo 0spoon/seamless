@@ -168,7 +168,7 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	// honest -- the only reliable close for these, since no hook fires on a kill.
 	s.reapStaleSessions(ctx)
 
-	existing, err := store.AllProposalKeys(ctx, s.db)
+	existing, err := loadSeen(ctx, s.db)
 	if err != nil {
 		return PassResult{}, err
 	}
@@ -176,7 +176,7 @@ func (s *Service) RunOnce(ctx context.Context) (PassResult, error) {
 	var res PassResult
 	// run records a failing pass by name instead of letting its zero count pass
 	// for "nothing to propose".
-	run := func(name string, pass func(context.Context, map[string]struct{}) (int, error)) int {
+	run := func(name string, pass func(context.Context, seenKeys) (int, error)) int {
 		n, err := pass(ctx, existing)
 		if err != nil {
 			s.logger.Warn("gardener: "+name+" pass", "error", err)
@@ -267,16 +267,60 @@ func (s *Service) reapStaleSessions(ctx context.Context) {
 	s.logger.Info("gardener reaped idle sessions", "count", len(stale), "idle_ttl", s.cfg.SessionIdle)
 }
 
+// seenKeys is the suppression set a pass consults before proposing: payload key
+// -> why that key is blocked. It exists because a rejection has two strengths.
+// A hidden (or pending, or applied) key is blocked outright; a regularly
+// dismissed one is blocked only until evidence for it recurs, which is what
+// makes "dismiss" a decision about the evidence so far rather than a permanent
+// verdict on the pattern.
+type seenKeys map[string]store.ProposalBlock
+
+// loadSeen reads the suppression set for the whole run.
+func loadSeen(ctx context.Context, db *sql.DB) (seenKeys, error) {
+	blocks, err := store.ProposalKeyBlocks(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	return seenKeys(blocks), nil
+}
+
+// blocked reports whether key is suppressed for a pass whose proposals carry no
+// evidence clock. Merge, archive, digest and the request-driven kinds are all
+// like this: their key already encodes the content, so a changed world mints a
+// new key rather than re-raising the old one, and any block at all holds.
+func (s seenKeys) blocked(key string) bool { return s.blockedSince(key, time.Time{}) }
+
+// blockedSince is blocked for a pass that DOES have an evidence clock -- the
+// error/gap passes, whose key is the pattern's stable identity and whose
+// evidence keeps accumulating under it. A hard block still holds; a regular
+// dismissal lapses once the group's newest evidence postdates it, so a pattern
+// that keeps happening is raised again rather than silently accruing forever.
+func (s seenKeys) blockedSince(key string, evidence time.Time) bool {
+	b, ok := s[key]
+	if !ok {
+		return false
+	}
+	if b.Hard {
+		return true
+	}
+	return !evidence.After(b.DismissedAt)
+}
+
+// mark blocks the key for the rest of the run, so one pass cannot propose the
+// same thing twice and a later pass sharing the key namespace (the three
+// archive passes) cannot double-propose one memory.
+func (s seenKeys) mark(key string) { s[key] = store.ProposalBlock{Hard: true} }
+
 // createProposal persists a proposal and records a gardener.action event. The
-// key is added to seen so a single run does not propose the same thing twice.
+// key is marked seen so a single run does not propose the same thing twice.
 // It returns the new proposal's id.
-func (s *Service) createProposal(ctx context.Context, kind, key string, payload map[string]any, seen map[string]struct{}) (string, error) {
+func (s *Service) createProposal(ctx context.Context, kind, key string, payload map[string]any, seen seenKeys) (string, error) {
 	payload["key"] = key
 	p, err := store.CreateProposal(ctx, s.db, kind, payload)
 	if err != nil {
 		return "", err
 	}
-	seen[key] = struct{}{}
+	seen.mark(key)
 	s.record(ctx, p.ID, map[string]any{"action": "propose", "kind": kind, "key": key})
 	return p.ID, nil
 }

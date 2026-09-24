@@ -33,6 +33,10 @@
     'git-fork': '<circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><path d="M12 12v3"/>',
     map: '<path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/><path d="M15 5.764v15"/><path d="M9 3.236v15"/>',
     activity: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+    zap: '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>',
+    'trending-up': '<polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/>',
+    flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/>',
+    award: '<path d="m15.477 12.89 1.515 8.526a.5.5 0 0 1-.81.47l-3.58-2.687a1 1 0 0 0-1.197 0l-3.586 2.686a.5.5 0 0 1-.81-.469l1.514-8.526"/><circle cx="12" cy="8" r="6"/>',
     copy: '<rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>',
     check: '<path d="M20 6 9 17l-5-5"/>'
   };
@@ -54,6 +58,10 @@
     if (kind === 'retrieval.injected') return 'brain';
     if (kind === 'hook.prompt') return 'search';
     if (kind === 'subagent.captured') return 'git-fork';
+    if (kind === 'memory.first_reuse') return 'zap';
+    if (kind === 'project.stage_reached') return 'trending-up';
+    if (kind === 'milestone.reached') return 'award';
+    if (kind === 'plan.shipped') return 'flag';
     if (kind.indexOf('session.') === 0) return 'circle';
     if (kind.indexOf('plan.') === 0) return 'map';
     return 'activity';
@@ -302,6 +310,17 @@
     return meta;
   }
 
+  // Stream severity -- mirrors evtSev/rowSev in internal/console/atoms.go, so a
+  // live row is coded exactly like the same event on the session trace and the
+  // Overview ledger. Four classes only: the left edge is scanned, not read.
+  function rowSev(kind, isError) {
+    if (isError) return 'danger';
+    if (kind === 'agent.mishap' || kind === 'hook.error') return 'danger';
+    if (kind === 'retrieval.injected') return 'inject';
+    if (kind === 'memory.written' || kind === 'note.written' || kind === 'trial.recorded') return 'write';
+    return 'system';
+  }
+
   // ---- buildRow (live feed) --------------------------------------------------
   function buildRow(d) {
     var expandable = !!(d.request || d.response);
@@ -312,6 +331,7 @@
     row.setAttribute('data-session', d.sessionId || '');
     row.setAttribute('data-ts', d.ts || '');
     row.setAttribute('data-kind', d.kind || '');
+    row.setAttribute('data-sev', rowSev(d.kind || '', !!d.isError));
     if (d.isError) row.setAttribute('data-err', '1');
 
     var sum = el(expandable ? 'summary' : 'div', 'ix-row-head');

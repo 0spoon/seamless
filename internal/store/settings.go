@@ -332,6 +332,60 @@ func ClearBriefingConfig(ctx context.Context, db *sql.DB) error {
 	return DeleteSetting(ctx, db, SettingBriefingConfig)
 }
 
+// SettingFeaturesConfig is the settings key holding the optional-features
+// override: a JSON-encoded config.Features. When present it layers over the
+// file/env features config (see FeaturesConfig), so the owner can turn optional
+// features on and off from the console without editing seamless.yaml or
+// restarting the daemon.
+//
+// Two writers reach this row: the console Settings form, and the one-time
+// grandfather migration that keeps research enabled on installations that
+// already hold trial data. That is why the console calls it a "stored override"
+// rather than implying the owner set it.
+const SettingFeaturesConfig = "features_config"
+
+// FeaturesConfig returns the effective optional-features config: base (the
+// file/env values) with the stored override row, when present, decoded over it.
+// overridden reports whether such a row exists. Absent fields in a stored
+// override keep their base value, so a row written before a feature existed
+// stays forward-compatible -- a newly added feature keeps its default rather
+// than being zeroed off by an old row.
+//
+// Callers resolve this LIVE (per request or per assembly, like the briefing
+// override) and must be failure-soft: on error, log and fall back to base rather
+// than failing an agent call or a console page over a corrupt row.
+func FeaturesConfig(ctx context.Context, db *sql.DB, base config.Features) (cfg config.Features, overridden bool, err error) {
+	raw, found, err := GetSetting(ctx, db, SettingFeaturesConfig)
+	if err != nil {
+		return base, false, err
+	}
+	if !found || strings.TrimSpace(raw) == "" {
+		return base, false, nil
+	}
+	cfg = base
+	if err := json.Unmarshal([]byte(raw), &cfg); err != nil {
+		return base, false, fmt.Errorf("store.FeaturesConfig: decode: %w", err)
+	}
+	return cfg, true, nil
+}
+
+// SetFeaturesConfig persists f as the optional-features override. Callers
+// validate first; this only encodes and stores.
+func SetFeaturesConfig(ctx context.Context, db *sql.DB, f config.Features) error {
+	raw, err := json.Marshal(f)
+	if err != nil {
+		return fmt.Errorf("store.SetFeaturesConfig: %w", err)
+	}
+	return SetSetting(ctx, db, SettingFeaturesConfig, string(raw))
+}
+
+// ClearFeaturesConfig removes the optional-features override, reverting the
+// effective config to the file/env base -- which, for an installation that never
+// set the keys, means every optional feature is off again.
+func ClearFeaturesConfig(ctx context.Context, db *sql.DB) error {
+	return DeleteSetting(ctx, db, SettingFeaturesConfig)
+}
+
 // SettingEmbedderMode is the settings key holding the owner's embedder
 // override. The only stored value is EmbedderModeOff; EmbedderModeAuto clears
 // the row, so "auto" and "no override" are the same state. The daemon reads it

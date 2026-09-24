@@ -245,9 +245,15 @@ func (s *Service) refreshPromptCorpus(ctx context.Context, project string) {
 	}()
 }
 
+// buildPromptCorpus tokenizes the project's visible memories into an IDF
+// corpus. The scope is the isolation-aware one (scopedActiveMemories), so a
+// sealed project's prompt recall matches its own knowledge only -- and, since
+// the scope is baked into the cached corpus, a freshly tightened project keeps
+// serving the wider one until the next rebuild, exactly like any other memory
+// change (see promptCorpusTTL).
 func (s *Service) buildPromptCorpus(ctx context.Context, project string) (*promptCorpus, error) {
 	s.corpus.builds.Add(1)
-	mems, err := store.ActiveMemories(ctx, s.db, project)
+	mems, err := s.scopedActiveMemories(ctx, project, nil)
 	if err != nil {
 		return nil, err
 	}

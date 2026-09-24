@@ -3,9 +3,12 @@ package console
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
+	"github.com/0spoon/seamless/internal/store"
 )
 
 // eventRow is a display-ready projection of one event-log entry.
@@ -24,9 +27,7 @@ func (s *Service) recentEvents(ctx context.Context, limit int) ([]eventRow, erro
 	if s.cfg.Events == nil {
 		return nil, nil
 	}
-	// Hide transport-level Interactions noise (tool.call/hook.prompt) from the
-	// overview's business feed; those live on the Interactions screen instead.
-	evs, err := s.cfg.Events.RecentExcluding(ctx, limit, core.EventToolCall, core.EventHookPrompt)
+	evs, err := s.cfg.Events.RecentExcluding(ctx, limit, s.ledgerExcludedKinds(ctx)...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,6 +68,23 @@ func (s *Service) recentMishaps(ctx context.Context, limit int) ([]mishapRow, er
 	return out, nil
 }
 
+// ledgerExcludedKinds is the exclusion set for the business ledgers (the
+// Overview feed, the Now wire, the project workspace's recent list):
+// transport-level Interactions noise always -- tool.call and hook.prompt live
+// on the Interactions screen instead -- plus milestone.reached while momentum
+// is off. Milestones are the one gated kind consumption must filter itself:
+// the events are only minted while the feature is on, but a row minted before
+// a switch-off would otherwise keep celebrating in the ledger, and off means
+// zero trace. The audit surfaces (the Interactions stream, the event detail
+// page) keep the history, exactly like historical trial lines.
+func (s *Service) ledgerExcludedKinds(ctx context.Context) []core.EventKind {
+	kinds := []core.EventKind{core.EventToolCall, core.EventHookPrompt}
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		kinds = append(kinds, store.EventMilestoneReached)
+	}
+	return kinds
+}
+
 func toEventRow(e core.Event) eventRow {
 	return eventRow{
 		ID:        e.ID,
@@ -98,6 +116,12 @@ func eventSummary(e core.Event) string {
 		return "superseded " + payloadStr(p, "name")
 	case core.EventMemoryArchived:
 		return "archived " + payloadStr(p, "name")
+	case core.EventProjectIsolationChanged:
+		line := "isolation " + payloadStr(p, "from") + " -> " + payloadStr(p, "to")
+		if parent := payloadStr(p, "parent"); parent != "" {
+			line += "; detached from " + parent
+		}
+		return line
 	case core.EventRepoMoved:
 		if path := payloadStr(p, "new_path"); path != "" {
 			return "repo moved to " + path + "; project adopted"
@@ -105,6 +129,14 @@ func eventSummary(e core.Event) string {
 		return "repo moved; project adopted"
 	case core.EventNoteWritten:
 		return "wrote note " + payloadStr(p, "title")
+	case core.EventNoteRead:
+		// A read names its note by slug rather than the title the write side
+		// records: the tool takes an id or a slug, so the title is not
+		// necessarily in hand when the event is written.
+		if slug := payloadStr(p, "slug"); slug != "" {
+			return "read note " + slug
+		}
+		return "read note"
 	case core.EventFavoriteChanged:
 		verb := "starred"
 		if fav, _ := p["favorite"].(bool); !fav {
@@ -113,6 +145,39 @@ func eventSummary(e core.Event) string {
 		return verb + " " + payloadStr(p, "kind") + " " + payloadStr(p, "id")
 	case core.EventTrialRecorded:
 		return "recorded trial " + payloadStr(p, "title")
+	case core.EventMemoryFirstReuse:
+		// The momentum payoff line: the ideation copy, verbatim shape.
+		line := strings.TrimSpace(payloadStr(p, "kind") + " " + payloadStr(p, "name"))
+		if line == "" {
+			line = "a memory"
+		}
+		return line + " just paid off for the first time"
+	case core.EventProjectStage:
+		if stage := payloadStr(p, "stage"); stage != "" {
+			return "matured to " + stage
+		}
+		return "maturity stage reached"
+	case store.EventMilestoneReached:
+		// The milestone line is the payload's claim, verbatim: the mint wrote
+		// the exact judged sentence ("100 memories written in seamless") and
+		// the real count behind it, so rephrasing here would un-judge it.
+		if claim := payloadStr(p, "claim"); claim != "" {
+			return claim
+		}
+		return "milestone reached"
+	case core.EventRecordBroken:
+		if label := payloadStr(p, "label"); label != "" {
+			if n, ok := p["n"].(float64); ok {
+				return fmt.Sprintf("new record: %s -- %d", label, int(n))
+			}
+			return "new record: " + label
+		}
+		return "personal record broken"
+	case eventFeaturesChanged:
+		if reset, _ := p["reset"].(bool); reset {
+			return "optional features reset to the file configuration"
+		}
+		return "optional features changed" + featureStateSuffix(p)
 	case core.EventTaskTransition:
 		if to := payloadStr(p, "to"); to != "" {
 			return "task -> " + to
@@ -149,6 +214,12 @@ func eventSummary(e core.Event) string {
 		return "presented plan " + payloadStr(p, "basename")
 	case core.EventPlanApproved:
 		return "approved plan " + payloadStr(p, "basename")
+	case core.EventPlanShipped:
+		line := "shipped plan " + payloadStr(p, "plan")
+		if n := payloadInt(p, "steps"); n > 0 {
+			line += " (" + plural(n, "step", "steps") + ")"
+		}
+		return line
 	case core.EventSubagentCaptured:
 		if at := payloadStr(p, "agent_type"); at != "" {
 			return "cached subagent (" + at + ")"
@@ -167,6 +238,48 @@ func payloadStr(p map[string]any, key string) string {
 		return v
 	}
 	return ""
+}
+
+// payloadInt reads a numeric payload field as an int, 0 when absent: a live
+// SSE event carries the in-process int, a row read back from the DB carries
+// JSON's float64.
+func payloadInt(p map[string]any, key string) int {
+	switch v := p[key].(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	}
+	return 0
+}
+
+// featureStateSuffix renders a features_changed payload's per-feature state as
+// " (research on, ... off)", in registry order so the line reads the same way
+// every time. An empty or unreadable map contributes nothing rather than an
+// invented state.
+func featureStateSuffix(p map[string]any) string {
+	state := payloadMap(p, "features")
+	if len(state) == 0 {
+		return ""
+	}
+	var parts []string
+	for _, f := range features.Registry() {
+		on, ok := state[string(f.Key)].(bool)
+		if !ok {
+			continue
+		}
+		word := "off"
+		if on {
+			word = "on"
+		}
+		parts = append(parts, string(f.Key)+" "+word)
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return " (" + strings.Join(parts, ", ") + ")"
 }
 
 // payloadMap reads a nested object field from a payload map (nil if absent).

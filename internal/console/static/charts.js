@@ -171,3 +171,170 @@
     show(area, l, next);
   });
 })();
+
+/* Capture calendar (the Sessions page). The same contract as the trend readout
+   above -- every string shown was formatted server-side -- but the cells are
+   discrete rects, so the readout keys off each cell's own data-day and <title>
+   rather than a nearest-point search. Three affordances:
+
+   - Hover (or the keyboard cursor) shows the day's numbers in the shared
+     .hov-tip readout, instantly, in place of the browser's sluggish native
+     tooltip: enhance() lifts each <title> into a data-t attribute so the
+     native one cannot double up. The morph restores <title>s from the fresh
+     server copy; re-enhancing on seam:content-updated lifts them again.
+   - Click (or Enter on the keyboard cursor) focuses the session map on that
+     day via the shared no-reload path: it mints the ?day URL the server
+     defined, preserving the other filters; clicking the already-focused day
+     clears it. Real navigation stays the no-JS fallback via the svg's titles.
+   - Arrow keys walk days from today (the svg is server-rendered focusable):
+     up/down one day, left/right one week, Home/End the span's edges. */
+(function () {
+  function grids() { return document.querySelectorAll('.mom-cal-grid'); }
+  function cellsOf(grid) { return grid.querySelectorAll('.mom-cal-cell'); }
+
+  function enhance() {
+    grids().forEach(function (grid) {
+      cellsOf(grid).forEach(function (cell) {
+        var title = cell.querySelector('title');
+        if (!title) return;
+        cell.setAttribute('data-t', title.textContent);
+        cell.removeChild(title);
+      });
+    });
+  }
+  enhance();
+  document.addEventListener('seam:content-updated', enhance);
+
+  function calOf(t) { return t && t.closest ? t.closest('.mom-cal') : null; }
+  function cellOf(t) { return t && t.closest ? t.closest('.mom-cal-cell') : null; }
+
+  function div(cls, text) {
+    var e = document.createElement('div');
+    e.className = cls;
+    if (text) e.textContent = text;
+    return e;
+  }
+
+  function tipOf(cal) {
+    var tip = cal.querySelector(':scope > .hov-tip');
+    if (!tip) {
+      tip = div('hov-tip');
+      tip.hidden = true;
+      cal.appendChild(tip);
+    }
+    return tip;
+  }
+
+  function show(cell) {
+    var cal = calOf(cell);
+    if (!cal) return;
+    var raw = cell.getAttribute('data-t') || '';
+    var cut = raw.indexOf(' -- ');
+    var tip = tipOf(cal);
+    tip.textContent = '';
+    tip.appendChild(div('hov-t', cut < 0 ? raw : raw.slice(0, cut)));
+    tip.appendChild(div('hov-v', cut < 0 ? '' : raw.slice(cut + 4)));
+    tip.appendChild(div('hov-s', cell.classList.contains('sel')
+      ? 'Click to clear the day focus'
+      : 'Click to focus the session map on this day'));
+    tip.hidden = false;
+    // Above the cell, centred and clamped inside the card; below when the top
+    // row would clip it. Rect math, so the horizontal scroll is accounted for.
+    var cr = cell.getBoundingClientRect(), ar = cal.getBoundingClientRect();
+    var cx = cr.left - ar.left + cr.width / 2;
+    var left = Math.max(0, Math.min(cx - tip.offsetWidth / 2, cal.clientWidth - tip.offsetWidth));
+    var top = cr.top - ar.top - tip.offsetHeight - 10;
+    if (top < 0) top = cr.bottom - ar.top + 10;
+    tip.style.left = Math.round(left) + 'px';
+    tip.style.top = Math.round(top) + 'px';
+  }
+
+  function hide(cal) {
+    var tip = cal && cal.querySelector(':scope > .hov-tip');
+    if (tip) tip.hidden = true;
+    var kb = cal && cal.querySelector('.mom-cal-cell.kb');
+    if (kb) kb.classList.remove('kb');
+  }
+
+  function open(cell) {
+    var url = new URL(location.href);
+    if (cell.classList.contains('sel')) url.searchParams.delete('day');
+    else url.searchParams.set('day', cell.getAttribute('data-day') || '');
+    if (window.SeamConsole && window.SeamConsole.load) {
+      window.SeamConsole.load(url.href, { history: 'push', source: 'query' });
+    } else {
+      location.assign(url.href);
+    }
+  }
+
+  document.addEventListener('pointerover', function (e) {
+    var cell = cellOf(e.target);
+    if (cell) { enhanceCell(cell); show(cell); }
+    else hide(calOf(e.target));
+  }, { passive: true });
+  document.addEventListener('pointerout', function (e) {
+    var cal = calOf(e.target);
+    if (cal && !calOf(e.relatedTarget)) hide(cal);
+  }, { passive: true });
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var cell = cellOf(e.target);
+    if (cell) open(cell);
+  });
+
+  // A cell hovered in the sliver between the morph restoring <title>s and the
+  // enhance pass: lift lazily so the readout never shows stale emptiness.
+  function enhanceCell(cell) {
+    var title = cell.querySelector('title');
+    if (!title) return;
+    cell.setAttribute('data-t', title.textContent);
+    cell.removeChild(title);
+  }
+
+  // Keyboard: the grid is one tab stop; arrows move a .kb cursor cell starting
+  // from today (the last cell), Enter or Space opens it, Escape rests.
+  function cursor(grid, cells, next) {
+    var cur = grid.querySelector('.mom-cal-cell.kb');
+    if (cur) cur.classList.remove('kb');
+    var cell = cells[next];
+    if (!cell) return;
+    cell.classList.add('kb');
+    enhanceCell(cell);
+    show(cell);
+  }
+  document.addEventListener('focusin', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('mom-cal-grid')) {
+      var cells = cellsOf(t);
+      cursor(t, cells, cells.length - 1);
+    }
+  });
+  document.addEventListener('focusout', function (e) {
+    var t = e.target;
+    if (t && t.classList && t.classList.contains('mom-cal-grid')) hide(calOf(t));
+  });
+  document.addEventListener('keydown', function (e) {
+    var t = e.target;
+    if (!t || !t.classList || !t.classList.contains('mom-cal-grid')) return;
+    var cells = cellsOf(t);
+    var cur = t.querySelector('.mom-cal-cell.kb');
+    var i = cur ? Array.prototype.indexOf.call(cells, cur) : cells.length - 1;
+    var n = cells.length;
+    var next;
+    switch (e.key) {
+      case 'ArrowUp': next = Math.max(0, i - 1); break;
+      case 'ArrowDown': next = Math.min(n - 1, i + 1); break;
+      case 'ArrowLeft': next = Math.max(0, i - 7); break;
+      case 'ArrowRight': next = Math.min(n - 1, i + 7); break;
+      case 'Home': next = 0; break;
+      case 'End': next = n - 1; break;
+      case 'Enter': case ' ':
+        if (cur) { e.preventDefault(); open(cur); }
+        return;
+      case 'Escape': hide(calOf(t)); return;
+      default: return;
+    }
+    e.preventDefault();
+    cursor(t, cells, next);
+  });
+})();

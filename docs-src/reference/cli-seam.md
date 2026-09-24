@@ -308,6 +308,29 @@ Favorites sort first in the console, can be filtered there, and starred
 memories are pinned into every session briefing and rank-boosted in recall. A
 plan's star lives on its primary note, so a task-only plan cannot be starred.
 
+### seam project isolation {#seam_project_isolation}
+
+```bash
+seam project isolation [--yes] <slug> [<state>]
+```
+
+Shows or sets a project's [isolation](/concepts/project-isolation/) state.
+`state` is one of `open`, `confidential`, or `sealed`; omit it to print the
+current state and its promise line. Unlike most subcommands this one talks to
+the console's JSON endpoint rather than an MCP tool - there is deliberately no
+tool to change isolation, because tightening detaches family and parent links
+and is an owner decision.
+
+**Tightening requires `--yes`.** Without it, the command prints exactly the
+consequences the console's confirm panel shows - the family and parent it would
+detach from - applies nothing, and exits non-zero, so a script cannot mistake an
+unconfirmed tighten for a fence that went up. **Loosening is immediate** and
+ignores `--yes`.
+
+A project with children refuses to tighten until they are re-parented; the
+refusal names them. Promise text is echoed from the server rather than
+transcribed here, so the console and the CLI cannot drift apart.
+
 ### seam usage {#seam_usage}
 
 ```bash
@@ -329,7 +352,14 @@ Client-side checks, each reported `ok` or `FAIL`, exiting non-zero if any failed
 
 1. **server** - `/healthz` reachable and reporting `ok`.
 2. **mcp_tools** - `tools/list` returns the tool count this CLI was built to
-   expect. A mismatch means the running daemon is a different build.
+   expect, minus the tools of any [optional
+   feature](/reference/console/#optional-features) that is switched off (the
+   line reads `31 registered, 28 exposed (research disabled)`). A mismatch that
+   feature state does not explain means the running daemon is a different build.
+   When the feature state cannot be read - the daemon is older than optional
+   features, or its settings endpoint did not answer - the check judges the
+   plausible range instead and names the reason rather than failing a healthy
+   daemon.
 3. **projects** - `project_list` answers.
 
 This is the client-side view. `seamlessd doctor` checks config, database, and

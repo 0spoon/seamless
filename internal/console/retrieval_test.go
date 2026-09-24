@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -50,6 +51,9 @@ func TestRetrievalPage_RatesAndLists(t *testing.T) {
 	// The churn annotation renders beside the denominator (hero + project row).
 	body := getHTMLBody(t, mux, "/console/retrieval")
 	require.Contains(t, body, "+1 new")
+	// The tokens card carries the same judged pair as its two siblings.
+	require.Contains(t, body, "~200")
+	require.NotContains(t, body, "retrieval-scope-quiet", "the only scope has traffic, so no quiet strip")
 	require.Len(t, data.TopInjected, 1)
 	require.Equal(t, m.ID, data.TopInjected[0].ID)
 	require.Equal(t, 2, data.TopInjected[0].Sessions)
@@ -158,6 +162,36 @@ func TestRetrievalPage_FunnelBySurface(t *testing.T) {
 	require.Contains(t, body, "subagent-start")
 	require.Contains(t, body, "1 of 2 pulled")
 	require.Contains(t, body, "1 of 1 pulled")
+}
+
+// Scopes without any window activity collapse into the quiet strip instead of
+// stacking as 0%-reach rows; scopes with traffic keep their full row. The flat
+// ByProject list in the JSON payload is unchanged by the split.
+func TestRetrievalPage_QuietScopesCollapse(t *testing.T) {
+	db, mgr, mux := newConsoleWithFiles(t)
+	ctx := context.Background()
+	rec := events.NewRecorder(db)
+
+	hot := writeMemory(t, mgr, core.KindGotcha, "alpha", "hot-memory", "gets injected")
+	cold := writeMemory(t, mgr, core.KindGotcha, "beta", "cold-memory", "never injected")
+	// Backdate the cold memory below the 24h window so beta carries no churn
+	// annotation -- a scope is quiet only when the window did nothing to it.
+	_, err := db.ExecContext(ctx, `UPDATE memories_index SET created_at = ? WHERE id = ?`,
+		core.FormatTime(time.Now().UTC().Add(-48*time.Hour)), cold.ID)
+	require.NoError(t, err)
+
+	_, err = rec.Record(ctx, core.Event{Kind: core.EventInjected, SessionID: "sessA", Payload: map[string]any{"item_ids": []any{hot.ID}}})
+	require.NoError(t, err)
+
+	body := getHTMLBody(t, mux, "/console/retrieval")
+	require.Contains(t, body, `class="retrieval-scope-quiet"`)
+	require.Contains(t, body, "1 quiet scope")
+	require.Contains(t, body, `title="0 of 1 active memories surfaced">beta<small>1</small></a>`)
+	require.Contains(t, body, `href="/console/projects/alpha"`, "the touched scope keeps its full row")
+
+	var data retrievalData
+	getJSON(t, mux, "/console/retrieval?format=json", &data)
+	require.Len(t, data.ByProject, 2, "the JSON contract stays flat")
 }
 
 func TestRetrievalPage_EmptyRenders(t *testing.T) {

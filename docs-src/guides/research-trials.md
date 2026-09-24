@@ -10,6 +10,26 @@ one time in thirty. A config that works on one machine.
 Agents are bad at this in a specific way: each one starts fresh, re-derives the
 same first three hypotheses, and tries them again. A **lab** is where that stops.
 
+## Turn it on first
+
+Labs and trials are an
+[optional feature](/reference/console/#optional-features), and optional features
+ship **off**. On a fresh install the screens and the three tools below are not
+there until you enable research, in any one of three places:
+
+- **The console** - Settings → Features, the fastest route. It applies to the
+  console immediately; agents pick it up on their next session.
+- **The config file** - `features: research: true` in `seamless.yaml`.
+- **The environment** - `SEAMLESS_FEATURES_RESEARCH=1`.
+
+A console toggle stores an override that wins over the file and the environment
+until you reset it, so if the YAML says one thing and the tools disagree, check
+the console first. An installation that was already recording trials before this
+became optional keeps it on across the upgrade - the feature is never switched
+off underneath existing data, and switching it off later hides the screens and
+the tools without deleting a single trial. See
+[Configuration](/reference/configuration/#precedence).
+
 ## The loop
 
 <figure class="doc-figure" data-tone="ok" aria-labelledby="research-loop-caption">
@@ -78,8 +98,13 @@ See [Write memories that get recalled](/guides/write-good-memories/).
 
 ## The skill
 
-The installer drops the portable `seam-research` package into the selected
-client's skill home. From a clone, use `make install-research-skill
+While the feature is on, the installer drops the portable `seam-research`
+package into the selected client's skill home - and while it is off, `seamlessd
+install-hooks` skips it and removes a copy it previously delivered, so no agent
+reads about tools its server will refuse. A toggle in the console cannot reach a
+client's skill home on its own, so `seamlessd doctor` raises an info line until
+the next install run reconciles the two. From a clone, use
+`make install-research-skill
 CLIENT=claude` for Claude Code or `make install-research-skill CLIENT=codex` for
 Codex (`CLIENT=detect` is the default). It wraps this loop
 - open the lab, query before trying, predict before running, record once with

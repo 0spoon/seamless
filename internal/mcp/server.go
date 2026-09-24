@@ -22,6 +22,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/agentguide"
 	"github.com/0spoon/seamless/internal/capture"
+	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/events"
 	"github.com/0spoon/seamless/internal/files"
@@ -43,8 +44,9 @@ const (
 	// registered count (Server.NumTools) equals it. P2 minimal loop = 15; P3 adds
 	// tasks (4) + trials (3) = 22; P4 adds gardener (2) + capture_url +
 	// usage_summary = 26; plans-as-composition adds tasks_claim + tasks_release = 28;
-	// gardener_request = 29; gardener_split = 30; favorite_set = 31.
-	ToolCount = 31
+	// gardener_request = 29; gardener_split = 30; favorite_set = 31;
+	// memory_edit + notes_edit = 33.
+	ToolCount = 33
 
 	// maxRequestBodyBytes bounds the streamable-HTTP POST body before mcp-go
 	// buffers it. MCP calls are compact JSON-RPC envelopes; 1 MiB leaves ample
@@ -124,9 +126,18 @@ var errAmbiguousActor = errors.New(
 // choice with machine-wide blast radius: a global memory is injected into EVERY
 // project's briefing, indefinitely. The safe-looking option is the expensive one,
 // so the error says so rather than leaving the two to look symmetric.
+//
+// The isolation clause is the one exception to both facts, and it ships here
+// because the promise above is otherwise false for a fenced caller: a session
+// bound to a confidential or sealed project cannot write outside it, so neither
+// a new slug nor global is available to it. Guidance and behavior land together
+// or the guidance is a lie (see the constraint memory
+// write-scope-registers-the-project-it-names).
 const writeScopeHelp = "an unknown slug CREATES that project, so a new project is always " +
 	"an available choice and never an error; project=global is not a neutral fallback -- it puts " +
-	"the item in EVERY project's briefing, so choose it only for genuinely cross-project knowledge"
+	"the item in EVERY project's briefing, so choose it only for genuinely cross-project knowledge; " +
+	"the exception is a session bound to a confidential or sealed project, which can write only into " +
+	"that project"
 
 // maxScopeErrorProjects caps the slug list a scope error carries, so a machine
 // with many projects still returns an error an agent can actually read.
@@ -142,7 +153,8 @@ const maxScopeErrorProjects = 30
 const writeProjectArgDesc = "project slug; defaults to the bound/ambient session's project. " +
 	"An unknown slug CREATES that project -- naming a new one is normal and never an error. " +
 	"Pass project=global ONLY for knowledge that belongs in EVERY project's briefing; it is not a " +
-	"neutral default. With no session and no explicit project the call is rejected as ambiguous."
+	"neutral default. With no session and no explicit project the call is rejected as ambiguous. " +
+	"A session bound to a confidential or sealed project can write ONLY into that project."
 
 // normalizeProject maps the reserved global tokens to the internal empty-string
 // global scope, and leaves every other slug untouched.
@@ -192,7 +204,12 @@ type Config struct {
 	// (config.Capture.AllowedPorts). Empty means the capture package's 80/443
 	// default, never "any port".
 	CaptureAllowedPorts []int
-	Logger              *slog.Logger
+	// Features is the file/env optional-features config (config.Config.Features).
+	// It is only the BASE: the stored override row layers over it per request in
+	// effectiveFeatures, so a console toggle needs no restart. The zero value is
+	// every optional feature off, which is also config.Defaults().
+	Features config.Features
+	Logger   *slog.Logger
 }
 
 // Server hosts the MCP tools and their per-connection session bindings.
@@ -277,6 +294,11 @@ func New(cfg Config) *Server {
 		mcpserver.WithToolHandlerMiddleware(s.authMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.logMiddleware),
 		mcpserver.WithToolHandlerMiddleware(s.validateMiddleware),
+		// The optional-feature gate. It is a FILTER, not a middleware, because
+		// mcp-go applies filters at both tools/list and tools/call -- so a
+		// disabled feature's tools are neither advertised nor callable, with one
+		// piece of logic. See exposedTools for the semantics and the tradeoff.
+		mcpserver.WithToolFilter(s.exposedTools),
 	)
 	s.registerTools()
 	return s
@@ -318,6 +340,7 @@ func (s *Server) registerTools() {
 
 	s.addTool(memoryWriteTool(), s.handleMemoryWrite)
 	s.addTool(memoryAppendTool(), s.handleMemoryAppend)
+	s.addTool(memoryEditTool(), s.handleMemoryEdit)
 	s.addTool(memoryReadTool(), s.handleMemoryRead)
 	s.addTool(memoryDeleteTool(), s.handleMemoryDelete)
 
@@ -326,6 +349,7 @@ func (s *Server) registerTools() {
 	s.addTool(notesCreateTool(), s.handleNotesCreate)
 	s.addTool(notesReadTool(), s.handleNotesRead)
 	s.addTool(notesUpdateTool(), s.handleNotesUpdate)
+	s.addTool(notesEditTool(), s.handleNotesEdit)
 	s.addTool(notesAppendTool(), s.handleNotesAppend)
 	s.addTool(notesDeleteTool(), s.handleNotesDelete)
 
@@ -538,14 +562,29 @@ const ambientFallbackWindow = 6 * time.Hour
 // project's items, the read-side twin of the cross-agent write bleed.
 func (s *Server) resolveReadScope(ctx context.Context, explicit string) (string, error) {
 	if explicit != "" {
-		return validateProjectArg(explicit)
+		project, err := validateProjectArg(explicit)
+		if err != nil {
+			return "", err
+		}
+		// An explicit project= is the whole read fence for recall and every
+		// by-name lookup: naming an isolated project is exactly how a session
+		// bound elsewhere would read it.
+		if err := s.fenceRead(ctx, project); err != nil {
+			return "", err
+		}
+		return project, nil
 	}
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
 	}
-	sess, ok, ambiguous := s.ambientFallback(ctx)
+	sess, ok, ambiguous, fenced := s.ambientFallback(ctx)
 	if ok {
 		return sess.ProjectSlug, nil
+	}
+	// The fence outranks the ambiguity help: an agent refused an isolated project
+	// needs a binding, not advice about naming scopes.
+	if fenced != nil {
+		return "", fenced
 	}
 	if ambiguous {
 		return "", s.scopeErr(ctx, errAmbiguousScope, "")
@@ -633,6 +672,13 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 		if err != nil {
 			return "", err
 		}
+		// The fence runs BEFORE EnsureProject: registration is a durable side
+		// effect, so a fenced caller naming a new slug must be refused without
+		// leaving the project it was not allowed to create behind. This one funnel
+		// carries the fence for all five durable creates.
+		if err := s.fenceWrite(ctx, project); err != nil {
+			return "", err
+		}
 		if _, err := store.EnsureProject(ctx, s.cfg.DB, project, project); err != nil {
 			return "", err
 		}
@@ -641,9 +687,15 @@ func (s *Server) resolveWriteScope(ctx context.Context, explicit string) (string
 	if b, ok := s.getBinding(ctx); ok {
 		return b.project, nil
 	}
-	sess, ok, ambiguous := s.ambientFallback(ctx)
+	sess, ok, ambiguous, fenced := s.ambientFallback(ctx)
 	if ok {
 		return sess.ProjectSlug, nil
+	}
+	// Deliberately without writeScopeHelp: its promise that an unknown slug
+	// creates that project does not hold for a caller the fence just refused, and
+	// an error that offers an unavailable escape hatch teaches the wrong lesson.
+	if fenced != nil {
+		return "", fenced
 	}
 	if ambiguous {
 		return "", s.scopeErr(ctx, errAmbiguousScope, writeScopeHelp)
@@ -690,7 +742,7 @@ func (s *Server) boundSession(ctx context.Context) string {
 	if b, ok := s.getBinding(ctx); ok {
 		return b.sessionID
 	}
-	if sess, ok, _ := s.ambientFallback(ctx); ok {
+	if sess, ok, _, _ := s.ambientFallback(ctx); ok { //nolint:errcheck // stamping is best-effort: a fenced refusal yields "" (no source session), the same degraded-provenance answer as no ambient at all
 		return sess.ID
 	}
 	return ""
@@ -781,23 +833,44 @@ func (s *Server) resolveActor(ctx context.Context, req mcp.CallToolRequest) (str
 // projects -- concurrent agents in different repos, the cross-agent-bleed case --
 // it returns ambiguous=true and ok=false so durable creates force an explicit
 // project= rather than guessing. It is only consulted when there is no binding.
-func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguous bool) {
+//
+// It also never resolves INTO an isolated project: fenced non-nil is the refusal
+// to guess a caller into one. Everything above is inference from circumstantial
+// evidence -- whichever agent last touched a hook session, with nothing tying it
+// to this connection -- and inference must not be what grants access to a project
+// whose whole point is that outsiders cannot reach it. Being right most of the
+// time is enough for provenance and wrong once is enough for a leak, so the
+// isolated case takes an explicit binding instead.
+func (s *Server) ambientFallback(ctx context.Context) (sess core.Session, ok bool, ambiguous bool, fenced error) {
 	projects, err := store.ActiveAmbientProjects(ctx, s.cfg.DB, ambientFallbackWindow)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback projects", "error", err)
-		return core.Session{}, false, false
+		return core.Session{}, false, false, nil
 	}
 	if len(projects) != 1 {
 		// Zero (nothing to inherit) or several (ambiguous) both decline; only the
 		// multi-project case is a true ambiguity the caller must resolve.
-		return core.Session{}, false, len(projects) > 1
+		return core.Session{}, false, len(projects) > 1, nil
+	}
+	// "Would a session bound elsewhere be allowed to read this project?" is the
+	// same question as "may an unbound connection be resolved into it?", so the
+	// probe is CanRead from the global scope rather than a second policy rule.
+	visible, err := store.CanRead(ctx, s.cfg.DB, "", projects[0])
+	if err != nil {
+		// Decline rather than grant: a fence that fails open on a database error
+		// is not a fence.
+		s.logger.Warn("mcp: ambient fallback isolation", "error", err)
+		return core.Session{}, false, false, nil
+	}
+	if !visible {
+		return core.Session{}, false, false, s.ambientFenceErr(ctx, projects[0])
 	}
 	sess, ok, err = store.LatestActiveAmbientSessionForProject(ctx, s.cfg.DB, projects[0], ambientFallbackWindow)
 	if err != nil {
 		s.logger.Warn("mcp: ambient fallback lookup", "error", err)
-		return core.Session{}, false, false
+		return core.Session{}, false, false, nil
 	}
-	return sess, ok, false
+	return sess, ok, false, nil
 }
 
 // record appends an event best-effort; a logging failure never fails a tool.

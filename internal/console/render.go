@@ -10,6 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 //go:embed templates
@@ -40,8 +42,9 @@ var faviconSVG []byte
 // layout so it can supply the "content" (and optional "scripts") blocks. Pages
 // are added here as their handlers land, phase by phase.
 var pageNames = []string{
-	"login", "overview", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
+	"login", "overview", "now", "search", "interactions", "projects", "projectdetail", "context", "sessions", "session",
 	"memories", "notes", "retrieval", "tasks", "plans", "labs", "trials", "gardener", "settings", "event", "error",
+	"feature_off",
 }
 
 // peekNames are the entity detail templates. Each templates/peek_<name>.html
@@ -64,9 +67,16 @@ type pageData struct {
 	Title    string
 	Active   string // nav key to highlight
 	Nav      navCounts
+	Host     string // machine this console runs on, for the sidebar account row
 	Notice   string // positive flash banner (from ?notice=)
 	FlashErr string // error flash banner (from ?error=)
-	Data     any
+	// Features is the effective optional-feature state for this request; page
+	// templates reach it as $.Features to hide a feature's copy.
+	Features config.Features
+	// NavOff marks the sidebar nav ids belonging to a disabled optional feature
+	// (registry-derived, see navOff). The layout guards each entry with it.
+	NavOff map[string]bool
+	Data   any
 }
 
 // withFlash populates the banner fields from the ?notice= / ?error= query params
@@ -83,6 +93,7 @@ func withFlash(r *http.Request, pd pageData) pageData {
 var funcs = template.FuncMap{
 	"ago":           ago,
 	"ts":            ts,
+	"day":           day,
 	"shortID":       shortID,
 	"pct":           func(n, d int) int { return percent(n, d) },
 	"add":           func(a, b int) int { return a + b },
@@ -90,8 +101,14 @@ var funcs = template.FuncMap{
 	"hasPrefix":     strings.HasPrefix,
 	"copyBtn":       copyBtn,
 	"agentPill":     agentPill,
+	"isoPill":       isolationPill,
 	"evtTone":       evtTone,
 	"evtIcon":       evtIcon,
+	"evtSev":        evtSev,
+	"glint":         glintKind,
+	"rowSev":        rowSev,
+	"deltaChip":     deltaChip,
+	"bandLine":      bandLine,
 	"taskTone":      taskTone,
 	"planTone":      planTone,
 	"outcomeTone":   outcomeTone,
@@ -102,6 +119,9 @@ var funcs = template.FuncMap{
 	"compactNum":    compactNum,
 	"kindLegend":    kindLegend,
 	"kindBars":      kindBars,
+	"kindBar":       kindBar,
+	"sparkLine":     sparkLine,
+	"ptlTrack":      ptlTrack,
 	"areaChart":     areaChart,
 	"stackedBar":    stackedBar,
 	"coverageTrend": coverageTrend,
@@ -118,6 +138,8 @@ func evtTone(kind string) string {
 		return "pop"
 	case kind == "memory.superseded" || kind == "memory.archived":
 		return "warn"
+	case kind == "project.isolation.changed":
+		return "accent"
 	case kind == "plan.approved":
 		return "ok"
 	case strings.HasPrefix(kind, "plan."), kind == "subagent.captured":
@@ -144,6 +166,19 @@ func evtIcon(kind string) string {
 		return "circle"
 	case kind == "subagent.captured":
 		return "git-fork"
+	case kind == "project.isolation.changed":
+		return "lock"
+	case kind == "memory.first_reuse":
+		return "zap"
+	case kind == "project.stage_reached":
+		return "trending-up"
+	case kind == "milestone.reached":
+		// The milestone ledger's own glyph -- a medal, distinct from the
+		// gamification records' trophy.
+		return "award"
+	case kind == "plan.shipped":
+		// The settlement's own glyph, distinct from the plan-capture map.
+		return "flag"
 	case strings.HasPrefix(kind, "plan."):
 		return "map"
 	default:
@@ -267,7 +302,10 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 		writeJSON(w, http.StatusOK, pd.Data)
 		return
 	}
-	pd.Nav = s.navCounts(r.Context())
+	pd.Features = s.effectiveFeatures(r.Context())
+	pd.NavOff = navOff(pd.Features)
+	pd.Nav = s.navCounts(r.Context(), pd.Features)
+	pd.Host = s.host
 	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
 	if !ok {
@@ -341,10 +379,14 @@ func (s *Service) renderErrorPage(w http.ResponseWriter, r *http.Request, status
 		http.Error(w, msg, status)
 		return
 	}
+	feats := s.effectiveFeatures(r.Context())
 	pd := pageData{
-		Title: heading,
-		Nav:   s.navCounts(r.Context()),
-		Data:  errorData{Status: status, Heading: heading, Message: msg},
+		Title:    heading,
+		Nav:      s.navCounts(r.Context(), feats),
+		Features: feats,
+		NavOff:   navOff(feats),
+		Host:     s.host,
+		Data:     errorData{Status: status, Heading: heading, Message: msg},
 	}
 	var buf bytes.Buffer
 	if err := tmpl.ExecuteTemplate(&buf, "layout", pd); err != nil {
@@ -454,6 +496,28 @@ func ts(v any) string {
 		return ""
 	}
 	return t.UTC().Format("2006-01-02 15:04 MST")
+}
+
+// day formats a timestamp as its calendar date ("2026-08-07"), for lines that
+// witness when something happened rather than how long ago. Accepts time.Time
+// or *time.Time like ts; a nil or zero time renders "".
+func day(v any) string {
+	var t time.Time
+	switch x := v.(type) {
+	case time.Time:
+		t = x
+	case *time.Time:
+		if x == nil {
+			return ""
+		}
+		t = *x
+	default:
+		return ""
+	}
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format("2006-01-02")
 }
 
 // copyBtn renders a small quiet copy-to-clipboard button carrying the FULL

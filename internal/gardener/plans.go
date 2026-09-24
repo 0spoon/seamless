@@ -12,6 +12,12 @@ package gardener
 // which removes it from the briefing's awaiting-approval lines; the note
 // itself stays readable, as always.
 //
+// A third settlement outranks both: when the capture owns no steps and another
+// composition in the project holds the steps for the same work, the pass
+// proposes folding it in (mergeplans.go). That reading is more specific than
+// shipped, because the commits evidencing "this shipped" are the OTHER plan's
+// steps landing.
+//
 // The evidence is read straight out of .git (internal/gitread) -- the daemon
 // never execs git -- from the repos the repo_project_map ties to the note's
 // project. Everything is best-effort: no stamp, no mapped repo, or no reflog
@@ -42,7 +48,7 @@ const maxShipCommits = 8
 // proposeStalePlans proposes settling captured plans still unapproved after
 // StalePlanDays -- shipped when the repo evidences the work landed, abandoned
 // otherwise. 0 disables the pass.
-func (s *Service) proposeStalePlans(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeStalePlans(ctx context.Context, seen seenKeys) (int, error) {
 	if s.cfg.StalePlanDays <= 0 {
 		return 0, nil
 	}
@@ -67,22 +73,40 @@ func (s *Service) proposeStalePlans(ctx context.Context, seen map[string]struct{
 				return created, err
 			}
 		}
+		slug := plans.SlugFromTags(n.Tags)
 		ev := s.shipEvidence(n, roots[n.Project])
+		merge := s.mergeTarget(ctx, n, slug)
 
-		// The two keys are deliberately distinct: an abandon proposed before the
-		// work landed does not stop a later pass from surfacing the ship evidence.
+		// Three keys, deliberately distinct: a settlement proposed and dismissed
+		// on one reading does not stop a later pass from raising another. Merge
+		// outranks ship because it is the more specific truth -- the same commits
+		// that evidence "this shipped" are the target composition's own steps
+		// landing, so a stranded capture beside a real plan reads as shipped too,
+		// and only the merge says where the work actually went.
 		kind, key := store.ProposalAbandonPlan, "abandon_plan:"+n.ID
-		if ev.shipped() {
+		switch {
+		case merge.found():
+			kind, key = store.ProposalMergePlans, "merge_plans:"+n.ID
+		case ev.shipped():
 			kind, key = store.ProposalShipPlan, "ship_plan:"+n.ID
 		}
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
+		reason := ev.reason(s.cfg.StalePlanDays)
+		if merge.found() {
+			reason = merge.reason(s.cfg.StalePlanDays)
+		}
 		payload := map[string]any{
-			"id": n.ID, "slug": plans.SlugFromTags(n.Tags), "note_slug": n.Slug,
+			"id": n.ID, "slug": slug, "note_slug": n.Slug,
 			"title": n.Title, "project": n.Project, "plan_status": plans.StatusFromTags(n.Tags),
-			"reason":        ev.reason(s.cfg.StalePlanDays),
+			"reason":        reason,
 			"last_activity": core.FormatTime(n.Updated),
+		}
+		if merge.found() {
+			payload["merge_into"] = merge.slug
+			payload["merge_into_title"] = merge.title
+			payload["shared_tokens"] = merge.shared
 		}
 		if ev.shipped() {
 			payload["repo"] = ev.repo
@@ -112,18 +136,21 @@ func (s *Service) applySettlePlan(ctx context.Context, p store.Proposal, status 
 	if !ok {
 		return nil, fmt.Errorf("plan note %q no longer exists", id)
 	}
-	note, err := s.files.Store().ReadNote(idx.FilePath)
-	if err != nil {
-		return nil, err
-	}
-	if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
-		return nil, fmt.Errorf("plan %q was approved since this was proposed", note.Slug)
-	}
-	basename := plans.Basename(note.Slug)
-	note.Tags = plans.SetStatusTag(note.Tags, status)
-	note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), status)
-	note.Updated = now
-	written, err := s.files.WriteNote(ctx, note)
+	// Retag under the note's lock. The capture hook rewrites this file on every
+	// plan-file save and the console's approve hatch on every approval, so the
+	// settlement reads the tags it is judging inside the lock -- an approval
+	// landing between an unlocked read and the write would be silently retagged
+	// away, which is exactly the state this apply refuses to overwrite.
+	written, err := s.files.MutateNote(ctx, idx.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
+			return core.Note{}, fmt.Errorf("plan %q was approved since this was proposed", note.Slug)
+		}
+		basename := plans.Basename(note.Slug)
+		note.Tags = plans.SetStatusTag(note.Tags, status)
+		note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), status)
+		note.Updated = now
+		return note, nil
+	})
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,10 @@ cmd/seambench/     agent-scenario benchmark: `run` (headless scenario x conditio
 docs-src/          docs site markdown + nav.yaml (source; docs/docs/ is output)
 internal/core/     domain types: Project, Memory, Session, Task, Trial, Event
 internal/config/   single YAML + env config (static key, budgets, briefing tunables, llm)
-internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations
+internal/store/    SQLite: schema, FTS5, embeddings (BLOB + cosine), migrations;
+                   index_work.go mirrors the DB-native work record (tasks,
+                   trials, session findings) into the same fts table the files
+                   layer fills with memories and notes
 internal/events/   append-only event log; SSE fan-out; retrieval stats
 internal/validate/ path/title/name guards
 internal/files/    markdown layer: frontmatter, atomic writes, watcher     [P1]
@@ -181,7 +184,9 @@ renders its reference from it. Do not transcribe a number here -- three differen
 stale counts is exactly how this section drifted before.
 
 sessions (`session_start/update/end`), memory (`memory_write/append/read/delete`,
-write carries `supersedes`), discovery (`recall` -- the only search tool, RRF-fused),
+write carries `supersedes`), discovery (`recall` -- the only search tool,
+RRF-fused, spanning durable knowledge AND the work record: memories, notes,
+tasks, trials, session findings),
 notes (`notes_create/read/update/append/delete`), projects (`project_list/create`),
 tasks (`tasks_add/update/ready/list` -- `tasks_list id=<id>` loads a single task
 by its globally-unique id -- plus `tasks_claim`/`tasks_release` for

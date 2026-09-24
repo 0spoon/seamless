@@ -23,7 +23,24 @@ const COOKIE = createHash('sha256').update(`seamless-console\0${KEY}`).digest('h
 
 const PAGES = [
   { name: 'overview', url: '/console/?w=30d' },
-  { name: 'interactions', url: '/console/interactions' },
+  // Cross-project by default: the Now screen's whole point is the whole fleet.
+  { name: 'now', url: '/console/now' },
+  {
+    name: 'interactions',
+    url: '/console/interactions',
+    // The feed is client-rendered and starts empty by design -- it only shows
+    // live arrivals until you add a history window. The `history=` URL param
+    // does not help: the server hands the page an empty div and the JS fills
+    // it. So drive the control the way an owner would.
+    prepare: async (page) => {
+      await page.selectOption('#ix-history-window', '3600');
+      await page.click('#ix-history-load');
+      await page.waitForFunction(() => {
+        const feed = document.getElementById('ix-feed');
+        return feed && feed.children.length > 0;
+      }, null, { timeout: 15000 });
+    },
+  },
   { name: 'plans', url: '/console/plans?w=30d' },
   { name: 'retrieval', url: '/console/retrieval?w=30d' },
   // Keep the legacy asset basename so published and cached landing-page URLs
@@ -50,6 +67,8 @@ const PAGES = [
       // 'load', not 'networkidle': the console's SSE stream never goes idle.
       await page.goto(BASE + p.url, { waitUntil: 'load' });
       await page.waitForTimeout(1500);
+      if (p.prepare) await p.prepare(page);
+      await page.waitForTimeout(500);
       await page.screenshot({ path: path.join(outDir, `${p.name}-${theme}.png`) });
       console.log(`captured ${p.name}-${theme}.png`);
     }

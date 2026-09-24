@@ -10,6 +10,9 @@ package a2a
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/0spoon/seamless/internal/retrieve"
 )
 
 // ProtocolVersion is the A2A generation the endpoint speaks: the v0.3
@@ -133,9 +136,13 @@ func Card(version, endpoint string) AgentCard {
 		Skills: []AgentSkill{{
 			ID:   "recall",
 			Name: "Recall",
-			Description: "Search the owner's memories and notes by meaning and keyword (RRF-fused). " +
+			// The scope list is derived, never transcribed: server.go validates
+			// against retrieve.RecallScopes, so a hand-written copy here would
+			// advertise a set the endpoint no longer accepts (or, worse, omit
+			// one it does).
+			Description: "Search the owner's durable knowledge and work record by meaning and keyword (RRF-fused). " +
 				"Send the query as a text part; optional message metadata scopes it " +
-				"(project, scope: all|memories|notes, limit). The reply carries a data part " +
+				"(project, scope: " + strings.Join(retrieve.RecallScopes, "|") + ", limit). The reply carries a data part " +
 				"({\"hits\": [...]}) and a text summary of the same hits.",
 			Tags:        []string{"memory", "search", "knowledge"},
 			Examples:    []string{"What did we decide about the retry backoff?"},

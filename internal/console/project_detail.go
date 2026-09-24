@@ -11,6 +11,7 @@ package console
 
 import (
 	"fmt"
+	"html/template"
 	"net/http"
 	"slices"
 	"strings"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/store"
+	"github.com/0spoon/seamless/internal/validate"
 )
 
 // projectTabKeys are the workspace tabs in bar order. A ?tab= deep-link outside
@@ -40,6 +42,15 @@ type projectWorkspaceData struct {
 	Favorite    bool
 	ActiveTab   string
 	Tabs        []projectTabVM
+	// Stage is the momentum maturity glyph, pre-rendered ("" while the
+	// feature is off); the same glyph the board row shows, by construction.
+	Stage template.HTML
+
+	// The agent-facing fence: the title-row pill, the Overview control, and the
+	// pending confirm panel a ?isolate= tighten renders (nil the rest of the time).
+	Isolation        core.Isolation
+	IsolationOptions []isolationOptionVM
+	IsolationConfirm *isolationConfirmVM
 
 	Metrics   projectMetrics
 	Trend     []store.TrendBucket // this project's injection trend (its own memories)
@@ -88,6 +99,14 @@ type projectMetrics struct {
 	ReachRate   int
 	HasCoverage bool
 	Coverage    int
+
+	// Judgment for the two rates, against this project's own prior equal-length
+	// window and the console-wide targets.
+	PriorLabel    string
+	ReachDelta    delta
+	ReachBand     band
+	CoverageDelta delta
+	CoverageBand  band
 }
 
 // projectDetail dispatches the /console/projects/{slug} route: the peek fragment
@@ -127,6 +146,7 @@ func (s *Service) projectSummary(w http.ResponseWriter, r *http.Request, p core.
 		Memories: counts.Memories, Sessions: counts.Sessions,
 		OpenTasks: counts.OpenTasks, Notes: counts.Notes,
 		Created: p.CreatedAt, Updated: p.UpdatedAt,
+		Isolation: isolationOf(p), IsolationPromise: isolationPromise(isolationOf(p)),
 	}
 	s.renderDetail(w, r, "project", pageData{Title: "Project " + p.Slug, Active: "projects", Data: d})
 }
@@ -155,6 +175,21 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 			tab, strings.Join(projectTabKeys, ", ")))
 		return
 	}
+	// The pending-tighten page state. Strict like ?tab=: a value outside the
+	// isolation enum is a 400, never a silently dropped panel.
+	var pending core.Isolation
+	if values, ok := query["isolate"]; ok {
+		if len(values) != 1 {
+			s.badRequest(w, r, "parameter \"isolate\" must be provided exactly once")
+			return
+		}
+		state, err := validate.Isolation(values[0])
+		if err != nil {
+			s.badRequest(w, r, err.Error())
+			return
+		}
+		pending = state
+	}
 	now := time.Now().UTC()
 	win := store.ResolveRetrievalWindow(r.URL.Query().Get("w"), now)
 
@@ -162,6 +197,15 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		Slug: slug, Name: p.Name, Description: p.Description,
 		Parent: p.ParentSlug, Retired: p.Retired(), Favorite: p.Favorite, ActiveTab: tab,
 		IsRoot: p.ParentSlug == "", TrendWin: win.Label,
+		Isolation: isolationOf(p), IsolationOptions: isolationOptions(isolationOf(p)),
+	}
+	if pending != "" {
+		confirm, err := s.isolationPendingConfirm(ctx, slug, pending)
+		if err != nil {
+			s.serverError(w, r, err)
+			return
+		}
+		data.IsolationConfirm = confirm
 	}
 	if data.Name == "" {
 		data.Name = slug
@@ -182,6 +226,9 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 			break
 		}
 	}
+	if info, ok := s.projectStages(ctx, board, now)[slug]; ok {
+		data.Stage = stageGlyph(info, now)
+	}
 	data.Live = row.LiveSessions
 	data.Metrics = projectMetrics{
 		Memories: row.Memories, Sessions: row.Sessions, Live: row.LiveSessions,
@@ -193,6 +240,12 @@ func (s *Service) projectWorkspace(w http.ResponseWriter, r *http.Request, p cor
 		data.Metrics.HasCoverage = true
 		data.Metrics.Coverage = percent(cov.Covered, cov.Total)
 	}
+	prior, hasPrior := s.priorProjectVitals(ctx, slug, win, now)
+	data.Metrics.PriorLabel = priorLabel(win, hasPrior)
+	data.Metrics.ReachDelta = pointDelta(data.Metrics.ReachRate, prior.ReachRate, hasPrior && data.Metrics.HasReach, riseGood)
+	data.Metrics.ReachBand = floorBand(data.Metrics.ReachRate, reachTargetPct, data.Metrics.HasReach)
+	data.Metrics.CoverageDelta = pointDelta(data.Metrics.Coverage, prior.Coverage, hasPrior && data.Metrics.HasCoverage && prior.CovTotal > 0, riseGood)
+	data.Metrics.CoverageBand = floorBand(data.Metrics.Coverage, continuityTargetPct, data.Metrics.HasCoverage)
 
 	if err := s.fillOverviewTab(ctx, &data, slug, win); err != nil {
 		s.serverError(w, r, err)

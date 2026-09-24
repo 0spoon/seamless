@@ -1020,10 +1020,13 @@ body::before {
 }
 .shot-img { display: block; width: 100%; height: auto; }
 .shot-frame a { display: block; line-height: 0; }
+/* Two-up, not four-across: at the 1120px content width a quarter-column
+   thumbnail of a 1440x900 console page is unreadable. Two rows of two keep
+   each shot legible enough to be worth clicking through. */
 .shot-strip {
   margin-top: 44px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 .shot-card { margin: 0; }
@@ -1053,9 +1056,6 @@ body::before {
 :root[data-theme="dark"] .themed-dark.themed-dark { display: block; }
 :root[data-theme="light"] .themed-light.themed-light { display: block; }
 :root[data-theme="light"] .themed-dark.themed-dark { display: none; }
-@media (max-width: 1024px) {
-  .shot-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
 @media (max-width: 900px) {
   .console-grid { grid-template-columns: 1fr; }
 }

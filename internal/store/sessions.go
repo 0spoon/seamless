@@ -92,6 +92,12 @@ func UpdateSession(ctx context.Context, db *sql.DB, s core.Session) error {
 	if n == 0 {
 		return fmt.Errorf("store.UpdateSession: no session with id %q", s.ID)
 	}
+	// session_end lands findings here, so this is the main entry point for a
+	// session into the search corpus; IndexSessionFTS also removes the row when
+	// findings were cleared back to nothing.
+	if err := IndexSessionFTS(ctx, db, s); err != nil {
+		return fmt.Errorf("store.UpdateSession: %w", err)
+	}
 	return nil
 }
 
@@ -314,6 +320,15 @@ func UpdateAmbientFindings(
 	n, err := res.RowsAffected()
 	if err != nil {
 		return false, fmt.Errorf("store.UpdateAmbientFindings: rows affected: %w", err)
+	}
+	if n > 0 {
+		// Codex has no SessionEnd, so for those sessions this is the only path
+		// findings ever take -- without it their handoff prose would never
+		// reach the corpus. Keyed by external identity, so the mirror looks the
+		// id up rather than making this targeted write a transaction.
+		if err := reindexSessionFTSByExternal(ctx, db, externalClient, externalSessionID); err != nil {
+			return true, fmt.Errorf("store.UpdateAmbientFindings: %w", err)
+		}
 	}
 	return n > 0, nil
 }
@@ -568,6 +583,21 @@ func ListSessions(ctx context.Context, db *sql.DB, status core.SessionStatus, si
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// LiveSessionCount counts the sessions live right now: active and heartbeating
+// on or after the cutoff -- the same predicate as ProjectsWithCounts' live
+// column and Session.LiveAsOf. It backs the console's Now nav badge, so it is
+// one scalar query, safe on every page load.
+func LiveSessionCount(ctx context.Context, db *sql.DB, cutoff time.Time) (int, error) {
+	var n int
+	err := db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM sessions WHERE status = 'active' AND updated_at >= ?`,
+		core.FormatTime(cutoff)).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("store.LiveSessionCount: %w", err)
+	}
+	return n, nil
 }
 
 // LatestActiveAmbientSessionForProject returns the most recently updated active

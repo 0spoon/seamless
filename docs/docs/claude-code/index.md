@@ -98,9 +98,12 @@ shows the marked Seamless-awareness block it can add to global or project
 `CLAUDE.md`. It edits only after you choose a scope and approve the change, then
 removes its own one-shot skill directory.
 
-The installer drops a second skill alongside it: `/seam-research`, the
-research-lab workflow for systematic debugging (see [Run research
-trials](https://thereisnospoon.org/docs/guides/research-trials/)). Unlike `/seam-onboard` it is a recurring
+The installer drops a second skill alongside it *if research is enabled*:
+`/seam-research`, the research-lab workflow for systematic debugging (see
+[Run research trials](https://thereisnospoon.org/docs/guides/research-trials/)). Research is an
+[optional feature](https://thereisnospoon.org/docs/reference/console/#optional-features) and ships off, so a
+fresh install has no research skill until you turn it on and re-run
+`seamlessd install-hooks`. Unlike `/seam-onboard` it is a recurring
 workflow, not a one-shot - it never self-removes, upgrades refresh it in place,
 and Claude can activate it on its own when an investigation calls for
 structured trials. From a clone, `make install-research-skill CLIENT=claude`

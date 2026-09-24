@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/files"
@@ -46,16 +47,37 @@ const (
 	ActionUnchanged        Action = "unchanged"
 	ActionAlreadyDelivered Action = "already-delivered"
 	ActionSkipped          Action = "skipped"
+	ActionRemoved          Action = "removed"
+	ActionDisabled         Action = "disabled"
 )
 
 // Options provides the client homes and opt-outs. HomeDir is the user's home;
 // CodexHome is $CODEX_HOME when set, otherwise Codex defaults below HomeDir.
 type Options struct {
-	HomeDir      string
-	CodexHome    string
+	HomeDir   string
+	CodexHome string
+	// SkipOnboard and SkipResearch are the owner's explicit per-skill opt-outs
+	// (SEAMLESS_NO_ONBOARD_SKILL / SEAMLESS_NO_RESEARCH_SKILL): that package is
+	// neither installed nor removed, because the owner has taken it over.
 	SkipOnboard  bool
 	SkipResearch bool
+	// DisabledSkills names the skills whose OPTIONAL feature is switched off --
+	// built by the caller from features.Registry() (Feature.Skill), so a future
+	// optional feature gates its skill by being registered rather than by a
+	// second copy of the name here.
+	//
+	// Such a skill is not installed, AND a copy already sitting in the skill
+	// root is removed: a skill that documents tools the MCP server no longer
+	// exposes sends agents at calls that cannot succeed. Removal happens only
+	// during an explicit install run, never behind the owner's back on a live
+	// toggle, and only for the packages Seamless itself maintains. The
+	// SkipOnboard/SkipResearch opt-outs still win: a package the owner told
+	// Seamless not to manage is left exactly as it is.
+	DisabledSkills []string
 }
+
+// disabled reports whether the named skill's optional feature is off.
+func (o Options) disabled(name string) bool { return slices.Contains(o.DisabledSkills, name) }
 
 // Result reports the exact root and per-skill actions for installer output.
 type Result struct {
@@ -113,6 +135,9 @@ func Root(client Client, opts Options) (string, error) {
 // Install delivers both Seamless skills for client. The one-shot onboarding
 // marker lives in each client root independently: using the Claude copy never
 // suppresses first delivery to Codex, and vice versa.
+//
+// A skill listed in opts.DisabledSkills is synced the other way: not installed,
+// and removed if present (see Options.DisabledSkills).
 func Install(client Client, opts Options) (Result, error) {
 	root, err := Root(client, opts)
 	if err != nil {
@@ -127,12 +152,30 @@ func Install(client Client, opts Options) (Result, error) {
 		}
 	}
 	if !opts.SkipResearch {
-		result.Research, err = installRecurring(root, ResearchName)
+		result.Research, err = syncRecurring(root, ResearchName, opts.disabled(ResearchName))
 		if err != nil {
 			return Result{}, fmt.Errorf("skills.Install %s: research: %w", client, err)
 		}
 	}
 	return result, nil
+}
+
+// Installed reports whether the maintained skill package name is present in
+// client's skill root, along with the path it occupies (returned either way, so
+// a caller can name the location in a diagnosis). It is the read-only companion
+// to Install: doctor uses it to spot a skill left on disk for a feature that has
+// since been switched off.
+func Installed(client Client, opts Options, name string) (string, bool, error) {
+	root, err := Root(client, opts)
+	if err != nil {
+		return "", false, err
+	}
+	target := filepath.Join(root, name)
+	present, err := exists(target)
+	if err != nil {
+		return target, false, fmt.Errorf("skills.Installed %s: %w", client, err)
+	}
+	return target, present, nil
 }
 
 // Remove deletes (or previews) the maintained skill packages and onboarding
@@ -213,6 +256,33 @@ func installOnboard(root string) (Action, error) {
 		}
 	}
 	return action, nil
+}
+
+// syncRecurring brings one recurring skill in line with its feature: installed
+// and refreshed while the feature is on, absent while it is off.
+func syncRecurring(root, name string, featureOff bool) (Action, error) {
+	if featureOff {
+		return removeRecurring(root, name)
+	}
+	return installRecurring(root, name)
+}
+
+// removeRecurring deletes the maintained skill package for a switched-off
+// feature. Only that package is touched -- the skill root's other contents, and
+// the onboarding marker, are the owner's.
+func removeRecurring(root, name string) (Action, error) {
+	dst := filepath.Join(root, name)
+	present, err := exists(dst)
+	if err != nil {
+		return "", err
+	}
+	if !present {
+		return ActionDisabled, nil
+	}
+	if err := os.RemoveAll(dst); err != nil {
+		return "", fmt.Errorf("remove %s: %w", dst, err)
+	}
+	return ActionRemoved, nil
 }
 
 func installRecurring(root, name string) (Action, error) {

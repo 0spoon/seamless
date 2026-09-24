@@ -20,14 +20,28 @@ Four layers resolve each key. Later layers win:
 1. **Defaults** - the built-in values in the table below.
 2. **File** - whatever the YAML sets.
 3. **Environment** - `SEAMLESS_*` overrides the file.
-4. **Runtime override (DB)** - the console's Settings form stores briefing knobs
-   in the database. They win over file *and* env, apply from the next session
-   start without a daemon restart, and stay until reset.
+4. **Runtime override (DB)** - the console's Settings forms store some blocks in
+   the database. They win over file *and* env, take effect without a daemon
+   restart, and stay until reset.
 
-That fourth layer only covers the `briefing:` block. It exists so you can tune
-what agents get injected while they are running, and it is the one place where
-the config file is not the last word - check the console before concluding a
-briefing setting is being ignored.
+That fourth layer covers two blocks, and only those two:
+
+| Block | Written by | When it takes effect |
+|---|---|---|
+| `briefing:` | Settings → Briefing injection | From the next session start. |
+| `features:` | Settings → [Features](https://thereisnospoon.org/docs/reference/console/#optional-features) | Immediately in the console; an agent sees it from its next session (tool lists and briefings alike). |
+
+It exists so you can change what agents get injected - and what they can reach -
+while they are running, and it is the one place where the config file is not the
+last word: check the console before concluding a `briefing:` or `features:`
+setting is being ignored. Neither form ever writes your config file, and
+**Reset** on either clears the stored row and hands that block back to file/env.
+
+One override can be in force without you having set it. Upgrading an
+installation that already holds trial data seeds a stored `features:` override
+with research on, so a feature that now ships off does not disappear from under
+data you were already using. The console labels it a stored override, not your
+choice; **Reset** clears it like any other.
 
 ## Generating a key
 
@@ -70,6 +84,9 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 | `briefing.include_sibling_memories` | bool | - |
 | `briefing.utility_weight` | float64 | `0.4` |
 | `briefing.utility_mode` | string | `auto` |
+| `features.research` | bool | - |
+| `features.momentum` | bool | - |
+| `features.gamification` | bool | - |
 | `search.semantic_floor` | float64 | `0.3` |
 | `llm.provider` | string | `openai` |
 | `llm.openai.api_key` | string | - |
@@ -216,6 +233,29 @@ briefing:
   # bounded recall/prompt-recall utility boosts are always on.
   # env: SEAMLESS_BRIEFING_UTILITY_MODE
   utility_mode: auto
+
+# Optional features. These ship OFF: a fresh installation exposes none of them
+# until you turn one on -- here, via env, or live in the console (Settings ->
+# Features), which stores a runtime override in the database that WINS over this
+# file and env until reset. Turning a feature off hides its console screens, its
+# MCP tools, and its agent-facing mentions; it never deletes stored data, and
+# re-enabling restores every surface. An installation that already holds research
+# data keeps the feature on across the upgrade (a one-time seeded override).
+features:
+  # Research labs and trials: the Labs and Trials console screens, the trials
+  # search scope, and the lab_open, trial_record, trial_query MCP tools.
+  # env: SEAMLESS_FEATURES_RESEARCH
+  research: false
+  # Momentum surfaces woven into existing screens: the plan finish-line card
+  # (and its agent-briefing emphasis), the activity calendar with capture
+  # streaks, knowledge payoff moments, and project maturity stages.
+  # env: SEAMLESS_FEATURES_MOMENTUM
+  momentum: false
+  # The arcade layer of the Now screen: the day tape, personal records, the
+  # hot-streak pulse, and celebration moments. Every number is judged from
+  # real recorded activity; off, the Now screen carries no trace of it.
+  # env: SEAMLESS_FEATURES_GAMIFICATION
+  gamification: false
 
 # Console search (the full page's fused semantic+lexical retrieval). Agent
 # recall is not affected by these knobs.

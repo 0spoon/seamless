@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/lifecycle"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
@@ -39,8 +40,22 @@ func CanUndoApply(kind string) bool {
 	}
 }
 
+// CanUndoResolution reports whether a resolved proposal can be taken back,
+// whatever it was resolved into. Both rejection tiers always can -- neither a
+// dismissal nor a hide has an effect to invert, and hiding forever would be a
+// trap if the forever started before the owner could change their mind. Only an
+// apply consults CanUndoApply, which stays the single source for that judgement
+// and for the console's confirm policy.
+func CanUndoResolution(status, kind string) bool {
+	if status == store.ProposalApplied {
+		return CanUndoApply(kind)
+	}
+	return true
+}
+
 // Undo returns a resolved proposal to the pending queue, inverting whatever its
-// apply did. A dismissal simply reopens. An apply first runs the per-kind
+// apply did. A rejection -- dismissed or hidden -- simply reopens, which is
+// also how a hide-forever stops being forever. An apply first runs the per-kind
 // inverse, and every inverse is guarded by a precondition describing the world
 // the apply left behind: if the world has moved on since (the memory was
 // re-archived by hand, the task was completed, the plan was approved), the undo
@@ -59,11 +74,13 @@ func (s *Service) Undo(ctx context.Context, id string) error {
 	switch p.Status {
 	case store.ProposalPending:
 		return fmt.Errorf("proposal %q is still pending -- there is nothing to undo", id)
-	case store.ProposalDismissed:
+	case store.ProposalDismissed, store.ProposalHidden:
+		// Both rejection tiers reopen the same way: neither had an effect, and
+		// reopening clears whichever block the tier had put on the key.
 		if err := store.ReopenProposal(ctx, s.db, id); err != nil {
 			return err
 		}
-		s.record(ctx, id, map[string]any{"action": "undo_dismiss", "kind": p.Kind})
+		s.record(ctx, id, map[string]any{"action": "undo_reject", "resolution": p.Status, "kind": p.Kind})
 		return nil
 	}
 
@@ -89,7 +106,12 @@ func (s *Service) invertApply(ctx context.Context, p store.Proposal, now time.Ti
 		return s.undoMerge(ctx, p, now)
 	case store.ProposalDigest:
 		return s.undoDigest(ctx, p)
-	case store.ProposalReproject:
+	case store.ProposalReproject, store.ProposalRelocate:
+		// A relocate is a move like any other, so its inverse is the same move
+		// back. It deliberately does NOT join consolidate/split in the
+		// never-undoable set: the apply created nothing, it only changed one
+		// memory's project, and an owner who tightened a fence must be able to
+		// take back a repair they no longer want.
 		return s.undoReproject(ctx, p, now)
 	case store.ProposalRekind:
 		return s.undoRekind(ctx, p, now)
@@ -97,6 +119,8 @@ func (s *Service) invertApply(ctx context.Context, p store.Proposal, now time.Ti
 		return s.undoSettlePlan(ctx, p, plans.StatusAbandoned, now)
 	case store.ProposalShipPlan:
 		return s.undoSettlePlan(ctx, p, plans.StatusShipped, now)
+	case store.ProposalMergePlans:
+		return s.undoMergePlans(ctx, p, now)
 	case store.ProposalMemoryWanted, store.ProposalToolError:
 		return s.undoOpenedTask(ctx, p, now)
 	default:
@@ -108,15 +132,21 @@ func (s *Service) invertApply(ctx context.Context, p store.Proposal, now time.Ti
 // memory that is active again (someone already restored it) or superseded (a
 // later merge claimed it -- undoing the archive would drop that edge).
 func (s *Service) undoArchive(ctx context.Context, p store.Proposal, now time.Time) error {
-	mem, err := s.loadInactiveMemory(ctx, payloadString(p.Payload, "id"))
-	if err != nil {
-		return err
-	}
-	if mem.SupersededBy != "" {
-		return fmt.Errorf("memory %q has since been superseded -- restore it from that merge instead", mem.Name)
-	}
-	restored, err := lifecycle.Unarchive(ctx, s.files, mem, now)
-	if err != nil {
+	// Unarchive strips the tombstone and rewrites the whole file, and the
+	// supersession guard is the read that decides whether it may -- both belong
+	// inside the lock, or the undo restores a body someone else has moved on from.
+	var restored core.Memory
+	if err := s.mutateInactiveMemory(ctx, payloadString(p.Payload, "id"), func(ctx context.Context, mem core.Memory) error {
+		if mem.SupersededBy != "" {
+			return fmt.Errorf("memory %q has since been superseded -- restore it from that merge instead", mem.Name)
+		}
+		r, err := lifecycle.Unarchive(ctx, s.files, mem, now)
+		if err != nil {
+			return err
+		}
+		restored = r
+		return nil
+	}); err != nil {
 		return err
 	}
 	s.recordMemory(ctx, core.EventMemoryWritten, restored, map[string]any{
@@ -134,15 +164,21 @@ func (s *Service) undoMerge(ctx context.Context, p store.Proposal, now time.Time
 	if keepID == "" || dropID == "" {
 		return errors.New("merge proposal missing keep/drop ids")
 	}
-	drop, err := s.loadInactiveMemory(ctx, dropID)
-	if err != nil {
-		return err
-	}
-	if drop.SupersededBy != keepID {
-		return fmt.Errorf("memory %q is no longer superseded by this merge's kept memory", drop.Name)
-	}
-	restored, err := lifecycle.Unsupersede(ctx, s.files, drop, now)
-	if err != nil {
+	// Same shape as undoArchive: the "still superseded by this very merge" guard
+	// is what authorizes the rewrite, so it reads the file under the lock rather
+	// than a copy taken before it.
+	var restored core.Memory
+	if err := s.mutateInactiveMemory(ctx, dropID, func(ctx context.Context, drop core.Memory) error {
+		if drop.SupersededBy != keepID {
+			return fmt.Errorf("memory %q is no longer superseded by this merge's kept memory", drop.Name)
+		}
+		r, err := lifecycle.Unsupersede(ctx, s.files, drop, now)
+		if err != nil {
+			return err
+		}
+		restored = r
+		return nil
+	}); err != nil {
 		return err
 	}
 	s.recordMemory(ctx, core.EventMemoryWritten, restored, map[string]any{
@@ -188,21 +224,35 @@ func (s *Service) undoReproject(ctx context.Context, p store.Proposal, now time.
 	if to == "" {
 		return errors.New("this move was applied before results were recorded -- move the memory back by hand")
 	}
-	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
+	idx, err := s.activeMemoryIndex(ctx, payloadString(p.Payload, "id"))
 	if err != nil {
 		return err
 	}
-	if mem.Project != to {
-		return fmt.Errorf("memory %q has since moved out of %s -- this undo would send it somewhere it never was", mem.Name, to)
-	}
-	if clash, found, cerr := store.MemoryByName(ctx, s.db, from, mem.Name); cerr != nil {
-		return cerr
-	} else if found && clash.ID != mem.ID {
-		return fmt.Errorf("project %q already has an active memory named %q", from, mem.Name)
-	}
-	mem.Updated = now
-	moved, err := s.files.MoveMemory(ctx, mem, from)
-	if err != nil {
+	// Both sides of the move are locked, as in applyReproject: the memory's
+	// current file and the one it is moving back into, since MoveMemory writes the
+	// new path before dropping the old.
+	var moved core.Memory
+	if err := s.files.MutatePaths(ctx, []string{idx.FilePath, files.MemoryRelPath(from, idx.Name)}, func(ctx context.Context) error {
+		mem, rerr := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
+		if rerr != nil {
+			return rerr
+		}
+		if mem.Project != to {
+			return fmt.Errorf("memory %q has since moved out of %s -- this undo would send it somewhere it never was", mem.Name, to)
+		}
+		if clash, found, cerr := store.MemoryByName(ctx, s.db, from, mem.Name); cerr != nil {
+			return cerr
+		} else if found && clash.ID != mem.ID {
+			return fmt.Errorf("project %q already has an active memory named %q", from, mem.Name)
+		}
+		mem.Updated = now
+		m, merr := s.files.MoveMemory(ctx, mem, from)
+		if merr != nil {
+			return merr
+		}
+		moved = m
+		return nil
+	}); err != nil {
 		return err
 	}
 	s.recordMemory(ctx, core.EventMemoryMoved, moved, map[string]any{
@@ -223,17 +273,22 @@ func (s *Service) undoRekind(ctx context.Context, p store.Proposal, now time.Tim
 	if !slices.Contains(core.MemoryKinds, from) {
 		return fmt.Errorf("this reclassification recorded an unknown original kind %q", from)
 	}
-	mem, err := s.loadActiveMemory(ctx, payloadString(p.Payload, "id"))
-	if err != nil {
-		return err
-	}
-	if mem.Kind != to {
-		return fmt.Errorf("memory %q is now a %s, not the %s this proposal set", mem.Name, mem.Kind, to)
-	}
-	mem.Kind = from
-	mem.Updated = now
-	written, err := s.files.WriteMemory(ctx, mem)
-	if err != nil {
+	// The "is it still the kind this proposal set" guard decides the write, and
+	// WriteMemory re-renders the whole file, so read and write are one locked step.
+	var written core.Memory
+	if err := s.mutateActiveMemory(ctx, payloadString(p.Payload, "id"), func(ctx context.Context, mem core.Memory) error {
+		if mem.Kind != to {
+			return fmt.Errorf("memory %q is now a %s, not the %s this proposal set", mem.Name, mem.Kind, to)
+		}
+		mem.Kind = from
+		mem.Updated = now
+		w, werr := s.files.WriteMemory(ctx, mem)
+		if werr != nil {
+			return werr
+		}
+		written = w
+		return nil
+	}); err != nil {
 		return err
 	}
 	s.recordMemory(ctx, core.EventMemoryWritten, written, map[string]any{
@@ -258,18 +313,19 @@ func (s *Service) undoSettlePlan(ctx context.Context, p store.Proposal, settled 
 	if !ok {
 		return errors.New("the plan note no longer exists")
 	}
-	note, err := s.files.Store().ReadNote(idx.FilePath)
-	if err != nil {
-		return err
-	}
-	if current := plans.StatusFromTags(note.Tags); current != settled {
-		return fmt.Errorf("plan %q is now %s, not the %s this proposal set", note.Slug, current, settled)
-	}
-	basename := plans.Basename(note.Slug)
-	note.Tags = plans.SetStatusTag(note.Tags, prior)
-	note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), prior)
-	note.Updated = now
-	if _, err := s.files.WriteNote(ctx, note); err != nil {
+	// The capture hook rewrites this same note on every plan-file save, so the
+	// retag reads and writes under the file's lock: the status guard is the read
+	// that decides the write, and the write renders the whole file from it.
+	if _, err := s.files.MutateNote(ctx, idx.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if current := plans.StatusFromTags(note.Tags); current != settled {
+			return core.Note{}, fmt.Errorf("plan %q is now %s, not the %s this proposal set", note.Slug, current, settled)
+		}
+		basename := plans.Basename(note.Slug)
+		note.Tags = plans.SetStatusTag(note.Tags, prior)
+		note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), prior)
+		note.Updated = now
+		return note, nil
+	}); err != nil {
 		return err
 	}
 	return nil
@@ -311,11 +367,11 @@ func (s *Service) undoOpenedTask(ctx context.Context, p store.Proposal, now time
 	return nil
 }
 
-// loadInactiveMemory is loadActiveMemory's mirror: it resolves a memory id to
-// its full on-disk content and requires the memory to be INACTIVE, which is the
-// state an archive or merge left it in. A memory that is active again has
-// already been restored by some other route.
-func (s *Service) loadInactiveMemory(ctx context.Context, id string) (core.Memory, error) {
+// inactiveMemoryIndex is activeMemoryIndex's mirror: it resolves a memory id to
+// its INDEX row and requires the memory to be INACTIVE, which is the state an
+// archive or merge left it in. A memory that is active again has already been
+// restored by some other route.
+func (s *Service) inactiveMemoryIndex(ctx context.Context, id string) (core.Memory, error) {
 	if id == "" {
 		return core.Memory{}, errors.New("empty memory id")
 	}
@@ -329,5 +385,34 @@ func (s *Service) loadInactiveMemory(ctx context.Context, id string) (core.Memor
 	if idx.InvalidAt == nil {
 		return core.Memory{}, fmt.Errorf("memory %q is already active", idx.Name)
 	}
+	return idx, nil
+}
+
+// loadInactiveMemory resolves an inactive memory id to its full on-disk content.
+// As with loadActiveMemory, a caller that goes on to write must call it inside
+// the file's lock -- mutateInactiveMemory is that path.
+func (s *Service) loadInactiveMemory(ctx context.Context, id string) (core.Memory, error) {
+	idx, err := s.inactiveMemoryIndex(ctx, id)
+	if err != nil {
+		return core.Memory{}, err
+	}
 	return s.files.Store().ReadMemory(idx.FilePath)
+}
+
+// mutateInactiveMemory is mutateActiveMemory for the undo direction: it runs fn
+// with the file's lock held and the memory re-read (and re-checked for
+// inactivity) inside it, so a memory restored by hand while the undo waited is
+// refused rather than restored twice from a stale body.
+func (s *Service) mutateInactiveMemory(ctx context.Context, id string, fn func(context.Context, core.Memory) error) error {
+	idx, err := s.inactiveMemoryIndex(ctx, id)
+	if err != nil {
+		return err
+	}
+	return s.files.Mutate(ctx, idx.FilePath, func(ctx context.Context) error {
+		mem, rerr := s.loadInactiveMemory(ctx, id)
+		if rerr != nil {
+			return rerr
+		}
+		return fn(ctx, mem)
+	})
 }

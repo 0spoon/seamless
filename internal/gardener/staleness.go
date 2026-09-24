@@ -27,7 +27,7 @@ var errProtectionIncomplete = errors.New("protection set incomplete: some memory
 //     to this pass's activity metric.)
 //   - References: a memory named by a [[link]] in another memory's body is kept,
 //     since something still points at it.
-func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{}) (int, error) {
+func (s *Service) proposeArchives(ctx context.Context, seen seenKeys) (int, error) {
 	cutoff := s.now().UTC().Add(-time.Duration(s.cfg.StalenessDays) * 24 * time.Hour)
 	stale, err := store.StaleMemories(ctx, s.db, cutoff)
 	if err != nil {
@@ -59,7 +59,7 @@ func (s *Service) proposeArchives(ctx context.Context, seen map[string]struct{})
 			continue // still referenced by another memory
 		}
 		key := "archive:" + m.ID
-		if _, dup := seen[key]; dup {
+		if seen.blocked(key) {
 			continue
 		}
 		payload := map[string]any{

@@ -1,0 +1,11 @@
+{{define "content"}}
+{{with .Data}}
+<section class="feature-off" data-feature-off="{{.Key}}">
+  <span class="feature-off-icon">{{icon "power"}}</span>
+  <h1>{{.Label}} is switched off</h1>
+  {{if .Blurb}}<p class="feature-off-blurb">{{.Blurb}}</p>{{end}}
+  <p class="feature-off-kept">Nothing was deleted. The data is preserved exactly as it was and this screen returns the moment the feature is switched back on.</p>
+  <a class="btn primary" href="{{.SettingsHref}}">{{icon "settings"}} Turn it on in Settings</a>
+</section>
+{{end}}
+{{end}}

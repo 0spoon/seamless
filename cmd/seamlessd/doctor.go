@@ -17,9 +17,11 @@ import (
 
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
 	"github.com/0spoon/seamless/internal/hooks"
 	"github.com/0spoon/seamless/internal/llm"
 	"github.com/0spoon/seamless/internal/mcp"
+	agentskills "github.com/0spoon/seamless/internal/skills"
 	"github.com/0spoon/seamless/internal/store"
 )
 
@@ -110,6 +112,7 @@ func doctor(args []string) error {
 	checks = append(checks, hooksCheck(cfg))
 	checks = append(checks, claudeDesktopChecks(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))...)
 	checks = append(checks, codexChecks(cfg, db)...)
+	checks = append(checks, featureSkillsCheck(db, cfg))
 	checks = append(checks, gardenerCheck(cfg))
 
 	return reportChecks(checks)
@@ -606,6 +609,53 @@ func claudeDesktopMCPCheck(path, seamBin, configPath string) check {
 		path)}
 }
 
+// featureSkillsCheck reports a client-side skill package that documents an
+// OPTIONAL feature the owner has switched off. The skill lives in the client's
+// own config directory (~/.claude/skills, $CODEX_HOME/skills), which the daemon
+// cannot reach when a toggle flips in the console -- and must not delete behind
+// the owner's back -- so the skill and the feature drift apart until the next
+// install-hooks run brings them back in line.
+//
+// That drift is informational, not broken: nothing fails, no data is at risk,
+// and every gated tool is already refused by the MCP tool filter. What it costs
+// is an agent reading a skill that names tools its server no longer exposes, so
+// the line names the package, the feature, and both ways out.
+func featureSkillsCheck(db *sql.DB, cfg config.Config) check {
+	const name = "feature skills"
+	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
+	defer cancel()
+	effective, _, err := store.FeaturesConfig(ctx, db, cfg.Features)
+	if err != nil {
+		return check{statusWarn, name, "cannot read the stored feature toggles: " + err.Error()}
+	}
+	opts, err := agentskills.OptionsFromEnvironment()
+	if err != nil {
+		return check{statusWarn, name, "cannot resolve the client skill homes: " + err.Error()}
+	}
+
+	var stale []string
+	for _, feature := range features.Registry() {
+		if feature.Skill == "" || feature.Enabled(effective) {
+			continue
+		}
+		for _, client := range []agentskills.Client{agentskills.ClientClaude, agentskills.ClientCodex} {
+			path, installed, err := agentskills.Installed(client, opts, feature.Skill)
+			if err != nil {
+				return check{statusWarn, name, fmt.Sprintf("cannot inspect the %s skill root: %v", client, err)}
+			}
+			if installed {
+				stale = append(stale, fmt.Sprintf("%s (%s, feature %s is off)", path, client, feature.Key))
+			}
+		}
+	}
+	if len(stale) == 0 {
+		return check{statusOK, name, "no installed skill documents a disabled optional feature"}
+	}
+	return check{statusInfo, name, fmt.Sprintf(
+		"%s -- agents may see a skill referencing disabled tools; rerun `seamlessd install-hooks` to remove it, or re-enable the feature in the console (Settings -> Features)",
+		strings.Join(stale, "; "))}
+}
+
 // gardenerCheck reports the gardener ticker configuration.
 func gardenerCheck(cfg config.Config) check {
 	g := cfg.Gardener
@@ -657,6 +707,11 @@ func missingEmbedCredential(cfg config.Config) (bool, string) {
 // touches no external dependency -- and compares the registered count to
 // mcp.ToolCount, catching a tool that was written but never wired in (or vice
 // versa).
+//
+// This counts REGISTRATION, which the optional-feature tool filter does not
+// touch: gating shrinks the live tools/list only, so a disabled feature must
+// never move this number. Registered-vs-exposed is `seam doctor`'s line, which
+// talks to a running server; this one deliberately does not.
 func mcpToolsCheck() check {
 	srv := mcp.New(mcp.Config{})
 	n := srv.NumTools()

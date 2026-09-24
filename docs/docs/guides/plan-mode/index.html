@@ -28,7 +28,7 @@
 <script>(function(){var d=document.documentElement,q=new URLSearchParams(location.search),t=localStorage.getItem("theme");if(t)d.dataset.theme=t;
 var o=q.get("os")||localStorage.getItem("os");if(o==="unix"||!/^(macos|linux|windows|all)$/.test(o||""))o=/Windows/i.test(navigator.userAgent)?"windows":/Mac/i.test(navigator.userAgent)?"macos":"linux";d.dataset.os=o;
 var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").filter(function(x){return x==="claude"||x==="codex"||x==="claude-desktop";});if(cs.length&&cs.length<3)d.dataset.clients=cs.join(" ");})();</script>
-<link rel="stylesheet" href="../../../static/site.css?v=8d1e7f91">
+<link rel="stylesheet" href="../../../static/site.css?v=91f1742e">
 <link rel="stylesheet" href="../../static/docs.css?v=ab748326">
 </head>
 <body class="docs" data-docs-root="../../">
@@ -119,6 +119,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         <li><a href="../../concepts/tasks-and-plans/">Tasks &amp; plans</a></li>
         
         <li><a href="../../concepts/projects/">Projects &amp; scope</a></li>
+        
+        <li><a href="../../concepts/project-isolation/">Project isolation</a></li>
         
         <li><a href="../../concepts/gardener/">The gardener</a></li>
         
@@ -288,11 +290,12 @@ the agent that executes it can read the research that justified it.</p>
     <div class="flow-node success no-arrow"><span class="flow-step">3a · approved</span><strong>Tracking begins</strong><small>Status becomes approved and an implementation task is created.</small></div>
     <div class="flow-node warn no-arrow"><span class="flow-step">3b · abandoned</span><strong>Closed deliberately</strong><small>An unapproved plan can be marked abandoned instead of lingering.</small></div>
     <div class="flow-node success no-arrow"><span class="flow-step">3c · shipped</span><strong>Landed without ceremony</strong><small>When the repo's history shows the work was implemented anyway, the gardener proposes settling it as shipped.</small></div>
+    <div class="flow-node no-arrow"><span class="flow-step">3d · merged</span><strong>Folded into another plan</strong><small>When the capture has no steps and another composition holds them for the same work, the gardener proposes moving its notes there.</small></div>
   </div>
   <figcaption id="plan-lifecycle-caption">A captured plan remains one composition across edits; approval changes its state and opens the execution loop.</figcaption>
 </figure>
 <p>The statuses are stored as a <code>plan-status:&lt;value&gt;</code> tag on the note:
-<code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>, <code>shipped</code>.</p>
+<code>draft</code>, <code>presented</code>, <code>approved</code>, <code>abandoned</code>, <code>shipped</code>, <code>merged</code>.</p>
 <h2 id="why-unapproved-plans-show-up-in-the-briefing">Why unapproved plans show up in the briefing</h2>
 <p>A captured-but-unapproved plan appears in briefings as:</p>
 <div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">PLAN (awaiting approval): seamless-documentation-site -- (presented, 2m)

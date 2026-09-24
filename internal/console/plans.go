@@ -17,6 +17,8 @@ import (
 	"time"
 
 	"github.com/0spoon/seamless/internal/core"
+	"github.com/0spoon/seamless/internal/features"
+	"github.com/0spoon/seamless/internal/files"
 	"github.com/0spoon/seamless/internal/plans"
 	"github.com/0spoon/seamless/internal/store"
 )
@@ -63,6 +65,22 @@ type planRow struct {
 	// primary would drop an actively-worked plan out of the window (and sort it
 	// low) merely because its narrative note had not been re-saved.
 	Updated time.Time `json:"updated"`
+	// Shipped marks a plan with a plan.shipped settlement in the current local
+	// month -- the mom-settle hook the live-arrival wash keys on. A momentum
+	// surface: never set while the feature is off (zero trace, JSON included).
+	Shipped bool `json:"shipped,omitempty"`
+	// Token fields project store.PlanTokenRollup: the cumulative model tokens
+	// of the sessions attributed to this plan (whole-session transcript totals,
+	// a session counted once however many steps it moved). The qualifiers
+	// travel with the number so no surface renders it bare: TokenSessions is
+	// the attributed-session count, TokenUnreported the sessions whose tokens
+	// have not landed (live, or ended without a clean SessionEnd), TokenShared
+	// the sessions also attributed to another plan -- which is why plan tokens
+	// must never be summed across plans.
+	Tokens          int `json:"tokens,omitempty"`
+	TokenSessions   int `json:"tokenSessions,omitempty"`
+	TokenUnreported int `json:"tokenUnreported,omitempty"`
+	TokenShared     int `json:"tokenShared,omitempty"`
 }
 
 // plansData is the Plans library payload. Rows are one merged, newest-first
@@ -90,6 +108,16 @@ type plansData struct {
 	// QS is the ?w= suffix rail links carry so the active window survives a
 	// selection change ("" at the default).
 	QS string `json:"-"`
+	// ShippedMonth is the header's quiet momentum line: the real count of
+	// plan.shipped settlements in the current LOCAL calendar month. nil while
+	// the momentum feature is off -- zero trace, including in the JSON.
+	ShippedMonth *planShippedMonth `json:"shippedThisMonth,omitempty"`
+}
+
+// planShippedMonth carries the Plans header's monthly shipped count, a
+// verbatim count of plan.shipped events (each latched once-ever per plan).
+type planShippedMonth struct {
+	Count int `json:"count"`
 }
 
 // planKey identifies a plan by the (project, slug) pair rather than the slug
@@ -179,6 +207,10 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 	if err != nil {
 		return plansData{}, err
 	}
+	tokens, err := store.PlanTokenRollups(ctx, s.cfg.DB)
+	if err != nil {
+		return plansData{}, err
+	}
 	// Every note carrying a plan:<slug> tag, both sources: composedPrimaries picks
 	// the composed narratives out of this set, and the activity index spans all of
 	// it (captures and agent caches carry the slug tag too).
@@ -197,14 +229,14 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 	rows := make([]planRow, 0, len(captures))
 	owned := make(map[string]bool, len(captures))
 	for _, n := range captures {
-		row := s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))])
+		row := s.planRow(ctx, n, agentCount, tokens, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))])
 		owned[planKey(n.Project, row.Slug)] = true
 		rows = append(rows, row)
 	}
 	// Composed plans: any note carrying a plan:<slug> tag that is not itself a
 	// capture. The earliest-created non-agent note is the narrative primary.
 	for _, n := range composedPrimaries(composed, owned) {
-		rows = append(rows, s.planRow(ctx, n, agentCount, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
+		rows = append(rows, s.planRow(ctx, n, agentCount, tokens, activity[planKey(n.Project, plans.SlugFromTags(n.Tags))]))
 	}
 	// Total is every plan regardless of window -- the headline the sidebar badge
 	// must agree with. Window-filter last so it applies uniformly across sources,
@@ -238,7 +270,34 @@ func (s *Service) plansPage(ctx context.Context, win store.RetrievalWindow) (pla
 			data.Ready++
 		}
 	}
+	s.planShippedMomentum(ctx, &data)
 	return data, nil
+}
+
+// planShippedMomentum fills the momentum surfaces of the Plans page: the
+// header's monthly shipped count and the per-row settle marks, both judged
+// from the plan.shipped settlements in the current local month. Gated on the
+// feature (off = not computed, zero trace) and failure-soft the momentum way
+// -- an error drops the whole surface rather than rendering a wrong zero.
+func (s *Service) planShippedMomentum(ctx context.Context, data *plansData) {
+	if !features.Enabled(s.effectiveFeatures(ctx), features.Momentum) {
+		return
+	}
+	now := time.Now().Local()
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+	refs, err := store.PlansShippedSince(ctx, s.cfg.DB, monthStart)
+	if err != nil {
+		s.logger.Warn("console: plans shipped this month", "error", err)
+		return
+	}
+	data.ShippedMonth = &planShippedMonth{Count: len(refs)}
+	shipped := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		shipped[planKey(ref.Project, ref.Slug)] = true
+	}
+	for i := range data.Rows {
+		data.Rows[i].Shipped = shipped[planKey(data.Rows[i].Project, data.Rows[i].Slug)]
+	}
 }
 
 // composedPrimaries groups plan:<slug> notes by (project, slug) and returns the
@@ -282,6 +341,10 @@ func (s *Service) planDetailBySlug(ctx context.Context, slug string) (planDetail
 	if err != nil {
 		return planDetailData{}, false, err
 	}
+	tokens, err := store.PlanTokenRollups(ctx, s.cfg.DB)
+	if err != nil {
+		return planDetailData{}, false, err
+	}
 	// attached is every other note in the composition, so it carries the same
 	// note-activity the list derives from its index -- keep the two in step.
 	noteActivity := planNote.Updated
@@ -290,7 +353,7 @@ func (s *Service) planDetailBySlug(ctx context.Context, slug string) (planDetail
 			noteActivity = a.Updated
 		}
 	}
-	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount, noteActivity), Attached: attached}
+	d := planDetailData{Row: s.planRow(ctx, planNote, agentCount, tokens, noteActivity), Attached: attached}
 	// The approve escape hatch is a CC-capture lifecycle action; composed plans
 	// have no draft/presented/approved state to flip.
 	d.CanApprove = d.Row.Source == planSourceCapture && d.Row.Status != plans.StatusApproved
@@ -375,22 +438,31 @@ func (s *Service) planApprove(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "files layer unavailable", http.StatusServiceUnavailable)
 		return
 	}
-	note, err := s.cfg.Files.Store().ReadNote(planNote.FilePath)
+	// Read the note and retag it under the file's lock. The capture hook rewrites
+	// this same file on every plan-file save, and the retag renders the whole file
+	// from what the read returned -- unserialized, an approval racing a save
+	// dropped one of the two writes silently (the index upsert is by id, so
+	// nothing complained). The status check is the read that decides the write, so
+	// it belongs inside; an already-approved plan reports ErrNoChange, which is
+	// also what keeps the event below from firing on a second approval.
+	approved := false
+	note, err := s.cfg.Files.MutateNote(ctx, planNote.FilePath, func(_ context.Context, note core.Note) (core.Note, error) {
+		if plans.StatusFromTags(note.Tags) == plans.StatusApproved {
+			return note, files.ErrNoChange
+		}
+		note.Tags = plans.SetStatusTag(note.Tags, plans.StatusApproved)
+		note.Description = plans.NoteDescription(plans.Basename(note.Slug), plans.NoteIteration(note), plans.StatusApproved)
+		note.Updated = time.Now().UTC()
+		approved = true
+		return note, nil
+	})
 	if err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	basename := plans.Basename(note.Slug)
-	if plans.StatusFromTags(note.Tags) != plans.StatusApproved {
-		note.Tags = plans.SetStatusTag(note.Tags, plans.StatusApproved)
-		note.Description = plans.NoteDescription(basename, plans.NoteIteration(note), plans.StatusApproved)
-		note.Updated = time.Now().UTC()
-		if note, err = s.cfg.Files.WriteNote(ctx, note); err != nil {
-			s.serverError(w, r, err)
-			return
-		}
+	if approved {
 		s.recordPlanAction(ctx, core.EventPlanApproved, note.Project, note.ID, map[string]any{
-			"basename": basename, "plan_slug": slug, "by": "console",
+			"basename": plans.Basename(note.Slug), "plan_slug": slug, "by": "console",
 		})
 	}
 	task, created, err := plans.EnsureTask(ctx, s.cfg.DB, note, slug, "console")
@@ -474,7 +546,7 @@ func (s *Service) planAgentCounts(ctx context.Context) (map[string]int, error) {
 // noteActivity is the newest stamp across the composition's OTHER notes (zero if
 // unknown, which degrades to the primary's own); planRow folds in the step tasks
 // itself, since it already loads them. See planRow.Updated.
-func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int, noteActivity time.Time) planRow {
+func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[string]int, tokens map[store.PlanRef]store.PlanTokenRollup, noteActivity time.Time) planRow {
 	slug := plans.SlugFromTags(n.Tags)
 	isCapture := slices.Contains(n.Tags, plans.TagPlan)
 	row := planRow{
@@ -483,6 +555,12 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 		Status: plans.StatusFromTags(n.Tags), Favorite: n.Favorite,
 		Agents:  agentCount[slug],
 		Updated: n.Updated,
+	}
+	if tr, ok := tokens[store.PlanRef{Project: n.Project, Slug: slug}]; ok {
+		row.Tokens = tr.Tokens
+		row.TokenSessions = tr.Sessions
+		row.TokenUnreported = tr.Unreported
+		row.TokenShared = tr.Shared
 	}
 	if noteActivity.After(row.Updated) {
 		row.Updated = noteActivity
@@ -519,13 +597,14 @@ func (s *Service) planRow(ctx context.Context, n core.Note, agentCount map[strin
 
 // planPhase buckets a plan by the progress of its step tasks. A step in progress
 // wins outright (matching "has an in-progress task"). Otherwise the plan is done
-// when it is terminal -- an abandoned or shipped capture, or every step closed
-// with none open -- and ready when open steps remain or it has not started yet.
+// when it is terminal -- an abandoned, shipped or merged capture, or every step
+// closed with none open -- and ready when open steps remain or it has not
+// started yet.
 func planPhase(r planRow) string {
 	switch {
 	case r.TasksWIP > 0:
 		return planPhaseInProgress
-	case r.Status == plans.StatusAbandoned, r.Status == plans.StatusShipped:
+	case r.Status == plans.StatusAbandoned, r.Status == plans.StatusShipped, r.Status == plans.StatusMerged:
 		return planPhaseDone
 	case r.TasksTotal > 0 && r.TasksOpen == 0:
 		return planPhaseDone
@@ -559,7 +638,9 @@ func (s *Service) recordPlanAction(ctx context.Context, kind core.EventKind, pro
 }
 
 // planTone maps a plan status to a badge tone: approved and shipped green,
-// presented brand-ish accent, draft amber, abandoned neutral.
+// presented brand-ish accent, draft amber, abandoned and merged neutral -- a
+// merged capture reached no verdict of its own, it was filed under another
+// plan, so it reads as settled rather than as an outcome.
 func planTone(status string) string {
 	switch status {
 	case plans.StatusApproved, plans.StatusShipped:
@@ -568,7 +649,7 @@ func planTone(status string) string {
 		return "accent"
 	case plans.StatusDraft:
 		return "warn"
-	default: // abandoned
+	default: // abandoned, merged
 		return ""
 	}
 }

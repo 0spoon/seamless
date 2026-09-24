@@ -188,34 +188,7 @@ func GetSessionCoverageForProject(ctx context.Context, db *sql.DB, project strin
 	if project == "" {
 		return SessionCoverage{}, errors.New("store.GetSessionCoverageForProject: empty project is ambiguous -- project_slug='' rows are real global sessions; use GetSessionCoverage for the all-sessions number, or pass an explicit slug")
 	}
-	var c SessionCoverage
-	args := []any{
-		string(core.EventMemoryWritten), string(core.EventNoteWritten), string(core.EventTrialRecorded),
-		project,
-	}
-	where := " WHERE s.project_slug = ?"
-	if !since.IsZero() {
-		where += " AND s.created_at >= ?"
-		args = append(args, core.FormatTime(since))
-	}
-	err := db.QueryRowContext(ctx, `
-		SELECT
-			COUNT(*),
-			COALESCE(SUM(CASE WHEN has_findings OR has_mem OR has_note OR has_trial THEN 1 ELSE 0 END), 0),
-			COALESCE(SUM(has_findings), 0),
-			COALESCE(SUM(has_mem), 0),
-			COALESCE(SUM(has_note), 0),
-			COALESCE(SUM(has_trial), 0)
-		FROM (
-			SELECT
-				(s.findings <> '') AS has_findings,
-				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_mem,
-				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_note,
-				EXISTS (SELECT 1 FROM events e WHERE e.session_id = s.id AND e.kind = ?) AS has_trial
-			FROM sessions s`+where+`
-		)`,
-		args...,
-	).Scan(&c.Total, &c.Covered, &c.Findings, &c.Memories, &c.Notes, &c.Trials)
+	c, err := sessionCoverage(ctx, db, project, true, since, time.Time{})
 	if err != nil {
 		return c, fmt.Errorf("store.GetSessionCoverageForProject: %w", err)
 	}

@@ -22,6 +22,7 @@
 - [Recall](https://thereisnospoon.org/docs/concepts/recall/): One search entry point fusing keyword and vector search - and the three different ways your knowledge actually reaches an agent.
 - [Tasks & plans](https://thereisnospoon.org/docs/concepts/tasks-and-plans/): The dependency-aware ready queue, lease-based claiming that lets parallel agents divide work, and plans as compositions rather than primitives.
 - [Projects & scope](https://thereisnospoon.org/docs/concepts/projects/): How Seamless decides which project a call belongs to - the precedence chain, the fail-closed rule, and project families.
+- [Project isolation](https://thereisnospoon.org/docs/concepts/project-isolation/): Confidential and sealed projects - what each state promises, how tightening works, and the limits of the fence.
 - [The gardener](https://thereisnospoon.org/docs/concepts/gardener/): The background pass that finds duplicates, staleness, and drift - and proposes, because nothing rewrites your knowledge behind your back.
 - [Memory supersession](https://thereisnospoon.org/docs/concepts/memory-supersession/): How an agent memory store stays true instead of just growing - new knowledge explicitly replaces old, with provenance, unlike decay scores or append-only logs.
 - [Lease-based task claiming](https://thereisnospoon.org/docs/concepts/lease-based-task-claiming/): The coordination primitive that lets parallel AI agents share one task queue - an atomic claim with an expiry, so two agents never work the same task and a crashed agent never strands one.
@@ -44,8 +45,8 @@
 
 - [Reference](https://thereisnospoon.org/docs/reference/): The complete Seamless surface - every MCP tool, both CLIs, every configuration key, every hook, the console, and the on-disk file formats.
 - [MCP API overview](https://thereisnospoon.org/docs/reference/mcp/): The endpoint, the auth model, the scope rules, and an index of every tool Seamless serves.
-- [Sessions, memory & recall](https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/): The eight tools an agent uses most - open a session, write and read memory, and search the store.
-- [Notes, projects & capture](https://thereisnospoon.org/docs/reference/mcp/notes-projects-capture/): Work artifacts, project scope, and SSRF-safe URL capture - the eight tools around the edges of memory.
+- [Sessions, memory & recall](https://thereisnospoon.org/docs/reference/mcp/sessions-memory-recall/): The nine tools an agent uses most - open a session, write, edit and read memory, and search the store.
+- [Notes, projects & capture](https://thereisnospoon.org/docs/reference/mcp/notes-projects-capture/): Work artifacts, project scope, and SSRF-safe URL capture - the nine tools around the edges of memory.
 - [Tasks](https://thereisnospoon.org/docs/reference/mcp/tasks/): The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.
 - [Lab, gardener & usage](https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/): Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.
 - [seam CLI](https://thereisnospoon.org/docs/reference/cli-seam/): Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.
