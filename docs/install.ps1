@@ -553,19 +553,51 @@ function Register-ServiceFallback {
     Step 'service' 'Startup shortcut (no Scheduled Task rights); daemon started directly'
 }
 
+# One liveness request, with certificate validation disabled for https. Windows
+# PowerShell 5.1 has no -SkipCertificateCheck, where the global validation
+# callback is the only lever; it is restored in finally so this cannot leak into
+# the rest of the install (the download and checksum steps must keep verifying).
+function Invoke-HealthProbe {
+    param([string]$Url)
+    if ($Url -notlike 'https:*') {
+        return Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 $Url
+    }
+    if ($PSVersionTable.PSVersion.Major -ge 6) {
+        return Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 -SkipCertificateCheck $Url
+    }
+    $prev = [System.Net.ServicePointManager]::ServerCertificateValidationCallback
+    try {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+        return Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 $Url
+    } finally {
+        [System.Net.ServicePointManager]::ServerCertificateValidationCallback = $prev
+    }
+}
+
 # The Scheduled Task reports success as soon as it has started the process, but the
 # daemon binds its listener ~100ms later. Poll until it actually answers, so a green
 # install means it is serving rather than racing a listener that is not up.
+#
+# Plaintext first, then TLS: once tls.cert_file and tls.key_file are set the
+# listener refuses http entirely, so an http-only poll reports a healthy daemon
+# as absent and fails an install that actually worked. Verification is skipped
+# because this asks only "is something serving here" -- no body is read and no
+# credential is sent, and the certificate covers the host of server_url rather
+# than the bind address being dialed. Matches wait_healthy in docs/install and
+# serverReachable in cmd/seamlessd/console.go.
 function Wait-Healthy {
     param([string]$Addr)
+    $urls = @("http://$Addr/healthz", "https://$Addr/healthz")
     for ($i = 0; $i -lt 50; $i++) {
-        try {
-            $r = Invoke-WebRequest -UseBasicParsing -TimeoutSec 1 "http://$Addr/healthz"
-            if ([int]$r.StatusCode -eq 200) { Step 'healthz' "ok -- http://$Addr"; return }
-        } catch {}
+        foreach ($u in $urls) {
+            try {
+                $r = Invoke-HealthProbe $u
+                if ([int]$r.StatusCode -eq 200) { Step 'healthz' "ok -- $u"; return }
+            } catch {}
+        }
         Start-Sleep -Milliseconds 200
     }
-    Die "no /healthz from $Addr after 10s; check the log: $LogFile"
+    Die "no /healthz from $Addr over http or https after 50 attempts; check the log: $LogFile"
 }
 
 # The client half of Wait-Healthy. Nothing was started here, so there is no

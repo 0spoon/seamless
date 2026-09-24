@@ -519,12 +519,28 @@ install: build
 # documented upgrade sequence -- races a server that is not accepting yet and
 # reports a failure that fixes itself. Poll until it actually answers, so a green
 # install means it is serving.
+#
+# Plaintext first, then TLS with verification disabled. Once tls.cert_file and
+# tls.key_file are set the listener refuses http entirely, so an http-only poll
+# can never succeed and `make install` fails on a TLS install that in fact
+# worked -- every step before this one has already run. The Makefile deliberately
+# does not parse the tls keys to pick a scheme: it greps only `addr:` out of the
+# config, and re-deriving more of it here is the transcription that drifts.
+# Probing both is the same answer without the second copy.
+#
+# Verification is skipped because this asks "is something serving here" and
+# nothing else: no body is read and no credential is sent, and the certificate
+# covers the host of `server_url` rather than the bind address being dialed, so
+# a verifying probe would report a correctly configured daemon as down. This
+# mirrors serverReachable in cmd/seamlessd/console.go, which fails the same way
+# for the same reason.
 _wait-healthy:
 	@for i in $$(seq 1 50); do \
-	    curl -sf --max-time 1 -o /dev/null "http://$(ADDR)/healthz" 2>/dev/null && exit 0; \
+	    curl -sf  --max-time 1 -o /dev/null "http://$(ADDR)/healthz"  2>/dev/null && exit 0; \
+	    curl -sfk --max-time 1 -o /dev/null "https://$(ADDR)/healthz" 2>/dev/null && exit 0; \
 	    sleep 0.1; \
 	done; \
-	echo "ERROR: no /healthz from $(ADDR) after 5s; check $(SVC_LOG)"; exit 1
+	echo "ERROR: no /healthz from $(ADDR) over http or https after 50 attempts; check $(SVC_LOG)"; exit 1
 
 # Seed $(CONFIG) on first install only -- never clobber a config that may hold an
 # edited bearer key. ./seamless.yaml (gitignored, the pre-install layout's live

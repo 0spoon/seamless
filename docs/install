@@ -287,6 +287,34 @@ http_ok() {
 	fi
 }
 
+# Liveness probe for a daemon on host:port whose scheme this script does not
+# know. Plaintext first, then TLS with verification disabled; on success
+# HEALTH_URL names the URL that answered, so the caller can report which.
+#
+# Once tls.cert_file and tls.key_file are set the listener refuses http
+# entirely, so an http-only probe reports a healthy daemon as absent and fails
+# an install that actually worked. Reading the tls keys back out of the config
+# to choose a scheme would be a second copy of the config parsing that this
+# script already warns about; probing both reaches the same answer without it.
+#
+# Verification is skipped deliberately: nothing is read from the response and no
+# credential is sent, so this asks only "is something serving here", and the
+# certificate covers the host of server_url rather than the bind address being
+# dialed. Same call that serverReachable makes in cmd/seamlessd/console.go.
+health_ok() {
+	HEALTH_URL=http://$1/healthz
+	if have curl; then
+		curl -sf --max-time 1 -o /dev/null "$HEALTH_URL" && return 0
+		HEALTH_URL=https://$1/healthz
+		curl -sfk --max-time 1 -o /dev/null "$HEALTH_URL" && return 0
+	elif have wget; then
+		wget -q --timeout=1 -O /dev/null "$HEALTH_URL" && return 0
+		HEALTH_URL=https://$1/healthz
+		wget -q --timeout=1 --no-check-certificate -O /dev/null "$HEALTH_URL" && return 0
+	fi
+	return 1
+}
+
 sha256_of() {
 	if have sha256sum; then sha256sum "$1" | cut -d' ' -f1
 	elif have shasum; then shasum -a 256 "$1" | cut -d' ' -f1
@@ -635,8 +663,8 @@ EOF
 wait_healthy() {
 	i=0
 	while [ "$i" -lt 50 ]; do
-		if http_ok "http://$ADDR/healthz"; then
-			step healthz "ok -- http://$ADDR"
+		if health_ok "$ADDR"; then
+			step healthz "ok -- $HEALTH_URL"
 			return 0
 		fi
 		i=$((i + 1))
@@ -648,7 +676,7 @@ wait_healthy() {
 	darwin) where="check the log: $LOG" ;;
 	*) where="check the log: journalctl --user -u seamless -n 50" ;;
 	esac
-	die "no /healthz from $ADDR after 10s; $where"
+	die "no /healthz from $ADDR over http or https after 50 attempts; $where"
 }
 
 # The client half of wait_healthy. Nothing was started here, so there is no
