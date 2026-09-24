@@ -10,6 +10,32 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](https://thereisnospoon.org/docs/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.5.0 {#v0-5-0}
+
+Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.0)
+
+### Features
+
+- feat(network): Phase 4 docs, one shared TLS client, live client-role tool count
+- feat(install): client role -- pairing, install-hooks --server-url, client surfaces
+- feat(transport,archive): LAN-capable serve and the export/import CLI verbs
+- feat(identity): scope sessions and the repo map by host
+- feat(archive): guarded import -- fresh restore and ATTACH merge
+- feat(archive): export package and the store read-path additions
+- feat(recall): extend the corpus to the work record
+
+### Fixes
+
+- fix(store): retry the BUSY that busy_timeout cannot cover
+- fix(store): serialize migrations across processes
+- fix(deps): require goldmark v1.8.5 to match go.sum
+
+### Other
+
+- build(deps): bump grpc to v1.83.1 to clear GO-2026-6348
+- refactor(config): one ServerURL derivation, gitread repo readers, hostGuard allowlist
+- build(lint): migrate .golangci.yml to schema v2
+
 ## v0.4.11 {#v0-4-11}
 
 Released 2026-08-11 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.4.11)
