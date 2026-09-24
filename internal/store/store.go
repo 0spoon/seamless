@@ -33,6 +33,21 @@ func isUniqueViolation(err error) bool {
 	return code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY
 }
 
+// isBusy reports whether err is any flavor of SQLite's BUSY -- the lock could
+// not be taken -- via the driver's typed code, like isUniqueViolation.
+//
+// The comparison masks the low byte because SQLITE_BUSY has extended forms
+// (_SNAPSHOT, _RECOVERY, _TIMEOUT) that all mean the same thing to a caller
+// deciding whether to wait and try again. Only retryBusy needs this: everywhere
+// else, the busy_timeout on the DSN has already done the waiting.
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	return se.Code()&0xff == sqlite3.SQLITE_BUSY
+}
+
 // Open opens (creating if needed) the SQLite database at dbPath, applies PRAGMAs
 // via the DSN so every pooled connection inherits them, runs migrations, and
 // returns the handle. The caller is responsible for closing the *sql.DB.

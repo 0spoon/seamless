@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"math/rand/v2"
+	"time"
 )
 
 //go:embed migrations/001_initial.sql
@@ -145,15 +147,23 @@ func LatestSchemaVersion() int {
 // pending) lock-free: applyMigration re-reads it under the write lock, because
 // this one is a snapshot that a concurrent process can invalidate.
 func migrate(db *sql.DB, ms []Migration) error {
-	if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
-		version    INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL DEFAULT (datetime('now'))
-	)`); err != nil {
+	ctx := context.Background()
+
+	if err := retryBusy(ctx, func() error {
+		_, err := db.Exec(`CREATE TABLE IF NOT EXISTS schema_migrations (
+			version    INTEGER PRIMARY KEY,
+			applied_at TEXT NOT NULL DEFAULT (datetime('now'))
+		)`)
+		return err
+	}); err != nil {
 		return fmt.Errorf("store.migrate: create tracking table: %w", err)
 	}
 
 	var current int
-	if err := db.QueryRow("SELECT COALESCE(MAX(version), 0) FROM schema_migrations").Scan(&current); err != nil {
+	if err := retryBusy(ctx, func() error {
+		const q = "SELECT COALESCE(MAX(version), 0) FROM schema_migrations"
+		return db.QueryRow(q).Scan(&current)
+	}); err != nil {
 		return fmt.Errorf("store.migrate: read current version: %w", err)
 	}
 
@@ -161,11 +171,66 @@ func migrate(db *sql.DB, ms []Migration) error {
 		if m.Version <= current {
 			continue
 		}
-		if err := applyMigration(db, m); err != nil {
+		if err := retryBusy(ctx, func() error { return applyMigration(ctx, db, m) }); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// busyRetryWindow bounds how long an opener waits out a peer holding the
+// database in a state SQLite's own busy handler does not cover. Generous
+// because losing this race costs an install real behavior (install-hooks falls
+// back to the file/env features config and silently skips the skills of every
+// feature enabled only in the database), and free in the common case, which
+// never retries at all.
+const busyRetryWindow = 10 * time.Second
+
+// retryBusy runs fn until it stops reporting BUSY, the window closes, or ctx
+// ends, returning fn's own error in the first two cases.
+//
+// The DSN's busy_timeout already covers ordinary write contention, and this
+// does not duplicate it. It exists for the one case that timeout cannot see: on
+// a brand-new database several connections race to perform the
+// journal_mode=WAL transition, which takes an exclusive lock, and SQLite hands
+// everyone else SQLITE_BUSY *without consulting the busy handler*, so the
+// timeout never applies. A concurrent first-ever open then failed outright --
+// 2 openers in 40 at a concurrency of 12.
+//
+// That transition happens once in a database's lifetime, so this loop can only
+// spin on a first-ever open; every later one takes the fast path on the first
+// try. fn must be idempotent, which both callers are: CREATE TABLE IF NOT
+// EXISTS, and a migration that re-reads its own version under the write lock.
+func retryBusy(ctx context.Context, fn func() error) error {
+	const (
+		baseDelay = 2 * time.Millisecond
+		maxDelay  = 100 * time.Millisecond
+	)
+
+	deadline := time.Now().Add(busyRetryWindow)
+	for attempt := 1; ; attempt++ {
+		err := fn()
+		if err == nil || !isBusy(err) || !time.Now().Before(deadline) {
+			return err
+		}
+
+		d := baseDelay << (attempt - 1)
+		if d <= 0 || d > maxDelay {
+			d = maxDelay
+		}
+		// Equal jitter, as in internal/llm: keep half the backoff as a floor
+		// and randomize the rest, so racing openers do not wake in lockstep
+		// and collide again.
+		d = d/2 + rand.N(d/2+1)
+
+		t := time.NewTimer(d)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		case <-t.C:
+		}
+	}
 }
 
 // applyMigration applies one migration under SQLite's write lock, skipping it
@@ -184,8 +249,7 @@ func migrate(db *sql.DB, ms []Migration) error {
 // loser died on "duplicate column name". It is a dedicated connection rather
 // than db.Begin so the raw BEGIN/COMMIT cannot be interleaved with another
 // caller's statements on a pooled one.
-func applyMigration(db *sql.DB, m Migration) error {
-	ctx := context.Background()
+func applyMigration(ctx context.Context, db *sql.DB, m Migration) error {
 	conn, err := db.Conn(ctx)
 	if err != nil {
 		return fmt.Errorf("store.migrate: connection for v%d: %w", m.Version, err)

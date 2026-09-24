@@ -73,3 +73,46 @@ func TestMigrate_ConcurrentAppliersDoNotCollide(t *testing.T) {
 	require.NoError(t, dbs[0].QueryRow("SELECT COUNT(*) FROM schema_migrations").Scan(&rows))
 	require.Equal(t, LatestSchemaVersion()+1, rows)
 }
+
+// TestMigrate_ConcurrentFirstEverOpen pins retryBusy. A database is created
+// once, and the connections that race to create it also race to perform the
+// journal_mode=WAL transition, which takes an exclusive lock and hands the
+// losers SQLITE_BUSY *without consulting the busy handler* -- so the DSN's
+// busy_timeout, which covers every other kind of contention, does not apply
+// and the open simply failed.
+//
+// It is a probabilistic race, so this opens several fresh databases rather
+// than one: before retryBusy the loop below failed on roughly one round in
+// twenty, and a single round would have been a test that passes with the bug
+// in place.
+func TestMigrate_ConcurrentFirstEverOpen(t *testing.T) {
+	const (
+		rounds  = 12
+		openers = 12
+	)
+	for round := range rounds {
+		dbPath := filepath.Join(t.TempDir(), "seam.db")
+
+		errs := make([]error, openers)
+		var wg sync.WaitGroup
+		start := make(chan struct{})
+		for i := range openers {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				db, err := Open(dbPath)
+				errs[i] = err
+				if err == nil {
+					_ = db.Close()
+				}
+			}()
+		}
+		close(start)
+		wg.Wait()
+
+		for i, err := range errs {
+			require.NoErrorf(t, err, "round %d, opener %d", round, i)
+		}
+	}
+}
