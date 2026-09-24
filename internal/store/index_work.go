@@ -23,6 +23,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/0spoon/seamless/internal/core"
@@ -132,4 +133,81 @@ func reindexSessionFTSByExternal(ctx context.Context, db *sql.DB, externalClient
 		return fmt.Errorf("store: reindex session fts: %w", err)
 	}
 	return IndexSessionFTS(ctx, db, s)
+}
+
+// workFTSChunk bounds one by-id load; the by-id loaders build an IN (...) list,
+// so an unbounded merge could otherwise blow past SQLite's bound-parameter
+// limit. 500 matches the chunk size ActiveSessionsByIDs already uses.
+const workFTSChunk = 500
+
+// ReindexWorkFTS refreshes the unified fts rows for the named work-record ids.
+//
+// It exists for bulk row writes that bypass the normal writers -- the archive
+// merge import INSERTs task/trial/session rows straight into the tables, so
+// nothing on that path calls IndexTaskFTS/IndexTrialFTS/IndexSessionFTS and the
+// imported work record would be present but unsearchable. Keeping the reindex
+// here rather than in the importer keeps the column mapping next to its writers
+// (AGENTS.md: each half of the fts table is maintained next to its own writer).
+//
+// Ids with no row are skipped, not an error: the caller passes the ids it tried
+// to insert, and INSERT OR IGNORE means some of them are legitimately already
+// present under another row or were never inserted at all. Rows that do exist
+// are reindexed unconditionally -- an fts row is a rebuildable mirror, so
+// rewriting one that was already correct costs a delete + insert and nothing
+// else.
+//
+// The loads are batched (TasksByIDs/TrialsByIDs/SessionsByIDs) rather than one
+// query per id: a merge reindexes every imported id at once.
+func ReindexWorkFTS(ctx context.Context, db *sql.DB, taskIDs, trialIDs, sessionIDs []string) error {
+	for chunk := range slices.Chunk(taskIDs, workFTSChunk) {
+		byID, err := TasksByIDs(ctx, db, chunk)
+		if err != nil {
+			return fmt.Errorf("store.ReindexWorkFTS: %w", err)
+		}
+		for _, id := range chunk {
+			t, ok := byID[id]
+			if !ok {
+				continue
+			}
+			if err := IndexTaskFTS(ctx, db, t); err != nil {
+				return fmt.Errorf("store.ReindexWorkFTS: task %s: %w", id, err)
+			}
+		}
+	}
+
+	for chunk := range slices.Chunk(trialIDs, workFTSChunk) {
+		byID, err := TrialsByIDs(ctx, db, chunk)
+		if err != nil {
+			return fmt.Errorf("store.ReindexWorkFTS: %w", err)
+		}
+		for _, id := range chunk {
+			tr, ok := byID[id]
+			if !ok {
+				continue
+			}
+			if err := IndexTrialFTS(ctx, db, tr); err != nil {
+				return fmt.Errorf("store.ReindexWorkFTS: trial %s: %w", id, err)
+			}
+		}
+	}
+
+	for chunk := range slices.Chunk(sessionIDs, workFTSChunk) {
+		byID, err := SessionsByIDs(ctx, db, chunk)
+		if err != nil {
+			return fmt.Errorf("store.ReindexWorkFTS: %w", err)
+		}
+		for _, id := range chunk {
+			s, ok := byID[id]
+			if !ok {
+				continue
+			}
+			// IndexSessionFTS removes the row when the findings are not worth
+			// indexing, which is the right outcome for an imported session that
+			// carries none.
+			if err := IndexSessionFTS(ctx, db, s); err != nil {
+				return fmt.Errorf("store.ReindexWorkFTS: session %s: %w", id, err)
+			}
+		}
+	}
+	return nil
 }

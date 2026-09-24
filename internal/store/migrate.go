@@ -115,6 +115,22 @@ func migrationList() []Migration {
 	}
 }
 
+// LatestSchemaVersion returns the version of the newest COMPILED migration --
+// what a fresh Open would leave in schema_migrations -- as opposed to
+// SchemaVersion, which reports what a given database has actually applied.
+//
+// The pair is the newer-schema refusal: an archive whose schema_version exceeds
+// this binary's LatestSchemaVersion was written by a newer seamlessd and cannot
+// be understood by migrating forward, because the migrations that produced it
+// are not in this build.
+func LatestSchemaVersion() int {
+	ms := migrationList()
+	if len(ms) == 0 {
+		return 0
+	}
+	return ms[len(ms)-1].Version
+}
+
 // migrate applies every migration whose version exceeds the current max, each
 // inside its own transaction, recording the version in schema_migrations.
 // Ported from Seam v1 (migrations/migrate.go); the rarely-used PreHook was

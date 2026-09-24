@@ -1,6 +1,8 @@
 package store
 
 import (
+	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -139,4 +141,77 @@ func TestTableCount(t *testing.T) {
 	// is excluded by name filter; assert a sane lower bound instead of an exact
 	// count so adding indexes/tables later does not brittle-break this.
 	require.GreaterOrEqual(t, n, 14)
+}
+
+// TestLatestSchemaVersion_MatchesAFreshDB pins the compiled-vs-applied pair: a
+// database this binary just created must report exactly the version this binary
+// compiles, or the archive importer's newer-schema refusal would fire on
+// archives it wrote itself.
+func TestLatestSchemaVersion_MatchesAFreshDB(t *testing.T) {
+	db := openTestDB(t)
+
+	applied, err := SchemaVersion(db)
+	require.NoError(t, err)
+	require.Equal(t, LatestSchemaVersion(), applied,
+		"a freshly opened DB must sit at the newest compiled migration")
+
+	ms := migrationList()
+	require.Equal(t, ms[len(ms)-1].Version, LatestSchemaVersion(),
+		"LatestSchemaVersion must be the last migrationList entry, not a transcribed number")
+}
+
+func TestOpenExisting_AbsentFileIsAnErrorAndCreatesNothing(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "seam.db")
+
+	db, err := OpenExisting(dbPath)
+	require.Error(t, err)
+	require.Nil(t, db)
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	_, statErr := os.Stat(dbPath)
+	require.ErrorIs(t, statErr, os.ErrNotExist, "OpenExisting must never create the database")
+}
+
+// TestOpenExisting_DoesNotMigrate is the whole point of the function: a newer
+// binary reading a data dir served by an older running daemon must not migrate
+// the live schema out from under it. The PRAGMA assertions pin the other half
+// of the contract -- same DSN as Open, only the migrate step removed.
+func TestOpenExisting_DoesNotMigrate(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "seam.db")
+
+	// Build a deliberately one-version-behind database.
+	all := migrationList()
+	require.Greater(t, len(all), 1)
+	raw, err := sql.Open("sqlite", dsn(dbPath))
+	require.NoError(t, err)
+	raw.SetMaxOpenConns(1)
+	require.NoError(t, migrate(raw, all[:len(all)-1]))
+	require.NoError(t, raw.Close())
+
+	behind := all[len(all)-2].Version
+
+	db, err := OpenExisting(dbPath)
+	require.NoError(t, err)
+
+	v, err := SchemaVersion(db)
+	require.NoError(t, err)
+	require.Equal(t, behind, v, "OpenExisting must leave the schema exactly where it found it")
+	require.Less(t, v, LatestSchemaVersion(), "the fixture must actually be behind")
+
+	var fk int
+	require.NoError(t, db.QueryRow("PRAGMA foreign_keys").Scan(&fk))
+	require.Equal(t, 1, fk, "foreign_keys must be ON, same DSN as Open")
+	var jm string
+	require.NoError(t, db.QueryRow("PRAGMA journal_mode").Scan(&jm))
+	require.Equal(t, "wal", strings.ToLower(jm))
+	require.NoError(t, db.Close())
+
+	// Open on the same file is the contrast: it DOES migrate forward.
+	migrated, err := Open(dbPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = migrated.Close() })
+	v, err = SchemaVersion(migrated)
+	require.NoError(t, err)
+	require.Equal(t, LatestSchemaVersion(), v)
 }

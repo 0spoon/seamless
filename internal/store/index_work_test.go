@@ -259,3 +259,91 @@ func TestSessionFindingsIndexable(t *testing.T) {
 	require.False(t, SessionFindingsIndexable(core.FindingNoSummary))
 	require.True(t, SessionFindingsIndexable("we ruled out the driver"))
 }
+
+// TestReindexWorkFTS_RebuildsAndSkipsMissingIDs covers the merge-import shape:
+// rows land in the tables by bulk INSERT (nothing calls the per-writer index
+// hooks), so the mirror has to be rebuilt by id afterwards. Ids with no row are
+// skipped rather than failing the whole reindex, because INSERT OR IGNORE means
+// the caller's id list is a superset of what actually landed.
+func TestReindexWorkFTS_RebuildsAndSkipsMissingIDs(t *testing.T) {
+	db := openTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	require.NoError(t, CreateTask(ctx, db, core.Task{
+		ID: "01RTASK", ProjectSlug: "seam", Title: "reindex the work record",
+		Body: "the merge import inserts rows behind the writers", Status: core.TaskOpen,
+		PlanSlug: "archives", CreatedAt: now, UpdatedAt: now,
+	}))
+	require.NoError(t, CreateTrial(ctx, db, core.Trial{
+		ID: "01RTRIAL", Lab: "vacuum-into", Title: "bound parameter form",
+		Expected: "a snapshot file appears", Actual: "it did",
+		Outcome: core.OutcomePass, ProjectSlug: "seam", CreatedAt: now,
+	}))
+	require.NoError(t, CreateSession(ctx, db, core.Session{
+		ID: "01RSESS", Name: "cc/reindex", ProjectSlug: "seam",
+		Status: core.SessionCompleted, Findings: "export vacuums before it walks the trees",
+		CreatedAt: now, UpdatedAt: now,
+	}))
+	// A session with nothing worth indexing must stay out of the corpus even
+	// though its id is handed to the reindex.
+	require.NoError(t, CreateSession(ctx, db, core.Session{
+		ID: "01RQUIET", Name: "cc/quiet", ProjectSlug: "seam",
+		Status: core.SessionCompleted, CreatedAt: now, UpdatedAt: now,
+	}))
+
+	// Wipe the mirror: this is the state a bulk row INSERT leaves behind.
+	_, err := db.ExecContext(ctx, `DELETE FROM fts`)
+	require.NoError(t, err)
+	for _, id := range []string{"01RTASK", "01RTRIAL", "01RSESS"} {
+		_, _, _, _, _, _, found := ftsRow(t, db, id)
+		require.Falsef(t, found, "%s should be unindexed before the reindex", id)
+	}
+
+	require.NoError(t, ReindexWorkFTS(ctx, db,
+		[]string{"01RTASK", "01MISSINGTASK"},
+		[]string{"01RTRIAL", "01MISSINGTRIAL"},
+		[]string{"01RSESS", "01RQUIET", "01MISSINGSESS"},
+	))
+
+	kind, project, title, name, _, body, found := ftsRow(t, db, "01RTASK")
+	require.True(t, found)
+	require.Equal(t, core.ItemKindTask, kind)
+	require.Equal(t, "seam", project)
+	require.Equal(t, "reindex the work record", title)
+	require.Equal(t, "archives", name, "the plan slug still rides in name")
+	require.Contains(t, body, "behind the writers")
+
+	kind, _, title, name, description, body, found := ftsRow(t, db, "01RTRIAL")
+	require.True(t, found)
+	require.Equal(t, core.ItemKindTrial, kind)
+	require.Equal(t, "bound parameter form", title)
+	require.Equal(t, "vacuum-into", name)
+	require.Equal(t, "pass", description)
+	require.Contains(t, body, "a snapshot file appears")
+
+	kind, _, title, _, _, body, found = ftsRow(t, db, "01RSESS")
+	require.True(t, found)
+	require.Equal(t, core.ItemKindSession, kind)
+	require.Equal(t, "cc/reindex", title)
+	require.Equal(t, "export vacuums before it walks the trees", body)
+
+	_, _, _, _, _, _, found = ftsRow(t, db, "01RQUIET")
+	require.False(t, found, "a session with no findings must not be indexed")
+
+	for _, id := range []string{"01MISSINGTASK", "01MISSINGTRIAL", "01MISSINGSESS"} {
+		_, _, _, _, _, _, found := ftsRow(t, db, id)
+		require.Falsef(t, found, "%s has no row and must not be indexed", id)
+	}
+
+	// Empty id lists are a no-op, not an error: a merge that imported only
+	// memories still calls this.
+	require.NoError(t, ReindexWorkFTS(ctx, db, nil, nil, nil))
+
+	// Re-running is idempotent -- the mirror is rebuildable, so a second pass
+	// must leave exactly one row per item.
+	require.NoError(t, ReindexWorkFTS(ctx, db, []string{"01RTASK"}, []string{"01RTRIAL"}, []string{"01RSESS"}))
+	var n int
+	require.NoError(t, db.QueryRowContext(ctx, `SELECT COUNT(*) FROM fts WHERE item_id = ?`, "01RTASK").Scan(&n))
+	require.Equal(t, 1, n)
+}

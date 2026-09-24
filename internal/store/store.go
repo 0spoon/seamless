@@ -46,17 +46,7 @@ func Open(dbPath string) (*sql.DB, error) {
 		}
 	}
 
-	// Set PRAGMAs on the DSN (not via db.Exec) so foreign_keys and busy_timeout
-	// apply to every connection the pool opens, not just the first. mmap_size
-	// serves reads from file-backed mapped pages instead of one pread per 4KB
-	// page -- the embeddings full scan behind CosineSearch outgrows the default
-	// 2MB page cache immediately, and mapped pages are OS-evictable, so this is
-	// an address-space reservation, not a 256MB heap commitment.
-	dsn := "file:" + url.PathEscape(dbPath) +
-		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)" +
-		"&_pragma=mmap_size(268435456)"
-
-	db, err := sql.Open("sqlite", dsn)
+	db, err := sql.Open("sqlite", dsn(dbPath))
 	if err != nil {
 		return nil, fmt.Errorf("store.Open: %w", err)
 	}
@@ -68,6 +58,53 @@ func Open(dbPath string) (*sql.DB, error) {
 	if err := migrate(db, migrationList()); err != nil {
 		_ = db.Close()
 		return nil, fmt.Errorf("store.Open: %w", err)
+	}
+	return db, nil
+}
+
+// dsn builds the connection string shared by Open and OpenExisting.
+//
+// PRAGMAs ride on the DSN (not a db.Exec) so foreign_keys and busy_timeout
+// apply to every connection the pool opens, not just the first. mmap_size
+// serves reads from file-backed mapped pages instead of one pread per 4KB
+// page -- the embeddings full scan behind CosineSearch outgrows the default
+// 2MB page cache immediately, and mapped pages are OS-evictable, so this is
+// an address-space reservation, not a 256MB heap commitment.
+//
+// It is one function rather than two copies on purpose: OpenExisting differs
+// from Open in exactly one thing (it never migrates), and a drifting PRAGMA
+// set would make that a second, silent difference.
+func dsn(dbPath string) string {
+	return "file:" + url.PathEscape(dbPath) +
+		"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)" +
+		"&_pragma=mmap_size(268435456)"
+}
+
+// OpenExisting opens an existing SQLite database with the same DSN as Open but
+// WITHOUT running migrations, and reports os.ErrNotExist when the file is
+// absent instead of creating it.
+//
+// This is the read-path handle for one-shot subcommands that must not change
+// the database they are reading. `seamlessd export` is the motivating caller: a
+// newer CLI binary run against a data dir served by an older running daemon
+// would otherwise migrate the live schema out from under it as a side effect of
+// taking a backup. Anything that legitimately owns the schema calls Open.
+func OpenExisting(dbPath string) (*sql.DB, error) {
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil, fmt.Errorf("store.OpenExisting: %w", err)
+	}
+
+	db, err := sql.Open("sqlite", dsn(dbPath))
+	if err != nil {
+		return nil, fmt.Errorf("store.OpenExisting: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+
+	// sql.Open is lazy, so an unreadable or non-SQLite file would otherwise
+	// surface as a confusing failure inside the caller's first query.
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("store.OpenExisting: %w", err)
 	}
 	return db, nil
 }
