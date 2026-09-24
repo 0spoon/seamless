@@ -198,7 +198,7 @@ func TestRegisterProjectForCWDMixedOwnersStillMint(t *testing.T) {
 
 // mkLinkedWorktree wires wtRoot up as a linked worktree of mainRoot using the
 // real on-disk layout git produces (.git file -> admin dir -> commondir), so
-// the tests exercise gitMainWorktreeRoot without needing a git executable.
+// the tests exercise gitread.MainWorktreeRoot without needing a git executable.
 func mkLinkedWorktree(t *testing.T, mainRoot, wtRoot, wtName string, relativeGitdir bool) {
 	t.Helper()
 	admin := filepath.Join(mainRoot, ".git", "worktrees", wtName)

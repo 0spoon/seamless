@@ -30,17 +30,31 @@ var loopbackHosts = map[string]bool{
 // browser resolve a hostname to 127.0.0.1, but it cannot change the Host header
 // that browser then sends, so the forged request never reaches a handler.
 //
-// A wildcard bind (0.0.0.0, ::, or a bare port) cannot have an allowlist -- the
-// operator deliberately made the daemon reachable at addresses only they know --
-// so the guard steps aside there and warnNonLoopbackBind carries the message
-// instead. Any concrete bind host is added to the allowlist, which is what lets
+// The allowlist is the loopback names, plus a concrete bind host, plus extra --
+// the names the operator has told us the daemon answers to (an advertised
+// server URL, additional hostnames). A wildcard bind (0.0.0.0, ::, or a bare
+// port) with nothing extra cannot have an allowlist -- the operator
+// deliberately made the daemon reachable at addresses only they know -- so the
+// guard steps aside there and warnNonLoopbackBind carries the message instead.
+// Naming even one extra host is what turns the guard back on for a wildcard
+// bind: the operator has now said what the daemon is called.
+//
+// The concrete bind host is in the list unconditionally, which is what lets
 // `--addr 192.168.1.5:8081` work while still rejecting a rebound name.
-func hostGuard(bind string, next http.Handler) http.Handler {
+func hostGuard(bind string, extra []string, next http.Handler) http.Handler {
 	host := bindHost(bind)
-	if isWildcardHost(host) {
+	allowed := map[string]bool{}
+	for _, h := range extra {
+		if h = strings.ToLower(strings.Trim(strings.TrimSpace(h), "[]")); h != "" {
+			allowed[h] = true
+		}
+	}
+	if isWildcardHost(host) && len(allowed) == 0 {
 		return next
 	}
-	allowed := map[string]bool{strings.ToLower(host): true}
+	if !isWildcardHost(host) {
+		allowed[strings.ToLower(host)] = true
+	}
 	for h := range loopbackHosts {
 		allowed[h] = true
 	}

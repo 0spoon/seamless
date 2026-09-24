@@ -336,7 +336,7 @@ func codexChecks(cfg config.Config, db *sql.DB) []check {
 // drift tautologically current.
 func doctorInstallOptions(client hooks.Client, settingsPath string, cfg config.Config) hooks.InstallOptions {
 	return hooks.InstallOptions{
-		Client: client, SettingsPath: settingsPath, BaseURL: hookBaseURL(cfg.Addr),
+		Client: client, SettingsPath: settingsPath, BaseURL: cfg.ServerURL(),
 		APIKey: cfg.MCP.APIKey, SeamBin: resolveSeamBin(""), ConfigPath: absConfigPath(cfg.SourcePath()),
 	}
 }

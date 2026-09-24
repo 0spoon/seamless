@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,7 +87,7 @@ func runInstallHooks(args []string) error {
 	}
 	baseURL := *urlFlag
 	if baseURL == "" {
-		baseURL = hookBaseURL(cfg.Addr)
+		baseURL = cfg.ServerURL()
 	}
 	seamBin := resolveSeamBin(*seamFlag)
 	if _, lookErr := exec.LookPath(seamBin); lookErr != nil {
@@ -1000,17 +999,4 @@ func seamBinName() string {
 		return "seam.exe"
 	}
 	return "seam"
-}
-
-// hookBaseURL turns a bind address into a reachable base URL, mapping a
-// bind-all host to loopback.
-func hookBaseURL(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return "http://127.0.0.1:8081"
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, port)
 }

@@ -227,7 +227,10 @@ func TestTrialOpts_Resolve(t *testing.T) {
 	})
 }
 
-func TestConfigBaseURL(t *testing.T) {
+// The live instance a trial is recorded against is the one the config points
+// at. The derivation is config.ServerURL's (and tested there); what this pins
+// is that resolve() reaches for it rather than reinventing a base URL.
+func TestResolveFallsBackToTheConfiguredServerURL(t *testing.T) {
 	tests := []struct{ addr, want string }{
 		{"127.0.0.1:8081", "http://127.0.0.1:8081"},
 		{"0.0.0.0:8099", "http://127.0.0.1:8099"},
@@ -236,7 +239,7 @@ func TestConfigBaseURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.addr, func(t *testing.T) {
-			require.Equal(t, tt.want, configBaseURL(config.Config{Addr: tt.addr}))
+			require.Equal(t, tt.want, config.Config{Addr: tt.addr}.ServerURL())
 		})
 	}
 }

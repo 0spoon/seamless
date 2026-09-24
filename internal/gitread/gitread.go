@@ -1,9 +1,11 @@
 // Package gitread reads git repository state straight out of .git, with no
 // exec dependency and no git library: the daemon must work on machines where a
 // git binary may not exist, and hooks fire on every prompt. The readers back
-// the provenance stamp on captured plans and subagent notes (internal/hooks)
-// and the gardener's stale-plan ship evidence (internal/gardener). Every
-// failure yields a zero value -- all reads are best-effort by design.
+// the provenance stamp on captured plans and subagent notes (internal/hooks),
+// the gardener's stale-plan ship evidence (internal/gardener), and the repo
+// root / main-worktree / origin identity a cwd registers a project by
+// (internal/store). Every failure yields a zero value -- all reads are
+// best-effort by design.
 package gitread
 
 import (
@@ -35,14 +37,7 @@ func Head(cwd string) string {
 		return ""
 	}
 	// Loose ref in the git dir, then its commondir (worktrees), then packed-refs.
-	dirs := []string{gitDir}
-	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
-		common := strings.TrimSpace(string(b))
-		if !filepath.IsAbs(common) {
-			common = filepath.Join(gitDir, common)
-		}
-		dirs = append(dirs, filepath.Clean(common))
-	}
+	dirs := sharedDirs(gitDir)
 	for _, d := range dirs {
 		if b, err := os.ReadFile(filepath.Join(d, filepath.FromSlash(refName))); err == nil {
 			return strings.TrimSpace(string(b))
@@ -123,6 +118,23 @@ func resolveGitDir(cwd string) string {
 		gitDir = filepath.Join(cwd, gitDir)
 	}
 	return gitDir
+}
+
+// sharedDirs returns the directories that may hold state gitDir shares with the
+// repository it belongs to: gitDir itself, then the commondir it points at when
+// it is a linked worktree's admin dir. Refs, packed-refs and config all live in
+// the common directory for a worktree, while HEAD and the reflog are the
+// worktree's own -- so a reader looks in both, nearest first.
+func sharedDirs(gitDir string) []string {
+	dirs := []string{gitDir}
+	if b, err := os.ReadFile(filepath.Join(gitDir, "commondir")); err == nil {
+		common := strings.TrimSpace(string(b))
+		if !filepath.IsAbs(common) {
+			common = filepath.Join(gitDir, common)
+		}
+		dirs = append(dirs, filepath.Clean(common))
+	}
+	return dirs
 }
 
 // packedRef scans a packed-refs file for refName and returns its hash, or "".

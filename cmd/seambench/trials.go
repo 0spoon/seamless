@@ -31,7 +31,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -107,7 +106,7 @@ func (o *trialOpts) resolve() (trialTarget, error) {
 		return t, fmt.Errorf("load the Seamless config to find the live instance: %w", err)
 	}
 	if t.url == "" {
-		t.url = configBaseURL(cfg)
+		t.url = cfg.ServerURL()
 	}
 	if t.key == "" {
 		t.key = cfg.MCP.APIKey
@@ -116,19 +115,6 @@ func (o *trialOpts) resolve() (trialTarget, error) {
 		return t, fmt.Errorf("no API key for %s: set mcp.api_key in the config or pass --trials-key-file", t.url)
 	}
 	return t, nil
-}
-
-// configBaseURL is the configured server's base URL, mapping a bind-all host to
-// loopback (the same mapping cmd/seam makes).
-func configBaseURL(cfg config.Config) string {
-	host, port, err := net.SplitHostPort(cfg.Addr)
-	if err != nil {
-		return "http://127.0.0.1:8081"
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, port)
 }
 
 // recordTrialsForReport records every not-yet-recorded run as a trial, and

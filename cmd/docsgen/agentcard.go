@@ -17,5 +17,5 @@ const agentCardPath = ".well-known/agent-card.json"
 // default bind address; a live card differs only where an install differs (its
 // build version, a non-default addr:).
 func agentCard(reg *registryMeta) ([]byte, error) {
-	return a2a.CardJSON(reg.Version, "http://"+config.Defaults().Addr+"/api/a2a")
+	return a2a.CardJSON(reg.Version, config.Defaults().ServerURL()+"/api/a2a")
 }

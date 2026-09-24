@@ -5,19 +5,25 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
-func TestBrowserHost(t *testing.T) {
+// The health probe and the login page's form action are two views of one
+// address: the probe wants a bare authority, the form wants the URL.
+func TestURLHostPort(t *testing.T) {
 	cases := map[string]string{
-		"127.0.0.1:8081": "127.0.0.1:8081",
-		"0.0.0.0:8081":   "127.0.0.1:8081",
-		":8081":          "127.0.0.1:8081",
-		"[::]:8081":      "127.0.0.1:8081",
-		"localhost:9000": "localhost:9000",
-		"not-hostport":   "not-hostport", // handed back verbatim
+		"http://127.0.0.1:8081": "127.0.0.1:8081",
+		"http://localhost:9000": "localhost:9000",
+		"http://[::1]:8081":     "[::1]:8081",
+		"https://seam.lan:8443": "seam.lan:8443",
 	}
 	for in, want := range cases {
-		require.Equal(t, want, browserHost(in), "browserHost(%q)", in)
+		require.Equal(t, want, urlHostPort(in), "urlHostPort(%q)", in)
+	}
+	for _, addr := range []string{"127.0.0.1:8081", "0.0.0.0:8081", ":8081", "[::]:8081", "localhost:9000"} {
+		base := config.Config{Addr: addr}.ServerURL()
+		require.Equal(t, strings.TrimPrefix(base, "http://"), urlHostPort(base), "addr %q", addr)
 	}
 }
 
@@ -36,7 +42,7 @@ func TestA2AEndpointUsesEffectiveBind(t *testing.T) {
 }
 
 func TestRenderConsoleLoginPage(t *testing.T) {
-	page, err := renderConsoleLoginPage("127.0.0.1:8081", "deadbeefKEY")
+	page, err := renderConsoleLoginPage("http://127.0.0.1:8081", "deadbeefKEY")
 	require.NoError(t, err)
 	// POSTs the key to the login endpoint and auto-submits.
 	require.Contains(t, page, `action="http://127.0.0.1:8081/console/login"`)

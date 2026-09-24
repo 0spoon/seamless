@@ -222,7 +222,7 @@ func TestDoctorInstallOptionsUsesCurrentDesiredPaths(t *testing.T) {
 	require.NoError(t, os.WriteFile(oldConfig, []byte("mcp: {}\n"), 0o600))
 	path := filepath.Join(t.TempDir(), "hooks.json")
 	_, err := hooks.Install(hooks.InstallOptions{
-		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: hookBaseURL(cfg.Addr),
+		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: cfg.ServerURL(),
 		APIKey: cfg.MCP.APIKey, SeamBin: oldSeam, ConfigPath: oldConfig,
 	})
 	require.NoError(t, err)
@@ -309,7 +309,7 @@ func installDoctorCodexHooks(t *testing.T, cfg config.Config, seamBin string) st
 	path, err := expandHome(defaultCodexHooksPath())
 	require.NoError(t, err)
 	_, err = hooks.Install(hooks.InstallOptions{
-		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: hookBaseURL(cfg.Addr),
+		Client: hooks.ClientCodex, SettingsPath: path, BaseURL: cfg.ServerURL(),
 		APIKey: cfg.MCP.APIKey, SeamBin: seamBin, ConfigPath: cfg.SourcePath(),
 	})
 	require.NoError(t, err)
@@ -321,7 +321,7 @@ func installDoctorClaudeHooks(t *testing.T, cfg config.Config, seamBin string) s
 	path, err := expandHome("~/.claude/settings.json")
 	require.NoError(t, err)
 	_, err = hooks.Install(hooks.InstallOptions{
-		Client: hooks.ClientClaudeCode, SettingsPath: path, BaseURL: hookBaseURL(cfg.Addr),
+		Client: hooks.ClientClaudeCode, SettingsPath: path, BaseURL: cfg.ServerURL(),
 		APIKey: cfg.MCP.APIKey, SeamBin: seamBin, ConfigPath: cfg.SourcePath(),
 	})
 	require.NoError(t, err)

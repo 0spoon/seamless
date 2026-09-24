@@ -4,8 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
-	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -32,7 +32,7 @@ var consoleLoginTmpl = template.Must(template.New("console-login").Parse(`<!doct
 </head>
 <body>
 <p>Signing in to the Seamless console...</p>
-<form id="login" method="post" action="http://{{.Addr}}/console/login">
+<form id="login" method="post" action="{{.Base}}/console/login">
 <input type="hidden" name="key" value="{{.Key}}">
 <input type="hidden" name="next" value="/console/">
 <noscript><button type="submit">Continue to console</button></noscript>
@@ -62,12 +62,12 @@ func runConsoleOpen(args []string) error {
 	if strings.TrimSpace(cfg.MCP.APIKey) == "" {
 		return fmt.Errorf("seamlessd.console-open: mcp.api_key is empty; run `seamlessd serve` once to generate it, or set it in seamless.yaml")
 	}
-	host := browserHost(cfg.Addr)
-	if !serverReachable(host) {
-		return fmt.Errorf("seamlessd.console-open: console not reachable at http://%s -- start it with `make run` or `make start`", host)
+	base := cfg.ServerURL()
+	if !serverReachable(urlHostPort(base)) {
+		return fmt.Errorf("seamlessd.console-open: console not reachable at %s -- start it with `make run` or `make start`", base)
 	}
 
-	page, err := renderConsoleLoginPage(host, cfg.MCP.APIKey)
+	page, err := renderConsoleLoginPage(base, cfg.MCP.APIKey)
 	if err != nil {
 		return fmt.Errorf("seamlessd.console-open: %w", err)
 	}
@@ -101,7 +101,7 @@ func runConsoleOpen(args []string) error {
 	if *browser != "" {
 		where = *browser
 	}
-	fmt.Printf("opened pre-authenticated console at http://%s/console/ in %s\n", host, where)
+	fmt.Printf("opened pre-authenticated console at %s/console/ in %s\n", base, where)
 	return nil
 }
 
@@ -150,34 +150,33 @@ func sweepStaleLoginPages() {
 	}
 }
 
-// renderConsoleLoginPage returns the self-submitting login HTML for addr+key.
-func renderConsoleLoginPage(addr, key string) (string, error) {
+// renderConsoleLoginPage returns the self-submitting login HTML posting key to
+// the console at base (a config.ServerURL).
+func renderConsoleLoginPage(base, key string) (string, error) {
 	var b strings.Builder
-	if err := consoleLoginTmpl.Execute(&b, struct{ Addr, Key string }{Addr: addr, Key: key}); err != nil {
+	if err := consoleLoginTmpl.Execute(&b, struct{ Base, Key string }{Base: base, Key: key}); err != nil {
 		return "", err
 	}
 	return b.String(), nil
 }
 
-// browserHost turns a bind address into one a browser can reach: a wildcard or
-// unspecified host (":8081", "0.0.0.0:8081", "[::]:8081") maps to loopback.
-func browserHost(addr string) string {
-	host, port, err := net.SplitHostPort(addr)
-	if err != nil {
-		return addr // not host:port; hand it back verbatim
-	}
-	switch host {
-	case "", "0.0.0.0", "::", "[::]":
-		host = "127.0.0.1"
-	}
-	return net.JoinHostPort(host, port)
+// a2aEndpoint returns the usable discovery URL for the daemon's effective bind
+// address. It takes a bind address rather than the loaded config because the
+// caller passes the post-flag-override value: `serve --addr` wins over `addr:`,
+// and the card must advertise what the daemon actually listened on.
+func a2aEndpoint(bind string) string {
+	return config.Config{Addr: bind}.ServerURL() + "/api/a2a"
 }
 
-// a2aEndpoint returns the usable discovery URL for the daemon's effective bind
-// address. The caller passes the post-flag-override value, and wildcard binds
-// advertise loopback rather than an unroutable 0.0.0.0/[::] destination.
-func a2aEndpoint(bind string) string {
-	return "http://" + browserHost(bind) + "/api/a2a"
+// urlHostPort is the authority (host:port) of a base URL, for the callers that
+// still take a bare host rather than a URL. "" when base does not parse, which
+// config.ServerURL cannot produce -- it builds the URL from its parts.
+func urlHostPort(base string) string {
+	u, err := url.Parse(base)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 // serverReachable reports whether the console answers /healthz within 2s. Any

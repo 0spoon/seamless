@@ -105,7 +105,7 @@ const localEndpointNote = "The MCP endpoint is per-install: each Seamless daemon
 // from the default bind address so a port change cannot leave the published
 // card lying. The /api/mcp mount lives in cmd/seamlessd/main.go.
 func mcpEndpoint() string {
-	return "http://" + config.Defaults().Addr + "/api/mcp"
+	return config.Defaults().ServerURL() + "/api/mcp"
 }
 
 // serverCard renders the card from the registry listing. serverInfo mirrors

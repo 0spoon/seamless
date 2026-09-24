@@ -77,7 +77,7 @@ func runUninstall(args []string) error {
 	}
 	baseURL := strings.TrimSpace(*urlFlag)
 	if baseURL == "" {
-		baseURL = hookBaseURL(cfg.Addr)
+		baseURL = cfg.ServerURL()
 	}
 	installDir := resolveInstallDir(*installDirFlag)
 	configDir, cerr := expandHome("~/.config/seamless")

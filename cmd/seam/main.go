@@ -10,7 +10,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"net"
 	"os"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -81,17 +80,11 @@ func dispatch(ctx context.Context, e *env, argv []string) int {
 	return 0
 }
 
-// mcpBase returns the base URL (scheme://host:port) of the configured server,
-// mapping a bind-all host to loopback.
+// mcpBase returns the base URL (scheme://host:port) of the configured server.
+// The derivation itself lives in config.ServerURL, which every client of the
+// daemon shares; this is the name the rest of the CLI already calls.
 func mcpBase(cfg config.Config) string {
-	host, port, err := net.SplitHostPort(cfg.Addr)
-	if err != nil {
-		return "http://127.0.0.1:8081"
-	}
-	if host == "" || host == "0.0.0.0" || host == "::" {
-		host = "127.0.0.1"
-	}
-	return "http://" + net.JoinHostPort(host, port)
+	return cfg.ServerURL()
 }
 
 // dial loads config and returns an initialized MCP client plus the base URL.

@@ -15,7 +15,7 @@ func okHandler() http.Handler {
 }
 
 func TestHostGuard_LoopbackBind(t *testing.T) {
-	h := hostGuard("127.0.0.1:8081", okHandler())
+	h := hostGuard("127.0.0.1:8081", nil, okHandler())
 
 	for _, tc := range []struct {
 		name string
@@ -48,7 +48,7 @@ func TestHostGuard_LoopbackBind(t *testing.T) {
 // A concrete non-loopback bind is a deliberate choice, so that address joins the
 // allowlist -- but a rebound name still does not.
 func TestHostGuard_ConcreteNonLoopbackBindIsAllowlisted(t *testing.T) {
-	h := hostGuard("192.168.1.5:8081", okHandler())
+	h := hostGuard("192.168.1.5:8081", nil, okHandler())
 
 	for host, want := range map[string]int{
 		"192.168.1.5:8081":      http.StatusTeapot,
@@ -67,13 +67,66 @@ func TestHostGuard_ConcreteNonLoopbackBindIsAllowlisted(t *testing.T) {
 // aside rather than guessing and breaking the operator's setup.
 func TestHostGuard_WildcardBindPassesEverythingThrough(t *testing.T) {
 	for _, bind := range []string{"0.0.0.0:8081", ":8081", "[::]:8081"} {
-		h := hostGuard(bind, okHandler())
+		h := hostGuard(bind, nil, okHandler())
 		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 		req.Host = "anything.example.com"
 		rr := httptest.NewRecorder()
 		h.ServeHTTP(rr, req)
 		require.Equal(t, http.StatusTeapot, rr.Code, "bind %s", bind)
 	}
+}
+
+// Extra allowlist entries are additive: they join the loopback names and the
+// bind host without displacing either, and they are matched case-insensitively
+// like every other Host comparison.
+func TestHostGuard_ExtraHostsJoinTheAllowlist(t *testing.T) {
+	h := hostGuard("192.168.1.5:8081", []string{"Seam.lan", " ", ""}, okHandler())
+
+	for host, want := range map[string]int{
+		"seam.lan:8081":         http.StatusTeapot,
+		"SEAM.LAN":              http.StatusTeapot,
+		"192.168.1.5:8081":      http.StatusTeapot, // the bind host is still allowed
+		"127.0.0.1:8081":        http.StatusTeapot, // and so is loopback
+		"evil.example.com:8081": http.StatusMisdirectedRequest,
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+		req.Host = host
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		require.Equal(t, want, rr.Code, "Host: %s", host)
+	}
+}
+
+// Naming a host is what makes a wildcard bind guardable: with an allowlist the
+// guard is on even for 0.0.0.0, and the wildcard itself never joins the list
+// (an empty Host header must not match a bare ":8081" bind).
+func TestHostGuard_WildcardBindWithExtraHostsIsGuarded(t *testing.T) {
+	for _, bind := range []string{"0.0.0.0:8081", ":8081", "[::]:8081"} {
+		h := hostGuard(bind, []string{"seam.lan"}, okHandler())
+		for host, want := range map[string]int{
+			"seam.lan:8081":    http.StatusTeapot,
+			"127.0.0.1:8081":   http.StatusTeapot,
+			"anything.example": http.StatusMisdirectedRequest,
+			"":                 http.StatusMisdirectedRequest,
+		} {
+			req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+			req.Host = host
+			rr := httptest.NewRecorder()
+			h.ServeHTTP(rr, req)
+			require.Equal(t, want, rr.Code, "bind %s, Host: %s", bind, host)
+		}
+	}
+}
+
+// An allowlist of nothing but blanks is not an allowlist: a wildcard bind stays
+// unguarded rather than admitting only loopback and locking the operator out.
+func TestHostGuard_BlankExtraHostsStayUnguardedOnAWildcardBind(t *testing.T) {
+	h := hostGuard("0.0.0.0:8081", []string{"", "   "}, okHandler())
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Host = "anything.example.com"
+	rr := httptest.NewRecorder()
+	h.ServeHTTP(rr, req)
+	require.Equal(t, http.StatusTeapot, rr.Code)
 }
 
 func TestIsLoopbackBind(t *testing.T) {

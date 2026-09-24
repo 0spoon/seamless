@@ -343,7 +343,9 @@ func runServe(args []string) error {
 
 	// Host allowlist outermost, so a rebound request is refused before it can
 	// reach even an unauthenticated route (see netguard.go).
-	srv := newHTTPServer(ctx, bind, hostGuard(bind, mux))
+	// No extra allowlist entries yet: the config key that names them lands with
+	// the transport work, and nil reproduces the bind-host-only allowlist.
+	srv := newHTTPServer(ctx, bind, hostGuard(bind, nil, mux))
 	warnNonLoopbackBind(bind)
 
 	errCh := make(chan error, 1)
