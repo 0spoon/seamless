@@ -138,6 +138,13 @@ func runUninstall(args []string) error {
 	return nil
 }
 
+// purgeExportAdvice is printed above the uninstall confirmation whenever
+// --purge is in play. The data dir holds the markdown corpus, which is the
+// source of truth for every memory and note -- nothing else has a copy, and
+// `seamlessd export` is one command that makes the delete reversible. It is
+// advice at the moment of the decision, not a second prompt.
+const purgeExportAdvice = "export first: seamlessd export"
+
 // printUninstallPreamble prints the header block: which client targets, where
 // the binaries live, and whether user data is kept or purged.
 func printUninstallPreamble(names []string, installDir, configDir, dataDir string, purge, dryRun bool) {
@@ -146,6 +153,8 @@ func printUninstallPreamble(names []string, installDir, configDir, dataDir strin
 	fieldRow("bin", tildePath(installDir))
 	if purge {
 		fieldRow("purge", yellow("will delete ")+dim(tildePath(configDir)+", "+tildePath(dataDir)))
+		fmt.Printf("%s%s%s\n", fieldCont, yellow(purgeExportAdvice),
+			dim(" -- memories and notes are markdown files, and nothing else keeps a copy"))
 	} else {
 		fieldRow("keep", dim(tildePath(configDir)+", "+tildePath(dataDir)+" (use --purge to delete)"))
 	}

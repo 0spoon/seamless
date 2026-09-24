@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>seamlessd CLI - Seamless docs</title>
-<meta name="description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
+<meta name="description" content="The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/reference/cli-seamlessd/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/reference/cli-seamlessd/">
 <meta property="og:title" content="seamlessd CLI - Seamless docs">
-<meta property="og:description" content="The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
+<meta property="og:description" content="The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"seamlessd CLI","item":"https://thereisnospoon.org/docs/reference/cli-seamlessd/"}]},{"@type":"TechArticle","headline":"seamlessd CLI - Seamless docs","description":"The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.","url":"https://thereisnospoon.org/docs/reference/cli-seamlessd/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Reference","item":"https://thereisnospoon.org/docs/reference/"},{"@type":"ListItem","position":3,"name":"seamlessd CLI","item":"https://thereisnospoon.org/docs/reference/cli-seamlessd/"}]},{"@type":"TechArticle","headline":"seamlessd CLI - Seamless docs","description":"The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.","url":"https://thereisnospoon.org/docs/reference/cli-seamlessd/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -224,11 +224,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>seamlessd CLI</h1>
-  <p class="lede">The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.</p>
+  <p class="lede">The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_update">seamlessd update</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
+      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_export">seamlessd export</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-3"><a href="#importing-a-v1-directory">Importing a v1 directory</a></li><li class="lvl-3"><a href="#importing-an-archive">Importing an archive</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_update">seamlessd update</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
     </ul>
   </details>
   <p><code>seamlessd</code> is both the server and the operator CLI. <code>serve</code> runs the daemon;
@@ -315,6 +315,10 @@ Checks stop early if config or the database cannot be loaded at all.</p>
 <td>Path, schema version, and table count. Opens and migrates if needed.</td>
 </tr>
 <tr>
+<td><code>schema version</code></td>
+<td>An <strong>info</strong> line pairing what the database has applied with what this binary compiles - <code>v25 applied / v25 compiled</code>. A database <em>ahead</em> of the binary warns: it was written by a newer <code>seamlessd</code>, which is also why an archive from it would be refused.</td>
+</tr>
+<tr>
 <td><code>repo map</code></td>
 <td>Warns when <code>repo_project_map</code> entries name paths that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed <code>map-repo</code> override.</td>
 </tr>
@@ -373,12 +377,15 @@ current trust decision. A recent hook observation cannot make a changed command
 healthy.</p>
 <p>Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.</p>
-<h2 id="seamlessd_import">seamlessd import</h2>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import <span class="o">[</span>--from DIR<span class="o">]</span> <span class="o">[</span>--skip LIST<span class="o">]</span> <span class="o">[</span>--embed<span class="o">=</span>false<span class="o">]</span>
+<h2 id="seamlessd_export">seamlessd export</h2>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd <span class="nb">export</span> <span class="o">[</span>-o FILE<span class="p">|</span>-<span class="o">]</span> <span class="o">[</span>--no-db<span class="o">]</span>
 </span></span></code></pre></div>
-<p>Imports a Seam v1 data directory into this instance. Memory and note files are
-written and indexed under the v2 data directory; trials, sessions, and tool-call
-events are inserted into the database.</p>
+<p>Writes the whole instance to one gzipped tar: the markdown corpus, a consistent
+snapshot of <code>seam.db</code>, and a <code>manifest.json</code> describing what is inside.</p>
+<p><strong>Config and <code>mcp.api_key</code> are never in the archive.</strong> A restored instance gets
+its own config and a freshly generated key, which is what lets an archive be
+copied to another machine, a NAS, or a colleague without carrying this machine's
+only credential.</p>
 <div class="table-wrap">
 <table>
 <thead>
@@ -390,27 +397,172 @@ events are inserted into the database.</p>
 </thead>
 <tbody>
 <tr>
-<td><code>--from</code></td>
-<td><code>~/.seam</code></td>
-<td>v1 data directory to import from. A leading <code>~</code> expands.</td>
+<td><code>-o</code></td>
+<td><code>seamless-&lt;host&gt;-&lt;UTC timestamp&gt;.tar.gz</code> in the working directory</td>
+<td>Where to write the archive. <code>-</code> streams it to stdout and puts the report on stderr.</td>
 </tr>
 <tr>
-<td><code>--skip</code></td>
-<td><code>briefings</code></td>
-<td>Comma-separated storage projects to skip.</td>
-</tr>
-<tr>
-<td><code>--embed</code></td>
-<td><code>true</code></td>
-<td>Embed imported items for cosine search, using the configured provider.</td>
+<td><code>--no-db</code></td>
+<td><code>false</code></td>
+<td>Export the markdown trees only. Sessions, tasks, trials, events, and embeddings are then <strong>not</strong> in the archive.</td>
 </tr>
 </tbody>
 </table>
 </div>
-<p><strong>It is idempotent by id</strong>, so re-running imports only what is new - which makes
-a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
-prints a report even when the import ends in an error. With <code>--embed</code> on and no
-usable embedder, it warns and imports without vectors rather than failing.</p>
+<p>Layout, in tar order:</p>
+<div class="code-block" data-lang="text"><pre class="chroma"><code><span class="line"><span class="cl">manifest.json                       always first
+</span></span><span class="line"><span class="cl">seam.db                             absent with --no-db
+</span></span><span class="line"><span class="cl">memory/{project|_global}/{name}.md
+</span></span><span class="line"><span class="cl">notes/{project|_global}/{slug}.md
+</span></span></code></pre></div>
+<p><code>manifest.json</code> first is deliberate: a reader can refuse an archive - wrong
+format, or a schema newer than its own binary understands - before extracting a
+single byte. Every entry is a regular file with mode <code>0600</code> and uid/gid zeroed,
+so a restore under another account carries no ownership from the exporting
+machine.</p>
+<p><strong>It is safe to run against a live instance.</strong> The snapshot is SQLite's
+<code>VACUUM INTO</code> on a handle that never migrates, so a newer binary cannot move the
+schema under a running older daemon, and a write in flight is simply not in the
+snapshot rather than half in it. The database is snapshotted <em>before</em> the trees
+are walked, so the file set is a superset of what the snapshot's index describes;
+the import's reconciliation heals that window.</p>
+<p>A named destination is claimed with <code>O_EXCL</code> and written through a sibling
+<code>.tmp</code> that is renamed into place, so an export never overwrites an existing
+archive and never leaves a truncated one under a finished-looking name.</p>
+<h2 id="seamlessd_import">seamlessd import</h2>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import <span class="o">[</span>--from DIR<span class="p">|</span>FILE<span class="p">|</span>-<span class="o">]</span> <span class="o">[</span>--embed<span class="o">=</span>false<span class="o">]</span>
+</span></span><span class="line"><span class="cl">                 <span class="o">[</span>--skip LIST<span class="o">]</span>              <span class="c1"># v1 directory only</span>
+</span></span><span class="line"><span class="cl">                 <span class="o">[</span>--dry-run<span class="o">]</span> <span class="o">[</span>--force<span class="o">]</span>      <span class="c1"># archive only</span>
+</span></span></code></pre></div>
+<p>Imports another store into this instance. <strong>What <code>--from</code> names on disk decides
+which of two unrelated operations runs</strong> - never a flag:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th><code>--from</code> is</th>
+<th>Source</th>
+<th>What happens</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>a directory (the default <code>~/.seam</code>)</td>
+<td>A Seam v1 data directory</td>
+<td>Memory and note files are written and indexed here; trials, sessions, and tool-call events are inserted into the database.</td>
+</tr>
+<tr>
+<td>a regular file, or <code>-</code></td>
+<td>A <code>seamlessd export</code> archive</td>
+<td>A <strong>restore</strong> into an empty data directory, or a <strong>merge</strong> into a populated one.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Default</th>
+<th>Applies to</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--from</code></td>
+<td><code>~/.seam</code></td>
+<td>both</td>
+<td>Source path. A leading <code>~</code> expands; <code>-</code> reads an archive from stdin.</td>
+</tr>
+<tr>
+<td><code>--embed</code></td>
+<td><code>true</code></td>
+<td>both</td>
+<td>Embed imported items for cosine search, using the configured provider.</td>
+</tr>
+<tr>
+<td><code>--skip</code></td>
+<td><code>briefings</code></td>
+<td>v1 directory</td>
+<td>Comma-separated storage projects to skip.</td>
+</tr>
+<tr>
+<td><code>--dry-run</code></td>
+<td><code>false</code></td>
+<td>archive</td>
+<td>Report what the import would do and change nothing.</td>
+</tr>
+<tr>
+<td><code>--force</code></td>
+<td><code>false</code></td>
+<td>archive</td>
+<td>Allow a fresh restore while a daemon is still answering for this data directory.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>A flag from the other family is an <strong>error</strong>, not an ignored no-op: <code>--dry-run</code>
+against a v1 directory would otherwise read as &quot;previewed, nothing happened&quot;
+while the import actually ran.</p>
+<h3 id="importing-a-v1-directory">Importing a v1 directory</h3>
+<p><strong>Idempotent by id</strong>, so re-running imports only what is new - which makes a
+delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and prints
+a report even when the import ends in an error. With <code>--embed</code> on and no usable
+embedder, it warns and imports without vectors rather than failing.</p>
+<h3 id="importing-an-archive">Importing an archive</h3>
+<p>Restore-or-merge is a property of the <strong>destination</strong>, printed in the report and
+never overridable. There is no <code>restore</code> verb and no <code>--mode</code>: the only thing an
+override could do is replace a populated instance's database.</p>
+<ul>
+<li><strong>Fresh</strong> (restore) when the data directory is absent, or holds neither
+<code>seam.db</code> nor <code>seam.db-wal</code> and no regular non-dot file in either tree. The
+markdown is restored byte-for-byte and the snapshot is renamed into place last,
+so an interrupted restore leaves files and no database - which the next run
+reads as fresh again and repeats cleanly.</li>
+<li><strong>Merge</strong> otherwise, first-writer-wins by ULID: an item or row whose id is
+already here is skipped, which makes re-merging the same archive a no-op.</li>
+</ul>
+<p>A fresh restore replaces <code>seam.db</code> wholesale, so it <strong>refuses while a daemon is
+answering</strong> for that data directory and tells you to run <code>seamlessd stop</code>;
+<code>--force</code> overrides. A merge and a <code>--dry-run</code> need no such thing - a merge
+writes through the same files layer the daemon uses, and a dry run writes
+nothing.</p>
+<p>What a merge does <strong>not</strong> touch:</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Not merged</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>settings</code></td>
+<td>Repo paths, families, briefing overrides, and the embedder switch describe <em>this</em> machine.</td>
+</tr>
+<tr>
+<td><code>embeddings</code></td>
+<td>Vectors belong to whichever model this instance runs; imported items are embedded on write instead.</td>
+</tr>
+<tr>
+<td><code>*_index</code>, <code>fts</code>, <code>retrieval_stats</code>, <code>jobs</code></td>
+<td>Rebuildable mirrors, refreshed by the import itself.</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p>Collisions are <strong>reported, never resolved</strong>. A corpus file whose path is already
+held by a different item is left unwritten and both ids are named; a
+<code>sessions.name</code> or <code>projects.slug</code> already taken is reported rather than renamed,
+because minting a new name would invent an identifier nothing refers to. The run
+still exits 0 - the report is the work item.</p>
+<p>When the archive's <code>embedding_models</code> differ from this instance's embedder, the
+report says so and points at the console's re-embed
+(Settings → Embeddings). Vectors from two models are not comparable, so that
+mismatch does not heal itself.</p>
 <h2 id="seamlessd_install_hooks">seamlessd install-hooks</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd install-hooks <span class="o">[</span>--client claude<span class="p">|</span>claude-desktop<span class="p">|</span>codex<span class="p">|</span>all<span class="p">|</span>detect<span class="o">]</span> <span class="o">[</span>--settings PATH<span class="o">]</span> <span class="o">[</span>--codex-hooks PATH<span class="o">]</span> <span class="o">[</span>--desktop-config PATH<span class="o">]</span> <span class="o">[</span>--url BASE<span class="o">]</span> <span class="o">[</span>--seam PATH<span class="o">]</span> <span class="o">[</span>--mcp<span class="o">=</span>false<span class="o">]</span> <span class="o">[</span>--skills<span class="o">=</span>false<span class="o">]</span>
 </span></span></code></pre></div>
@@ -726,7 +878,7 @@ daemon is running older code than what you just built.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_update">seamlessd update</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
+      <li class="lvl-2"><a href="#seamlessd_serve">seamlessd serve</a></li><li class="lvl-2"><a href="#seamlessd_doctor">seamlessd doctor</a></li><li class="lvl-2"><a href="#seamlessd_export">seamlessd export</a></li><li class="lvl-2"><a href="#seamlessd_import">seamlessd import</a></li><li class="lvl-3"><a href="#importing-a-v1-directory">Importing a v1 directory</a></li><li class="lvl-3"><a href="#importing-an-archive">Importing an archive</a></li><li class="lvl-2"><a href="#seamlessd_install_hooks">seamlessd install-hooks</a></li><li class="lvl-2"><a href="#seamlessd_uninstall">seamlessd uninstall</a></li><li class="lvl-2"><a href="#seamlessd_update">seamlessd update</a></li><li class="lvl-2"><a href="#seamlessd_map_repo">seamlessd map-repo</a></li><li class="lvl-2"><a href="#seamlessd_family">seamlessd family</a></li><li class="lvl-2"><a href="#seamlessd_console_open">seamlessd console-open</a></li><li class="lvl-2"><a href="#seamlessd_service">seamlessd start / stop / restart / status</a></li><li class="lvl-2"><a href="#seamlessd_version">seamlessd version</a></li>
     </ul>
   </aside>
   

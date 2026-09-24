@@ -1,11 +1,15 @@
 package main
 
 import (
+	"bytes"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/config"
 )
 
 func okHandler() http.Handler {
@@ -142,5 +146,117 @@ func TestIsLoopbackBind(t *testing.T) {
 		"example.com:80": false, // unresolvable name: warn rather than stay quiet
 	} {
 		require.Equal(t, want, isLoopbackBind(bind), "bind %s", bind)
+	}
+}
+
+// The wiring runServe performs: the allowlist is config.AllowedHostsEffective,
+// so naming the daemon in server_url is what both advertises it and admits it.
+// Without this the operator sets server_url, every remote client dials the name
+// it publishes, and the guard answers 421 to all of them.
+func TestHostGuard_AllowlistFromServerURL(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  config.Config
+		want map[string]int
+	}{
+		{
+			name: "wildcard bind, server_url names the daemon",
+			cfg:  config.Config{Addr: "0.0.0.0:8081", AdvertisedURL: "http://seam.lan:8081"},
+			want: map[string]int{
+				"seam.lan:8081":  http.StatusTeapot,
+				"seam.lan":       http.StatusTeapot,
+				"127.0.0.1:8081": http.StatusTeapot,
+				"evil.example":   http.StatusMisdirectedRequest,
+			},
+		},
+		{
+			name: "concrete bind, server_url plus extra hosts",
+			cfg: config.Config{
+				Addr: "192.168.1.5:8081", AdvertisedURL: "https://seam.lan",
+				AllowedHosts: []string{"seam", "mac.local"},
+			},
+			want: map[string]int{
+				"seam.lan":         http.StatusTeapot,
+				"seam":             http.StatusTeapot,
+				"mac.local:8081":   http.StatusTeapot,
+				"192.168.1.5:8081": http.StatusTeapot, // the bind host, unconditionally
+				"evil.example":     http.StatusMisdirectedRequest,
+			},
+		},
+		{
+			name: "wildcard bind with nothing named stays unguarded",
+			cfg:  config.Config{Addr: "0.0.0.0:8081"},
+			want: map[string]int{
+				// ServerHost of a wildcard bind is loopback, which is already in
+				// the list -- so it is not a name the operator supplied, and the
+				// guard must not switch on because of it.
+				"anything.example": http.StatusTeapot,
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := hostGuard(tc.cfg.Addr, tc.cfg.AllowedHostsEffective(), okHandler())
+			for host, want := range tc.want {
+				req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+				req.Host = host
+				rr := httptest.NewRecorder()
+				h.ServeHTTP(rr, req)
+				require.Equal(t, want, rr.Code, "Host: %s", host)
+			}
+		})
+	}
+}
+
+// warnLines captures the slog output of fn, one entry per line.
+func warnLines(t *testing.T, fn func()) string {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelWarn})))
+	defer slog.SetDefault(prev)
+	fn()
+	return buf.String()
+}
+
+// The protection line is a claim about this listener, so it must track TLS. A
+// warning that says "no TLS on this listener" to an operator who just configured
+// TLS is how a security warning trains its reader to ignore it.
+func TestWarnNonLoopbackBind(t *testing.T) {
+	require.Empty(t, warnLines(t, func() { warnNonLoopbackBind("127.0.0.1:8081", false) }),
+		"loopback is the designed model; no warning")
+
+	plain := warnLines(t, func() { warnNonLoopbackBind("0.0.0.0:8081", false) })
+	require.Contains(t, plain, "SECURITY: binding to a non-loopback address")
+	require.Contains(t, plain, "the console cookie is not Secure")
+	require.Contains(t, plain, "set tls.cert_file/tls.key_file or keep it inside a trusted LAN")
+
+	secure := warnLines(t, func() { warnNonLoopbackBind("0.0.0.0:8081", true) })
+	require.Contains(t, secure, "SECURITY: binding to a non-loopback address")
+	require.Contains(t, secure, "the console cookie is Secure")
+	require.NotContains(t, secure, "no TLS on this listener")
+	require.NotContains(t, secure, "sent in the clear")
+}
+
+func TestWarnAdvertisedLoopback(t *testing.T) {
+	for _, tc := range []struct {
+		name, bind, url string
+		wantWarn        bool
+	}{
+		{"loopback bind is the normal install", "127.0.0.1:8081", "http://127.0.0.1:8081", false},
+		{"wide bind, loopback url", "0.0.0.0:8081", "http://127.0.0.1:8081", true},
+		{"wide bind, localhost url", "0.0.0.0:8081", "http://localhost:8081", true},
+		{"wide bind, ipv6 loopback url", "0.0.0.0:8081", "http://[::1]:8081", true},
+		{"wide bind, 127/8 url", "0.0.0.0:8081", "http://127.0.0.2:8081", true},
+		{"wide bind, named url", "0.0.0.0:8081", "http://seam.lan:8081", false},
+		{"concrete lan bind, own address", "192.168.1.5:8081", "http://192.168.1.5:8081", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := warnLines(t, func() { warnAdvertisedLoopback(tc.bind, tc.url) })
+			if tc.wantWarn {
+				require.Contains(t, out, "server_url still points at this machine")
+				return
+			}
+			require.Empty(t, out)
+		})
 	}
 }

@@ -518,6 +518,34 @@ func TestValidate(t *testing.T) {
 		{"zero-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{0} }, true},
 		{"negative-capture-port", func(c *Config) { c.Capture.AllowedPorts = []int{-1} }, true},
 		{"capture-port-above-range", func(c *Config) { c.Capture.AllowedPorts = []int{65536} }, true},
+
+		// Transport: role, server_url, tls.
+		{"role-server-ok", func(c *Config) { c.Role = RoleServer }, false},
+		{"empty-role-ok", func(c *Config) { c.Role = "" }, false},
+		{"unknown-role", func(c *Config) { c.Role = "peer" }, true},
+		{"role-case-is-not-normalized", func(c *Config) { c.Role = "Server" }, true},
+		{"server-url-ok", func(c *Config) { c.AdvertisedURL = "http://seam.lan:8081" }, false},
+		{"server-url-https-ok", func(c *Config) { c.AdvertisedURL = "https://seam.lan" }, false},
+		{"server-url-trailing-slash-ok", func(c *Config) { c.AdvertisedURL = "https://seam.lan/" }, false},
+		{"server-url-bare-host", func(c *Config) { c.AdvertisedURL = "seam.lan:8081" }, true},
+		{"server-url-scheme-relative", func(c *Config) { c.AdvertisedURL = "//seam.lan:8081" }, true},
+		{"server-url-bad-scheme", func(c *Config) { c.AdvertisedURL = "ws://seam.lan:8081" }, true},
+		{"server-url-no-host", func(c *Config) { c.AdvertisedURL = "http://" }, true},
+		{"server-url-with-path", func(c *Config) { c.AdvertisedURL = "http://seam.lan:8081/api" }, true},
+		{"server-url-with-query", func(c *Config) { c.AdvertisedURL = "http://seam.lan:8081?x=1" }, true},
+		{"server-url-with-fragment", func(c *Config) { c.AdvertisedURL = "http://seam.lan:8081#top" }, true},
+		{"tls-both-ok", func(c *Config) { c.TLS = TLS{CertFile: "c.pem", KeyFile: "k.pem"} }, false},
+		{"tls-ca-only-ok", func(c *Config) { c.TLS = TLS{CAFile: "ca.pem"} }, false},
+		{"tls-cert-without-key", func(c *Config) { c.TLS = TLS{CertFile: "c.pem"} }, true},
+		{"tls-key-without-cert", func(c *Config) { c.TLS = TLS{KeyFile: "k.pem"} }, true},
+		{"client-with-url-ok", func(c *Config) { c.Role, c.AdvertisedURL = RoleClient, "https://seam.lan" }, false},
+		{"client-without-url", func(c *Config) { c.Role = RoleClient }, true},
+		{"client-with-ca-ok", func(c *Config) {
+			c.Role, c.AdvertisedURL, c.TLS = RoleClient, "https://seam.lan", TLS{CAFile: "ca.pem"}
+		}, false},
+		{"client-with-server-cert", func(c *Config) {
+			c.Role, c.AdvertisedURL, c.TLS = RoleClient, "https://seam.lan", TLS{CertFile: "c.pem", KeyFile: "k.pem"}
+		}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -531,4 +559,90 @@ func TestValidate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadFrom_TransportFileAndEnv(t *testing.T) {
+	path := writeConfig(t, `
+addr: 0.0.0.0:8081
+server_url: http://seam.lan:8081
+allowed_hosts: [seam, mac.local]
+tls:
+  cert_file: /etc/seamless/cert.pem
+  key_file: /etc/seamless/key.pem
+`)
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, RoleServer, cfg.Role, "absent role keeps the default")
+	require.Equal(t, "http://seam.lan:8081", cfg.AdvertisedURL)
+	require.Equal(t, []string{"seam", "mac.local"}, cfg.AllowedHosts)
+	require.True(t, cfg.TLSEnabled())
+	// server_url wins over the derived scheme AND the derived host.
+	require.Equal(t, "http://seam.lan:8081", cfg.ServerURL())
+	require.Equal(t, []string{"seam", "mac.local", "seam.lan"}, cfg.AllowedHostsEffective())
+
+	t.Setenv("SEAMLESS_SERVER_URL", "https://seam.example:9443")
+	t.Setenv("SEAMLESS_ALLOWED_HOSTS", "one, two ,")
+	t.Setenv("SEAMLESS_TLS_CA_FILE", "/etc/seamless/ca.pem")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, "https://seam.example:9443", cfg.ServerURL(), "env wins over file")
+	require.Equal(t, []string{"one", "two"}, cfg.AllowedHosts, "env replaces the list, blanks dropped")
+	require.Equal(t, "/etc/seamless/ca.pem", cfg.TLS.CAFile)
+}
+
+func TestLoadFrom_ClientRole(t *testing.T) {
+	path := writeConfig(t, "role: client\nserver_url: https://seam.lan\n")
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.True(t, cfg.IsClient())
+	require.False(t, cfg.TLSEnabled(), "a client holds no server certificate")
+	require.Equal(t, "https://seam.lan", cfg.ServerURL())
+
+	t.Setenv("SEAMLESS_ROLE", "server")
+	cfg, err = LoadFrom(path)
+	require.NoError(t, err)
+	require.False(t, cfg.IsClient(), "env wins over file")
+}
+
+func TestLoadFrom_TransportInvalid(t *testing.T) {
+	t.Run("bad role in file", func(t *testing.T) {
+		_, err := LoadFrom(writeConfig(t, "role: peer\n"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "valid values are server, client")
+	})
+	t.Run("bad role in env", func(t *testing.T) {
+		t.Setenv("SEAMLESS_ROLE", "worker")
+		_, err := LoadFrom("")
+		require.Error(t, err)
+	})
+	t.Run("bare host server_url", func(t *testing.T) {
+		_, err := LoadFrom(writeConfig(t, "server_url: seam.lan:8081\n"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "absolute http:// or https:// URL")
+	})
+	t.Run("client without server_url", func(t *testing.T) {
+		_, err := LoadFrom(writeConfig(t, "role: client\n"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "requires server_url")
+	})
+	t.Run("half-set tls", func(t *testing.T) {
+		_, err := LoadFrom(writeConfig(t, "tls:\n  cert_file: /c.pem\n"))
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "must be set together")
+	})
+	t.Run("unknown tls key", func(t *testing.T) {
+		_, err := LoadFrom(writeConfig(t, "tls:\n  cert: /c.pem\n"))
+		require.Error(t, err, "KnownFields rejects a typo rather than ignoring it")
+	})
+}
+
+func TestLoadFrom_ExpandsHomeInTLSPaths(t *testing.T) {
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+	path := writeConfig(t, "tls:\n  cert_file: ~/certs/c.pem\n  key_file: ~/certs/k.pem\n  ca_file: ~/certs/ca.pem\n")
+	cfg, err := LoadFrom(path)
+	require.NoError(t, err)
+	require.Equal(t, filepath.Join(home, "certs", "c.pem"), cfg.TLS.CertFile)
+	require.Equal(t, filepath.Join(home, "certs", "k.pem"), cfg.TLS.KeyFile)
+	require.Equal(t, filepath.Join(home, "certs", "ca.pem"), cfg.TLS.CAFile)
 }

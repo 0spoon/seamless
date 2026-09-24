@@ -352,6 +352,12 @@ violation is visible in the import block.</p>
 <td>-</td>
 </tr>
 <tr>
+<td><code>archive</code></td>
+<td>domain</td>
+<td>Instance archives: <code>VACUUM INTO</code> snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports <code>config</code> - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it.</td>
+<td><code>core</code>, <code>files</code>, <code>llm</code>, <code>store</code>, <code>validate</code></td>
+</tr>
+<tr>
 <td><code>importer</code></td>
 <td>domain</td>
 <td>One-way migration from the v1 store. Reads v1, writes v2, never modifies v1.</td>

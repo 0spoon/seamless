@@ -394,3 +394,38 @@ func TestOverview_ProjectsAtAGlance(t *testing.T) {
 	require.Equal(t, 1, data.SessActive, "the headline counts live sessions, not raw active status")
 	require.Equal(t, 3, data.SessTotal)
 }
+
+// A shared daemon serves several machines, so "which machine did this run on"
+// has to be readable from the session surfaces. The JSON carries it and both
+// views render it.
+func TestSessionsPage_ShowsHost(t *testing.T) {
+	db, mux := newConsole(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	id, err := core.NewID()
+	require.NoError(t, err)
+	require.NoError(t, store.CreateSession(ctx, db, core.Session{
+		ID: id, Name: "cc/remote01", Host: "argon", Status: core.SessionActive,
+		CreatedAt: now.Add(-time.Minute), UpdatedAt: now,
+	}))
+
+	var data sessionsData
+	getJSON(t, mux, "/console/sessions?format=json", &data)
+	require.Len(t, data.Sessions, 1)
+	require.Equal(t, "argon", data.Sessions[0].Host)
+
+	req := httptest.NewRequest(http.MethodGet, "/console/sessions", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr := do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Body.String(), "Machine this agent ran on")
+	require.Contains(t, rr.Body.String(), "argon")
+
+	req = httptest.NewRequest(http.MethodGet, "/console/sessions/"+id, nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr = do(mux, req)
+	require.Equal(t, http.StatusOK, rr.Code)
+	require.Contains(t, rr.Body.String(), "Machine the agent ran on")
+	require.Contains(t, rr.Body.String(), "argon")
+}

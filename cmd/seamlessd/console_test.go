@@ -37,8 +37,19 @@ func TestA2AEndpointUsesEffectiveBind(t *testing.T) {
 		"[::]:8081":      "http://127.0.0.1:8081/api/a2a",
 	}
 	for bind, want := range tests {
-		require.Equal(t, want, a2aEndpoint(bind), "bind %q", bind)
+		require.Equal(t, want, a2aEndpoint(config.Config{Addr: bind}), "bind %q", bind)
 	}
+}
+
+// The card is discovery metadata: an agent dials exactly what it says. Both
+// transport keys must reach it, which a synthesized config.Config{Addr: bind}
+// could not express -- it advertised http:// on a TLS daemon and loopback on a
+// wildcard bind that server_url had already named.
+func TestA2AEndpointCarriesTLSAndServerURL(t *testing.T) {
+	require.Equal(t, "https://127.0.0.1:8081/api/a2a",
+		a2aEndpoint(config.Config{Addr: "0.0.0.0:8081", TLS: config.TLS{CertFile: "c.pem", KeyFile: "k.pem"}}))
+	require.Equal(t, "https://seam.lan:8443/api/a2a",
+		a2aEndpoint(config.Config{Addr: "0.0.0.0:8081", AdvertisedURL: "https://seam.lan:8443"}))
 }
 
 func TestRenderConsoleLoginPage(t *testing.T) {

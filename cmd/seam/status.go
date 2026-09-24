@@ -6,9 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 )
 
 var statusCmd = spec("status", groupObservability, "server health + project count",
@@ -37,12 +35,15 @@ func runStatus(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	if err != nil {
 		return err
 	}
-	base := mcpBase(cfg)
+	base := cfg.ServerURL()
 
 	var failed int
 
 	// Health via the unauthenticated /healthz endpoint.
-	client := &http.Client{Timeout: 3 * time.Second}
+	client, err := httpClient(cfg, healthTimeout)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Get(base + "/healthz")
 	if err != nil {
 		return fmt.Errorf("server unreachable at %s: %w", base, err)

@@ -6,9 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 )
 
 var versionCmd = spec("version", groupObservability, "the running daemon's version",
@@ -39,9 +37,12 @@ func runVersion(_ context.Context, e *env, _ *noOpts, _ []string) error {
 	if err != nil {
 		return err
 	}
-	base := mcpBase(cfg)
+	base := cfg.ServerURL()
 
-	client := &http.Client{Timeout: 3 * time.Second}
+	client, err := httpClient(cfg, healthTimeout)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Get(base + "/healthz")
 	if err != nil {
 		return fmt.Errorf("server unreachable at %s: %w", base, err)

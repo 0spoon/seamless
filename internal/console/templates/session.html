@@ -161,6 +161,7 @@
         <dl class="session-meta-list">
           <div><dt>Project</dt><dd class="mono">{{if .Session.ProjectSlug}}<a href="/console/projects/{{.Session.ProjectSlug}}" data-peek>{{.Session.ProjectSlug}}</a>{{else}}global{{end}}</dd></div>
           <div><dt>Source</dt><dd class="mono">{{if .Session.Source}}{{.Session.Source}}{{else}}&mdash;{{end}}</dd></div>
+          <div><dt title="Machine the agent ran on; blank for sessions recorded before host scoping">Host</dt><dd class="mono">{{if .Session.Host}}{{.Session.Host}}{{else}}&mdash;{{end}}</dd></div>
           <div><dt title="LLM powering this session's agent, as the provider names it">Model</dt><dd class="mono">{{if .Session.Model}}{{.Session.Model}}{{else}}&mdash;{{end}}</dd></div>
           <div><dt>Mode</dt><dd>{{if .Session.Ambient}}ambient{{else}}explicit{{end}}</dd></div>
           <div><dt>Duration</dt><dd>{{if .Duration}}{{.Duration}}{{else}}&mdash;{{end}}</dd></div>

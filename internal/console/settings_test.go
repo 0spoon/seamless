@@ -63,7 +63,7 @@ func TestSettingsPage(t *testing.T) {
 	require.Equal(t, "seam", data.Workspaces[0].Slug)
 	require.Equal(t, workspaceFamily{Name: "seam-tools", MemberCount: 2}, data.Workspaces[0].Families[0])
 	require.Equal(t, familyScopeRef{Slug: "seam", Registered: true}, data.FamilyEditors[0].Members[0])
-	require.Equal(t, []string{"/Users/x/repos/seamless"}, data.Workspaces[1].Repos)
+	require.Equal(t, []repoRoute{{Path: "/Users/x/repos/seamless"}}, data.Workspaces[1].Repos)
 
 	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
@@ -124,18 +124,21 @@ func TestBuildWorkspaceRegistry_JoinsSourcesAndPreservesReferences(t *testing.T)
 		{Slug: "shared", Name: "Shared"},
 		{Slug: "old", Name: "Old", RetiredAt: &retiredAt},
 	}
-	repoMap := map[string]string{
-		"/repos/z-app":  "app",
-		"/repos/a-app":  "app",
-		"/repos/future": "future",
-		"/repos/global": "",
+	// Two hosts, plus the legacy unnamed bucket: a route is (host, path), and
+	// the machine a checkout lives on must survive into the view.
+	repoRows := []store.RepoMapRow{
+		{Host: "mac", Path: "/repos/z-app", Slug: "app"},
+		{Host: "mac", Path: "/repos/a-app", Slug: "app"},
+		{Host: "argon", Path: "/srv/app", Slug: "app"},
+		{Host: "mac", Path: "/repos/future", Slug: "future"},
+		{Host: "", Path: "/repos/global", Slug: ""},
 	}
 	families := map[string][]string{
 		"solo":  {"shared"},
 		"suite": {"future", "app", "app"},
 	}
 
-	workspaces, unbound := buildWorkspaceRegistry(projects, repoMap, families)
+	workspaces, unbound := buildWorkspaceRegistry(projects, repoRows, families)
 
 	require.Len(t, workspaces, 4)
 	require.Equal(t, []string{"app", "shared", "old", "future"}, []string{
@@ -144,14 +147,19 @@ func TestBuildWorkspaceRegistry_JoinsSourcesAndPreservesReferences(t *testing.T)
 		workspaces[2].Slug,
 		workspaces[3].Slug,
 	})
-	require.Equal(t, []string{"/repos/a-app", "/repos/z-app"}, workspaces[0].Repos)
+	require.Equal(t, []repoRoute{
+		{Host: "argon", Path: "/srv/app"},
+		{Host: "mac", Path: "/repos/a-app"},
+		{Host: "mac", Path: "/repos/z-app"},
+	}, workspaces[0].Repos, "ordered by host then path, so a machine's checkouts stay together")
 	require.True(t, workspaces[0].ParentRegistered)
 	require.Equal(t, "suite", workspaces[0].Families[0].Name)
 	require.Equal(t, 2, workspaces[0].Families[0].MemberCount)
 	require.True(t, workspaces[2].Retired)
 	require.False(t, workspaces[3].Registered)
-	require.Equal(t, []string{"/repos/future"}, workspaces[3].Repos)
-	require.Equal(t, []string{"/repos/global"}, unbound)
+	require.Equal(t, []repoRoute{{Host: "mac", Path: "/repos/future"}}, workspaces[3].Repos)
+	require.Equal(t, []repoRoute{{Host: "", Path: "/repos/global"}}, unbound,
+		"the legacy unnamed bucket is still a route, not a dropped row")
 
 	editors, createOptions := buildFamilyEditors(workspaces, families)
 	require.Len(t, editors, 2)

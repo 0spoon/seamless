@@ -43,6 +43,22 @@ type Config struct {
 	Addr string `yaml:"addr"`
 	// DataDir holds the SQLite database and markdown trees. A leading ~ expands.
 	DataDir string `yaml:"data_dir"`
+	// Role is this install's part in a deployment: RoleServer (the default) runs
+	// the daemon here; RoleClient runs none and dials AdvertisedURL instead.
+	// Read it through IsClient, never by comparing this string.
+	Role string `yaml:"role"`
+	// AdvertisedURL is the base URL clients dial (yaml key `server_url`). Empty
+	// means "derive it from Addr", which is what a loopback install wants. Set
+	// it when the bind address is not the address clients use -- a wildcard
+	// bind, a LAN name, a TLS listener. Read it through ServerURL, which applies
+	// that derivation; this field is the raw configured value.
+	AdvertisedURL string `yaml:"server_url"`
+	// AllowedHosts are EXTRA Host-header values the daemon answers to, beyond
+	// the loopback names, the concrete bind host, and ServerHost. Naming even
+	// one turns the Host allowlist on for a wildcard bind (see hostGuard).
+	AllowedHosts []string `yaml:"allowed_hosts"`
+	// TLS makes the listener HTTPS and tells the CLI which root CA to trust.
+	TLS TLS `yaml:"tls"`
 
 	MCP         MCP         `yaml:"mcp"`
 	Budgets     Budgets     `yaml:"budgets"`
@@ -56,6 +72,34 @@ type Config struct {
 
 	// sourcePath records which config file was loaded (empty = defaults only).
 	sourcePath string `yaml:"-"`
+}
+
+// Roles are the accepted role values.
+const (
+	// RoleServer runs the daemon on this machine. The default.
+	RoleServer = "server"
+	// RoleClient runs no daemon here: every surface dials server_url instead.
+	RoleClient = "client"
+)
+
+// Roles is the canonical role set, for validation and for the message that
+// names the accepted values.
+var Roles = []string{RoleServer, RoleClient}
+
+// TLS holds the daemon's HTTPS material and the client's extra trust root.
+//
+// cert_file/key_file are a SERVER pair -- set both and the daemon serves HTTPS
+// (TLSEnabled). ca_file is the CLIENT half: the root CA `seam` adds to the
+// system pool so a self-signed or private-CA server certificate verifies. They
+// are separate keys because the two halves live on different machines.
+type TLS struct {
+	// CertFile is the PEM certificate chain the daemon serves. A leading ~ expands.
+	CertFile string `yaml:"cert_file"`
+	// KeyFile is the PEM private key for CertFile. A leading ~ expands.
+	KeyFile string `yaml:"key_file"`
+	// CAFile is an extra root CA the seam CLI trusts when dialing an https
+	// server_url. A leading ~ expands.
+	CAFile string `yaml:"ca_file"`
 }
 
 // MCP holds the static bearer key guarding /api/mcp and the console.
@@ -345,6 +389,7 @@ func Defaults() Config {
 	return Config{
 		Addr:    "127.0.0.1:8081",
 		DataDir: "~/.seamless",
+		Role:    RoleServer,
 		Budgets: Budgets{MaxBriefingTokens: 1500, RecallBudgetTokens: 1000},
 		Briefing: Briefing{
 			ConstraintMaxFull:      4,
@@ -458,6 +503,24 @@ func LoadFrom(path string) (Config, error) {
 	}
 	cfg.DataDir = expanded
 
+	// The TLS material is read by path like data_dir is, so it expands the same
+	// way: a `~/certs/...` that silently failed to open would look like a
+	// missing certificate rather than an unexpanded path.
+	for _, p := range []struct {
+		key string
+		dst *string
+	}{
+		{"tls.cert_file", &cfg.TLS.CertFile},
+		{"tls.key_file", &cfg.TLS.KeyFile},
+		{"tls.ca_file", &cfg.TLS.CAFile},
+	} {
+		v, perr := expandHome(*p.dst)
+		if perr != nil {
+			return Config{}, fmt.Errorf("config.Load: expand %s: %w", p.key, perr)
+		}
+		*p.dst = v
+	}
+
 	if err := cfg.Validate(); err != nil {
 		return Config{}, err
 	}
@@ -518,6 +581,9 @@ func (c Config) Validate() error {
 	}
 	if strings.TrimSpace(c.DataDir) == "" {
 		return fmt.Errorf("config: data_dir is empty")
+	}
+	if err := c.validateTransport(); err != nil {
+		return err
 	}
 	switch c.LLM.Provider {
 	case ProviderOpenAI, ProviderOllama, ProviderAnthropic:
@@ -612,6 +678,12 @@ func (c Config) NotesDir() string { return filepath.Join(c.DataDir, "notes") }
 func (c *Config) applyEnv() error {
 	envStr("SEAMLESS_ADDR", &c.Addr)
 	envStr("SEAMLESS_DATA_DIR", &c.DataDir)
+	envStr("SEAMLESS_ROLE", &c.Role)
+	envStr("SEAMLESS_SERVER_URL", &c.AdvertisedURL)
+	envStrSlice("SEAMLESS_ALLOWED_HOSTS", &c.AllowedHosts)
+	envStr("SEAMLESS_TLS_CERT_FILE", &c.TLS.CertFile)
+	envStr("SEAMLESS_TLS_KEY_FILE", &c.TLS.KeyFile)
+	envStr("SEAMLESS_TLS_CA_FILE", &c.TLS.CAFile)
 	envStr("SEAMLESS_MCP_API_KEY", &c.MCP.APIKey)
 
 	if err := envInt("SEAMLESS_MAX_BRIEFING_TOKENS", &c.Budgets.MaxBriefingTokens); err != nil {
@@ -773,6 +845,24 @@ func envInt(key string, dst *int) error {
 // value. Blank entries are skipped, so trailing commas and a set-but-empty value
 // are tolerated; the latter yields an empty slice, which each list's own
 // empty-means-default rule then resolves (it never means "unrestricted").
+// envStrSlice overlays a comma-separated env list. An unset variable leaves the
+// file value alone; a set one REPLACES it (never appends), so an operator can
+// empty a list from the environment. Blank fields are dropped, which is what
+// makes a trailing comma harmless.
+func envStrSlice(key string, dst *[]string) {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return
+	}
+	var out []string
+	for field := range strings.SplitSeq(v, ",") {
+		if field = strings.TrimSpace(field); field != "" {
+			out = append(out, field)
+		}
+	}
+	*dst = out
+}
+
 func envIntSlice(key string, dst *[]int) error {
 	v, ok := os.LookupEnv(key)
 	if !ok {

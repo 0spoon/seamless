@@ -80,13 +80,6 @@ func dispatch(ctx context.Context, e *env, argv []string) int {
 	return 0
 }
 
-// mcpBase returns the base URL (scheme://host:port) of the configured server.
-// The derivation itself lives in config.ServerURL, which every client of the
-// daemon shares; this is the name the rest of the CLI already calls.
-func mcpBase(cfg config.Config) string {
-	return cfg.ServerURL()
-}
-
 // hostHeader carries this machine's name to the daemon on every MCP request.
 // It mirrors internal/mcp.HostHeader; the CLI keeps its own literal for the same
 // reason it keeps its own hook client enum -- importing that package would drag
@@ -110,8 +103,16 @@ func dial(ctx context.Context) (*mcpclient.Client, config.Config, error) {
 	if err != nil {
 		return nil, cfg, err
 	}
-	cli, err := mcpclient.NewStreamableHttpClient(mcpBase(cfg)+"/api/mcp",
-		transport.WithHTTPHeaders(mcpHeaders(cfg)))
+	// No whole-request deadline: a tool call may be LLM-backed (recall
+	// embeddings, gardener_request) and legitimately slow. The dial timeout
+	// inside httpClient is what makes a down daemon fail fast.
+	hc, err := httpClient(cfg, 0)
+	if err != nil {
+		return nil, cfg, err
+	}
+	cli, err := mcpclient.NewStreamableHttpClient(cfg.ServerURL()+"/api/mcp",
+		transport.WithHTTPHeaders(mcpHeaders(cfg)),
+		transport.WithHTTPBasicClient(hc))
 	if err != nil {
 		return nil, cfg, err
 	}
@@ -122,7 +123,7 @@ func dial(ctx context.Context) (*mcpclient.Client, config.Config, error) {
 	initReq.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initReq.Params.ClientInfo = mcp.Implementation{Name: "seam-cli", Version: "0"}
 	if _, err := cli.Initialize(ctx, initReq); err != nil {
-		return nil, cfg, fmt.Errorf("connect to seamlessd at %s: %w", mcpBase(cfg), err)
+		return nil, cfg, fmt.Errorf("connect to seamlessd at %s: %w", cfg.ServerURL(), err)
 	}
 	return cli, cfg, nil
 }

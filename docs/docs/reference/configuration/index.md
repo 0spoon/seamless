@@ -65,6 +65,12 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 |---|---|---|
 | `addr` | string | `127.0.0.1:8081` |
 | `data_dir` | string | `~/.seamless` |
+| `role` | string | `server` |
+| `server_url` | string | - |
+| `allowed_hosts` | []string | - |
+| `tls.cert_file` | string | - |
+| `tls.key_file` | string | - |
+| `tls.ca_file` | string | - |
 | `mcp.api_key` | string | - |
 | `budgets.max_briefing_tokens` | int | `1500` |
 | `budgets.recall_budget_tokens` | int | `1000` |

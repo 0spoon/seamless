@@ -95,7 +95,7 @@ func TestBridge_RoundTripPersistsSession(t *testing.T) {
 	}, "\n") + "\n"
 
 	var out bytes.Buffer
-	b := newBridge(srv.URL+"/api/mcp", "testkey")
+	b := newBridge(srv.URL+"/api/mcp", "testkey", nil)
 	require.NoError(t, b.run(context.Background(), strings.NewReader(in), &out))
 
 	// Three replies; the notification relayed as silence.
@@ -126,7 +126,7 @@ func TestBridge_NotificationRelaysNothing(t *testing.T) {
 	defer srv.Close()
 
 	var out bytes.Buffer
-	b := newBridge(srv.URL+"/api/mcp", "k")
+	b := newBridge(srv.URL+"/api/mcp", "k", nil)
 	require.NoError(t, b.run(context.Background(),
 		strings.NewReader(`{"jsonrpc":"2.0","method":"notifications/initialized"}`+"\n"), &out))
 	require.Empty(t, out.String())
@@ -141,7 +141,7 @@ func TestBridge_DaemonDownIsFatal(t *testing.T) {
 	endpoint := srv.URL + "/api/mcp"
 	srv.Close()
 
-	b := newBridge(endpoint, "k")
+	b := newBridge(endpoint, "k", nil)
 	err := b.run(context.Background(),
 		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`+"\n"), io.Discard)
 	require.Error(t, err)
@@ -157,7 +157,7 @@ func TestBridge_Non2xxIsFatal(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	b := newBridge(srv.URL+"/api/mcp", "k")
+	b := newBridge(srv.URL+"/api/mcp", "k", nil)
 	err := b.run(context.Background(),
 		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n"), io.Discard)
 	require.Error(t, err)
@@ -175,7 +175,7 @@ func TestBridge_RelaysSSEReplies(t *testing.T) {
 	defer srv.Close()
 
 	var out bytes.Buffer
-	b := newBridge(srv.URL+"/api/mcp", "k")
+	b := newBridge(srv.URL+"/api/mcp", "k", nil)
 	require.NoError(t, b.run(context.Background(),
 		strings.NewReader(`{"jsonrpc":"2.0","id":7,"method":"tools/call"}`+"\n"), &out))
 
@@ -195,7 +195,7 @@ func TestBridge_ForwardsUnterminatedFinalFrame(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	b := newBridge(srv.URL+"/api/mcp", "k")
+	b := newBridge(srv.URL+"/api/mcp", "k", nil)
 	require.NoError(t, b.run(context.Background(),
 		strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize"}`), io.Discard)) // no "\n"
 	require.Equal(t, 1, got)

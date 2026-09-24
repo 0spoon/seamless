@@ -216,7 +216,7 @@ func (s *Service) buildContextData(ctx context.Context, selected string) (contex
 	if err != nil {
 		return contextData{}, false, fmt.Errorf("console.buildContextData: list projects: %w", err)
 	}
-	repoMap, err := store.RepoProjectMap(ctx, s.cfg.DB)
+	repoRows, err := store.RepoMapRows(ctx, s.cfg.DB)
 	if err != nil {
 		return contextData{}, false, fmt.Errorf("console.buildContextData: repo mappings: %w", err)
 	}
@@ -229,7 +229,7 @@ func (s *Service) buildContextData(ctx context.Context, selected string) (contex
 		return contextData{}, false, fmt.Errorf("console.buildContextData: briefing config: %w", err)
 	}
 
-	workspaces, _ := buildWorkspaceRegistry(projects, repoMap, familyMap)
+	workspaces, _ := buildWorkspaceRegistry(projects, repoRows, familyMap)
 	bySlug := make(map[string]workspaceScope, len(workspaces))
 	for _, workspace := range workspaces {
 		bySlug[workspace.Slug] = workspace

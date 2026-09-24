@@ -34,7 +34,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/0spoon/seamless/internal/config"
 )
@@ -87,7 +86,13 @@ func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	return newBridge(mcpBase(cfg)+"/api/mcp", cfg.MCP.APIKey).run(ctx, e.stdin, e.stdout)
+	// No whole-request deadline (see httpClient): a tool call may be LLM-backed
+	// and legitimately slow, and codex has its own tool_timeout_sec for that.
+	client, err := httpClient(cfg, 0)
+	if err != nil {
+		return err
+	}
+	return newBridge(cfg.ServerURL()+"/api/mcp", cfg.MCP.APIKey, client).run(ctx, e.stdin, e.stdout)
 }
 
 // bridge forwards stdio MCP frames to a streamable-HTTP endpoint and back. It is
@@ -101,19 +106,23 @@ type bridge struct {
 	sessionID string // Mcp-Session-Id from initialize, replayed on later POSTs
 }
 
-func newBridge(endpoint, apiKey string) *bridge {
-	return &bridge{
-		endpoint: endpoint,
-		apiKey:   apiKey,
-		// A dial timeout so a down daemon fails fast, but no response timeout: a
-		// tool call may be LLM-backed (recall embeddings, gardener_request) and
-		// legitimately slow, and codex has its own tool_timeout_sec for that.
-		client: &http.Client{
+// newBridge takes its HTTP client rather than building one: the TLS trust the
+// CLI applies (tls.ca_file) has to be identical here and on every other surface,
+// and a bridge with its own client was how it would drift. A nil client falls
+// back to the shared shape with no extra roots, for the tests that only exercise
+// framing.
+func newBridge(endpoint, apiKey string, client *http.Client) *bridge {
+	if client == nil {
+		// A dial timeout so a down daemon fails fast, but no response timeout:
+		// a tool call may be LLM-backed (recall embeddings, gardener_request)
+		// and legitimately slow.
+		client = &http.Client{
 			Transport: &http.Transport{
-				DialContext: (&net.Dialer{Timeout: 5 * time.Second}).DialContext,
+				DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
 			},
-		},
+		}
 	}
+	return &bridge{endpoint: endpoint, apiKey: apiKey, client: client}
 }
 
 // run reads newline-delimited JSON-RPC from r and relays each frame's reply to w

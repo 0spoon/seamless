@@ -7,9 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
-	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -41,7 +39,7 @@ func runDoctor(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	if err != nil {
 		return err
 	}
-	base := mcpBase(cfg)
+	base := cfg.ServerURL()
 
 	var failed int
 	report := func(ok bool, name, detail string) {
@@ -54,7 +52,10 @@ func runDoctor(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	}
 
 	// Health.
-	client := &http.Client{Timeout: 3 * time.Second}
+	client, cerr := httpClient(cfg, healthTimeout)
+	if cerr != nil {
+		return cerr
+	}
 	resp, herr := client.Get(base + "/healthz")
 	if herr != nil {
 		report(false, "server", "unreachable at "+base+": "+herr.Error())

@@ -40,5 +40,5 @@ silence, not an error message.
 - [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/): Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.
 - [Capture Claude Code plans](https://thereisnospoon.org/docs/guides/plan-mode/): How plan mode is captured automatically - which hook does what, a plan's life from draft to approved, and the escape hatches.
 - [Run research trials](https://thereisnospoon.org/docs/guides/research-trials/): The lab loop for systematic debugging - recording what was tried, letting parallel agents share dead ends, and distilling the result into memory.
-- [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/): Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.
+- [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/): One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.
 - [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/): Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.

@@ -21,8 +21,8 @@ preserved read-only as a fallback archive.
 ## Project structure
 
 ```
-cmd/seamlessd/     server daemon: serve, doctor, import, install-hooks, map-repo,
-                   family, console-open
+cmd/seamlessd/     server daemon: serve, doctor, export, import, install-hooks,
+                   map-repo, family, console-open
 cmd/seam/          headless CLI (agents + owner observability)  [P2/P5]
 cmd/docsgen/       docs site generator: docs-src/ -> docs/docs/ (see SITE.md)
 cmd/demoseed/      thin CLI over internal/demokit: the console-fleet seed
@@ -56,6 +56,9 @@ internal/mcp/      MCP tools (streamable HTTP, static bearer key); see ToolCount
 internal/hooks/    session hooks + CC plan-mode capture (PostToolUse etc.) [P2/P3]
 internal/console/  server-rendered observability UI (html/template + SSE)  [P5]
 internal/capture/  SSRF-safe URL fetch                                     [P4]
+internal/archive/  instance archives: VACUUM INTO snapshot + corpus + manifest
+                   out; guarded tar extract and restore-or-merge back in.
+                   Never imports config
 internal/importer/ one-shot import of the v1 (~/.seam) snapshot
 internal/demokit/  importable fixture-seeding primitives + the demo spec sets;
                    the shared seam under BOTH branding and the benchmark

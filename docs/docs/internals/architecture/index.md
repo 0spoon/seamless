@@ -52,6 +52,7 @@ violation is visible in the import block.
 | `gardener` | domain | The timed passes (dedup, staleness, digest, stale-plan) and request-driven interpretation. Writes proposals; never mutates a memory. | `config`, `core`, `events`, `files`, `lifecycle`, `llm`, `plans`, `store` |
 | `plans` | domain | The captured-plan vocabulary: note-slug prefixes, the `plan-status` tag lifecycle, the tracking-task composition. One home so the tag spellings cannot drift. | `core`, `store` |
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
+| `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
 | `mcp` | surface | The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution. | `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
 | `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |

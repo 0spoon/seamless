@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"flag"
 	"fmt"
 	"html/template"
@@ -160,12 +161,16 @@ func renderConsoleLoginPage(base, key string) (string, error) {
 	return b.String(), nil
 }
 
-// a2aEndpoint returns the usable discovery URL for the daemon's effective bind
-// address. It takes a bind address rather than the loaded config because the
-// caller passes the post-flag-override value: `serve --addr` wins over `addr:`,
-// and the card must advertise what the daemon actually listened on.
-func a2aEndpoint(bind string) string {
-	return config.Config{Addr: bind}.ServerURL() + "/api/a2a"
+// a2aEndpoint returns the usable discovery URL for the daemon's A2A endpoint.
+//
+// It takes the LOADED config, not a bind address: the card must carry the
+// scheme tls.* decides and the host server_url names, and synthesizing a
+// config.Config{Addr: bind} threw both away -- a TLS daemon advertised http://
+// and a wildcard bind advertised loopback even when server_url said otherwise.
+// `serve --addr` still wins, because runServe writes the override back onto
+// cfg.Addr before anything derives a URL from it.
+func a2aEndpoint(cfg config.Config) string {
+	return cfg.ServerURL() + "/api/a2a"
 }
 
 // urlHostPort is the authority (host:port) of a base URL, for the callers that
@@ -179,11 +184,32 @@ func urlHostPort(base string) string {
 	return u.Host
 }
 
-// serverReachable reports whether the console answers /healthz within 2s. Any
-// HTTP response (200 or a 503 degraded) counts; only a transport error is down.
+// serverReachable reports whether a daemon answers /healthz on host (host:port)
+// within 2s. Any HTTP response (200 or a 503 degraded) counts; only a transport
+// error is down.
+//
+// Plaintext first, then TLS: once tls.cert_file/tls.key_file are set the
+// listener refuses http entirely, and a probe that only spoke http would report
+// a perfectly healthy daemon as absent -- which is how `import` would decide it
+// is safe to overwrite a live data directory. The TLS leg deliberately skips
+// verification: this asks "is something serving here", nothing is read from the
+// response and no credential is sent, and requiring a trusted chain would turn
+// a self-signed LAN daemon (the documented setup) back into "down".
 func serverReachable(host string) bool {
 	client := &http.Client{Timeout: 2 * time.Second}
 	resp, err := client.Get("http://" + host + "/healthz")
+	if err == nil {
+		_ = resp.Body.Close()
+		return true
+	}
+	tlsClient := &http.Client{
+		Timeout: 2 * time.Second,
+		Transport: &http.Transport{
+			//nolint:gosec // liveness probe only: no body read, no credential sent
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
+		},
+	}
+	resp, err = tlsClient.Get("https://" + host + "/healthz")
 	if err != nil {
 		return false
 	}

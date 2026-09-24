@@ -1,9 +1,11 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"net/url"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -26,7 +28,13 @@ const defaultServerURL = "http://127.0.0.1:8081"
 // questions that happen to have the same answer on a loopback install; keeping
 // one derivation here is what lets the second question get its own answer
 // (server_url) without hunting the first one down in five files.
+// A configured server_url wins outright: it is the operator saying "this is
+// where clients reach me", which is precisely the question no bind address can
+// answer once the two differ (a wildcard bind, a LAN name, a reverse proxy).
 func (c Config) ServerURL() string {
+	if advertised := strings.TrimSpace(c.AdvertisedURL); advertised != "" {
+		return strings.TrimSuffix(advertised, "/")
+	}
 	scheme := "http"
 	if c.TLSEnabled() {
 		scheme = "https"
@@ -52,21 +60,119 @@ func (c Config) ServerHost() string {
 // IsClient reports whether this install runs no daemon of its own and dials a
 // server elsewhere instead.
 //
-// Always false today: the role key that can make it true lands with the
-// transport work. It exists now so the call sites that must branch on it are
-// written against one predicate rather than each inventing its own.
-func (Config) IsClient() bool {
-	return false
+// It is the single predicate every branching call site shares. An unset role is
+// the default (server): absence means the default, and a role that is neither
+// value never reaches here, because Validate refuses it at load.
+func (c Config) IsClient() bool {
+	return c.Role == RoleClient
 }
 
 // TLSEnabled reports whether the daemon serves HTTPS rather than HTTP -- which
-// is what decides ServerURL's scheme and whether the console's session cookie
-// may be marked Secure.
+// is what decides ServerURL's scheme, whether the console's session cookie may
+// be marked Secure, and what the non-loopback bind warning may truthfully claim.
 //
-// Always false today: the tls.cert_file/tls.key_file pair that can make it true
-// lands with the transport work.
-func (Config) TLSEnabled() bool {
-	return false
+// Both halves of the pair are required because serving TLS needs both; Validate
+// refuses a half-set pair at load, so a lone cert_file can never quietly read as
+// "no TLS" here.
+func (c Config) TLSEnabled() bool {
+	return strings.TrimSpace(c.TLS.CertFile) != "" && strings.TrimSpace(c.TLS.KeyFile) != ""
+}
+
+// AllowedHostsEffective is the extra-Host allowlist the daemon answers to: the
+// configured allowed_hosts, plus the host of a CONFIGURED server_url. The
+// advertised host is in the list whenever it was named, because advertising a
+// name the guard then rejects is a self-inflicted 421.
+//
+// Loopback names and the concrete bind host are NOT here: hostGuard adds those
+// itself, and they are facts about the listener rather than operator intent.
+// That distinction is load-bearing. A DERIVED ServerHost is exactly one of
+// those two -- loopback for a wildcard bind, the bind host for a concrete one
+// -- so putting it in this list would add nothing the guard did not already
+// allow while making the list non-empty, and a non-empty list is precisely what
+// switches the guard on for a wildcard bind. The daemon would start refusing
+// every Host but loopback on an `addr: 0.0.0.0` install where the operator
+// named nothing at all.
+//
+// Empty return = "the operator has named no host", which is the state hostGuard
+// reads as "a wildcard bind cannot have an allowlist".
+func (c Config) AllowedHostsEffective() []string {
+	var out []string
+	add := func(h string) {
+		if h = strings.ToLower(strings.Trim(strings.TrimSpace(h), "[]")); h != "" && !slices.Contains(out, h) {
+			out = append(out, h)
+		}
+	}
+	for _, h := range c.AllowedHosts {
+		add(h)
+	}
+	if strings.TrimSpace(c.AdvertisedURL) != "" {
+		add(c.ServerHost())
+	}
+	return out
+}
+
+// validateTransport enforces the role/server_url/tls rules, as one block so the
+// cross-key rules (a client needs a URL, a client has no server certificate)
+// sit beside the per-key ones they depend on.
+func (c Config) validateTransport() error {
+	// Absent (empty) means the default; present-but-unrecognized is an error,
+	// never a silent fallback to server -- which is the one that opens a port.
+	if c.Role != "" && !slices.Contains(Roles, c.Role) {
+		return fmt.Errorf("config: role invalid %q: valid values are %s", c.Role, strings.Join(Roles, ", "))
+	}
+	if err := validateServerURL(c.AdvertisedURL); err != nil {
+		return err
+	}
+	if (strings.TrimSpace(c.TLS.CertFile) == "") != (strings.TrimSpace(c.TLS.KeyFile) == "") {
+		return fmt.Errorf("config: tls.cert_file and tls.key_file must be set together (one without the other cannot serve TLS)")
+	}
+	if c.IsClient() {
+		if strings.TrimSpace(c.AdvertisedURL) == "" {
+			return fmt.Errorf("config: role: client requires server_url -- a client runs no daemon of its own")
+		}
+		if strings.TrimSpace(c.TLS.CertFile) != "" {
+			return fmt.Errorf("config: tls.cert_file is a server key; a client trusts its server with tls.ca_file")
+		}
+	}
+	return nil
+}
+
+// validateServerURL refuses anything that is not a bare absolute base URL.
+//
+// The strictness is the point: every consumer appends a path to this value
+// ("/api/mcp", "/healthz", "/console/"), and ServerHost compares its host
+// against a Host header and a TLS SAN. A bare "host:8081" parses as a URL with
+// scheme "host" -- valid to url.Parse, useless to both -- so the scheme check is
+// what catches the most likely typo. A single trailing slash is accepted and
+// trimmed (it names the same base URL); any deeper path is refused rather than
+// silently dropped.
+func validateServerURL(raw string) error {
+	s := strings.TrimSpace(raw)
+	if s == "" {
+		return nil
+	}
+	u, err := url.Parse(s)
+	if err != nil {
+		return fmt.Errorf("config: server_url %q is not a URL: %w", s, err)
+	}
+	switch u.Scheme {
+	case "http", "https":
+	default:
+		return fmt.Errorf("config: server_url %q must be an absolute http:// or https:// URL", s)
+	}
+	if u.Hostname() == "" {
+		return fmt.Errorf("config: server_url %q names no host", s)
+	}
+	if strings.Trim(u.Path, "/") != "" || strings.Contains(u.Path, "//") {
+		return fmt.Errorf("config: server_url %q must be a bare base URL (scheme://host:port), with no path", s)
+	}
+	if u.RawQuery != "" || u.ForceQuery {
+		return fmt.Errorf("config: server_url %q must be a bare base URL, with no query string", s)
+	}
+	if u.Fragment != "" {
+		return fmt.Errorf("config: server_url %q must be a bare base URL, with no fragment", s)
+	}
+	return nil
 }
 
 // reachableHost maps a bind host that means "every interface" to loopback. A

@@ -4442,19 +4442,61 @@ Commit periodically (a cron job or a `launchd` timer is plenty). The payoff is
 that `git log` over your memory directory is a real history of what your agents
 learned and when they changed their minds.
 
-If you would rather keep the tasks and sessions too, back up `seam.db` with
-SQLite's own tooling rather than copying the file while the daemon is running:
+Git gives you the knowledge with a history. It deliberately leaves out the other
+half - sessions, tasks, trials, events - which is what
+[`seamlessd export`](#the-whole-instance-in-one-archive) is for. They compose:
+git for the diffable record of what your agents learned, an archive for the whole
+instance.
+
+## The whole instance in one archive
 
 ```bash
-sqlite3 ~/.seamless/seam.db ".backup '/tmp/seam-backup.db'"
+seamlessd export
+# wrote /Users/you/seamless-nuc.local-20260923T220501Z.tar.gz (4.1 MiB)
+#   host nuc.local, seamlessd 0.9.1, created 2026-09-23T22:05:01Z
+#   corpus: 214 memories, 38 notes
+#   database: schema v25, 18422 rows across 21 tables
 ```
 
-A plain `cp` of a WAL-mode database under a live writer can capture a torn state.
-`.backup` will not.
+One gzipped tar with the markdown corpus, a consistent snapshot of `seam.db`, and
+a manifest describing what is inside. Full flags in
+[the CLI reference](/reference/cli-seamlessd/#seamlessd_export).
+
+Three things worth knowing:
+
+- **Run it while the daemon is up.** The snapshot is SQLite's `VACUUM INTO`,
+  taken inside a read transaction, so a write in flight is simply not in it. No
+  `cp` of a WAL-mode database, no stopping anything. (A plain `cp` of
+  `seam.db` under a live writer can capture a torn state; this cannot.)
+- **The key is not in it.** Config and `mcp.api_key` are deliberately excluded,
+  so an archive can go to a NAS or another machine without carrying this
+  machine's only credential.
+- **`-` streams.** `seamlessd export -o - | ssh backup-box 'cat > seam.tgz'`
+  writes the archive to stdout and the report to stderr.
+
+`--no-db` gives you a knowledge-only archive: the two markdown trees, nothing
+else. It is the tarball equivalent of the git recipe above.
 
 ## Restore
 
-Restoring is: put the files back, start the daemon.
+```bash
+seamlessd stop
+seamlessd import --from seamless-nuc.local-20260923T220501Z.tar.gz
+seamlessd doctor && seamlessd start
+```
+
+Into an **empty** data directory, that is a restore: every `.md` lands
+byte-for-byte and the database snapshot is renamed into place last. Into a
+**populated** one it is a merge instead, first-writer-wins by ULID. Which one it
+will be is a property of the destination, is printed in the report, and cannot be
+overridden - so there is no way to ask for a restore and get a populated instance
+wiped. Add `--dry-run` to see the mode and the counts without writing anything.
+
+A restore refuses while a daemon is answering for that data directory (it would
+be replacing `seam.db` underneath it) and names `seamlessd stop`; `--force`
+overrides. A merge does not need the daemon down.
+
+You can also restore the knowledge alone, from an archive or from git:
 
 ```bash
 # files back in place
@@ -4470,15 +4512,35 @@ isn't one to forget.
 To force a full rebuild, stop the daemon, delete `seam.db`, and start it again.
 You lose sessions, tasks, trials, and events; you lose no knowledge.
 
+## Merging two instances
+
+Importing an archive into an instance that already has data is a **merge**, and
+it is idempotent: anything whose ULID is already here is skipped, so running the
+same archive twice inserts zero the second time. That makes it the way to fold a
+laptop's instance into a desktop's, or several devices' into one.
+
+Two rules keep it honest:
+
+- **Collisions are reported, never resolved.** A memory whose path is already
+  held by a different item is left unwritten and both ids are printed; a session
+  name or project slug already taken is reported rather than renamed. Deciding
+  which one wins is yours.
+- **This machine's settings stay this machine's.** Repo mappings, families,
+  briefing overrides, and the embedder switch are not merged, and neither are
+  embeddings - vectors belong to whichever model you run here, so imported items
+  are embedded on write instead.
+
 ## Import from Seam v1
 
 ```bash
-seamlessd import --help
+seamlessd import --from ~/.seam
 ```
 
-The importer brings a v1 store's memories, sessions, and tool-call events into
-`seam.db`. It is **idempotent**: running it twice does not double anything, so a
-partial import is safe to re-run.
+`seamlessd import` fronts two operations and picks between them by what
+`--from` names on disk: a **directory** is a Seam v1 store, a **file** (or `-`)
+is an archive. Point it at a v1 data directory and it brings that store's
+memories, sessions, and tool-call events into `seam.db`. It is **idempotent**:
+running it twice does not double anything, so a partial import is safe to re-run.
 
 ## Hand-editing
 
@@ -4503,18 +4565,29 @@ any text editor.
 
 ```bash
 # on the old machine
-cd ~/.seamless && git push          # or: tar czf seamless.tgz memory notes
+seamlessd export -o seamless.tar.gz
 
 # on the new one
-git clone <remote> ~/.seamless      # or untar
 make install                        # seeds a config with a NEW generated key
-make doctor
+seamlessd stop                      # the installer starts the service
+seamlessd import --from seamless.tar.gz
+seamlessd doctor && seamlessd start
 ```
 
-The index rebuilds itself on first start. The install generates a fresh
-`mcp.api_key` rather than copying the old config: the key is the only
-credential, and a machine migration is a good moment not to spread it around.
-See [Install & deploy](/install/).
+The new machine's data directory is empty, so this is a restore: every memory
+and note lands byte-for-byte, and the sessions, tasks, trials, and events come
+with it. If you are folding the old machine into an instance that already has
+data, the same command is a merge instead - see
+[Merging two instances](#merging-two-instances).
+
+The install generates a fresh `mcp.api_key` rather than copying the old config:
+the key is the only credential, it is deliberately not in the archive, and a
+machine migration is a good moment not to spread it around. See
+[Install & deploy](/install/).
+
+If all you want is the knowledge, the git recipe moves it just as well
+(`git clone <remote> ~/.seamless`), and so does `seamlessd export --no-db`. The
+index rebuilds itself on first start either way.
 
 ---
 
@@ -6231,6 +6304,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `llm` | The provider, or a warning that its credential is missing. |
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
+| `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was written by a newer `seamlessd`, which is also why an archive from it would be refused. |
 | `repo map` | Warns when `repo_project_map` entries name paths that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
 | `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
@@ -6254,26 +6328,124 @@ healthy.
 Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.
 
-## seamlessd import {#seamlessd_import}
+## seamlessd export {#seamlessd_export}
 
 ```bash
-seamlessd import [--from DIR] [--skip LIST] [--embed=false]
+seamlessd export [-o FILE|-] [--no-db]
 ```
 
-Imports a Seam v1 data directory into this instance. Memory and note files are
-written and indexed under the v2 data directory; trials, sessions, and tool-call
-events are inserted into the database.
+Writes the whole instance to one gzipped tar: the markdown corpus, a consistent
+snapshot of `seam.db`, and a `manifest.json` describing what is inside.
+
+**Config and `mcp.api_key` are never in the archive.** A restored instance gets
+its own config and a freshly generated key, which is what lets an archive be
+copied to another machine, a NAS, or a colleague without carrying this machine's
+only credential.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--from` | `~/.seam` | v1 data directory to import from. A leading `~` expands. |
-| `--skip` | `briefings` | Comma-separated storage projects to skip. |
-| `--embed` | `true` | Embed imported items for cosine search, using the configured provider. |
+| `-o` | `seamless-<host>-<UTC timestamp>.tar.gz` in the working directory | Where to write the archive. `-` streams it to stdout and puts the report on stderr. |
+| `--no-db` | `false` | Export the markdown trees only. Sessions, tasks, trials, events, and embeddings are then **not** in the archive. |
 
-**It is idempotent by id**, so re-running imports only what is new - which makes
-a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
-prints a report even when the import ends in an error. With `--embed` on and no
-usable embedder, it warns and imports without vectors rather than failing.
+Layout, in tar order:
+
+```text
+manifest.json                       always first
+seam.db                             absent with --no-db
+memory/{project|_global}/{name}.md
+notes/{project|_global}/{slug}.md
+```
+
+`manifest.json` first is deliberate: a reader can refuse an archive - wrong
+format, or a schema newer than its own binary understands - before extracting a
+single byte. Every entry is a regular file with mode `0600` and uid/gid zeroed,
+so a restore under another account carries no ownership from the exporting
+machine.
+
+**It is safe to run against a live instance.** The snapshot is SQLite's
+`VACUUM INTO` on a handle that never migrates, so a newer binary cannot move the
+schema under a running older daemon, and a write in flight is simply not in the
+snapshot rather than half in it. The database is snapshotted *before* the trees
+are walked, so the file set is a superset of what the snapshot's index describes;
+the import's reconciliation heals that window.
+
+A named destination is claimed with `O_EXCL` and written through a sibling
+`.tmp` that is renamed into place, so an export never overwrites an existing
+archive and never leaves a truncated one under a finished-looking name.
+
+## seamlessd import {#seamlessd_import}
+
+```bash
+seamlessd import [--from DIR|FILE|-] [--embed=false]
+                 [--skip LIST]              # v1 directory only
+                 [--dry-run] [--force]      # archive only
+```
+
+Imports another store into this instance. **What `--from` names on disk decides
+which of two unrelated operations runs** - never a flag:
+
+| `--from` is | Source | What happens |
+|---|---|---|
+| a directory (the default `~/.seam`) | A Seam v1 data directory | Memory and note files are written and indexed here; trials, sessions, and tool-call events are inserted into the database. |
+| a regular file, or `-` | A `seamlessd export` archive | A **restore** into an empty data directory, or a **merge** into a populated one. |
+
+| Flag | Default | Applies to | Meaning |
+|---|---|---|---|
+| `--from` | `~/.seam` | both | Source path. A leading `~` expands; `-` reads an archive from stdin. |
+| `--embed` | `true` | both | Embed imported items for cosine search, using the configured provider. |
+| `--skip` | `briefings` | v1 directory | Comma-separated storage projects to skip. |
+| `--dry-run` | `false` | archive | Report what the import would do and change nothing. |
+| `--force` | `false` | archive | Allow a fresh restore while a daemon is still answering for this data directory. |
+
+A flag from the other family is an **error**, not an ignored no-op: `--dry-run`
+against a v1 directory would otherwise read as "previewed, nothing happened"
+while the import actually ran.
+
+### Importing a v1 directory
+
+**Idempotent by id**, so re-running imports only what is new - which makes a
+delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and prints
+a report even when the import ends in an error. With `--embed` on and no usable
+embedder, it warns and imports without vectors rather than failing.
+
+### Importing an archive
+
+Restore-or-merge is a property of the **destination**, printed in the report and
+never overridable. There is no `restore` verb and no `--mode`: the only thing an
+override could do is replace a populated instance's database.
+
+- **Fresh** (restore) when the data directory is absent, or holds neither
+  `seam.db` nor `seam.db-wal` and no regular non-dot file in either tree. The
+  markdown is restored byte-for-byte and the snapshot is renamed into place last,
+  so an interrupted restore leaves files and no database - which the next run
+  reads as fresh again and repeats cleanly.
+- **Merge** otherwise, first-writer-wins by ULID: an item or row whose id is
+  already here is skipped, which makes re-merging the same archive a no-op.
+
+A fresh restore replaces `seam.db` wholesale, so it **refuses while a daemon is
+answering** for that data directory and tells you to run `seamlessd stop`;
+`--force` overrides. A merge and a `--dry-run` need no such thing - a merge
+writes through the same files layer the daemon uses, and a dry run writes
+nothing.
+
+What a merge does **not** touch:
+
+| Not merged | Why |
+|---|---|
+| `settings` | Repo paths, families, briefing overrides, and the embedder switch describe *this* machine. |
+| `embeddings` | Vectors belong to whichever model this instance runs; imported items are embedded on write instead. |
+| `*_index`, `fts`, `retrieval_stats`, `jobs` | Rebuildable mirrors, refreshed by the import itself. |
+
+Collisions are **reported, never resolved**. A corpus file whose path is already
+held by a different item is left unwritten and both ids are named; a
+`sessions.name` or `projects.slug` already taken is reported rather than renamed,
+because minting a new name would invent an identifier nothing refers to. The run
+still exits 0 - the report is the work item.
+
+When the archive's `embedding_models` differ from this instance's embedder, the
+report says so and points at the console's re-embed
+(Settings → Embeddings). Vectors from two models are not comparable, so that
+mismatch does not heal itself.
 
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
@@ -6581,6 +6753,12 @@ rejected until one is set - `seamlessd doctor` reports it as a warning.
 |---|---|---|
 | `addr` | string | `127.0.0.1:8081` |
 | `data_dir` | string | `~/.seamless` |
+| `role` | string | `server` |
+| `server_url` | string | - |
+| `allowed_hosts` | []string | - |
+| `tls.cert_file` | string | - |
+| `tls.key_file` | string | - |
+| `tls.ca_file` | string | - |
 | `mcp.api_key` | string | - |
 | `budgets.max_briefing_tokens` | int | `1500` |
 | `budgets.recall_budget_tokens` | int | `1000` |
@@ -8436,7 +8614,12 @@ The split is deliberate: durable knowledge is yours in plain markdown, and
 high-churn state that would be miserable as files stays in the database.
 
 WAL mode means `seam.db` is normally accompanied by `seam.db-wal` and
-`seam.db-shm`. They are part of the database; copy all three or none.
+`seam.db-shm`. They are part of the database; copy all three or none - a `cp` of
+just `seam.db` under a live writer is a torn snapshot, not a backup. The way not
+to think about any of that is
+[`seamlessd export`](/reference/cli-seamlessd/#seamlessd_export), which takes the
+snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
+against a running daemon.
 
 ### Reconciliation
 
@@ -8750,6 +8933,7 @@ violation is visible in the import block.
 | `gardener` | domain | The timed passes (dedup, staleness, digest, stale-plan) and request-driven interpretation. Writes proposals; never mutates a memory. | `config`, `core`, `events`, `files`, `lifecycle`, `llm`, `plans`, `store` |
 | `plans` | domain | The captured-plan vocabulary: note-slug prefixes, the `plan-status` tag lifecycle, the tracking-task composition. One home so the tag spellings cannot drift. | `core`, `store` |
 | `capture` | domain | SSRF-safe URL fetch: private-IP rejection, a pinned dialer, a port allowlist, redirect validation, a size cap. | - |
+| `archive` | domain | Instance archives: `VACUUM INTO` snapshot + corpus + manifest out, guarded tar extraction and restore-or-merge back in. Never imports `config` - an archive is described by its manifest and the data dir it is handed, not by whichever process is holding it. | `core`, `files`, `llm`, `store`, `validate` |
 | `importer` | domain | One-way migration from the v1 store. Reads v1, writes v2, never modifies v1. | `core`, `files`, `store` |
 | `mcp` | surface | The tool surface over streamable HTTP, plus per-connection session bindings and scope resolution. | `capture`, `core`, `events`, `files`, `gardener`, `lifecycle`, `llm`, `plans`, `retrieve`, `store`, `validate` |
 | `hooks` | surface | Shared Claude Code/Codex hook endpoints and adapters, ambient sessions, bounded injection, findings harvest, and Claude-specific plan capture. | `config`, `core`, `events`, `files`, `plans`, `retrieve`, `store`, `validate` |

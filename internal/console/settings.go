@@ -20,9 +20,24 @@ import (
 	"github.com/0spoon/seamless/internal/validate"
 )
 
+// repoMapping is one (host, path) -> project route, read from the repo_map
+// table rather than the legacy flat JSON mirror: once several machines share one
+// daemon, two of them can mount the same path on different repositories, so a
+// route without its host names nothing.
 type repoMapping struct {
+	// Host is the machine the path lives on. Empty is the LEGACY bucket -- rows
+	// written before host scoping, or by a seeder that never named its machine
+	// -- and renders as "unknown", never as "this machine".
+	Host    string `json:"host,omitempty"`
 	Repo    string `json:"repo"`
 	Project string `json:"project"`
+}
+
+// repoRoute is one mapped repo path under a workspace scope, with the machine
+// it lives on.
+type repoRoute struct {
+	Host string `json:"host,omitempty"`
+	Path string `json:"path"`
 }
 
 type familyGroup struct {
@@ -67,7 +82,7 @@ type workspaceScope struct {
 	Registered       bool              `json:"registered"`
 	Retired          bool              `json:"retired"`
 	ParentRegistered bool              `json:"parentRegistered"`
-	Repos            []string          `json:"repos"`
+	Repos            []repoRoute       `json:"repos"`
 	Families         []workspaceFamily `json:"families"`
 }
 
@@ -177,7 +192,7 @@ type settingsData struct {
 	RepoMap            []repoMapping         `json:"repoMap"`
 	Families           []familyGroup         `json:"families"`
 	Workspaces         []workspaceScope      `json:"workspaces"`
-	UnboundRepos       []string              `json:"unboundRepos"`
+	UnboundRepos       []repoRoute           `json:"unboundRepos"`
 	FamilyEditors      []familyEditor        `json:"familyEditors"`
 	FamilyOptions      []familyProjectOption `json:"familyOptions"`
 }
@@ -190,7 +205,7 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	repoMap, err := store.RepoProjectMap(ctx, s.cfg.DB)
+	repoRows, err := store.RepoMapRows(ctx, s.cfg.DB)
 	if err != nil {
 		s.serverError(w, r, err)
 		return
@@ -200,7 +215,7 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.serverError(w, r, err)
 		return
 	}
-	workspaces, unboundRepos := buildWorkspaceRegistry(projects, repoMap, families)
+	workspaces, unboundRepos := buildWorkspaceRegistry(projects, repoRows, families)
 	familyEditors, familyOptions := buildFamilyEditors(workspaces, families)
 	briefing, overridden, err := store.BriefingConfig(ctx, s.cfg.DB, s.cfg.BriefingCfg)
 	if err != nil {
@@ -245,7 +260,7 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			UtilityRows:        utilityRows,
 			UtilityReady:       [3]int{store.UtilityReadyMinEvents, store.UtilityReadyMinMemories, store.UtilityReadyMinAgeDays},
 			Projects:           projects,
-			RepoMap:            sortedRepoMap(repoMap),
+			RepoMap:            sortedRepoMap(repoRows),
 			Families:           sortedFamilies(families),
 			Workspaces:         workspaces,
 			UnboundRepos:       unboundRepos,
@@ -830,12 +845,15 @@ func settingsRegistryNotice(w http.ResponseWriter, r *http.Request, msg string) 
 	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#workspace-registry", http.StatusSeeOther)
 }
 
-func sortedRepoMap(m map[string]string) []repoMapping {
-	out := make([]repoMapping, 0, len(m))
-	for repo, project := range m {
-		out = append(out, repoMapping{Repo: repo, Project: project})
+// sortedRepoMap projects the repo_map rows for display. store.RepoMapRows
+// already returns them ordered by host then path, so this preserves that order
+// rather than re-sorting by path alone: grouping a machine's routes together is
+// the whole point of showing the host.
+func sortedRepoMap(rows []store.RepoMapRow) []repoMapping {
+	out := make([]repoMapping, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, repoMapping{Host: r.Host, Repo: r.Path, Project: r.Slug})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].Repo < out[j].Repo })
 	return out
 }
 
@@ -850,7 +868,19 @@ func sortedFamilies(m map[string][]string) []familyGroup {
 	return out
 }
 
-func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, families map[string][]string) ([]workspaceScope, []string) {
+// lessRoute orders routes by host then path, matching store.RepoMapRows so a
+// machine's checkouts stay grouped wherever they are rendered.
+func lessRoute(a, b repoRoute) bool {
+	if a.Host != b.Host {
+		return a.Host < b.Host
+	}
+	return a.Path < b.Path
+}
+
+// buildWorkspaceRegistry joins the project registry, the repo_map rows and the
+// family settings into the Settings/Context workspace view, returning the scopes
+// plus the routes that resolve to no scope at all.
+func buildWorkspaceRegistry(projects []core.Project, repoRows []store.RepoMapRow, families map[string][]string) ([]workspaceScope, []repoRoute) {
 	bySlug := make(map[string]*workspaceScope, len(projects))
 	ensure := func(slug string) *workspaceScope {
 		if scope, ok := bySlug[slug]; ok {
@@ -879,9 +909,10 @@ func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, 
 		}
 	}
 
-	var unboundRepos []string
-	for repo, project := range repoMap {
-		slug := strings.TrimSpace(project)
+	var unboundRepos []repoRoute
+	for _, row := range repoRows {
+		repo := repoRoute{Host: row.Host, Path: row.Path}
+		slug := strings.TrimSpace(row.Slug)
 		if slug == "" {
 			unboundRepos = append(unboundRepos, repo)
 			continue
@@ -905,7 +936,7 @@ func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, 
 
 	out := make([]workspaceScope, 0, len(bySlug))
 	for _, scope := range bySlug {
-		sort.Strings(scope.Repos)
+		sort.Slice(scope.Repos, func(i, j int) bool { return lessRoute(scope.Repos[i], scope.Repos[j]) })
 		sort.Slice(scope.Families, func(i, j int) bool {
 			return scope.Families[i].Name < scope.Families[j].Name
 		})
@@ -923,7 +954,7 @@ func buildWorkspaceRegistry(projects []core.Project, repoMap map[string]string, 
 		}
 		return out[i].Slug < out[j].Slug
 	})
-	sort.Strings(unboundRepos)
+	sort.Slice(unboundRepos, func(i, j int) bool { return lessRoute(unboundRepos[i], unboundRepos[j]) })
 	return out, unboundRepos
 }
 

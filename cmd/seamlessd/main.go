@@ -4,7 +4,8 @@
 //
 //	seamlessd serve         start the HTTP server
 //	seamlessd doctor        run configuration + database self-checks
-//	seamlessd import        import a Seam v1 data directory
+//	seamlessd export        write the whole instance to one archive (corpus + db snapshot + manifest)
+//	seamlessd import        import a Seam v1 data directory, or a seamlessd export archive
 //	seamlessd install-hooks install agent hooks, MCP, and maintained skills
 //	seamlessd uninstall     remove Seamless (service, hooks, MCP, skills, binaries)
 //	seamlessd update        upgrade in place to the latest release (re-runs the installer)
@@ -17,6 +18,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -89,6 +91,8 @@ func main() {
 		err = runServe(args)
 	case "doctor":
 		err = runDoctor(args)
+	case "export":
+		err = runExport(args)
 	case "import":
 		err = runImport(args)
 	case "install-hooks":
@@ -134,7 +138,10 @@ func usage() {
 usage:
   seamlessd serve          start the HTTP server (127.0.0.1:8081)
   seamlessd doctor         run configuration + database self-checks
-  seamlessd import         import a Seam v1 data directory (--from ~/.seam)
+  seamlessd export         write the whole instance to one archive: corpus + db snapshot + manifest
+                           (-o FILE, or -o - for stdout; --no-db for the markdown trees only)
+  seamlessd import         import a Seam v1 data directory (--from ~/.seam), or a seamlessd export
+                           archive (--from FILE|-; --dry-run previews, --force allows a live restore)
   seamlessd install-hooks  install Claude Code/Codex hooks, MCP, and maintained skills
   seamlessd uninstall      remove Seamless: service, hooks, MCP, skills, binaries
                            (--purge also deletes config + ~/.seamless; --dry-run to preview)
@@ -177,6 +184,12 @@ func runServe(args []string) error {
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: %w", err)
 	}
+	// Refuse before anything opens a file or a port. A client install has no
+	// daemon of its own by definition, and serving one here would quietly give
+	// the machine a second, empty corpus that its own hooks never write to.
+	if cfg.IsClient() {
+		return fmt.Errorf("seamlessd.serve: role: client runs no daemon -- this install dials %s; remove `role: client` to serve here", cfg.ServerURL())
+	}
 	var keyPath string
 	cfg, keyPath, err = config.EnsureAPIKey(cfg)
 	if err != nil {
@@ -187,8 +200,15 @@ func runServe(args []string) error {
 	}
 	bind := cfg.Addr
 	if *addr != "" {
+		// The flag is the bind address, so it becomes the config's: everything
+		// downstream that derives "where do clients reach this daemon" --
+		// ServerURL, ServerHost, the Host allowlist, the agent card -- must
+		// answer from the address actually listened on, not from a superseded
+		// `addr:`. A configured server_url still wins over both.
 		bind = *addr
+		cfg.Addr = bind
 	}
+	serverURL := cfg.ServerURL()
 	logger := slog.Default()
 
 	db, err := store.Open(cfg.DBPath())
@@ -295,11 +315,13 @@ func runServe(args []string) error {
 		Features: cfg.Features,
 	})
 	// A2A: the agent-to-agent surface, one recall skill over the same retrieve
-	// service and bearer key as MCP. The endpoint URL in the card is the real
-	// bind address, so a non-default addr: advertises itself correctly.
+	// service and bearer key as MCP. The endpoint URL in the card is the URL
+	// clients actually dial (server_url, else the effective bind address), so a
+	// non-default addr:, a wildcard bind and a TLS listener all advertise
+	// themselves correctly.
 	a2aSrv, err := a2a.New(a2a.Config{
 		Retrieve: ret, Events: rec, APIKey: cfg.MCP.APIKey,
-		Version: buildVersion(), Endpoint: a2aEndpoint(bind),
+		Version: buildVersion(), Endpoint: a2aEndpoint(cfg),
 		Logger: logger,
 	})
 	if err != nil {
@@ -320,7 +342,11 @@ func runServe(args []string) error {
 		Features:       cfg.Features,
 		Embedding:      embedRT,
 		SessionIdleTTL: time.Duration(cfg.Gardener.SessionIdleMinutes) * time.Minute,
-		Logger:         logger,
+		// Secure only under TLS: a browser drops a Secure cookie arriving over
+		// http, so setting it unconditionally would lock the owner out of the
+		// console on the default loopback install.
+		SecureCookies: cfg.TLSEnabled(),
+		Logger:        logger,
 	})
 	if err != nil {
 		return fmt.Errorf("seamlessd.serve: console: %w", err)
@@ -350,17 +376,29 @@ func runServe(args []string) error {
 	consoleSrv.Register(mux)
 
 	// Host allowlist outermost, so a rebound request is refused before it can
-	// reach even an unauthenticated route (see netguard.go).
-	// No extra allowlist entries yet: the config key that names them lands with
-	// the transport work, and nil reproduces the bind-host-only allowlist.
-	srv := newHTTPServer(ctx, bind, hostGuard(bind, nil, mux))
-	warnNonLoopbackBind(bind)
+	// reach even an unauthenticated route (see netguard.go). The effective list
+	// is allowed_hosts plus the host of server_url, so naming the daemon is all
+	// it takes to arm the guard -- including on a wildcard bind.
+	tlsOn := cfg.TLSEnabled()
+	srv := newHTTPServer(ctx, bind, hostGuard(bind, cfg.AllowedHostsEffective(), mux))
+	if tlsOn {
+		// TLS 1.2 floor: everything below it is either broken or obsolete, and
+		// nothing that speaks to this daemon (Go, curl, a browser) needs it.
+		srv.TLSConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+	warnNonLoopbackBind(bind, tlsOn)
+	warnAdvertisedLoopback(bind, serverURL)
 
 	errCh := make(chan error, 1)
 	go func() {
-		slog.Info("seamlessd listening", "addr", bind, "data_dir", cfg.DataDir,
+		slog.Info("seamlessd listening", "addr", bind, "url", serverURL, "tls", tlsOn,
+			"data_dir", cfg.DataDir,
 			"version", buildVersion(), "commit", commit, "built", buildDate, "mcp_tools", mcp.ToolCount)
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		serve := srv.ListenAndServe
+		if tlsOn {
+			serve = func() error { return srv.ListenAndServeTLS(cfg.TLS.CertFile, cfg.TLS.KeyFile) }
+		}
+		if err := serve(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			errCh <- err
 		}
 	}()

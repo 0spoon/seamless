@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"database/sql"
 	"errors"
 	"flag"
 	"fmt"
 	"io/fs"
+	"maps"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -89,6 +93,7 @@ func doctor(args []string) error {
 		llmCheck(cfg),
 		embedderCheck(cfg),
 	)
+	checks = append(checks, transportChecks(cfg)...)
 
 	// Database: open (creating + migrating if needed) and report schema state.
 	db, err := store.Open(cfg.DBPath())
@@ -106,7 +111,9 @@ func doctor(args []string) error {
 			fmt.Sprintf("%s (schema v%d, %d tables)", cfg.DBPath(), ver, tbls)})
 	}
 
+	checks = append(checks, schemaVersionCheck(db))
 	checks = append(checks, repoMapCheck(db))
+	checks = append(checks, remoteSessionsCheck(db))
 	checks = append(checks, mcpToolsCheck())
 	checks = append(checks, claudeRuntimeChecks()...)
 	checks = append(checks, hooksCheck(cfg))
@@ -181,36 +188,254 @@ func chmodRepairCommand(mode, path string) string {
 	return fmt.Sprintf("chmod %s '%s'", mode, strings.ReplaceAll(target, "'", "'\"'\"'"))
 }
 
-// repoMapCheck reports dangling repo_project_map entries -- mapped paths that no
-// longer exist on disk. A repo moved without a rename heals itself at its next
-// session start (RegisterProjectForCWD adopts the project once every owner of
-// the derived slug is dead), but a repo moved AND renamed derives a different
-// slug and cannot be recognized; the printed map-repo override is the fix for
-// that case. Dangling entries are otherwise harmless, so this warns rather than
+// repoMapCheck reports dangling repo_map entries -- mapped paths that no longer
+// exist on disk. A repo moved without a rename heals itself at its next session
+// start (RegisterProjectForCWD adopts the project once every owner of the
+// derived slug is dead), but a repo moved AND renamed derives a different slug
+// and cannot be recognized; the printed map-repo override is the fix for that
+// case. Dangling entries are otherwise harmless, so this warns rather than
 // fails.
+//
+// Only LOCAL rows are stat'd. A path on another machine is missing from this
+// disk by definition, so stat'ing it would report every remote device's repos as
+// dangling -- and a same-named checkout here would report a stale mapping as
+// healthy, which is worse. The unnamed ("") host bucket counts as local: it is
+// the pre-host-scoping legacy mirror of THIS machine, not an unknown one.
+// schemaVersionCheck pairs what the database has APPLIED with what this binary
+// COMPILES. doctor's own store.Open has already migrated forward by the time it
+// runs, so "applied < compiled" is unreachable here and the interesting case is
+// the other one: a database written by a NEWER seamlessd, which this build
+// cannot understand by migrating (the migrations that produced it are not in it)
+// and which is the same refusal an archive from that machine would hit. Info
+// rather than ok, because the pair is a fact to read, not a condition to pass.
+func schemaVersionCheck(db *sql.DB) check {
+	const name = "schema version"
+	applied, err := store.SchemaVersion(db)
+	if err != nil {
+		return check{statusWarn, name, "cannot read schema_migrations: " + err.Error()}
+	}
+	compiled := store.LatestSchemaVersion()
+	detail := fmt.Sprintf("v%d applied / v%d compiled", applied, compiled)
+	if applied > compiled {
+		return check{statusWarn, name, detail +
+			" -- this database was written by a newer seamlessd; upgrade (seamlessd update) before reading or exporting it"}
+	}
+	return check{statusInfo, name, detail}
+}
+
 func repoMapCheck(db *sql.DB) check {
 	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
 	defer cancel()
-	m, err := store.RepoProjectMap(ctx, db)
+	rows, err := store.RepoMapRows(ctx, db)
 	if err != nil {
-		return check{statusWarn, "repo map", "cannot read repo_project_map: " + err.Error()}
+		return check{statusWarn, "repo map", "cannot read repo_map: " + err.Error()}
 	}
-	if len(m) == 0 {
+	if len(rows) == 0 {
 		return check{statusOK, "repo map", "no repos mapped yet (a repo maps itself on its first session)"}
 	}
+	local := config.Hostname()
+	var localCount, remoteCount int
 	var missing []string
-	for path, slug := range m {
-		if _, err := os.Lstat(path); errors.Is(err, fs.ErrNotExist) {
-			missing = append(missing, fmt.Sprintf("%s -> %s", path, slug))
+	remoteHosts := map[string]bool{}
+	for _, r := range rows {
+		if r.Host != "" && r.Host != local {
+			remoteCount++
+			remoteHosts[r.Host] = true
+			continue
+		}
+		localCount++
+		if _, serr := os.Lstat(r.Path); errors.Is(serr, fs.ErrNotExist) {
+			missing = append(missing, fmt.Sprintf("%s -> %s", r.Path, r.Slug))
 		}
 	}
+	remote := ""
+	if remoteCount > 0 {
+		names := slices.Sorted(maps.Keys(remoteHosts))
+		remote = fmt.Sprintf("; %d on %s, not verifiable from here",
+			remoteCount, strings.Join(names, ", "))
+	}
 	if len(missing) == 0 {
-		return check{statusOK, "repo map", fmt.Sprintf("%d mapped paths, all present on disk", len(m))}
+		return check{statusOK, "repo map", fmt.Sprintf(
+			"%d local mapped paths, all present on disk%s", localCount, remote)}
 	}
 	slices.Sort(missing)
 	return check{statusWarn, "repo map", fmt.Sprintf(
-		"%d of %d mapped paths missing on disk: %s -- a moved repo adopts its project at its next session start; a renamed one needs `seamlessd map-repo --path <new-root> --project <slug>`",
-		len(missing), len(m), strings.Join(missing, "; "))}
+		"%d of %d local mapped paths missing on disk: %s -- a moved repo adopts its project at its next session start; a renamed one needs `seamlessd map-repo --path <new-root> --project <slug>`%s",
+		len(missing), localCount, strings.Join(missing, "; "), remote)}
+}
+
+// remoteSessionsCheck reports which machines have used this daemon lately and
+// how many daemon-side captures were skipped for them.
+//
+// Info, never a warning: a shared daemon is a supported deployment and the skips
+// are the design working. It exists because that design is SILENT otherwise --
+// plan capture, git stamps and transcript harvest read the daemon's disk, so a
+// remote agent simply gets none of them, and nothing else on any surface says so.
+func remoteSessionsCheck(db *sql.DB) check {
+	const name = "remote sessions"
+	ctx, cancel := context.WithTimeout(context.Background(), codexActivityTimeout)
+	defer cancel()
+	since := time.Now().Add(-24 * time.Hour)
+	hosts, err := store.SessionHostsSince(ctx, db, since)
+	if err != nil {
+		return check{statusWarn, name, "cannot read session hosts: " + err.Error()}
+	}
+	local := config.Hostname()
+	var total, remote int
+	var others []string
+	for _, h := range hosts {
+		total += h.Sessions
+		// The unnamed bucket is this machine's own history (pre-host-scoping
+		// rows, or a client too old to send a host), not another device.
+		if h.Host == "" || h.Host == local {
+			continue
+		}
+		remote += h.Sessions
+		others = append(others, fmt.Sprintf("%s (%d)", h.Host, h.Sessions))
+	}
+	if remote == 0 {
+		return check{statusInfo, name, fmt.Sprintf("none in 24h (%d sessions, all local)", total)}
+	}
+	skips, serr := store.RemoteSkipsSince(ctx, db, since)
+	detail := fmt.Sprintf("%d of %d sessions in 24h from %s", remote, total, strings.Join(others, ", "))
+	if serr != nil {
+		return check{statusInfo, name, detail + "; skipped-capture count unreadable: " + serr.Error()}
+	}
+	return check{statusInfo, name, fmt.Sprintf(
+		"%s; %d local captures skipped for them (plan capture, git stamps and transcript harvest read THIS machine's disk)",
+		detail, skips)}
+}
+
+// transportChecks reports the network posture: what the daemon binds, what URL
+// it hands clients, and whether its TLS material is usable.
+//
+// They run before the database opens because they are answerable from config
+// alone, and because a wrong answer here is what makes every remote client fail
+// in a way that looks like a network problem from the other end.
+func transportChecks(cfg config.Config) []check {
+	if cfg.IsClient() {
+		// A client install has no listener, no allowlist and no server
+		// certificate. Its own checks are Phase 3; saying so is better than
+		// reporting a bind address it never binds.
+		return []check{{statusInfo, "role", "client: this install runs no daemon and dials " + cfg.ServerURL()}}
+	}
+	return []check{bindCheck(cfg), serverURLCheck(cfg), tlsCheck(cfg)}
+}
+
+// bindCheck reports the listener's exposure. Non-loopback without TLS is a warn
+// and not a fail for the same reason warnNonLoopbackBind is a warning: binding
+// wide is a legitimate choice, and refusing it would only teach people to patch
+// it out.
+func bindCheck(cfg config.Config) check {
+	const name = "bind"
+	if isLoopbackBind(cfg.Addr) {
+		return check{statusOK, name, cfg.Addr + " (reachable only from this machine)"}
+	}
+	if cfg.TLSEnabled() {
+		return check{statusOK, name, cfg.Addr + " over TLS; the bearer key is still the only authentication"}
+	}
+	return check{statusWarn, name, cfg.Addr +
+		" is reachable beyond this machine with no TLS: the bearer key, every hook payload and the whole console travel in the clear" +
+		" -- set tls.cert_file/tls.key_file, or keep it inside a trusted LAN"}
+}
+
+// serverURLCheck proves the advertised URL actually reaches this daemon, which
+// is the one transport fact no amount of local inspection can establish: the
+// operator can only see it fail from the client, where it looks like the network.
+//
+// A 421 is called out by name because it is the failure mode with the least
+// obvious cause: the URL resolves, the daemon answers, and it refuses the Host
+// header it was just told to advertise.
+func serverURLCheck(cfg config.Config) check {
+	const name = "server_url"
+	base := cfg.ServerURL()
+	detail := base
+	if strings.TrimSpace(cfg.AdvertisedURL) == "" {
+		detail = base + " (derived from addr; set server_url when clients reach this daemon by another name)"
+	}
+	client := &http.Client{
+		Timeout: codexActivityTimeout,
+		Transport: &http.Transport{
+			//nolint:gosec // reachability probe: nothing is read from the body and no credential is sent
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true, MinVersion: tls.VersionTLS12},
+		},
+	}
+	resp, err := client.Get(base + "/healthz")
+	if err != nil {
+		// Not a failure: doctor runs with the daemon stopped as often as not.
+		return check{statusInfo, name, detail + " -- not answering right now (" + err.Error() + ")"}
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusMisdirectedRequest {
+		return check{statusFail, name, fmt.Sprintf(
+			"%s answers 421 to its own Host header %q: add the host to allowed_hosts (or correct server_url) and restart",
+			base, cfg.ServerHost())}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return check{statusWarn, name, fmt.Sprintf("%s answered %s", detail, resp.Status)}
+	}
+	return check{statusOK, name, detail + " reaches this daemon"}
+}
+
+// tlsExpiryWarning is how close to expiry a certificate earns a warning. A
+// month is enough notice to renew a mkcert/private-CA certificate by hand, which
+// is the documented setup and has no auto-renewal behind it.
+const tlsExpiryWarning = 30 * 24 * time.Hour
+
+// tlsCheck parses the configured pair and reports what a client will actually
+// experience: an expiring certificate, or one whose SANs do not cover the name
+// the daemon advertises. Both fail at the client's TLS handshake with a message
+// that says nothing about which file on the server is wrong.
+func tlsCheck(cfg config.Config) check {
+	const name = "tls"
+	if !cfg.TLSEnabled() {
+		return check{statusInfo, name, "off (http); set tls.cert_file and tls.key_file to serve https"}
+	}
+	pair, err := tls.LoadX509KeyPair(cfg.TLS.CertFile, cfg.TLS.KeyFile)
+	if err != nil {
+		return check{statusFail, name, "cannot load the certificate/key pair: " + err.Error()}
+	}
+	leaf := pair.Leaf
+	if leaf == nil {
+		// Go only populates Leaf when it parses the chain itself, which
+		// LoadX509KeyPair does not guarantee across versions.
+		leaf, err = x509.ParseCertificate(pair.Certificate[0])
+		if err != nil {
+			return check{statusFail, name, "cannot parse the certificate: " + err.Error()}
+		}
+	}
+	host := cfg.ServerHost()
+	var problems []string
+	switch left := time.Until(leaf.NotAfter); {
+	case left <= 0:
+		problems = append(problems, fmt.Sprintf("EXPIRED on %s", leaf.NotAfter.UTC().Format(time.DateOnly)))
+	case left < tlsExpiryWarning:
+		problems = append(problems, fmt.Sprintf("expires in %dd (%s)",
+			int(left.Hours()/24), leaf.NotAfter.UTC().Format(time.DateOnly)))
+	}
+	if err := leaf.VerifyHostname(host); err != nil {
+		problems = append(problems, fmt.Sprintf(
+			"does not cover %q (SANs: %s) -- clients dialing server_url will refuse it",
+			host, strings.Join(certNames(leaf), ", ")))
+	}
+	if len(problems) > 0 {
+		return check{statusWarn, name, fmt.Sprintf("%s: %s", cfg.TLS.CertFile, strings.Join(problems, "; "))}
+	}
+	return check{statusOK, name, fmt.Sprintf("%s covers %s, valid until %s",
+		cfg.TLS.CertFile, host, leaf.NotAfter.UTC().Format(time.DateOnly))}
+}
+
+// certNames lists a certificate's subject alternative names for the report: DNS
+// names and IP addresses, which are the two forms a Seamless server_url can take.
+func certNames(c *x509.Certificate) []string {
+	names := append([]string(nil), c.DNSNames...)
+	for _, ip := range c.IPAddresses {
+		names = append(names, ip.String())
+	}
+	if len(names) == 0 {
+		return []string{"none"}
+	}
+	return names
 }
 
 // hooksCheck reports whether the Claude Code Seamless hooks are installed. It

@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -122,17 +123,59 @@ func isLoopbackBind(bind string) bool {
 // choice (a container, a VM the operator reaches over a private network) and
 // refusing it would only teach people to patch it out. What it must not be is
 // *silent*: everything past this point -- a single static bearer key with no
-// rate limiting, a session cookie deliberately not marked Secure because
-// loopback is not HTTPS, an event feed that streams the corpus -- is designed
-// for a single-user localhost service, and none of it announces that at the
-// moment the operator edits `addr:`.
-func warnNonLoopbackBind(bind string) {
+// rate limiting, an event feed that streams the corpus -- is designed for a
+// single-user localhost service, and none of it announces that at the moment
+// the operator edits `addr:`.
+//
+// tlsOn is what the protection line is allowed to claim. The line used to say
+// the cookie is not Secure and there is no TLS on this listener, which stops
+// being true the moment tls.cert_file/tls.key_file are set -- and a security
+// warning that states something false is worse than one that is missing,
+// because the operator who checks it learns to stop reading it.
+func warnNonLoopbackBind(bind string, tlsOn bool) {
 	if isLoopbackBind(bind) {
 		return
+	}
+	protection := "a single static bearer key sent in the clear; the console cookie is not Secure (no TLS on this listener)"
+	advice := "set tls.cert_file/tls.key_file or keep it inside a trusted LAN; loopback plus an SSH tunnel remains the safest option"
+	if tlsOn {
+		protection = "TLS on this listener (the console cookie is Secure), guarded by a single static bearer key with no rate limiting"
+		advice = "keep it inside a trusted LAN; the bearer key is the only thing between a LAN peer and the whole corpus"
 	}
 	slog.Warn("SECURITY: binding to a non-loopback address exposes Seamless beyond this machine",
 		"addr", bind,
 		"exposed", "MCP tools, hooks, and the console -- your entire memory corpus",
-		"protection", "a single static bearer key; the console cookie is not Secure (no TLS on this listener)",
-		"advice", "prefer 127.0.0.1 and reach the daemon over an SSH tunnel; if this is deliberate, put it behind a TLS reverse proxy")
+		"protection", protection,
+		"advice", advice)
+}
+
+// warnAdvertisedLoopback warns when the daemon listens beyond this machine but
+// the URL it hands out still names loopback.
+//
+// That combination is a half-finished widening, and it fails in two directions
+// at once: every client the daemon tells where to find it (the agent card, the
+// installed hooks, `seamlessd client-config`) is handed an address that means
+// "your own machine", and the Host allowlist gets nothing to admit but loopback
+// names, so a request arriving under the daemon's real name is refused with 421.
+// Both symptoms are remote and neither looks like a config mistake from there.
+func warnAdvertisedLoopback(bind, serverURL string) {
+	if isLoopbackBind(bind) {
+		return
+	}
+	u, err := url.Parse(serverURL)
+	if err != nil {
+		return
+	}
+	h := strings.ToLower(strings.Trim(u.Hostname(), "[]"))
+	if !loopbackHosts[h] {
+		ip := net.ParseIP(h)
+		if ip == nil || !ip.IsLoopback() {
+			return
+		}
+	}
+	slog.Warn("server_url still points at this machine while the bind address does not",
+		"addr", bind,
+		"server_url", serverURL,
+		"effect", "clients are handed a loopback URL, and the Host allowlist admits only loopback names (everything else gets 421)",
+		"advice", "set server_url to the name or address other devices use to reach this daemon")
 }

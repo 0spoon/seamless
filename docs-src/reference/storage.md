@@ -171,7 +171,12 @@ The split is deliberate: durable knowledge is yours in plain markdown, and
 high-churn state that would be miserable as files stays in the database.
 
 WAL mode means `seam.db` is normally accompanied by `seam.db-wal` and
-`seam.db-shm`. They are part of the database; copy all three or none.
+`seam.db-shm`. They are part of the database; copy all three or none - a `cp` of
+just `seam.db` under a live writer is a torn snapshot, not a backup. The way not
+to think about any of that is
+[`seamlessd export`](/reference/cli-seamlessd/#seamlessd_export), which takes the
+snapshot with SQLite's `VACUUM INTO` inside a read transaction and is safe to run
+against a running daemon.
 
 ### Reconciliation
 

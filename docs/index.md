@@ -38,7 +38,7 @@
 - [Coordinate multiple agents](https://thereisnospoon.org/docs/guides/coordinate-agents/): Fan-out over the ready queue, planner/executor splits via plan composition, shared-lab investigation, and what happens when a claim holder dies.
 - [Capture Claude Code plans](https://thereisnospoon.org/docs/guides/plan-mode/): How plan mode is captured automatically - which hook does what, a plan's life from draft to approved, and the escape hatches.
 - [Run research trials](https://thereisnospoon.org/docs/guides/research-trials/): The lab loop for systematic debugging - recording what was tried, letting parallel agents share dead ends, and distilling the result into memory.
-- [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/): Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.
+- [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/): One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.
 - [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/): Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.
 
 ## Reference
@@ -50,7 +50,7 @@
 - [Tasks](https://thereisnospoon.org/docs/reference/mcp/tasks/): The six task tools - the dependency-aware ready queue and lease-based claiming that lets parallel agents divide work safely.
 - [Lab, gardener & usage](https://thereisnospoon.org/docs/reference/mcp/lab-gardener-usage/): Research trials, the propose-only gardener, the usage summary, and favorites - the nine tools for keeping the store honest.
 - [seam CLI](https://thereisnospoon.org/docs/reference/cli-seam/): Every seam subcommand - agent loop, tasks, plans, observability, hooks - plus the flag-order rules and what each one rejects.
-- [seamlessd CLI](https://thereisnospoon.org/docs/reference/cli-seamlessd/): The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
+- [seamlessd CLI](https://thereisnospoon.org/docs/reference/cli-seamlessd/): The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
 - [Configuration](https://thereisnospoon.org/docs/reference/configuration/): Every configuration key, its type and default, plus the annotated example file and the four layers that resolve them.
 - [Hooks](https://thereisnospoon.org/docs/reference/hooks/): The hooks Seamless installs per client - seven for Claude Code, five for Codex - their transports and timeouts, the fail-open contract, and what install-hooks writes.
 - [The service & where things live](https://thereisnospoon.org/docs/reference/service/): Everything OS-specific in one place - the per-user service (launchd, systemd, or a Scheduled Task), its native controls and logs, and every path Seamless touches.

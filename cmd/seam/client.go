@@ -13,18 +13,25 @@ import (
 	"github.com/0spoon/seamless/internal/config"
 )
 
+// consoleTimeout bounds a console JSON request. The console renders from local
+// SQLite, so anything slower than this is a wedged daemon rather than a big page.
+const consoleTimeout = 5 * time.Second
+
 // consoleJSON fetches a console page as JSON, authenticating with the bearer key.
 func consoleJSON(cfg config.Config, path string, v any) error {
-	req, err := http.NewRequest(http.MethodGet, mcpBase(cfg)+path, nil)
+	req, err := http.NewRequest(http.MethodGet, cfg.ServerURL()+path, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
+	client, err := httpClient(cfg, consoleTimeout)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("console unreachable at %s: %w", mcpBase(cfg), err)
+		return fmt.Errorf("console unreachable at %s: %w", cfg.ServerURL(), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {
@@ -63,16 +70,19 @@ func consoleError(resp *http.Response) string {
 // owner-only overrides (e.g. force-releasing a task lock) that live on the
 // console surface rather than the MCP tools.
 func consolePOST(cfg config.Config, path string, v any) error {
-	req, err := http.NewRequest(http.MethodPost, mcpBase(cfg)+path, nil)
+	req, err := http.NewRequest(http.MethodPost, cfg.ServerURL()+path, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Accept", "application/json")
-	client := &http.Client{Timeout: 5 * time.Second}
+	client, err := httpClient(cfg, consoleTimeout)
+	if err != nil {
+		return err
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("console unreachable at %s: %w", mcpBase(cfg), err)
+		return fmt.Errorf("console unreachable at %s: %w", cfg.ServerURL(), err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode == http.StatusNotFound {

@@ -156,6 +156,7 @@ func TestLogin_CorrectKeySetsCookieAndGrantsAccess(t *testing.T) {
 	require.NotNil(t, cookie, "login must set the console cookie")
 	require.Equal(t, consoleToken(testKey), cookie.Value)
 	require.True(t, cookie.HttpOnly)
+	require.False(t, cookie.Secure, "no TLS here: a Secure cookie over http is dropped by the browser")
 
 	// The cookie now authenticates a page load.
 	req2 := httptest.NewRequest(http.MethodGet, "/console/", nil)
@@ -306,4 +307,55 @@ func TestOverview_CoverageTrendEmptyWhenNoSessions(t *testing.T) {
 	var data overviewData
 	getJSON(t, mux, "/console/?format=json", &data)
 	require.Nil(t, data.CoverageTrend)
+}
+
+// SecureCookies follows config.TLSEnabled: under TLS the session cookie must be
+// Secure, and the logout that deletes it must carry the same attribute or the
+// browser may keep the original in place.
+func TestSecureCookiesUnderTLS(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := New(Config{DB: db, APIKey: testKey, SecureCookies: true})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	svc.Register(mux)
+
+	form := url.Values{"key": {testKey}, "next": {"/console/"}}
+	req := httptest.NewRequest(http.MethodPost, "/console/login", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rr := do(mux, req)
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == cookieName {
+			require.True(t, c.Secure)
+			require.True(t, c.HttpOnly)
+		}
+	}
+
+	out := httptest.NewRequest(http.MethodPost, "/console/logout", nil)
+	out.Header.Set("Authorization", "Bearer "+testKey)
+	rr = do(mux, out)
+	require.Equal(t, http.StatusSeeOther, rr.Code)
+	var found bool
+	for _, c := range rr.Result().Cookies() {
+		if c.Name == cookieName {
+			found = true
+			require.True(t, c.Secure, "the delete must match the set, or it may not replace it")
+			require.True(t, c.MaxAge < 0)
+		}
+	}
+	require.True(t, found)
+}
+
+// The sidebar names the SERVER, not "this machine": the console may be open on
+// a different device than the daemon.
+func TestSidebarNamesTheServerHost(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "seam.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+	svc, err := New(Config{DB: db, APIKey: testKey})
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(svc.host, "server"), "got %q", svc.host)
+	require.NotContains(t, svc.host, "this machine")
 }

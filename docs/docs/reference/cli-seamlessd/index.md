@@ -1,6 +1,6 @@
 # seamlessd CLI
 
-> The daemon and operator CLI - serve, doctor, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
+> The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
 every other subcommand is a one-shot that opens the same config and database
@@ -70,6 +70,7 @@ Checks stop early if config or the database cannot be loaded at all.
 | `llm` | The provider, or a warning that its credential is missing. |
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
+| `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was written by a newer `seamlessd`, which is also why an archive from it would be refused. |
 | `repo map` | Warns when `repo_project_map` entries name paths that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. |
 | `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
 | `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
@@ -93,26 +94,124 @@ healthy.
 Reach for it after changing config, after an upgrade, or as the first step when
 recall has quietly gone lexical.
 
-## seamlessd import {#seamlessd_import}
+## seamlessd export {#seamlessd_export}
 
 ```bash
-seamlessd import [--from DIR] [--skip LIST] [--embed=false]
+seamlessd export [-o FILE|-] [--no-db]
 ```
 
-Imports a Seam v1 data directory into this instance. Memory and note files are
-written and indexed under the v2 data directory; trials, sessions, and tool-call
-events are inserted into the database.
+Writes the whole instance to one gzipped tar: the markdown corpus, a consistent
+snapshot of `seam.db`, and a `manifest.json` describing what is inside.
+
+**Config and `mcp.api_key` are never in the archive.** A restored instance gets
+its own config and a freshly generated key, which is what lets an archive be
+copied to another machine, a NAS, or a colleague without carrying this machine's
+only credential.
 
 | Flag | Default | Meaning |
 |---|---|---|
-| `--from` | `~/.seam` | v1 data directory to import from. A leading `~` expands. |
-| `--skip` | `briefings` | Comma-separated storage projects to skip. |
-| `--embed` | `true` | Embed imported items for cosine search, using the configured provider. |
+| `-o` | `seamless-<host>-<UTC timestamp>.tar.gz` in the working directory | Where to write the archive. `-` streams it to stdout and puts the report on stderr. |
+| `--no-db` | `false` | Export the markdown trees only. Sessions, tasks, trials, events, and embeddings are then **not** in the archive. |
 
-**It is idempotent by id**, so re-running imports only what is new - which makes
-a delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and
-prints a report even when the import ends in an error. With `--embed` on and no
-usable embedder, it warns and imports without vectors rather than failing.
+Layout, in tar order:
+
+```text
+manifest.json                       always first
+seam.db                             absent with --no-db
+memory/{project|_global}/{name}.md
+notes/{project|_global}/{slug}.md
+```
+
+`manifest.json` first is deliberate: a reader can refuse an archive - wrong
+format, or a schema newer than its own binary understands - before extracting a
+single byte. Every entry is a regular file with mode `0600` and uid/gid zeroed,
+so a restore under another account carries no ownership from the exporting
+machine.
+
+**It is safe to run against a live instance.** The snapshot is SQLite's
+`VACUUM INTO` on a handle that never migrates, so a newer binary cannot move the
+schema under a running older daemon, and a write in flight is simply not in the
+snapshot rather than half in it. The database is snapshotted *before* the trees
+are walked, so the file set is a superset of what the snapshot's index describes;
+the import's reconciliation heals that window.
+
+A named destination is claimed with `O_EXCL` and written through a sibling
+`.tmp` that is renamed into place, so an export never overwrites an existing
+archive and never leaves a truncated one under a finished-looking name.
+
+## seamlessd import {#seamlessd_import}
+
+```bash
+seamlessd import [--from DIR|FILE|-] [--embed=false]
+                 [--skip LIST]              # v1 directory only
+                 [--dry-run] [--force]      # archive only
+```
+
+Imports another store into this instance. **What `--from` names on disk decides
+which of two unrelated operations runs** - never a flag:
+
+| `--from` is | Source | What happens |
+|---|---|---|
+| a directory (the default `~/.seam`) | A Seam v1 data directory | Memory and note files are written and indexed here; trials, sessions, and tool-call events are inserted into the database. |
+| a regular file, or `-` | A `seamlessd export` archive | A **restore** into an empty data directory, or a **merge** into a populated one. |
+
+| Flag | Default | Applies to | Meaning |
+|---|---|---|---|
+| `--from` | `~/.seam` | both | Source path. A leading `~` expands; `-` reads an archive from stdin. |
+| `--embed` | `true` | both | Embed imported items for cosine search, using the configured provider. |
+| `--skip` | `briefings` | v1 directory | Comma-separated storage projects to skip. |
+| `--dry-run` | `false` | archive | Report what the import would do and change nothing. |
+| `--force` | `false` | archive | Allow a fresh restore while a daemon is still answering for this data directory. |
+
+A flag from the other family is an **error**, not an ignored no-op: `--dry-run`
+against a v1 directory would otherwise read as "previewed, nothing happened"
+while the import actually ran.
+
+### Importing a v1 directory
+
+**Idempotent by id**, so re-running imports only what is new - which makes a
+delta re-import safe after the first pass. It honours SIGINT/SIGTERM, and prints
+a report even when the import ends in an error. With `--embed` on and no usable
+embedder, it warns and imports without vectors rather than failing.
+
+### Importing an archive
+
+Restore-or-merge is a property of the **destination**, printed in the report and
+never overridable. There is no `restore` verb and no `--mode`: the only thing an
+override could do is replace a populated instance's database.
+
+- **Fresh** (restore) when the data directory is absent, or holds neither
+  `seam.db` nor `seam.db-wal` and no regular non-dot file in either tree. The
+  markdown is restored byte-for-byte and the snapshot is renamed into place last,
+  so an interrupted restore leaves files and no database - which the next run
+  reads as fresh again and repeats cleanly.
+- **Merge** otherwise, first-writer-wins by ULID: an item or row whose id is
+  already here is skipped, which makes re-merging the same archive a no-op.
+
+A fresh restore replaces `seam.db` wholesale, so it **refuses while a daemon is
+answering** for that data directory and tells you to run `seamlessd stop`;
+`--force` overrides. A merge and a `--dry-run` need no such thing - a merge
+writes through the same files layer the daemon uses, and a dry run writes
+nothing.
+
+What a merge does **not** touch:
+
+| Not merged | Why |
+|---|---|
+| `settings` | Repo paths, families, briefing overrides, and the embedder switch describe *this* machine. |
+| `embeddings` | Vectors belong to whichever model this instance runs; imported items are embedded on write instead. |
+| `*_index`, `fts`, `retrieval_stats`, `jobs` | Rebuildable mirrors, refreshed by the import itself. |
+
+Collisions are **reported, never resolved**. A corpus file whose path is already
+held by a different item is left unwritten and both ids are named; a
+`sessions.name` or `projects.slug` already taken is reported rather than renamed,
+because minting a new name would invent an identifier nothing refers to. The run
+still exits 0 - the report is the work item.
+
+When the archive's `embedding_models` differ from this instance's embedder, the
+report says so and points at the console's re-embed
+(Settings → Embeddings). Vectors from two models are not comparable, so that
+mismatch does not heal itself.
 
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 

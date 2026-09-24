@@ -547,7 +547,7 @@
             <span class="workspace-cell-label">Repo route</span>
             {{if .Repos}}
             <div class="workspace-route-list">
-              {{range .Repos}}<div class="workspace-route" title="{{.}}"><span class="repo-path-icon">{{icon "folder-open"}}</span><span class="mono">{{.}}</span>{{copyBtn .}}</div>{{end}}
+              {{range .Repos}}<div class="workspace-route" title="{{.Path}}{{if .Host}} on {{.Host}}{{end}}"><span class="repo-path-icon">{{icon "folder-open"}}</span><span class="mono">{{.Path}}</span><span class="kind faint" title="Machine this checkout lives on">{{if .Host}}{{.Host}}{{else}}unknown host{{end}}</span>{{copyBtn .Path}}</div>{{end}}
             </div>
             {{else}}<span class="workspace-empty-mark" title="No repo route">&mdash;</span>{{end}}
           </div>
@@ -567,7 +567,7 @@
       {{if .UnboundRepos}}
       <aside class="workspace-unbound">
         <span class="workspace-unbound-icon">{{icon "triangle-alert"}}</span>
-        <div><strong>Unbound arrival routes</strong><p>These repo paths do not resolve to a project scope.</p><div>{{range .UnboundRepos}}<span class="mono">{{.}}</span>{{end}}</div></div>
+        <div><strong>Unbound arrival routes</strong><p>These repo paths do not resolve to a project scope.</p><div>{{range .UnboundRepos}}<span class="mono" title="{{if .Host}}on {{.Host}}{{else}}host unknown{{end}}">{{.Path}}{{if .Host}} <span class="faint">({{.Host}})</span>{{end}}</span>{{end}}</div></div>
       </aside>
       {{end}}
     </section>

@@ -5,20 +5,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Import, back up &amp; restore - Seamless docs</title>
-<meta name="description" content="Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.">
+<meta name="description" content="One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.">
 <link rel="canonical" href="https://thereisnospoon.org/docs/guides/data/">
 <meta name="robots" content="max-image-preview:large, max-snippet:-1">
 <meta property="og:site_name" content="Seamless">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://thereisnospoon.org/docs/guides/data/">
 <meta property="og:title" content="Import, back up &amp; restore - Seamless docs">
-<meta property="og:description" content="Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.">
+<meta property="og:description" content="One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.">
 <meta property="og:image" content="https://thereisnospoon.org/static/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Seamless - your agents share a brain. You can read it.">
 <meta name="twitter:card" content="summary_large_image">
-<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://thereisnospoon.org/docs/guides/"},{"@type":"ListItem","position":3,"name":"Import, back up \u0026 restore","item":"https://thereisnospoon.org/docs/guides/data/"}]},{"@type":"TechArticle","headline":"Import, back up \u0026 restore - Seamless docs","description":"Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.","url":"https://thereisnospoon.org/docs/guides/data/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
+<script type="application/ld+json">{"@context":"https://schema.org","@graph":[{"@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"Docs","item":"https://thereisnospoon.org/docs/"},{"@type":"ListItem","position":2,"name":"Guides","item":"https://thereisnospoon.org/docs/guides/"},{"@type":"ListItem","position":3,"name":"Import, back up \u0026 restore","item":"https://thereisnospoon.org/docs/guides/data/"}]},{"@type":"TechArticle","headline":"Import, back up \u0026 restore - Seamless docs","description":"One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.","url":"https://thereisnospoon.org/docs/guides/data/","inLanguage":"en","isPartOf":{"@id":"https://thereisnospoon.org/#website"}}]}</script>
 <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f6f2">
 <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#101217">
 <link rel="icon" type="image/svg+xml" href="../../../static/favicon.svg">
@@ -224,11 +224,11 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 </nav>
 
   <h1>Import, back up &amp; restore</h1>
-  <p class="lede">Putting ~/.seamless in git, what deleting seam.db actually costs, restoring by rebuilding the index, and moving to a new machine.</p>
+  <p class="lede">One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.</p>
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#what-is-precious-and-what-is-not">What is precious, and what is not</a></li><li class="lvl-2"><a href="#put-it-in-git">Put it in git</a></li><li class="lvl-2"><a href="#restore">Restore</a></li><li class="lvl-2"><a href="#import-from-seam-v1">Import from Seam v1</a></li><li class="lvl-2"><a href="#hand-editing">Hand-editing</a></li><li class="lvl-2"><a href="#moving-machines">Moving machines</a></li>
+      <li class="lvl-2"><a href="#what-is-precious-and-what-is-not">What is precious, and what is not</a></li><li class="lvl-2"><a href="#put-it-in-git">Put it in git</a></li><li class="lvl-2"><a href="#the-whole-instance-in-one-archive">The whole instance in one archive</a></li><li class="lvl-2"><a href="#restore">Restore</a></li><li class="lvl-2"><a href="#merging-two-instances">Merging two instances</a></li><li class="lvl-2"><a href="#import-from-seam-v1">Import from Seam v1</a></li><li class="lvl-2"><a href="#hand-editing">Hand-editing</a></li><li class="lvl-2"><a href="#moving-machines">Moving machines</a></li>
     </ul>
   </details>
   <p>Because durable knowledge is markdown files, backup and restore are boring - and
@@ -282,14 +282,50 @@ knowledge - and that diffs beautifully, because it is markdown.</p>
 <p>Commit periodically (a cron job or a <code>launchd</code> timer is plenty). The payoff is
 that <code>git log</code> over your memory directory is a real history of what your agents
 learned and when they changed their minds.</p>
-<p>If you would rather keep the tasks and sessions too, back up <code>seam.db</code> with
-SQLite's own tooling rather than copying the file while the daemon is running:</p>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">sqlite3 ~/.seamless/seam.db <span class="s2">&#34;.backup &#39;/tmp/seam-backup.db&#39;&#34;</span>
+<p>Git gives you the knowledge with a history. It deliberately leaves out the other
+half - sessions, tasks, trials, events - which is what
+<a href="#the-whole-instance-in-one-archive"><code>seamlessd export</code></a> is for. They compose:
+git for the diffable record of what your agents learned, an archive for the whole
+instance.</p>
+<h2 id="the-whole-instance-in-one-archive">The whole instance in one archive</h2>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd <span class="nb">export</span>
+</span></span><span class="line"><span class="cl"><span class="c1"># wrote /Users/you/seamless-nuc.local-20260923T220501Z.tar.gz (4.1 MiB)</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#   host nuc.local, seamlessd 0.9.1, created 2026-09-23T22:05:01Z</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#   corpus: 214 memories, 38 notes</span>
+</span></span><span class="line"><span class="cl"><span class="c1">#   database: schema v25, 18422 rows across 21 tables</span>
 </span></span></code></pre></div>
-<p>A plain <code>cp</code> of a WAL-mode database under a live writer can capture a torn state.
-<code>.backup</code> will not.</p>
+<p>One gzipped tar with the markdown corpus, a consistent snapshot of <code>seam.db</code>, and
+a manifest describing what is inside. Full flags in
+<a href="../../reference/cli-seamlessd/#seamlessd_export">the CLI reference</a>.</p>
+<p>Three things worth knowing:</p>
+<ul>
+<li><strong>Run it while the daemon is up.</strong> The snapshot is SQLite's <code>VACUUM INTO</code>,
+taken inside a read transaction, so a write in flight is simply not in it. No
+<code>cp</code> of a WAL-mode database, no stopping anything. (A plain <code>cp</code> of
+<code>seam.db</code> under a live writer can capture a torn state; this cannot.)</li>
+<li><strong>The key is not in it.</strong> Config and <code>mcp.api_key</code> are deliberately excluded,
+so an archive can go to a NAS or another machine without carrying this
+machine's only credential.</li>
+<li><strong><code>-</code> streams.</strong> <code>seamlessd export -o - | ssh backup-box 'cat &gt; seam.tgz'</code>
+writes the archive to stdout and the report to stderr.</li>
+</ul>
+<p><code>--no-db</code> gives you a knowledge-only archive: the two markdown trees, nothing
+else. It is the tarball equivalent of the git recipe above.</p>
 <h2 id="restore">Restore</h2>
-<p>Restoring is: put the files back, start the daemon.</p>
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd stop
+</span></span><span class="line"><span class="cl">seamlessd import --from seamless-nuc.local-20260923T220501Z.tar.gz
+</span></span><span class="line"><span class="cl">seamlessd doctor <span class="o">&amp;&amp;</span> seamlessd start
+</span></span></code></pre></div>
+<p>Into an <strong>empty</strong> data directory, that is a restore: every <code>.md</code> lands
+byte-for-byte and the database snapshot is renamed into place last. Into a
+<strong>populated</strong> one it is a merge instead, first-writer-wins by ULID. Which one it
+will be is a property of the destination, is printed in the report, and cannot be
+overridden - so there is no way to ask for a restore and get a populated instance
+wiped. Add <code>--dry-run</code> to see the mode and the counts without writing anything.</p>
+<p>A restore refuses while a daemon is answering for that data directory (it would
+be replacing <code>seam.db</code> underneath it) and names <code>seamlessd stop</code>; <code>--force</code>
+overrides. A merge does not need the daemon down.</p>
+<p>You can also restore the knowledge alone, from an archive or from git:</p>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># files back in place</span>
 </span></span><span class="line"><span class="cl">cp -R backup/memory backup/notes ~/.seamless/
 </span></span><span class="line"><span class="cl">make run
@@ -300,12 +336,30 @@ keeps it in sync from then on. You do not run a reindex command, because there
 isn't one to forget.</p>
 <p>To force a full rebuild, stop the daemon, delete <code>seam.db</code>, and start it again.
 You lose sessions, tasks, trials, and events; you lose no knowledge.</p>
+<h2 id="merging-two-instances">Merging two instances</h2>
+<p>Importing an archive into an instance that already has data is a <strong>merge</strong>, and
+it is idempotent: anything whose ULID is already here is skipped, so running the
+same archive twice inserts zero the second time. That makes it the way to fold a
+laptop's instance into a desktop's, or several devices' into one.</p>
+<p>Two rules keep it honest:</p>
+<ul>
+<li><strong>Collisions are reported, never resolved.</strong> A memory whose path is already
+held by a different item is left unwritten and both ids are printed; a session
+name or project slug already taken is reported rather than renamed. Deciding
+which one wins is yours.</li>
+<li><strong>This machine's settings stay this machine's.</strong> Repo mappings, families,
+briefing overrides, and the embedder switch are not merged, and neither are
+embeddings - vectors belong to whichever model you run here, so imported items
+are embedded on write instead.</li>
+</ul>
 <h2 id="import-from-seam-v1">Import from Seam v1</h2>
-<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import --help
+<div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl">seamlessd import --from ~/.seam
 </span></span></code></pre></div>
-<p>The importer brings a v1 store's memories, sessions, and tool-call events into
-<code>seam.db</code>. It is <strong>idempotent</strong>: running it twice does not double anything, so a
-partial import is safe to re-run.</p>
+<p><code>seamlessd import</code> fronts two operations and picks between them by what
+<code>--from</code> names on disk: a <strong>directory</strong> is a Seam v1 store, a <strong>file</strong> (or <code>-</code>)
+is an archive. Point it at a v1 data directory and it brings that store's
+memories, sessions, and tool-call events into <code>seam.db</code>. It is <strong>idempotent</strong>:
+running it twice does not double anything, so a partial import is safe to re-run.</p>
 <h2 id="hand-editing">Hand-editing</h2>
 <p>Files are the source of truth, so editing them by hand is allowed and expected -
 the watcher picks up your change and reindexes it.</p>
@@ -324,17 +378,26 @@ point only at an active memory, never self-supersede) stop being true. Use
 any text editor.</p>
 <h2 id="moving-machines">Moving machines</h2>
 <div class="code-block" data-lang="bash"><pre class="chroma"><code><span class="line"><span class="cl"><span class="c1"># on the old machine</span>
-</span></span><span class="line"><span class="cl"><span class="nb">cd</span> ~/.seamless <span class="o">&amp;&amp;</span> git push          <span class="c1"># or: tar czf seamless.tgz memory notes</span>
+</span></span><span class="line"><span class="cl">seamlessd <span class="nb">export</span> -o seamless.tar.gz
 </span></span><span class="line"><span class="cl">
 </span></span><span class="line"><span class="cl"><span class="c1"># on the new one</span>
-</span></span><span class="line"><span class="cl">git clone &lt;remote&gt; ~/.seamless      <span class="c1"># or untar</span>
 </span></span><span class="line"><span class="cl">make install                        <span class="c1"># seeds a config with a NEW generated key</span>
-</span></span><span class="line"><span class="cl">make doctor
+</span></span><span class="line"><span class="cl">seamlessd stop                      <span class="c1"># the installer starts the service</span>
+</span></span><span class="line"><span class="cl">seamlessd import --from seamless.tar.gz
+</span></span><span class="line"><span class="cl">seamlessd doctor <span class="o">&amp;&amp;</span> seamlessd start
 </span></span></code></pre></div>
-<p>The index rebuilds itself on first start. The install generates a fresh
-<code>mcp.api_key</code> rather than copying the old config: the key is the only
-credential, and a machine migration is a good moment not to spread it around.
-See <a href="../../install/">Install &amp; deploy</a>.</p>
+<p>The new machine's data directory is empty, so this is a restore: every memory
+and note lands byte-for-byte, and the sessions, tasks, trials, and events come
+with it. If you are folding the old machine into an instance that already has
+data, the same command is a merge instead - see
+<a href="#merging-two-instances">Merging two instances</a>.</p>
+<p>The install generates a fresh <code>mcp.api_key</code> rather than copying the old config:
+the key is the only credential, it is deliberately not in the archive, and a
+machine migration is a good moment not to spread it around. See
+<a href="../../install/">Install &amp; deploy</a>.</p>
+<p>If all you want is the knowledge, the git recipe moves it just as well
+(<code>git clone &lt;remote&gt; ~/.seamless</code>), and so does <code>seamlessd export --no-db</code>. The
+index rebuilds itself on first start either way.</p>
 
 </article>
 
@@ -352,7 +415,7 @@ See <a href="../../install/">Install &amp; deploy</a>.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-is-precious-and-what-is-not">What is precious, and what is not</a></li><li class="lvl-2"><a href="#put-it-in-git">Put it in git</a></li><li class="lvl-2"><a href="#restore">Restore</a></li><li class="lvl-2"><a href="#import-from-seam-v1">Import from Seam v1</a></li><li class="lvl-2"><a href="#hand-editing">Hand-editing</a></li><li class="lvl-2"><a href="#moving-machines">Moving machines</a></li>
+      <li class="lvl-2"><a href="#what-is-precious-and-what-is-not">What is precious, and what is not</a></li><li class="lvl-2"><a href="#put-it-in-git">Put it in git</a></li><li class="lvl-2"><a href="#the-whole-instance-in-one-archive">The whole instance in one archive</a></li><li class="lvl-2"><a href="#restore">Restore</a></li><li class="lvl-2"><a href="#merging-two-instances">Merging two instances</a></li><li class="lvl-2"><a href="#import-from-seam-v1">Import from Seam v1</a></li><li class="lvl-2"><a href="#hand-editing">Hand-editing</a></li><li class="lvl-2"><a href="#moving-machines">Moving machines</a></li>
     </ul>
   </aside>
   

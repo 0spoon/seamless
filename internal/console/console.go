@@ -80,7 +80,12 @@ type Config struct {
 	// SessionIdleTTL is the configured live/idle threshold for session displays
 	// (gardener.session_idle_minutes); <= 0 falls back to core.SessionIdleTTL.
 	SessionIdleTTL time.Duration
-	Logger         *slog.Logger
+	// SecureCookies marks the console session cookie Secure. It follows
+	// config.TLSEnabled and nothing else: a browser silently DROPS a Secure
+	// cookie that arrives over http, so setting it on a plaintext listener
+	// would lock the owner out of their own console with no error anywhere.
+	SecureCookies bool
+	Logger        *slog.Logger
 }
 
 // Service renders the console and serves its routes.
@@ -90,8 +95,13 @@ type Service struct {
 	pages     map[string]*template.Template
 	fragments map[string]*template.Template // peek-body fragments, keyed by entity
 	// host names the machine this daemon runs on, for the sidebar account row.
-	// Resolved once at construction: it cannot change for the process, and a
-	// failed lookup degrades to the bind address rather than an empty row.
+	// Resolved once at construction: it cannot change for the process.
+	//
+	// It reads "server <name>" rather than a bare hostname because the console
+	// may now be open on a different machine than the daemon: the row used to
+	// say "this machine", which stopped being true the moment a second device
+	// could reach it. An unreadable hostname degrades to "server" alone -- never
+	// to a guess, and never back to "this machine".
 	host string
 }
 
@@ -105,9 +115,9 @@ func New(cfg Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	host, herr := os.Hostname()
-	if herr != nil || strings.TrimSpace(host) == "" {
-		host = "this machine"
+	host := "server"
+	if name, herr := os.Hostname(); herr == nil && strings.TrimSpace(name) != "" {
+		host = "server " + strings.TrimSpace(name)
 	}
 	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments, host: host}, nil
 }
@@ -332,6 +342,7 @@ func (s *Service) loginSubmit(w http.ResponseWriter, r *http.Request) {
 		Value:    consoleToken(key),
 		Path:     "/console",
 		HttpOnly: true,
+		Secure:   s.cfg.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   30 * 24 * 3600,
 	})
@@ -339,11 +350,16 @@ func (s *Service) loginSubmit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Service) logout(w http.ResponseWriter, r *http.Request) {
+	// The delete carries the same attributes as the set. A browser matches a
+	// cookie for replacement on name/domain/path, and sending the expiry
+	// without Secure over https is the shape most likely to leave the original
+	// in place -- a "logout" that silently kept the session.
 	http.SetCookie(w, &http.Cookie{
 		Name:     cookieName,
 		Value:    "",
 		Path:     "/console",
 		HttpOnly: true,
+		Secure:   s.cfg.SecureCookies,
 		SameSite: http.SameSiteLaxMode,
 		MaxAge:   -1,
 	})

@@ -113,6 +113,26 @@ func TestResolveInstallDir(t *testing.T) {
 	require.Equal(t, filepath.Join(home, ".local", "bin"), resolveInstallDir(""))
 }
 
+// --purge deletes the markdown corpus, so the preamble points at the archive
+// command above the confirmation. Without --purge there is nothing to warn
+// about and the line must not appear.
+func TestPrintUninstallPreamble_PurgeOffersAnExportFirst(t *testing.T) {
+	withPurge := capturePreamble(t, true)
+	require.Contains(t, withPurge, purgeExportAdvice)
+	require.Contains(t, withPurge, "seamlessd export")
+
+	require.NotContains(t, capturePreamble(t, false), "seamlessd export")
+}
+
+// capturePreamble returns what printUninstallPreamble printed.
+func capturePreamble(t *testing.T, purge bool) string {
+	t.Helper()
+	return captureStdout(t, func() error {
+		printUninstallPreamble([]string{"claude"}, "/opt/bin", "/tmp/cfg", "/tmp/data", purge, false)
+		return nil
+	})
+}
+
 func TestPurgeGuard(t *testing.T) {
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)

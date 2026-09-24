@@ -477,7 +477,12 @@ embedder on/off switch.</li>
 <p>The split is deliberate: durable knowledge is yours in plain markdown, and
 high-churn state that would be miserable as files stays in the database.</p>
 <p>WAL mode means <code>seam.db</code> is normally accompanied by <code>seam.db-wal</code> and
-<code>seam.db-shm</code>. They are part of the database; copy all three or none.</p>
+<code>seam.db-shm</code>. They are part of the database; copy all three or none - a <code>cp</code> of
+just <code>seam.db</code> under a live writer is a torn snapshot, not a backup. The way not
+to think about any of that is
+<a href="../../reference/cli-seamlessd/#seamlessd_export"><code>seamlessd export</code></a>, which takes the
+snapshot with SQLite's <code>VACUUM INTO</code> inside a read transaction and is safe to run
+against a running daemon.</p>
 <h3 id="reconciliation">Reconciliation</h3>
 <p>At startup the files layer walks both trees and reconciles them against the
 index: changed and new files are re-indexed, and index rows whose file has been
