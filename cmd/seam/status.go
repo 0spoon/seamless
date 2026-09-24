@@ -40,7 +40,7 @@ func runStatus(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	var failed int
 
 	// Health via the unauthenticated /healthz endpoint.
-	client, err := httpClient(cfg, healthTimeout)
+	client, err := cfg.HTTPClient(healthTimeout)
 	if err != nil {
 		return err
 	}

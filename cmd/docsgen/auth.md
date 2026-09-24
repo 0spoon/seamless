@@ -13,7 +13,7 @@ deliberately publishes no `/.well-known/openid-configuration` and no
 `/.well-known/oauth-authorization-server`: OAuth discovery metadata would
 advertise endpoints that do not exist.
 
-## The real API is per-install, on localhost
+## The real API is per-install, on localhost by default
 
 Seamless is local-first. The API endpoints run on each machine that installs
 it, served by the `seamlessd` daemon, bound to localhost: MCP at
@@ -22,13 +22,29 @@ it, served by the `seamlessd` daemon, bound to localhost: MCP at
 `http://127.0.0.1:8081/.well-known/agent-card.json`. There is no hosted
 remote, no sign-up, and no registration endpoint on this domain.
 
+An operator may widen one install to serve several devices on a private
+network (`addr` plus a `server_url`, optionally with TLS), in which case those
+same paths are served under that base URL instead. That changes where the
+endpoints are, not what they are: still one bearer key, still no accounts,
+still nothing hosted here.
+
 ## Supported authentication method
 
 One method: a static bearer key, unique to each install.
 
 - Every MCP and A2A request carries `Authorization: Bearer <key>`.
 - The daemon compares the key in constant time and rejects requests without it.
-- The trust boundary is the machine: the daemon binds `127.0.0.1` only.
+
+The trust boundary is the **listener**, and by default that is the machine: the
+daemon binds `127.0.0.1`, so the key is adequate because nothing off the
+machine can present it. An operator who widens the bind moves that boundary out
+to whatever the listener now reaches, and the key does not get stronger: there
+is one key per install, no per-client authorization, no rate limiting, and no
+accounts. Two guards travel with the widening -- a Host-header allowlist (any
+unrecognized `Host` gets `421`) and optional TLS (`tls.cert_file` +
+`tls.key_file`) -- and they are what make a private network survivable. Neither
+makes the endpoint safe to expose publicly, and the daemon logs a security
+warning on every non-loopback start.
 
 ## How credentials are provisioned and used
 

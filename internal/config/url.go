@@ -146,6 +146,14 @@ func (c Config) validateTransport() error {
 // what catches the most likely typo. A single trailing slash is accepted and
 // trimmed (it names the same base URL); any deeper path is refused rather than
 // silently dropped.
+//
+// A wildcard host is REFUSED here rather than mapped to loopback the way a
+// wildcard bind is. The two look alike and are opposite questions: a wildcard
+// addr is an operator answering "listen everywhere", which reachableHost can
+// safely narrow to "dial me here", while a wildcard server_url is the operator
+// answering "clients reach me here" with a non-answer. Rewriting that one would
+// hand back an address that is only correct on the daemon's own machine, which
+// is precisely the machine the value exists to point away from.
 func validateServerURL(raw string) error {
 	s := strings.TrimSpace(raw)
 	if s == "" {
@@ -162,6 +170,18 @@ func validateServerURL(raw string) error {
 	}
 	if u.Hostname() == "" {
 		return fmt.Errorf("config: server_url %q names no host", s)
+	}
+	// The predicate is reachableHost's own rewrite, not a second copy of its
+	// literal set: the derive path and this refusal must never disagree about
+	// which hosts are wildcards. url.Hostname strips IPv6 brackets, so
+	// "http://[::]:8081" arrives here as "::" -- the bracketed spelling in that
+	// set is for callers that split a host themselves, and a real IPv6 literal
+	// like [fd00::1] is untouched by either. The empty host is a wildcard to
+	// reachableHost too, which is why this sits BELOW the "names no host"
+	// check: that value has its own, more specific error.
+	if host := u.Hostname(); reachableHost(host) != host {
+		return fmt.Errorf("config: server_url %q names the wildcard host %q, which says where the daemon LISTENS, not where a client dials: "+
+			"put the wildcard in addr and set server_url to the name or address other machines reach this one at", s, host)
 	}
 	if strings.Trim(u.Path, "/") != "" || strings.Contains(u.Path, "//") {
 		return fmt.Errorf("config: server_url %q must be a bare base URL (scheme://host:port), with no path", s)

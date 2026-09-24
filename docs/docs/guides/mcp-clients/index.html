@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -300,8 +302,12 @@ to put that loop into a rules file so the agent actually does.</p>
 <h2 id="before-the-config">Before the config</h2>
 <p>Three facts every block below shares:</p>
 <ul>
-<li>The daemon binds <strong>localhost only</strong> (<code>127.0.0.1:8081</code> by default), so the
-client has to run on the same machine. <code>curl -s http://127.0.0.1:8081/healthz</code> proves it is up, no auth needed.</li>
+<li>The daemon binds <strong>localhost only</strong> by default (<code>127.0.0.1:8081</code>), so the
+client has to run on the same machine. <code>curl -s http://127.0.0.1:8081/healthz</code> proves it is up, no auth needed. A daemon
+<a href="../../guides/network-install/">shared across a LAN</a> is the opt-in exception:
+substitute its <code>server_url</code> for <code>http://127.0.0.1:8081</code> in every block below,
+and under https make sure the client trusts the server's CA - these clients
+use their own HTTP stack and never read Seamless's <code>tls.ca_file</code>.</li>
 <li>The bearer key is <code>mcp.api_key</code> in your
 <a href="../../reference/configuration/"><code>seamless.yaml</code></a> (usually
 <code>~/.config/seamless/seamless.yaml</code>). <code>seam mcp-headers</code> prints the current

@@ -23,7 +23,7 @@ They answer different questions and neither subsumes the other.
 
 | | `seamlessd doctor` | `seam doctor` |
 |---|---|---|
-| Runs | Against config and the database directly - no daemon needed | Against a running daemon over HTTP and MCP |
+| Runs | Against config and the database directly - no daemon needed, except on a `role: client` install, where the tool count dials the server | Against a running daemon over HTTP and MCP |
 | Checks | `binary`, `config`, `data_dir`, `mcp.api_key`, `llm`, `embedder`, `database`, `mcp_tools`, **`hooks`**, `gardener` | `server` (`/healthz`), `mcp_tools` (`tools/list`), `projects` |
 | Fails on | Only a `fail` - warnings are informational | Any failed check |
 
@@ -281,9 +281,11 @@ tool calls, so silence there is expected.
 
 ## Two daemons, the wrong port, or code changes that never land
 
-**What is happening.** Seamless is **one instance per machine**: one port (8081),
-one data directory (`~/.seamless`). The dev and release install layouts drive that
-same instance, so installing one replaces the other. Most confusion here is
+**What is happening.** Seamless is **one server instance per machine**: one port
+(8081), one data directory (`~/.seamless`). The dev and release install layouts
+drive that same instance, so installing one replaces the other. (A `role: client`
+install has neither a port nor a data directory, so it cannot collide this way -
+see [Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/).) Most confusion here is
 someone accidentally interacting with a second copy, or with the same copy running
 older code.
 

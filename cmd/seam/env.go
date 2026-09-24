@@ -11,14 +11,8 @@ package main
 
 import (
 	"context"
-	"crypto/tls"
-	"crypto/x509"
-	"fmt"
 	"io"
-	"net"
-	"net/http"
 	"os"
-	"strings"
 	"time"
 
 	mcpclient "github.com/mark3labs/mcp-go/client"
@@ -54,51 +48,16 @@ func newEnv() *env {
 	}
 }
 
-const (
-	// dialTimeout bounds how long a client waits to establish a connection. It
-	// is separate from the response deadline because a down daemon must fail
-	// fast even where the response may legitimately take minutes (mcp-proxy).
-	dialTimeout = 5 * time.Second
-	// healthTimeout bounds a /healthz probe: it pings SQLite and returns, so a
-	// slower answer is a wedged daemon, not a busy one.
-	healthTimeout = 3 * time.Second
-)
+// The HTTP client every command here dials with is config.Config.HTTPClient,
+// not a constructor of this CLI's own. It moved to internal/config so that
+// seamlessd's client-role surfaces -- install-hooks reading the server's feature
+// state, the client-role doctor's live tools/list count -- share the ONE TLS
+// trust decision rather than reimplementing it: an https server_url with a
+// private CA either verifies everywhere or the install half-works in a way that
+// reads as an intermittent network fault. config.DialTimeout is the connection
+// deadline it applies; the argument to HTTPClient is the whole-request one
+// (0 = none, for the mcp-proxy bridge whose tool calls can be LLM-slow).
 
-// httpClient is the one HTTP client constructor in this CLI. Every command that
-// talks to the daemon -- hook, mcp-proxy, doctor, status, version, the console
-// JSON surface, and the MCP dial -- goes through it, because the TLS trust
-// decision must be identical on all of them: an https server_url with a private
-// CA either verifies everywhere or the CLI half-works in a way that reads as an
-// intermittent network fault.
-//
-// timeout is the whole-request deadline; 0 means none (the mcp-proxy bridge,
-// whose tool calls can be LLM-slow). The dial timeout applies either way.
-//
-// A configured-but-unusable tls.ca_file is an ERROR, never a silent fall back to
-// the system pool: the request would then fail at the TLS handshake and look
-// exactly like an outage, which is the local-vs-remote distinction AGENTS.md
-// requires be kept (llm-degradation-remote-vs-local, same rule).
-func httpClient(cfg config.Config, timeout time.Duration) (*http.Client, error) {
-	tr := &http.Transport{
-		Proxy:       http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
-	}
-	if ca := strings.TrimSpace(cfg.TLS.CAFile); ca != "" {
-		pem, err := os.ReadFile(ca)
-		if err != nil {
-			return nil, fmt.Errorf("tls.ca_file %s: %w", ca, err)
-		}
-		pool, err := x509.SystemCertPool()
-		if err != nil || pool == nil {
-			// Windows has historically returned an error here; an empty pool
-			// plus the configured root is still a working trust store for the
-			// one server this CLI talks to.
-			pool = x509.NewCertPool()
-		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("tls.ca_file %s: no PEM certificate found", ca)
-		}
-		tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
-	}
-	return &http.Client{Timeout: timeout, Transport: tr}, nil
-}
+// healthTimeout bounds a /healthz probe: it pings SQLite and returns, so a
+// slower answer is a wedged daemon, not a busy one.
+const healthTimeout = 3 * time.Second

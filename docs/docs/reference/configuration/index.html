@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -618,6 +620,46 @@ rejected until one is set - <code>seamlessd doctor</code> reports it as a warnin
 </span></span></span><span class="line"><span class="cl"><span class="c"># ~ is expanded to the home directory.</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_DATA_DIR</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">data_dir</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;~/.seamless&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># This install&#39;s part in a deployment. `server` (the default) runs the daemon</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># here. `client` runs no daemon at all: serve refuses, there is no database and</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># no corpus on this machine, and every surface -- the seam CLI, the hooks, the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># MCP registration -- dials server_url instead. A client REQUIRES server_url.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_ROLE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">role</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;server&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># The base URL clients dial, as a bare scheme://host[:port] with no path, query</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># or fragment. Empty means &#34;derive it from addr&#34;, which is what a loopback</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># install wants. Set it when the bind address is not the address clients use: a</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># wildcard bind, a LAN name, a TLS listener. Naming it also adds its host to the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># Host-header allowlist, which is what arms that guard on a wildcard bind.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># A wildcard host here is refused at load (0.0.0.0, ::): that answers &#34;where do</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># I listen&#34;, not &#34;where do I dial&#34;, so it belongs in addr instead.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_SERVER_URL</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">server_url</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># EXTRA Host-header values the daemon answers to, beyond the loopback names, a</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># concrete bind host, and the host of server_url. Requests arriving under any</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># other Host get 421 (the DNS-rebinding guard). Naming even one host turns the</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># guard on for a wildcard bind, which otherwise has no allowlist to apply.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="c"># env: SEAMLESS_ALLOWED_HOSTS (comma-separated, e.g. &#34;studio.local,192.168.1.10&#34;)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">allowed_hosts</span><span class="p">:</span><span class="w"> </span><span class="p">[]</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="nt">tls</span><span class="p">:</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># PEM certificate chain and private key. Both set -&gt; the daemon serves https</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># (TLS 1.2 floor) instead of http, and the console session cookie is marked</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Secure. One without the other is refused at load: it cannot serve TLS. The</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># certificate&#39;s SANs must cover the host of server_url, which is what</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># `seamlessd doctor` checks. A leading ~ is expanded.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_TLS_CERT_FILE / SEAMLESS_TLS_KEY_FILE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">cert_file</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">key_file</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&#34;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># CLIENT-side extra root CA: the certificate the `seam` CLI adds to the system</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># trust store when dialing an https server_url, for a private CA or a</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># self-signed server. It is the client half of the pair above -- setting</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># cert_file together with role: client is refused.</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># env: SEAMLESS_TLS_CA_FILE</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="nt">ca_file</span><span class="p">:</span><span class="w"> </span><span class="s2">&#34;&#34;</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="nt">mcp</span><span class="p">:</span><span class="w">
 </span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="c"># Static bearer key protecting /api/mcp and the console. On a true first run</span><span class="w">

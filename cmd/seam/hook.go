@@ -196,7 +196,7 @@ func runHook(ctx context.Context, e *env, o *hookOpts, pos []string) error {
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Content-Type", "application/json")
 
-	client, err := httpClient(cfg, 10*time.Second)
+	client, err := cfg.HTTPClient(10 * time.Second)
 	if err != nil {
 		// Same degradation as a transport failure: a hook must never block the
 		// agent, so the reason goes to stderr and the turn continues.

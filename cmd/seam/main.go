@@ -106,7 +106,7 @@ func dial(ctx context.Context) (*mcpclient.Client, config.Config, error) {
 	// No whole-request deadline: a tool call may be LLM-backed (recall
 	// embeddings, gardener_request) and legitimately slow. The dial timeout
 	// inside httpClient is what makes a down daemon fail fast.
-	hc, err := httpClient(cfg, 0)
+	hc, err := cfg.HTTPClient(0)
 	if err != nil {
 		return nil, cfg, err
 	}

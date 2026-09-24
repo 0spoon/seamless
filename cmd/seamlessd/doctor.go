@@ -19,6 +19,10 @@ import (
 	"strings"
 	"time"
 
+	mcpclient "github.com/mark3labs/mcp-go/client"
+	mcptransport "github.com/mark3labs/mcp-go/client/transport"
+	mcpgo "github.com/mark3labs/mcp-go/mcp"
+
 	"github.com/0spoon/seamless/internal/config"
 	"github.com/0spoon/seamless/internal/core"
 	"github.com/0spoon/seamless/internal/features"
@@ -161,9 +165,16 @@ func doctor(args []string) error {
 // The hook and MCP comparisons are the SAME desired-state ones the server role
 // runs, built from the current config through doctorInstallOptions rather than
 // from the installed artifact -- a client's stale hook is drift by the same rule.
+//
+// mcp_tools is the one check that changes MEANING rather than disappearing. On a
+// server it counts REGISTRATION inside this process (mcpToolsCheck); on a client
+// this process registers nothing and serves nothing, so the same line would be a
+// fact about a daemon this install does not run. clientMCPToolsCheck asks the
+// server instead, which is also the only way a client can learn that its key
+// works at all.
 func clientChecks(cfg config.Config) []check {
 	checks := transportChecks(cfg)
-	checks = append(checks, apiKeyCheck(cfg), mcpToolsCheck())
+	checks = append(checks, apiKeyCheck(cfg), clientMCPToolsCheck(cfg))
 	checks = append(checks, claudeRuntimeChecks()...)
 	checks = append(checks, hooksCheck(cfg))
 	checks = append(checks, claudeDesktopChecks(resolveSeamBin(""), absConfigPath(cfg.SourcePath()))...)
@@ -1030,8 +1041,10 @@ func missingEmbedCredential(cfg config.Config) (bool, string) {
 //
 // This counts REGISTRATION, which the optional-feature tool filter does not
 // touch: gating shrinks the live tools/list only, so a disabled feature must
-// never move this number. Registered-vs-exposed is `seam doctor`'s line, which
-// talks to a running server; this one deliberately does not.
+// never move this number. Registered-vs-exposed is the line the CLIENTS run --
+// `seam doctor`, and clientMCPToolsCheck below -- because it needs a running
+// server to ask; this one deliberately does not, which is what makes it the
+// useful check on a SERVER install whose daemon may well be stopped.
 func mcpToolsCheck() check {
 	srv := mcp.New(mcp.Config{})
 	n := srv.NumTools()
@@ -1040,6 +1053,107 @@ func mcpToolsCheck() check {
 			fmt.Sprintf("registered %d tools but ToolCount is %d", n, mcp.ToolCount)}
 	}
 	return check{statusOK, "mcp_tools", fmt.Sprintf("%d tools registered", n)}
+}
+
+// clientMCPTimeout bounds the whole tools/list probe: the handshake plus one
+// list, both answered from the server's memory. Anything slower is a wedged
+// daemon rather than a busy one, and doctor must not hang on it.
+const clientMCPTimeout = 5 * time.Second
+
+// clientMCPToolsCheck is the client-role mcp_tools line: what the SERVER exposes
+// right now, counted by asking it, rather than what this binary happens to have
+// compiled in.
+//
+// The distinction is the whole reason it exists. A client install runs no MCP
+// server, so mcpToolsCheck's registration count is a fact about a process on
+// another machine -- one this report cannot see, and one that would keep reading
+// "ok" while the server was down, misconfigured, or refusing this install's key.
+// Dialing it is also the only way a client learns its key works: nothing else in
+// the client report presents a credential (clientServerURLCheck deliberately
+// sends none, because it is a reachability probe).
+//
+// Feature-awareness is not optional here. Optional features ship OFF, so a
+// default server EXPOSES fewer tools than it REGISTERS; judging the live count
+// against a bare mcp.ToolCount would report a red on every healthy default
+// install. The verdict is features.ToolCountVerdict -- the same one `seam
+// doctor` renders, so the two clients cannot disagree about what a number means.
+//
+// It FAILs rather than warns when the dial does not answer: on a client the
+// server IS the install, so a tool surface that cannot be reached is not a
+// degraded report but the whole of what this machine was going to do.
+func clientMCPToolsCheck(cfg config.Config) check {
+	const name = "mcp_tools"
+	base := cfg.ServerURL()
+
+	ctx, cancel := context.WithTimeout(context.Background(), clientMCPTimeout)
+	defer cancel()
+	live, err := remoteToolCount(ctx, cfg)
+	if err != nil {
+		return check{statusFail, name, fmt.Sprintf(
+			"tools/list failed against %s: %v -- check that seamlessd is running there and that mcp.api_key matches the server's key",
+			base, err)}
+	}
+
+	// Failure-soft, exactly as in `seam doctor`: without the server's effective
+	// feature state there is no single expected number, only a range, and the
+	// verdict says out loud that it could not read the state rather than
+	// asserting a number it does not know. A nil feats is what carries that.
+	feats, ferr := clientConsoleFeatures(cfg, base)
+	why := ""
+	if ferr != nil {
+		why = ferr.Error()
+	}
+	ok, detail := features.ToolCountVerdict(mcp.ToolCount, live, feats, why)
+	if !ok {
+		return check{statusFail, name, detail +
+			" -- a gap this arithmetic cannot explain is either the tool gate misbehaving or a client and server on different versions"}
+	}
+	return check{statusOK, name, detail}
+}
+
+// remoteToolCount performs the MCP handshake against the configured server and
+// returns how many tools its tools/list advertises.
+//
+// The HTTP client is config.Config.HTTPClient -- the ONE TLS trust decision,
+// shared with the seam CLI and with install-hooks. That sharing is a
+// prerequisite rather than a tidiness win: this function presents the bearer
+// key, and the only reason a caller here would reach for its own client is to
+// avoid the import, which is how a credential ends up on an unverified
+// connection. A tls.ca_file this machine cannot use is an error from that
+// constructor and is reported as one, never a silent fall back to the system
+// pool.
+func remoteToolCount(ctx context.Context, cfg config.Config) (int, error) {
+	hc, err := cfg.HTTPClient(clientMCPTimeout)
+	if err != nil {
+		return 0, err
+	}
+	headers := map[string]string{"Authorization": "Bearer " + cfg.MCP.APIKey}
+	if host := config.Hostname(); host != "" {
+		// The same connection-scoped machine name every other client sends, so
+		// the probe is attributed to this box rather than to the server itself.
+		headers[mcp.HostHeader] = host
+	}
+	cli, err := mcpclient.NewStreamableHttpClient(cfg.ServerURL()+"/api/mcp",
+		mcptransport.WithHTTPHeaders(headers),
+		mcptransport.WithHTTPBasicClient(hc))
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = cli.Close() }()
+	if err := cli.Start(ctx); err != nil {
+		return 0, err
+	}
+	var initReq mcpgo.InitializeRequest
+	initReq.Params.ProtocolVersion = mcpgo.LATEST_PROTOCOL_VERSION
+	initReq.Params.ClientInfo = mcpgo.Implementation{Name: "seamlessd-doctor", Version: version}
+	if _, err := cli.Initialize(ctx, initReq); err != nil {
+		return 0, err
+	}
+	tools, err := cli.ListTools(ctx, mcpgo.ListToolsRequest{})
+	if err != nil {
+		return 0, err
+	}
+	return len(tools.Tools), nil
 }
 
 // apiKeyCheck warns when the static bearer key is unset. On a true first run

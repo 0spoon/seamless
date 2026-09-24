@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/mark3labs/mcp-go/mcp"
 
@@ -26,9 +25,11 @@ import (
 // reads the effective feature state from the console before judging the number
 // (mcpToolsCheck below).
 //
-// seamlessd's own doctor asserts the same constant against REGISTRATION
-// (mcp.NumTools with a zero config), which is feature-independent and correctly
-// stays a bare equality -- the two checks measure different things on purpose.
+// seamlessd's own doctor asserts its compiled-in mcp.ToolCount against
+// REGISTRATION on a SERVER install, which is feature-independent and correctly
+// stays a bare equality; on a CLIENT install it asks the same live question this
+// command does, through the same features.ToolCountVerdict. The two checks
+// measure different things on purpose.
 const expectedTools = 33
 
 var doctorCmd = spec("doctor", groupObservability, "reachability + key + tool-count check",
@@ -52,7 +53,7 @@ func runDoctor(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 	}
 
 	// Health.
-	client, cerr := httpClient(cfg, healthTimeout)
+	client, cerr := cfg.HTTPClient(healthTimeout)
 	if cerr != nil {
 		return cerr
 	}
@@ -108,13 +109,18 @@ func runDoctor(ctx context.Context, e *env, _ *noOpts, _ []string) error {
 // It reads the daemon's effective optional-feature state first, because with
 // optional features defaulting to OFF a fresh install exposes FEWER tools than
 // are registered, and that is the common case rather than the exception.
+//
+// The judging itself is features.ToolCountVerdict, shared with the client-role
+// `seamlessd doctor`, which asks this same question from the other binary. Only
+// the registered count differs between them: seamlessd reads mcp.ToolCount
+// directly, this CLI mirrors it in expectedTools above.
 func toolsCheck(cfg config.Config, live int) (bool, string) {
 	feats, ferr := consoleFeatures(cfg)
 	why := ""
 	if ferr != nil {
 		why = ferr.Error()
 	}
-	return toolsVerdict(live, feats, why)
+	return features.ToolCountVerdict(expectedTools, live, feats, why)
 }
 
 // consoleFeatures reads the daemon's effective optional-feature state from the
@@ -138,48 +144,4 @@ func consoleFeatures(cfg config.Config) (*config.Features, error) {
 		return nil, errors.New("settings JSON carries no featuresConfig")
 	}
 	return data.FeaturesConfig, nil
-}
-
-// toolsVerdict is the pure half of the mcp_tools check: the live count, the
-// effective feature state (nil when it could not be read, with why saying so),
-// and the registry's own accounting of which tools a disabled feature hides.
-func toolsVerdict(live int, feats *config.Features, why string) (bool, string) {
-	// Failure-soft. Without the feature state there is no single expected
-	// number, only a range: everything registered, minus everything the optional
-	// features could be hiding. Judging against the range keeps one unreadable
-	// endpoint from failing an otherwise healthy daemon, and naming the reason
-	// keeps the line from claiming a certainty it does not have. Asserting the
-	// full count instead would fail every default install whose console did not
-	// answer; assuming all features off would pretend to know they are.
-	if feats == nil {
-		low := expectedTools - len(features.ToolOwners())
-		return live >= low && live <= expectedTools,
-			fmt.Sprintf("%d exposed of %d registered, expected %d-%d (feature state unreadable: %s)",
-				live, expectedTools, low, expectedTools, why)
-	}
-	hidden := features.HiddenTools(*feats)
-	if len(hidden) == 0 {
-		return live == expectedTools, fmt.Sprintf("%d tools (expected %d)", live, expectedTools)
-	}
-	want := expectedTools - len(hidden)
-	names := disabledFeatureNames(*feats)
-	if live == want {
-		return true, fmt.Sprintf("%d registered, %d exposed (%s disabled)", expectedTools, live, names)
-	}
-	return false, fmt.Sprintf("%d registered, %d exposed, expected %d with %s disabled",
-		expectedTools, live, want, names)
-}
-
-// disabledFeatureNames lists, in registry order, the disabled features that
-// account for a gap between the registered and exposed tool counts. Features
-// that own no tools are left out: they explain nothing about this number.
-func disabledFeatureNames(c config.Features) string {
-	var keys []string
-	for _, f := range features.Registry() {
-		if f.Enabled(c) || len(f.Tools) == 0 {
-			continue
-		}
-		keys = append(keys, string(f.Key))
-	}
-	return strings.Join(keys, ", ")
 }

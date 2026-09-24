@@ -52,6 +52,7 @@ sections:
       - plan-mode.md
       - research-trials.md
       - data.md
+      - network-install.md
       - troubleshooting.md
 
   - title: Reference

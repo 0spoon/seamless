@@ -86,9 +86,10 @@ func runMCPProxy(ctx context.Context, e *env, o *mcpProxyOpts, _ []string) error
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
-	// No whole-request deadline (see httpClient): a tool call may be LLM-backed
-	// and legitimately slow, and codex has its own tool_timeout_sec for that.
-	client, err := httpClient(cfg, 0)
+	// No whole-request deadline (see config.Config.HTTPClient): a tool call may
+	// be LLM-backed and legitimately slow, and codex has its own
+	// tool_timeout_sec for that.
+	client, err := cfg.HTTPClient(0)
 	if err != nil {
 		return err
 	}
@@ -118,7 +119,7 @@ func newBridge(endpoint, apiKey string, client *http.Client) *bridge {
 		// and legitimately slow.
 		client = &http.Client{
 			Transport: &http.Transport{
-				DialContext: (&net.Dialer{Timeout: dialTimeout}).DialContext,
+				DialContext: (&net.Dialer{Timeout: config.DialTimeout}).DialContext,
 			},
 		}
 	}

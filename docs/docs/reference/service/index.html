@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -254,14 +256,22 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 survives reboots without you supervising it. It runs as <strong>your</strong> user, not
 root: it reads your config, writes your files, and should die with your login
 session, not the machine.</p>
-<p>There is <strong>one instance per machine</strong>: port <code>8081</code>, data dir <code>~/.seamless</code> -
-one daemon, one database, one set of files. Both are config keys, not fixed
-facts: set <code>addr:</code> and <code>data_dir:</code> in <code>~/.config/seamless/seamless.yaml</code> (or
-the <code>SEAMLESS_ADDR</code> / <code>SEAMLESS_DATA_DIR</code> env overrides) and restart the
-service. The config is the single source of truth for the bind address - the
-installer and the Makefile both read the port back out of it, so their health
-checks follow your change rather than assuming <code>8081</code>, and nothing bakes the
-address into the service itself.</p>
+<p>By default there is <strong>one instance per machine</strong>: port <code>8081</code>, data dir
+<code>~/.seamless</code> - one daemon, one database, one set of files. Both are config
+keys, not fixed facts: set <code>addr:</code> and <code>data_dir:</code> in
+<code>~/.config/seamless/seamless.yaml</code> (or the <code>SEAMLESS_ADDR</code> /
+<code>SEAMLESS_DATA_DIR</code> env overrides) and restart the service. The config is the
+single source of truth for the bind address - the installer and the Makefile
+both read the port back out of it, so their health checks follow your change
+rather than assuming <code>8081</code>, and nothing bakes the address into the service
+itself.</p>
+<p>One instance per machine is the default, not a law. Several devices can share
+<strong>one</strong> daemon: the server keeps the service, the database and the corpus, and
+every other machine installs with <code>role: client</code> plus <code>server_url</code>, which runs
+no daemon and registers no service at all (<code>seamlessd serve</code> refuses on a
+client outright). Everything below describes the server's install;
+<a href="../../guides/network-install/">Share one daemon across a LAN</a> is the setup, and
+the tradeoffs.</p>
 <h2 id="control-it-from-anywhere">Control it from anywhere</h2>
 <p>Whatever the platform, one set of verbs controls the service - they resolve
 your OS's service manager for you:</p>

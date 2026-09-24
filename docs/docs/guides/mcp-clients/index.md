@@ -44,9 +44,13 @@ to put that loop into a rules file so the agent actually does.
 
 Three facts every block below shares:
 
-- The daemon binds **localhost only** (`127.0.0.1:8081` by default), so the
+- The daemon binds **localhost only** by default (`127.0.0.1:8081`), so the
   client has to run on the same machine. `curl -s
-  http://127.0.0.1:8081/healthz` proves it is up, no auth needed.
+  http://127.0.0.1:8081/healthz` proves it is up, no auth needed. A daemon
+  [shared across a LAN](https://thereisnospoon.org/docs/guides/network-install/) is the opt-in exception:
+  substitute its `server_url` for `http://127.0.0.1:8081` in every block below,
+  and under https make sure the client trusts the server's CA - these clients
+  use their own HTTP stack and never read Seamless's `tls.ca_file`.
 - The bearer key is `mcp.api_key` in your
   [`seamless.yaml`](https://thereisnospoon.org/docs/reference/configuration/) (usually
   `~/.config/seamless/seamless.yaml`). `seam mcp-headers` prints the current

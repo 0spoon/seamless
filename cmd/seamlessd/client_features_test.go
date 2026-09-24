@@ -90,22 +90,19 @@ func TestClientConsoleJSON_NonOKNamesTheStatus(t *testing.T) {
 
 // A configured-but-unusable tls.ca_file is an error, never a silent fall back to
 // the system pool: the request would then fail in the handshake and read as an
-// outage.
-func TestClientHTTPClient_UnusableCAFileIsAnError(t *testing.T) {
+// outage. The constructor itself is tested where it lives
+// (internal/config/httpclient_test.go); what this pins is that the client-role
+// read goes THROUGH it instead of building a client of its own.
+func TestClientConsoleJSON_UnusableCAFileIsAnError(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.TLS.CAFile = filepath.Join(t.TempDir(), "absent.pem")
-	_, err := clientHTTPClient(cfg)
+	var data struct{}
+	err := clientConsoleJSON(cfg, "https://example.invalid", "/console/settings?format=json", &data)
 	require.ErrorContains(t, err, "tls.ca_file")
 
 	notPEM := filepath.Join(t.TempDir(), "ca.pem")
 	require.NoError(t, os.WriteFile(notPEM, []byte("not a certificate"), 0o600))
 	cfg.TLS.CAFile = notPEM
-	_, err = clientHTTPClient(cfg)
+	err = clientConsoleJSON(cfg, "https://example.invalid", "/console/settings?format=json", &data)
 	require.ErrorContains(t, err, "no PEM certificate found")
-
-	// No ca_file: the system pool, and no error.
-	cfg.TLS.CAFile = ""
-	client, err := clientHTTPClient(cfg)
-	require.NoError(t, err)
-	require.Equal(t, clientConsoleTimeout, client.Timeout)
 }

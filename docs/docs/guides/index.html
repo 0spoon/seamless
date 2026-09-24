@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -248,9 +250,12 @@ is the lab loop for systematic debugging - recording every attempt so parallel
 agents share dead ends instead of repeating them. Related:
 <a href="../guides/plan-mode/">Capture Claude Code plans</a> explains how plan mode is
 captured into notes and tasks automatically, and which hook does what.</p>
-<p>The last two are operational. <a href="../guides/data/">Import, back up &amp; restore</a> covers
+<p>The last three are operational. <a href="../guides/data/">Import, back up &amp; restore</a> covers
 putting <code>~/.seamless</code> in git, what deleting <code>seam.db</code> actually costs (an index
 rebuild, not data loss), and moving to a new machine.
+<a href="../guides/network-install/">Share one daemon across a LAN</a> is the opt-in
+multi-device shape: the server config, TLS, the pairing command, and the
+daemon-side captures a remote device honestly does not get.
 <a href="../guides/troubleshooting/">Troubleshooting</a> is symptom-first, written for a
 system whose hooks deliberately fail open - where a broken install looks like
 silence, not an error message.</p>
@@ -293,6 +298,11 @@ silence, not an error message.</p>
   <a class="doc-card" href="../guides/data/">
     <h2>Import, back up &amp; restore</h2>
     <p>One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.</p>
+  </a>
+  
+  <a class="doc-card" href="../guides/network-install/">
+    <h2>Share one daemon across a LAN</h2>
+    <p>Run one seamlessd for several devices - the server config, TLS with mkcert or openssl, the client-config pairing command, and the captures a remote device honestly does not get.</p>
   </a>
   
   <a class="doc-card" href="../guides/troubleshooting/">

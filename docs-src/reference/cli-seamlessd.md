@@ -1,6 +1,6 @@
 ---
 title: seamlessd CLI
-description: The daemon and operator CLI - serve, doctor, export, import, install-hooks, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
+description: The daemon and operator CLI - serve, doctor, export, import, install-hooks, client-config, uninstall, update, map-repo, family, console-open, start/stop/restart/status, and version.
 ---
 
 `seamlessd` is both the server and the operator CLI. `serve` runs the daemon;
@@ -23,7 +23,24 @@ seamlessd serve [--addr HOST:PORT]
 
 Starts the HTTP server and blocks until SIGINT or SIGTERM, then shuts down
 gracefully. `--addr` overrides the configured bind address (default
-`127.0.0.1:8081`).
+`127.0.0.1:8081`). The flag is the bind address, so everything downstream that
+derives "where do clients reach this daemon" answers from the address actually
+listened on - a configured `server_url` still wins over both.
+
+It refuses to start at all under `role: client`, before it opens a file or a
+port: a client install has no daemon of its own by definition, and serving one
+would give the machine a second, empty corpus its own hooks never write to.
+
+With `tls.cert_file` and `tls.key_file` both set, the listener is **https**
+with a TLS 1.2 floor, and the console session cookie is marked `Secure`. One
+without the other is refused when the config loads. Outermost in the handler
+chain is the Host-header allowlist: the loopback names, a concrete bind host,
+the host of `server_url`, and `allowed_hosts`. Anything else gets `421
+Misdirected Request`. A wildcard bind with no host named anywhere is the single
+unguarded case - naming one arms the guard there too. Binding beyond loopback
+logs a `SECURITY` warning at startup whose text differs with TLS on or off, and
+a second warning when the bind is wide while `server_url` still names loopback.
+[Share one daemon across a LAN](/guides/network-install/) is the setup guide.
 
 On a true first run - no config file anywhere in the search order and no
 `SEAMLESS_MCP_API_KEY` in the environment - it generates the bearer key and
@@ -70,10 +87,14 @@ Checks stop early if config or the database cannot be loaded at all.
 | `mcp.api_key` | Set, or a warning that `/api/mcp` will reject everything. |
 | `llm` | The provider, or a warning that its credential is missing. |
 | `embedder` | Probes the embedder with a real embed call. Unreachable, unconfigured, or provider `anthropic` (no embeddings API) is a warning: recall degrades to FTS. |
+| `bind` | Loopback is OK. Non-loopback with TLS is OK with the reminder that the bearer key is still the only authentication; non-loopback *without* TLS is a warning naming what travels in the clear. |
+| `server_url` | Fetches `/healthz` through the advertised URL. Not answering is **info** (the daemon is often stopped while doctor runs); a `421` is a **fail** naming the Host header it just refused, which means the allowlist and the advertised name disagree. A derived URL says so. |
+| `tls` | Off, or the certificate's expiry (a warning from 30 days out, nothing auto-renews) and whether its SANs cover the host of `server_url` - the one that fails at the client's handshake with a message that names no file on the server. |
 | `database` | Path, schema version, and table count. Opens and migrates if needed. |
 | `schema version` | An **info** line pairing what the database has applied with what this binary compiles - `v25 applied / v25 compiled`. A database *ahead* of the binary warns: it was written by a newer `seamlessd`, which is also why an archive from it would be refused. |
-| `repo map` | Warns when `repo_project_map` entries name paths that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. |
-| `mcp_tools` | Fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. |
+| `repo map` | Warns when mapped paths belonging to **this** host name directories that no longer exist on disk. A moved repo adopts its project at its next session start; a moved-and-renamed repo needs the printed `map-repo` override. Rows belonging to other hosts are counted and reported as not verifiable from here - never stat'd, never treated as missing. |
+| `remote sessions` | An **info** line: which other machines used this daemon in the last 24 hours, and how many daemon-side captures were skipped for them. `none in 24h` on a single-machine install. |
+| `mcp_tools` | On a server install, fails if the number of registered tools disagrees with the expected count - catches a tool written but never wired in. On a `role: client` install it is the live count instead: `tools/list` against the server, judged against that server's effective feature state. |
 | `claude CLI runtime` / `claude app runtime` | Each discoverable Claude Code runtime's self-reported version, separately: the PATH CLI and, on macOS, every runtime the desktop app has retained - they can differ, and collapsing them would hide exactly that skew. No discoverable runtime means no lines. |
 | `hooks` | Claude Code definitions compared with today's desired profile. |
 | `claude desktop mcp` | The chat surface's `claude_desktop_config.json` entry compared with the desired stdio bridge. Absent is an **info** line naming the opt-in command, never a nag; an exact entry reports OK while stating that the running app's loaded state is unverifiable (the app reads the config at startup). No lines when neither the app nor a desktop config exists. |
@@ -84,6 +105,21 @@ Checks stop early if config or the database cannot be loaded at all.
 | `codex mcp` | Exact enabled stdio bridge state from `codex mcp get seamless --json`, plus executable/config target existence. |
 | `feature skills` | An **info** line when a client's skill home still holds a skill for an [optional feature](/reference/console/#optional-features) you switched off - the daemon never deletes there on a toggle. Re-run `install-hooks` to remove it, or re-enable the feature. |
 | `gardener` | The ticker configuration, or a warning that it is disabled. |
+
+Under `role: client` the report is a deliberately short, different list: a
+`role` info line naming the server it dials, a `server_url` reachability probe,
+the API key, the live MCP tool count, and the same desired-state hook and MCP
+comparisons above. That tool count is the one client check that presents the
+bearer key, so a wrong or rotated key surfaces there rather than as a silent
+green. Everything else is absent because it describes a machine
+that is somewhere else - the database, schema version, repo map, remote
+sessions and feature skills all read a local `seam.db` a client does not have
+(opening one would *mint* the database whose absence is what `role: client`
+means); the gardener runs inside the daemon; and the LLM and embedder belong to
+the server that does the embedding. The `server_url` probe is a **fail** rather
+than info on a client, because a client has no benign "daemon is stopped"
+state: until the server answers there are no briefings, memories, or tools on
+this machine.
 
 The definition checks compare current desired state, not mere existence. The
 shared classifier recognizes exact current definitions, marked stale entries,
@@ -217,7 +253,7 @@ mismatch does not heal itself.
 ## seamlessd install-hooks {#seamlessd_install_hooks}
 
 ```bash
-seamlessd install-hooks [--client claude|claude-desktop|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--seam PATH] [--mcp=false] [--skills=false]
+seamlessd install-hooks [--client claude|claude-desktop|codex|all|detect] [--settings PATH] [--codex-hooks PATH] [--desktop-config PATH] [--url BASE] [--server-url URL] [--api-key KEY] [--seam PATH] [--mcp=false] [--skills=false]
 ```
 
 Wires the selected install target(s) to Seamless: merges the hook entries into
@@ -239,7 +275,9 @@ it has no hooks and no skills - so selecting only it together with
 | `--settings` | `~/.claude/settings.json` | Target Claude Code settings file, created if absent. Point it at a project-scoped `.claude/settings.json` to scope the hooks to one repo. |
 | `--codex-hooks` | `$CODEX_HOME/hooks.json`, else `~/.codex/hooks.json` | Target Codex hooks file, created if absent. |
 | `--desktop-config` | the app's per-OS location | Claude app `claude_desktop_config.json` to register the chat-surface bridge in (macOS `~/Library/Application Support/Claude/`, Windows `%APPDATA%\Claude\`). |
-| `--url` | derived from the config addr | Base URL of the daemon. |
+| `--url` | derived from the config addr | Base URL of the daemon, for this run only. It does not change the config file. |
+| `--server-url` | none | Install as a **client** of the `seamlessd` at this base URL: writes `role: client`, `server_url`, and `mcp.api_key` into `~/.config/seamless/seamless.yaml` on first run, and wires every client against that URL. |
+| `--api-key` | `$SEAMLESS_MCP_API_KEY` | That server's bearer key, for `--server-url`. On its own it is an error, not a silent no-op - a server reads its own key from its config file. |
 | `--seam` | sibling of this binary, else `seam` on PATH | Path to the `seam` CLI baked into the command hooks. |
 | `--mcp` | `true` | Register the MCP server via the client CLI (`claude mcp add-json --scope user` / `codex mcp add`). |
 | `--skills` | `true` | Install the embedded skills for each wired client. A failure here degrades to a warning - skills must not cost the daemon bootstrap. |
@@ -250,6 +288,26 @@ is what the hooks authenticate with. The loaded config path is made absolute
 and passed to command hooks as `--config`, so they resolve config from any
 working directory. A `--seam` binary that cannot be found is a printed warning,
 not an error - the hooks would fail at fire time, so it says so now.
+
+With `--server-url`, that first-run step writes a *client* config instead -
+`role: client`, `server_url`, `mcp.api_key`, and deliberately no `data_dir` -
+and the run wires every selected target against the server's URL. The same
+bootstrap rule applies: a config file already in the search order is never
+edited, and the error names the exact lines to add by hand. The one file that
+is not an error is one that already says exactly this, which is what keeps
+re-running the installer from failing. No key is generated, because a client's
+key belongs to the server it dials: it comes from `--api-key`, else
+`$SEAMLESS_MCP_API_KEY`, and neither is an error. A client also has no local
+database to read the [optional features](/reference/console/#optional-features)
+from, so it asks the server over HTTP and falls back to its file/env config
+with a warning. The run closes by naming the server it is now a client of.
+
+Under an **https** base URL the wiring changes shape on purpose: every Claude
+Code hook becomes a command hook (including `UserPromptSubmit`, otherwise the
+one http hook) and the MCP registration becomes the `seam mcp-proxy` stdio
+bridge. Claude Code performs http hooks and http MCP connections with its own
+client, which has nowhere to be told about `tls.ca_file`; routing both through
+`seam` puts them on the CLI's trust store. Under http the shapes are unchanged.
 
 The hook file is written before MCP registration. Claude Code registration stays
 best-effort because its current CLI exposes no machine-readable state: a missing
@@ -289,6 +347,42 @@ often be lost. The Codex profile is five shell-string command hooks. Both
 profiles include safe constraint injection and parent-only lifecycle handling
 for subagents; the [hooks reference](/reference/hooks/) has both tables.
 
+## seamlessd client-config {#seamlessd_client_config}
+
+```bash
+seamlessd client-config [--redact]
+```
+
+Runs on the **server** and prints exactly what you paste on another machine to
+make it a client of this daemon. It reads the resolved config and formats it:
+it mutates nothing, opens no connection, and contacts no network.
+
+The output is the server URL, the bearer key, the minimum client version, and
+three paste-able commands - the macOS/Linux installer one-liner
+(`SEAMLESS_SERVER_URL` + `SEAMLESS_MCP_API_KEY`), the PowerShell equivalent,
+and the manual `install-hooks --server-url ... --api-key ...` form for a
+machine that already has the binaries. `--redact` substitutes a placeholder for
+the key so the block is safe to paste into a ticket or a chat; the shape of
+every command is unchanged.
+
+Every line it prints carries a URL and a key, so the refusals matter more than
+the output. It errors rather than printing a command that looks right and
+cannot work:
+
+| State | Why it refuses |
+|---|---|
+| `role: client` | This install has no clients of its own to pair. The message names the server to run it on instead. |
+| `mcp.api_key` empty | A client would have nothing to authenticate with. It names the config file and `openssl rand -hex 32`. |
+| `server_url` resolves to loopback | Pasted on a second machine that command dials *that* machine's port 8081 and fails as a connection error from the wrong end of the network. It names the fix (`server_url` plus `addr: 0.0.0.0:8081`, then restart) and points out that a second user **on the same box** needs none of that and can pair against `http://127.0.0.1:8081` directly. |
+
+Plain `http://` is a warning, not a refusal - it is a legitimate choice on a
+trusted LAN, and the operator already had to widen the bind and name
+`server_url` to get here. What it must not be is silent: the key in those
+commands, and every memory fetched with it, cross the network in the clear.
+
+See [Share one daemon across a LAN](/guides/network-install/) for the whole
+procedure.
+
 ## seamlessd uninstall {#seamlessd_uninstall}
 
 ```bash
@@ -309,6 +403,13 @@ Hook removal uses the installer's same classifier: current, marked-stale, and
 recognizable legacy Seamless definitions are removed; foreign definitions are
 preserved. Skill removal is scoped to `seam-onboard`, `seam-research`, and the
 one-shot delivery marker in each selected client's skill root.
+
+Under `role: client` two steps narrow rather than run. The service block reports
+`not installed` and no teardown happens - a client registered none, and running
+the teardown anyway would stop the daemon of a *server* sharing the same box.
+And `--purge` deletes only the config directory: the `~/.seamless` a client's
+config resolves to is a default it never wrote, and on a box converted from a
+server it is the server's corpus.
 
 | Flag | Default | Meaning |
 |---|---|---|

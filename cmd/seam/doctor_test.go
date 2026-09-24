@@ -143,29 +143,18 @@ func TestToolsCheck_UnreadableFeatureStateFallsBackToTheRange(t *testing.T) {
 	}
 }
 
-// The gap is derived from the registry, never from a literal: the day a second
-// optional feature lands, the arithmetic and the reason line follow it.
-func TestToolsVerdict_DerivesTheGapFromTheRegistry(t *testing.T) {
-	off := config.Features{}
-	hidden := features.HiddenTools(off)
-	require.NotEmpty(t, hidden, "with every feature off the registry must hide something")
-	require.Len(t, hidden, optionalTools())
+// The gap arithmetic itself now lives in internal/features
+// (features.ToolCountVerdict, shared with the client-role `seamlessd doctor`)
+// and is tested there against the registry. What stays here is the wiring: that
+// this command feeds it expectedTools and the state read from the console.
+func TestToolsCheck_FeedsTheRegisteredCountToTheSharedVerdict(t *testing.T) {
+	cfg := settingsServer(t, http.StatusOK, `{"featuresConfig":{"research":false}}`)
+	feats := config.Features{}
 
-	ok, detail := toolsVerdict(expectedTools-len(hidden), &off, "")
-	require.True(t, ok, detail)
-	for _, f := range features.Registry() {
-		if len(f.Tools) > 0 {
-			require.Contains(t, detail, string(f.Key), "a disabled feature must be named as the reason")
-		}
-	}
-
-	on := features.Defaults()
-	for _, f := range features.Registry() {
-		f.Set(&on, true)
-	}
-	ok, detail = toolsVerdict(expectedTools, &on, "")
-	require.True(t, ok, detail)
-	require.Empty(t, features.HiddenTools(on))
+	ok, detail := toolsCheck(cfg, expectedTools-optionalTools())
+	wantOK, wantDetail := features.ToolCountVerdict(expectedTools, expectedTools-optionalTools(), &feats, "")
+	require.Equal(t, wantOK, ok)
+	require.Equal(t, wantDetail, detail, "toolsCheck must be the shared verdict, not a second copy of it")
 }
 
 // doctor's aggregate shape, at the one depth a unit test can reach: the checks

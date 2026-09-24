@@ -25,7 +25,7 @@ func consoleJSON(cfg config.Config, path string, v any) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Accept", "application/json")
-	client, err := httpClient(cfg, consoleTimeout)
+	client, err := cfg.HTTPClient(consoleTimeout)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func consolePOST(cfg config.Config, path string, v any) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Accept", "application/json")
-	client, err := httpClient(cfg, consoleTimeout)
+	client, err := cfg.HTTPClient(consoleTimeout)
 	if err != nil {
 		return err
 	}

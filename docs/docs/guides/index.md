@@ -27,9 +27,12 @@ agents share dead ends instead of repeating them. Related:
 [Capture Claude Code plans](https://thereisnospoon.org/docs/guides/plan-mode/) explains how plan mode is
 captured into notes and tasks automatically, and which hook does what.
 
-The last two are operational. [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/) covers
+The last three are operational. [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/) covers
 putting `~/.seamless` in git, what deleting `seam.db` actually costs (an index
 rebuild, not data loss), and moving to a new machine.
+[Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/) is the opt-in
+multi-device shape: the server config, TLS, the pairing command, and the
+daemon-side captures a remote device honestly does not get.
 [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/) is symptom-first, written for a
 system whose hooks deliberately fail open - where a broken install looks like
 silence, not an error message.
@@ -41,4 +44,5 @@ silence, not an error message.
 - [Capture Claude Code plans](https://thereisnospoon.org/docs/guides/plan-mode/): How plan mode is captured automatically - which hook does what, a plan's life from draft to approved, and the escape hatches.
 - [Run research trials](https://thereisnospoon.org/docs/guides/research-trials/): The lab loop for systematic debugging - recording what was tried, letting parallel agents share dead ends, and distilling the result into memory.
 - [Import, back up & restore](https://thereisnospoon.org/docs/guides/data/): One archive with seamlessd export, restoring or merging it with seamlessd import, putting ~/.seamless in git, what deleting seam.db actually costs, and moving to a new machine.
+- [Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/): Run one seamlessd for several devices - the server config, TLS with mkcert or openssl, the client-config pairing command, and the captures a remote device honestly does not get.
 - [Troubleshooting](https://thereisnospoon.org/docs/guides/troubleshooting/): Symptom-first fixes for a system whose hooks fail open - where silence, not an error, is what a broken install looks like.

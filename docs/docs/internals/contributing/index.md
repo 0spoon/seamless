@@ -255,15 +255,19 @@ Two places outside `internal/mcp` also track the surface:
   doctor` reports registered against exposed: it reads the effective feature
   state from `GET /console/settings?format=json` and subtracts the tools of the
   features that are off, derived from the registry rather than from a second
-  number to keep current (`31 registered, 28 exposed (research disabled)`; `31
-  tools (expected 31)` when everything is on). With that state unreadable - an
+  number to keep current (`33 registered, 30 exposed (research disabled)`; `33
+  tools (expected 33)` when everything is on). With that state unreadable - an
   unreachable endpoint, or a pre-features daemon whose settings JSON carries no
   `featuresConfig` - it judges a **range** instead of a number and says why,
   rather than failing a healthy daemon over a fact it could not read.
-  `seamlessd doctor`'s `mcp_tools` check stays a bare equality against
-  registration: the two doctors measure different things, and making the
-  server-side one feature-aware would lose the "written but never wired in"
-  signal it exists for.
+  `seamlessd doctor`'s **server-role** `mcp_tools` check stays a bare equality
+  against registration: the two doctors measure different things, and making
+  the server-side one feature-aware would lose the "written but never wired in"
+  signal it exists for. Its **client-role** check is the opposite case - the
+  local binary serves no MCP at all there, so counting its own registrations
+  would report green against a server that is down or rejecting the key. That
+  path runs the same feature-aware live count `seam doctor` does, and both go
+  through `features.ToolCountVerdict` so the arithmetic exists once.
 - **A docs page's `tools:` frontmatter list** (under `docs-src/reference/mcp/`)
   decides where the generated reference for the tool appears. A page listing a
   name that is not in `Catalog()` is a docsgen error.

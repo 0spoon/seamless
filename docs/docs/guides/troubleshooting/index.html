@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../../guides/troubleshooting/" class="current" aria-current="page">Troubleshooting</a></li>
         
       </ul>
@@ -256,7 +258,7 @@ an agent - but it means you cannot wait for an error. You have to go ask.</p>
 <tbody>
 <tr>
 <td>Runs</td>
-<td>Against config and the database directly - no daemon needed</td>
+<td>Against config and the database directly - no daemon needed, except on a <code>role: client</code> install, where the tool count dials the server</td>
 <td>Against a running daemon over HTTP and MCP</td>
 </tr>
 <tr>
@@ -514,9 +516,11 @@ are looking at the propagation seam, not a failure:</p>
 the Interactions feed. The filter rejects it before the middleware that records
 tool calls, so silence there is expected.</p>
 <h2 id="two-daemons-the-wrong-port-or-code-changes-that-never-land">Two daemons, the wrong port, or code changes that never land</h2>
-<p><strong>What is happening.</strong> Seamless is <strong>one instance per machine</strong>: one port (8081),
-one data directory (<code>~/.seamless</code>). The dev and release install layouts drive that
-same instance, so installing one replaces the other. Most confusion here is
+<p><strong>What is happening.</strong> Seamless is <strong>one server instance per machine</strong>: one port
+(8081), one data directory (<code>~/.seamless</code>). The dev and release install layouts
+drive that same instance, so installing one replaces the other. (A <code>role: client</code>
+install has neither a port nor a data directory, so it cannot collide this way -
+see <a href="../../guides/network-install/">Share one daemon across a LAN</a>.) Most confusion here is
 someone accidentally interacting with a second copy, or with the same copy running
 older code.</p>
 <p><strong>Fix.</strong></p>
@@ -567,7 +571,7 @@ name is a lossless in-place update, so retrying is safe.</p>
 
     
     <nav class="page-nav" aria-label="Pagination">
-      <a class="prev" href="../../guides/data/"><span class="dir">Previous</span><span class="t">Import, back up &amp; restore</span></a>
+      <a class="prev" href="../../guides/network-install/"><span class="dir">Previous</span><span class="t">Share one daemon across a LAN</span></a>
       <a class="next" href="../../reference/"><span class="dir">Next</span><span class="t">Reference</span></a>
     </nav>
     

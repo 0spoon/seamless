@@ -8,14 +8,23 @@ survives reboots without you supervising it. It runs as **your** user, not
 root: it reads your config, writes your files, and should die with your login
 session, not the machine.
 
-There is **one instance per machine**: port `8081`, data dir `~/.seamless` -
-one daemon, one database, one set of files. Both are config keys, not fixed
-facts: set `addr:` and `data_dir:` in `~/.config/seamless/seamless.yaml` (or
-the `SEAMLESS_ADDR` / `SEAMLESS_DATA_DIR` env overrides) and restart the
-service. The config is the single source of truth for the bind address - the
-installer and the Makefile both read the port back out of it, so their health
-checks follow your change rather than assuming `8081`, and nothing bakes the
-address into the service itself.
+By default there is **one instance per machine**: port `8081`, data dir
+`~/.seamless` - one daemon, one database, one set of files. Both are config
+keys, not fixed facts: set `addr:` and `data_dir:` in
+`~/.config/seamless/seamless.yaml` (or the `SEAMLESS_ADDR` /
+`SEAMLESS_DATA_DIR` env overrides) and restart the service. The config is the
+single source of truth for the bind address - the installer and the Makefile
+both read the port back out of it, so their health checks follow your change
+rather than assuming `8081`, and nothing bakes the address into the service
+itself.
+
+One instance per machine is the default, not a law. Several devices can share
+**one** daemon: the server keeps the service, the database and the corpus, and
+every other machine installs with `role: client` plus `server_url`, which runs
+no daemon and registers no service at all (`seamlessd serve` refuses on a
+client outright). Everything below describes the server's install;
+[Share one daemon across a LAN](/guides/network-install/) is the setup, and
+the tradeoffs.
 
 ## Control it from anywhere
 

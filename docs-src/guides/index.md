@@ -28,9 +28,12 @@ agents share dead ends instead of repeating them. Related:
 [Capture Claude Code plans](/guides/plan-mode/) explains how plan mode is
 captured into notes and tasks automatically, and which hook does what.
 
-The last two are operational. [Import, back up & restore](/guides/data/) covers
+The last three are operational. [Import, back up & restore](/guides/data/) covers
 putting `~/.seamless` in git, what deleting `seam.db` actually costs (an index
 rebuild, not data loss), and moving to a new machine.
+[Share one daemon across a LAN](/guides/network-install/) is the opt-in
+multi-device shape: the server config, TLS, the pairing command, and the
+daemon-side captures a remote device honestly does not get.
 [Troubleshooting](/guides/troubleshooting/) is symptom-first, written for a
 system whose hooks deliberately fail open - where a broken install looks like
 silence, not an error message.

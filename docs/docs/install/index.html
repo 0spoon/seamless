@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -246,7 +248,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
 
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#installing-without-the-one-liner">Installing without the one-liner</a></li><li class="lvl-3"><a href="#homebrew">Homebrew</a></li><li class="lvl-3"><a href="#from-a-clone">From a clone</a></li><li class="lvl-3"><a href="#go-install-and-release-archives">Go install and release archives</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#installing-without-the-one-liner">Installing without the one-liner</a></li><li class="lvl-3"><a href="#homebrew">Homebrew</a></li><li class="lvl-3"><a href="#from-a-clone">From a clone</a></li><li class="lvl-3"><a href="#go-install-and-release-archives">Go install and release archives</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li><li class="lvl-3"><a href="#going-beyond-loopback-deliberately">Going beyond loopback, deliberately</a></li>
     </ul>
   </details>
   <p>Installing Seamless is one command: a script downloads a release archive
@@ -345,6 +347,14 @@ script</a> with no dependencies to audit.</p>
 <tr>
 <td><code>SEAMLESS_CLIENT=claude|claude-desktop|codex|all</code></td>
 <td>choose which target(s) to wire instead of auto-detection; comma lists work (<code>claude,claude-desktop</code>)</td>
+</tr>
+<tr>
+<td><code>SEAMLESS_SERVER_URL=http://studio.local:8081</code></td>
+<td>install as a <strong>client</strong> of a Seamless daemon running elsewhere: wire this machine's agent clients to that URL, install no service, and keep no data dir here. Requires <code>SEAMLESS_MCP_API_KEY</code>. See <a href="../guides/network-install/">Share one daemon across a LAN</a></td>
+</tr>
+<tr>
+<td><code>SEAMLESS_MCP_API_KEY=&lt;key&gt;</code></td>
+<td>the server's bearer key, required alongside <code>SEAMLESS_SERVER_URL</code> - <code>SEAMLESS_SERVER_URL</code> without it is a hard error, because a client needs both. <code>seamlessd client-config</code> on the server prints the whole command</td>
 </tr>
 <tr>
 <td><code>SEAMLESS_NO_HOOKS=1</code></td>
@@ -453,7 +463,12 @@ bearer value in client config or subprocess argv. A manual Codex direct-HTTP
 registration with <code>http_headers</code> does copy it into <code>config.toml</code>; use that
 tradeoff deliberately.</li>
 <li><strong>Loopback bind</strong> by default (<code>127.0.0.1:8081</code>). Nothing off your machine can
-reach it.</li>
+reach it. Widening it is an explicit opt-in, and the daemon logs a <code>SECURITY</code>
+warning every time it starts on a non-loopback address.</li>
+<li><strong>A Host-header allowlist</strong> guards against DNS rebinding: the daemon answers
+the loopback names, a concrete bind host, the host of <code>server_url</code>, and
+anything in <code>allowed_hosts</code>. Every other <code>Host</code> gets <code>421 Misdirected Request</code>. A wildcard bind (<code>0.0.0.0</code>) with no host named anywhere is the one
+unguarded case - naming even one host arms the guard there too.</li>
 <li><strong>SSRF guards on capture.</strong> <code>capture_url</code> is the one tool that makes an
 outbound request on an agent's behalf, and its destination ports are restricted
 to <code>capture.allowed_ports</code> (80 and 443 by default) - never &quot;any port&quot;.</li>
@@ -471,12 +486,28 @@ script's Sigstore bundle in-process before executing it. <code>curl | sh</code> 
 means trusting the bytes served by the site, so read the script first if that
 boundary is not acceptable; <code>go install</code> lands in the same place.</li>
 </ul>
-<p>The key and loopback are a matched pair. A static bearer key is adequate
-<em>because</em> the listener is on loopback; it would not be adequate on a public
-interface. If you widen <code>addr</code> to a routable address, the key becomes the only
-thing between the internet and your entire knowledge store - so don't. Put it
-behind a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) and leave the bind
-on loopback.</p>
+<h3 id="going-beyond-loopback-deliberately">Going beyond loopback, deliberately</h3>
+<p>A static bearer key is adequate <em>because</em> the listener is on loopback; the two
+are a matched pair. Widen <code>addr</code> and that key becomes the only thing between a
+network peer and your entire knowledge store - so widening it is three
+deliberate steps, not one:</p>
+<ol>
+<li><strong>Bind wide and say what you are called.</strong> <code>addr: 0.0.0.0:8081</code> plus
+<code>server_url: https://studio.local:8081</code>. The second key is what clients
+dial, and its host joins the allowlist, so the guard stays on.</li>
+<li><strong>Add TLS.</strong> <code>tls.cert_file</code> + <code>tls.key_file</code> makes the listener https
+(TLS 1.2 floor) and marks the console session cookie <code>Secure</code>. Without it
+the bearer key, every hook payload, and the whole console travel in the
+clear; <code>seamlessd doctor</code> reports that as a warning on the <code>bind</code> line.</li>
+<li><strong>Keep the blast radius small.</strong> There is still no rate limiting, no user
+accounts, and no per-client authorization: one key admits the whole corpus.
+A trusted LAN is the supported boundary. The public internet is not.</li>
+</ol>
+<p><a href="../guides/network-install/">Share one daemon across a LAN</a> is the walkthrough -
+certificates, the <code>seamlessd client-config</code> pairing command, and what a remote
+device does <em>not</em> get. If you only need to reach your own daemon from
+elsewhere, a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) over a
+loopback bind is still the smaller change and the safer one.</p>
 <p>See <a href="../reference/configuration/">Configuration</a> for every key.</p>
 
 </article>
@@ -495,7 +526,7 @@ on loopback.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#installing-without-the-one-liner">Installing without the one-liner</a></li><li class="lvl-3"><a href="#homebrew">Homebrew</a></li><li class="lvl-3"><a href="#from-a-clone">From a clone</a></li><li class="lvl-3"><a href="#go-install-and-release-archives">Go install and release archives</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li>
+      <li class="lvl-2"><a href="#install-in-one-command">Install in one command</a></li><li class="lvl-2"><a href="#installing-without-the-one-liner">Installing without the one-liner</a></li><li class="lvl-3"><a href="#homebrew">Homebrew</a></li><li class="lvl-3"><a href="#from-a-clone">From a clone</a></li><li class="lvl-3"><a href="#go-install-and-release-archives">Go install and release archives</a></li><li class="lvl-2"><a href="#the-service">The service</a></li><li class="lvl-2"><a href="#upgrading">Upgrading</a></li><li class="lvl-2"><a href="#uninstalling">Uninstalling</a></li><li class="lvl-2"><a href="#security-posture">Security posture</a></li><li class="lvl-3"><a href="#going-beyond-loopback-deliberately">Going beyond loopback, deliberately</a></li>
     </ul>
   </aside>
   

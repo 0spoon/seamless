@@ -94,6 +94,8 @@ script](https://thereisnospoon.org/install) with no dependencies to audit.
 | `SEAMLESS_VERSION=0.3.0` | install that version instead of the latest |
 | `SEAMLESS_INSTALL_DIR=~/bin` | put the binaries somewhere else |
 | `SEAMLESS_CLIENT=claude\|claude-desktop\|codex\|all` | choose which target(s) to wire instead of auto-detection; comma lists work (`claude,claude-desktop`) |
+| `SEAMLESS_SERVER_URL=http://studio.local:8081` | install as a **client** of a Seamless daemon running elsewhere: wire this machine's agent clients to that URL, install no service, and keep no data dir here. Requires `SEAMLESS_MCP_API_KEY`. See [Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/) |
+| `SEAMLESS_MCP_API_KEY=<key>` | the server's bearer key, required alongside `SEAMLESS_SERVER_URL` - `SEAMLESS_SERVER_URL` without it is a hard error, because a client needs both. `seamlessd client-config` on the server prints the whole command |
 | `SEAMLESS_NO_HOOKS=1` | skip agent hooks, MCP registration, and skills |
 | `SEAMLESS_NO_ONBOARD_SKILL=1` | skip the selected client(s)' one-shot onboarding skill |
 | `SEAMLESS_NO_RESEARCH_SKILL=1` | skip the selected client(s)' recurring research skill |
@@ -209,7 +211,13 @@ What you are accepting when you run this:
   registration with `http_headers` does copy it into `config.toml`; use that
   tradeoff deliberately.
 - **Loopback bind** by default (`127.0.0.1:8081`). Nothing off your machine can
-  reach it.
+  reach it. Widening it is an explicit opt-in, and the daemon logs a `SECURITY`
+  warning every time it starts on a non-loopback address.
+- **A Host-header allowlist** guards against DNS rebinding: the daemon answers
+  the loopback names, a concrete bind host, the host of `server_url`, and
+  anything in `allowed_hosts`. Every other `Host` gets `421 Misdirected
+  Request`. A wildcard bind (`0.0.0.0`) with no host named anywhere is the one
+  unguarded case - naming even one host arms the guard there too.
 - **SSRF guards on capture.** `capture_url` is the one tool that makes an
   outbound request on an agent's behalf, and its destination ports are restricted
   to `capture.allowed_ports` (80 and 443 by default) - never "any port".
@@ -227,11 +235,28 @@ What you are accepting when you run this:
   means trusting the bytes served by the site, so read the script first if that
   boundary is not acceptable; `go install` lands in the same place.
 
-The key and loopback are a matched pair. A static bearer key is adequate
-*because* the listener is on loopback; it would not be adequate on a public
-interface. If you widen `addr` to a routable address, the key becomes the only
-thing between the internet and your entire knowledge store - so don't. Put it
-behind a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) and leave the bind
-on loopback.
+### Going beyond loopback, deliberately
+
+A static bearer key is adequate *because* the listener is on loopback; the two
+are a matched pair. Widen `addr` and that key becomes the only thing between a
+network peer and your entire knowledge store - so widening it is three
+deliberate steps, not one:
+
+1. **Bind wide and say what you are called.** `addr: 0.0.0.0:8081` plus
+   `server_url: https://studio.local:8081`. The second key is what clients
+   dial, and its host joins the allowlist, so the guard stays on.
+2. **Add TLS.** `tls.cert_file` + `tls.key_file` makes the listener https
+   (TLS 1.2 floor) and marks the console session cookie `Secure`. Without it
+   the bearer key, every hook payload, and the whole console travel in the
+   clear; `seamlessd doctor` reports that as a warning on the `bind` line.
+3. **Keep the blast radius small.** There is still no rate limiting, no user
+   accounts, and no per-client authorization: one key admits the whole corpus.
+   A trusted LAN is the supported boundary. The public internet is not.
+
+[Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/) is the walkthrough -
+certificates, the `seamlessd client-config` pairing command, and what a remote
+device does *not* get. If you only need to reach your own daemon from
+elsewhere, a tunnel (Tailscale, SSH forwarding, Cloudflare Tunnel) over a
+loopback bind is still the smaller change and the safer one.
 
 See [Configuration](https://thereisnospoon.org/docs/reference/configuration/) for every key.

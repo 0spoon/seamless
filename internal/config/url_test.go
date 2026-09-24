@@ -110,6 +110,66 @@ func TestServerURLAdvertisedWins(t *testing.T) {
 		"a Host header does not preserve case")
 }
 
+// A wildcard is the one host server_url must not carry: ServerURL returns a
+// configured value verbatim, so an accepted wildcard reaches every client
+// surface intact -- including the pairing one-liner `seamlessd client-config`
+// prints for an operator to paste on ANOTHER machine, where 0.0.0.0 dials
+// nothing. The bind address that made the wildcard tempting is unaffected.
+func TestValidateServerURLRefusesWildcardHost(t *testing.T) {
+	refused := []struct{ raw, host string }{
+		{"http://0.0.0.0:8081", "0.0.0.0"},
+		{"https://0.0.0.0:8081", "0.0.0.0"},
+		{"http://0.0.0.0", "0.0.0.0"},
+		{"http://[::]:8081", "::"}, // url.Hostname strips the brackets
+		{"http://[::]", "::"},
+		{"  http://0.0.0.0:8081/  ", "0.0.0.0"}, // trimmed first, still refused
+	}
+	for _, tt := range refused {
+		t.Run(tt.raw, func(t *testing.T) {
+			err := validateServerURL(tt.raw)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "wildcard host")
+			require.Contains(t, err.Error(), tt.host, "the error names the offending host")
+		})
+	}
+
+	accepted := []string{
+		"",                        // unset: the derivation takes over
+		"http://[fd00::1]:8081",   // a real IPv6 literal is not a wildcard
+		"http://[::1]:8081",       // nor is IPv6 loopback
+		"http://127.0.0.1:8081",   // loopback is legal here; client-config is what refuses it
+		"http://localhost:8081",   // the same, by name
+		"http://192.168.1.5:8081", // the LAN address this rule tells operators to name
+		"https://seam.lan",
+	}
+	for _, raw := range accepted {
+		t.Run("accepted "+raw, func(t *testing.T) {
+			require.NoError(t, validateServerURL(raw))
+		})
+	}
+
+	require.Contains(t, validateServerURL("http://").Error(), "names no host",
+		"an empty host is a wildcard to reachableHost, but the earlier and more specific error wins")
+}
+
+// The refusal has to fire on the config-load path, not just in the private
+// helper: Validate is what config.Load, EnsureClientConfig and every consumer
+// of a loaded Config stand behind.
+func TestValidateRefusesWildcardServerURL(t *testing.T) {
+	c := Defaults()
+	c.Addr = "0.0.0.0:8081"
+	require.NoError(t, c.Validate(), "a wildcard BIND is a legitimate answer and stays one")
+
+	c.AdvertisedURL = "http://0.0.0.0:8081"
+	err := c.Validate()
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "server_url")
+	require.Contains(t, err.Error(), "0.0.0.0")
+
+	c.AdvertisedURL = "http://seam.lan:8081"
+	require.NoError(t, c.Validate(), "naming a reachable host is the fix the error asks for")
+}
+
 func TestAllowedHostsEffective(t *testing.T) {
 	tests := []struct {
 		name string

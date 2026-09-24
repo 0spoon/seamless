@@ -39,7 +39,7 @@ func runVersion(_ context.Context, e *env, _ *noOpts, _ []string) error {
 	}
 	base := cfg.ServerURL()
 
-	client, err := httpClient(cfg, healthTimeout)
+	client, err := cfg.HTTPClient(healthTimeout)
 	if err != nil {
 		return err
 	}

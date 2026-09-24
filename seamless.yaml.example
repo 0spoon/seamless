@@ -21,6 +21,46 @@ addr: "127.0.0.1:8081"
 # env: SEAMLESS_DATA_DIR
 data_dir: "~/.seamless"
 
+# This install's part in a deployment. `server` (the default) runs the daemon
+# here. `client` runs no daemon at all: serve refuses, there is no database and
+# no corpus on this machine, and every surface -- the seam CLI, the hooks, the
+# MCP registration -- dials server_url instead. A client REQUIRES server_url.
+# env: SEAMLESS_ROLE
+role: "server"
+
+# The base URL clients dial, as a bare scheme://host[:port] with no path, query
+# or fragment. Empty means "derive it from addr", which is what a loopback
+# install wants. Set it when the bind address is not the address clients use: a
+# wildcard bind, a LAN name, a TLS listener. Naming it also adds its host to the
+# Host-header allowlist, which is what arms that guard on a wildcard bind.
+# A wildcard host here is refused at load (0.0.0.0, ::): that answers "where do
+# I listen", not "where do I dial", so it belongs in addr instead.
+# env: SEAMLESS_SERVER_URL
+server_url: ""
+
+# EXTRA Host-header values the daemon answers to, beyond the loopback names, a
+# concrete bind host, and the host of server_url. Requests arriving under any
+# other Host get 421 (the DNS-rebinding guard). Naming even one host turns the
+# guard on for a wildcard bind, which otherwise has no allowlist to apply.
+# env: SEAMLESS_ALLOWED_HOSTS (comma-separated, e.g. "studio.local,192.168.1.10")
+allowed_hosts: []
+
+tls:
+  # PEM certificate chain and private key. Both set -> the daemon serves https
+  # (TLS 1.2 floor) instead of http, and the console session cookie is marked
+  # Secure. One without the other is refused at load: it cannot serve TLS. The
+  # certificate's SANs must cover the host of server_url, which is what
+  # `seamlessd doctor` checks. A leading ~ is expanded.
+  # env: SEAMLESS_TLS_CERT_FILE / SEAMLESS_TLS_KEY_FILE
+  cert_file: ""
+  key_file: ""
+  # CLIENT-side extra root CA: the certificate the `seam` CLI adds to the system
+  # trust store when dialing an https server_url, for a private CA or a
+  # self-signed server. It is the client half of the pair above -- setting
+  # cert_file together with role: client is refused.
+  # env: SEAMLESS_TLS_CA_FILE
+  ca_file: ""
+
 mcp:
   # Static bearer key protecting /api/mcp and the console. On a true first run
   # (no config file anywhere) `seamlessd serve` generates one into

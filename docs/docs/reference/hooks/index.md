@@ -168,6 +168,45 @@ with no Codex CLI, initialized home, or Seamless Codex configuration is one quie
 `not detected` line, never a failure. `seam doctor` covers the other half: it hits
 `/healthz` and calls `tools/list`, which proves the endpoint and key are working.
 
+## What rides on the query string
+
+A hook body is the agent client's schema, not Seamless's, so everything
+Seamless needs *about* the call travels beside it as query parameters on the
+same `/api/hooks/*` endpoints. `?client=` is one of them; the agent's machine
+identity is the rest.
+
+| Param | On | Value |
+|---|---|---|
+| `client` | every hook, when `--client` was passed | `codex`; omitted means Claude Code |
+| `host` | every command hook | this machine's hostname, lower-cased |
+| `repo_root` | `session-start` only | the enclosing repository root |
+| `main_root` | `session-start` only | the main checkout, when `repo_root` is a linked worktree |
+| `origin` | `session-start` only | the `origin` remote URL, when there is one |
+
+`seam hook` resolves the identity locally - it is the only process that can -
+and every value is best-effort: an unreadable hostname, an unparseable body, or
+a cwd outside any repository simply omits that param. The host goes on every
+hook because it is what tells the daemon whether the paths in this payload are
+on its own disk; the roots go on session start only, because that is the single
+hook that places a working directory in a project.
+
+**An absent `host` means the local machine.** That is what keeps an older
+`seam` binary - which only ever talked to a daemon on its own machine - working
+byte-for-byte.
+
+Claude Code's `UserPromptSubmit` is the one http hook, so no `seam` process
+computes an identity for it; the daemon attributes it through the ambient
+session that client already has.
+
+When the host is *not* the daemon's, every daemon-side read of the agent's
+filesystem is skipped rather than attempted, and the skip is recorded as a
+`hook.error` event with stage `remote-host-skip`. It is a host check and not a
+"does the file exist" check on purpose: two devices with the same username and
+home layout produce the same transcript and plan-file paths, so a missing-file
+test would sometimes find a real file - the wrong one. See
+[Share one daemon across a LAN](https://thereisnospoon.org/docs/guides/network-install/#what-a-remote-device-does-not-get)
+for the full list of what that covers.
+
 ## Why Claude Code uses two transports
 
 Six of the Claude Code hooks are `command`, one is `http`. (Codex, above, uses

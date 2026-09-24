@@ -11,34 +11,30 @@ package main
 // wire from the daemon that owns it.
 //
 // The same logic exists in `seam doctor` (cmd/seam/doctor.go consoleFeatures on
-// top of cmd/seam/client.go consoleJSON and cmd/seam/env.go httpClient). Neither
-// binary can import the other: both are package main. This is the seamlessd-side
-// copy, kept deliberately small.
+// top of cmd/seam/client.go consoleJSON). Neither binary can import the other:
+// both are package main. This is the seamlessd-side copy of the FEATURE READ,
+// kept deliberately small -- but the HTTP client under it is not a copy of
+// anything: it is config.Config.HTTPClient, the one TLS trust decision both
+// binaries share, because an install whose hooks refuse a certificate must
+// never have had install-hooks accept it.
 
 import (
-	"crypto/tls"
-	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/0spoon/seamless/internal/config"
 )
 
-const (
-	// clientConsoleTimeout bounds the whole settings request. The console
-	// renders from the server's SQLite, so anything slower than this is a wedged
-	// daemon rather than a big page -- and an install must not hang on it.
-	clientConsoleTimeout = 5 * time.Second
-	// clientDialTimeout fails a down or unreachable server fast, separately from
-	// the response deadline.
-	clientDialTimeout = 3 * time.Second
-)
+// clientConsoleTimeout bounds the whole settings request. The console renders
+// from the server's SQLite, so anything slower than this is a wedged daemon
+// rather than a big page -- and an install must not hang on it. The separate
+// connection deadline is config.DialTimeout, which fails a down or unreachable
+// server fast on every surface that dials one.
+const clientConsoleTimeout = 5 * time.Second
 
 // clientFeatures resolves the optional-feature config a client install wires
 // its skills against: the server's effective state (file/env base plus the
@@ -88,7 +84,7 @@ func clientConsoleJSON(cfg config.Config, baseURL, path string, v any) error {
 	}
 	req.Header.Set("Authorization", "Bearer "+cfg.MCP.APIKey)
 	req.Header.Set("Accept", "application/json")
-	client, err := clientHTTPClient(cfg)
+	client, err := cfg.HTTPClient(clientConsoleTimeout)
 	if err != nil {
 		return err
 	}
@@ -104,39 +100,4 @@ func clientConsoleJSON(cfg config.Config, baseURL, path string, v any) error {
 		return fmt.Errorf("unreadable response from %s: %w", path, err)
 	}
 	return nil
-}
-
-// clientHTTPClient builds the HTTP client this install uses to reach the server,
-// adding tls.ca_file to the system trust pool so a private-CA or self-signed
-// https server verifies -- the same trust decision cmd/seam/env.go's httpClient
-// makes, because a client whose install-hooks trusts a certificate its hooks
-// then reject is worse than one that fails outright.
-//
-// A configured-but-unusable tls.ca_file is an ERROR, never a silent fall back to
-// the system pool: the request would then fail in the TLS handshake and read as
-// an outage, which is precisely the local-vs-remote distinction AGENTS.md
-// requires be kept (llm-degradation-remote-vs-local).
-func clientHTTPClient(cfg config.Config) (*http.Client, error) {
-	tr := &http.Transport{
-		Proxy:       http.ProxyFromEnvironment,
-		DialContext: (&net.Dialer{Timeout: clientDialTimeout}).DialContext,
-	}
-	if ca := strings.TrimSpace(cfg.TLS.CAFile); ca != "" {
-		pem, err := os.ReadFile(ca)
-		if err != nil {
-			return nil, fmt.Errorf("tls.ca_file %s: %w", ca, err)
-		}
-		pool, err := x509.SystemCertPool()
-		if err != nil || pool == nil {
-			// Windows has historically returned an error here; an empty pool plus
-			// the configured root is still a working trust store for the one
-			// server this install talks to.
-			pool = x509.NewCertPool()
-		}
-		if !pool.AppendCertsFromPEM(pem) {
-			return nil, fmt.Errorf("tls.ca_file %s: no PEM certificate found", ca)
-		}
-		tr.TLSClientConfig = &tls.Config{RootCAs: pool, MinVersion: tls.VersionTLS12}
-	}
-	return &http.Client{Timeout: clientConsoleTimeout, Transport: tr}, nil
 }

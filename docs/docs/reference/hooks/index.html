@@ -154,6 +154,8 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
         
         <li><a href="../../guides/data/">Import, back up &amp; restore</a></li>
         
+        <li><a href="../../guides/network-install/">Share one daemon across a LAN</a></li>
+        
         <li><a href="../../guides/troubleshooting/">Troubleshooting</a></li>
         
       </ul>
@@ -228,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </details>
   <p>Seamless installs hooks for two clients: seven for Claude Code (including
@@ -512,6 +514,69 @@ MCP state. It also checks the recorded binary and config targets exist. A machin
 with no Codex CLI, initialized home, or Seamless Codex configuration is one quiet
 <code>not detected</code> line, never a failure. <code>seam doctor</code> covers the other half: it hits
 <code>/healthz</code> and calls <code>tools/list</code>, which proves the endpoint and key are working.</p>
+<h2 id="what-rides-on-the-query-string">What rides on the query string</h2>
+<p>A hook body is the agent client's schema, not Seamless's, so everything
+Seamless needs <em>about</em> the call travels beside it as query parameters on the
+same <code>/api/hooks/*</code> endpoints. <code>?client=</code> is one of them; the agent's machine
+identity is the rest.</p>
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Param</th>
+<th>On</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>client</code></td>
+<td>every hook, when <code>--client</code> was passed</td>
+<td><code>codex</code>; omitted means Claude Code</td>
+</tr>
+<tr>
+<td><code>host</code></td>
+<td>every command hook</td>
+<td>this machine's hostname, lower-cased</td>
+</tr>
+<tr>
+<td><code>repo_root</code></td>
+<td><code>session-start</code> only</td>
+<td>the enclosing repository root</td>
+</tr>
+<tr>
+<td><code>main_root</code></td>
+<td><code>session-start</code> only</td>
+<td>the main checkout, when <code>repo_root</code> is a linked worktree</td>
+</tr>
+<tr>
+<td><code>origin</code></td>
+<td><code>session-start</code> only</td>
+<td>the <code>origin</code> remote URL, when there is one</td>
+</tr>
+</tbody>
+</table>
+</div>
+<p><code>seam hook</code> resolves the identity locally - it is the only process that can -
+and every value is best-effort: an unreadable hostname, an unparseable body, or
+a cwd outside any repository simply omits that param. The host goes on every
+hook because it is what tells the daemon whether the paths in this payload are
+on its own disk; the roots go on session start only, because that is the single
+hook that places a working directory in a project.</p>
+<p><strong>An absent <code>host</code> means the local machine.</strong> That is what keeps an older
+<code>seam</code> binary - which only ever talked to a daemon on its own machine - working
+byte-for-byte.</p>
+<p>Claude Code's <code>UserPromptSubmit</code> is the one http hook, so no <code>seam</code> process
+computes an identity for it; the daemon attributes it through the ambient
+session that client already has.</p>
+<p>When the host is <em>not</em> the daemon's, every daemon-side read of the agent's
+filesystem is skipped rather than attempted, and the skip is recorded as a
+<code>hook.error</code> event with stage <code>remote-host-skip</code>. It is a host check and not a
+&quot;does the file exist&quot; check on purpose: two devices with the same username and
+home layout produce the same transcript and plan-file paths, so a missing-file
+test would sometimes find a real file - the wrong one. See
+<a href="../../guides/network-install/#what-a-remote-device-does-not-get">Share one daemon across a LAN</a>
+for the full list of what that covers.</p>
 <h2 id="why-claude-code-uses-two-transports">Why Claude Code uses two transports</h2>
 <p>Six of the Claude Code hooks are <code>command</code>, one is <code>http</code>. (Codex, above, uses
 <code>command</code> for all five - its trust gate applies only to command hooks.) The
@@ -720,7 +785,7 @@ live/schema evidence and the recapture procedure.</li>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
+      <li class="lvl-2"><a href="#the-profiles-at-a-glance">The profiles at a glance</a></li><li class="lvl-2"><a href="#claude-code-seven-hooks">Claude Code: seven hooks</a></li><li class="lvl-2"><a href="#codex-local-host-five-hooks">Codex local host: five hooks</a></li><li class="lvl-2"><a href="#the-fail-open-contract">The fail-open contract</a></li><li class="lvl-2"><a href="#what-rides-on-the-query-string">What rides on the query string</a></li><li class="lvl-2"><a href="#why-claude-code-uses-two-transports">Why Claude Code uses two transports</a></li><li class="lvl-2"><a href="#what-install-hooks-writes">What install-hooks writes</a></li><li class="lvl-3"><a href="#the-codex-profile-is-shell-strings">The Codex profile is shell strings</a></li><li class="lvl-3"><a href="#exact-definitions-legacy-adoption-and-foreign-hooks">Exact definitions, legacy adoption, and foreign hooks</a></li><li class="lvl-2"><a href="#related">Related</a></li>
     </ul>
   </aside>
   
