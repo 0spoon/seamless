@@ -1300,6 +1300,19 @@ bumps) filtered out. Each heading links the release's downloads and checksums.
 Install with one command ([quickstart](/quickstart/)), or update an existing
 install in place with `seamlessd update`.
 
+## v0.5.2 {#v0-5-2}
+
+Released 2026-09-27 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.2)
+
+### Features
+
+- feat(console): Luminous memory -- a living visual design over the new UX
+- feat(console): UX redesign -- job-grouped nav, keyboard-first palette, no dead ends
+
+### Fixes
+
+- fix(console): scope the wordmark's .brand rules to the anchor
+
 ## v0.5.1 {#v0-5-1}
 
 Released 2026-09-24 - [downloads and notes](https://github.com/0spoon/seamless/releases/tag/v0.5.1)
