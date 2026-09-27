@@ -343,7 +343,10 @@ h1, h2, h3 { text-wrap: balance; }
    contents, the sidebar scrolls instead of crushing the brand or the search. */
 .sidebar > * { flex-shrink: 0; }
 .side-head { display: flex; align-items: center; gap: 6px; min-height: 32px; }
-.brand {
+/* The wordmark (sidebar and phone bar) is always a.brand, never a bare .brand:
+   "brand" is also the tone class on chips, badges, and icon tiles, and a bare
+   rule stretches and re-fonts every one of them. */
+a.brand {
   font-family: var(--font-serif);
   font-weight: 600;
   font-size: 22px;
@@ -361,16 +364,16 @@ a.brand:hover { text-decoration: none; }
 .brand-word { overflow: hidden; white-space: nowrap; }
 /* The daemon's heart: a luminous orb whose halo breathes faster as the fleet
    gets busier (--activity), and dims when the stream drops. */
-.brand .dot {
+a.brand .dot {
   position: relative; width: 11px; height: 11px; border-radius: 50%; flex: none;
   background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--live) 45%, color-mix(in oklab, var(--live) 70%, #000) 100%);
   box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 16%, transparent), 0 0 14px color-mix(in oklab, var(--live) 70%, transparent);
 }
-.brand .dot::after {
+a.brand .dot::after {
   content: ""; position: absolute; inset: -5px; border-radius: 50%;
   border: 1px solid color-mix(in oklab, var(--live) 55%, transparent); opacity: 0;
 }
-.brand .dot.on::after { animation: orb-halo calc(2.8s - var(--activity) * 1.6s) var(--ease-out) infinite; }
+a.brand .dot.on::after { animation: orb-halo calc(2.8s - var(--activity) * 1.6s) var(--ease-out) infinite; }
 @keyframes orb-halo { 0% { opacity: .9; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.9); } }
 .brand-by { padding: 0 10px 14px 30px; font-size: var(--text-2xs); color: var(--faint); white-space: nowrap; overflow: hidden; letter-spacing: 0.02em; }
 .brand-by span { font-family: var(--font-mono); font-weight: 500; color: var(--muted); }
@@ -480,7 +483,7 @@ a.brand:hover { text-decoration: none; }
 :root[data-sidebar="collapsed"] { --sidebar-width: 64px; }
 :root[data-sidebar="collapsed"] .sidebar { padding-inline: 10px; }
 :root[data-sidebar="collapsed"] .side-head { flex-direction: column; gap: 10px; }
-:root[data-sidebar="collapsed"] .brand { padding: 2px 0 0; justify-content: center; flex: none; }
+:root[data-sidebar="collapsed"] .sidebar a.brand { padding: 2px 0 0; justify-content: center; flex: none; }
 :root[data-sidebar="collapsed"] .brand-word,
 :root[data-sidebar="collapsed"] .brand-by,
 :root[data-sidebar="collapsed"] .side-search-label,
@@ -942,7 +945,7 @@ details > summary { font-family: var(--font-display); }
 .live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--live); display: inline-block; margin-right: 5px; animation: seam-pulse 2s var(--ease-in-out) infinite; flex: none; }
 
 /* The wordmark dot pulses while the SSE stream is connected. */
-.brand .dot.on { animation: seam-pulse 2s var(--ease-in-out) infinite; }
+a.brand .dot.on { animation: seam-pulse 2s var(--ease-in-out) infinite; }
 
 /* Enter animation for elements an in-place data refresh inserts (the shared
    navigation morph tags them .live-in and strips the class after play).
@@ -1106,7 +1109,7 @@ details > summary { font-family: var(--font-display); }
     backdrop-filter: blur(12px);
     view-transition-name: mobile-bar;
   }
-  .mobile-brand { flex: 1; justify-content: center; font-size: var(--text-lg); padding: 0; }
+  .mobile-bar .mobile-brand { flex: 1; justify-content: center; font-size: var(--text-lg); padding: 0; }
   .mobile-act {
     display: inline-grid; place-items: center; width: 38px; height: 38px; flex: none; padding: 0;
     border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
@@ -1129,7 +1132,7 @@ details > summary { font-family: var(--font-display); }
   /* The rail state is a desktop preference; the drawer always shows labels. */
   :root[data-sidebar="collapsed"] .sidebar { padding-inline: 12px; }
   :root[data-sidebar="collapsed"] .side-head { flex-direction: row; }
-  :root[data-sidebar="collapsed"] .brand { justify-content: flex-start; flex: 1; padding: 2px 10px 0; }
+  :root[data-sidebar="collapsed"] .sidebar a.brand { justify-content: flex-start; flex: 1; padding: 2px 10px 0; }
   :root[data-sidebar="collapsed"] .brand-word,
   :root[data-sidebar="collapsed"] .brand-by,
   :root[data-sidebar="collapsed"] .side-search-label,

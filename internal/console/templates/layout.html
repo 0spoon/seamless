@@ -162,7 +162,10 @@
   if (!window.EventSource) { setLive(false); return; }
   var pill = document.getElementById('live-pill');
   var toast = document.getElementById('live-toast');
-  var dot = document.querySelector('.brand .dot');
+  // Both wordmarks carry the orb, and the phone bar's comes first in the
+  // document (hidden on desktop), so light them all rather than the first match.
+  var orbs = document.querySelectorAll('a.brand .dot');
+  function setOrb(on) { orbs.forEach(function (o) { o.classList.toggle('on', on); }); }
 
   var n = 0;            // qualifying events since the last applied refresh
   var pending = false;  // a refresh is due but was deferred to a safe moment
@@ -218,7 +221,7 @@
   function schedule() { if (debounce) clearTimeout(debounce); debounce = setTimeout(trigger, 700); } // coalesce write bursts
 
   var es = new EventSource('/console/events');
-  es.onopen = function () { connected = true; if (dot) dot.classList.add('on'); setLive(true); };
+  es.onopen = function () { connected = true; setOrb(true); setLive(true); };
   es.onmessage = function (ev) {
     // Ignore transport-level rows (tool.call / hook.prompt): those live on the
     // Interactions screen and would fire a refresh on every tool call. A page
@@ -241,7 +244,7 @@
     if (window.SEAM_NO_LIVE_REFRESH) return;
     n++; schedule();
   };
-  es.onerror = function () { connected = false; if (dot) dot.classList.remove('on'); setLive(false); };
+  es.onerror = function () { connected = false; setOrb(false); setLive(false); };
 
   // Flush a deferred refresh once the moment turns safe again (tab refocus, pane
   // or palette close, selection cleared). Cheap poll, decoupled from those events.

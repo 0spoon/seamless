@@ -79,3 +79,28 @@ func TestSidebar_IsOneAccountRow(t *testing.T) {
 	require.Contains(t, css, ".account-act {")
 	require.Contains(t, css, "width: 26px; height: 26px;")
 }
+
+// "brand" names two things: the wordmark (<a class="brand"> in the sidebar and
+// the phone bar) and the tone class on chips, badges, and icon tiles
+// (.kind.brand, .badge.brand, ...). A bare .brand selector styles both -- the
+// wordmark's flex: 1 once stretched every brand-toned chip across its row -- so
+// every compound that names .brand must qualify it: a.brand for the wordmark,
+// the component class for a tone.
+func TestBrandClass_WordmarkRulesStayOnTheWordmark(t *testing.T) {
+	css := regexp.MustCompile(`(?s)/\*.*?\*/`).ReplaceAllString(string(consoleCSS), "")
+	// .brand alone in its compound: opened by a line start, combinator, comma,
+	// or paren, and closed by a combinator, comma, paren, brace, or pseudo.
+	bare := regexp.MustCompile(`(?m)(?:^|[\s,>+~(])\.brand[\s,>+~){:]`)
+	require.Empty(t, bare.FindAllString(css, -1), "qualify .brand: a.brand for the wordmark, .<component>.brand for a tone")
+
+	// The collapsed rail is a sidebar state. Its wordmark rules must not reach
+	// the phone bar's wordmark, which stays centered whatever the rail does.
+	require.Contains(t, css, `:root[data-sidebar="collapsed"] .sidebar a.brand {`)
+
+	// The stream indicator lights every wordmark's orb: the phone bar's comes
+	// first in the document and is hidden on desktop, so lighting only the first
+	// match left the visible sidebar orb dark.
+	layout, err := templateFS.ReadFile("templates/layout.html")
+	require.NoError(t, err)
+	require.Contains(t, string(layout), `document.querySelectorAll('a.brand .dot')`)
+}
