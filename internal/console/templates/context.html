@@ -4,7 +4,7 @@
 
 <div class="context-page">
   <header class="mv2-bar">
-    <h1 title="How SessionStart knowledge crosses scope boundaries: global memory, shared parents, sibling families, and split lineage.">{{icon "share-2"}}Context</h1>
+    <h1>{{icon "share-2"}}Context</h1>{{about "How SessionStart knowledge crosses scope boundaries: global memory, shared parents, sibling families, and split lineage."}}
     <span class="mv2-count" aria-label="Context topology summary">
       <strong>{{.Summary.Scopes}}</strong>scope{{if ne .Summary.Scopes 1}}s{{end}}<small>{{.Summary.ParentLinks}} parent link{{if ne .Summary.ParentLinks 1}}s{{end}} &middot; {{.Summary.Families}} famil{{if eq .Summary.Families 1}}y{{else}}ies{{end}}{{if .Summary.Lineages}} &middot; {{.Summary.Lineages}} split lineage{{if ne .Summary.Lineages 1}}s{{end}}{{end}}</small>
     </span>

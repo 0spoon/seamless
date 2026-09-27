@@ -1,7 +1,7 @@
 {{define "content"}}
 <div class="ops-page" data-ops="interactions">
 <header class="mv2-bar">
-  <h1 title="Watch new prompts, tool calls, injections, session changes, and plan activity arrive at the top of a clean live stream.">{{icon "activity"}}Interactions</h1>
+  <h1>{{icon "activity"}}Interactions</h1>{{about "Watch new prompts, tool calls, injections, session changes, and plan activity arrive at the top of a clean live stream."}}
   <span class="mv2-count ix-total" aria-live="polite">
     <strong id="ix-count">0</strong>events in view<small class="live" id="ix-live"><span class="live-dot"></span>streaming now</small>
   </span>
@@ -58,7 +58,7 @@
     <div class="ix-feed" id="ix-feed"></div>
     <div class="empty dotgrid ix-empty" id="ix-empty" hidden>
       <span class="empty-ico">{{icon "activity"}}</span>
-      <div class="ix-empty-body"><strong id="ix-empty-copy">Listening for new interactions</strong><p id="ix-empty-help">New events will appear here at the top. Add a recent window when you need earlier context.</p><button class="btn small" type="button" id="ix-empty-load">Add last 5 minutes</button></div>
+      <div class="ix-empty-body"><strong id="ix-empty-copy">Listening for new interactions</strong><p id="ix-empty-help">New events will appear here at the top. Add a recent window when you need earlier context.</p><div class="ix-empty-acts"><button class="btn small" type="button" id="ix-empty-load">Add last 5 minutes</button><span class="ix-quick" id="ix-quick">or load <button type="button" class="ix-quick-btn" data-ix-quick="900">15 min</button><button type="button" class="ix-quick-btn" data-ix-quick="3600">1 hour</button><button type="button" class="ix-quick-btn" data-ix-quick="86400">24 hours</button></span></div></div>
     </div>
     <div class="ix-more" hidden>
       <span>More events remain in this history window</span>
@@ -276,6 +276,8 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
         : 'New events will appear here at the top. Add a recent window when you need earlier context.';
     }
     if (emptyLoadBtn) emptyLoadBtn.hidden = order.length > 0;
+    var quick = document.getElementById('ix-quick');
+    if (quick) quick.hidden = order.length > 0;
     if (olderWrap) olderWrap.hidden = !cursor;
   }
 
@@ -450,6 +452,16 @@ window.SEAM_NO_LIVE_REFRESH = true; // this screen is the live feed -- it owns i
   }
   if (historyBtn) historyBtn.onclick = function () { loadHistory(false); };
   if (emptyLoadBtn) emptyLoadBtn.onclick = function () { loadHistory(false); };
+  // One-click alternatives in the empty state: pick the window and add it, so
+  // "is anything happening?" never needs the History picker first.
+  document.querySelectorAll('[data-ix-quick]').forEach(function (b) {
+    b.onclick = function () {
+      if (!historySel) return;
+      historySel.value = b.getAttribute('data-ix-quick');
+      if (historySel.onchange) historySel.onchange();
+      loadHistory(false);
+    };
+  });
   // Keep the session ordering fresh as live events age and arrive.
   setInterval(function () { if (order.length) refreshTabs(); }, 15000);
   if (olderBtn) olderBtn.onclick = function () { loadHistory(true); };

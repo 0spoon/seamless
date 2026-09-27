@@ -5,7 +5,7 @@
   {{/* .topbar carries the live pill the SSE refresher toggles (layout.html
        queries `.topbar .live`); keep both classes together if this moves. */}}
   <header class="ov2-titlebar topbar">
-    <h1>Overview</h1>
+    <h1>{{icon "layout-dashboard"}}Overview</h1>{{about "The check-in page: what needs you, whether stored knowledge is reaching your agents, who is working right now, and what just happened."}}
     <span class="live ov2-title-live"><span class="live-dot"></span>system live</span>
     <span class="ov2-title-spacer"></span>
     <nav class="ov2-window-tabs" aria-label="Observation window" data-seam-query>
@@ -13,6 +13,17 @@
     </nav>
     <span class="ov2-observed"><strong>{{.CovTotal}}</strong>session{{if ne .CovTotal 1}}s{{end}} observed</span>
   </header>
+
+  {{/* "Since you were last here": shell.js fills this from the browser's own
+       last-looked stamp and GET /console/since, so the check-in question --
+       what changed while I was away? -- is answered before any number. Hidden
+       on a first visit and without script; data-live-skip keeps the live morph
+       from wiping what the client rendered. */}}
+  <section class="checkin" id="checkin" data-live-skip hidden aria-label="Since you were last here">
+    <span class="checkin-ico">{{icon "history"}}</span>
+    <div class="checkin-body"></div>
+    <button type="button" class="checkin-x" data-checkin-dismiss aria-label="Dismiss">{{icon "x"}}</button>
+  </section>
 
   {{/* One scroll-snap rail, never a wrapping grid: the finish-line bucket adds
        a card per qualifying plan, and a second ragged row would push the vitals
@@ -129,7 +140,7 @@
       {{range .Recent}}
       <a id="{{.ID}}" class="ov2-evt{{if glint .Kind}} mom-glint{{end}}" data-sev="{{evtSev .Kind}}" href="/console/events/{{.ID}}">
         <time title="{{ts .When}}">{{ago .When}}</time>
-        <span class="kindchip">{{.Kind}}</span>
+        <span class="kindchip" title="{{.Kind}}">{{icon (evtIcon .Kind)}}{{evtLabel .Kind}}</span>
         <p>{{.Summary}}{{if .SessionID}} <span class="mono-id">{{shortID .SessionID}}</span>{{end}}</p>
         <span class="ov2-evt-scope">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
       </a>

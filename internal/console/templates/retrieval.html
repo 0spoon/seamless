@@ -2,7 +2,7 @@
 {{with .Data}}
 <div class="retrieval-page" data-retrieval>
   <header class="mv2-bar">
-    <h1 title="See which durable knowledge reached active agent sessions, what that context cost, and where the knowledge base is going quiet.">{{icon "brain"}}Retrieval</h1>
+    <h1>{{icon "brain"}}Retrieval</h1>{{about "See which durable knowledge reached active agent sessions, what that context cost, and where the knowledge base is going quiet."}}
     <span class="mv2-count" aria-label="{{.Injections}} memory injections across {{len .ByProject}} knowledge bases in {{.WindowLabel}}">
       <strong>{{.Injections}}</strong>injection{{if ne .Injections 1}}s{{end}}<small>{{len .ByProject}} knowledge base{{if ne (len .ByProject) 1}}s{{end}} measured &middot; {{.WindowLabel}} view</small>
     </span>

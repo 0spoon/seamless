@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+
+	"github.com/0spoon/seamless/internal/core"
 )
 
 // TestTS formats a title= tooltip timestamp as a clean minute-precision UTC
@@ -40,4 +42,25 @@ func TestCompactNum(t *testing.T) {
 	require.Equal(t, "12.4k", compactNum(12400))
 	require.Equal(t, "999.9k", compactNum(999949))
 	require.Equal(t, "1.2M", compactNum(1_200_000))
+}
+
+// Every event kind the log can record reads as words, and a kind added later
+// without an entry is spelled out from its parts rather than shown raw.
+func TestEvtLabel_HumanNames(t *testing.T) {
+	for _, k := range []core.EventKind{
+		core.EventSessionStarted, core.EventSessionEnded, core.EventMemoryWritten, core.EventMemoryRead,
+		core.EventMemorySuperseded, core.EventMemoryArchived, core.EventMemoryMoved, core.EventRepoMoved,
+		core.EventFavoriteChanged, core.EventNoteWritten, core.EventNoteRead, core.EventTrialRecorded,
+		core.EventMemoryFirstReuse, core.EventProjectStage, core.EventRecordBroken, core.EventTaskTransition,
+		core.EventInjected, core.EventGardenerAction, core.EventToolCall, core.EventHookPrompt,
+		core.EventRecallMiss, core.EventHookError, core.EventAgentMishap, core.EventPlanCaptured,
+		core.EventPlanPresented, core.EventPlanApproved, core.EventPlanShipped, core.EventSubagentCaptured,
+		core.EventProjectIsolationChanged,
+	} {
+		_, ok := eventLabels[string(k)]
+		require.True(t, ok, "event kind %q has no human label", k)
+	}
+	require.Equal(t, "Project matured", evtLabel("project.stage_reached"))
+	require.Equal(t, "Widget spun up", evtLabel("widget.spun_up"))
+	require.Equal(t, "Event", evtLabel(""))
 }

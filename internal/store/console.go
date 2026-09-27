@@ -319,3 +319,41 @@ func SessionCoverageBuckets(ctx context.Context, db *sql.DB, w RetrievalWindow, 
 	}
 	return out, nil
 }
+
+// ActivitySince is the owner's check-in digest: what the fleet recorded
+// between since (inclusive) and until (exclusive). Every field is a plain count
+// of recorded rows -- the console's "since you were last here" line says exactly
+// these numbers and links each to the screen that lists them.
+type ActivitySince struct {
+	Sessions        int `json:"sessions"`        // sessions started
+	MemoriesWritten int `json:"memoriesWritten"` // memory.written events
+	NotesWritten    int `json:"notesWritten"`    // note.written events
+	TasksClosed     int `json:"tasksClosed"`     // tasks closed as done in the span
+	Proposals       int `json:"proposals"`       // gardener proposals raised, any status
+	Mishaps         int `json:"mishaps"`         // agent.mishap events
+}
+
+// GetActivitySince counts the check-in digest in one round trip.
+func GetActivitySince(ctx context.Context, db *sql.DB, since, until time.Time) (ActivitySince, error) {
+	var a ActivitySince
+	lo, hi := core.FormatTime(since), core.FormatTime(until)
+	err := db.QueryRowContext(ctx, `
+		SELECT
+			(SELECT COUNT(*) FROM sessions WHERE created_at >= ? AND created_at < ?),
+			(SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ? AND ts < ?),
+			(SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ? AND ts < ?),
+			(SELECT COUNT(*) FROM tasks WHERE status = 'done' AND closed_at >= ? AND closed_at < ?),
+			(SELECT COUNT(*) FROM gardener_proposals WHERE created_at >= ? AND created_at < ?),
+			(SELECT COUNT(*) FROM events WHERE kind = ? AND ts >= ? AND ts < ?)`,
+		lo, hi,
+		string(core.EventMemoryWritten), lo, hi,
+		string(core.EventNoteWritten), lo, hi,
+		lo, hi,
+		lo, hi,
+		string(core.EventAgentMishap), lo, hi,
+	).Scan(&a.Sessions, &a.MemoriesWritten, &a.NotesWritten, &a.TasksClosed, &a.Proposals, &a.Mishaps)
+	if err != nil {
+		return ActivitySince{}, fmt.Errorf("store.GetActivitySince: %w", err)
+	}
+	return a, nil
+}

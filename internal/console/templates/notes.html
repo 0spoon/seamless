@@ -5,7 +5,7 @@
 <div class="lib-page" data-library="notes">
 {{$base := "/console/notes"}}{{if .Selected}}{{$base = printf "/console/notes/%s" .Selected.ID}}{{end}}
 <header class="mv2-bar">
-  <h1 title="Research, meeting context, plans, and long-form artifacts kept for later work.">{{icon "file-text"}}Notes</h1>
+  <h1>{{icon "file-text"}}Notes</h1>{{about "Research, meeting context, plans, and long-form artifacts kept for later work."}}
   <span class="mv2-count" aria-label="{{.Count}} notes">
     <strong>{{.Count}}</strong>note{{if ne .Count 1}}s{{end}}{{if .Groups}}<small>across {{len .Groups}} scope{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
   </span>
@@ -15,14 +15,14 @@
     {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
   </form>
   <span class="mv2-spacer"></span>
-  <div class="mv2-sort">
-    <span class="mv2-sort-label">Sort</span>
-    <div class="seg" data-seam-query>
+  <details class="menu sort-menu">
+    <summary class="menu-btn" aria-label="Sort: {{sortLabel .Sort}}">{{icon "arrow-up-down"}}<span class="menu-k">Sort</span><strong>{{sortLabel .Sort}}</strong>{{icon "chevron-down"}}</summary>
+    <div class="menu-list" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
-  </div>
+  </details>
 </header>
 
 {{if or .Groups .Query}}
@@ -73,6 +73,9 @@
       {{agentPill "" .Model}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}inbox</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
+      <span class="reader-actions">
+        <a class="ract" href="{{.EditURL}}" title="Open {{.AbsPath}}">{{icon "pencil"}}Edit in editor</a>
+      </span>
     </div>
     <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}
       <form class="star-form" method="post" action="/console/favorites/note/{{.ID}}">
@@ -92,7 +95,6 @@
   {{if .BodyLoaded}}<div class="prose doc">{{.Body}}</div>{{else}}<div class="peek-note">Body unavailable</div>{{end}}
   <footer class="reader-foot">
     <span class="path">{{.FilePath}}{{copyBtn .FilePath}}</span>
-    <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
   </footer>
 </article>
 {{end}}

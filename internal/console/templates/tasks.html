@@ -4,7 +4,7 @@
 {{$open := add (add (len .Ready) (len .InProgress)) (len .Blocked)}}
 <div class="lib-page" data-library="tasks">
 <header class="mv2-bar">
-  <h1 title="Ready work, live claims, and dependency blockers across every project.">{{icon "list-checks"}}Tasks</h1>
+  <h1>{{icon "list-checks"}}Tasks</h1>{{about "Ready work, live claims, and dependency blockers across every project."}}
   <span class="mv2-count" aria-label="{{$open}} open tasks">
     <strong>{{$open}}</strong>open{{if .Closed}}<small>{{add (len .Closed) .ClosedMore}} recently closed</small>{{end}}
   </span>
@@ -101,6 +101,13 @@
       <span class="badge {{taskTone .Status}}">{{.Status}}</span>
       {{if .PlanSlug}}<a class="kind" href="/console/plans/{{.PlanSlug}}">plan:{{.PlanSlug}}</a>{{end}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
+      {{if .ClaimedBy}}
+      <span class="reader-actions">
+        <form method="post" action="/console/tasks/{{.ID}}/release" onsubmit="return confirm('Release the lock on this task? It reopens for any agent to claim.');">
+          <button class="ract danger" type="submit" title="Owner override: takes the lock from whoever holds it">{{icon "lock"}}Release lock</button>
+        </form>
+      </span>
+      {{end}}
     </div>
     <h2 class="reader-title">{{.Title}}{{copyBtn .Title}}
       <form class="star-form" method="post" action="/console/favorites/task/{{.ID}}">
@@ -133,13 +140,6 @@
       {{range .Blocks}}<li><a href="/console/tasks/{{.ID}}">{{.Title}}</a> <span class="badge {{taskTone .Status}}">{{.Status}}</span></li>{{end}}
     </ul>
   </section>
-  {{end}}
-  {{if .ClaimedBy}}
-  <footer class="reader-foot">
-    <form method="post" action="/console/tasks/{{.ID}}/release" onsubmit="return confirm('Release the lock on this task? It reopens for any agent to claim.');">
-      <button class="link-act danger" type="submit">release lock</button>
-    </form>
-  </footer>
   {{end}}
 </article>
 {{end}}

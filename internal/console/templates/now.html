@@ -5,7 +5,7 @@
   {{/* .topbar carries the live pill the SSE refresher toggles (layout.html
        queries `.topbar .live`). The pulse is fleet-wide by design. */}}
   <header class="now-titlebar topbar">
-    <h1>Now</h1>
+    <h1>{{icon "radar"}}Now</h1>{{about "Every live agent across every project: the claims it holds, what it just produced, the loose ends nobody is carrying, and the work ready to pick up next."}}
     <span class="live now-title-live"><span class="live-dot"></span>{{.AgentsLive}} agent{{if ne .AgentsLive 1}}s{{end}} live</span>
     <span class="now-title-spacer"></span>
     {{with .Arcade}}{{if .Hot.Count}}<span class="now-hot{{if .Hot.Hot}} on{{end}}" title="{{.Hot.Count}} events recorded in the last ten minutes">{{icon "flame"}}{{.Hot.Count}} in 10m</span>{{end}}{{end}}
@@ -200,7 +200,7 @@
           {{range .Wire}}
           <a id="{{.ID}}" class="now-evt" href="/console/events/{{.ID}}">
             <time title="{{ts .When}}">{{ago .When}}</time>
-            <span class="kindchip">{{.Kind}}</span>
+            <span class="kindchip" title="{{.Kind}}">{{icon (evtIcon .Kind)}}{{evtLabel .Kind}}</span>
             <p>{{.Summary}}</p>
             <span class="scope">{{if .Project}}{{.Project}}{{else}}global{{end}}</span>
           </a>

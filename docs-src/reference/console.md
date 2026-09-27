@@ -53,7 +53,10 @@ session, explaining nothing.
 
 Every write action redirects back with a flash message (`?notice=` for success,
 `?error=` for failure) rather than rendering a result page in place, so a reload
-never repeats the action.
+never repeats the action. With script, a success notice surfaces as a toast and
+both parameters are stripped from the address bar, so a later live refresh never
+replays a message about an action that already happened; an error also stays on
+the page as a banner.
 
 ## Signing in
 
@@ -91,6 +94,55 @@ land on an authenticated page with nothing to paste. It refuses to run if
 
 `make console-chrome` exists for agents: they drive Chrome, so this hands the auth
 cookie to the browser they can actually see. (`--browser` is macOS-only.)
+
+## Getting around
+
+The sidebar groups the screens by the job they serve rather than by table:
+
+| Group | Screens |
+|---|---|
+| **Live** | Overview, Now, Interactions |
+| **Knowledge** | Memories, Notes, Retrieval, Gardener |
+| **Work** | Projects, Plans, Tasks, Sessions |
+| **Research** | Labs, Trials (only while that [optional feature](#optional-features) is on) |
+
+Settings closes the list. Above the groups, a **Search or jump to** field opens
+the command palette. The sidebar collapses to an icon rail (the header button, or
+`[`) and remembers that per browser; under 720px it becomes a drawer behind the
+menu button, with every section's label and count.
+
+Every screen title carries an (i) button that says, in one line, what the screen
+is for.
+
+### The command palette
+
+`Cmd/Ctrl+K`, the sidebar's search field, or `/` on a screen with no filter of
+its own opens the palette. With nothing typed it offers **Recent** (the entities
+you last opened in this browser), **Jump to** (every section, with its shortcut),
+and **Actions** (switch theme, collapse the sidebar, the shortcut sheet). Typing
+matches sections and actions instantly; from two characters on it also searches
+memories, notes, tasks, plans, trials, projects, and sessions through the same
+route as [Search](#search).
+
+### Keyboard
+
+| Keys | Does |
+|---|---|
+| `Cmd/Ctrl+K` | Search or jump to a section |
+| `/` | Focus this screen's filter; open the palette where there is none |
+| `g` then a key | Go to a section: `o` Overview, `n` Now, `i` Interactions, `m` Memories, `e` Notes, `r` Retrieval, `g` Gardener, `w` Projects, `p` Plans, `t` Tasks, `s` Sessions, `l` Labs, `x` Trials, `,` Settings |
+| `j` / `k` | Next / previous item in a library rail |
+| `[` | Collapse or expand the sidebar |
+| `?` | The shortcut sheet |
+| `Esc` | Close the palette, a menu, the sheet, or the drawer |
+
+The `g` map is read from the sidebar itself, so a section switched off in
+Settings takes its shortcut with it.
+
+Moving between screens keeps the sidebar in place and settles the new content
+in (cross-document view transitions, where the browser supports them), and
+hovering a console link prefetches its page. Neither runs any code of the
+destination page early; both degrade to a plain navigation.
 
 ## Three ways to render a page
 
@@ -153,6 +205,19 @@ destination explains why there is nothing.
 Live sessions are counted TTL-aware (active *and* heartbeated within the idle
 threshold), so the headline matches the Sessions screen rather than the raw
 `active` count that an idle session inflates until the reaper runs.
+
+### Since you were last here
+
+When you come back to the Overview after at least five minutes away, a line
+above everything else answers the check-in question -- what changed while I was
+gone? -- with linked counts: memories written, sessions started, tasks closed,
+notes written, gardener proposals raised, and mishaps reported since you last
+looked ("Quiet since you were last here 3h ago" when nothing was recorded).
+
+"Last looked" is a per-browser stamp, set whenever a console tab is hidden or
+left; the counts come from `GET /console/since?t=<unix ms>`, which answers JSON
+only and refuses a missing, malformed, future, or older-than-90-days `t` with a
+400 rather than substituting a window.
 
 ## Now
 
@@ -292,6 +357,12 @@ recorded trial, the same covered-ness test the coverage numbers apply. The
 Overview's continuity vital links straight to `?retained=no`, so its click
 answers "which sessions dropped knowledge".
 
+The list defaults to the last 24 hours. When that leaves most sessions out, the
+list ends by saying so ("3 of 212 sessions were active in the last 24h") and
+offers the wider windows in place, so a quiet day never reads as an empty
+system. A row names its host only when the session ran on a different machine
+from the console's, and its source only when it was not a normal startup.
+
 A session's page is the workspace: its findings (rendered), its full event
 timeline as interaction rows, per-session counts (tool calls, memory reads and
 writes, items injected, and read-after-inject), the tasks it currently claims with
@@ -358,6 +429,9 @@ The same library shape, with the rail grouped by phase (**in progress**,
 - **composed** - plain [plans-as-composition](/concepts/tasks-and-plans/) plans (a
   note tagged `plan:<slug>` plus its tasks), which have none of the capture-only
   fields.
+
+When the window hides plans, the rail ends with how many last moved before it
+and the wider windows to switch to.
 
 A capture owns its slug; composed plans fill only the rest. The reader shows
 the rendered plan body, the step tasks, and the notes attached to the
@@ -712,7 +786,9 @@ without changing the underlying event.
 ## Errors
 
 A bad or stale URL renders a styled, layout-wrapped error page with a way back,
-rather than dropping you on a bare `404 page not found`. A 404 names the missing
+rather than dropping you on a bare `404 page not found` -- including any
+`/console/` path no route claims, which gets a search box and links to the
+common destinations. A 404 names the missing
 entity and a 400 names the bad parameter and its valid values. A 500 stays
 generic in the browser - the detail is in the log, not the response. Fragment
 fetches (`?peek=1`) get a fragment-shaped error, since a full page injected into

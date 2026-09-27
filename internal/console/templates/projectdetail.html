@@ -76,7 +76,7 @@
         <thead><tr><th>When</th><th>Event</th><th>Detail</th></tr></thead>
         <tbody>
           {{range .Recent}}
-          <tr id="{{.ID}}" class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}">{{.Kind}}</span></a></td><td>{{.Summary}}</td></tr>
+          <tr id="{{.ID}}" class="row-link" data-href="/console/events/{{.ID}}"><td class="muted">{{ago .When}}</td><td><a href="/console/events/{{.ID}}"><span class="kind {{evtTone .Kind}}" title="{{.Kind}}">{{evtLabel .Kind}}</span></a></td><td>{{.Summary}}</td></tr>
           {{end}}
         </tbody>
       </table>
@@ -231,7 +231,7 @@
   <div class="ix-feed" id="ix-pfeed">
     {{range .Interactions}}
     <details class="ix-row{{if .Tone}} tone-{{.Tone}}{{end}}{{if .IsError}} err{{end}}" data-sev="{{rowSev .Kind .IsError}}" data-id="{{.ID}}" data-ts="{{.TS.UnixMilli}}" data-kind="{{.Kind}}"{{if .IsError}} data-err="1"{{end}}{{if .SessionName}} data-session="{{.SessionName}}"{{end}}>
-      <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}">{{.Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{agentPill .Harness .Model}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
+      <summary><span class="ix-ico ix-type">{{icon (evtIcon .Kind)}}</span><span class="ix-when">{{ago .TS}}</span><span class="kind {{.Tone}}" title="{{.Kind}}">{{evtLabel .Kind}}</span>{{if .Label}}<span class="ix-label">{{.Label}}</span>{{end}}<span class="ix-sum">{{.Summary}}</span>{{agentPill .Harness .Model}}{{if .IsError}}<span class="badge danger">error</span>{{end}}{{if .Items}}<span class="ix-meta">{{.Items}} items</span>{{end}}</summary>
       <div class="ix-body">
         {{if or .SessionName .DurationMS .Items .IsError .Ambient}}
         <div class="ix-highlights">

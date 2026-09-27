@@ -144,6 +144,9 @@
       for (var i = 0; i < currentCounts.length; i++) {
         if (currentCounts[i].textContent === freshCounts[i].textContent) continue;
         currentCounts[i].textContent = freshCounts[i].textContent;
+        // data-zero lets the collapsed rail drop an attention mark at zero.
+        if (freshCounts[i].hasAttribute('data-zero')) currentCounts[i].setAttribute('data-zero', '');
+        else currentCounts[i].removeAttribute('data-zero');
         currentCounts[i].classList.remove('bump');
         void currentCounts[i].offsetWidth;
         currentCounts[i].classList.add('bump');

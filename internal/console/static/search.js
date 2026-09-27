@@ -1,7 +1,12 @@
-/* Command palette: Cmd/Ctrl-K (or "/" outside an input) opens a search overlay
-   on every console page. It fetches the same GET /console/search route the page
-   uses, via its ?format=json short-circuit, with fast=1 so a query per keystroke
-   never triggers a remote embedding call (see console/search.go).
+/* Command palette: Cmd/Ctrl-K, any [data-cmdk-open] trigger, or "/" on a page
+   with no filter of its own opens a search-or-jump overlay on every console
+   page. It answers in three layers:
+
+   - instantly, from the page itself: the sidebar's sections ("Jump to"), a few
+     actions, and the recently opened entities shell.js remembers;
+   - after two characters, from GET /console/search?format=json&fast=1 -- the
+     same route the Search page uses, with fast=1 so a query per keystroke never
+     triggers a remote embedding call (see console/search.go).
 
    Inert when #cmdk is absent (the login page has no palette). */
 (function () {
@@ -14,10 +19,10 @@
   var allLink = document.getElementById('cmdk-all');
 
   var MIN_CHARS = 2;      // matches the server's floor (store's ftsQuery drops 1-char tokens)
-  var DEBOUNCE_MS = 200;
+  var DEBOUNCE_MS = 180;
   var PER_GROUP = 5;
 
-  var rows = [];          // flat list of {href} in render order, for arrow keys
+  var rows = [];          // flat list of {href, run} in render order, for arrow keys
   var sel = -1;
   var timer = null;
   var inflight = null;    // AbortController for the outstanding fetch
@@ -29,12 +34,88 @@
     return '/console/search?q=' + encodeURIComponent(q || '');
   }
 
+  /* ---- Local sources: pages, actions, recents ------------------------------ */
+
+  // Pages come from the sidebar, so a feature switched off in Settings is not
+  // offered here either. Context and Search are real pages with no nav row.
+  function pages() {
+    var out = [];
+    document.querySelectorAll('nav.nav a[href]').forEach(function (a) {
+      var label = a.querySelector('.nav-label');
+      out.push({
+        title: label ? label.textContent : a.getAttribute('data-tip') || a.getAttribute('href'),
+        href: a.getAttribute('href'),
+        key: a.getAttribute('data-key'),
+        icon: a.querySelector('svg')
+      });
+    });
+    out.push({ title: 'Search', hint: 'every filter and sort', href: '/console/search', icon: null });
+    out.push({ title: 'Context', hint: 'briefing topology across projects', href: '/console/context', icon: null });
+    return out;
+  }
+  function actions() {
+    var out = [];
+    var theme = document.getElementById('theme-toggle');
+    if (theme) out.push({ title: 'Switch to ' + (document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark') + ' theme', run: function () { theme.click(); } });
+    if (window.SeamShell) {
+      out.push({ title: 'Collapse or expand the sidebar', hint: '[', run: function () { window.SeamShell.toggleSidebar(); } });
+      out.push({ title: 'Keyboard shortcuts', hint: '?', run: function () { window.SeamShell.openKeys(); } });
+    }
+    return out;
+  }
+  function recents() {
+    var raw;
+    try { raw = JSON.parse(localStorage.getItem('seamless-recent') || '[]'); } catch (e) { raw = []; }
+    if (!Array.isArray(raw)) return [];
+    var here = location.pathname;
+    return raw.filter(function (r) { return r && r.href && r.title && r.href !== here; }).slice(0, 5);
+  }
+  // A forgiving match: every query character in order, word starts preferred.
+  function score(text, q) {
+    text = (text || '').toLowerCase();
+    q = q.toLowerCase();
+    if (!q) return 1;
+    var at = text.indexOf(q);
+    if (at === 0) return 4;
+    if (at > 0) return text.charAt(at - 1) === ' ' ? 3 : 2;
+    var i = 0;
+    for (var j = 0; j < text.length && i < q.length; j++) if (text.charAt(j) === q.charAt(i)) i++;
+    return i === q.length ? 1 : 0;
+  }
+  function localGroups(q) {
+    var groups = [];
+    var jump = pages().map(function (p) { return { p: p, s: score(p.title, q) }; })
+      .filter(function (x) { return x.s > 0; })
+      .sort(function (a, b) { return b.s - a.s; })
+      .map(function (x) { return x.p; });
+    var acts = actions().filter(function (a) { return score(a.title, q) > 0; });
+    if (!q) {
+      var rec = recents();
+      if (rec.length) groups.push({ label: 'Recent', icon: 'history', rows: rec.map(function (r) { return { title: r.title, meta: r.kind, href: r.href }; }) });
+      groups.push({ label: 'Jump to', icon: 'compass', rows: jump.map(pageRow) });
+      if (acts.length) groups.push({ label: 'Actions', icon: 'zap', rows: acts.map(actionRow) });
+      return groups;
+    }
+    if (jump.length) groups.push({ label: 'Jump to', icon: 'compass', rows: jump.slice(0, 4).map(pageRow) });
+    if (acts.length) groups.push({ label: 'Actions', icon: 'zap', rows: acts.slice(0, 3).map(actionRow) });
+    return groups;
+  }
+  function pageRow(p) {
+    return { title: p.title, meta: p.hint || '', key: p.key ? 'g ' + p.key : '', href: p.href, svg: p.icon };
+  }
+  function actionRow(a) {
+    return { title: a.title, key: a.hint || '', run: a.run };
+  }
+
+  /* ---- Open / close -------------------------------------------------------- */
+
   function open() {
     if (isOpen()) return;
     restoreFocus = document.activeElement;
     overlay.hidden = false;
     input.value = '';
-    render(null);
+    allLink.setAttribute('href', searchHref(''));
+    render(localGroups(''), null);
     input.focus();
   }
 
@@ -69,76 +150,106 @@
     if (cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest' });
   }
 
-  function msg(cls, text) {
-    var d = document.createElement('div');
+  function note(cls, text) {
+    var d = document.createElement('li');
     d.className = cls;
+    d.setAttribute('role', 'presentation');
     d.textContent = text;
-    list.innerHTML = '';
     list.appendChild(d);
   }
 
-  /* render paints the groups. Every field goes in via textContent EXCEPT
-     snippetHtml, which is the ONE innerHTML in this file: it is server-generated
-     HTML from console/search.go's highlightSnippet, which escapes the item text
-     before substituting <mark>. Nothing else here may become innerHTML. */
-  function render(data) {
+  /* render paints local groups, then (when present) the server's groups. Every
+     field goes in via textContent EXCEPT snippetHtml, which is the ONE innerHTML
+     in this file: it is server-generated HTML from console/search.go's
+     highlightSnippet, which escapes the item text before substituting <mark>.
+     The page icons are cloned nodes from the sidebar, never strings. */
+  function render(local, remote, status) {
     rows = [];
     sel = -1;
     input.removeAttribute('aria-activedescendant');
-    if (!data) { msg('cmdk-empty', 'Type at least ' + MIN_CHARS + ' characters to search.'); return; }
-    if (!data.groups || !data.groups.length) { msg('cmdk-empty', 'No results.'); return; }
-
     list.innerHTML = '';
-    data.groups.forEach(function (g) {
-      var head = document.createElement('li');
-      head.className = 'cmdk-group';
-      head.setAttribute('role', 'presentation');
-      head.textContent = g.label + ' ';
+
+    (local || []).forEach(function (g) { group(g.label, g.rows.length, g.rows, 'local'); });
+
+    if (remote && remote.groups && remote.groups.length) {
+      remote.groups.forEach(function (g) {
+        group(g.label, g.count, (g.rows || []).slice(0, PER_GROUP).map(function (r) {
+          var bits = [];
+          if (r.identifier && r.identifier !== r.title) bits.push(r.identifier);
+          if (r.matchedId) bits.push(r.matchedId);
+          bits.push(r.project || 'global');
+          bits.push(r.age);
+          return { title: r.title, desc: r.description || '', snippetHtml: r.snippetHtml, meta: bits.join(' · '), href: r.href };
+        }), 'remote');
+      });
+    }
+    if (status) note(status.cls, status.text);
+    if (rows.length) setSelected(0);
+  }
+
+  function group(label, count, items, source) {
+    if (!items.length) return;
+    var head = document.createElement('li');
+    head.className = 'cmdk-group' + (source === 'local' ? ' local' : '');
+    head.setAttribute('role', 'presentation');
+    head.textContent = label + ' ';
+    if (source !== 'local') {
       var n = document.createElement('span');
       n.className = 'n';
-      n.textContent = g.count;
+      n.textContent = count;
       head.appendChild(n);
-      list.appendChild(head);
+    }
+    list.appendChild(head);
 
-      (g.rows || []).slice(0, PER_GROUP).forEach(function (r) {
-        var li = document.createElement('li');
-        li.className = 'cmdk-opt';
-        li.id = 'cmdk-opt-' + rows.length;
-        li.setAttribute('role', 'option');
-        li.setAttribute('aria-selected', 'false');
+    items.forEach(function (r) {
+      var li = document.createElement('li');
+      li.className = 'cmdk-opt' + (source === 'local' ? ' cmdk-local' : '');
+      li.id = 'cmdk-opt-' + rows.length;
+      li.setAttribute('role', 'option');
+      li.setAttribute('aria-selected', 'false');
 
-        var t = document.createElement('span');
-        t.className = 't';
-        t.textContent = r.title;
-        li.appendChild(t);
+      if (r.svg) {
+        var ic = r.svg.cloneNode(true);
+        ic.setAttribute('class', 'ico cmdk-ico');
+        li.appendChild(ic);
+      }
+      var t = document.createElement('span');
+      t.className = 't';
+      t.textContent = r.title;
+      li.appendChild(t);
 
+      if (r.snippetHtml || r.desc) {
         var d = document.createElement('span');
         d.className = 'd';
-        if (r.snippetHtml) {
-          d.innerHTML = r.snippetHtml; // server-escaped; see the note above
-        } else {
-          d.textContent = r.description || '';
-        }
+        if (r.snippetHtml) d.innerHTML = r.snippetHtml; // server-escaped; see the note above
+        else d.textContent = r.desc;
         li.appendChild(d);
-
+      }
+      if (r.meta) {
         var meta = document.createElement('span');
         meta.className = 'meta';
-        var bits = [];
-        if (r.identifier && r.identifier !== r.title) bits.push(r.identifier);
-        if (r.matchedId) bits.push(r.matchedId);
-        bits.push(r.project || 'global');
-        bits.push(r.age);
-        meta.textContent = bits.join(' · ');
+        meta.textContent = r.meta;
         li.appendChild(meta);
+      }
+      if (r.key) {
+        var k = document.createElement('kbd');
+        k.className = 'cmdk-key';
+        k.textContent = r.key;
+        li.appendChild(k);
+      }
 
-        var idx = rows.length;
-        li.addEventListener('mousemove', function () { setSelected(idx); });
-        li.addEventListener('click', function (e) { go(r.href, e.metaKey || e.ctrlKey); });
-        list.appendChild(li);
-        rows.push({ href: r.href });
-      });
+      var idx = rows.length;
+      li.addEventListener('mousemove', function () { if (sel !== idx) setSelected(idx); });
+      li.addEventListener('click', function (e) { choose(rows[idx], e.metaKey || e.ctrlKey); });
+      list.appendChild(li);
+      rows.push({ href: r.href, run: r.run });
     });
-    if (rows.length) setSelected(0);
+  }
+
+  function choose(row, newTab) {
+    if (!row) return;
+    if (row.run) { close(); row.run(); return; }
+    go(row.href, newTab);
   }
 
   function go(href, newTab) {
@@ -162,13 +273,15 @@
     }).then(function (data) {
       if (ctl !== inflight) return; // superseded by a newer keystroke
       panel.classList.remove('loading');
-      render(data);
+      var local = localGroups(q);
+      var none = (!data.groups || !data.groups.length);
+      render(local, data, none ? { cls: 'cmdk-empty', text: local.length ? 'No knowledge or work matches "' + q + '".' : 'No results for "' + q + '".' } : null);
     }).catch(function (err) {
       if (err && err.name === 'AbortError') return;
       if (ctl !== inflight) return;
       panel.classList.remove('loading');
       // Surface it: a silently empty palette reads as "nothing matched".
-      msg('cmdk-error', 'Search is unavailable right now.');
+      render(localGroups(q), null, { cls: 'cmdk-error', text: 'Search is unavailable right now.' });
     });
   }
 
@@ -176,12 +289,15 @@
     var q = input.value.trim();
     allLink.setAttribute('href', searchHref(q));
     if (timer) clearTimeout(timer);
+    if (inflight) { inflight.abort(); inflight = null; }
+    panel.classList.remove('loading');
+    var local = localGroups(q);
     if (q.length < MIN_CHARS) {
-      if (inflight) { inflight.abort(); inflight = null; }
-      panel.classList.remove('loading');
-      render(null);
+      render(local, null, q ? { cls: 'cmdk-empty', text: 'Keep typing to search memories, notes, tasks, plans, and sessions.' } : null);
       return;
     }
+    render(local, null, null);
+    panel.classList.add('loading');
     timer = setTimeout(function () { run(q); }, DEBOUNCE_MS);
   });
 
@@ -190,8 +306,9 @@
     if (e.key === 'ArrowUp') { e.preventDefault(); setSelected(sel - 1); return; }
     if (e.key === 'Enter') {
       e.preventDefault();
-      if (sel >= 0 && rows[sel]) { go(rows[sel].href, e.metaKey || e.ctrlKey); }
-      else { go(searchHref(input.value.trim()), e.metaKey || e.ctrlKey); }
+      var q = input.value.trim();
+      if (sel >= 0 && rows[sel]) { choose(rows[sel], e.metaKey || e.ctrlKey); }
+      else if (q) { go(searchHref(q), e.metaKey || e.ctrlKey); }
       return;
     }
     // Trap Tab inside the dialog. Only two stops exist (the input and the
@@ -211,10 +328,26 @@
     if (!panel.contains(e.target)) close();
   });
 
+  // Any element can open the palette (the sidebar's search field, the phone
+  // bar's search button); delegated so a morph-replaced trigger keeps working.
+  document.addEventListener('click', function (e) {
+    var trigger = e.target.closest ? e.target.closest('[data-cmdk-open]') : null;
+    if (!trigger) return;
+    e.preventDefault();
+    open();
+  });
+
   function typingTarget(el) {
     if (!el) return false;
     var tag = el.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable;
+  }
+
+  // The page's own filter, when it has one (library rails, Sessions, Projects,
+  // the Search page's query). "/" means "narrow what I am looking at" first.
+  function pageFilter() {
+    var el = document.querySelector('.main [data-page-filter], .main .lib-query input[name="q"]');
+    return el && el.offsetParent !== null ? el : null;
   }
 
   /* Capture phase: Escape must reach us before the detail pane's document-level
@@ -234,8 +367,13 @@
     }
     if (e.key === '/' && !isOpen() && !typingTarget(e.target) &&
         !e.metaKey && !e.ctrlKey && !e.altKey) {
+      var keysSheet = document.getElementById('keys');
+      if (keysSheet && !keysSheet.hidden) return;
       e.preventDefault();
-      open();
+      e.stopPropagation();
+      var filter = pageFilter();
+      if (filter) { filter.focus(); if (filter.select) filter.select(); }
+      else open();
     }
   }, true);
 })();

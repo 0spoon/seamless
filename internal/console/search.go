@@ -578,7 +578,7 @@ func resolveSearchWindow(key string, now time.Time) searchWindow {
 }
 
 func searchWindowOptions(active string) []searchWindowOption {
-	labels := map[string]string{"24h": "24h", "7d": "7 days", "30d": "30 days", "1y": "1 year", "all": "All"}
+	labels := map[string]string{"24h": "24h", "7d": "7d", "30d": "30d", "1y": "1y", "all": "All time"}
 	out := make([]searchWindowOption, 0, len(searchWindowKeys))
 	for _, key := range searchWindowKeys {
 		out = append(out, searchWindowOption{Key: key, Label: labels[key], Active: key == active})

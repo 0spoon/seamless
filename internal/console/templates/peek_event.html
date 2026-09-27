@@ -1,6 +1,6 @@
 {{define "peek-body"}}
 <article class="peek-entity event-peek">
-  <header class="peek-head"><span class="kind {{.Trace.Tone}}">{{.Event.Kind}}</span><span class="event-peek-time" title="{{ts .Event.When}}">{{ago .Event.When}}</span></header>
+  <header class="peek-head"><span class="kind {{.Trace.Tone}}" title="{{.Event.Kind}}">{{evtLabel .Event.Kind}}</span><span class="event-peek-time" title="{{ts .Event.When}}">{{ago .Event.When}}</span></header>
   <h2 class="peek-title">{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h2>
   <p class="event-peek-context">{{.Eyebrow}}{{if .Trace.SessionName}} <span>&middot;</span> {{.Trace.SessionName}}{{end}}</p>
   {{template "detail-body" .}}

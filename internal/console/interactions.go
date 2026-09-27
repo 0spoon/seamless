@@ -52,6 +52,8 @@ type interactionRow struct {
 	TS          time.Time `json:"ts"`
 	Kind        string    `json:"kind"`
 	Tone        string    `json:"tone"`
+	KindLabel   string    `json:"kindLabel"` // evtLabel(kind): the human name the feed shows
+	Icon        string    `json:"icon"`      // evtIcon(kind): the glyph, named once, server-side
 	Label       string    `json:"label"`
 	Summary     string    `json:"summary"`
 	Project     string    `json:"project,omitempty"`
@@ -73,7 +75,7 @@ type interactionRow struct {
 func toInteractionRow(e core.Event, sessOf func(string) core.Session) interactionRow {
 	p := e.Payload
 	row := interactionRow{
-		ID: e.ID, TS: e.TS, Kind: string(e.Kind),
+		ID: e.ID, TS: e.TS, Kind: string(e.Kind), KindLabel: evtLabel(string(e.Kind)), Icon: evtIcon(string(e.Kind)),
 		Tone: evtTone(string(e.Kind)), Summary: eventSummary(e),
 		Project: e.ProjectSlug, SessionID: e.SessionID,
 		Items: len(injectedEventItemIDs(e)),

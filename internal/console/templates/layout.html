@@ -7,37 +7,64 @@
 <link rel="icon" type="image/svg+xml" href="/console/static/favicon.svg">
 <link rel="stylesheet" href="/console/static/console.css">
 <script>
-/* Apply the saved theme before first paint (default dark) to avoid a flash. */
-(function(){try{document.documentElement.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();
+/* Apply the saved theme (default dark) and sidebar state before first paint,
+   so neither flashes. Both are per-browser conveniences, never server state. */
+(function(){var d=document.documentElement;d.classList.add('js');try{d.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');if(localStorage.getItem('seamless-sidebar')==='collapsed')d.setAttribute('data-sidebar','collapsed');}catch(e){d.setAttribute('data-theme','dark');}})();
+</script>
+{{/* Hover prefetch for console pages (Chromium; ignored elsewhere). It only
+     fetches the document, never runs it, and skips the SSE stream, sign-out,
+     in-place query links, and downloads -- so it is a cache warm, not an action. */}}
+<script type="speculationrules">
+{"prefetch":[{"source":"document","where":{"and":[{"href_matches":"/console/*"},{"not":{"href_matches":"/console/events"}},{"not":{"href_matches":"/console/logout"}},{"not":{"href_matches":"/console/static/*"}},{"not":{"selector_matches":"[data-seam-query] a, a[data-seam-query], a[download], a[target], a[data-no-prefetch]"}}]},"eagerness":"moderate"}]}
 </script>
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="shell">
-  <aside class="sidebar">
-    <div class="brand"><span class="dot"></span> Seamless</div>
+  {{/* Phone-only bar: the brand, search, and the drawer toggle. Above 720px it
+       is display:none and the sidebar is the chrome. */}}
+  <header class="mobile-bar">
+    <button class="mobile-act" type="button" id="drawer-open" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false">{{icon "menu"}}</button>
+    <a class="brand mobile-brand" href="/console/"><span class="dot"></span>Seamless</a>
+    <button class="mobile-act" type="button" data-cmdk-open aria-label="Search or jump to">{{icon "search"}}</button>
+  </header>
+  <aside class="sidebar" id="sidebar" aria-label="Console">
+    <div class="side-head">
+      <a class="brand" href="/console/" title="Seamless by 0spoon"><span class="dot"></span><span class="brand-word">Seamless</span></a>
+      <button class="side-toggle" type="button" id="side-toggle" aria-label="Collapse sidebar" title="Collapse sidebar ([)" aria-controls="sidebar" aria-expanded="true">{{icon "panel-left"}}</button>
+      <button class="side-toggle drawer-close" type="button" id="drawer-close" aria-label="Close navigation">{{icon "x"}}</button>
+    </div>
     <div class="brand-by">by <span>0spoon</span></div>
-    <nav class="nav">
-      <div class="nav-sec">Observe</div>
-      <a href="/console/" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
-      <a href="/console/now" class="{{if eq .Active "now"}}active{{end}}">{{icon "radar"}}<span class="nav-label">Now</span><span class="count">{{.Nav.Now}}</span></a>
-      <a href="/console/interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
-      <a href="/console/retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "brain"}}<span class="nav-label">Retrieval</span></a>
-      <a href="/console/search" class="{{if eq .Active "search"}}active{{end}}">{{icon "search"}}<span class="nav-label">Search</span><span class="kbd-hint">&#8984;K</span></a>
-      <div class="nav-sec">Browse</div>
-      <a href="/console/projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
-      <a href="/console/sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
-      <a href="/console/memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
-      <a href="/console/notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
-      <a href="/console/tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count">{{.Nav.Tasks}}</span></a>
-      <a href="/console/plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span><span class="count">{{.Nav.Plans}}</span></a>
+    {{/* The palette is the fastest way anywhere, so it leads the sidebar as a
+         field-shaped trigger rather than hiding behind a shortcut. On Search it
+         carries the active marker the old nav row did. */}}
+    <button type="button" class="side-search{{if eq .Active "search"}} active{{end}}" data-cmdk-open data-tip="Search" aria-label="Search or jump to (Cmd+K)"><span class="side-search-ico">{{icon "search"}}</span><span class="side-search-label">Search or jump to&hellip;</span><kbd class="kbd-hint">&#8984;K</kbd></button>
+    {{/* Grouped by the owner's job, not by table: what is happening (Live), what
+         the fleet knows and how it circulates (Knowledge), what is being done
+         (Work). data-key is the g-chord (g then key) shell.js binds and lists in
+         the ? sheet, so the shortcut map lives with the links it opens. */}}
+    <nav class="nav" aria-label="Sections">
+      <div class="nav-sec">Live</div>
+      <a href="/console/" data-key="o" data-tip="Overview" class="{{if eq .Active "overview"}}active{{end}}">{{icon "layout-dashboard"}}<span class="nav-label">Overview</span></a>
+      <a href="/console/now" data-key="n" data-tip="Now" class="{{if eq .Active "now"}}active{{end}}">{{icon "radar"}}<span class="nav-label">Now</span><span class="count" title="Agents live now"{{if not .Nav.Now}} data-zero{{end}}>{{.Nav.Now}}</span></a>
+      <a href="/console/interactions" data-key="i" data-tip="Interactions" class="{{if eq .Active "interactions"}}active{{end}}">{{icon "activity"}}<span class="nav-label">Interactions</span></a>
+      <div class="nav-sec">Knowledge</div>
+      <a href="/console/memories" data-key="m" data-tip="Memories" class="{{if eq .Active "memories"}}active{{end}}">{{icon "database"}}<span class="nav-label">Memories</span><span class="count">{{.Nav.Memories}}</span></a>
+      <a href="/console/notes" data-key="e" data-tip="Notes" class="{{if eq .Active "notes"}}active{{end}}">{{icon "file-text"}}<span class="nav-label">Notes</span><span class="count">{{.Nav.Notes}}</span></a>
+      <a href="/console/retrieval" data-key="r" data-tip="Retrieval" class="{{if eq .Active "retrieval"}}active{{end}}">{{icon "brain"}}<span class="nav-label">Retrieval</span></a>
+      <a href="/console/gardener" data-key="g" data-tip="Gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count" title="Proposals waiting for review"{{if not .Nav.Proposals}} data-zero{{end}}>{{.Nav.Proposals}}</span></a>
+      <div class="nav-sec">Work</div>
+      <a href="/console/projects" data-key="w" data-tip="Projects" class="{{if eq .Active "projects"}}active{{end}}">{{icon "table-2"}}<span class="nav-label">Projects</span><span class="count">{{.Nav.Projects}}</span></a>
+      <a href="/console/plans" data-key="p" data-tip="Plans" class="{{if eq .Active "plans"}}active{{end}}">{{icon "map"}}<span class="nav-label">Plans</span><span class="count">{{.Nav.Plans}}</span></a>
+      <a href="/console/tasks" data-key="t" data-tip="Tasks" class="{{if eq .Active "tasks"}}active{{end}}">{{icon "list-checks"}}<span class="nav-label">Tasks</span><span class="count" title="Open tasks">{{.Nav.Tasks}}</span></a>
+      <a href="/console/sessions" data-key="s" data-tip="Sessions" class="{{if eq .Active "sessions"}}active{{end}}">{{icon "terminal"}}<span class="nav-label">Sessions</span><span class="count">{{.Nav.Sessions}}</span></a>
       {{/* Optional-feature entries: hidden while their feature is off (NavOff is
            registry-derived, so a future feature hides its own entries the same
            way). The data behind them is untouched -- see /console/settings#features. */}}
-      {{if not (index .NavOff "labs")}}<a href="/console/labs" class="{{if eq .Active "labs"}}active{{end}}">{{icon "flask-conical"}}<span class="nav-label">Labs</span><span class="count">{{.Nav.Labs}}</span></a>{{end}}
-      {{if not (index .NavOff "trials")}}<a href="/console/trials" class="{{if eq .Active "trials"}}active{{end}}">{{icon "test-tube"}}<span class="nav-label">Trials</span><span class="count">{{.Nav.Trials}}</span></a>{{end}}
-      <div class="nav-sec">System</div>
-      <a href="/console/gardener" class="{{if eq .Active "gardener"}}active{{end}}">{{icon "sprout"}}<span class="nav-label">Gardener</span><span class="count">{{.Nav.Proposals}}</span></a>
-      <a href="/console/settings" class="{{if eq .Active "settings"}}active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
+      {{if or (not (index .NavOff "labs")) (not (index .NavOff "trials"))}}<div class="nav-sec">Research</div>{{end}}
+      {{if not (index .NavOff "labs")}}<a href="/console/labs" data-key="l" data-tip="Labs" class="{{if eq .Active "labs"}}active{{end}}">{{icon "flask-conical"}}<span class="nav-label">Labs</span><span class="count">{{.Nav.Labs}}</span></a>{{end}}
+      {{if not (index .NavOff "trials")}}<a href="/console/trials" data-key="x" data-tip="Trials" class="{{if eq .Active "trials"}}active{{end}}">{{icon "test-tube"}}<span class="nav-label">Trials</span><span class="count">{{.Nav.Trials}}</span></a>{{end}}
+      <a href="/console/settings" data-key="," data-tip="Settings" class="nav-settings{{if eq .Active "settings"}} active{{end}}">{{icon "settings"}}<span class="nav-label">Settings</span></a>
     </nav>
     <div class="side-foot">
       <div class="account">
@@ -53,28 +80,64 @@
       </div>
     </div>
   </aside>
-  <main class="main">
-    {{if .Notice}}<div class="section notice" role="status">{{.Notice}}</div>{{end}}
-    {{if .FlashErr}}<div class="section login-err" role="alert">{{.FlashErr}}</div>{{end}}
+  <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+  <main class="main" id="main" tabindex="-1">
+    {{if .Notice}}<div class="section notice" role="status" data-flash="ok">{{.Notice}}</div>{{end}}
+    {{if .FlashErr}}<div class="section login-err" role="alert" data-flash="error">{{.FlashErr}}</div>{{end}}
     {{template "content" .}}
   </main>
 </div>
+<div class="nav-progress" aria-hidden="true"></div>
 <button id="live-pill" type="button" hidden>new activity &middot; refresh</button>
 <div id="live-toast" role="status" aria-live="polite" hidden></div>
 <div id="cmdk" class="cmdk-overlay" hidden>
-  <div class="cmdk" role="dialog" aria-modal="true" aria-label="Search">
+  <div class="cmdk" role="dialog" aria-modal="true" aria-label="Search or jump to">
     <div class="cmdk-input-row">
       {{icon "search"}}
       <input id="cmdk-input" type="text" role="combobox" aria-expanded="true" aria-controls="cmdk-list"
              aria-autocomplete="list" autocomplete="off" spellcheck="false"
-             placeholder="Search memories, notes, tasks, plans&hellip;">
+             placeholder="Search knowledge and work, or jump to a page&hellip;">
+      <kbd class="cmdk-esc">esc</kbd>
     </div>
-    <ul id="cmdk-list" class="cmdk-list" role="listbox" aria-label="Search results"></ul>
+    <ul id="cmdk-list" class="cmdk-list" role="listbox" aria-label="Results"></ul>
     <div class="cmdk-foot">
       <span><kbd>&uarr;</kbd><kbd>&darr;</kbd> navigate</span>
       <span><kbd>&crarr;</kbd> open</span>
-      <span><kbd>esc</kbd> close</span>
+      <span><kbd>?</kbd> shortcuts</span>
       <a class="sp" id="cmdk-all" href="/console/search">See all results</a>
+    </div>
+  </div>
+</div>
+{{/* The ? sheet. shell.js fills the "Go to" group from the nav's data-key links
+     at open time, so it always matches the sections this console exposes. */}}
+<div id="keys" class="keys-overlay" hidden>
+  <div class="keys" role="dialog" aria-modal="true" aria-labelledby="keys-title">
+    <header class="keys-head">
+      <h2 id="keys-title">{{icon "keyboard"}}Keyboard shortcuts</h2>
+      <button type="button" class="keys-close" data-keys-close aria-label="Close">{{icon "x"}}</button>
+    </header>
+    <div class="keys-body">
+      <section>
+        <h3>Anywhere</h3>
+        <dl>
+          <div><dt><kbd>&#8984;</kbd><kbd>K</kbd></dt><dd>Search or jump to a page</dd></div>
+          <div><dt><kbd>/</kbd></dt><dd>Filter this page (search when it has no filter)</dd></div>
+          <div><dt><kbd>?</kbd></dt><dd>This sheet</dd></div>
+          <div><dt><kbd>[</kbd></dt><dd>Collapse or expand the sidebar</dd></div>
+          <div><dt><kbd>esc</kbd></dt><dd>Close a panel, sheet, or search</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Lists and readers</h3>
+        <dl>
+          <div><dt><kbd>j</kbd></dt><dd>Next item</dd></div>
+          <div><dt><kbd>k</kbd></dt><dd>Previous item</dd></div>
+        </dl>
+      </section>
+      <section>
+        <h3>Go to <small>press <kbd>g</kbd>, then</small></h3>
+        <dl id="keys-goto"></dl>
+      </section>
     </div>
   </div>
 </div>
@@ -83,6 +146,7 @@
 <script src="/console/static/library.js"></script>
 <script src="/console/static/charts.js"></script>
 <script src="/console/static/navigation.js"></script>
+<script src="/console/static/shell.js"></script>
 <script>
 (function () {
   // Static "live" pills (Overview, Projects topbar). #ix-live is excluded --

@@ -3,7 +3,7 @@
 {{$filter := .Filter}}{{$sort := .Sort}}{{$query := .Query}}{{$day := .Day}}{{$retained := .Retained}}
 <div class="ops-page" data-ops="sessions">
 <header class="mv2-bar">
-  <h1 title="Follow active runs, reopen completed findings, and inspect the work each agent left behind.">{{icon "terminal"}}Sessions</h1>
+  <h1>{{icon "terminal"}}Sessions</h1>{{about "Follow active runs, reopen completed findings, and inspect the work each agent left behind."}}
   <span class="mv2-count" aria-label="{{.Total}} sessions, {{.Active}} live">
     <strong>{{.Total}}</strong>recorded<small>{{.Active}} live{{if .Idle}} &middot; {{.Idle}} idle{{end}} &middot; {{if .Day}}{{.DayLabel}}{{else}}{{.WindowLabel}}{{end}} view</small>
   </span>
@@ -34,13 +34,13 @@
       <a class="{{if eq .Retained "no"}}on{{end}}" title="Sessions that retained nothing durable" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained=no">Nothing</a>
     </div>
   </div>
-  <div class="mv2-sort">
-    <span class="mv2-sort-label">Sort</span>
-    <div class="seg" data-seam-query>
+  <details class="menu sort-menu">
+    <summary class="menu-btn" aria-label="Sort: {{sortLabel .Sort}}">{{icon "arrow-up-down"}}<span class="menu-k">Sort</span><strong>{{sortLabel .Sort}}</strong>{{icon "chevron-down"}}</summary>
+    <div class="menu-list" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=recent&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort=name&amp;q={{.Query}}&amp;day={{.Day}}&amp;retained={{.Retained}}">Name</a>
     </div>
-  </div>
+  </details>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Updated</span>
     <div class="seg" data-seam-query>
@@ -60,7 +60,7 @@
     {{if .Day}}<span class="mom-cal-day" title="The session map below is focused on this day">{{.DayLabel}}<a class="mom-cal-day-x" href="/console/sessions?status={{.Filter}}&amp;w={{.Window}}&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;retained={{.Retained}}" data-seam-query aria-label="Clear the day focus" title="Back to the {{.WindowLabel}} view">&times;</a></span>{{end}}
     <span class="mom-cal-key"><span class="mom-cal-ramp" title="Cell intensity scales with sessions that day">less<i class="l0"></i><i class="l1"></i><i class="l2"></i><i class="l3"></i><i class="l4"></i>more</span><i class="mom-cal-key-dot"></i>day that captured knowledge</span>
   </header>
-  <div class="mom-cal-scroll">{{.Calendar}}</div>
+  <div class="mom-cal-scroll" data-scroll-end>{{.Calendar}}</div>
 </section>
 {{end}}
 
@@ -85,12 +85,11 @@
       <div class="sess-main">
         <span class="sess-state {{if .Live}}live{{else}}idle{{end}}" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Host}}<span class="kind faint" title="Machine this agent ran on">{{.Host}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if not (sameHost .Host $.HostName)}}<span class="kind faint" title="Ran on another machine">{{.Host}}</span>{{end}}{{if and .Source (ne .Source "startup")}}<span class="kind faint" title="How this session began">{{.Source}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}{{if not .Live}}<span class="kind faint" title="No activity within the idle window; the reaper will mark it expired">idle</span>{{end}}</div>
           {{if .Findings}}<div class="find">{{.Findings}}</div>{{else}}<div class="find faint">Work in progress &mdash; no findings yet</div>{{end}}
         </div>
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
-      <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
     {{end}}{{end}}
@@ -108,12 +107,11 @@
       <div class="sess-main">
         <span class="sess-state completed" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Host}}<span class="kind faint" title="Machine this agent ran on">{{.Host}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}</div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if not (sameHost .Host $.HostName)}}<span class="kind faint" title="Ran on another machine">{{.Host}}</span>{{end}}{{if and .Source (ne .Source "startup")}}<span class="kind faint" title="How this session began">{{.Source}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}</div>
           <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
         </div>
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
-      <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
     {{end}}{{end}}
@@ -132,12 +130,11 @@
       <div class="sess-main">
         <span class="sess-state expired" aria-hidden="true"></span>
         <div class="sess-copy">
-          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if .Ambient}}<span class="kind faint">ambient</span>{{end}}{{if .Host}}<span class="kind faint" title="Machine this agent ran on">{{.Host}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
+          <div class="id-line"><a href="/console/sessions/{{.ID}}" data-peek>{{if .Name}}{{.Name}}{{else}}{{shortID .ID}}{{end}}</a>{{copyBtn .ID}}{{agentPill .Harness .Model}}{{if not (sameHost .Host $.HostName)}}<span class="kind faint" title="Ran on another machine">{{.Host}}</span>{{end}}{{if and .Source (ne .Source "startup")}}<span class="kind faint" title="How this session began">{{.Source}}</span>{{end}}{{if .Tokens}}<span class="kind faint" title="Real model tokens consumed this session, harvested from the transcript">{{compactNum .Tokens}} tok</span>{{end}}<span class="kind faint" title="Reaped after going idle without a graceful session_end">reaped</span></div>
           <div class="find">{{if .Findings}}{{.Findings}}{{else}}No findings recorded{{end}}</div>
         </div>
       </div>
       <span class="proj">{{if .Project}}<a href="/console/projects/{{.Project}}" data-peek>{{icon "folder-tree"}}{{.Project}}</a>{{else}}global{{end}}</span>
-      <span class="src">{{.Source}}</span>
       <span class="when" title="{{ts .Updated}}">{{ago .Updated}}</span>
     </div>
     {{end}}{{end}}
@@ -146,7 +143,8 @@
 {{end}}
 {{end}}
 
-{{else}}
+{{end}}
+{{if not .Sessions}}
 {{if .Query}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions match &ldquo;{{.Query}}&rdquo;{{if .Filter}} with status "{{.Filter}}"{{end}}{{if eq .Retained "yes"}} that retained knowledge{{else if eq .Retained "no"}} that retained nothing{{end}}{{if .Day}} on {{.DayLabel}}{{else if ne .Window "all"}} in the last {{.WindowLabel}}{{end}}.</div></div>
 {{else if eq .Retained "no"}}
@@ -156,6 +154,15 @@
 {{else}}
 <div class="empty dotgrid"><span class="empty-ico">{{icon "terminal"}}</span><div>No sessions{{if .Filter}} with status "{{.Filter}}"{{end}}{{if eq .Retained "yes"}} that retained knowledge{{end}}{{if .Day}} on {{.DayLabel}}{{else if ne .Window "all"}} in the last {{.WindowLabel}}{{else}} yet{{end}} &mdash; each hooked agent run records a session here.</div></div>
 {{end}}
+{{end}}
+{{/* A windowed list must never read as "that's everything": say what the
+     window left out and offer the wider ones in place. */}}
+{{if and (ne .Window "all") (not .Day)}}
+<div class="widen" role="note">
+  {{icon "history"}}
+  <span>{{if and .Sessions (not .Filter) (not .Query) (not .Retained)}}{{len .Sessions}} of {{.Total}} sessions were active in the last {{.WindowLabel}}.{{else}}Showing sessions active in the last {{.WindowLabel}}.{{end}}</span>
+  <span class="widen-acts" data-seam-query>Widen to {{range .Windows}}{{if .Wider}}<a href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;retained={{$retained}}">{{.Label}}</a>{{end}}{{end}}</span>
+</div>
 {{end}}
   </div><!-- .list-pane -->
   <section id="detail-pane" class="detail-pane" hidden aria-live="polite" aria-label="Session detail">

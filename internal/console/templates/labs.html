@@ -3,7 +3,7 @@
 {{$sel := .Selected}}
 <div class="lib-page" data-library="labs">
 <header class="mv2-bar">
-  <h1 title="Stable lines of investigation, with outcomes and experiment history gathered in one place. A lab appears when its first trial is recorded.">{{icon "flask-conical"}}Labs</h1>
+  <h1>{{icon "flask-conical"}}Labs</h1>{{about "Stable lines of investigation, with outcomes and experiment history gathered in one place. A lab appears when its first trial is recorded."}}
   <span class="mv2-count" aria-label="{{.Count}} labs">
     <strong>{{.Count}}</strong>lab{{if ne .Count 1}}s{{end}}<small>{{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}} recorded</small>
   </span>

@@ -5,7 +5,7 @@
 <div class="lib-page" data-library="plans">
 {{$base := "/console/plans"}}{{if .Selected}}{{$base = printf "/console/plans/%s" .Selected.Row.Slug}}{{end}}
 <header class="mv2-bar">
-  <h1 title="Captured and composed plans, organized by execution state and connected to their steps.">{{icon "map"}}Plans</h1>
+  <h1>{{icon "map"}}Plans</h1>{{about "Captured and composed plans, organized by execution state and connected to their steps."}}
   <span class="mv2-count" aria-label="{{.Total}} plans">
     <strong>{{.Total}}</strong>plan{{if ne .Total 1}}s{{end}}<small>{{if eq .Window "all"}}all time{{else}}{{.Count}} updated in {{.WindowLabel}}{{end}}</small>
   </span>
@@ -74,7 +74,14 @@
       {{end}}
     </div>
     {{else}}
-    <div class="rail-none">No plans in {{.WindowLabel}} &mdash; widen the window.</div>
+    <div class="rail-none">No plans moved in the last {{.WindowLabel}}.</div>
+    {{end}}
+    {{if and (ne .Window "all") (lt .Count .Total)}}
+    <div class="widen" role="note">
+      {{icon "history"}}
+      <span>{{sub .Total .Count}} more plan{{if ne (sub .Total .Count) 1}}s{{end}} last moved before this window.</span>
+      <span class="widen-acts" data-seam-query>Widen to {{range .Windows}}{{if .Wider}}<a href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}{{end}}</span>
+    </div>
     {{end}}
     </div><!-- .rail-scroll -->
   </nav>
@@ -98,6 +105,13 @@
       <span class="kind">plan:{{.Row.Slug}}</span>{{copyBtn .Row.Slug}}
       {{if .Row.Status}}<span class="badge {{planTone .Row.Status}}">{{.Row.Status}}</span>{{end}}
       {{if .Row.Project}}<a class="chip-parent" href="/console/projects/{{.Row.Project}}">{{icon "git-branch"}}{{.Row.Project}}</a>{{else}}<span class="chip-parent">{{icon "git-branch"}}global</span>{{end}}
+      {{if .CanApprove}}
+      <span class="reader-actions">
+        <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
+          <button class="ract" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">{{icon "check"}}Approve plan</button>
+        </form>
+      </span>
+      {{end}}
     </div>
     <h2 class="reader-title">{{.Row.Title}}{{copyBtn .Row.Title}}
       <form class="star-form" method="post" action="/console/favorites/plan/{{.Row.Slug}}">
@@ -132,13 +146,6 @@
       {{range .Attached}}<li><a href="/console/notes/{{.ID}}">{{.Title}}</a> {{if .IsAgent}}<span class="badge">agent-cache</span>{{end}} <span class="muted" title="{{ts .Updated}}">{{ago .Updated}}</span></li>{{end}}
     </ul>
   </section>
-  {{end}}
-  {{if .CanApprove}}
-  <footer class="reader-foot">
-    <form method="post" action="/console/plans/{{.Row.Slug}}/approve">
-      <button class="link-act" type="submit" title="Escape hatch when Claude Code skipped the approval hook: flips the plan to approved and creates the tracking task">approve plan</button>
-    </form>
-  </footer>
   {{end}}
 </article>
 {{end}}

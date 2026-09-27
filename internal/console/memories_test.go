@@ -216,7 +216,7 @@ func TestMemoryReader_RanksFactsAndRefusesToEchoTheDescription(t *testing.T) {
 	body = page.Body.String()
 	require.Contains(t, body, `class="mv2-nobody"`)
 	require.Contains(t, body, "No body beyond the description yet")
-	require.Contains(t, body, "edit in editor")
+	require.Contains(t, body, "Edit in editor")
 	// Inside the reader sheet the sentence appears once -- as the description,
 	// not again below it wearing a body's clothes. (The rail row shows it too;
 	// that is a different pane answering a different question.)

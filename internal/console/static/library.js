@@ -19,14 +19,28 @@
   function pathOf(href) {
     try { return new URL(href, location.origin).pathname; } catch (e) { return href; }
   }
-  // Scroll the rail's list (never the page) just enough to show the item.
-  function revealInRail(a) {
+  // The group header is sticky inside the rail, so "visible" starts below it --
+  // an item scrolled to the rail's top edge would sit hidden under its header.
+  function stickyTop(a) {
+    var group = a.closest('.rail-group');
+    var head = group && group.querySelector('.rail-group-hd');
+    return head ? head.offsetHeight : 0;
+  }
+  // Scroll the rail's list (never the page) to show the item. Stepping (j/k,
+  // clicks) moves only as far as needed; a fresh page centers the selection so
+  // it never parks against an edge with its neighbors out of view.
+  function revealInRail(a, center) {
     var disclosure = a.closest ? a.closest('details') : null;
     if (disclosure) disclosure.open = true;
     var rail = a.closest('.rail-scroll') || a.closest('.lib-rail');
     if (!rail) return;
     var r = rail.getBoundingClientRect(), b = a.getBoundingClientRect();
-    if (b.top < r.top + 8) rail.scrollTop += b.top - r.top - 8;
+    if (center) {
+      if (rail.scrollHeight > rail.clientHeight) rail.scrollTop += (b.top - r.top) - (r.height - b.height) / 2;
+      return;
+    }
+    var top = r.top + 8 + stickyTop(a);
+    if (b.top < top) rail.scrollTop += b.top - top;
     else if (b.bottom > r.bottom - 8) rail.scrollTop += b.bottom - r.bottom + 8;
   }
   function mark(href) {
@@ -173,21 +187,15 @@
   });
 
   // j / k step the selection through the rail (list order, across groups),
-  // Gmail-style. / focuses the page-local filter where one exists. Arrow keys
-  // are left alone so they keep scrolling the document.
+  // Gmail-style. ("/" -> the page-local filter is search.js's, which owns the
+  // key so the palette and the filter never both answer it.) Arrow keys are
+  // left alone so they keep scrolling the document.
   document.addEventListener('keydown', function (e) {
-    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.defaultPrevented) return;
     var ae = document.activeElement;
     if (ae && ae.matches && ae.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')) return;
-    if (e.key === '/') {
-      var query = document.querySelector('.lib-query input[name="q"]');
-      if (!query) return;
-      e.preventDefault();
-      query.focus();
-      query.select();
-      return;
-    }
     if (e.key !== 'j' && e.key !== 'k') return;
+    if (!items().length) return;
     e.preventDefault();
     stepSelection(e.key === 'j' ? 1 : -1);
   });
@@ -203,7 +211,7 @@
       if (auto) { try { history.replaceState(null, '', auto); } catch (e) {} }
     }
     var selected = items().filter(function (a) { return a.classList.contains('selected'); })[0];
-    if (selected) revealInRail(selected);
+    if (selected) revealInRail(selected, initial);
     ensureReaderNav();
   }
 

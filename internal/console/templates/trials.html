@@ -5,7 +5,7 @@
 <div class="lib-page" data-library="trials">
 {{$base := "/console/trials"}}{{if .Selected}}{{$base = printf "/console/trials/%s" .Selected.ID}}{{end}}
 <header class="mv2-bar">
-  <h1 title="Expected-versus-actual records, outcomes, and structured metrics. Newest first, grouped by lab.">{{icon "test-tube"}}Trials</h1>
+  <h1>{{icon "test-tube"}}Trials</h1>{{about "Expected-versus-actual records, outcomes, and structured metrics. Newest first, grouped by lab."}}
   <span class="mv2-count" aria-label="{{.Count}} trials">
     <strong>{{.Count}}</strong>trial{{if ne .Count 1}}s{{end}}{{if .Groups}}<small>across {{len .Groups}} lab{{if ne (len .Groups) 1}}s{{end}}</small>{{end}}
   </span>

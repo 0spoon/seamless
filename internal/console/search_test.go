@@ -252,7 +252,7 @@ func TestSearch_PageSortsAcrossEntityGroups(t *testing.T) {
 	require.Less(t, taskAt, memoryAt,
 		"newest sort must cross the old kind-group boundary")
 	require.Contains(t, body, "search-filterbar")
-	require.Contains(t, body, ">1 year</a>")
+	require.Contains(t, body, ">1y</a>")
 	require.Contains(t, body, ">Confidence</option>")
 }
 

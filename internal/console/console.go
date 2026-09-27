@@ -103,6 +103,10 @@ type Service struct {
 	// could reach it. An unreadable hostname degrades to "server" alone -- never
 	// to a guess, and never back to "this machine".
 	host string
+	// hostName is the bare, normalized hostname behind host ("boron"), so a
+	// list can tag only the sessions that ran on a DIFFERENT machine instead
+	// of stamping this one's name on every row.
+	hostName string
 }
 
 // New builds a console Service, parsing its templates once.
@@ -115,11 +119,12 @@ func New(cfg Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	host := "server"
+	host, hostName := "server", ""
 	if name, herr := os.Hostname(); herr == nil && strings.TrimSpace(name) != "" {
 		host = "server " + strings.TrimSpace(name)
+		hostName = normHost(name)
 	}
-	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments, host: host}, nil
+	return &Service{cfg: cfg, logger: logger, pages: pages, fragments: fragments, host: host, hostName: hostName}, nil
 }
 
 // Register mounts the console routes on mux under /console. Public routes are the
@@ -145,6 +150,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 	handle("GET /console/static/library.js", s.serveLibraryJS)
 	handle("GET /console/static/charts.js", s.serveChartsJS)
 	handle("GET /console/static/navigation.js", s.serveNavigationJS)
+	handle("GET /console/static/shell.js", s.serveShellJS)
 	handle("GET /console/static/favicon.svg", s.serveFavicon)
 	handle("GET /console/login", s.loginForm)
 	handle("POST /console/login", s.parseForm(formBodySmall, s.loginSubmit))
@@ -152,6 +158,7 @@ func (s *Service) Register(mux *http.ServeMux) {
 
 	handle("GET /console/{$}", s.auth(s.overview))
 	handle("GET /console/now", s.auth(s.nowPage))
+	handle("GET /console/since", s.auth(s.sinceDigest))
 	handle("GET /console/search", s.auth(s.searchPage))
 	handle("GET /console/interactions", s.auth(s.interactions))
 	handle("GET /console/sessions", s.auth(s.sessionsList))
@@ -202,6 +209,10 @@ func (s *Service) Register(mux *http.ServeMux) {
 	post("POST /console/settings/features/reset", formBodySmall, s.settingsFeaturesReset)
 	handle("GET /console/events", s.auth(s.sse))
 	handle("GET /console/events/{id}", s.auth(s.eventDetail))
+	// Anything under /console/ no route above claims: the styled 404 inside the
+	// console chrome, never Go's bare plaintext page. Authenticated first, so an
+	// unknown path cannot render the sidebar's counts to a stranger.
+	handle("GET /console/", s.auth(s.unknownPage))
 }
 
 // parseForm is the structural body boundary for every console POST. Auth wraps
@@ -442,6 +453,56 @@ func (s *Service) serveNavigationJS(w http.ResponseWriter, _ *http.Request) {
 	_, _ = w.Write(navigationJS)
 }
 
+// sinceMaxAge bounds the check-in digest: past it, "since you were last here"
+// is no longer a useful frame and the client does not ask.
+const sinceMaxAge = 90 * 24 * time.Hour
+
+// sinceDigest answers the Overview's "since you were last here" line:
+// GET /console/since?t=<unix ms> returns what the fleet recorded from that
+// moment to now. JSON only -- the page renders it. The client remembers when
+// the owner last looked (a per-browser convenience); the server only counts.
+// A missing, malformed, future, or too-old t is a 400 naming the problem,
+// never a silently substituted default.
+func (s *Service) sinceDigest(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("t")
+	ms, err := strconv.ParseInt(raw, 10, 64)
+	now := time.Now()
+	if raw == "" || err != nil || ms <= 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "t must be a unix time in milliseconds"})
+		return
+	}
+	since := time.UnixMilli(ms)
+	if since.After(now) || now.Sub(since) > sinceMaxAge {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "t must be in the past 90 days"})
+		return
+	}
+	act, err := store.GetActivitySince(r.Context(), s.cfg.DB, since, now)
+	if err != nil {
+		s.serverError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, struct {
+		Since time.Time `json:"since"`
+		store.ActivitySince
+	}{since.UTC(), act})
+}
+
+// unknownPage answers a /console/ path that no route claims with the styled
+// in-console 404 (sidebar, a search box, and the way back), so a mistyped or
+// stale URL never drops the owner on Go's bare "404 page not found".
+func (s *Service) unknownPage(w http.ResponseWriter, r *http.Request) {
+	s.notFound(w, r, "Nothing lives at "+r.URL.Path+". The link may be mistyped, or what it pointed at has moved.")
+}
+
+// serveShellJS serves the console chrome client: the collapsible sidebar, the
+// phone drawer, g-chord shortcuts and the ? sheet, flash-to-toast, and the
+// palette's recents. Loaded on every page; each piece is inert without its markup.
+func (s *Service) serveShellJS(w http.ResponseWriter, _ *http.Request) {
+	w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	_, _ = w.Write(shellJS)
+}
+
 func (s *Service) serveFavicon(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
 	w.Header().Set("Cache-Control", "public, max-age=300")
@@ -597,16 +658,25 @@ type windowOption struct {
 	Key    string
 	Label  string
 	Active bool
+	// Wider marks the options past the active one: the choices a "nothing
+	// older is shown" strip offers when a windowed list looks thin.
+	Wider bool
 }
 
-// windowLabels maps a retrieval window key to its selector label.
-var windowLabels = map[string]string{"24h": "24h", "7d": "7d", "30d": "30d", "all": "all time"}
+// windowLabels maps a retrieval window key to its selector label. Every window
+// selector in the console speaks this one vocabulary (Search adds "1y"); prose
+// that names a window uses the store's lowercase RetrievalWindow.Label instead.
+var windowLabels = map[string]string{"24h": "24h", "7d": "7d", "30d": "30d", "all": "All time"}
 
 // windowOptions builds the ordered selector entries, flagging the active key.
 func windowOptions(active string) []windowOption {
 	out := make([]windowOption, 0, len(store.RetrievalWindowKeys))
+	past := false
 	for _, k := range store.RetrievalWindowKeys {
-		out = append(out, windowOption{Key: k, Label: windowLabels[k], Active: k == active})
+		out = append(out, windowOption{Key: k, Label: windowLabels[k], Active: k == active, Wider: past})
+		if k == active {
+			past = true
+		}
 	}
 	return out
 }

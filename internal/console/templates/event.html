@@ -10,7 +10,7 @@
         <span class="event-detail-eyebrow">{{.Eyebrow}}</span>
         <div class="event-detail-title-row">
           <h1>{{if .Event.Summary}}{{.Event.Summary}}{{else}}{{.Event.Kind}}{{end}}</h1>
-          <span class="kind {{.Trace.Tone}}">{{.Event.Kind}}</span>
+          <span class="kind {{.Trace.Tone}}">{{evtLabel .Event.Kind}}</span><code class="evt-raw" title="Event kind">{{.Event.Kind}}</code>
           {{agentPill .Trace.Harness .Trace.Model}}
           {{if .Trace.IsError}}<span class="badge danger">error</span>{{end}}
         </div>

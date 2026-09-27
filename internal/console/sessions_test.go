@@ -419,7 +419,7 @@ func TestSessionsPage_ShowsHost(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
-	require.Contains(t, rr.Body.String(), "Machine this agent ran on")
+	require.Contains(t, rr.Body.String(), "Ran on another machine", "a session from another host is tagged in the list")
 	require.Contains(t, rr.Body.String(), "argon")
 
 	req = httptest.NewRequest(http.MethodGet, "/console/sessions/"+id, nil)
@@ -428,4 +428,13 @@ func TestSessionsPage_ShowsHost(t *testing.T) {
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Contains(t, rr.Body.String(), "Machine the agent ran on")
 	require.Contains(t, rr.Body.String(), "argon")
+}
+
+// The list tags a session's host only when it is NOT this console's machine:
+// on a one-machine install every row would otherwise carry the same name.
+func TestSameHost_FoldsLocalSuffixAndCase(t *testing.T) {
+	require.True(t, sameHost("Boron.local", "boron"))
+	require.True(t, sameHost("boron", "BORON"))
+	require.True(t, sameHost("", "boron"), "an unknown host never earns a remote tag")
+	require.False(t, sameHost("argon", "boron"))
 }

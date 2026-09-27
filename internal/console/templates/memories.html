@@ -5,7 +5,7 @@
 <div class="lib-page" data-library="memories">
 {{$base := "/console/memories"}}{{if .Selected}}{{$base = printf "/console/memories/%s" .Selected.ID}}{{end}}
 <header class="mv2-bar">
-  <h1 title="Constraints, decisions, runbooks, and context that agents carry between sessions.">{{icon "database"}}Memories</h1>
+  <h1>{{icon "database"}}Memories</h1>{{about "Constraints, decisions, runbooks, and context that agents carry between sessions."}}
   <span class="mv2-count" aria-label="{{.ActiveCount}} active memories{{if .InactiveCount}}, {{.InactiveCount}} archived and superseded{{end}}">
     <strong>{{.ActiveCount}}</strong>active{{if .InactiveCount}}<small>{{.InactiveCount}} archived &amp; superseded</small>{{end}}
   </span>
@@ -15,16 +15,16 @@
     {{if ne .Sort "recent"}}<input type="hidden" name="sort" value="{{.Sort}}">{{end}}
   </form>
   <span class="mv2-spacer"></span>
-  <div class="mv2-sort">
-    <span class="mv2-sort-label">Sort</span>
-    <div class="seg" data-seam-query>
+  <details class="menu sort-menu">
+    <summary class="menu-btn" aria-label="Sort: {{sortLabel .Sort}}">{{icon "arrow-up-down"}}<span class="menu-k">Sort</span><strong>{{sortLabel .Sort}}</strong>{{icon "chevron-down"}}</summary>
+    <div class="menu-list" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="{{$base}}?sort=recent&amp;q={{.Query}}">Recent</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="{{$base}}?sort=name&amp;q={{.Query}}">Name</a>
       <a class="{{if eq .Sort "reach"}}on{{end}}" href="{{$base}}?sort=reach&amp;q={{.Query}}">Reach</a>
       <a class="{{if eq .Sort "utility"}}on{{end}}" href="{{$base}}?sort=utility&amp;q={{.Query}}" title="Time-decayed demand score: recall hits, prompt matches, explicit reads">Utility</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="{{$base}}?sort=favorites&amp;q={{.Query}}">Starred</a>
     </div>
-  </div>
+  </details>
 </header>
 
 {{if or .Groups .Inactive .Query}}
@@ -102,6 +102,15 @@
       {{agentPill .Harness .Model}}
       {{if .Project}}<a class="chip-parent" href="/console/projects/{{.Project}}">{{icon "git-branch"}}{{.Project}}</a>{{else}}<span class="chip-parent">{{icon "share-2"}}Shared globally</span>{{end}}
       {{range .Tags}}<span class="badge">{{.}}</span>{{end}}
+      {{/* The reader's actions sit where the eye starts, not below the body. */}}
+      <span class="reader-actions">
+        <a class="ract" href="{{.EditURL}}" title="Open {{.AbsPath}}">{{icon "pencil"}}Edit in editor</a>
+        {{if .CanArchive}}
+        <form method="post" action="/console/memories/{{.ID}}/archive" onsubmit="return confirm('Archive {{.Name}}? It leaves every index; the file stays on disk with a tombstone.');">
+          <button class="ract danger" type="submit">{{icon "archive"}}Archive</button>
+        </form>
+        {{end}}
+      </span>
     </div>
     <h2 class="reader-title mono-title">{{.Name}}{{copyBtn .Name}}
       <form class="star-form" method="post" action="/console/favorites/memory/{{.ID}}">
@@ -146,12 +155,6 @@
   {{end}}
   <footer class="reader-foot">
     <span class="path">{{.FilePath}}{{copyBtn .FilePath}}</span>
-    <a class="link-act" href="{{.EditURL}}" title="{{.AbsPath}}">edit in editor</a>
-    {{if .CanArchive}}
-    <form method="post" action="/console/memories/{{.ID}}/archive" onsubmit="return confirm('Archive {{.Name}}?');">
-      <button class="link-act danger" type="submit">archive</button>
-    </form>
-    {{end}}
   </footer>
 </article>
 {{end}}

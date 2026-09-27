@@ -1,11 +1,25 @@
 {{define "content"}}
 {{with .Data}}
-<div class="errpage">
-  <div class="err-ico">{{icon "triangle-alert"}}</div>
+<div class="errpage" data-status="{{.Status}}">
+  <div class="err-ico">{{if eq .Status 404}}{{icon "compass"}}{{else}}{{icon "triangle-alert"}}{{end}}</div>
   <div class="err-code">{{.Status}}</div>
   <h1 class="err-head">{{.Heading}}</h1>
   <p class="err-msg">{{.Message}}</p>
-  <a class="btn" href="/console/">&larr;&nbsp;Back to console</a>
+  {{/* A lost reader usually knows what they wanted, not where it lives: offer
+       the search first, then the places people most often mean. */}}
+  {{if eq .Status 404}}
+  <form class="err-search" method="get" action="/console/search" role="search" data-seam-query>
+    {{icon "search"}}
+    <input type="search" name="q" placeholder="Search memories, notes, tasks, plans&hellip;" aria-label="Search the console" autocomplete="off">
+    <button class="btn small" type="submit">Search</button>
+  </form>
+  {{end}}
+  <nav class="err-actions" aria-label="Go somewhere else">
+    <a class="btn" href="/console/">{{icon "layout-dashboard"}}Overview</a>
+    <a class="btn" href="/console/memories">{{icon "database"}}Memories</a>
+    <a class="btn" href="/console/sessions">{{icon "terminal"}}Sessions</a>
+    <a class="btn" href="/console/projects">{{icon "table-2"}}Projects</a>
+  </nav>
 </div>
 {{end}}
 {{end}}

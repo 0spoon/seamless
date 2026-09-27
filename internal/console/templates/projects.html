@@ -3,7 +3,7 @@
 {{$group := .Group}}{{$sort := .Sort}}{{$query := .Query}}
 <div class="ops-page" data-ops="projects">
 <header class="mv2-bar">
-  <h1 title="Your shared-context map: where agents are working, what each scope knows, what needs attention, and how often that knowledge comes back.">{{icon "table-2"}}Projects</h1>
+  <h1>{{icon "table-2"}}Projects</h1>{{about "Your shared-context map: where agents are working, what each scope knows, what needs attention, and how often that knowledge comes back."}}
   <span class="mv2-count" aria-label="{{.Projects}} workspaces">
     <strong>{{.Projects}}</strong>workspace{{if ne .Projects 1}}s{{end}}<small>{{if .Working}}{{.Working}} agent{{if ne .Working 1}}s{{end}} working across {{.LiveScopes}} scope{{if ne .LiveScopes 1}}s{{end}}{{else}}no agents working now{{end}}{{if .Retired}} &middot; {{.Retired}} retired{{end}}</small>
   </span>
@@ -23,15 +23,15 @@
       <a class="{{if eq .Group "flat"}}on{{end}}" href="/console/projects?group=flat&amp;sort={{.Sort}}&amp;q={{.Query}}&amp;w={{.Window}}">Flat</a>
     </div>
   </div>
-  <div class="mv2-sort">
-    <span class="mv2-sort-label">Sort</span>
-    <div class="seg" data-seam-query>
+  <details class="menu sort-menu">
+    <summary class="menu-btn" aria-label="Sort: {{sortLabel .Sort}}">{{icon "arrow-up-down"}}<span class="menu-k">Sort</span><strong>{{sortLabel .Sort}}</strong>{{icon "chevron-down"}}</summary>
+    <div class="menu-list" data-seam-query>
       <a class="{{if eq .Sort "recent"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=recent&amp;q={{.Query}}&amp;w={{.Window}}">Recent</a>
       <a class="{{if eq .Sort "coverage"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=coverage&amp;q={{.Query}}&amp;w={{.Window}}">Reach</a>
       <a class="{{if eq .Sort "name"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=name&amp;q={{.Query}}&amp;w={{.Window}}">Name</a>
       <a class="{{if eq .Sort "favorites"}}on{{end}}" href="/console/projects?group={{.Group}}&amp;sort=favorites&amp;q={{.Query}}&amp;w={{.Window}}">Starred</a>
     </div>
-  </div>
+  </details>
   <div class="mv2-sort">
     <span class="mv2-sort-label">Reach window</span>
     <div class="seg" data-seam-query>

@@ -128,7 +128,7 @@ func TestTaskRelease_OwnerOverride(t *testing.T) {
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
 	require.Contains(t, rr.Body.String(), "cc/agent-x")
-	require.Contains(t, rr.Body.String(), "release lock")
+	require.Contains(t, rr.Body.String(), "Release lock")
 
 	// POST the release: a browser gets a redirect back to the task.
 	rr = do(mux, postAuthed("/console/tasks/"+id+"/release"))
@@ -145,7 +145,7 @@ func TestTaskRelease_OwnerOverride(t *testing.T) {
 	req = httptest.NewRequest(http.MethodGet, "/console/tasks/"+id, nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	rr = do(mux, req)
-	require.NotContains(t, rr.Body.String(), "release lock")
+	require.NotContains(t, rr.Body.String(), "Release lock")
 
 	// A JSON caller (the seam CLI --force path) gets 200 with the reopened task;
 	// releasing an unclaimed task is an error, not a silent success.

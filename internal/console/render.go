@@ -35,6 +35,9 @@ var chartsJS []byte
 //go:embed static/navigation.js
 var navigationJS []byte
 
+//go:embed static/shell.js
+var shellJS []byte
+
 //go:embed static/favicon.svg
 var faviconSVG []byte
 
@@ -68,6 +71,7 @@ type pageData struct {
 	Active   string // nav key to highlight
 	Nav      navCounts
 	Host     string // machine this console runs on, for the sidebar account row
+	HostName string // the same machine's bare hostname, for sameHost comparisons
 	Notice   string // positive flash banner (from ?notice=)
 	FlashErr string // error flash banner (from ?error=)
 	// Features is the effective optional-feature state for this request; page
@@ -125,6 +129,52 @@ var funcs = template.FuncMap{
 	"areaChart":     areaChart,
 	"stackedBar":    stackedBar,
 	"coverageTrend": coverageTrend,
+	"evtLabel":      evtLabel,
+	"about":         pageAbout,
+	"sameHost":      sameHost,
+	"sortLabel":     sortLabel,
+}
+
+// pageAbout renders a page's one-line purpose as an (i) disclosure beside its
+// h1. The compact title bar keeps the purpose off the screen until asked for,
+// but a title attribute was the only way to ask -- invisible to touch, and to
+// anyone who never hovers a heading. A <details> needs no script, survives the
+// live morph open (navigation.js keeps a DETAILS element's open state), and is
+// announced as a button by assistive tech.
+func pageAbout(text string) template.HTML {
+	esc := template.HTMLEscapeString(text)
+	return template.HTML(`<details class="page-about"><summary aria-label="About this page" title="About this page">` +
+		string(icon("info")) + `</summary><p class="page-about-pop" role="note">` + esc + `</p></details>`)
+}
+
+// normHost folds a hostname to the form two machines' reports can be compared
+// in: lowercase, no trailing ".local" (macOS reports both spellings).
+func normHost(h string) string {
+	return strings.TrimSuffix(strings.ToLower(strings.TrimSpace(h)), ".local")
+}
+
+// sameHost reports whether a session's recorded host is this console's own
+// machine. An unknown side (either empty) counts as the same, so a missing host
+// never earns a tag it cannot back up.
+func sameHost(a, b string) bool {
+	a, b = normHost(a), normHost(b)
+	return a == "" || b == "" || a == b
+}
+
+// sortLabels names every sort key a console page accepts, so a compact sort
+// menu can show the active choice ("Sort: Recent") without each template
+// spelling out an if-chain. An unknown key renders as itself.
+var sortLabels = map[string]string{
+	"recent": "Recent", "name": "Name", "title": "Title", "reach": "Reach", "coverage": "Reach",
+	"utility": "Utility", "favorites": "Starred", "relevance": "Relevance", "newest": "Newest",
+	"oldest": "Oldest", "project": "Project", "confidence": "Confidence",
+}
+
+func sortLabel(key string) string {
+	if l, ok := sortLabels[key]; ok {
+		return l
+	}
+	return key
 }
 
 // evtTone maps an event kind to a chip tone class (see console.css .kind.*), so
@@ -149,6 +199,58 @@ func evtTone(kind string) string {
 	default:
 		return ""
 	}
+}
+
+// eventLabels is the console's human vocabulary for event kinds: what a ledger
+// row, a trace chip, or the live feed says happened. The raw kind is the
+// machine's name for it and stays one hover away (a title attribute) and on the
+// event page itself, so nothing that depends on the exact string is lost.
+var eventLabels = map[string]string{
+	"session.started":            "Session started",
+	"session.ended":              "Session ended",
+	"memory.written":             "Memory written",
+	"memory.read":                "Memory read",
+	"memory.superseded":          "Memory superseded",
+	"memory.archived":            "Memory archived",
+	"memory.moved":               "Memory moved",
+	"memory.first_reuse":         "First reuse",
+	"repo.moved":                 "Repo moved",
+	"favorite.changed":           "Star changed",
+	"note.written":               "Note written",
+	"note.read":                  "Note read",
+	"trial.recorded":             "Trial recorded",
+	"task.transition":            "Task moved",
+	"retrieval.injected":         "Context injected",
+	"gardener.action":            "Gardener",
+	"tool.call":                  "Tool call",
+	"hook.prompt":                "Unmatched prompt",
+	"recall.miss":                "Search miss",
+	"hook.error":                 "Hook error",
+	"agent.mishap":               "Mishap reported",
+	"plan.captured":              "Plan captured",
+	"plan.presented":             "Plan presented",
+	"plan.approved":              "Plan approved",
+	"plan.shipped":               "Plan shipped",
+	"subagent.captured":          "Subagent captured",
+	"project.isolation.changed":  "Isolation changed",
+	"project.stage_reached":      "Project matured",
+	"gamification.record_broken": "New record",
+	"milestone.reached":          "Milestone",
+	"settings.features_changed":  "Features changed",
+}
+
+// evtLabel names an event kind for a reader. An unlisted kind is spelled out
+// from its own parts ("foo.bar_baz" -> "Foo bar baz") rather than dropped, so a
+// kind added later still reads as words until it earns an entry above.
+func evtLabel(kind string) string {
+	if l, ok := eventLabels[kind]; ok {
+		return l
+	}
+	words := strings.TrimSpace(strings.NewReplacer(".", " ", "_", " ").Replace(kind))
+	if words == "" {
+		return "Event"
+	}
+	return strings.ToUpper(words[:1]) + words[1:]
 }
 
 // evtIcon maps an event kind to a lucide icon name for the Interactions feed's
@@ -181,6 +283,30 @@ func evtIcon(kind string) string {
 		return "flag"
 	case strings.HasPrefix(kind, "plan."):
 		return "map"
+	case kind == "gamification.record_broken":
+		return "trophy"
+	case kind == "agent.mishap", kind == "hook.error":
+		return "triangle-alert"
+	case kind == "memory.written", kind == "note.written":
+		return "pencil"
+	case kind == "memory.read", kind == "note.read":
+		return "eye"
+	case kind == "memory.archived":
+		return "archive"
+	case kind == "memory.superseded":
+		return "refresh-cw"
+	case kind == "memory.moved", kind == "repo.moved":
+		return "folder-open"
+	case kind == "favorite.changed":
+		return "star"
+	case kind == "trial.recorded":
+		return "test-tube"
+	case kind == "task.transition":
+		return "list-checks"
+	case kind == "gardener.action":
+		return "sprout"
+	case kind == "recall.miss":
+		return "search"
 	default:
 		return "activity"
 	}
@@ -306,6 +432,7 @@ func (s *Service) render(w http.ResponseWriter, r *http.Request, page string, pd
 	pd.NavOff = navOff(pd.Features)
 	pd.Nav = s.navCounts(r.Context(), pd.Features)
 	pd.Host = s.host
+	pd.HostName = s.hostName
 	pd = withFlash(r, pd)
 	tmpl, ok := s.pages[page]
 	if !ok {

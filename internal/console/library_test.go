@@ -139,7 +139,8 @@ func TestMemoriesLibrary_DetailAndReaderFragment(t *testing.T) {
 	require.Contains(t, body, `class="rail-subgroup-hd"`, "memory kind boundaries are explicit")
 	require.Contains(t, body, `data-context="seamless / gotcha"`)
 	require.Contains(t, body, `class="reader-sheet" data-memory-kind="gotcha"`)
-	require.Contains(t, body, `class="mv2-sort-label">Sort<`, "the compact bar still names its sort control")
+	require.Contains(t, body, `class="menu-k">Sort<`, "the compact bar still names its sort control")
+	require.Contains(t, body, `<strong>Recent</strong>`, "the sort menu shows the active choice without opening")
 
 	frag := getPeek(t, mux, "/console/memories/"+m.ID+"?reader=1")
 	require.Equal(t, http.StatusOK, frag.Code)
