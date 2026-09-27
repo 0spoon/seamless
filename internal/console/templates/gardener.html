@@ -8,7 +8,9 @@
     <span class="mv2-count" aria-label="{{.PendingCount}} proposals awaiting your decision">
       <strong>{{.PendingCount}}</strong>pending<small>{{.RequestedCount}} asked by you &middot; {{.BackgroundCount}} background</small>
     </span>
+    <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
     <span class="mv2-spacer"></span>
+    <div class="mv2-controls" id="mv2-controls">
     {{if .TotalPending}}
     <div class="mv2-sort">
       <span class="mv2-sort-label">Type</span>
@@ -30,7 +32,8 @@
       </div>
     </div>
     {{end}}
-  </header>
+    </div>
+</header>
 
   <section class="gardener-composer" aria-labelledby="gardener-ask-title">
     <h2 class="gardener-composer-title" id="gardener-ask-title">Ask for a cleanup</h2>

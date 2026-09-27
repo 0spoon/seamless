@@ -15,7 +15,9 @@
     <input type="hidden" name="sort" value="{{.Sort}}">
     <input type="hidden" name="w" value="{{.Window}}">
   </form>
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="mv2-sort">
     <span class="mv2-sort-label">View</span>
     <div class="seg" data-seam-query>
@@ -39,6 +41,7 @@
     </div>
   </div>
   <a class="btn small" href="/console/context" title="Global, parent, family, and split-lineage context flow">{{icon "share-2"}}<span>Context</span></a>
+  </div>
 </header>
 
 <section class="project-summary-grid" id="projects-attention" aria-label="Project portfolio summary">

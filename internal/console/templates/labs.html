@@ -7,8 +7,11 @@
   <span class="mv2-count" aria-label="{{.Count}} labs">
     <strong>{{.Count}}</strong>lab{{if ne .Count 1}}s{{end}}<small>{{.TrialsSum}} trial{{if ne .TrialsSum 1}}s{{end}} recorded</small>
   </span>
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <a class="btn small" href="/console/trials">{{icon "test-tube"}} Browse every trial</a>
+  </div>
 </header>
 
 {{if .Rows}}

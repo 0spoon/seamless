@@ -73,6 +73,23 @@
   </section>
   {{end}}
 
+  {{/* The knowledge sky: every active memory as a star, one galaxy per scope.
+       Brightness is use; twinkling means it reached an agent in the last day;
+       the page script flares a star the moment an injection names it. */}}
+  {{with .Sky}}
+  <section class="ov2-panel sky-panel" aria-label="Knowledge sky">
+    <header class="ov2-panel-head">
+      <h2>Knowledge sky</h2>
+      <span class="sky-sub">{{if lt .Shown .Total}}the {{.Shown}} most used of {{.Total}} active memories{{else}}{{.Total}} active memor{{if eq .Total 1}}y{{else}}ies{{end}}{{end}} &middot; brighter stars are used more &middot; they flare as they reach an agent</span>
+      <a href="/console/memories">Memories {{icon "arrow-right"}}</a>
+    </header>
+    <div class="sky" data-sky>{{.SVG}}</div>
+    <footer class="sky-legend">
+      {{range $.Data.MemByKind}}<a href="/console/memories?q={{.Kind}}" class="sky-kind"><i class="kdot" data-kind="{{.Kind}}"></i>{{.Kind}}<b>{{.N}}</b></a>{{end}}
+    </footer>
+  </section>
+  {{end}}
+
   <div class="ov2-grid">
     <section class="ov2-panel" aria-label="Recently active workspaces">
       <header class="ov2-panel-head"><h2>Recently active workspaces</h2><a href="/console/projects">All projects {{icon "arrow-right"}}</a></header>
@@ -126,10 +143,12 @@
         {{else}}<div class="ov2-panel-empty">{{icon "brain"}}<span>No memory earned reuse in the last 30 days yet.</span></div>{{end}}
       </section>
       {{end}}
+      {{if not .Sky}}
       <section class="ov2-panel" aria-label="Memory fabric">
         <header class="ov2-panel-head"><h2>Memory fabric</h2>{{if .Memories}}<span class="ov2-panel-total">{{.Memories}} active</span>{{end}}</header>
         {{if .MemByKind}}{{kindBar .MemByKind}}{{else}}<div class="ov2-panel-empty">{{icon "database"}}<span>No memories yet &mdash; agents write them with memory_write.</span></div>{{end}}
       </section>
+      {{end}}
     </aside>
   </div>
 
@@ -200,6 +219,55 @@
   window.addEventListener('load', sync);
   document.addEventListener('seam:content-updated', sync);
   sync();
+})();
+(function () {
+  'use strict';
+  /* The knowledge sky: a glass name tag follows the pointer over a star, and
+     a star flares when a live injection names it (seam:event carries every SSE
+     frame; retrieval.injected lists the surfaced memories in payload.item_ids).
+     Delegated to the document -- the live morph can replace the SVG. */
+  var tip = null;
+  function hide() { if (tip) { tip.remove(); tip = null; } }
+  document.addEventListener('mouseover', function (e) {
+    var star = e.target.closest ? e.target.closest('.sky .star') : null;
+    if (!star) return;
+    hide();
+    tip = document.createElement('div');
+    tip.className = 'sky-tip';
+    var name = document.createElement('strong');
+    name.textContent = star.getAttribute('data-name') || '';
+    var meta = document.createElement('span');
+    meta.textContent = star.getAttribute('data-meta') || '';
+    tip.appendChild(name);
+    tip.appendChild(meta);
+    tip.style.setProperty('--c', star.style.fill || 'var(--brand)');
+    document.body.appendChild(tip);
+    var r = star.getBoundingClientRect();
+    var x = Math.min(window.innerWidth - tip.offsetWidth - 12, Math.max(12, r.left + r.width / 2 - tip.offsetWidth / 2));
+    tip.style.left = x + 'px';
+    tip.style.top = Math.max(12, r.top - tip.offsetHeight - 12) + 'px';
+  });
+  document.addEventListener('mouseout', function (e) {
+    if (e.target.closest && e.target.closest('.sky .star')) hide();
+  });
+  window.addEventListener('scroll', hide, { passive: true });
+  function flare(id) {
+    var sky = document.querySelector('[data-sky]');
+    if (!sky || !id) return;
+    var star = sky.querySelector('.star[data-id="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+    if (!star) return;
+    star.classList.remove('flare');
+    void star.getBoundingClientRect();
+    star.classList.add('flare');
+    setTimeout(function () { star.classList.remove('flare'); }, 1800);
+  }
+  document.addEventListener('seam:event', function (e) {
+    var d = e.detail || {};
+    if (d.kind !== 'retrieval.injected' && d.kind !== 'memory.read') return;
+    var ids = d.itemIds || (d.itemId ? [d.itemId] : []);
+    if (!Array.isArray(ids)) return;
+    ids.slice(0, 24).forEach(function (id, i) { setTimeout(function () { flare(String(id)); }, i * 70); });
+  });
 })();
 </script>
 {{end}}

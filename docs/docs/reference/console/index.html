@@ -230,7 +230,7 @@ var c=q.get("client")||localStorage.getItem("clients")||"";var cs=c.split(",").f
   
   <details class="toc-inline"><summary>On this page</summary>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </details>
   <p>The console is the owner's window onto a system whose actual clients are agents.
@@ -489,6 +489,18 @@ Settings takes its shortcut with it.</p>
 in (cross-document view transitions, where the browser supports them), and
 hovering a console link prefetches its page. Neither runs any code of the
 destination page early; both degrade to a plain navigation.</p>
+<h3 id="ambient-signals">Ambient signals</h3>
+<p>The console shows activity without asking to be read. The line along the
+sidebar's edge - the Seam - carries each event from the live stream as a spark
+that travels to the section it belongs to and lights that section's icon:
+cyan for context reaching an agent, green for knowledge written, coral for
+something wrong, indigo for everything else. The sky behind the pages and the
+daemon's dot in the sidebar brighten and breathe faster with the recent event
+rate, and settle when the fleet is idle. Headline numbers count up when a page
+opens; agents working right now carry a slow orbit of light on the Now screen.</p>
+<p>All of it is decoration over data the page already states: nothing here changes
+a number, and <code>prefers-reduced-motion</code> stills every part of it (the Seam sends no
+sparks, numbers render at their value).</p>
 <h2 id="three-ways-to-render-a-page">Three ways to render a page</h2>
 <p>Every route answers in the shape the caller asked for:</p>
 <ul>
@@ -509,7 +521,9 @@ their library screen with that entity open in the reader.</p>
 naming the bad param and listing the valid values, rather than silently falling
 back to a default - so an agent driving the console by URL sees the fix.</p>
 <p><code>GET /console/events</code> is the SSE stream: every recorded event as one JSON <code>data:</code>
-frame, with a ping every 25 seconds. <code>?feed=interactions</code> opts into the richer
+frame, with a ping every 25 seconds. A <code>retrieval.injected</code> frame also lists the
+memories it surfaced as <code>itemIds</code> (capped at 48), which is what lets a page point
+at exactly what reached an agent. <code>?feed=interactions</code> opts into the richer
 transport-level rows the Interactions screen consumes.</p>
 <h2 id="overview">Overview</h2>
 <p><code>/console/</code></p>
@@ -531,6 +545,15 @@ there exactly.</li>
 <code>session_end</code>, attributed through the reporting session's harness and model.
 Warning tones appear only when reports exist; an empty rail is a positive
 &quot;No mishaps reported&quot; state.</li>
+<li><strong>Knowledge sky</strong> - every active memory drawn as a star, one galaxy per
+project scope (global included), coloured by kind with a counted legend
+beneath. A star's size and brightness follow its use (utility first, then
+injections); memories that reached an agent in the last day twinkle; and a
+star flares the moment a live injection names it. The layout is a pure
+function of the memories and their stats, so a live refresh moves nothing
+that did not change. Hover names a star; clicking opens it in Memories. The
+sky draws at most the 600 most-used memories and says so when it does. It is
+HTML only - the JSON answer carries no sky.</li>
 <li><strong>Recent activity</strong> - the last twelve events, each linking to its detail page.</li>
 </ul>
 <p>The four judged vitals at the top (memory reach, knowledge continuity, context
@@ -1105,7 +1128,7 @@ the detail pane would nest the whole console inside itself.</p>
   <aside class="docs-toc" aria-label="On this page">
     <p class="toc-head">On this page</p>
     <ul>
-      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
+      <li class="lvl-2"><a href="#what-the-console-can-change">What the console can change</a></li><li class="lvl-2"><a href="#signing-in">Signing in</a></li><li class="lvl-3"><a href="#make-console">make console</a></li><li class="lvl-2"><a href="#getting-around">Getting around</a></li><li class="lvl-3"><a href="#the-command-palette">The command palette</a></li><li class="lvl-3"><a href="#keyboard">Keyboard</a></li><li class="lvl-3"><a href="#ambient-signals">Ambient signals</a></li><li class="lvl-2"><a href="#three-ways-to-render-a-page">Three ways to render a page</a></li><li class="lvl-2"><a href="#overview">Overview</a></li><li class="lvl-3"><a href="#since-you-were-last-here">Since you were last here</a></li><li class="lvl-2"><a href="#now">Now</a></li><li class="lvl-2"><a href="#interactions">Interactions</a></li><li class="lvl-2"><a href="#search">Search</a></li><li class="lvl-2"><a href="#projects">Projects</a></li><li class="lvl-2"><a href="#sessions">Sessions</a></li><li class="lvl-2"><a href="#memories">Memories</a></li><li class="lvl-2"><a href="#notes">Notes</a></li><li class="lvl-2"><a href="#tasks">Tasks</a></li><li class="lvl-2"><a href="#plans">Plans</a></li><li class="lvl-2"><a href="#labs">Labs</a></li><li class="lvl-2"><a href="#trials">Trials</a></li><li class="lvl-2"><a href="#context">Context</a></li><li class="lvl-2"><a href="#retrieval">Retrieval</a></li><li class="lvl-2"><a href="#gardener">Gardener</a></li><li class="lvl-2"><a href="#settings">Settings</a></li><li class="lvl-3"><a href="#optional-features">Optional features</a></li><li class="lvl-3"><a href="#semantic-index--storage">Semantic index &amp; storage</a></li><li class="lvl-3"><a href="#briefing-injection">Briefing injection</a></li><li class="lvl-3"><a href="#project-families">Project families</a></li><li class="lvl-2"><a href="#event-detail">Event detail</a></li><li class="lvl-2"><a href="#errors">Errors</a></li>
     </ul>
   </aside>
   

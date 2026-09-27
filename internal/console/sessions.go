@@ -548,7 +548,18 @@ func injectedEventItemIDs(e core.Event) []string {
 	if e.ItemID != "" {
 		ids = append(ids, e.ItemID)
 	}
-	if raw, ok := e.Payload["item_ids"].([]any); ok {
+	// Two shapes reach here: an event read back from the log carries the
+	// JSON-decoded []any, while one delivered live by the recorder still holds
+	// the []string its producer built. Reading only the first made every live
+	// injection look empty (no item count on the feed, nothing for the sky).
+	switch raw := e.Payload["item_ids"].(type) {
+	case []string:
+		for _, str := range raw {
+			if str != "" {
+				ids = append(ids, str)
+			}
+		}
+	case []any:
 		for _, v := range raw {
 			if str, ok := v.(string); ok && str != "" {
 				ids = append(ids, str)

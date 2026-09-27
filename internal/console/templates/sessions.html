@@ -16,7 +16,9 @@
     <input type="hidden" name="day" value="{{.Day}}">
     <input type="hidden" name="retained" value="{{.Retained}}">
   </form>
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="mv2-sort">
     <span class="mv2-sort-label">Status</span>
     <div class="seg" data-seam-query>
@@ -46,6 +48,7 @@
     <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="/console/sessions?status={{$filter}}&amp;w={{.Key}}&amp;sort={{$sort}}&amp;q={{$query}}&amp;retained={{$retained}}">{{.Label}}</a>{{end}}
     </div>
+  </div>
   </div>
 </header>
 

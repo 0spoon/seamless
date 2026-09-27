@@ -293,7 +293,7 @@ func areaChart(points []store.TrendBucket) template.HTML {
 	var b strings.Builder
 	fmt.Fprintf(&b, `<div class="area"%s>`, hoverAttr(w, h, padT, padT+ph, hov))
 	fmt.Fprintf(&b, `<svg viewBox="0 0 %g %g" class="area-svg" style="color:var(--brand)" role="img" aria-label="%s" tabindex="0">`, w, h, template.HTMLEscapeString(alt))
-	b.WriteString(`<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.20"/><stop offset="100%" stop-color="currentColor" stop-opacity="0.01"/></linearGradient></defs>`)
+	b.WriteString(`<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="currentColor" stop-opacity="0.34"/><stop offset="100%" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>`)
 	// baseline gridlines
 	for _, g := range []float64{0.25, 0.5, 0.75, 1} {
 		yy := padT + ph*g
@@ -308,10 +308,14 @@ func areaChart(points []store.TrendBucket) template.HTML {
 	if n == 1 {
 		// A single point has no line/area to draw, and "peak" is meaningless, so
 		// render the datum itself as a visible dot in the series color.
-		fmt.Fprintf(&b, `<circle class="area-peak" cx="%.1f" cy="%.1f" r="4" fill="currentColor" stroke="var(--surface)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`, x(0), y(points[0].Count))
+		fmt.Fprintf(&b, `<circle class="area-peak" cx="%.1f" cy="%.1f" r="4" fill="currentColor" stroke="var(--surface-solid)" stroke-width="2.5" vector-effect="non-scaling-stroke"/>`, x(0), y(points[0].Count))
 	} else {
+		// The latest point breathes: the series is live, and its newest value is
+		// where the eye should land first.
+		fmt.Fprintf(&b, `<g class="area-head"><circle class="area-head-halo" cx="%.1f" cy="%.1f" r="4" fill="currentColor"/><circle cx="%.1f" cy="%.1f" r="3.5" fill="currentColor" stroke="var(--surface-solid)" stroke-width="2" vector-effect="non-scaling-stroke"/></g>`,
+			x(n-1), y(points[n-1].Count), x(n-1), y(points[n-1].Count))
 		// peak marker
-		fmt.Fprintf(&b, `<g class="area-peak"><line x1="%.1f" x2="%.1f" y1="%.1f" y2="%.1f" stroke="var(--pop)" stroke-width="1.5" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/><circle cx="%.1f" cy="%.1f" r="4" fill="var(--pop)" stroke="var(--surface)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></g>`,
+		fmt.Fprintf(&b, `<g class="area-peak"><line x1="%.1f" x2="%.1f" y1="%.1f" y2="%.1f" stroke="var(--pop)" stroke-width="1.5" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/><circle cx="%.1f" cy="%.1f" r="4" fill="var(--pop)" stroke="var(--surface-solid)" stroke-width="2.5" vector-effect="non-scaling-stroke"/></g>`,
 			x(peak), x(peak), y(points[peak].Count), padT+ph, x(peak), y(points[peak].Count))
 	}
 	b.WriteString(`</svg>`)
@@ -385,7 +389,7 @@ func coverageTrend(buckets []store.CoverageBucket) template.HTML {
 			// The <title> is the no-JS readout: it survives as the fallback for the
 			// charts.js hover layer, which masks it with its own capture rect (two
 			// tooltips for one point would otherwise stack up).
-			fmt.Fprintf(&dots, `<circle class="cov-dot" cx="%.1f" cy="%.1f" r="3.5" fill="var(--ok)" stroke="var(--surface)" stroke-width="2" vector-effect="non-scaling-stroke"><title>%s: %d%% (%d of %d)</title></circle>`,
+			fmt.Fprintf(&dots, `<circle class="cov-dot" cx="%.1f" cy="%.1f" r="3.5" fill="var(--ok)" stroke="var(--surface-solid)" stroke-width="2" vector-effect="non-scaling-stroke"><title>%s: %d%% (%d of %d)</title></circle>`,
 				x(i), y(pctOf(d)), template.HTMLEscapeString(d.Label), int(pctOf(d)+0.5), d.Covered, d.Total)
 		}
 		p := hoverPoint{X: x(i), Y: y(pctOf(d)), Label: d.Label}
@@ -527,6 +531,7 @@ func sparkLine(s spark) template.HTML {
 		maxV = 1
 	}
 	var pts strings.Builder
+	var lastX, lastY float64
 	for i, p := range s.Points {
 		x := 2 + (float64(i)/float64(n-1))*(w-4)
 		v := float64(p.Count)
@@ -538,7 +543,11 @@ func sparkLine(s spark) template.HTML {
 			pts.WriteByte(' ')
 		}
 		fmt.Fprintf(&pts, "%.1f,%.1f", x, y)
+		lastX, lastY = x, y
 	}
+	// A faint wash under the line and a dot on its newest value: the shape reads
+	// as a quantity over time, and the eye lands on "now".
+	fill := fmt.Sprintf("2,%g %s %.1f,%g", h, pts.String(), w-2, h)
 	cls := "ov2-spark"
 	if s.Tone != "" {
 		cls += " " + s.Tone
@@ -548,7 +557,8 @@ func sparkLine(s spark) template.HTML {
 		attrs = ` role="img" aria-label="` + template.HTMLEscapeString(s.Label) + `"`
 	}
 	return template.HTML(`<svg class="` + cls + `" viewBox="0 0 96 26"` + attrs +
-		`><polyline points="` + pts.String() + `"></polyline></svg>`)
+		`><polygon class="spark-fill" points="` + fill + `"></polygon><polyline points="` + pts.String() +
+		`"></polyline><circle class="spark-head" cx="` + fmt.Sprintf("%.1f", lastX) + `" cy="` + fmt.Sprintf("%.1f", lastY) + `" r="2.2"></circle></svg>`)
 }
 
 // ---------------------------------------------------------------------------

@@ -15,12 +15,15 @@
     {{if .Done}}<a href="#rg-done">{{.Done}} done</a>{{end}}
   </div>
   {{with .ShippedMonth}}<span class="mom-shipped" title="Counted from plan.shipped settlements in the current local month">Plans shipped this month: <strong>{{.Count}}</strong></span>{{end}}
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="mv2-sort">
     <span class="mv2-sort-label">Updated</span>
     <div class="seg" data-seam-query>
       {{range .Windows}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?w={{.Key}}">{{.Label}}</a>{{end}}
     </div>
+  </div>
   </div>
 </header>
 

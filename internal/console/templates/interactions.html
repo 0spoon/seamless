@@ -5,7 +5,9 @@
   <span class="mv2-count ix-total" aria-live="polite">
     <strong id="ix-count">0</strong>events in view<small class="live" id="ix-live"><span class="live-dot"></span>streaming now</small>
   </span>
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="mv2-sort ix-kind-control">
     <span class="mv2-sort-label">Type</span>
     <div class="ix-filters" id="ix-kinds">
@@ -17,6 +19,7 @@
       <button class="ix-seg" type="button" data-cat="session"><span class="dot session"></span>Sessions</button>
       <button class="ix-seg" type="button" data-cat="plan"><span class="dot plan"></span>Plans</button>
     </div>
+  </div>
   </div>
 </header>
 

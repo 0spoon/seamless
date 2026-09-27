@@ -144,6 +144,21 @@ in (cross-document view transitions, where the browser supports them), and
 hovering a console link prefetches its page. Neither runs any code of the
 destination page early; both degrade to a plain navigation.
 
+### Ambient signals
+
+The console shows activity without asking to be read. The line along the
+sidebar's edge - the Seam - carries each event from the live stream as a spark
+that travels to the section it belongs to and lights that section's icon:
+cyan for context reaching an agent, green for knowledge written, coral for
+something wrong, indigo for everything else. The sky behind the pages and the
+daemon's dot in the sidebar brighten and breathe faster with the recent event
+rate, and settle when the fleet is idle. Headline numbers count up when a page
+opens; agents working right now carry a slow orbit of light on the Now screen.
+
+All of it is decoration over data the page already states: nothing here changes
+a number, and `prefers-reduced-motion` stills every part of it (the Seam sends no
+sparks, numbers render at their value).
+
 ## Three ways to render a page
 
 Every route answers in the shape the caller asked for:
@@ -167,7 +182,9 @@ naming the bad param and listing the valid values, rather than silently falling
 back to a default - so an agent driving the console by URL sees the fix.
 
 `GET /console/events` is the SSE stream: every recorded event as one JSON `data:`
-frame, with a ping every 25 seconds. `?feed=interactions` opts into the richer
+frame, with a ping every 25 seconds. A `retrieval.injected` frame also lists the
+memories it surfaced as `itemIds` (capped at 48), which is what lets a page point
+at exactly what reached an agent. `?feed=interactions` opts into the richer
 transport-level rows the Interactions screen consumes.
 
 ## Overview
@@ -192,6 +209,15 @@ The landing page and the health check. It carries:
   `session_end`, attributed through the reporting session's harness and model.
   Warning tones appear only when reports exist; an empty rail is a positive
   "No mishaps reported" state.
+- **Knowledge sky** - every active memory drawn as a star, one galaxy per
+  project scope (global included), coloured by kind with a counted legend
+  beneath. A star's size and brightness follow its use (utility first, then
+  injections); memories that reached an agent in the last day twinkle; and a
+  star flares the moment a live injection names it. The layout is a pure
+  function of the memories and their stats, so a live refresh moves nothing
+  that did not change. Hover names a star; clicking opens it in Memories. The
+  sky draws at most the 600 most-used memories and says so when it does. It is
+  HTML only - the JSON answer carries no sky.
 - **Recent activity** - the last twelve events, each linking to its detail page.
 
 The four judged vitals at the top (memory reach, knowledge continuity, context

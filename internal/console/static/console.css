@@ -1,50 +1,59 @@
 /* Seamless observability console -- self-contained, no build step.
-   Restyled on the Seamless Design System (imported from the "Seamless Console
-   Design Brief"): warm paper, Space Grotesk display numerals, Hanken Grotesk
-   body, JetBrains Mono data, indigo brand, coral pop, the signature live-dot.
-   Light-first with an explicit [data-theme="dark"] override and a
-   prefers-color-scheme dark fallback. */
 
-/* Webfonts are tasteful Google-hosted substitutes chosen to fit the brief, not
-   licensed brand faces. The fallback stack below keeps the console legible when
-   offline. @import must stay first. */
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+   "Luminous memory": the console is an observatory for a living memory. The
+   canvas is night sky (daylight paper in the light theme); knowledge is light;
+   agents are moving sparks; and the Seam -- the thread of light along the
+   sidebar's edge -- carries every recorded event as it happens (shell.js).
+   Fraunces sets titles and hero numerals, Instrument Sans the interface, IBM
+   Plex Mono the data. Dark-first with an explicit [data-theme="light"] (the
+   root) and a prefers-color-scheme fallback. Every colour is a token; the two
+   themes change lightness, never the hue a meaning is carried in. */
+
+/* Webfonts are Google-hosted; the fallback stacks below keep the console
+   legible offline. @import must stay first. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght,SOFT@0,9..144,300..700,0..100;1,9..144,300..700,0..100&family=Instrument+Sans:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&display=swap');
 
 /* ===========================================================================
    TOKENS
    =========================================================================== */
 :root {
-  /* neutral ramp (warm slate / paper) */
-  --paper:         #f7f6f2;
-  --surface:       #ffffff;
-  --surface-2:     #f1efe9;
-  --surface-3:     #e9e6dd;
-  --border:        #e4e1d8;
-  --border-strong: #d3cfc3;
-  --ink:           #1c1e24;
-  --ink-2:         #3b3e46;
-  --muted:         #676a72; /* AA: 4.71:1 on --surface-2 (neutral chips) */
-  --faint:         #6f7178; /* AA: 4.5:1 small text on --surface/--paper */
+  /* canvas + surfaces (daylight observatory: warm paper, ink-blue light) */
+  --void:          #e9e6dc;
+  --paper:         #f4f2ec;
+  --surface:       #fffdf8;
+  --surface-solid: #fffdf8; /* popovers and sticky chrome: never see-through */
+  --surface-2:     #f1eee6;
+  --surface-3:     #e8e4d9;
+  --border:        rgba(40, 38, 90, 0.12);
+  --border-strong: rgba(40, 38, 90, 0.22);
+  --sheen:         rgba(255, 255, 255, 0.75); /* the lit top edge of a panel */
+  --ink:           #15162a;
+  --ink-2:         #383a52;
+  --muted:         #5b5e76; /* AA: 5.0:1 on --surface-3 */
+  --faint:         #5f6278; /* AA: 4.7:1 on --surface-3 */
 
-  /* brand (indigo) + pop (coral) */
-  --brand:        #3f56e8;
-  --brand-strong: #2c3ec6;
-  --brand-soft:   #eaecfd;
+  /* brand (indigo light) + pop (coral) + flow (cyan: context moving) */
+  --brand:        #4448d8;
+  --brand-strong: #3134b8;
+  --brand-soft:   #e9e8fb;
   --brand-ink:    #ffffff;
-  --pop:          #ff6a3d;
-  --pop-strong:   #b0431a; /* AA: readable as text on --pop-soft + as button bg under white */
-  --pop-soft:     #ffece4;
-  --pop-ink:      #3a1405; /* dark ink for text on the bright --pop button */
-  --match:        #ffdf57;
-  --match-ink:    #332600;
+  --violet:       #7a4fe0;
+  --pop:          #f0643a;
+  --pop-strong:   #a73c18; /* AA: text on --pop-soft and on paper */
+  --pop-soft:     #fbe6dc;
+  --pop-ink:      #2a0d02; /* dark ink for text on the bright --pop fill */
+  --flow:         #066378;
+  --flow-soft:    #dcedf0;
+  --match:        #ffd84a;
+  --match-ink:    #2e2300;
 
   /* semantic */
-  --ok:          #0e7a42; /* AA: 4.76:1 on --ok-soft */
-  --ok-soft:     #e2f5ea;
-  --warn:        #855510; /* AA: 5.5:1 on --warn-soft */
-  --warn-soft:   #f8efd6;
-  --danger:      #c02e27; /* AA: 4.8:1 on --danger-soft */
-  --danger-soft: #fbe7e5;
+  --ok:          #0a6843; /* AA: 5.6:1 on --ok-soft */
+  --ok-soft:     #e0efe5;
+  --warn:        #835408; /* AA: 5.4:1 on --warn-soft */
+  --warn-soft:   #f5ead3;
+  --danger:      #ac2740; /* AA: 5.4:1 on --danger-soft */
+  --danger-soft: #f8e3e4;
   --danger-ink:  #ffffff; /* text on a solid --danger fill (btn.danger:hover) */
 
   /* semantic aliases (product code consumes these) */
@@ -54,33 +63,42 @@
   --bg-page:        var(--paper);
   --accent:         var(--brand);
   --accent-soft:    var(--brand-soft);
-  --scrim:          rgba(24, 26, 34, 0.42);
-  --live:           var(--ok);
+  --scrim:          rgba(22, 22, 42, 0.38);
+  --live:           #0f9a62;
 
-  /* per-kind hues -- drive the memories-by-kind legend + chart dots */
-  --k-gotcha:     var(--pop);
+  /* per-kind hues -- one spectrum for the legend, rail dots, and constellation */
+  --k-gotcha:     #d9542b;
   --k-constraint: var(--brand);
-  --k-convention: #d6409f;
-  --k-reference:  #0e9384;
-  --k-decision:   #8b5cf6;
-  --k-runbook:    var(--warn);
-  --k-protocol:   #e5484d;
-  --k-stage:      #0ea5e9;
-  --k-refuted:    var(--muted);
+  --k-convention: #c2338f;
+  --k-reference:  #0b8a7d;
+  --k-decision:   #7b4de0;
+  --k-runbook:    #a86b0c;
+  --k-protocol:   #d03c4f;
+  --k-stage:      #0b86c4;
+  --k-refuted:    #7a7c8e;
+
+  /* the aurora behind everything, and the Seam's light */
+  --aurora-a: rgba(108, 99, 255, 0.10);
+  --aurora-b: rgba(20, 184, 206, 0.09);
+  --aurora-c: rgba(240, 100, 58, 0.06);
+  --seam:     linear-gradient(to bottom, transparent, rgba(68, 72, 216, 0.35) 18%, rgba(6, 99, 120, 0.35) 55%, rgba(122, 79, 224, 0.25) 85%, transparent);
+  --grain-opacity: 0.035;
+  --activity: 0; /* 0..1, the fleet's recent event rate (shell.js) */
 
   /* type */
-  --font-display: "Space Grotesk", "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-sans:    "Hanken Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-serif:   "Fraunces", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --font-display: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans:    "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:    "IBM Plex Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --mono:         var(--font-mono); /* back-compat alias */
 
   --text-2xs: 11px; --text-xs: 12px; --text-sm: 13px; --text-base: 14px;
-  --text-md: 15px;  --text-lg: 17px; --text-xl: 20px; --text-2xl: 26px;
-  --text-3xl: 34px; --text-4xl: 52px;
+  --text-md: 15px;  --text-lg: 17px; --text-xl: 20px; --text-2xl: 28px;
+  --text-3xl: 36px; --text-4xl: 56px;
 
   --tracking-tight: -0.02em;
-  --tracking-wide:  0.04em;
-  --tracking-wider: 0.08em;
+  --tracking-wide:  0.06em;
+  --tracking-wider: 0.1em;
   --leading-normal: 1.5;
 
   /* spacing / layout */
@@ -88,79 +106,107 @@
   --content-max:   1280px;
 
   /* radii */
-  --radius-xs: 5px; --radius-sm: 7px; --radius-md: 10px; --radius-lg: 14px;
+  --radius-xs: 6px; --radius-sm: 8px; --radius-md: 12px; --radius-lg: 16px; --radius-xl: 22px;
   --radius-pill: 999px;
   --radius: var(--radius-md); /* back-compat alias */
 
-  /* elevation */
-  --shadow-xs: 0 1px 2px rgba(20, 22, 30, 0.05);
-  --shadow-sm: 0 1px 2px rgba(20, 22, 30, 0.05), 0 1px 3px rgba(20, 22, 30, 0.07);
-  --shadow-md: 0 2px 6px rgba(20, 22, 30, 0.06), 0 8px 22px rgba(20, 22, 30, 0.07);
-  --shadow-lg: 0 8px 20px rgba(20, 22, 30, 0.10), 0 24px 48px rgba(20, 22, 30, 0.10);
-  --shadow-focus: 0 0 0 3px var(--brand-soft);
+  /* elevation + light */
+  --shadow-xs: 0 1px 2px rgba(30, 28, 70, 0.05);
+  --shadow-sm: 0 1px 2px rgba(30, 28, 70, 0.05), 0 2px 6px rgba(30, 28, 70, 0.05);
+  --shadow-md: 0 2px 6px rgba(30, 28, 70, 0.06), 0 12px 28px rgba(30, 28, 70, 0.08);
+  --shadow-lg: 0 10px 24px rgba(30, 28, 70, 0.10), 0 28px 64px rgba(30, 28, 70, 0.14);
+  --shadow-focus: 0 0 0 2px var(--paper), 0 0 0 4px color-mix(in oklab, var(--brand) 70%, transparent);
+  --glow-brand: 0 0 0 1px color-mix(in oklab, var(--brand) 30%, transparent), 0 6px 22px color-mix(in oklab, var(--brand) 22%, transparent);
   --shadow: var(--shadow-sm); /* back-compat alias */
 
   /* motion */
   --ease-out:    cubic-bezier(0.2, 0.7, 0.3, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --dur-fast: 120ms; --dur-med: 200ms; --dur-slow: 320ms;
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms; --dur-med: 200ms; --dur-slow: 320ms; --dur-xslow: 640ms;
 
   color-scheme: light dark;
 }
 
-/* Dark theme -- explicit opt-in; warm-dark slate, brand/pop brightened. */
+/* Dark theme -- the night observatory: ink-violet void, lit hairlines, light
+   brightened for the dark. Only tokens are reassigned here. */
 [data-theme="dark"] {
-  --paper:        #101217;
-  --surface:      #181b22;
-  --surface-2:    #20242e;
-  --surface-3:    #2a2f3a;
-  --border:       #2b303b;
-  --border-strong:#3a4150;
-  --ink:          #e8eaf0;
-  --ink-2:        #c4c8d2;
-  --muted:        #949aa8;
-  --faint:        #8b909d; /* AA: 4.9:1 on the dark surface */
-  --brand:        #7d8cff;
-  --brand-strong: #97a3ff;
-  --brand-soft:   #202748;
-  --brand-ink:    #0d0f14;
-  --pop:          #ff855f;
-  --pop-strong:   #ff9d7d;
-  --pop-soft:     #3a251c;
-  --match:        #ffd166;
-  --match-ink:    #2d2100;
-  --ok:           #45c07f;
-  --ok-soft:      #143020;
-  --warn:         #e0b25b;
-  --warn-soft:    #33280f;
-  --danger:       #f0857d;
-  --danger-soft:  #3a1c1a;
-  --danger-ink:   #3a1c1a; /* dark ink on the light-red dark-theme --danger fill */
-  /* per-kind hues -- brightened for the dark surface, matching the aliased four */
-  --k-reference:  #2dd4bf;
-  --k-decision:   #a78bfa;
-  --k-protocol:   #f2777b;
-  --k-stage:      #38bdf8;
-  --scrim:        rgba(0, 0, 0, 0.55);
+  --void:          #04050a;
+  --paper:         #07080e;
+  --surface:       rgba(13, 16, 24, 0.86);
+  --surface-solid: #0d1018;
+  --surface-2:     #131725;
+  --surface-3:     #1a1f30;
+  --border:        rgba(150, 160, 255, 0.10);
+  --border-strong: rgba(150, 160, 255, 0.19);
+  --sheen:         rgba(255, 255, 255, 0.05);
+  --ink:           #eceefb;
+  --ink-2:         #c1c6de;
+  --muted:         #9097b3;
+  --faint:         #7c83a3; /* AA: 4.8:1 on --surface-2 */
+  --brand:         #8e96ff;
+  --brand-strong:  #b0b6ff;
+  --brand-soft:    rgba(142, 150, 255, 0.14);
+  --brand-ink:     #0b0c14;
+  --violet:        #b99bff;
+  --pop:           #ff8a66;
+  --pop-strong:    #ffa98c;
+  --pop-soft:      rgba(255, 138, 102, 0.14);
+  --pop-ink:       #2a0d02;
+  --flow:          #5fe3f6;
+  --flow-soft:     rgba(95, 227, 246, 0.12);
+  --match:         #ffd166;
+  --match-ink:     #2d2100;
+  --ok:            #4fdc9e;
+  --ok-soft:       rgba(79, 220, 158, 0.13);
+  --warn:          #f7c065;
+  --warn-soft:     rgba(247, 192, 101, 0.13);
+  --danger:        #ff7486;
+  --danger-soft:   rgba(255, 116, 134, 0.14);
+  --danger-ink:    #2b0a10;
+  --live:          #4fdc9e;
+  --k-gotcha:      #ff8a66;
+  --k-constraint:  #8e96ff;
+  --k-convention:  #f07acb;
+  --k-reference:   #45d8c4;
+  --k-decision:    #b99bff;
+  --k-runbook:     #f7c065;
+  --k-protocol:    #ff7c8c;
+  --k-stage:       #5ec8ff;
+  --k-refuted:     #8b91ad;
+  --aurora-a:      rgba(118, 100, 255, 0.34);
+  --aurora-b:      rgba(40, 200, 230, 0.20);
+  --aurora-c:      rgba(255, 110, 150, 0.12);
+  --seam:          linear-gradient(to bottom, transparent, rgba(142, 150, 255, 0.55) 18%, rgba(95, 227, 246, 0.5) 55%, rgba(185, 155, 255, 0.4) 85%, transparent);
+  --grain-opacity: 0.05;
+  --stars-opacity: 0.32;
+  --scrim:         rgba(2, 3, 8, 0.62);
   --shadow-xs: none;
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-  --shadow-md: 0 4px 14px rgba(0, 0, 0, 0.40);
-  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --shadow-lg: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(150, 160, 255, 0.08);
+  --glow-brand: 0 0 0 1px rgba(142, 150, 255, 0.35), 0 8px 28px rgba(142, 150, 255, 0.28);
 }
 
 /* Honour OS preference when the app hasn't pinned a theme. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --paper:#101217; --surface:#181b22; --surface-2:#20242e; --surface-3:#2a2f3a;
-    --border:#2b303b; --border-strong:#3a4150; --ink:#e8eaf0; --ink-2:#c4c8d2;
-    --muted:#949aa8; --faint:#8b909d; --brand:#7d8cff; --brand-strong:#97a3ff;
-    --brand-soft:#202748; --brand-ink:#0d0f14; --pop:#ff855f; --pop-strong:#ff9d7d;
-    --pop-soft:#3a251c; --match:#ffd166; --match-ink:#2d2100; --ok:#45c07f; --ok-soft:#143020; --warn:#e0b25b;
-    --warn-soft:#33280f; --danger:#f0857d; --danger-soft:#3a1c1a; --danger-ink:#3a1c1a;
-    --k-reference:#2dd4bf; --k-decision:#a78bfa; --k-protocol:#f2777b; --k-stage:#38bdf8;
-    --scrim:rgba(0,0,0,0.55);
-    --shadow-xs:none; --shadow-sm:0 1px 2px rgba(0,0,0,0.35);
-    --shadow-md:0 4px 14px rgba(0,0,0,0.40); --shadow-lg:0 12px 32px rgba(0,0,0,0.55);
+    --void:#04050a; --paper:#07080e; --surface:rgba(13,16,24,0.86); --surface-solid:#0d1018;
+    --surface-2:#131725; --surface-3:#1a1f30; --border:rgba(150,160,255,0.10); --border-strong:rgba(150,160,255,0.19);
+    --sheen:rgba(255,255,255,0.05); --ink:#eceefb; --ink-2:#c1c6de; --muted:#9097b3; --faint:#7c83a3;
+    --brand:#8e96ff; --brand-strong:#b0b6ff; --brand-soft:rgba(142,150,255,0.14); --brand-ink:#0b0c14; --violet:#b99bff;
+    --pop:#ff8a66; --pop-strong:#ffa98c; --pop-soft:rgba(255,138,102,0.14); --pop-ink:#2a0d02;
+    --flow:#5fe3f6; --flow-soft:rgba(95,227,246,0.12); --match:#ffd166; --match-ink:#2d2100;
+    --ok:#4fdc9e; --ok-soft:rgba(79,220,158,0.13); --warn:#f7c065; --warn-soft:rgba(247,192,101,0.13);
+    --danger:#ff7486; --danger-soft:rgba(255,116,134,0.14); --danger-ink:#2b0a10; --live:#4fdc9e;
+    --k-gotcha:#ff8a66; --k-constraint:#8e96ff; --k-convention:#f07acb; --k-reference:#45d8c4; --k-decision:#b99bff;
+    --k-runbook:#f7c065; --k-protocol:#ff7c8c; --k-stage:#5ec8ff; --k-refuted:#8b91ad;
+    --aurora-a:rgba(118,100,255,0.34); --aurora-b:rgba(40,200,230,0.20); --aurora-c:rgba(255,110,150,0.12);
+    --seam:linear-gradient(to bottom, transparent, rgba(142,150,255,0.55) 18%, rgba(95,227,246,0.5) 55%, rgba(185,155,255,0.4) 85%, transparent);
+    --grain-opacity:0.05; --stars-opacity:0.32; --scrim:rgba(2,3,8,0.62);
+    --shadow-xs:none; --shadow-sm:0 1px 2px rgba(0,0,0,0.45);
+    --shadow-md:0 10px 30px rgba(0,0,0,0.45); --shadow-lg:0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(150,160,255,0.08);
+    --glow-brand:0 0 0 1px rgba(142,150,255,0.35), 0 8px 28px rgba(142,150,255,0.28);
   }
 }
 
@@ -182,25 +228,78 @@
    =========================================================================== */
 * { box-sizing: border-box; }
 
+html { background: var(--paper); }
 body {
   margin: 0;
+  position: relative;
+  min-height: 100vh;
   font-family: var(--font-sans);
   font-size: var(--text-base);
   line-height: var(--leading-normal);
   color: var(--text-primary);
-  background: var(--bg-page);
+  background: transparent;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+  text-rendering: optimizeLegibility;
 }
 
-a { color: var(--brand); text-decoration: none; }
-a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-underline-offset: 2px; }
+/* The sky. Three slow light pools drift behind everything; their brightness
+   follows --activity (the fleet's recent event rate, set by shell.js), so a
+   busy fleet reads as a brighter sky and an idle one settles to a dim glow.
+   Gradients only -- no filter: blur -- and the drift is a transform, so the
+   compositor carries it. The grain is a fixed, tiled noise layer above it. */
+body::before {
+  content: ""; position: fixed; inset: -25vmax; z-index: -2; pointer-events: none;
+  background:
+    radial-gradient(42vmax 26vmax at 68% 16%, var(--aurora-a), transparent 70%),
+    radial-gradient(30vmax 24vmax at 30% 42%, var(--aurora-b), transparent 70%),
+    radial-gradient(38vmax 26vmax at 86% 88%, var(--aurora-c), transparent 72%);
+  opacity: calc(0.62 + var(--activity) * 0.38);
+  transition: opacity 2.4s var(--ease-in-out);
+  animation: sky-drift 70s var(--ease-in-out) infinite alternate;
+  will-change: transform;
+}
+/* Star dust: three sparse tiled layers of pinpoint light at the sky's depth. */
+html::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: var(--stars-opacity, 0);
+  background-image:
+    radial-gradient(1px 1px at 23px 41px, var(--ink), transparent 60%),
+    radial-gradient(1px 1px at 137px 83px, var(--ink), transparent 60%),
+    radial-gradient(1.2px 1.2px at 71px 161px, var(--ink), transparent 60%),
+    radial-gradient(1px 1px at 211px 19px, var(--ink), transparent 60%),
+    radial-gradient(1.4px 1.4px at 283px 213px, var(--ink), transparent 60%),
+    radial-gradient(1px 1px at 331px 127px, var(--ink), transparent 60%);
+  background-size: 360px 260px;
+  animation: stars-breathe 9s var(--ease-in-out) infinite alternate;
+}
+@keyframes stars-breathe { from { opacity: var(--stars-opacity, 0); } to { opacity: calc(var(--stars-opacity, 0) * 0.55); } }
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 1.4 -0.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+@keyframes sky-drift {
+  0%   { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); }
+  50%  { transform: translate3d(3vmax, -2vmax, 0) rotate(6deg) scale(1.06); }
+  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg) scale(1.02); }
+}
 
-::selection { background: var(--brand-soft); }
+a { color: var(--brand); text-decoration: none; transition: color var(--dur-fast) var(--ease-out); }
+a:hover { text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--brand) 45%, transparent); text-underline-offset: 3px; }
+
+h1, h2, h3 { text-wrap: balance; }
+::selection { background: color-mix(in oklab, var(--brand) 32%, transparent); color: var(--ink); }
+* { scrollbar-width: thin; scrollbar-color: var(--border-strong) transparent; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--radius-pill); border: 3px solid transparent; background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }
 
-/* Faint dot-grid -- a nod to graph paper, used on login + empty states. */
-.dotgrid { background-image: radial-gradient(circle, var(--border-strong) 1px, transparent 1.2px); background-size: 15px 15px; }
+/* Faint dot-grid: star-chart paper for login and empty states. */
+.dotgrid {
+  background-image: radial-gradient(circle, color-mix(in oklab, var(--brand) 26%, transparent) 1px, transparent 1.3px);
+  background-size: 18px 18px;
+}
 
 /* ===========================================================================
    LAYOUT
@@ -222,9 +321,13 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 .sidebar {
   width: var(--sidebar-width);
   flex: 0 0 var(--sidebar-width);
-  background: var(--surface);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--surface-solid) 76%, transparent), color-mix(in oklab, var(--surface-solid) 58%, transparent));
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  backdrop-filter: blur(22px) saturate(150%);
   border-right: 1px solid var(--border);
-  padding: 14px 12px 14px;
+  z-index: 20;
+  padding: 16px 12px 14px;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -241,10 +344,11 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 .sidebar > * { flex-shrink: 0; }
 .side-head { display: flex; align-items: center; gap: 6px; min-height: 32px; }
 .brand {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-tight);
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 22px;
+  font-variation-settings: "SOFT" 100, "opsz" 72;
+  letter-spacing: -0.015em;
   padding: 2px 10px 0;
   display: flex;
   align-items: center;
@@ -255,9 +359,21 @@ a:hover { text-decoration: underline; text-decoration-color: var(--pop); text-un
 }
 a.brand:hover { text-decoration: none; }
 .brand-word { overflow: hidden; white-space: nowrap; }
-.brand .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--live); flex: none; }
-.brand-by { padding: 0 10px 12px 29px; font-size: var(--text-2xs); color: var(--faint); white-space: nowrap; overflow: hidden; }
-.brand-by span { font-family: var(--font-display); font-weight: 600; color: var(--muted); }
+/* The daemon's heart: a luminous orb whose halo breathes faster as the fleet
+   gets busier (--activity), and dims when the stream drops. */
+.brand .dot {
+  position: relative; width: 11px; height: 11px; border-radius: 50%; flex: none;
+  background: radial-gradient(circle at 35% 35%, #fff 0 12%, var(--live) 45%, color-mix(in oklab, var(--live) 70%, #000) 100%);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--live) 16%, transparent), 0 0 14px color-mix(in oklab, var(--live) 70%, transparent);
+}
+.brand .dot::after {
+  content: ""; position: absolute; inset: -5px; border-radius: 50%;
+  border: 1px solid color-mix(in oklab, var(--live) 55%, transparent); opacity: 0;
+}
+.brand .dot.on::after { animation: orb-halo calc(2.8s - var(--activity) * 1.6s) var(--ease-out) infinite; }
+@keyframes orb-halo { 0% { opacity: .9; transform: scale(.6); } 100% { opacity: 0; transform: scale(1.9); } }
+.brand-by { padding: 0 10px 14px 30px; font-size: var(--text-2xs); color: var(--faint); white-space: nowrap; overflow: hidden; letter-spacing: 0.02em; }
+.brand-by span { font-family: var(--font-mono); font-weight: 500; color: var(--muted); }
 .side-toggle {
   display: inline-grid; place-items: center; width: 28px; height: 28px; flex: none; padding: 0;
   border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent;
@@ -270,10 +386,10 @@ a.brand:hover { text-decoration: none; }
 /* The search-or-jump field: shaped like an input so it reads as "type here",
    but it is a button that opens the palette -- the palette is the input. */
 .side-search {
-  display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; margin: 0 0 10px;
-  padding: 6px 8px 6px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
-  background: var(--surface-2); color: var(--muted); font: inherit; font-size: var(--text-sm);
-  cursor: pointer; text-align: left;
+  display: flex; align-items: center; gap: 9px; width: 100%; min-height: 36px; margin: 0 0 8px;
+  padding: 6px 8px 6px 11px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink) 4%, transparent); color: var(--muted); font: inherit; font-size: var(--text-sm);
+  cursor: pointer; text-align: left; box-shadow: inset 0 1px 0 var(--sheen);
   transition: border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out);
 }
 .side-search:hover { border-color: var(--border-strong); color: var(--ink-2); }
@@ -285,31 +401,77 @@ a.brand:hover { text-decoration: none; }
 
 .nav { display: flex; flex-direction: column; gap: 1px; flex: 1 0 auto; }
 .nav-sec {
-  font-size: var(--text-2xs); text-transform: uppercase; letter-spacing: var(--tracking-wide); color: var(--faint);
-  font-weight: 600; padding: 14px 12px 4px; white-space: nowrap; overflow: hidden;
+  font-family: var(--font-mono); font-size: 10px; text-transform: uppercase; letter-spacing: 0.16em; color: var(--faint);
+  font-weight: 500; padding: 16px 12px 5px; white-space: nowrap; overflow: hidden;
 }
 .nav-sec:first-child { padding-top: 4px; }
 .nav a {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   padding: 7px 10px;
   border-radius: var(--radius-sm);
-  color: var(--text-primary);
+  color: var(--ink-2);
   font-weight: 500;
   white-space: nowrap;
   transition: background var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
 }
-.nav a:hover { background: var(--surface-2); text-decoration: none; }
+.nav a:hover { background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink); text-decoration: none; }
 .nav a:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
-.nav a.active { background: var(--brand-soft); color: var(--brand); }
+/* The active section is lit: a soft wash, a hairline, and a bar of light on
+   the Seam side that glides to the next section on navigation. */
+.nav a.active {
+  color: var(--ink);
+  background: linear-gradient(90deg, color-mix(in oklab, var(--brand) 20%, transparent), color-mix(in oklab, var(--brand) 5%, transparent) 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--brand) 22%, transparent);
+}
+.nav a.active::after {
+  content: ""; position: absolute; right: -12px; top: 7px; bottom: 7px; width: 3px; border-radius: 3px 0 0 3px;
+  background: linear-gradient(var(--brand), var(--flow));
+  box-shadow: 0 0 12px color-mix(in oklab, var(--brand) 80%, transparent), 0 0 3px var(--brand);
+}
 .nav-label { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.nav a .ico { color: var(--muted); transition: color var(--dur-fast) var(--ease-out); }
-.nav a:hover .ico { color: var(--text-secondary); }
-.nav a.active .ico { color: var(--brand); }
-.nav .count { font-size: var(--text-xs); color: var(--muted); font-variant-numeric: tabular-nums; }
+.nav a .ico { color: var(--muted); transition: color var(--dur-fast) var(--ease-out), filter var(--dur-med) var(--ease-out); }
+.nav a:hover .ico { color: var(--ink-2); }
+.nav a.active .ico { color: var(--brand); filter: drop-shadow(0 0 6px color-mix(in oklab, var(--brand) 70%, transparent)); }
+.nav .count { font-family: var(--font-mono); font-size: 11px; color: var(--faint); font-variant-numeric: tabular-nums; }
 .nav a.active .count { color: var(--brand); }
+.nav .count[data-zero] { opacity: .55; }
+
+/* A spark landed here: the section's icon takes the spark's colour and glows
+   for a beat (shell.js sets --land and restarts the class). */
+.nav a.landed .ico { animation: nav-land 1s var(--ease-out); }
+@keyframes nav-land {
+  0%   { color: var(--land, var(--brand)); filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
+  25%  { color: var(--land, var(--brand)); filter: drop-shadow(0 0 8px var(--land, var(--brand))); transform: scale(1.22); }
+  100% { filter: drop-shadow(0 0 0 transparent); transform: scale(1); }
+}
+
+/* ---- The Seam ---------------------------------------------------------------
+   A thread of light down the sidebar's edge. Each recorded event travels it as
+   a spark -- from the daemon's orb at the top to the section it belongs to --
+   coloured by what it is: context flowing (cyan), knowledge written (mint),
+   something wrong (coral), everything else (indigo). */
+.seam {
+  position: fixed; top: 0; bottom: 0; left: calc(var(--sidebar-width) - 1px); z-index: 25; width: 1px;
+  background: var(--seam); pointer-events: none;
+  opacity: calc(0.55 + var(--activity) * 0.45);
+  transition: left var(--dur-med) var(--ease-out), opacity 1.2s var(--ease-in-out);
+}
+.spark {
+  position: absolute; left: 50%; top: 0; width: 9px; height: 9px; margin: -4.5px 0 0 -4.5px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 24%, var(--spark, var(--brand)) 48%, transparent 74%);
+  box-shadow: 0 0 12px 3px var(--spark, var(--brand)), 0 0 30px 6px color-mix(in oklab, var(--spark, var(--brand)) 45%, transparent);
+  will-change: transform, opacity;
+}
+.spark::before {
+  content: ""; position: absolute; left: 50%; bottom: 50%; width: 2px; height: 64px; margin-left: -1px;
+  background: linear-gradient(to top, var(--spark, var(--brand)), transparent);
+  border-radius: 2px; opacity: .75;
+}
+.seam.horizontal .spark::before { left: auto; right: 50%; bottom: auto; top: 50%; width: 46px; height: 2px; margin: -1px 0 0; background: linear-gradient(to left, var(--spark, var(--brand)), transparent); }
+
 /* Settings closes the list, away from the daily sections. */
 .nav a.nav-settings { margin-top: auto; }
 .nav .nav-sec + a.nav-settings, .nav a + a.nav-settings { margin-top: auto; }
@@ -329,6 +491,7 @@ a.brand:hover { text-decoration: none; }
 :root[data-sidebar="collapsed"] .side-toggle .ico { transform: scaleX(-1); }
 :root[data-sidebar="collapsed"] .side-search { justify-content: center; padding: 6px 0; margin-top: 10px; }
 :root[data-sidebar="collapsed"] .nav a { justify-content: center; padding: 9px 0; }
+:root[data-sidebar="collapsed"] .nav a.active::after { right: -10px; }
 :root[data-sidebar="collapsed"] .nav-label {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
@@ -401,7 +564,7 @@ body:has(.main[aria-busy="true"]) .nav-progress { opacity: 1; animation: nav-pro
 :root:not([data-theme="light"]) .tt-ico.ico-light { display: inline-flex; }
 
 /* Theme toggle + sign-out are pinned to the sidebar bottom. */
-.side-foot { margin-top: auto; padding: 14px 8px 0; border-top: 1px solid var(--border); }
+.side-foot { margin-top: auto; padding: 12px 0 0; border-top: 1px solid var(--border); }
 
 /* One account row rather than two floating buttons: who this console belongs
    to, and the two things the owner can do about it. The action buttons are a
@@ -409,12 +572,13 @@ body:has(.main[aria-busy="true"]) .nav-progress { opacity: 1; animation: nav-pro
    just clicked it. */
 .account {
   display: flex; align-items: center; gap: 8px; padding: 6px 7px;
-  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink) 3%, transparent); box-shadow: inset 0 1px 0 var(--sheen);
 }
 .account-dot {
-  width: 22px; height: 22px; flex: none; border-radius: 50%;
-  background: color-mix(in oklab, var(--brand) 22%, var(--surface));
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--brand) 38%, transparent);
+  width: 24px; height: 24px; flex: none; border-radius: 50%;
+  background: conic-gradient(from 210deg, var(--brand), var(--flow), var(--violet), var(--brand));
+  box-shadow: inset 0 0 0 2px color-mix(in oklab, var(--surface-solid) 70%, transparent), 0 0 12px color-mix(in oklab, var(--brand) 35%, transparent);
 }
 .account-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.2; }
 .account-copy strong { font-size: var(--text-xs); font-weight: 650; color: var(--text-primary); }
@@ -979,6 +1143,11 @@ details > summary { font-family: var(--font-display); }
   :root[data-sidebar="collapsed"] .account { flex-direction: row; padding: 6px 7px; border-color: var(--border); background: var(--surface); }
   #side-toggle { display: none; }
   .drawer-close { display: inline-grid; }
+  /* On a phone the Seam runs under the bar, and sparks travel along it. */
+  .seam {
+    top: 52px; left: 0; right: 0; bottom: auto; width: auto; height: 1px;
+    background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--brand) 70%, transparent) 20%, color-mix(in oklab, var(--flow) 70%, transparent) 60%, transparent);
+  }
   .sidebar .side-search kbd { display: none; }
   .nav a { padding: 9px 10px; }
   .main { padding: 18px 16px 56px; }
@@ -5183,4 +5352,530 @@ a.checkin-chip:hover { border-color: var(--brand); color: var(--brand); text-dec
   .now-grid { grid-template-columns: minmax(0, 1fr); }
   .now-agents { grid-template-columns: minmax(0, 1fr); }
   .now-titlebar { flex-wrap: wrap; gap: 8px 16px; }
+}
+
+/* ===========================================================================
+   LUMINOUS LAYER (2026-09 UI redesign)
+
+   Appended last on purpose: equal-specificity rules here supersede the older
+   layers above without rewriting them. Everything is tokens; the dark theme is
+   the night observatory, the light theme the daylight one. Motion plays once
+   on arrival (page reveal, count-up) or answers a real event (the Seam, live
+   rows); prefers-reduced-motion stills all of it.
+   =========================================================================== */
+
+/* ---- Arrival: the page settles in, section by section ----------------------
+   shell.js sets html.reveal on first paint and removes it after the sequence,
+   so live-morph insertions never replay it (they get .live-in instead). */
+@keyframes rise-in { from { opacity: 0; transform: translate3d(0, 10px, 0); } }
+.reveal .main > *,
+.reveal .main > div > * { animation: rise-in .6s var(--ease-out) both; }
+.reveal .main > div > :nth-child(2) { animation-delay: 50ms; }
+.reveal .main > div > :nth-child(3) { animation-delay: 100ms; }
+.reveal .main > div > :nth-child(4) { animation-delay: 150ms; }
+.reveal .main > div > :nth-child(5) { animation-delay: 200ms; }
+.reveal .main > div > :nth-child(6) { animation-delay: 250ms; }
+.reveal .main > div > :nth-child(n+7) { animation-delay: 300ms; }
+::view-transition-new(main) { animation: vt-in 220ms var(--ease-out) both; }
+@keyframes vt-in { from { opacity: 0; } }
+
+/* ---- Titles ------------------------------------------------------------------
+   Every screen's h1 is set in Fraunces, soft and optical-sized, beside its icon
+   lit in a small glass tile tinted with the screen's accent. */
+.main h1 {
+  font-family: var(--font-serif);
+  font-weight: 560;
+  font-variation-settings: "SOFT" 60, "opsz" 72;
+  letter-spacing: -0.022em;
+  color: var(--ink);
+}
+.mv2-bar h1, .ov2-titlebar h1, .now-titlebar h1 { font-size: 31px; line-height: 1.1; gap: 13px; }
+.mv2-bar h1 > .ico, .ov2-titlebar h1 > .ico, .now-titlebar h1 > .ico {
+  width: 36px; height: 36px; padding: 8.5px; flex: none; border-radius: 12px;
+  color: var(--lib-accent, var(--brand));
+  background:
+    radial-gradient(circle at 30% 18%, color-mix(in oklab, currentColor 34%, transparent), transparent 70%),
+    color-mix(in oklab, currentColor 9%, var(--surface-solid));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 30%, transparent), 0 6px 22px color-mix(in oklab, currentColor 22%, transparent);
+}
+.ov2-titlebar h1 > .ico { color: var(--brand); }
+.now-titlebar h1 > .ico { color: var(--ok); }
+
+/* The title bar rests on a horizon: a hairline that fades out at both ends and
+   carries a little of the accent light in its middle. */
+.mv2-bar, .ov2-titlebar, .now-titlebar {
+  position: relative; border-bottom: 0; padding-bottom: 16px; margin-bottom: 20px;
+}
+.mv2-bar::after, .ov2-titlebar::after, .now-titlebar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--border-strong) 12%, color-mix(in oklab, var(--lib-accent, var(--brand)) 45%, var(--border-strong)) 50%, var(--border-strong) 88%, transparent);
+}
+.mv2-count { color: var(--muted); }
+.mv2-count strong {
+  font-family: var(--font-serif); font-weight: 560; font-size: 19px; font-variation-settings: "opsz" 36;
+  font-variant-numeric: lining-nums tabular-nums; margin-right: 4px;
+}
+.mv2-count small { color: var(--faint); }
+.mv2-sort-label, .lib-control-label {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; color: var(--faint);
+}
+
+/* ---- Surfaces ----------------------------------------------------------------
+   Panels are lit from the top edge (--sheen), faintly see-through in the dark
+   so the sky reads behind them, and rounder. Link-cards also carry a cursor
+   spotlight (shell.js tracks --mx/--my on .lit). */
+.card, .ov2-panel, .ov2-vital, .ov2-attn-card, .table-wrap, .reader-sheet, .sess-list, .search-results,
+.ops-stage .sess-list, .lib-rail, .now-zone, .now-card, .project-summary-card, .mom-cal, .ix-volume, .ix-row,
+.context-scope-card, .retrieval-flow-panel, .retrieval-panel, .registry-panel, .gardener-request-card,
+.login-intro, .login-card, .login-config, .ov2-live {
+  border-color: var(--border);
+  box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-sm);
+}
+.card, .ov2-panel, .ov2-vital, .ov2-attn-card, .reader-sheet, .table-wrap, .search-results, .now-zone,
+.project-summary-card, .mom-cal, .context-scope-card, .retrieval-flow-panel, .retrieval-panel, .registry-panel {
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(180deg, color-mix(in oklab, var(--ink) 2.5%, transparent), transparent 140px),
+    var(--surface);
+}
+/* The flashlight: hovering a panel lights it from the pointer (shell.js keeps
+   --mx/--my current). Layered into the panel's own background, so there is no
+   pseudo-element to collide with a panel's existing decoration. */
+:is(.ov2-vital, .project-summary-card, .ov2-panel, .card, .now-zone, .context-scope-card, .retrieval-panel, .search-results):hover {
+  background:
+    radial-gradient(440px circle at var(--mx, 50%) var(--my, -40%), color-mix(in oklab, var(--brand) 10%, transparent), transparent 62%),
+    linear-gradient(180deg, color-mix(in oklab, var(--ink) 2.5%, transparent), transparent 140px),
+    var(--surface);
+}
+a.ov2-vital:hover, a.ov2-attn-card:hover, a.project-summary-card:hover { border-color: color-mix(in oklab, var(--brand) 34%, var(--border)); }
+
+/* ---- Numbers -----------------------------------------------------------------
+   Hero numerals are Fraunces lining figures: the number is the headline. */
+.ov2-vital-num strong, .stat .value, .now-tape-cell > strong, .project-summary-copy strong, .hov-v,
+.rv-hero-num, .checkin-chip strong, .retrieval-hero strong, .session-signal strong {
+  font-family: var(--font-serif);
+  font-weight: 540;
+  font-variation-settings: "SOFT" 30, "opsz" 96;
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ---- Controls ----------------------------------------------------------------
+   Segmented controls are a recessed track; the chosen option is a lit chip. */
+.seg, .ov2-window-tabs {
+  gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink) 4%, transparent); box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+.seg a, .seg button, .ov2-window-tabs a {
+  border: 0; border-radius: 8px; background: transparent; color: var(--muted);
+  font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600; padding: 5px 11px;
+  transition: color var(--dur-fast) var(--ease-out), background var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out);
+}
+.seg a:hover, .seg button:hover, .ov2-window-tabs a:hover { color: var(--ink); background: color-mix(in oklab, var(--ink) 5%, transparent); text-decoration: none; }
+.seg a.on, .seg button.on, .ov2-window-tabs a.active, .lib-page .seg a.on {
+  color: var(--ink);
+  background: linear-gradient(180deg, color-mix(in oklab, var(--lib-accent, var(--brand)) 24%, var(--surface-solid)), color-mix(in oklab, var(--lib-accent, var(--brand)) 12%, var(--surface-solid)));
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--lib-accent, var(--brand)) 40%, transparent), 0 2px 10px color-mix(in oklab, var(--lib-accent, var(--brand)) 22%, transparent);
+}
+
+.btn {
+  border-radius: var(--radius-sm); border-color: var(--border-strong);
+  background: color-mix(in oklab, var(--ink) 4%, var(--surface-solid)); color: var(--ink);
+  box-shadow: inset 0 1px 0 var(--sheen), 0 1px 2px rgba(0, 0, 0, 0.12);
+  transition: background var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), box-shadow var(--dur-med) var(--ease-out), transform var(--dur-fast) var(--ease-out);
+}
+.btn:hover { background: color-mix(in oklab, var(--ink) 8%, var(--surface-solid)); border-color: color-mix(in oklab, var(--brand) 35%, var(--border-strong)); }
+.btn:active { transform: translateY(1px); }
+.btn.primary, button.btn[type="submit"].primary {
+  color: var(--brand-ink); border-color: transparent;
+  background: linear-gradient(135deg, var(--brand), var(--violet));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), var(--glow-brand);
+}
+.btn.primary:hover { filter: brightness(1.08); background: linear-gradient(135deg, var(--brand), var(--violet)); }
+.btn.pop { background: linear-gradient(135deg, var(--pop), color-mix(in oklab, var(--pop) 70%, var(--violet))); border-color: transparent; color: var(--pop-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25), 0 6px 20px color-mix(in oklab, var(--pop) 30%, transparent); }
+.btn.pop:hover, .btn.pop:active { filter: brightness(1.06); color: var(--pop-ink); background: linear-gradient(135deg, var(--pop), color-mix(in oklab, var(--pop) 70%, var(--violet))); }
+.btn.small { border-radius: 7px; }
+
+.search, .lib-query, .ops-select, select, .err-search, .ix-history-picker select {
+  border-color: var(--border); border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--ink) 4%, var(--surface-solid));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.14);
+}
+.search:focus-within, .lib-query:focus-within, .err-search:focus-within {
+  border-color: color-mix(in oklab, var(--lib-accent, var(--brand)) 60%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--lib-accent, var(--brand)) 16%, transparent), 0 0 24px color-mix(in oklab, var(--lib-accent, var(--brand)) 14%, transparent);
+}
+
+/* Chips: domain enums stay lowercase mono (data), event names stay sans
+   (prose); both are translucent pills with a hairline. */
+.kind, .badge, .agent-pill, .chip-parent {
+  border: 1px solid var(--border); background: color-mix(in oklab, var(--ink) 5%, transparent);
+}
+.kind { border-radius: 7px; }
+.badge.ok { border-color: color-mix(in oklab, var(--ok) 28%, transparent); }
+.badge.warn { border-color: color-mix(in oklab, var(--warn) 28%, transparent); }
+.badge.danger { border-color: color-mix(in oklab, var(--danger) 30%, transparent); }
+.badge.accent, .badge.brand { border-color: color-mix(in oklab, var(--brand) 30%, transparent); }
+.badge.pop { border-color: color-mix(in oklab, var(--pop) 30%, transparent); }
+.kindchip {
+  display: inline-flex; align-items: center; gap: 0; padding: 2px 9px 2px 7px; border-radius: var(--radius-pill);
+  font-family: var(--font-sans); font-size: var(--text-xs); font-weight: 600; letter-spacing: 0; color: var(--ink-2);
+  background: color-mix(in oklab, var(--ink) 5%, transparent); border: 1px solid var(--border);
+}
+.ov2-evt[data-sev="inject"] .kindchip, .now-evt[data-sev="inject"] .kindchip { color: var(--flow); border-color: color-mix(in oklab, var(--flow) 30%, transparent); background: var(--flow-soft); }
+.ov2-evt[data-sev="write"] .kindchip { color: var(--ok); border-color: color-mix(in oklab, var(--ok) 30%, transparent); background: var(--ok-soft); }
+.ov2-evt[data-sev="danger"] .kindchip { color: var(--danger); border-color: color-mix(in oklab, var(--danger) 30%, transparent); background: var(--danger-soft); }
+kbd { border-radius: 6px; border-color: var(--border-strong); background: color-mix(in oklab, var(--ink) 6%, transparent); color: var(--ink-2); font-family: var(--font-mono); box-shadow: inset 0 -1px 0 var(--border-strong); }
+
+/* The live marker is a small lit orb with a halo. */
+.live-dot {
+  width: 7px; height: 7px; background: var(--live);
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--live) 18%, transparent), 0 0 10px color-mix(in oklab, var(--live) 70%, transparent);
+}
+
+/* ---- Tables and rows -------------------------------------------------------- */
+th {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.12em; color: var(--faint);
+}
+td { border-bottom-color: var(--border); }
+tbody tr:hover, tbody tr.row-link:hover { background: color-mix(in oklab, var(--brand) 5%, transparent); }
+tbody tr.row-link:hover td:first-child { box-shadow: inset 2px 0 0 var(--brand); }
+
+/* ---- Library rails and readers ---------------------------------------------- */
+.lib-rail { --rail-bg: var(--paper); }
+.rail-item { border-radius: 10px; }
+.rail-item:hover { background: color-mix(in oklab, var(--ink) 5%, transparent); }
+.rail-item.selected, .rail-item.selected:hover {
+  background: linear-gradient(90deg, color-mix(in oklab, var(--lib-item-accent) 18%, transparent), color-mix(in oklab, var(--lib-item-accent) 4%, transparent));
+  box-shadow: inset 3px 0 0 var(--lib-item-accent), inset 0 0 0 1px color-mix(in oklab, var(--lib-item-accent) 22%, transparent);
+}
+.rail-group-hd { font-family: var(--font-mono); letter-spacing: 0.12em; color: var(--ink-2); }
+.rail-overview { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; }
+.reader-sheet { border-radius: var(--radius-xl); }
+.reader-sheet::before { height: 2px; background: linear-gradient(90deg, transparent, var(--lib-item-accent), transparent); opacity: 1; }
+.reader-sheet::after {
+  content: ""; position: absolute; inset: 0 0 auto; height: 160px; pointer-events: none; z-index: 0;
+  background: radial-gradient(60% 100% at 50% 0%, color-mix(in oklab, var(--lib-item-accent) 12%, transparent), transparent 70%);
+}
+.reader-sheet > * { position: relative; z-index: 1; }
+.reader-title { font-family: var(--font-serif); font-weight: 560; font-variation-settings: "SOFT" 60, "opsz" 72; letter-spacing: -0.02em; }
+.reader-title.mono-title { font-family: var(--font-mono); font-weight: 600; letter-spacing: -0.01em; }
+.reader-nav {
+  border-radius: var(--radius-md); border-color: var(--border);
+  background: color-mix(in oklab, var(--surface-solid) 80%, transparent); box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-sm);
+}
+.prose.doc { font-size: 15.5px; line-height: 1.78; color: var(--ink-2); }
+.prose.doc h1, .prose.doc h2, .prose.doc h3 { font-family: var(--font-serif); font-weight: 580; color: var(--ink); letter-spacing: -0.015em; }
+.prose.doc code { font-family: var(--font-mono); border: 1px solid var(--border); border-radius: 6px; padding: 1px 5px; }
+.prose.doc pre { border: 1px solid var(--border); border-radius: var(--radius-md); background: color-mix(in oklab, var(--ink) 4%, var(--surface-solid)); }
+.prose.doc blockquote { border-left: 2px solid var(--lib-item-accent, var(--brand)); color: var(--muted); font-style: italic; }
+.prose.doc a { text-decoration: underline; text-decoration-color: color-mix(in oklab, var(--brand) 40%, transparent); text-underline-offset: 3px; }
+
+/* ---- Overlays: palette, sheet, menus, toasts ---------------------------------
+   Glass over a dimmed sky, with a lit top edge. */
+.cmdk-overlay, .keys-overlay { background: var(--scrim); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+.cmdk, .keys, .menu-list, .page-about-pop, .hov-tip, .side-tip, .chord-hint, #live-toast, .detail-pane {
+  background: color-mix(in oklab, var(--surface-solid) 92%, transparent);
+  -webkit-backdrop-filter: blur(18px) saturate(140%); backdrop-filter: blur(18px) saturate(140%);
+  border-color: var(--border-strong);
+}
+.cmdk, .keys { border-radius: var(--radius-xl); box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-lg), 0 0 80px color-mix(in oklab, var(--brand) 12%, transparent); animation: sheet-in 220ms var(--ease-spring) both; }
+@keyframes sheet-in { from { opacity: 0; transform: translateY(-8px) scale(.985); } }
+.cmdk::before, .keys::before {
+  content: ""; display: block; height: 1px; margin: 0 18%;
+  background: linear-gradient(90deg, transparent, var(--brand), var(--flow), transparent); opacity: .8;
+}
+.cmdk-input-row { padding: 15px 16px; }
+.cmdk-input-row input { font-size: 16px; }
+.cmdk-group { font-family: var(--font-mono); font-size: 10px; font-weight: 500; letter-spacing: 0.14em; color: var(--faint); }
+.cmdk-opt { border-radius: 10px; padding: 8px 10px; }
+.cmdk-opt.selected { background: linear-gradient(90deg, color-mix(in oklab, var(--brand) 20%, transparent), color-mix(in oklab, var(--brand) 5%, transparent)); box-shadow: inset 2px 0 0 var(--brand); }
+.cmdk-foot { background: color-mix(in oklab, var(--ink) 3%, transparent); }
+.side-tip { color: var(--ink); background: color-mix(in oklab, var(--surface-solid) 94%, transparent); border: 1px solid var(--border-strong); }
+#live-toast { border-radius: var(--radius-pill); box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-lg); }
+#live-toast.show { animation: toast-in 380ms var(--ease-spring) both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+#live-toast::before { box-shadow: 0 0 10px var(--ok); }
+#live-toast.error::before { box-shadow: 0 0 10px var(--danger); }
+#live-pill { border: 0; background: linear-gradient(135deg, var(--brand), var(--violet)); box-shadow: var(--glow-brand); }
+
+/* ---- Charts: lines glow, the latest point breathes ---------------------------- */
+.area-line { filter: drop-shadow(0 0 6px color-mix(in oklab, currentColor 60%, transparent)); }
+.ov2-spark { color: var(--brand); overflow: visible; }
+.ov2-spark.ok { color: var(--ok); }
+.ov2-spark polyline { stroke: currentColor; filter: drop-shadow(0 0 4px color-mix(in oklab, currentColor 55%, transparent)); }
+.ov2-spark .spark-fill { fill: currentColor; stroke: none; opacity: .13; }
+.ov2-spark .spark-head { fill: currentColor; stroke: var(--surface-solid); stroke-width: 1.2; }
+.area-head-halo { transform-box: fill-box; transform-origin: center; animation: head-halo 2.4s var(--ease-out) infinite; }
+@keyframes head-halo { 0% { opacity: .7; transform: scale(1); } 100% { opacity: 0; transform: scale(3.2); } }
+.ov2-track, .legend-bar, .reach-track { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.ov2-track > i { background: linear-gradient(90deg, var(--brand), var(--flow)); box-shadow: 0 0 10px color-mix(in oklab, var(--brand) 50%, transparent); }
+
+/* ---- Empty states ------------------------------------------------------------- */
+.empty, .reader-empty, .ov2-panel-empty {
+  border-color: var(--border); background: color-mix(in oklab, var(--ink) 2%, transparent);
+}
+.empty-ico .ico, .ov2-panel-empty .ico { color: var(--brand); filter: drop-shadow(0 0 10px color-mix(in oklab, var(--brand) 55%, transparent)); }
+
+/* ---- Focus: one ring everywhere ----------------------------------------------- */
+:focus-visible { outline: none; }
+a:focus-visible, button:focus-visible, summary:focus-visible, [tabindex]:focus-visible { box-shadow: var(--shadow-focus); border-radius: 6px; }
+
+/* ---- The knowledge sky (Overview) --------------------------------------------
+   One galaxy per scope; stars are memories. Brighter = used more (utility, then
+   injections); warm stars reached an agent in the last day and twinkle; a star
+   flares when a live injection names it. */
+.sky-panel { overflow: hidden; margin-bottom: 18px; }
+.sky-panel .ov2-panel-head { align-items: baseline; }
+.sky-sub { color: var(--faint); font-size: var(--text-xs); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky {
+  position: relative; margin: 0 10px; border-radius: var(--radius-md);
+  background:
+    radial-gradient(120% 90% at 50% 110%, color-mix(in oklab, var(--brand) 10%, transparent), transparent 60%),
+    radial-gradient(1px 1px at 12% 22%, color-mix(in oklab, var(--ink) 55%, transparent), transparent),
+    radial-gradient(1px 1px at 33% 71%, color-mix(in oklab, var(--ink) 40%, transparent), transparent),
+    radial-gradient(1px 1px at 58% 12%, color-mix(in oklab, var(--ink) 45%, transparent), transparent),
+    radial-gradient(1px 1px at 79% 64%, color-mix(in oklab, var(--ink) 38%, transparent), transparent),
+    radial-gradient(1px 1px at 91% 28%, color-mix(in oklab, var(--ink) 50%, transparent), transparent),
+    radial-gradient(1.5px 1.5px at 44% 44%, color-mix(in oklab, var(--ink) 35%, transparent), transparent);
+}
+.sky-svg { display: block; width: 100%; height: auto; max-height: 360px; overflow: visible; }
+.sky-neb { opacity: calc(0.75 + var(--activity) * 0.25); transition: opacity 2s var(--ease-in-out); }
+.sky-line { fill: none; stroke: color-mix(in oklab, var(--ink) 22%, transparent); stroke-width: 0.8; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
+.star { transform-box: fill-box; transform-origin: center; transition: r var(--dur-slow) var(--ease-out); cursor: pointer; }
+.star.bright { filter: url(#sky-glow); }
+.star.warm { animation: twinkle 3.2s var(--ease-in-out) infinite; animation-delay: var(--tw, 0s); }
+@keyframes twinkle { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.star-link:hover .star { filter: url(#sky-glow); stroke: var(--ink); stroke-width: 0.8; }
+.star.flare { animation: star-flare 1.6s var(--ease-out); filter: url(#sky-glow); }
+@keyframes star-flare {
+  0% { transform: scale(1); opacity: 1; }
+  18% { transform: scale(3.2); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.sky-label { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; }
+.sky-count { fill: var(--faint); letter-spacing: 0; }
+.sky-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; padding: 12px 16px 14px; border-top: 1px solid var(--border); margin-top: 8px; }
+.sky-kind { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-family: var(--font-mono); font-size: var(--text-2xs); }
+.sky-kind:hover { color: var(--ink); text-decoration: none; }
+.sky-kind .kdot { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+.sky-kind b { color: var(--ink-2); font-weight: 600; }
+.sky-tip {
+  position: fixed; z-index: 96; pointer-events: none; display: flex; flex-direction: column; gap: 2px;
+  max-width: 340px; padding: 8px 12px; border-radius: var(--radius-md);
+  background: color-mix(in oklab, var(--surface-solid) 94%, transparent); border: 1px solid var(--border-strong);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: var(--shadow-lg), 0 0 0 1px color-mix(in oklab, var(--c, var(--brand)) 30%, transparent);
+  animation: seam-pop var(--dur-fast) var(--ease-out) both;
+}
+.sky-tip strong { font-family: var(--font-mono); font-size: var(--text-xs); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sky-tip span { font-size: var(--text-2xs); color: var(--muted); }
+.sky-tip::before { content: ""; position: absolute; left: 10px; top: 10px; bottom: 10px; width: 2px; margin-left: -8px; border-radius: 2px; background: var(--c, var(--brand)); box-shadow: 0 0 8px var(--c, var(--brand)); }
+
+/* ---- Editorial panel titles ---------------------------------------------------
+   Panel and zone headings are Fraunces too, a size down from the page title. */
+.ov2-panel-head h2, .now-zone-head h2, .card > h2:not(.h2-flat), .session-card-head h2, .event-card-head h2 {
+  font-family: var(--font-serif); font-weight: 560; font-variation-settings: "SOFT" 50, "opsz" 36;
+  font-size: 17px; letter-spacing: -0.01em; text-transform: none; color: var(--ink);
+}
+.ov2-panel-head a, .now-zone-head a { font-weight: 600; }
+
+/* ---- One instrument voice for small labels --------------------------------
+   Every eyebrow, kicker, column head, and field label speaks in Plex Mono at
+   one size and tracking. Each keeps its own accent colour. */
+.board-colhd, .brief-group > header span:not(.brief-group-icon), .briefing-title > div > span, .budget-stat small,
+.context-family-card > header small, .context-flow-column h3, .context-picker label, .context-pool-strip small,
+.context-rule-label, .context-section-kicker, .embedder-facts > div > span, .event-card-eyebrow, .event-detail-eyebrow,
+.event-raw-card > summary small, .family-dialog-head > div > span, .funnel .step .l, .gardener-composer-title,
+.gardener-examples > span, .gardener-fenced-note > div > span, .gardener-request-origin > span, .gardener-retarget label,
+.gardener-scope > span, .gardener-split-controls label, .grp-hd, .ix-chip-k, .ix-section-title, .login-kicker,
+.login-section-label, .mem-index .hd, .metricbar .k, .now-tape-label, .ops-stage-eyebrow, .ov2-attn-label,
+.ov2-live-label, .ov2-vital-label, .plan-ledger .lbl, .project-card-label, .project-summary-copy > span,
+.proposal-document-head > div > span, .proposal-memory > span, .proposal-move-map div > span,
+.proposal-object > div:nth-child(2) > span, .proposal-project > span, .proposal-query-list > span, .proposal-reason > span,
+.proposal-source-list > span, .proposal-target-projects > div > span, .registry-panel-head > div > span,
+.retrieval-coverage-copy > span, .retrieval-instrument-copy > span, .retrieval-instrument-metrics > div > span,
+.retrieval-memory-metrics span, .retrieval-panel-head > div > span, .retrieval-reach-core span, .retrieval-zone-kicker,
+.runtime-card-head > div > span, .search-control-label, .search-sort label, .session-card-eyebrow, .session-detail-eyebrow,
+.session-peek-facts small, .session-peek-section-head > div > span, .session-work-section h3, .settings-mode > span,
+.settings-zone-kicker, .stale-strip .lab, .stat .label, .workspace-cell-label, .workspace-columns span {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; letter-spacing: 0.13em;
+}
+.ov2-evt .kindchip, .now-evt .kindchip { font-family: var(--font-sans); letter-spacing: 0; text-transform: none; }
+
+/* ---- Numbered zones (Retrieval, Settings) ------------------------------------
+   The index becomes an italic serif numeral in a ring of light, not a badge. */
+.retrieval-zone-index, .settings-zone-index {
+  font-family: var(--font-serif); font-style: italic; font-weight: 500; font-size: 18px;
+  font-variation-settings: "SOFT" 100, "opsz" 36; letter-spacing: 0; color: var(--brand);
+  border: 0; background:
+    radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--brand) 16%, transparent), transparent 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--brand) 38%, transparent), 0 0 22px color-mix(in oklab, var(--brand) 22%, transparent);
+}
+.retrieval-zone-head h2, .settings-zone-head h2 {
+  font-family: var(--font-serif); font-weight: 560; font-variation-settings: "SOFT" 60, "opsz" 48;
+  font-size: 23px; letter-spacing: -0.015em;
+}
+.retrieval-zone-head, .settings-zone-head { border-bottom-color: transparent; position: relative; }
+.retrieval-zone-head::after, .settings-zone-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px;
+  background: linear-gradient(90deg, color-mix(in oklab, var(--brand) 40%, transparent), var(--border) 30%, transparent);
+}
+
+/* ---- Liveness ---------------------------------------------------------------
+   What is live looks live: live dots ping, live sessions keep a heartbeat, and
+   an agent mid-flight on Now has light orbiting its card (amber and slower once
+   it cools; nothing once it is quiet). */
+.live-dot { position: relative; }
+.live-dot::after {
+  content: ""; position: absolute; inset: -1px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 0 color-mix(in oklab, var(--live) 60%, transparent);
+  animation: live-ping 2.4s var(--ease-out) infinite;
+}
+@keyframes live-ping { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--live) 55%, transparent); } 100% { box-shadow: 0 0 0 8px transparent; } }
+.sess-state.live { animation: heartbeat 1.8s var(--ease-in-out) infinite; }
+@keyframes heartbeat {
+  0%, 100% { box-shadow: 0 0 0 4px var(--ok-soft), 0 0 0 0 transparent; }
+  30% { box-shadow: 0 0 0 4px var(--ok-soft), 0 0 12px 3px color-mix(in oklab, var(--ok) 55%, transparent); }
+}
+
+@property --orbit { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.now-agent {
+  position: relative; border-left-width: 1px; border-color: var(--border); border-radius: var(--radius-lg);
+  background:
+    radial-gradient(120% 70% at 0% 0%, color-mix(in oklab, var(--ok) 9%, transparent), transparent 60%),
+    var(--surface);
+  box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-sm);
+}
+.now-agent[data-fresh="warm"] { background: radial-gradient(120% 70% at 0% 0%, color-mix(in oklab, var(--warn) 8%, transparent), transparent 60%), var(--surface); }
+.now-agent[data-fresh="quiet"] { background: var(--surface); }
+.now-agent[data-fresh="hot"]::before, .now-agent[data-fresh="warm"]::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px; pointer-events: none;
+  background: conic-gradient(from var(--orbit), transparent 0deg, var(--orbit-c, var(--ok)) 50deg, transparent 110deg, transparent 360deg);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  animation: orbit 4.8s linear infinite;
+}
+.now-agent[data-fresh="warm"]::before { --orbit-c: var(--warn); animation-duration: 9s; opacity: .7; }
+@keyframes orbit { to { --orbit: 360deg; } }
+.now-claim { border-radius: 10px; border-color: var(--border); background: color-mix(in oklab, var(--ink) 4%, transparent); }
+.now-claim .lease { font-family: var(--font-mono); }
+
+/* Interactions, listening: a sweep of light crosses the empty stream. */
+.ix-empty { position: relative; overflow: hidden; }
+.ix-empty::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 30%, color-mix(in oklab, var(--brand) 8%, transparent) 50%, transparent 70%);
+  transform: translateX(-100%); animation: listen-sweep 3.6s var(--ease-in-out) infinite;
+}
+@keyframes listen-sweep { to { transform: translateX(100%); } }
+.ix-empty .empty-ico { position: relative; }
+.ix-empty .empty-ico::before, .ix-empty .empty-ico::after {
+  content: ""; position: absolute; inset: -6px; border-radius: 16px; pointer-events: none;
+  border: 1px solid color-mix(in oklab, var(--brand) 40%, transparent); opacity: 0;
+  animation: listen-ring 2.6s var(--ease-out) infinite;
+}
+.ix-empty .empty-ico::after { animation-delay: 1.3s; }
+@keyframes listen-ring { 0% { opacity: .8; transform: scale(.85); } 100% { opacity: 0; transform: scale(1.6); } }
+
+/* ---- Login: the observatory ---------------------------------------------------
+   A field of stars and three constellations twinkle and drift behind glass; the
+   headline is the product's promise, set large, with its verb lit. */
+.login-wrap { background: transparent; isolation: isolate; }
+.login-sky { position: absolute; inset: 0; z-index: -1; pointer-events: none; overflow: hidden; }
+.login-sky-svg { width: 100%; height: 100%; animation: login-drift 90s var(--ease-in-out) infinite alternate; }
+@keyframes login-drift { from { transform: scale(1.04) translate3d(-1%, -1%, 0); } to { transform: scale(1.08) translate3d(1%, 1%, 0); } }
+.ls-star { fill: var(--ink); opacity: .55; animation: ls-twinkle 5s var(--ease-in-out) infinite; animation-delay: var(--d, 0s); }
+.ls-fig { fill: var(--brand-strong); opacity: .9; filter: drop-shadow(0 0 4px var(--brand)); }
+.ls-line { fill: none; stroke: color-mix(in oklab, var(--brand) 45%, transparent); stroke-width: 1; stroke-dasharray: 3 5; }
+@keyframes ls-twinkle { 0%, 100% { opacity: .55; } 50% { opacity: .15; } }
+.login-intro, .login-card, .login-config {
+  background: color-mix(in oklab, var(--surface-solid) 72%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(140%); backdrop-filter: blur(16px) saturate(140%);
+  border-color: var(--border-strong);
+  box-shadow: inset 0 1px 0 var(--sheen), var(--shadow-lg);
+}
+.login-intro { border-radius: var(--radius-xl); animation: rise-in .7s var(--ease-out) both; }
+.login-card { border-radius: var(--radius-xl); animation: rise-in .7s var(--ease-out) .12s both; }
+.login-config { animation: rise-in .7s var(--ease-out) .22s both; }
+.login-brand strong { font-family: var(--font-serif); font-weight: 600; font-size: 20px; font-variation-settings: "SOFT" 100, "opsz" 48; letter-spacing: -0.01em; }
+.login-hero-copy h1 {
+  font-family: var(--font-serif); font-weight: 520; font-size: clamp(40px, 5.6vw, 66px); line-height: 1.02;
+  letter-spacing: -0.035em; font-variation-settings: "SOFT" 70, "opsz" 144;
+}
+.login-hero-copy h1 em {
+  font-style: italic; font-weight: 480; padding-right: .04em;
+  background: linear-gradient(100deg, var(--brand-strong), var(--flow) 55%, var(--violet));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.login-card h2, .login-guide h2, .login-config h2 { font-family: var(--font-serif); font-weight: 560; font-variation-settings: "SOFT" 60, "opsz" 36; letter-spacing: -0.01em; }
+.login-card input { background: color-mix(in oklab, var(--ink) 5%, var(--surface-solid)); border-color: var(--border-strong); border-radius: var(--radius-md); }
+.login-card .btn { min-height: 40px; border-radius: var(--radius-md); }
+
+/* ---- Title-bar controls on phones ----------------------------------------------
+   On desktop the wrapper is layout-neutral (display: contents). On a phone a
+   bar with several controls folds them behind a Filters toggle, so the first
+   screen shows the list rather than four rows of segmented buttons. Without
+   script (no html.js) they stay open. */
+.mv2-controls { display: contents; }
+.mv2-filter-toggle { display: none; }
+@media (max-width: 720px) {
+  .mv2-bar:has(.mv2-controls > :nth-child(2)) .mv2-filter-toggle {
+    display: inline-flex; align-items: center; gap: 6px; margin-left: auto; min-height: 32px; padding: 5px 11px;
+    border: 1px solid var(--border-strong); border-radius: var(--radius-pill); background: color-mix(in oklab, var(--ink) 4%, var(--surface-solid));
+    color: var(--ink-2); font: inherit; font-size: var(--text-xs); font-weight: 600; cursor: pointer;
+  }
+  .mv2-filter-toggle .ico { width: 14px; height: 14px; }
+  .mv2-filter-toggle.on { color: var(--brand); border-color: color-mix(in oklab, var(--brand) 50%, transparent); background: var(--brand-soft); }
+  .mv2-bar .mv2-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; width: 100%; order: 10; }
+  .js .mv2-bar:has(.mv2-controls > :nth-child(2)) .mv2-controls:not([data-open]) { display: none; }
+  .mv2-bar .mv2-controls[data-open] { animation: rise-in var(--dur-slow) var(--ease-out) both; }
+  .mv2-bar h1 { font-size: 26px; }
+  .mv2-bar h1 > .ico { width: 32px; height: 32px; padding: 7px; }
+}
+
+/* ---- Detail titles, search provenance, phone calendar ---------------------- */
+/* A session is named by its id: the title keeps the id's mono face. */
+.session-detail-title-row h1 { font-family: var(--font-mono); font-weight: 600; letter-spacing: -0.01em; font-size: 26px; }
+/* How a search hit matched is provenance, not a headline: a quiet two-line tag. */
+.search-identifier-match, .search-text-match {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 10px 6px 8px; border-radius: var(--radius-md);
+  border: 1px solid var(--border); background: color-mix(in oklab, var(--ink) 3%, transparent);
+}
+.search-identifier-match strong, .search-text-match strong { font-size: var(--text-xs); font-weight: 650; }
+.search-identifier-match small, .search-text-match small { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; color: var(--faint); }
+.search-identifier-match .ico, .search-text-match .ico { width: 13px; height: 13px; }
+.search-identifier-match { color: var(--brand); }
+.search-text-match { color: var(--ok); }
+@media (max-width: 720px) {
+  .mom-cal-head { flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+  .mom-cal-streak, .mom-cal-streak small { white-space: nowrap; }
+  .mom-cal-key { display: none; }
+}
+
+/* ---- Projects: portfolio cards read top-down -----------------------------------
+   Icon and label on one line, the number large beneath, the note below it, so
+   neither the label nor the note has to fight the numeral for width. */
+.project-summary-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+.project-summary-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: start; gap: 4px 11px; padding: 14px 16px 15px; min-height: 0; }
+.project-summary-icon { grid-row: 1 / 3; width: 34px; height: 34px; border-radius: 10px; }
+.project-summary-copy { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.project-summary-copy > span { order: 1; color: var(--faint); }
+.project-summary-copy strong { order: 2; grid-row: auto; font-size: 30px; line-height: 1.05; margin: 2px 0 1px; }
+.project-summary-copy small { order: 3; white-space: normal; overflow: visible; line-height: 1.35; }
+
+/* ---- Final pass: numerals, rail headers, instrument labels ---------------------- */
+/* The delivery path's stage numbers and the instrument readouts join the serif
+   numeral system. */
+.retrieval-flow > li > strong, .retrieval-instrument-metrics strong {
+  font-family: var(--font-serif); font-weight: 540; font-variation-settings: "SOFT" 30, "opsz" 96;
+  font-variant-numeric: lining-nums tabular-nums; letter-spacing: -0.02em;
+}
+/* Compact readout labels may wrap to a second line rather than truncate. */
+.retrieval-instrument-metrics > div > span { white-space: normal; overflow: visible; letter-spacing: 0.08em; line-height: 1.35; }
+/* Sticky rail group headers: frosted glass over the list, not a black band. */
+.rail-group-hd {
+  background: color-mix(in oklab, var(--paper) 80%, transparent);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  border-radius: 8px;
 }

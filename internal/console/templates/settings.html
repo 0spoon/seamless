@@ -3,13 +3,16 @@
 <div class="settings-page" data-settings>
   <header class="mv2-bar">
     <h1>{{icon "settings"}}Settings</h1>{{about "Understand the running profile, shape what every new agent session receives, and inspect how workspaces are connected."}}
+    <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
     <span class="mv2-spacer"></span>
+    <div class="mv2-controls" id="mv2-controls">
     <div class="settings-mode{{if .BriefingOverridden}} override{{end}}" aria-label="Active briefing configuration source">
       <span>Briefing source</span>
       <strong>{{if .BriefingOverridden}}Console override{{else}}File + env{{end}}</strong>
       <small>{{if .BriefingOverridden}}runtime layer active{{else}}baseline active{{end}}</small>
     </div>
-  </header>
+    </div>
+</header>
 
   <nav class="settings-jumpbar" aria-label="Settings sections">
     <a href="#runtime-profile">

@@ -251,6 +251,29 @@
     if (summary) summary.focus();
   }, true);
 
+  /* ---- Phone title bars: the Filters toggle --------------------------------- */
+
+  // Held here, not in an attribute alone: the live morph resets attributes to
+  // what the server rendered, so the open state is re-applied after each patch.
+  var filtersOpen = false;
+  function syncFilters() {
+    document.querySelectorAll('[data-filters-toggle]').forEach(function (b) {
+      b.setAttribute('aria-expanded', filtersOpen ? 'true' : 'false');
+      b.classList.toggle('on', filtersOpen);
+    });
+    document.querySelectorAll('.mv2-controls').forEach(function (c) {
+      if (filtersOpen) c.setAttribute('data-open', '');
+      else c.removeAttribute('data-open');
+    });
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest ? e.target.closest('[data-filters-toggle]') : null;
+    if (!b) return;
+    filtersOpen = !filtersOpen;
+    syncFilters();
+  });
+  document.addEventListener('seam:content-updated', syncFilters);
+
   /* ---- Flash banners as toasts --------------------------------------------- */
 
   // A mutation redirects back with ?notice= / ?error=; the server renders the
@@ -282,6 +305,165 @@
   }
   surfaceFlash();
   document.addEventListener('seam:content-updated', surfaceFlash);
+
+  /* ---- Arrival: reveal, count-up, and the panel flashlight ------------------ */
+
+  // html.reveal is set before first paint (layout.html) so the page settles in
+  // section by section; it comes off once the sequence has played, so a live
+  // morph that inserts a node later never replays it.
+  var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  setTimeout(function () { root.classList.remove('reveal'); }, 1100);
+
+  // Headline numbers count up from zero on arrival: "24%", "~297", "1,284".
+  // Only a whole number with an optional prefix/suffix is animated; anything
+  // else (an em dash, "no data") is left exactly as the server wrote it.
+  var COUNTED = '.ov2-vital-num > strong, .now-tape-cell > strong, .project-summary-copy > strong, .mv2-count > strong, .stat .value';
+  function countUp() {
+    if (calm) return;
+    document.querySelectorAll(COUNTED).forEach(function (el) {
+      var text = (el.textContent || '').trim();
+      var m = text.match(/^([^\d-]*)(\d{1,3}(?:,\d{3})*|\d+)([^\d]*)$/);
+      if (!m) return;
+      var end = parseInt(m[2].replace(/,/g, ''), 10);
+      if (!isFinite(end) || end < 2) return;
+      var comma = m[2].indexOf(',') !== -1;
+      var t0 = null;
+      var dur = Math.min(1100, 520 + end * 2);
+      function fmt(n) { var s = String(n); return comma ? s.replace(/\B(?=(\d{3})+(?!\d))/g, ',') : s; }
+      function frame(t) {
+        if (t0 === null) t0 = t;
+        var p = Math.min(1, (t - t0) / dur);
+        var eased = 1 - Math.pow(1 - p, 4);
+        el.textContent = m[1] + fmt(Math.round(end * eased)) + m[3];
+        if (p < 1) requestAnimationFrame(frame);
+        else el.textContent = text;
+      }
+      el.textContent = m[1] + '0' + m[3];
+      requestAnimationFrame(frame);
+    });
+  }
+  if (root.classList.contains('reveal')) countUp();
+
+  var LIT = '.ov2-vital, .project-summary-card, .ov2-panel, .card, .now-zone, .context-scope-card, .retrieval-panel, .search-results';
+  var litFrame = 0, litEvent = null;
+  document.addEventListener('pointermove', function (e) {
+    litEvent = e;
+    if (litFrame) return;
+    litFrame = requestAnimationFrame(function () {
+      litFrame = 0;
+      var ev = litEvent;
+      var el = ev && ev.target && ev.target.closest ? ev.target.closest(LIT) : null;
+      if (!el) return;
+      var r = el.getBoundingClientRect();
+      el.style.setProperty('--mx', Math.round(ev.clientX - r.left) + 'px');
+      el.style.setProperty('--my', Math.round(ev.clientY - r.top) + 'px');
+    });
+  }, { passive: true });
+
+  /* ---- The Seam and the sky ------------------------------------------------ */
+
+  // Every event the SSE stream carries (layout.html re-dispatches it as
+  // seam:event) becomes a spark that runs down the Seam from the daemon's orb
+  // to the section it belongs to, and lights that section's icon. The same
+  // events feed --activity, a decaying event rate the sky and the orb breathe
+  // with. Purely ambient: nothing here changes data, and reduced motion or a
+  // hidden tab skips the sparks (the activity level still settles).
+  var seam = document.getElementById('seam');
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+  var ROUTES = [
+    [/^retrieval\./, '/console/retrieval', 'flow'],
+    [/^(memory\.written|note\.written|trial\.recorded)$/, null, 'ok'],
+    [/^(agent\.mishap|hook\.error)$/, '/console/', 'danger'],
+    [/^memory\./, '/console/memories', 'brand'],
+    [/^note\./, '/console/notes', 'brand'],
+    [/^session\./, '/console/sessions', 'brand'],
+    [/^task\./, '/console/tasks', 'brand'],
+    [/^(plan\.|subagent\.)/, '/console/plans', 'violet'],
+    [/^gardener\./, '/console/gardener', 'pop'],
+    [/^recall\.miss$/, '/console/retrieval', 'pop'],
+    [/^trial\./, '/console/trials', 'ok'],
+    [/^(tool\.call|hook\.prompt)$/, '/console/interactions', 'brand'],
+    [/^project\./, '/console/projects', 'violet']
+  ];
+  var WRITE_HOME = { 'memory.written': '/console/memories', 'note.written': '/console/notes', 'trial.recorded': '/console/trials' };
+  function routeOf(kind) {
+    for (var i = 0; i < ROUTES.length; i++) {
+      if (ROUTES[i][0].test(kind)) return { href: ROUTES[i][1] || WRITE_HOME[kind], tone: ROUTES[i][2] };
+    }
+    return { href: '/console/now', tone: 'brand' };
+  }
+  function navLink(href) {
+    var links = document.querySelectorAll('nav.nav a[href]');
+    for (var i = 0; i < links.length; i++) if (links[i].getAttribute('href') === href) return links[i];
+    return null;
+  }
+  var live = 0;
+  function spark(kind) {
+    if (!seam || document.hidden || (reduce && reduce.matches) || live >= 7 || !seam.animate) return;
+    var route = routeOf(kind || '');
+    var target = navLink(route.href) || navLink('/console/now');
+    var tone = 'var(--' + route.tone + ')';
+    var el = document.createElement('span');
+    el.className = 'spark';
+    el.style.setProperty('--spark', tone);
+    seam.appendChild(el);
+    live++;
+    var horizontal = seam.offsetWidth > seam.offsetHeight;
+    seam.classList.toggle('horizontal', horizontal);
+    var from, to, frames;
+    if (horizontal) {
+      from = 0; to = seam.offsetWidth * (0.35 + Math.random() * 0.6);
+      frames = [
+        { transform: 'translateX(' + from + 'px) scale(.6)', opacity: 0 },
+        { opacity: 1, offset: 0.12 },
+        { transform: 'translateX(' + to + 'px) scale(1)', opacity: 1, offset: 0.82 },
+        { transform: 'translateX(' + to + 'px) scale(2.4)', opacity: 0 }
+      ];
+    } else {
+      var orb = document.querySelector('.sidebar .brand .dot');
+      var sr = seam.getBoundingClientRect();
+      from = orb ? orb.getBoundingClientRect().top + 5 - sr.top : 30;
+      to = target ? target.getBoundingClientRect().top + target.offsetHeight / 2 - sr.top : sr.height * 0.5;
+      frames = [
+        { transform: 'translateY(' + from + 'px) scale(.6)', opacity: 0 },
+        { opacity: 1, offset: 0.1 },
+        { transform: 'translateY(' + to + 'px) scale(1)', opacity: 1, offset: 0.84 },
+        { transform: 'translateY(' + to + 'px) scale(2.6)', opacity: 0 }
+      ];
+    }
+    var dist = Math.abs(to - from);
+    var anim = el.animate(frames, { duration: Math.min(1500, 520 + dist * 0.9), easing: 'cubic-bezier(.3,.6,.25,1)' });
+    anim.onfinish = function () {
+      el.remove();
+      live--;
+      if (target && !horizontal) {
+        target.style.setProperty('--land', tone);
+        target.classList.remove('landed');
+        void target.offsetWidth;
+        target.classList.add('landed');
+      }
+    };
+  }
+
+  // --activity: events decay with a ~20s half-life; the rate maps onto 0..1
+  // so a steady trickle glows faintly and a burst lights the sky.
+  var rate = 0, rateAt = Date.now();
+  function decay() {
+    var now = Date.now();
+    rate *= Math.pow(0.5, (now - rateAt) / 20000);
+    rateAt = now;
+  }
+  function publish() {
+    decay();
+    root.style.setProperty('--activity', (1 - Math.exp(-rate / 6)).toFixed(3));
+  }
+  document.addEventListener('seam:event', function (e) {
+    decay();
+    rate += 1;
+    publish();
+    spark(e.detail && e.detail.kind);
+  });
+  setInterval(publish, 3000);
 
   /* ---- Timelines open on "now" --------------------------------------------- */
 

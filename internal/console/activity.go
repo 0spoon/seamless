@@ -19,8 +19,16 @@ type eventRow struct {
 	Project   string    `json:"project,omitempty"`
 	SessionID string    `json:"sessionId,omitempty"`
 	ItemID    string    `json:"itemId,omitempty"`
-	Summary   string    `json:"summary"`
+	// ItemIDs are the memories an injection surfaced (capped), so a live client
+	// can point at exactly what reached an agent -- the Overview's sky flares
+	// those stars. Only injections carry them.
+	ItemIDs []string `json:"itemIds,omitempty"`
+	Summary string   `json:"summary"`
 }
+
+// maxRowItemIDs caps the ids an event row carries: a briefing can surface
+// dozens of memories, and the sky only needs enough to light a burst.
+const maxRowItemIDs = 48
 
 // recentEvents returns the most recent events as display rows.
 func (s *Service) recentEvents(ctx context.Context, limit int) ([]eventRow, error) {
@@ -93,8 +101,21 @@ func toEventRow(e core.Event) eventRow {
 		Project:   e.ProjectSlug,
 		SessionID: e.SessionID,
 		ItemID:    e.ItemID,
+		ItemIDs:   rowItemIDs(e),
 		Summary:   eventSummary(e),
 	}
+}
+
+// rowItemIDs lists an injection's surfaced memory ids for the live row.
+func rowItemIDs(e core.Event) []string {
+	if e.Kind != core.EventInjected {
+		return nil
+	}
+	ids := injectedEventItemIDs(e)
+	if len(ids) > maxRowItemIDs {
+		ids = ids[:maxRowItemIDs]
+	}
+	return ids
 }
 
 // eventSummary renders a one-line human description of an event from its payload.
@@ -189,11 +210,7 @@ func eventSummary(e core.Event) string {
 		}
 		return "context injected"
 	case core.EventGardenerAction:
-		action := payloadStr(p, "action")
-		if kind := payloadStr(p, "kind"); kind != "" {
-			return fmt.Sprintf("gardener %s (%s)", action, kind)
-		}
-		return "gardener " + action
+		return gardenerSummary(p)
 	case core.EventToolCall:
 		label := "tool " + payloadStr(p, "tool")
 		if isErr, _ := p["is_error"].(bool); isErr {
@@ -310,4 +327,74 @@ func payloadList(p map[string]any, key string) []map[string]any {
 		}
 	}
 	return out
+}
+
+// proposalWork names what a gardener proposal kind would do, as the object of
+// "proposed" / "applied" (store.ProposalKinds). An unlisted kind is spelled out.
+var proposalWork = map[string]string{
+	store.ProposalMerge:        "merging duplicate memories",
+	store.ProposalArchive:      "archiving a memory",
+	store.ProposalDigest:       "a digest",
+	store.ProposalConsolidate:  "consolidating memories",
+	store.ProposalReproject:    "moving a memory to another project",
+	store.ProposalSplit:        "splitting a project",
+	store.ProposalAbandonPlan:  "settling a stale plan as abandoned",
+	store.ProposalMemoryWanted: "filling a knowledge gap",
+	store.ProposalToolError:    "fixing a recurring tool error",
+	store.ProposalRekind:       "re-kinding a memory",
+	store.ProposalShipPlan:     "settling a plan as shipped",
+	store.ProposalRelocate:     "relocating a memory",
+	store.ProposalMergePlans:   "merging duplicate plans",
+}
+
+// gardenerSummary says what the gardener did, in words: the ledger reads
+// "proposed archiving a memory", not "gardener propose (archive)".
+func gardenerSummary(p map[string]any) string {
+	kind := payloadStr(p, "kind")
+	work, ok := proposalWork[kind]
+	if !ok {
+		work = "a proposal"
+		if kind != "" {
+			work = "a " + strings.ReplaceAll(kind, "_", " ") + " proposal"
+		}
+	}
+	switch action := payloadStr(p, "action"); action {
+	case "propose":
+		return "proposed " + work
+	case "apply":
+		return "applied " + work
+	case "dismiss":
+		return "dismissed a proposal"
+	case "hide":
+		return "hid a proposal forever"
+	case "unhide":
+		return "lifted a hidden proposal pattern"
+	case "undo_apply":
+		return "undid " + work
+	case "undo_reject":
+		return "reopened a decided proposal"
+	case "request":
+		if text := payloadStr(p, "text"); text != "" {
+			return "took a request: " + text
+		}
+		return "took a cleanup request"
+	case "split":
+		if src := payloadStr(p, "source"); src != "" {
+			return "planned a split of " + src
+		}
+		return "planned a project split"
+	case "utility_armed":
+		if proj := payloadStr(p, "project"); proj != "" {
+			return "armed utility ranking for " + proj
+		}
+		return "armed utility ranking"
+	case "digest_note":
+		return "wrote digest " + payloadStr(p, "title")
+	case "undo_digest_note":
+		return "withdrew digest " + payloadStr(p, "title")
+	case "":
+		return "gardener activity"
+	default:
+		return "gardener " + strings.ReplaceAll(action, "_", " ")
+	}
 }

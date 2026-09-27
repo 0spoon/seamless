@@ -12,13 +12,16 @@
   {{if .Lab}}
   <span class="lib-active-filter">{{icon "flask-conical"}}<span>Lab <strong class="mono">{{.Lab}}</strong></span><a href="/console/trials{{if .Outcome}}?outcome={{.Outcome}}{{end}}" data-seam-query>Clear</a></span>
   {{end}}
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="mv2-sort">
     <span class="mv2-sort-label">Outcome</span>
     <div class="seg" data-seam-query>
       {{$lab := .Lab}}
       {{range outcomeSegs .Outcome}}<a class="{{if .Active}}on{{end}}" href="{{$base}}?{{if $lab}}lab={{$lab}}&amp;{{end}}{{if .Key}}outcome={{.Key}}{{end}}">{{.Label}}</a>{{end}}
     </div>
+  </div>
   </div>
 </header>
 

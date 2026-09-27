@@ -124,7 +124,7 @@ func TestLogin_LandingGuidance(t *testing.T) {
 	rr := do(mux, httptest.NewRequest(http.MethodGet, "/console/login", nil))
 	require.Equal(t, http.StatusOK, rr.Code)
 	body := rr.Body.String()
-	require.Contains(t, body, "See what your agents remember.")
+	require.Contains(t, body, "See what your agents <em>remember</em>.")
 	require.Contains(t, body, `data-copy="seamlessd console-open"`)
 	require.Contains(t, body, "opens your default browser with the console cookie already set")
 	require.Contains(t, body, "https://thereisnospoon.org/docs/quickstart/")

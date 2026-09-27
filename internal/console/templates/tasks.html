@@ -8,12 +8,15 @@
   <span class="mv2-count" aria-label="{{$open}} open tasks">
     <strong>{{$open}}</strong>open{{if .Closed}}<small>{{add (len .Closed) .ClosedMore}} recently closed</small>{{end}}
   </span>
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
   <div class="lib-summary-pills">
     {{if .InProgress}}<a class="status-live" href="#rg-inprogress"><span class="live-dot"></span>{{len .InProgress}} in progress</a>{{end}}
     <a class="status-ready" href="#rg-ready">{{len .Ready}} ready</a>
     {{if .Blocked}}<a class="status-blocked" href="#rg-blocked">{{len .Blocked}} blocked</a>{{end}}
     {{if .Closed}}<a href="#rg-closed">{{add (len .Closed) .ClosedMore}} closed</a>{{end}}
+  </div>
   </div>
 </header>
 

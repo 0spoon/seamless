@@ -9,7 +9,7 @@
 <script>
 /* Apply the saved theme (default dark) and sidebar state before first paint,
    so neither flashes. Both are per-browser conveniences, never server state. */
-(function(){var d=document.documentElement;d.classList.add('js');try{d.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');if(localStorage.getItem('seamless-sidebar')==='collapsed')d.setAttribute('data-sidebar','collapsed');}catch(e){d.setAttribute('data-theme','dark');}})();
+(function(){var d=document.documentElement;d.classList.add('js','reveal');try{d.setAttribute('data-theme',localStorage.getItem('seamless-theme')||'dark');if(localStorage.getItem('seamless-sidebar')==='collapsed')d.setAttribute('data-sidebar','collapsed');}catch(e){d.setAttribute('data-theme','dark');}})();
 </script>
 {{/* Hover prefetch for console pages (Chromium; ignored elsewhere). It only
      fetches the document, never runs it, and skips the SSE stream, sign-out,
@@ -81,6 +81,10 @@
     </div>
   </aside>
   <div class="drawer-scrim" id="drawer-scrim" hidden></div>
+  {{/* The Seam: a thread of light along the sidebar's edge. shell.js sends each
+       event the SSE stream carries down it as a spark that lands on the section
+       it belongs to. Decorative: aria-hidden, and still under reduced motion. */}}
+  <div class="seam" id="seam" aria-hidden="true"></div>
   <main class="main" id="main" tabindex="-1">
     {{if .Notice}}<div class="section notice" role="status" data-flash="ok">{{.Notice}}</div>{{end}}
     {{if .FlashErr}}<div class="section login-err" role="alert" data-flash="error">{{.FlashErr}}</div>{{end}}
@@ -222,6 +226,10 @@
     // window.SEAM_LIVE_ALL_KINDS; the debounce still coalesces the bursts.
     try {
       var d = JSON.parse(ev.data), k = d.kind;
+      // Every event, transport included, goes to the shell's ambient layer (the
+      // Seam, the sky's activity level) over this one stream -- never a second
+      // EventSource.
+      document.dispatchEvent(new CustomEvent('seam:event', { detail: d }));
       if ((k === 'tool.call' || k === 'hook.prompt') && !window.SEAM_LIVE_ALL_KINDS) return;
       // Momentum payoff moment: one quiet toast line, only while the console
       // happens to be open. The event's summary already carries the copy.

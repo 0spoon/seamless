@@ -608,6 +608,10 @@ type overviewData struct {
 	// feature is off (no panel, no JSON key), non-nil with Found false as the
 	// honest empty state.
 	Spotlight *spotlightData `json:"spotlight,omitempty"`
+
+	// Sky is the knowledge constellation panel (HTML only; nil for JSON callers
+	// and for a fleet with no active memories).
+	Sky *skyData `json:"-"`
 }
 
 // spotlightData is the memory-of-the-month panel payload: the winner (when
@@ -826,7 +830,29 @@ func (s *Service) overview(w http.ResponseWriter, r *http.Request) {
 	data.Attention = s.attentionCards(ctx, data)
 	data.Vitals = overviewVitals(data, report, covTrend, prior, hasPrior, win)
 	data.Spotlight = s.memorySpotlight(ctx, now)
+	data.Sky = s.knowledgeSky(ctx, now, r)
 	s.render(w, r, "overview", pageData{Title: "Overview", Active: "overview", Data: data})
+}
+
+// knowledgeSky builds the Overview's constellation. It is decoration over data
+// the page already states elsewhere, so a failed read degrades to no sky (with
+// a warning) rather than failing the whole status page. JSON callers never pay
+// for it: the panel is HTML-only.
+func (s *Service) knowledgeSky(ctx context.Context, now time.Time, r *http.Request) *skyData {
+	if wantsJSON(r) {
+		return nil
+	}
+	mems, err := store.AllMemoriesIncludingInvalid(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("console: knowledge sky: memories", "error", err)
+		return nil
+	}
+	stats, err := store.AllRetrievalStats(ctx, s.cfg.DB)
+	if err != nil {
+		s.logger.Warn("console: knowledge sky: retrieval stats", "error", err)
+		return nil
+	}
+	return buildSky(mems, stats, now)
 }
 
 // memorySpotlight assembles the momentum memory-of-the-month panel: nil while

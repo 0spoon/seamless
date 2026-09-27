@@ -70,3 +70,27 @@ func TestSinceDigest_RejectsBadT(t *testing.T) {
 		require.Contains(t, rr.Body.String(), `"error"`)
 	}
 }
+
+// A live event still carries the []string its producer built; one read back
+// from the log carries JSON's []any. Both must yield the surfaced ids.
+func TestInjectedEventItemIDs_BothPayloadShapes(t *testing.T) {
+	live := core.Event{Kind: core.EventInjected, Payload: map[string]any{"item_ids": []string{"a", "", "b"}}}
+	stored := core.Event{Kind: core.EventInjected, Payload: map[string]any{"item_ids": []any{"a", 7, "b"}}}
+	require.Equal(t, []string{"a", "b"}, injectedEventItemIDs(live))
+	require.Equal(t, []string{"a", "b"}, injectedEventItemIDs(stored))
+	require.Equal(t, []string{"a", "b"}, toEventRow(live).ItemIDs, "the live row names what reached the agent")
+	require.Nil(t, toEventRow(core.Event{Kind: core.EventMemoryWritten, ItemID: "x"}).ItemIDs, "only injections carry the list")
+}
+
+// Every proposal kind the store can hold reads as words in the ledger, so a
+// kind added to store.ProposalKinds without a phrase fails here, not in prose.
+func TestGardenerSummary_CoversEveryProposalKind(t *testing.T) {
+	for _, k := range store.ProposalKinds {
+		_, ok := proposalWork[k]
+		require.True(t, ok, "proposal kind %q has no ledger phrase", k)
+	}
+	require.Equal(t, "proposed archiving a memory", gardenerSummary(map[string]any{"action": "propose", "kind": "archive"}))
+	require.Equal(t, "armed utility ranking for orbital", gardenerSummary(map[string]any{"action": "utility_armed", "project": "orbital"}))
+	require.Equal(t, "dismissed a proposal", gardenerSummary(map[string]any{"action": "dismiss"}))
+	require.Equal(t, "applied a brand new proposal", gardenerSummary(map[string]any{"action": "apply", "kind": "brand_new"}))
+}

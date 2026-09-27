@@ -6,7 +6,10 @@
   {{if .Query}}<span class="mv2-count" aria-label="{{.Total}} results">
     <strong>{{.Total}}</strong>match{{if ne .Total 1}}es{{end}}<small>for &ldquo;{{.Query}}&rdquo; &middot; {{.WindowLabel}}</small>
   </span>{{end}}
+  <button type="button" class="mv2-filter-toggle" data-filters-toggle aria-expanded="false" aria-controls="mv2-controls">{{icon "sliders"}}<span>Filters</span></button>
   <span class="mv2-spacer"></span>
+  <div class="mv2-controls" id="mv2-controls">
+  </div>
 </header>
 
 <form class="search search-query" method="get" action="/console/search" data-seam-query>
