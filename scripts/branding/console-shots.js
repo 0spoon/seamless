@@ -48,9 +48,30 @@ const PAGES = [
   { name: 'relations', url: '/console/context?scope=project&project=orbital' },
 ];
 
+// A freshly seeded instance has never been welcomed, so the Overview opens
+// with the first-run level-choice card, which pushes the Knowledge sky below
+// the fold. Dismiss it once through its own form (the server keeps the
+// choice, so both theme passes see the dismissed page).
+async function dismissWelcome(browser) {
+  const context = await browser.newContext();
+  await context.addCookies([{ name: 'seamless_console', value: COOKIE, url: BASE }]);
+  const page = await context.newPage();
+  await page.goto(BASE + '/console/', { waitUntil: 'load' });
+  const form = page.locator('form[action="/console/settings/level/welcome"]');
+  if (await form.count()) {
+    await Promise.all([
+      page.waitForNavigation({ waitUntil: 'load' }),
+      form.locator('button').first().click(),
+    ]);
+    console.log('dismissed the welcome card');
+  }
+  await context.close();
+}
+
 (async () => {
   const outDir = process.argv[2] || '.';
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
+  await dismissWelcome(browser);
   for (const theme of ['dark', 'light']) {
     const context = await browser.newContext({
       viewport: { width: 1440, height: 900 },

@@ -288,7 +288,12 @@ go run ./cmd/demoseed -data /tmp/seamless-demo
 #    drops Now, Interactions, Retrieval, and the Overview vitals from what the
 #    shots capture. (This flow does not go through scripts/fixture/harness.sh,
 #    which sets research and the level for its own instances.)
-SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
+#    SEAMLESS_CONFIG must name a throwaway file (it can be empty): env vars only
+#    override keys, so without it serve still loads your LIVE
+#    ~/.config/seamless/seamless.yaml and inherits its llm key, tls, and briefing.
+touch /tmp/seamless-demo.yaml
+SEAMLESS_CONFIG=/tmp/seamless-demo.yaml \
+  SEAMLESS_DATA_DIR=/tmp/seamless-demo SEAMLESS_ADDR=127.0.0.1:8090 \
   SEAMLESS_FEATURES_RESEARCH=1 SEAMLESS_FEATURES_MOMENTUM=1 \
   SEAMLESS_FEATURES_GAMIFICATION=1 SEAMLESS_CONSOLE_LEVEL=advanced \
   SEAMLESS_MCP_API_KEY=<any key> ./bin/seamlessd serve
@@ -311,7 +316,9 @@ make site-stamp && make site-check
 
 `console-shots.js` mints the console cookie from the API key itself (the same
 `sha256("seamless-console\0" + key)` digest `internal/console` expects), so no
-login step is needed. It waits on `load` rather than `networkidle` because the
+login step is needed. Before capturing it dismisses the Overview's first-run
+level-choice card through its own form: a freshly seeded instance has never
+been welcomed, and the card pushes the Knowledge sky below the fold. It waits on `load` rather than `networkidle` because the
 console's SSE stream never goes idle.
 
 A page entry may carry a `prepare(page)` hook, run after load and before the
