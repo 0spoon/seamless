@@ -102,6 +102,7 @@ func TestQueryControls_AreWiredAcrossConsole(t *testing.T) {
 		"plans":     1,
 		"trials":    2,
 		"gardener":  2,
+		"settings":  1,
 	}
 	for name, want := range wantMarkers {
 		source, err := templateFS.ReadFile("templates/" + name + ".html")
@@ -235,7 +236,8 @@ func TestNav_RendersExactlyTheVisibleScreensPerLevel(t *testing.T) {
 				require.NotEmpty(t, m[3], "every nav link carries its collapsed-rail tip: %s", m[1])
 			}
 			require.Equal(t, tc.want, got, "the sidebar at %s must be exactly the matrix's entries", tc.level)
-			require.Equal(t, strings.Count(nav, "<a "), len(got), "every nav link must be a registry entry")
+			require.Equal(t, strings.Count(nav, "<a ")-strings.Count(nav, "data-jump="), len(got),
+				"every visible nav link must be a registry entry")
 
 			lvl, err := parseLevel(tc.level)
 			require.NoError(t, err)

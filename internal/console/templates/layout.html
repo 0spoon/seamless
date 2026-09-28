@@ -53,6 +53,10 @@
 {{- range .Entries}}
       <a href="{{.Href}}" data-key="{{.Key}}" data-tip="{{.Label}}" class="{{.LinkClass}}">{{icon .Icon}}<span class="nav-label">{{.Label}}</span>{{if .Badge}}<span class="count"{{with .BadgeTitle}} title="{{.}}"{{end}}{{if and .BadgeZero (not .Count)}} data-zero{{end}}>{{.Count}}</span>{{end}}</a>
 {{- end}}{{end}}
+      {{/* Palette-only rows (no sidebar link): pages without a nav row and the
+           Settings sections this level offers. Inside the nav so they change
+           with it; search.js reads them as Jump to entries. */}}
+      <div class="nav-jumps" hidden>{{range .Jumps}}<a href="{{.Href}}" data-jump="{{.Title}}"{{with .Hint}} data-hint="{{.}}"{{end}} tabindex="-1">{{icon .Icon}}</a>{{end}}</div>
     </nav>
     <div class="side-foot">
       <div class="account">
@@ -78,7 +82,7 @@
          full, under this note offering the switch. Information, never an error;
          "Got it" hides it for this browser tab only (shell.js, sessionStorage). */}}
     {{with .LevelBanner}}<div class="section notice level-banner" role="note" data-level-banner="{{.ID}}">
-      <p class="level-banner-copy">{{icon "eye-off"}}<span><strong>{{.Label}}</strong> is {{.MinArticle}} {{.Min.Label}} screen. You are in {{.Current.Label}}: it works, it just is not in your sidebar.</span></p>
+      <p class="level-banner-copy">{{icon "eye-off"}}<span><strong>{{.Label}}</strong> is {{.MinArticle}} {{.Min.Label}} {{.Kind}}. You are in {{.Current.Label}}: it works, it just is not in {{.Place}}.</span></p>
       <div class="level-banner-acts">
         <form method="post" action="/console/settings/level">
           <input type="hidden" name="level" value="{{.Min}}">

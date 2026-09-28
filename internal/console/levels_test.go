@@ -400,3 +400,35 @@ func TestLevels_ProjectTabsFollowTheirScreens(t *testing.T) {
 	require.Contains(t, page, `data-tab="context"`)
 	require.NotContains(t, page, "data-level-banner")
 }
+
+// The palette's Jump to follows the level: the rows with no sidebar link (the
+// pages without a nav row, the Settings sections) are rendered inside the nav
+// from the registries, so a hidden screen or section is not offered there.
+func TestLevels_PaletteJumpsFollowTheLevel(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+	jumpRe := regexp.MustCompile(`<a href="([^"]+)" data-jump="([^"]+)"`)
+	jumps := func() []string {
+		var out []string
+		for _, m := range jumpRe.FindAllStringSubmatch(getPeek(t, mux, "/console/memories").Body.String(), -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+
+	require.Equal(t, []string{
+		"/console/search",
+		"/console/settings?s=experience", "/console/settings?s=features", "/console/settings?s=setup",
+	}, jumps(), "basic: no Context, no Standard or Advanced sections")
+
+	setLevel(t, db, "advanced")
+	require.Equal(t, []string{
+		"/console/search", "/console/context",
+		"/console/settings?s=experience", "/console/settings?s=features", "/console/settings?s=setup",
+		"/console/settings?s=briefing", "/console/settings?s=workspaces", "/console/settings?s=engine",
+	}, jumps())
+
+	page := getPeek(t, mux, "/console/memories").Body.String()
+	require.Contains(t, page, `data-jump="Settings › Briefing" data-hint="What every new agent session starts with"`)
+	require.Contains(t, string(searchJS), "a.getAttribute('data-jump')", "the palette reads the jump rows")
+	require.NotContains(t, string(searchJS), "title: 'Context'", "no hand-listed pages left in the palette")
+}

@@ -53,21 +53,22 @@
 
   /* ---- Local sources: pages, actions, recents ------------------------------ */
 
-  // Pages come from the sidebar, so a feature switched off in Settings is not
-  // offered here either. Context and Search are real pages with no nav row.
+  // Pages come from the sidebar, so a feature switched off in Settings -- or a
+  // screen above the console level -- is not offered here either. The pages
+  // with no nav row (Search, Context) and the Settings sections ride along as
+  // hidden [data-jump] links inside the same nav, rendered from the registries.
   function pages() {
     var out = [];
     document.querySelectorAll('nav.nav a[href]').forEach(function (a) {
       var label = a.querySelector('.nav-label');
       out.push({
-        title: label ? label.textContent : a.getAttribute('data-tip') || a.getAttribute('href'),
+        title: a.getAttribute('data-jump') || (label ? label.textContent : a.getAttribute('data-tip') || a.getAttribute('href')),
+        hint: a.getAttribute('data-hint') || '',
         href: a.getAttribute('href'),
         key: a.getAttribute('data-key'),
         icon: a.querySelector('svg')
       });
     });
-    out.push({ title: 'Search', hint: 'every filter and sort', href: '/console/search', icon: null });
-    out.push({ title: 'Context', hint: 'briefing topology across projects', href: '/console/context', icon: null });
     return out;
   }
   function actions() {

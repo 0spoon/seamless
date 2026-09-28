@@ -90,7 +90,7 @@ func TestContext_AllScopesShowsEffectiveBriefingTopology(t *testing.T) {
 	require.Contains(t, body, ">Context</h1>")
 	require.Contains(t, body, "Global memory")
 	require.Contains(t, body, "Briefing families")
-	require.Contains(t, body, `/console/settings#briefing-recipe`)
+	require.Contains(t, body, `/console/settings?s=briefing`)
 	require.NotContains(t, body, "context-must-not-render-this-task")
 	require.NotContains(t, body, "old-relations-tree")
 }

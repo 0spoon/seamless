@@ -103,18 +103,52 @@ type pageData struct {
 	// for the palette to narrow its server results to (the JSON itself is
 	// level-blind).
 	VisibleScopes string
-	Data          any
+	// Jumps are the palette's Jump to rows that have no sidebar link: the
+	// screens without a nav row and the Settings sections this level offers.
+	Jumps []jumpEntry
+	Data  any
+}
+
+// jumpEntry is one hidden palette row the layout renders inside the sidebar
+// nav, so it re-renders (and search.js re-reads it) whenever the level changes
+// what the sidebar offers.
+type jumpEntry struct {
+	Title string
+	Hint  string
+	Href  string
+	Icon  string
+}
+
+// jumpEntries lists the palette rows with no sidebar link at this level: the
+// visible screens without a nav row (Search, Context), then the visible
+// Settings sections as "Settings > <section>".
+func jumpEntries(visible []screen, lvl level) []jumpEntry {
+	var out []jumpEntry
+	for _, sc := range visible {
+		if !sc.NavRow {
+			out = append(out, jumpEntry{Title: sc.Label, Hint: sc.Hint, Href: sc.Href, Icon: sc.Icon})
+		}
+	}
+	for _, sec := range visibleSettingsSections(lvl) {
+		out = append(out, jumpEntry{Title: "Settings \u203a " + sec.Label, Hint: sec.Blurb, Href: sec.Href(), Icon: sec.Icon})
+	}
+	return out
 }
 
 // levelBanner is the soft note a below-level screen carries: which screen, the
 // level whose sidebar shows it, and the level in force. It is information, not
 // an error -- the page beneath renders in full.
 type levelBanner struct {
-	// ID is the screen's registry id: the per-browser "Got it" remembers it.
+	// ID names what the banner is about (a screen id, or settings:<section>):
+	// the per-browser "Got it" remembers it.
 	ID      string
 	Label   string
 	Min     level
 	Current level
+	// Kind and Place word the note: a "screen" missing from "your sidebar",
+	// or a "Settings section" missing from "your Settings menu".
+	Kind  string
+	Place string
 }
 
 // MinArticle is the indefinite article for the minimum level's label ("an
@@ -133,7 +167,10 @@ func levelBannerFor(id string, current level) *levelBanner {
 	if !ok || current >= sc.Min {
 		return nil
 	}
-	return &levelBanner{ID: sc.ID, Label: sc.Label, Min: sc.Min, Current: current}
+	return &levelBanner{
+		ID: sc.ID, Label: sc.Label, Min: sc.Min, Current: current,
+		Kind: "screen", Place: "your sidebar",
+	}
 }
 
 // withChrome fills the per-request chrome every layout-wrapped page shares: the
@@ -148,6 +185,7 @@ func (s *Service) withChrome(ctx context.Context, pd pageData) pageData {
 	pd.NavGroups = navGroups(pd.Screens, pd.Active, pd.Nav)
 	pd.VisibleScopes = strings.Join(slices.DeleteFunc(searchScopesFor(pd.Features, pd.Level),
 		func(scope string) bool { return scope == "all" }), " ")
+	pd.Jumps = jumpEntries(pd.Screens, pd.Level)
 	if pd.LevelBanner == nil {
 		id := pd.Screen
 		if id == "" {

@@ -195,10 +195,30 @@ type settingsData struct {
 	UnboundRepos       []repoRoute           `json:"unboundRepos"`
 	FamilyEditors      []familyEditor        `json:"familyEditors"`
 	FamilyOptions      []familyProjectOption `json:"familyOptions"`
+	// ConsoleLevel is the level in force (presentation only), with whether a
+	// stored row sets it and who wrote that row ("chosen" by the owner or
+	// "seeded" by the upgrade). They are the ONLY fields that differ by level:
+	// everything above is the full payload at every level and every section.
+	ConsoleLevel           string `json:"consoleLevel"`
+	ConsoleLevelOverridden bool   `json:"consoleLevelOverridden"`
+	ConsoleLevelSource     string `json:"consoleLevelSource,omitempty"`
+
+	// Section is the ?s= section the page shows and Subnav its menu; page
+	// state only, so JSON callers get the same payload whatever s says.
+	Section string             `json:"-"`
+	Subnav  []settingsNavEntry `json:"-"`
+	// ConfigPath is the config file this daemon loaded ("" = env-only), for
+	// the Your setup section.
+	ConfigPath string `json:"-"`
 }
 
 func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
+	section, err := settingsSectionParam(r.URL.Query())
+	if err != nil {
+		s.badRequest(w, r, err.Error())
+		return
+	}
 
 	projects, err := store.ListProjects(ctx, s.cfg.DB)
 	if err != nil {
@@ -243,9 +263,11 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("console: settings feature counts", "error", cerr)
 	}
 
-	s.render(w, r, "settings", pageData{
-		Title:  "Settings",
-		Active: "settings",
+	lvl := s.consoleLevel(ctx)
+	pd := pageData{
+		Title:       "Settings \u00b7 " + section.Label,
+		Active:      "settings",
+		LevelBanner: sectionBanner(section, lvl.Level),
 		Data: settingsData{
 			DataDir:            s.cfg.DataDir,
 			Embeddings:         embeddings,
@@ -266,8 +288,16 @@ func (s *Service) settings(w http.ResponseWriter, r *http.Request) {
 			UnboundRepos:       unboundRepos,
 			FamilyEditors:      familyEditors,
 			FamilyOptions:      familyOptions,
+
+			ConsoleLevel:           lvl.Level.String(),
+			ConsoleLevelOverridden: lvl.Overridden,
+			ConsoleLevelSource:     lvl.Source,
+			Section:                section.ID,
+			Subnav:                 settingsSubnav(lvl.Level, section.ID),
+			ConfigPath:             strings.TrimSpace(s.cfg.ConfigPath),
 		},
-	})
+	}
+	s.render(w, r, "settings", pd)
 }
 
 // utilityActivationRows joins the activation state with each scope's demand
@@ -367,7 +397,7 @@ func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
 	project := strings.TrimSpace(r.PostFormValue("project"))
 	if project != "" {
 		if err := validate.Name(project); err != nil {
-			settingsFlash(w, r, "project: "+err.Error())
+			settingsUtilityFlash(w, r, "project: "+err.Error())
 			return
 		}
 	}
@@ -375,7 +405,7 @@ func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
 	switch force {
 	case "on", "off", "auto":
 	default:
-		settingsFlash(w, r, fmt.Sprintf("force invalid %q: valid values are on, off, auto", force))
+		settingsUtilityFlash(w, r, fmt.Sprintf("force invalid %q: valid values are on, off, auto", force))
 		return
 	}
 
@@ -400,7 +430,7 @@ func (s *Service) settingsUtilityForce(w http.ResponseWriter, r *http.Request) {
 	if scope == "" {
 		scope = "the global scope"
 	}
-	settingsNotice(w, r, fmt.Sprintf("Utility ranking for %s set to %s.", scope, force))
+	settingsUtilityNotice(w, r, fmt.Sprintf("Utility ranking for %s set to %s.", scope, force))
 }
 
 // settingsBriefingSave persists the briefing form as the runtime override row
@@ -419,7 +449,7 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 	}
 	weight, err := strconv.ParseFloat(weightStr, 64)
 	if err != nil {
-		settingsFlash(w, r, "utility_weight must be a number between 0 and 1")
+		settingsBriefingFlash(w, r, "utility_weight must be a number between 0 and 1")
 		return
 	}
 	b.UtilityWeight = weight
@@ -442,20 +472,20 @@ func (s *Service) settingsBriefingSave(w http.ResponseWriter, r *http.Request) {
 		}
 		n, err := strconv.Atoi(v)
 		if err != nil {
-			settingsFlash(w, r, name+" must be a whole number")
+			settingsBriefingFlash(w, r, name+" must be a whole number")
 			return
 		}
 		*dst = n
 	}
 	if err := b.Validate(); err != nil {
-		settingsFlash(w, r, err.Error())
+		settingsBriefingFlash(w, r, err.Error())
 		return
 	}
 	if err := store.SetBriefingConfig(r.Context(), s.cfg.DB, b); err != nil {
 		s.serverError(w, r, err)
 		return
 	}
-	settingsNotice(w, r, "Briefing settings saved -- they apply from the next session start.")
+	settingsBriefingNotice(w, r, "Briefing settings saved -- they apply from the next session start.")
 }
 
 // eventFeaturesChanged records an optional-feature toggle in the event log, so
@@ -556,7 +586,7 @@ func (s *Service) settingsBriefingReset(w http.ResponseWriter, r *http.Request) 
 		s.serverError(w, r, err)
 		return
 	}
-	settingsNotice(w, r, "Briefing overrides cleared -- back to the file/env configuration.")
+	settingsBriefingNotice(w, r, "Briefing overrides cleared -- back to the file/env configuration.")
 }
 
 // embeddingsPanel assembles the semantic-index section: the startup runtime
@@ -820,36 +850,55 @@ func (s *Service) settingsFamilyDelete(w http.ResponseWriter, r *http.Request) {
 	settingsRegistryNotice(w, r, fmt.Sprintf("Family %q deleted.", name))
 }
 
-func settingsFlash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg), http.StatusSeeOther)
+// settingsBack answers a Settings POST by going back to the section it came
+// from, carrying its one-shot flash (param is "notice" or "error") and the
+// block to land on.
+func settingsBack(w http.ResponseWriter, r *http.Request, section, param, msg, anchor string) {
+	target := "/console/settings?s=" + section + "&" + param + "=" + url.QueryEscape(msg)
+	if anchor != "" {
+		target += "#" + anchor
+	}
+	http.Redirect(w, r, target, http.StatusSeeOther)
 }
 
-func settingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg), http.StatusSeeOther)
+func settingsBriefingFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	settingsBack(w, r, "briefing", "error", msg, "briefing-recipe")
+}
+
+func settingsBriefingNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	settingsBack(w, r, "briefing", "notice", msg, "briefing-recipe")
+}
+
+func settingsUtilityFlash(w http.ResponseWriter, r *http.Request, msg string) {
+	settingsBack(w, r, "engine", "error", msg, "utility-activation")
+}
+
+func settingsUtilityNotice(w http.ResponseWriter, r *http.Request, msg string) {
+	settingsBack(w, r, "engine", "notice", msg, "utility-activation")
 }
 
 func settingsEmbeddingsFlash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#semantic-index", http.StatusSeeOther)
+	settingsBack(w, r, "engine", "error", msg, "semantic-index")
 }
 
 func settingsEmbeddingsNotice(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#semantic-index", http.StatusSeeOther)
+	settingsBack(w, r, "engine", "notice", msg, "semantic-index")
 }
 
 func settingsFeaturesFlash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#features", http.StatusSeeOther)
+	settingsBack(w, r, "features", "error", msg, "features")
 }
 
 func settingsFeaturesNotice(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#features", http.StatusSeeOther)
+	settingsBack(w, r, "features", "notice", msg, "features")
 }
 
 func settingsRegistryFlash(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?error="+url.QueryEscape(msg)+"#workspace-registry", http.StatusSeeOther)
+	settingsBack(w, r, "workspaces", "error", msg, "workspace-registry")
 }
 
 func settingsRegistryNotice(w http.ResponseWriter, r *http.Request, msg string) {
-	http.Redirect(w, r, "/console/settings?notice="+url.QueryEscape(msg)+"#workspace-registry", http.StatusSeeOther)
+	settingsBack(w, r, "workspaces", "notice", msg, "workspace-registry")
 }
 
 // sortedRepoMap projects the repo_map rows for display. store.RepoMapRows

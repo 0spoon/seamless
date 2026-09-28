@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -65,24 +67,38 @@ func TestSettingsPage(t *testing.T) {
 	require.Equal(t, familyScopeRef{Slug: "seam", Registered: true}, data.FamilyEditors[0].Members[0])
 	require.Equal(t, []repoRoute{{Path: "/Users/x/repos/seamless"}}, data.Workspaces[1].Repos)
 
-	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
-	req.Header.Set("Authorization", "Bearer "+testKey)
-	rr := do(mux, req)
-	require.Equal(t, http.StatusOK, rr.Code)
-	page := rr.Body.String()
-	require.Contains(t, page, "/Users/x/repos/seamless")
+	section := func(s string) string {
+		req := httptest.NewRequest(http.MethodGet, "/console/settings?s="+s, nil)
+		req.Header.Set("Authorization", "Bearer "+testKey)
+		rr := do(mux, req)
+		require.Equal(t, http.StatusOK, rr.Code, s)
+		page := rr.Body.String()
+		require.Contains(t, page, `class="settings-page" data-settings data-section="`+s+`"`)
+		require.Contains(t, page, `aria-label="Settings sections"`)
+		require.Contains(t, page, `window.SEAM_NO_LIVE_REFRESH = true`)
+		return page
+	}
+
+	page := section("briefing")
 	require.Contains(t, page, "Briefing injection")
-	require.Contains(t, page, `class="settings-page" data-settings`)
-	require.Contains(t, page, `aria-label="Settings sections"`)
-	require.Contains(t, page, `id="runtime-profile"`)
 	require.Contains(t, page, `id="briefing-recipe"`)
-	require.Contains(t, page, `id="workspace-registry"`)
 	require.Contains(t, page, `class="brief-group memory-group"`)
 	require.Contains(t, page, `class="brief-group family-group"`)
 	require.Contains(t, page, `class="brief-group utility-group"`)
 	require.Contains(t, page, `id="utility-mode"`)
 	require.Contains(t, page, `name="constraint_max_full"`)
 	require.Contains(t, page, `name="convention_max_full"`)
+	require.Contains(t, page, `data-briefing-form`)
+	require.NotContains(t, page, `id="workspace-registry"`, "one section at a time")
+
+	page = section("engine")
+	require.Contains(t, page, `id="runtime-profile"`)
+	require.Contains(t, page, `id="semantic-index"`)
+	require.Contains(t, page, `id="utility-activation"`)
+
+	page = section("workspaces")
+	require.Contains(t, page, "/Users/x/repos/seamless")
+	require.Contains(t, page, `id="workspace-registry"`)
 	require.Contains(t, page, `class="registry-scroll workspace-directory"`)
 	require.Contains(t, page, `class="workspace-row" data-workspace-scope="seamless"`)
 	require.Contains(t, page, `class="workspace-route" title="/Users/x/repos/seamless"`)
@@ -94,27 +110,6 @@ func TestSettingsPage(t *testing.T) {
 	require.NotContains(t, page, `workspace-family-peers`)
 	require.NotContains(t, page, `class="repos-panel"`)
 	require.NotContains(t, page, `class="families-panel"`)
-	require.Contains(t, page, `window.SEAM_NO_LIVE_REFRESH = true`)
-	require.Contains(t, page, `data-briefing-form`)
-}
-
-func TestSettingsStyles_ControlPlaneContracts(t *testing.T) {
-	css := string(consoleCSS)
-
-	require.Contains(t, css, ".settings-jumpbar")
-	require.Contains(t, css, "position: sticky")
-	require.Contains(t, css, ".briefing-groups")
-	require.Contains(t, css, ".brief-group.utility-group {")
-	require.Contains(t, css, "grid-column: 1 / -1; display: grid;",
-		"the closed-loop card must span the settings grid instead of collapsing to one track")
-	require.Contains(t, css, ".brief-number select {")
-	require.Contains(t, css, ".is-dirty .brief-state")
-	require.Contains(t, css, ".registry-scroll { max-height:")
-	require.Contains(t, css, ".workspace-row { display: grid;")
-	require.Contains(t, css, ".workspace-cell-label")
-	require.Contains(t, css, ".family-summary")
-	require.Contains(t, css, ".family-dialog::backdrop")
-	require.Contains(t, css, "@media (max-width: 520px)")
 }
 
 func TestBuildWorkspaceRegistry_JoinsSourcesAndPreservesReferences(t *testing.T) {
@@ -370,7 +365,7 @@ func TestSettingsUtilityForce(t *testing.T) {
 	require.Empty(t, row.Remaining, "a forced scope owes no readiness hint")
 
 	// The HTML table renders each gate against its threshold.
-	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?s=engine", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	page := do(mux, req)
 	require.Equal(t, http.StatusOK, page.Code)
@@ -476,7 +471,7 @@ func TestSettingsEmbeddingsPanel(t *testing.T) {
 	require.Positive(t, data.Database.SchemaVersion)
 
 	// The page renders the section with its controls.
-	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?s=engine", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	rr := do(mux, req)
 	require.Equal(t, http.StatusOK, rr.Code)
@@ -552,7 +547,7 @@ func TestSettingsEmbeddingsDisabledStates(t *testing.T) {
 	require.Contains(t, rr.Header().Get("Location"), "error=")
 
 	// The page names the disabled cause for the owner.
-	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?s=engine", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	page := do(mux, req).Body.String()
 	require.Contains(t, page, "Embeddings off")
@@ -631,10 +626,174 @@ func TestSettingsEmbeddingsFallbackReason(t *testing.T) {
 	mux := http.NewServeMux()
 	svc.Register(mux)
 
-	req := httptest.NewRequest(http.MethodGet, "/console/settings", nil)
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?s=engine", nil)
 	req.Header.Set("Authorization", "Bearer "+testKey)
 	page := do(mux, req).Body.String()
 	require.Contains(t, page, "No usable embedding provider")
 	require.Contains(t, page, "api_key is empty")
 	require.Contains(t, page, "lexical-only recall")
+}
+
+// Settings is one section at a time. Each section renders at its level, a
+// section above the level still renders by URL under the banner, and the
+// sub-nav offers exactly the level's sections (plus the open one).
+func TestSettingsSections_RenderAtTheirLevels(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "basic")
+
+	subnav := regexp.MustCompile(`data-section-link="([a-z]+)"`)
+	offered := func(page string) []string {
+		var out []string
+		for _, m := range subnav.FindAllStringSubmatch(page, -1) {
+			out = append(out, m[1])
+		}
+		return out
+	}
+
+	// No s: the default section, experience.
+	page := getPeek(t, mux, "/console/settings").Body.String()
+	require.Contains(t, page, `data-section="experience"`)
+	require.Contains(t, page, `id="experience"`)
+	require.Equal(t, []string{"experience", "features", "setup"}, offered(page))
+	require.NotContains(t, page, "data-level-banner")
+
+	for _, tc := range []struct {
+		level   string
+		section string
+		anchor  string
+		banner  bool
+		subnav  []string
+	}{
+		{"basic", "features", `id="features"`, false, []string{"experience", "features", "setup"}},
+		{"basic", "setup", `id="setup"`, false, []string{"experience", "features", "setup"}},
+		{"basic", "briefing", `id="briefing-recipe"`, true, []string{"experience", "features", "setup", "briefing"}},
+		{"basic", "engine", `id="knowledge-engine"`, true, []string{"experience", "features", "setup", "engine"}},
+		{"standard", "briefing", `id="briefing-recipe"`, false,
+			[]string{"experience", "features", "setup", "briefing", "workspaces"}},
+		{"standard", "workspaces", `id="workspace-registry"`, false,
+			[]string{"experience", "features", "setup", "briefing", "workspaces"}},
+		{"standard", "engine", `id="knowledge-engine"`, true,
+			[]string{"experience", "features", "setup", "briefing", "workspaces", "engine"}},
+		{"advanced", "engine", `id="knowledge-engine"`, false,
+			[]string{"experience", "features", "setup", "briefing", "workspaces", "engine"}},
+	} {
+		setLevel(t, db, tc.level)
+		rr := getPeek(t, mux, "/console/settings?s="+tc.section)
+		require.Equal(t, http.StatusOK, rr.Code, "%s at %s", tc.section, tc.level)
+		page := rr.Body.String()
+		require.Contains(t, page, tc.anchor, "%s at %s renders its content", tc.section, tc.level)
+		require.Equal(t, tc.subnav, offered(page), "%s at %s: sub-nav", tc.section, tc.level)
+		require.Contains(t, page, `aria-current="page"`, "the open section is marked")
+		if tc.banner {
+			require.Contains(t, page, `data-level-banner="settings:`+tc.section+`"`, "%s at %s", tc.section, tc.level)
+			require.Contains(t, page, "Settings section. You are in "+titleWord(tc.level)+
+				": it works, it just is not in your Settings menu.")
+		} else {
+			require.NotContains(t, page, "data-level-banner", "%s at %s", tc.section, tc.level)
+		}
+	}
+}
+
+// An unknown or repeated ?s= is a 400 naming the valid sections -- never a
+// silent fallback to the default section.
+func TestSettingsSections_UnknownSectionIsANamedBadRequest(t *testing.T) {
+	_, mux := newConsoleLevel(t, config.Features{}, "advanced")
+	for _, path := range []string{"/console/settings?s=runtime", "/console/settings?s=features&s=setup"} {
+		rr := getPeek(t, mux, path)
+		require.Equal(t, http.StatusBadRequest, rr.Code, path)
+	}
+	rr := getPeek(t, mux, "/console/settings?s=runtime")
+	require.Contains(t, rr.Body.String(),
+		"invalid s &#34;runtime&#34;: valid values are experience, features, setup, briefing, workspaces, engine")
+
+	req := httptest.NewRequest(http.MethodGet, "/console/settings?s=runtime&format=json", nil)
+	req.Header.Set("Authorization", "Bearer "+testKey)
+	rr = do(mux, req)
+	require.Equal(t, http.StatusBadRequest, rr.Code)
+	require.Contains(t, rr.Body.String(), "valid values are experience, features, setup, briefing, workspaces, engine")
+}
+
+// The JSON contract: the FULL payload at every section, plus the level fields.
+// seam doctor and client_features read featuresConfig from it, unchanged.
+func TestSettingsSections_JSONIsTheFullPayloadAtEverySection(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{Research: true}, "basic")
+	_, err := store.EnsureProject(context.Background(), db, "seamless", "Seamless")
+	require.NoError(t, err)
+
+	want := rawJSON(t, mux, "/console/settings?format=json")
+	for _, id := range settingsSectionIDs() {
+		require.Equal(t, want, rawJSON(t, mux, "/console/settings?format=json&s="+id), "s=%s", id)
+	}
+	for _, key := range []string{"featuresConfig", "features", "featuresOverridden", "briefing", "embeddings",
+		"database", "utilityRows", "projects", "workspaces", "familyEditors"} {
+		require.Contains(t, want, key)
+	}
+
+	var data settingsData
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.Equal(t, "basic", data.ConsoleLevel)
+	require.False(t, data.ConsoleLevelOverridden)
+	require.Empty(t, data.ConsoleLevelSource)
+	setLevel(t, db, "standard")
+	getJSON(t, mux, "/console/settings?format=json", &data)
+	require.Equal(t, "standard", data.ConsoleLevel)
+	require.True(t, data.ConsoleLevelOverridden)
+	require.Equal(t, "chosen", data.ConsoleLevelSource)
+}
+
+// Every Settings POST lands back on the section it belongs to.
+func TestSettingsSections_EveryPostReturnsToItsSection(t *testing.T) {
+	db, mux := newConsoleLevel(t, config.Features{}, "advanced")
+	ctx := context.Background()
+	_, err := store.EnsureProject(ctx, db, "app", "app")
+	require.NoError(t, err)
+	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{}))
+	require.NoError(t, store.SetBriefingConfig(ctx, db, config.Defaults().Briefing))
+
+	for _, tc := range []struct {
+		path, body, want string
+	}{
+		{"/console/settings/features", "", "/console/settings?s=features&notice="},
+		{"/console/settings/features", "feature_bogus=1", "/console/settings?s=features&error="},
+		{"/console/settings/features/reset", "", "/console/settings?s=features&notice="},
+		{"/console/settings/briefing", "findings_count=2", "/console/settings?s=briefing&notice="},
+		{"/console/settings/briefing", "findings_count=-1", "/console/settings?s=briefing&error="},
+		{"/console/settings/briefing/reset", "", "/console/settings?s=briefing&notice="},
+		{"/console/settings/utility", "project=app&force=on", "/console/settings?s=engine&notice="},
+		{"/console/settings/utility", "project=app&force=sideways", "/console/settings?s=engine&error="},
+		{"/console/settings/embeddings/mode", "mode=off", "/console/settings?s=engine&notice="},
+		{"/console/settings/embeddings/mode", "mode=sideways", "/console/settings?s=engine&error="},
+		{"/console/settings/embeddings/reembed", "", "/console/settings?s=engine&error="},
+		{"/console/settings/families/save", "name=fam&members=app", "/console/settings?s=workspaces&notice="},
+		{"/console/settings/families/save", "name=fam&members=nope", "/console/settings?s=workspaces&error="},
+		{"/console/settings/families/delete", "original_name=fam", "/console/settings?s=workspaces&notice="},
+	} {
+		rr := postForm(mux, tc.path, tc.body)
+		require.Equal(t, http.StatusSeeOther, rr.Code, "%s %s", tc.path, tc.body)
+		require.True(t, strings.HasPrefix(rr.Header().Get("Location"), tc.want),
+			"%s %s -> %s, want prefix %s", tc.path, tc.body, rr.Header().Get("Location"), tc.want)
+	}
+}
+
+// The save bar replaces the footer-only buttons: it appears once a form is
+// dirty (the snapshot tracker toggles .is-dirty), Discard puts the form back to
+// its server-rendered baseline, and without script the bar simply stays. Old
+// #anchor bookmarks map to their section in place.
+func TestSettingsSections_SaveBarAndLegacyAnchors(t *testing.T) {
+	source, err := templateFS.ReadFile("templates/settings.html")
+	require.NoError(t, err)
+	page := string(source)
+	require.Equal(t, 2, strings.Count(page, `class="brief-actions settings-savebar"`), "one bar per editable form")
+	require.Equal(t, 2, strings.Count(page, `type="button" data-form-discard`))
+	require.Contains(t, page, "form.reset();")
+	require.NotContains(t, page, "data-filters-toggle", "no Filters toggle on a page with no filters")
+	require.NotContains(t, page, "settings-mode", "the briefing-source chip gave way to per-section precedence lines")
+	require.Contains(t, page, `'#features': 'features'`)
+	require.Contains(t, page, `'#briefing-recipe': 'briefing'`)
+	require.Contains(t, page, `'#workspace-registry': 'workspaces'`)
+	require.Contains(t, page, "window.SeamConsole.load('/console/settings?s='")
+
+	css := string(consoleCSS)
+	require.Contains(t, css, ".js form:not(.is-dirty) > .settings-savebar { display: none; }")
+	require.Contains(t, css, ".settings-subnav")
+	require.Contains(t, css, "@media (max-width: 720px)")
 }

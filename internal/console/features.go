@@ -116,7 +116,7 @@ func (s *Service) featureOff(w http.ResponseWriter, r *http.Request, key feature
 			`<article class="peek-entity"><div class="peek-head"><span class="badge">off</span></div>`+
 				`<h2 class="peek-title">%s is switched off</h2>`+
 				`<p class="peek-desc">Nothing was deleted &mdash; the data is preserved and returns as soon as the feature is on.</p>`+
-				`<p class="peek-note"><a href="/console/settings#features">Turn it back on in Settings</a></p></article>`,
+				`<p class="peek-note"><a href="/console/settings?s=features">Turn it back on in Settings</a></p></article>`,
 			template.HTMLEscapeString(label))
 		return
 	}
@@ -125,7 +125,7 @@ func (s *Service) featureOff(w http.ResponseWriter, r *http.Request, key feature
 		Active: "settings",
 		Data: featureOffData{
 			Key: string(key), Label: label, Blurb: blurb, Error: msg,
-			SettingsHref: "/console/settings#features",
+			SettingsHref: "/console/settings?s=features",
 		},
 	})
 }

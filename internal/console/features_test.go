@@ -46,7 +46,7 @@ func TestGatedRoutes_RenderTheDisabledPageForBrowsers(t *testing.T) {
 		require.Contains(t, body, `data-feature-off="research"`, path)
 		require.Contains(t, body, "Research labs &amp; trials is switched off", path)
 		require.Contains(t, body, "Nothing was deleted", path)
-		require.Contains(t, body, `href="/console/settings#features"`, path)
+		require.Contains(t, body, `href="/console/settings?s=features"`, path)
 		// The gated screen's own content must not leak through.
 		require.NotContains(t, body, "boot loop trial", path)
 		require.NotContains(t, body, `id="lib-reader"`, path)
@@ -430,13 +430,13 @@ func TestSettingsUtilityUnlocked_FollowsTheMomentumFeature(t *testing.T) {
 		Projects: map[string]store.UtilityProjectState{"demo": {ReadyAt: &readyAt}},
 	}))
 
-	page := getPeek(t, mux, "/console/settings").Body.String()
+	page := getPeek(t, mux, "/console/settings?s=engine").Body.String()
 	require.NotContains(t, page, "mom-unlocked", "off leaves no trace of the unlock notice")
 	require.NotContains(t, page, "unlocked 2026-07-12")
 	require.Contains(t, page, ">armed ", "the operational armed note is core metadata and stays")
 
 	require.NoError(t, store.SetFeaturesConfig(ctx, db, config.Features{Momentum: true}))
-	page = getPeek(t, mux, "/console/settings").Body.String()
+	page = getPeek(t, mux, "/console/settings?s=engine").Body.String()
 	require.Contains(t, page, `class="mom-unlocked"`)
 	require.Contains(t, page, "unlocked 2026-07-12",
 		"the stored activation date is witnessed on the surface, verbatim")
@@ -775,12 +775,12 @@ func TestFeatureWhenOff_NamesInPageSurfaces(t *testing.T) {
 func TestSettingsFeaturesZone_MarkupContract(t *testing.T) {
 	_, mux, _ := newGatedConsole(t)
 
-	page := getPeek(t, mux, "/console/settings")
+	page := getPeek(t, mux, "/console/settings?s=features")
 	require.Equal(t, http.StatusOK, page.Code)
 	body := page.Body.String()
 
-	require.Contains(t, body, `<section class="settings-zone" id="features">`)
-	require.Contains(t, body, `href="#features"`, "the jumpbar carries the new zone")
+	require.Contains(t, body, `<section class="settings-zone settings-section" id="features">`)
+	require.Contains(t, body, `href="/console/settings?s=features"`, "the sub-nav carries the section")
 	require.Contains(t, body, "Optional features are off until you turn them on.")
 	require.Contains(t, body, "nothing is ever deleted")
 	require.Contains(t, body, "agents pick the change up on their next session")
@@ -797,30 +797,23 @@ func TestSettingsFeaturesZone_MarkupContract(t *testing.T) {
 		"the reassurance line reports the data of a feature that is currently off")
 	require.NotContains(t, body, `action="/console/settings/features/reset"`,
 		"reset is offered only while a stored override exists")
+	require.Contains(t, body, "Following file + env", "the precedence line says where the switches come from")
 
-	// Zone renumbering: features is 02 and the later zones moved down.
-	for _, marker := range []string{
-		`<div class="settings-zone-index">02</div>`,
-		`<div class="settings-zone-index">03</div>`,
-		`<div class="settings-zone-index">04</div>`,
-		`<div class="settings-zone-index">05</div>`,
-	} {
-		require.Contains(t, body, marker)
-	}
-	require.Contains(t, body, `<b>05</b><strong>Registry</strong>`)
+	// No numbered zones any more: the numbers implied a sequence that never existed.
+	require.NotContains(t, body, `class="settings-zone-index"`)
 }
 
 func TestSettingsFeaturesZone_ShowsLiveDataAndOverrideState(t *testing.T) {
 	db, mux, _ := newGatedConsole(t)
 	require.NoError(t, store.SetFeaturesConfig(context.Background(), db, config.Features{Research: true}))
 
-	body := getPeek(t, mux, "/console/settings").Body.String()
+	body := getPeek(t, mux, "/console/settings?s=features").Body.String()
 	require.Contains(t, body, "Data kept: 1 trial across 1 lab.")
 	require.Contains(t, body, "Enabled")
 	require.Contains(t, body, `action="/console/settings/features/reset"`)
-	require.Contains(t, body, "Stored override",
-		"the breadcrumb says stored override -- the grandfather migration can be the writer")
-	require.Contains(t, body, "A stored override is in force for these switches.")
+	require.Contains(t, body, "Stored override active",
+		"the precedence line says stored override -- the grandfather migration can be the writer")
+	require.Contains(t, body, "Reset to file + env")
 }
 
 func TestSettingsFeaturesSaveAndReset(t *testing.T) {
@@ -995,11 +988,7 @@ func TestFeatureStyles_ZoneAndDisabledPage(t *testing.T) {
 	require.Contains(t, css, ".features-grid")
 	require.Contains(t, css, ".feature-card")
 	require.Contains(t, css, ".feature-off")
-	require.Contains(t, css, ".settings-jumpbar > a:nth-child(5) .settings-jump-icon",
-		"the fifth jumpbar entry needs its own icon color")
-	require.Contains(t, css, "grid-template-columns: repeat(5, minmax(0, 1fr)) auto",
-		"the jumpbar grid must make room for the features entry")
-	require.NotContains(t, css, "grid-template-columns: repeat(4, minmax(0, 1fr)) auto")
+	require.Contains(t, css, ".settings-subnav", "Settings is one section at a time, with a sub-nav")
 }
 
 // The features form rides the same snapshot-based dirty tracker the briefing
